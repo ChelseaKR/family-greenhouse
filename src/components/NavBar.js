@@ -56,7 +56,7 @@ const NavBar = () => {
                 </NavLink>
               </NavItem>
               {isAuthenticated && (
-                <NavItem>
+                /*<NavItem>
                   <NavLink
                     tag={RouterNavLink}
                     to="/external-api"
@@ -64,7 +64,16 @@ const NavBar = () => {
                     activeClassName="router-link-exact-active"
                   >
                     External API
-                  </NavLink>
+                  </NavLink>*/
+                  <NavItem>
+                    <NavLink
+                        tag={RouterNavLink}
+                        to="/add"
+                        exact
+                        activeClassName="router-link-exact-active"
+                    >
+                      New Plant
+                    </NavLink>
                 </NavItem>
               )}
             </Nav>
@@ -83,7 +92,7 @@ const NavBar = () => {
               )}
               {isAuthenticated && (
                 <UncontrolledDropdown nav inNavbar>
-                  <DropdownToggle nav caret id="profileDropDown">
+                  <DropdownToggle nav caret id="settingsDropDown">
                     <img
                       src={user.picture}
                       alt="Profile"
@@ -99,7 +108,7 @@ const NavBar = () => {
                       className="dropdown-profile"
                       activeClassName="router-link-exact-active"
                     >
-                      <FontAwesomeIcon icon="user" className="mr-3" /> Profile
+                      <FontAwesomeIcon icon="user" className="mr-3" /> Settings
                     </DropdownItem>
                     <DropdownItem
                       id="qsLogoutBtn"
