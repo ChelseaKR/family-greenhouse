@@ -2,9 +2,9 @@ import React from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { Container } from "reactstrap";
 
-import Loading from "./components/Loading";
-import NavBar from "./components/NavBar";
-import Footer from "./components/Footer";
+import Loading from "./components/common/Loading";
+import NavBar from "./components/common/NavBar";
+import Footer from "./components/common/Footer";
 import Home from "./views/Home";
 import Profile from "./views/Profile";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -34,6 +34,8 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home/>} />
             <Route path="/profile" element={<Profile/>} />
+            <Route path="/app" element={<AddPlant/>} />
+            <Route path="/plant" element={<Plant/>} />
           </Routes>
         </Container>
         <Footer />

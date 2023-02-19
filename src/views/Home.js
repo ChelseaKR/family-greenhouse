@@ -1,6 +1,6 @@
 import React, { Fragment } from "react";
 
-import Hero from "../components/Hero";
+import Hero from "../components/common/Hero";
 
 const Home = () => (
   <Fragment>
