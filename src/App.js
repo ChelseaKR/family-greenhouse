@@ -13,6 +13,9 @@ import history from "./utils/history";
 import "./App.css";
 
 import initFontAwesome from "./utils/initFontAwesome";
+import AddPlant from "./components/plants/add-plant.component";
+import Plant from "./components/plants/plant.component";
+import PlantsList from "./components/plants/plants-list.component";
 initFontAwesome();
 
 const App = () => {
@@ -34,8 +37,10 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home/>} />
             <Route path="/profile" element={<Profile/>} />
-            <Route path="/app" element={<AddPlant/>} />
-            <Route path="/plant" element={<Plant/>} />
+            <Route path="/plants" element={<PlantsList/>} />
+            <Route path="/plants/:id" element={<Plant/>} />
+            <Route path="/add" element={<AddPlant/>} />
+
           </Routes>
         </Container>
         <Footer />

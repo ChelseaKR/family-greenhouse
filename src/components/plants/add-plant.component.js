@@ -1,7 +1,8 @@
 import React, { Component } from "react";
-import PlantDataService from "../services/plant.service";
+import PlantDataService from "../../services/plant.service";
+import { withAuth0 } from '@auth0/auth0-react';
 
-export default class AddPlant extends Component {
+class AddPlant extends Component {
     constructor(props) {
         super(props);
         this.onChangeName = this.onChangeName.bind(this);
@@ -11,8 +12,12 @@ export default class AddPlant extends Component {
         this.savePlant = this.savePlant.bind(this);
         this.newPlant = this.newPlant.bind(this);
 
+        console.log("USERNAME")
+        const { user } = this.props.auth0;
+
         this.state = {
-            id: null,
+            userId: user.sub,
+            id: "",
             name: "",
             type: "",
             location: "",
@@ -48,6 +53,7 @@ export default class AddPlant extends Component {
 
     savePlant() {
         var data = {
+            userId: this.state.userId,
             name: this.state.name,
             type: this.state.type,
             location: this.state.location,
@@ -154,3 +160,5 @@ export default class AddPlant extends Component {
         );
     }
 }
+
+export default withAuth0(AddPlant)

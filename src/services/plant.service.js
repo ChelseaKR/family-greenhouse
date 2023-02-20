@@ -10,7 +10,7 @@ class PlantDataService {
     }
 
     create(data) {
-        return http.post("/plants", data);
+        return http.post("/plants/add", data);
     }
 
     update(id, data) {
@@ -25,9 +25,9 @@ class PlantDataService {
         return http.delete(`/plants`);
     }
 
-/*    findByName(name) {
-        return http.get(`/plants?name=${name}`);
-    }*/
+    findByName(name, data) {
+        return http.get(`/plants?name=${name}`, data);
+    }
 }
 
 export default new PlantDataService();
