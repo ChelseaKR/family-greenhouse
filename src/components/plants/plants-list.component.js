@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import PlantDataService from "../../services/plant.service";
 import { Link } from "react-router-dom";
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
 
 export default class PlantsList extends Component {
     constructor(props) {
@@ -94,7 +95,7 @@ export default class PlantsList extends Component {
 
         return (
             <div className="list row">
-                <div className="col-md-8">
+                <div className="col-md-12">
                     <div className="input-group mb-3">
                         <input
                             type="text"
@@ -114,74 +115,39 @@ export default class PlantsList extends Component {
                         </div>
                     </div>
                 </div>
-                <div className="col-md-6">
-                    <h4>Plants List</h4>
-
+                <div className="col-md-12">
+                    <h4>Plants List
+                    <a
+                        className="btn btn-sm btn-success" style={{float: "right"}}
+                        href="/add"
+                    >
+                        <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
+                    </a></h4>
                     <ul className="list-group">
-                        {plants &&
-                            plants.map((plant, index) => (
+                        {plants && plants.map((plant, index) => (
                                 <li
-                                    className={
-                                        "list-group-item " +
-                                        (index === currentIndex ? "active" : "")
-                                    }
+                                    className={ "list-group-item " +  (index === currentIndex ? "active" : "")  }
                                     onClick={() => this.setActivePlant(plant, index)}
                                     key={index}
                                 >
                                     {plant.name}
+                                    <br></br>
+
+                                    <Link
+                                        to={"/plants/" + plant.id}
+                                        className="badge badge-warning"
+                                    >
+                                        Edit
+                                    </Link>
                                 </li>
                             ))}
                     </ul>
-
-                    <button
+{/*                    <button
                         className="m-3 btn btn-sm btn-danger"
                         onClick={this.removeAllPlants}
                     >
                         Remove All
-                    </button>
-                </div>
-                <div className="col-md-6">
-                    {currentPlant ? (
-                        <div>
-                            <h4>Plant</h4>
-                            <div>
-                                <label>
-                                    <strong>Name:</strong>
-                                </label>{" "}
-                                {currentPlant.name}
-                            </div>
-                            <div>
-                                <label>
-                                    <strong>Type:</strong>
-                                </label>{" "}
-                                {currentPlant.type}
-                            </div>
-                            <div>
-                                <label>
-                                    <strong>Location:</strong>
-                                </label>{" "}
-                                {currentPlant.location}
-                            </div>
-                            <div>
-                                <label>
-                                    <strong>Description:</strong>
-                                </label>{" "}
-                                {currentPlant.description}
-                            </div>
-
-                            <Link
-                                to={"/plants/" + currentPlant.id}
-                                className="badge badge-warning"
-                            >
-                                Edit
-                            </Link>
-                        </div>
-                    ) : (
-                        <div>
-                            <br />
-                            <p>Select a plant</p>
-                        </div>
-                    )}
+                    </button>*/}
                 </div>
             </div>
         );

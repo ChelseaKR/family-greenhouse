@@ -23,7 +23,6 @@ const providerConfig = {
     redirect_uri: window.location.origin,
     ...(config.audience ? {
           audience: config.audience,
-          scope: "read:current_user update:current_user_metadata"
         } : null),
   },
 };
