@@ -66,3 +66,8 @@ npm run build
 ```bash
 npm run test
 ```
+
+## Third-party APIs
+- [Amazon Simple Email Service (AWS)](https://aws.amazon.com/sns/) - Device notifications and email reminders
+- [Auth0](https://auth0.com/) - Identity and Access Management provider
+- [Perenual](https://perenual.com/) - For listing plant species + species info
