@@ -35,12 +35,13 @@ exports.create = (req, res) => {
 
 // Retrieve all Plants from the database.
 exports.findAll = (req, res) => {
-    const userId = req.params.userId;
+    console.log("findAll....");
+    const userId = req.query.userId;
+    console.log(userId);
     const name = req.query.name;
-
-    console.log(name);
-3
-    let whereClause = (userId != null && name != null) ? { userId: { [Op.eq]: userId }, name: { [Op.iLike]: `%${title}%` } } : null;
+    //res.send(userId);
+    //let whereClause = null;
+    let whereClause = { userId: { [Op.eq]: userId }};
     Plant.findAll({ where: whereClause })
         .then(data => {
             res.send(data);

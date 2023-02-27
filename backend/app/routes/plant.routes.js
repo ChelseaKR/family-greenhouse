@@ -1,3 +1,4 @@
+const plants = require("../controllers/plant.controller");
 module.exports = app => {
     const plants = require("../controllers/plant.controller.js");
 
@@ -12,6 +13,8 @@ module.exports = app => {
     router.put("/:id", plants.update);
 
     router.delete("/:id", plants.delete);
+
+    router.get("/:userId", plants.findAll);
 
     router.delete("/", plants.deleteAll);
 
