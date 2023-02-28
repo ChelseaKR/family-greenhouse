@@ -12,7 +12,6 @@ class AddPlant extends Component {
         this.savePlant = this.savePlant.bind(this);
         this.newPlant = this.newPlant.bind(this);
 
-        console.log("USERNAME")
         const { user } = this.props.auth0;
 
         this.state = {
