@@ -1,8 +1,8 @@
 import http from "../http-common";
 
 class PlantDataService {
-    getAll() {
-        return http.get("/plants");
+    getAll(data) {
+        return http.get("/plants", data);
     }
 
     get(id) {
@@ -25,8 +25,12 @@ class PlantDataService {
         return http.delete(`/plants`);
     }
 
-    findByName(name, data) {
-        return http.get(`/plants?name=${name}`, data);
+    findByName(name) {
+        return http.get(`/plants?name=${name}`);
+    }
+
+    findByUserId(userId) {
+        return http.get(`/plants?userId=${userId}`);
     }
 }
 
