@@ -2,8 +2,9 @@ import React, { Component } from "react";
 import PlantDataService from "../../services/plant.service";
 import { Link } from "react-router-dom";
 import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {useAuth0, withAuth0} from "@auth0/auth0-react";
 
-export default class PlantsList extends Component {
+export class PlantsList extends Component {
     constructor(props) {
         super(props);
         this.onChangeSearchName = this.onChangeSearchName.bind(this);
@@ -12,8 +13,12 @@ export default class PlantsList extends Component {
         this.setActivePlant = this.setActivePlant.bind(this);
         this.removeAllPlants = this.removeAllPlants.bind(this);
         this.searchName = this.searchName.bind(this);
+        this.searchUserId = this.searchUserId.bind(this);
 
+
+        const { user } = this.props.auth0;
         this.state = {
+            userId: user.sub,
             plants: [],
             currentPlant: null,
             currentIndex: -1,
@@ -34,7 +39,7 @@ export default class PlantsList extends Component {
     }
 
     retrievePlants() {
-        PlantDataService.getAll()
+        PlantDataService.findByUserId(this.state.userId)
             .then(response => {
                 this.setState({
                     plants: response.data
@@ -79,6 +84,24 @@ export default class PlantsList extends Component {
         });
 
         PlantDataService.findByName(this.state.searchName)
+            .then(response => {
+                this.setState({
+                    plants: response.data
+                });
+                console.log(response.data);
+            })
+            .catch(e => {
+                console.log(e);
+            });
+    }
+
+    searchUserId() {
+        this.setState({
+            currentPlant: null,
+            currentIndex: -1
+        });
+        // console.log(this.state.userId);
+        PlantDataService.findByUserId(this.state.userId)
             .then(response => {
                 this.setState({
                     plants: response.data
@@ -153,3 +176,5 @@ export default class PlantsList extends Component {
         );
     }
 }
+
+export default withAuth0(PlantsList)
