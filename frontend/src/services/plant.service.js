@@ -25,8 +25,8 @@ class PlantDataService {
         return http.delete(`/plants`);
     }
 
-    findByName(name) {
-        return http.get(`/plants?name=${name}`);
+    findByName(userId, name) {
+        return http.get(`/plants?userId=${userId}&name=${name}`);
     }
 
     findByUserId(userId) {

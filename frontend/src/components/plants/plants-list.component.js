@@ -83,7 +83,7 @@ export class PlantsList extends Component {
             currentIndex: -1
         });
 
-        PlantDataService.findByName(this.state.searchName)
+        PlantDataService.findByName(this.state.userId, this.state.searchName)
             .then(response => {
                 this.setState({
                     plants: response.data

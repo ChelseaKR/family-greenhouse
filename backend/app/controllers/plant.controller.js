@@ -35,23 +35,28 @@ exports.create = (req, res) => {
 
 // Retrieve all Plants from the database.
 exports.findAll = (req, res) => {
-    console.log("findAll....");
     const userId = req.query.userId;
-    console.log(userId);
     const name = req.query.name;
-    //res.send(userId);
-    //let whereClause = null;
-    let whereClause = { userId: { [Op.eq]: userId }};
-    Plant.findAll({ where: whereClause })
-        .then(data => {
-            res.send(data);
-        })
-        .catch(err => {
-            res.status(500).send({
-                message:
-                    err.message || "Some error occurred while retrieving Plants."
+    let whereClause = null;
+    if (userId != null && name != null) {
+        whereClause = { userId: { [Op.eq]: userId }, name: { [Op.iLike]: `%${name}%` } };
+    } else if (userId != null && name == null) {
+        whereClause = { userId: { [Op.eq]: userId }};
+    }
+
+    if (whereClause != null) {
+        Plant.findAll({ where: whereClause })
+            .then(data => {
+                res.send(data);
+            })
+            .catch(err => {
+                res.status(500).send({
+                    message:
+                        err.message || "Some error occurred while retrieving Plants."
+                });
             });
-        });
+    }
+
 };
 
 // Find a single Plant with an id
