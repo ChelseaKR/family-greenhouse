@@ -5315,10 +5315,10 @@ globby@^11.0.4, globby@^11.1.0:
     merge2 "^1.4.1"
     slash "^3.0.0"
 
-good-fences@^1.1.2:
-  version "1.1.2"
-  resolved "https://registry.npmjs.org/good-fences/-/good-fences-1.1.2.tgz"
-  integrity sha512-mak/FJUNN0QTimaRnVQRTnF0v6xNP9jTZNm42VOzXy8in+/5Tzs8Rvikx5hoMgQZjCCAZqD1+hU13B98CBTw8A==
+good-fences@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/good-fences/-/good-fences-1.2.0.tgz#0c313c4a57509f220648f766c32a7417aa309f6a"
+  integrity sha512-SUWYA1Ry12945kJ/pOZu1yoRTk3pJmJ5kk+BpRrZvHBTfg9H7IjQ5FhBb6mMDkRpMpm0qbGR0zrinP9NPHy2WA==
   dependencies:
     cli-progress "^3.9.0"
     commander "^7.2.0"
