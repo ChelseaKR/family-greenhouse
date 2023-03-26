@@ -94,7 +94,7 @@ class AddPlant extends Component {
             <div className="submit-form">
                 {this.state.submitted ? (
                     <div>
-                        <h4>You plant has been added successfully!</h4>
+                        <h4>Your plant has been added successfully!</h4>
                         <button className="btn btn-success" onClick={this.newPlant}>
                             Add
                         </button>

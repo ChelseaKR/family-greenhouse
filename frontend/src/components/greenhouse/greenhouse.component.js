@@ -6,15 +6,13 @@ import UsersListComponent from "./users-list.component";
 class Greenhouse extends Component {
 
     render() {
-
         return (
             <div>
                 <h3>My Greenhouse</h3>
                 <br/>
                 <UsersListComponent/>
             </div>
-
-    );
+        );
     }
 }
 
