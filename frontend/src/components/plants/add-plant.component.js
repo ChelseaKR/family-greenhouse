@@ -13,7 +13,7 @@ class AddPlant extends Component {
         this.newPlant = this.newPlant.bind(this);
 
         const { user } = this.props.auth0;
-
+        console.log(JSON.stringify(user));
         this.state = {
             userId: user.sub,
             id: "",

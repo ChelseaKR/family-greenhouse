@@ -88,6 +88,14 @@ const NavBar = () => {
                   <DropdownMenu>
                     <DropdownItem header>{user.name}</DropdownItem>
                     <DropdownItem
+                        tag={RouterNavLink}
+                        to="/greenhouse"
+                        className="dropdown-profile"
+                        activeClassName="router-link-exact-active"
+                    >
+                      <FontAwesomeIcon icon="house-chimney" className="mr-3" />My Greenhouse
+                    </DropdownItem>
+                    <DropdownItem
                       tag={RouterNavLink}
                       to="/profile"
                       className="dropdown-profile"
@@ -137,6 +145,15 @@ const NavBar = () => {
                     <h6 className="d-inline-block">{user.name}</h6>
                   </span>
                 </NavItem>
+                <NavItem>
+                <FontAwesomeIcon icon="house-chimney" className="mr-3" />
+                <RouterNavLink
+                    to="/greenhouse"
+                    activeClassName="router-link-exact-active"
+                >
+                  My Greenhouse
+                </RouterNavLink>
+              </NavItem>
                 <NavItem>
                   <FontAwesomeIcon icon="user" className="mr-3" />
                   <RouterNavLink
