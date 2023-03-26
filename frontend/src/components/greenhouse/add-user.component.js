@@ -9,9 +9,10 @@ class AddUser extends Component {
         this.saveUser = this.saveUser.bind(this);
         this.newUser = this.newUser.bind(this);
 
-        //const { user } = this.props.auth0;
+        const { user } = this.props.auth0;
         this.state = {
             email: "",
+            greenhouseId: user.greenhouse,
 
             submitted: false
         };
@@ -26,12 +27,14 @@ class AddUser extends Component {
     saveUser() {
         var data = {
             email: this.state.email,
+            greenhouseId: this.state.greenhouseId
         };
 
         UserDataService.create(data)
             .then(response => {
                 this.setState({
                     email: response.data.email,
+                    greenhouseId: response.data.greenhouseId,
 
                     submitted: true
                 });
@@ -43,8 +46,11 @@ class AddUser extends Component {
     }
 
     newUser() {
+        const { user } = this.props.auth0;
+
         this.setState({
             email: "",
+            greenhouseId: user.greenhouse,
 
             submitted: false
         });
