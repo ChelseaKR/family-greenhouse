@@ -1,18 +1,17 @@
 import React, { Component } from "react";
-import PlantDataService from "../../services/plant.service";
-import { Link } from "react-router-dom";
-import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
-import {useAuth0, withAuth0} from "@auth0/auth0-react";
+import UserDataService from "../../services/user.service";
 
-export class PlantsList extends Component {
+import { Link } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { withAuth0 } from "@auth0/auth0-react";
+
+export class UsersList extends Component {
     constructor(props) {
         super(props);
-        this.onChangeSearchName = this.onChangeSearchName.bind(this);
         this.retrieveUsers = this.retrieveUsers.bind(this);
         this.refreshList = this.refreshList.bind(this);
         this.setActiveUser = this.setActiveUser.bind(this);
         this.removeAllUsers = this.removeAllUsers.bind(this);
-        this.searchName = this.searchName.bind(this);
         this.searchGreenhouseId = this.searchGreenhouseId.bind(this);
 
         const { user } = this.props.auth0;
@@ -21,27 +20,18 @@ export class PlantsList extends Component {
             users: [],
             currentUser: null,
             currentIndex: -1,
-            searchName: ""
         };
     }
 
     componentDidMount() {
-        this.retrievePlants();
+        this.retrieveUsers();
     }
 
-    onChangeSearchName(e) {
-        const searchName = e.target.value;
-
-        this.setState({
-            searchName: searchName
-        });
-    }
-
-    retrievePlants() {
-        PlantDataService.findByUserId(this.state.userId)
+    retrieveUsers() {
+        UserDataService.findByGreenhouseId(this.state.greenhouseId)
             .then(response => {
                 this.setState({
-                    plants: response.data
+                    users: response.data
                 });
                 console.log(response.data);
             })
@@ -51,22 +41,22 @@ export class PlantsList extends Component {
     }
 
     refreshList() {
-        this.retrievePlants();
+        this.retrieveUsers();
         this.setState({
-            currentPlant: null,
+            currentUser: null,
             currentIndex: -1
         });
     }
 
-    setActivePlant(plant, index) {
+    setActiveUser(user, index) {
         this.setState({
-            currentPlant: plant,
+            currentUser: user,
             currentIndex: index
         });
     }
 
-    removeAllPlants() {
-        PlantDataService.deleteAll()
+    removeAllUsers() {
+        UserDataService.deleteAll()
             .then(response => {
                 console.log(response.data);
                 this.refreshList();
@@ -76,34 +66,16 @@ export class PlantsList extends Component {
             });
     }
 
-    searchName() {
+    searchGreenhouseId() {
         this.setState({
-            currentPlant: null,
+            currentUser: null,
             currentIndex: -1
         });
-
-        PlantDataService.findByName(this.state.userId, this.state.searchName)
+        // console.log(this.state.greenhouseId);
+        UserDataService.findByGreenhouseId(this.state.greenhouseId)
             .then(response => {
                 this.setState({
-                    plants: response.data
-                });
-                console.log(response.data);
-            })
-            .catch(e => {
-                console.log(e);
-            });
-    }
-
-    searchUserId() {
-        this.setState({
-            currentPlant: null,
-            currentIndex: -1
-        });
-        // console.log(this.state.userId);
-        PlantDataService.findByUserId(this.state.userId)
-            .then(response => {
-                this.setState({
-                    plants: response.data
+                    users: response.data
                 });
                 console.log(response.data);
             })
@@ -113,60 +85,40 @@ export class PlantsList extends Component {
     }
 
     render() {
-        const { searchName, plants, currentPlant, currentIndex } = this.state;
+        const { users, currentUser, currentIndex } = this.state;
 
         return (
             <div className="list row">
                 <div className="col-md-12">
-                    <div className="input-group mb-3">
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Search by name"
-                            value={searchName}
-                            onChange={this.onChangeSearchName}
-                        />
-                        <div className="input-group-append">
-                            <button
-                                className="btn btn-outline-secondary"
-                                type="button"
-                                onClick={this.searchName}
-                            >
-                                Search
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-md-12">
-                    <h4>Plants List
+                    <h4>Family List
                         <a
                             className="btn btn-sm btn-success" style={{float: "right"}}
-                            href="/add"
+                            href="/users/add"
                         >
-                            <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
+                            <FontAwesomeIcon icon="plus" className="mr-1" /> Add Family!
                         </a></h4>
                     <ul className="list-group">
-                        {plants && plants.map((plant, index) => (
+                        {users && users.map((user, index) => (
                             <li
                                 className={ "list-group-item " +  (index === currentIndex ? "active" : "")  }
-                                onClick={() => this.setActivePlant(plant, index)}
+                                onClick={() => this.setActiveUser(user, index)}
                                 key={index}
                             >
-                                {plant.name}
+                                {user.name}
                                 <br></br>
 
-                                <Link
-                                    to={"/plants/" + plant.id}
+{/*                                <Link
+                                    to={"/users/" + user.sub}
                                     className="badge badge-warning"
                                 >
                                     Edit
-                                </Link>
+                                </Link>*/}
                             </li>
                         ))}
                     </ul>
                     {/*                    <button
                         className="m-3 btn btn-sm btn-danger"
-                        onClick={this.removeAllPlants}
+                        onClick={this.removeAllUsers}
                     >
                         Remove All
                     </button>*/}
@@ -176,4 +128,4 @@ export class PlantsList extends Component {
     }
 }
 
-export default withAuth0(PlantsList)
+export default withAuth0(UsersList)

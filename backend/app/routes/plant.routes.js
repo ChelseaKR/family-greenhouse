@@ -1,4 +1,3 @@
-const plants = require("../controllers/plant.controller");
 module.exports = app => {
     const plants = require("../controllers/plant.controller.js");
 

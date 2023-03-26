@@ -1,8 +1,8 @@
 import React, { Component } from "react";
 import PlantDataService from "../../services/plant.service";
 import { Link } from "react-router-dom";
-import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
-import {useAuth0, withAuth0} from "@auth0/auth0-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { withAuth0 } from "@auth0/auth0-react";
 
 export class PlantsList extends Component {
     constructor(props) {
@@ -14,7 +14,6 @@ export class PlantsList extends Component {
         this.removeAllPlants = this.removeAllPlants.bind(this);
         this.searchName = this.searchName.bind(this);
         this.searchUserId = this.searchUserId.bind(this);
-
 
         const { user } = this.props.auth0;
         this.state = {
@@ -142,7 +141,7 @@ export class PlantsList extends Component {
                     <h4>Plants List
                     <a
                         className="btn btn-sm btn-success" style={{float: "right"}}
-                        href="/add"
+                        href="/plants/add"
                     >
                         <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
                     </a></h4>

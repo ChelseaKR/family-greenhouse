@@ -3,15 +3,19 @@ import PlantDataService from "../../services/plant.service";
 import { withRouter } from '../common/with-router';
 import UsersListComponent from "./users-list.component";
 
-class Plant extends Component {
+class Greenhouse extends Component {
 
     render() {
-        const { currentPlant } = this.state;
 
         return (
-            <UsersListComponent></UsersListComponent>
-        );
+            <div>
+                <h3>My Greenhouse</h3>
+                <br/>
+                <UsersListComponent/>
+            </div>
+
+    );
     }
 }
 
-export default withRouter(Plant);
+export default withRouter(Greenhouse);

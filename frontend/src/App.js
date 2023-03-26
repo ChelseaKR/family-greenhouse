@@ -18,7 +18,7 @@ import PlantsList from "./components/plants/plants-list.component";
 import Greenhouse from "./components/greenhouse/greenhouse.component";
 import AddUser from "./components/greenhouse/add-user.component";
 import User from "./components/plants/plant.component";
-import usersList from "./components/plants/plants-list.component";
+import UsersList from "./components/plants/plants-list.component";
 
 import "./App.css";
 initFontAwesome();
@@ -42,10 +42,14 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home/>} />
             <Route path="/greenhouse" element={<Greenhouse/>} />
+
             <Route path="/plants" element={<PlantsList/>} />
             <Route path="/plants/:id" element={<Plant/>} />
-            <Route path="/add" element={<AddPlant/>} />
+            <Route path="/plants/add" element={<AddPlant/>} />
 
+            <Route path="/users" element={<UsersList/>} />
+            <Route path="/users/:id" element={<User/>} />
+            <Route path="/users/add" element={<AddUser/>} />
           </Routes>
         </Container>
         <Footer />
