@@ -39,7 +39,7 @@
     "postcss": "^8.4",
     "react": "^17",
     "react-dom": "^17",
-    "react-router-dom": "^6.9",
+    "react-router-dom": "^6.10",
     "react-scripts": "^5.0",
     "reactstrap": "^9.1",
     "typescript": "^5.0"
