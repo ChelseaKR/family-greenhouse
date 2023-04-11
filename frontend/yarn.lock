@@ -5437,10 +5437,10 @@ he@^1.2.0:
   resolved "https://registry.npmjs.org/he/-/he-1.2.0.tgz"
   integrity sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==
 
-helmet@^6.0:
-  version "6.0.1"
-  resolved "https://registry.yarnpkg.com/helmet/-/helmet-6.0.1.tgz#52ec353638b2e87f14fe079d142b368ac11e79a4"
-  integrity sha512-8wo+VdQhTMVBMCITYZaGTbE4lvlthelPYSvoyNvk4RECTmrVjMerp9RfUOQXZWLvCcAn1pKj7ZRxK4lI9Alrcw==
+helmet@^6.1:
+  version "6.1.4"
+  resolved "https://registry.yarnpkg.com/helmet/-/helmet-6.1.4.tgz#a57dc478532e811f7dfd64b69f9023dad1c6e28e"
+  integrity sha512-nCJIriKjOYcRmHRpK+Z5DayEh6xwOKO0U0qzWL3MEIwsB8OSxxBu/mUE9U5PRH8ln/+WySlK2eYe5FOlo0v9aA==
 
 highlight.js@^11.7:
   version "11.7.0"
@@ -10156,15 +10156,10 @@ typedarray-to-buffer@^3.1.5:
   dependencies:
     is-typedarray "^1.0.0"
 
-typescript@^4.0.3:
+typescript@^4.0.3, typescript@^4.9:
   version "4.9.5"
   resolved "https://registry.npmjs.org/typescript/-/typescript-4.9.5.tgz"
   integrity sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==
-
-typescript@^5.0:
-  version "5.0.2"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.0.2.tgz#891e1a90c5189d8506af64b9ef929fca99ba1ee5"
-  integrity sha512-wVORMBGO/FAs/++blGNeAVdbNKtIh1rbBL2EyQ1+J9lClJ93KiiKe8PmFIVdXhHcyv44SL9oglmfeSsndo0jRw==
 
 unbox-primitive@^1.0.2:
   version "1.0.2"
