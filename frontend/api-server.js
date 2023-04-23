@@ -26,7 +26,7 @@ if (
 
 app.use(morgan("dev"));
 app.use(helmet());
-app.use(cors({ origin: appOrigin }));
+app.use(cors({ origin: appOrigin, credentials: true }));
 
 const checkJwt = jwt({
   secret: jwksRsa.expressJwtSecret({

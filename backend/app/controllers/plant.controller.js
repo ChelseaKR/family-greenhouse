@@ -5,15 +5,16 @@ const Op = db.Sequelize.Op;
 // Create and Save a new Plant
 exports.create = (req, res) => {
     // Validate request
-    if (!req.body.userId) {
+    if (!req.body.userId || !req.body.greenhouse) {
         res.status(400).send({
-            message: "user id can't be empty!"
+            message: "user id or greenhouse can't be empty!"
         });
         return;
     }
     // Create a Plant
     const plant = {
         userId: req.body.userId,
+        greenhouse: req.body.greenhouse,
         name: req.body.name,
         type: req.body.type,
         location: req.body.location,
@@ -35,13 +36,13 @@ exports.create = (req, res) => {
 
 // Retrieve all Plants from the database.
 exports.findAll = (req, res) => {
-    const userId = req.query.userId;
+    const greenhouse = req.query.greenhouse;
     const name = req.query.name;
     let whereClause = null;
-    if (userId != null && name != null) {
-        whereClause = { userId: { [Op.eq]: userId }, name: { [Op.iLike]: `%${name}%` } };
-    } else if (userId != null && name == null) {
-        whereClause = { userId: { [Op.eq]: userId }};
+    if (greenhouse != null && name != null) {
+        whereClause = { greenhouse: { [Op.eq]: greenhouse }, name: { [Op.iLike]: `%${name}%` } };
+    } else if (greenhouse != null && name == null) {
+        whereClause = { greenhouse: { [Op.eq]: greenhouse }};
     }
 
     if (whereClause != null) {

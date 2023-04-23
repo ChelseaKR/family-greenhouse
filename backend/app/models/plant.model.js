@@ -3,6 +3,9 @@ module.exports = (sequelize, Sequelize) => {
         userId: {
             type: Sequelize.STRING
         },
+        greenhouse: {
+            type: Sequelize.STRING
+        },
         name: {
             type: Sequelize.STRING
         },
