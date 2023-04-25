@@ -9,6 +9,6 @@
     "express-oauth2-jwt-bearer": "^1.4.0",
     "pg": "^8.10.0",
     "postgresql": "^0.0.1",
-    "sequelize": "^6.30.0"
+    "sequelize": "^6.31.0"
   }
 }
