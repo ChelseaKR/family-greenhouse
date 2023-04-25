@@ -25,12 +25,12 @@ class PlantDataService {
         return http.delete(`/plants`);
     }
 
-    findByName(userId, name) {
-        return http.get(`/plants?userId=${userId}&name=${name}`);
+    findByName(greenhouse, name) {
+        return http.get(`/plants?greenhouse=${greenhouse}&name=${name}`);
     }
 
-    findByUserId(userId) {
-        return http.get(`/plants?userId=${userId}`);
+    findByGreenhouse(greenhouse) {
+        return http.get(`/plants?greenhouse=${greenhouse}`);
     }
 }
 
