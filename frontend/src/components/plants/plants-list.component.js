@@ -13,11 +13,13 @@ export class PlantsList extends Component {
         this.setActivePlant = this.setActivePlant.bind(this);
         this.removeAllPlants = this.removeAllPlants.bind(this);
         this.searchName = this.searchName.bind(this);
-        this.searchUserId = this.searchUserId.bind(this);
+        this.searchGreenhouse = this.searchGreenhouse.bind(this);
 
         const { user } = this.props.auth0;
+
         this.state = {
             userId: user.sub,
+            greenhouse: user.greenhouse,
             plants: [],
             currentPlant: null,
             currentIndex: -1,
@@ -38,7 +40,7 @@ export class PlantsList extends Component {
     }
 
     retrievePlants() {
-        PlantDataService.findByUserId(this.state.userId)
+        PlantDataService.findByGreenhouse(this.state.greenhouse)
             .then(response => {
                 this.setState({
                     plants: response.data
@@ -82,7 +84,7 @@ export class PlantsList extends Component {
             currentIndex: -1
         });
 
-        PlantDataService.findByName(this.state.userId, this.state.searchName)
+        PlantDataService.findByName(this.state.greenhouse, this.state.searchGreenhouse)
             .then(response => {
                 this.setState({
                     plants: response.data
@@ -94,13 +96,14 @@ export class PlantsList extends Component {
             });
     }
 
-    searchUserId() {
+    searchGreenhouse() {
         this.setState({
             currentPlant: null,
             currentIndex: -1
         });
         // console.log(this.state.userId);
-        PlantDataService.findByUserId(this.state.userId)
+        console.log(this.state.greenhouse);
+        PlantDataService.findByGreenhouse(this.state.greenhouse)
             .then(response => {
                 this.setState({
                     plants: response.data

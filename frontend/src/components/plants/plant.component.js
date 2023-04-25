@@ -16,6 +16,7 @@ class Plant extends Component {
         this.state = {
             currentPlant: {
                 id: null,
+                greenhouse: "",
                 name: "",
                 type: "",
                 location: "",
