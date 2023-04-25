@@ -16,6 +16,7 @@ class AddPlant extends Component {
         console.log(JSON.stringify(user));
         this.state = {
             userId: user.sub,
+            greenhouse: user.greenhouse,
             id: "",
             name: "",
             type: "",
@@ -51,8 +52,11 @@ class AddPlant extends Component {
     }
 
     savePlant() {
+        const { user } = this.props.auth0;
+
         var data = {
             userId: this.state.userId,
+            greenhouse: user.greenhouse,
             name: this.state.name,
             type: this.state.type,
             location: this.state.location,
@@ -61,8 +65,10 @@ class AddPlant extends Component {
 
         PlantDataService.create(data)
             .then(response => {
+                console.log("creating plant..." + user.greenhouse);
                 this.setState({
                     id: response.data.id,
+                    greenhouse: user.greenhouse,
                     name: response.data.name,
                     type: response.data.type,
                     location: response.data.location,
@@ -78,8 +84,10 @@ class AddPlant extends Component {
     }
 
     newPlant() {
+        const { user } = this.props.auth0;
         this.setState({
             id: null,
+            greenhouse: user.greenhouse,
             name: "",
             type: "",
             location: "",
