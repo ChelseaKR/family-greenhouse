@@ -48,54 +48,6 @@ const NavBar = () => {
                  className="d-inline-block align-top" alt=""/>
             Family Greenhouse
           </a>
-            {!isAuthenticated && (
-                  <Button
-                      id="qsLoginBtn"
-                      color="primary"
-                      className="btn-margin btn-right"
-                      onClick={() => loginWithRedirect()}
-                  >
-                    Log in
-                  </Button>
-            )}
-            {isAuthenticated && (
-                <UncontrolledDropdown nav inNavbar>
-                  <DropdownToggle nav caret id="settingsDropDown">
-                    <img
-                        src={user.picture}
-                        alt="Profile"
-                        className="nav-user-profile rounded-circle"
-                        width="50"
-                    />
-                  </DropdownToggle>
-                  <DropdownMenu>
-                    <DropdownItem header>{user.name}</DropdownItem>
-                    <DropdownItem
-                        tag={RouterNavLink}
-                        to="/greenhouse"
-                        className="dropdown-profile"
-                        activeClassName="router-link-exact-active"
-                    >
-                      <FontAwesomeIcon icon="house-chimney" className="mr-3" />My Greenhouse
-                    </DropdownItem>
-                    <DropdownItem
-                        tag={RouterNavLink}
-                        to="/profile"
-                        className="dropdown-profile"
-                        activeClassName="router-link-exact-active"
-                    >
-                      <FontAwesomeIcon icon="user" className="mr-3" /> Settings
-                    </DropdownItem>
-                    <DropdownItem
-                        id="qsLogoutBtn"
-                        onClick={() => logoutWithRedirect()}
-                    >
-                      <FontAwesomeIcon icon="power-off" className="mr-3" /> Log
-                      out
-                    </DropdownItem>
-                  </DropdownMenu>
-                </UncontrolledDropdown>
-            )}
           <NavbarToggler onClick={toggle} />
           <Collapse isOpen={isOpen} navbar>
             <Nav className="mr-auto" navbar>
@@ -110,14 +62,64 @@ const NavBar = () => {
                 </NavLink>
               </NavItem>*/}
             </Nav>
-
+            <Nav className="d-none d-md-block" navbar>
+              {!isAuthenticated && (
+                <NavItem>
+                  <Button
+                    id="qsLoginBtn"
+                    color="primary"
+                    className="btn-margin"
+                    onClick={() => loginWithRedirect()}
+                  >
+                    Log in
+                  </Button>
+                </NavItem>
+              )}
+              {isAuthenticated && (
+                <UncontrolledDropdown nav inNavbar>
+                  <DropdownToggle nav caret id="settingsDropDown">
+                    <img
+                      src={user.picture}
+                      alt="Profile"
+                      className="nav-user-profile rounded-circle"
+                      width="50"
+                    />
+                  </DropdownToggle>
+                  <DropdownMenu>
+                    <DropdownItem header>{user.name}</DropdownItem>
+                    <DropdownItem
+                        tag={RouterNavLink}
+                        to="/greenhouse"
+                        className="dropdown-profile"
+                        activeClassName="router-link-exact-active"
+                    >
+                      <FontAwesomeIcon icon="house-chimney" className="mr-3" />My Greenhouse
+                    </DropdownItem>
+                    <DropdownItem
+                      tag={RouterNavLink}
+                      to="/profile"
+                      className="dropdown-profile"
+                      activeClassName="router-link-exact-active"
+                    >
+                      <FontAwesomeIcon icon="user" className="mr-3" /> Settings
+                    </DropdownItem>
+                    <DropdownItem
+                      id="qsLogoutBtn"
+                      onClick={() => logoutWithRedirect()}
+                    >
+                      <FontAwesomeIcon icon="power-off" className="mr-3" /> Log
+                      out
+                    </DropdownItem>
+                  </DropdownMenu>
+                </UncontrolledDropdown>
+              )}
+            </Nav>
             {!isAuthenticated && (
               <Nav className="d-md-none" navbar>
                 <NavItem>
                   <Button
                     id="qsLoginBtn"
                     color="primary"
-                    className="btn-right"
                     block
                     onClick={() => loginWithRedirect({})}
                   >
