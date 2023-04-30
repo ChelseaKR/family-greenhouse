@@ -1,9 +1,10 @@
 const db = require("../models");
 const Plant = db.plants;
+const Task = db.tasks;
 const Op = db.Sequelize.Op;
 
 // Create and Save a new Plant
-exports.create = (req, res) => {
+exports.create = async (req, res) => {
     // Validate request
     if (!req.body.userId || !req.body.greenhouse) {
         res.status(400).send({
@@ -20,6 +21,13 @@ exports.create = (req, res) => {
         location: req.body.location,
         description: req.body.description
     };
+
+    const wateringTask = await Task.create({
+        plant_id: plant.id,
+        task_type: 'watering',
+        reminder_time: '12:00:00',
+        next_task_date: new Date(Date.now() + plant.watering_frequency_days).setTime(this.reminder_time)
+    });
 
     // Save Plant in the database
     Plant.create(plant)
