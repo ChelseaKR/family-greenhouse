@@ -1,0 +1,40 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 14
+
+    - name: Install dependencies and build
+      run: |
+        ./scripts/install-all.sh
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        envs: FRONTEND_ENV_VAR1,FRONTEND_ENV_VAR2,BACKEND_ENV_VAR1,BACKEND_ENV_VAR2
+        script: |
+          export FRONTEND_ENV_VAR1=${{ secrets.FRONTEND_ENV_VAR1 }}
+          export FRONTEND_ENV_VAR2=${{ secrets.FRONTEND_ENV_VAR2 }}
+          export BACKEND_ENV_VAR1=${{ secrets.BACKEND_ENV_VAR1 }}
+          export BACKEND_ENV_VAR2=${{ secrets.BACKEND_ENV_VAR2 }}
+          cd /path/to/your/app/on/ec2
+          git pull
+          ./scripts/install-all.sh
+          (./scripts/front-end.sh &) && (./scripts/back-end.sh &)
