@@ -19,7 +19,9 @@ exports.create = async (req, res) => {
         name: req.body.name,
         type: req.body.type,
         location: req.body.location,
-        description: req.body.description
+        description: req.body.description,
+        watering_frequency_days: req.body.watering_frequency_days,
+        last_watered: req.body.last_watered
     };
 
     const task = await Task.create({

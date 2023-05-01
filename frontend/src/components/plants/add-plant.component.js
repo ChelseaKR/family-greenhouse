@@ -24,6 +24,7 @@ class AddPlant extends Component {
                 type: "",
                 location: "",
                 description: "",
+                watering_frequency_days: 0
             },
             newTask: {
                 task_type: 'water',
@@ -117,7 +118,7 @@ class AddPlant extends Component {
             type: this.state.newPlant.type,
             location: this.state.newPlant.location,
             description: this.state.newPlant.description,
-            wateringFrequencyDays: this.state.newPlant.watering_frequency_days,
+            watering_frequency_days: this.state.newPlant.watering_frequency_days,
             taskTime: this.state.newTask.reminder_time
         };
 
