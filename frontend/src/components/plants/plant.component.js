@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import PlantDataService from "../../services/plant.service";
-import {withRouter} from "../common/with-router";
+import { withRouter } from "../common/with-router";
 
 class Plant extends Component {
     constructor(props) {
@@ -24,7 +24,7 @@ class Plant extends Component {
                 description: "",
                 watering_frequency_days: 0,
             },
-            currentWateringTask: {
+            currentTask: {
                 task_type: 'water',
                 reminder_time: null,
                 next_task_date: null,
@@ -99,12 +99,12 @@ class Plant extends Component {
         }));
     }
 
-    onChangeWateringTaskTime(e) {
+    onChangeTaskTime(e) {
         const wateringFrequencyTaskTime = e.target.value;
 
         this.setState(prevState => ({
-            currentWateringTask: {
-                ...prevState.currentWateringTask,
+            currentTask: {
+                ...prevState.currentTask,
                 reminder_time: wateringFrequencyTaskTime
             }
         }));
@@ -127,7 +127,7 @@ class Plant extends Component {
         PlantDataService.update(
             this.state.currentPlant.id,
             this.state.currentPlant,
-            this.state.currentWateringTask
+            this.state.currentTask
         )
             .then(response => {
                 console.log(response.data);
@@ -153,7 +153,7 @@ class Plant extends Component {
 
     render() {
         const currentPlant = this.state.currentPlant;
-        const currentWateringTask = this.state.currentWateringTask;
+        const currentTask = this.state.currentTask;
 
         const daysOptions = Array.from({ length: 365 }, (_, i) => {
             return i + 1;
@@ -223,8 +223,8 @@ class Plant extends Component {
                                     type="text"
                                     className="form-control"
                                     id="watering_task_time"
-                                    value={currentWateringTask.reminder_time}
-                                    onChange={this.onChangeWateringTaskTime}
+                                    value={currentTask.reminder_time}
+                                    onChange={this.onChangeTaskTime}
                                 />
                             </div>
                         </form>

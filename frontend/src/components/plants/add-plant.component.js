@@ -9,70 +9,137 @@ class AddPlant extends Component {
         this.onChangeType = this.onChangeType.bind(this);
         this.onChangeLocation = this.onChangeLocation.bind(this);
         this.onChangeDescription = this.onChangeDescription.bind(this);
+        this.onChangeWateringFrequencyDays = this.onChangeWateringFrequencyDays.bind(this);
         this.savePlant = this.savePlant.bind(this);
         this.newPlant = this.newPlant.bind(this);
 
         const { user } = this.props.auth0;
         console.log(JSON.stringify(user));
         this.state = {
-            userId: user.sub,
-            greenhouse: user.greenhouse,
-            id: "",
-            name: "",
-            type: "",
-            location: "",
-            description: "",
-
+            newPlant: {
+                userId: user.sub,
+                greenhouse: user.greenhouse,
+                id: "",
+                name: "",
+                type: "",
+                location: "",
+                description: "",
+            },
+            newTask: {
+                task_type: 'water',
+                reminder_time: null,
+                next_task_date: null,
+            },
+            selectedWateringFrequencyOption: "",
             submitted: false
         };
     }
 
     onChangeName(e) {
-        this.setState({
-            name: e.target.value
+        const name = e.target.value;
+
+        this.setState(function(prevState) {
+            return {
+                newPlant: {
+                    ...prevState.newPlant,
+                    name: name
+                }
+            };
         });
     }
 
     onChangeType(e) {
-        this.setState({
-            type: e.target.value
+        const type = e.target.value;
+
+        this.setState(function(prevState) {
+            return {
+                newPlant: {
+                    ...prevState.newPlant,
+                    type: type
+                }
+            };
         });
     }
 
     onChangeLocation(e) {
-        this.setState({
-            location: e.target.value
+        const location = e.target.value;
+
+        this.setState(function(prevState) {
+            return {
+                newPlant: {
+                    ...prevState.newPlant,
+                    location: location
+                }
+            };
         });
     }
 
     onChangeDescription(e) {
-        this.setState({
-            description: e.target.value
-        });
+        const description = e.target.value;
+
+        this.setState(prevState => ({
+            newPlant: {
+                ...prevState.newPlant,
+                description: description
+            }
+        }));
+    }
+
+    onChangeWateringFrequencyDays(e) {
+        const wateringFrequencyDays = e.target.value;
+
+        this.setState(prevState => ({
+            newPlant: {
+                ...prevState.newPlant,
+                watering_frequency_days: wateringFrequencyDays
+            }
+        }));
+    }
+
+    onChangeTaskTime(e) {
+        const wateringFrequencyTaskTime = e.target.value;
+
+        this.setState(prevState => ({
+            newTask: {
+                ...prevState.newTask,
+                reminder_time: wateringFrequencyTaskTime
+            }
+        }));
     }
 
     savePlant() {
         const { user } = this.props.auth0;
 
         var data = {
-            userId: this.state.userId,
+            userId: this.state.newPlant.userId,
             greenhouse: user.greenhouse,
-            name: this.state.name,
-            type: this.state.type,
-            location: this.state.location,
-            description: this.state.description
+            name: this.state.newPlant.name,
+            type: this.state.newPlant.type,
+            location: this.state.newPlant.location,
+            description: this.state.newPlant.description,
+            wateringFrequencyDays: this.state.newPlant.watering_frequency_days,
+            taskTime: this.state.newTask.reminder_time
         };
 
         PlantDataService.create(data)
             .then(response => {
-                console.log("creating plant..." + user.greenhouse);
+                console.log("creating plant in greenhouse: " + user.greenhouse);
                 this.setState({
-                    id: response.data.id,
-                    greenhouse: user.greenhouse,
-                    name: response.data.name,
-                    type: response.data.type,
-                    location: response.data.location,
-                    description: response.data.description,
+                    newPlant: {
+                        id: response.data.id,
+                        greenhouse: user.greenhouse,
+                        name: response.data.name,
+                        type: response.data.type,
+                        location: response.data.location,
+                        description: response.data.description,
+                        watering_frequency_days: response.data.watering_frequency_days,
+                    },
+                    newTask: {
+                        task_type: response.data.task_type,
+                        reminder_time: response.data.reminder_time,
+                        next_task_date: response.data.next_task_date,
+                    },
+                    selectedWateringFrequencyOption: "",
 
                     submitted: true
                 });
@@ -86,18 +153,30 @@ class AddPlant extends Component {
     newPlant() {
         const { user } = this.props.auth0;
         this.setState({
-            id: null,
-            greenhouse: user.greenhouse,
-            name: "",
-            type: "",
-            location: "",
-            description: "",
+            newPlant: {
+                id: null,
+                userId: user.sub,
+                greenhouse: user.greenhouse,
+                name: "",
+                type: "",
+                location: "",
+                description: "",
+            },
+            newTask: {
+                task_type: 'water',
+                reminder_time: null,
+                next_task_date: null,
+            },
+            selectedWateringFrequencyOption: "",
 
             submitted: false
         });
     }
 
     render() {
+        const daysOptions = Array.from({ length: 365 }, (_, i) => {
+            return i + 1;
+        });
         return (
             <div className="submit-form">
                 {this.state.submitted ? (
@@ -116,7 +195,7 @@ class AddPlant extends Component {
                                 className="form-control"
                                 id="name"
                                 required
-                                value={this.state.name}
+                                value={this.state.newPlant.name}
                                 onChange={this.onChangeName}
                                 name="Name"
                             />
@@ -128,7 +207,7 @@ class AddPlant extends Component {
                                 className="form-control"
                                 id="type"
                                 required
-                                value={this.state.type}
+                                value={this.state.newPlant.type}
                                 onChange={this.onChangeType}
                                 name="Type"
                             />
@@ -140,7 +219,7 @@ class AddPlant extends Component {
                                 className="form-control"
                                 id="type"
                                 required
-                                value={this.state.location}
+                                value={this.state.newPlant.location}
                                 onChange={this.onChangeLocation}
                                 name="Location"
                             />
@@ -152,12 +231,22 @@ class AddPlant extends Component {
                                 className="form-control"
                                 id="description"
                                 required
-                                value={this.state.description}
+                                value={this.state.newPlant.description}
                                 onChange={this.onChangeDescription}
                                 name="description"
                             />
                         </div>
-
+                        <div className="form-group">
+                            <label htmlFor={`days-watering`}>Remind me to water:</label>
+                            <select id="days" value={this.state.newPlant.watering_frequency_days} onChange={this.onChangeWateringFrequencyDays}>
+                                <option value="">Select an option</option>
+                                {daysOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                        Every {option} {option > 1 ? 'days' : 'day'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <button onClick={this.savePlant} className="btn btn-success">
                             Submit
                         </button>

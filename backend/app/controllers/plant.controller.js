@@ -22,11 +22,11 @@ exports.create = async (req, res) => {
         description: req.body.description
     };
 
-    const wateringTask = await Task.create({
+    const task = await Task.create({
         plant_id: plant.id,
-        task_type: 'watering',
+        task_type: 'water',
         reminder_time: '12:00:00',
-        next_task_date: new Date(Date.now() + plant.watering_frequency_days).setTime(this.reminder_time)
+        next_task_date: new Date(Date.now())
     });
 
     // Save Plant in the database
@@ -37,9 +37,21 @@ exports.create = async (req, res) => {
         .catch(err => {
             res.status(500).send({
                 message:
-                    err.message || "Some error occurred while creating the Plant."
+                    err.message || "Some error occurred while creating the plant."
             });
         });
+
+/*    // Save task in the database
+    Plant.create(task)
+        .then(data => {
+            res.send(data);
+        })
+        .catch(err => {
+            res.status(500).send({
+                message:
+                    err.message || "Some error occurred while creating the task."
+            });
+        });*/
 };
 
 // Retrieve all Plants from the database.
