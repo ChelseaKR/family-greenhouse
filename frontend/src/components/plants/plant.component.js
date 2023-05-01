@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import PlantDataService from "../../services/plant.service";
-import { withRouter } from '../common/with-router';
+import TaskFrequencyDropdown from "./task-frequency-dropdown"
+import {withRouter} from "../common/with-router";
 
 class Plant extends Component {
     constructor(props) {
@@ -22,14 +23,14 @@ class Plant extends Component {
                 type: "",
                 location: "",
                 description: "",
-                watering_frequency_days: null,
-                last_watered: null
+                watering_frequency_days: 0,
             },
             currentWateringTask: {
                 task_type: 'watering',
                 reminder_time: null,
                 next_task_date: null,
             },
+            selectedWateringFrequencyOption: "",
             message: ""
         };
     }
@@ -155,6 +156,10 @@ class Plant extends Component {
         const currentPlant = this.state.currentPlant;
         const currentWateringTask = this.state.currentWateringTask;
 
+        const daysOptions = Array.from({ length: 365 }, (_, i) => {
+            return i + 1;
+        });
+
         return (
             <div>
                 {currentPlant ? (
@@ -202,14 +207,18 @@ class Plant extends Component {
                                 />
                             </div>
                             <div className="form-group">
-                                <label htmlFor="watering_frequency_days">Watering Frequency</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="watering_frequency_days"
-                                    value={currentPlant.watering_frequency_days}
-                                    onChange={this.onChangeWateringFrequencyDays}
-                                />
+                                <label htmlFor={`days-watering`}>Remind me to water:</label>
+                                <select id="days" value={this.state.selectedWateringFrequencyOption} onChange={this.onChangeWateringFrequencyDays}>
+                                    <option value="">Select an option</option>
+                                    {daysOptions.map((option) => (
+                                        <option key={option} value={option}>
+                                            Every {option} {option > 1 ? 'days' : 'day'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group">
                                 <label htmlFor="watering_task_time">Watering Reminder Time</label>
                                 <input
                                     type="text"
