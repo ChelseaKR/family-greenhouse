@@ -9,6 +9,7 @@ class Plant extends Component {
         this.onChangeType = this.onChangeType.bind(this);
         this.onChangeLocation = this.onChangeLocation.bind(this);
         this.onChangeDescription = this.onChangeDescription.bind(this);
+        this.onChangeWateringFrequencyDays = this.onChangeWateringFrequencyDays.bind(this);
         this.getPlant = this.getPlant.bind(this);
         this.updatePlant = this.updatePlant.bind(this);
         this.deletePlant = this.deletePlant.bind(this);
@@ -21,6 +22,13 @@ class Plant extends Component {
                 type: "",
                 location: "",
                 description: "",
+                watering_frequency_days: null,
+                last_watered: null
+            },
+            currentWateringTask: {
+                task_type: 'watering',
+                reminder_time: null,
+                next_task_date: null,
             },
             message: ""
         };
@@ -76,6 +84,17 @@ class Plant extends Component {
             currentPlant: {
                 ...prevState.currentPlant,
                 description: description
+            }
+        }));
+    }
+
+    onChangeWateringFrequencyDays(e) {
+        const wateringFrequencyDays = e.target.value;
+
+        this.setState(prevState => ({
+            currentPlant: {
+                ...prevState.currentPlant,
+                watering_frequency_days: wateringFrequencyDays
             }
         }));
     }
@@ -167,6 +186,24 @@ class Plant extends Component {
                                     id="description"
                                     value={currentPlant.description}
                                     onChange={this.onChangeDescription}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="watering_frequency_days">Watering Frequency</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    id="watering_frequency_days"
+                                    value={currentPlant.watering_frequency_days}
+                                    onChange={this.onChangeWateringFrequencyDays}
+                                />
+                                <label htmlFor="watering_task_time">Watering Time Reminder</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    id="watering_task_time"
+                                    value={currentPlant.watering_frequency_days}
+                                    onChange={this.onChangeWateringFrequencyDays}
                                 />
                             </div>
                         </form>
