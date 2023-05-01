@@ -25,7 +25,6 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.DATE
         }
     });
-    Plant.hasMany(Task, { as: 'tasks', foreignKey: 'plant_id' });
 
     return Plant;
 };

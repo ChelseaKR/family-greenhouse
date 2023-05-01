@@ -99,6 +99,17 @@ class Plant extends Component {
         }));
     }
 
+    onChangeWateringTaskTime(e) {
+        const wateringFrequencyTaskTime = e.target.value;
+
+        this.setState(prevState => ({
+            currentWateringTask: {
+                ...prevState.currentWateringTask,
+                reminder_time: wateringFrequencyTaskTime
+            }
+        }));
+    }
+
     getPlant(id) {
         PlantDataService.get(id)
             .then(response => {
@@ -115,7 +126,8 @@ class Plant extends Component {
     updatePlant() {
         PlantDataService.update(
             this.state.currentPlant.id,
-            this.state.currentPlant
+            this.state.currentPlant,
+            this.state.currentWateringTask
         )
             .then(response => {
                 console.log(response.data);
@@ -140,7 +152,8 @@ class Plant extends Component {
     }
 
     render() {
-        const { currentPlant } = this.state;
+        const currentPlant = this.state.currentPlant;
+        const currentWateringTask = this.state.currentWateringTask;
 
         return (
             <div>
@@ -197,13 +210,13 @@ class Plant extends Component {
                                     value={currentPlant.watering_frequency_days}
                                     onChange={this.onChangeWateringFrequencyDays}
                                 />
-                                <label htmlFor="watering_task_time">Watering Time Reminder</label>
+                                <label htmlFor="watering_task_time">Watering Reminder Time</label>
                                 <input
                                     type="text"
                                     className="form-control"
                                     id="watering_task_time"
-                                    value={currentPlant.watering_frequency_days}
-                                    onChange={this.onChangeWateringFrequencyDays}
+                                    value={currentWateringTask.reminder_time}
+                                    onChange={this.onChangeWateringTaskTime}
                                 />
                             </div>
                         </form>
