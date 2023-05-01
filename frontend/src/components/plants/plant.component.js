@@ -1,6 +1,5 @@
 import React, { Component } from "react";
 import PlantDataService from "../../services/plant.service";
-import TaskFrequencyDropdown from "./task-frequency-dropdown"
 import {withRouter} from "../common/with-router";
 
 class Plant extends Component {
@@ -26,7 +25,7 @@ class Plant extends Component {
                 watering_frequency_days: 0,
             },
             currentWateringTask: {
-                task_type: 'watering',
+                task_type: 'water',
                 reminder_time: null,
                 next_task_date: null,
             },
@@ -115,7 +114,7 @@ class Plant extends Component {
         PlantDataService.get(id)
             .then(response => {
                 this.setState({
-                    currentPlant: response.data
+                    currentPlant: response.data,
                 });
                 console.log(response.data);
             })
@@ -208,7 +207,7 @@ class Plant extends Component {
                             </div>
                             <div className="form-group">
                                 <label htmlFor={`days-watering`}>Remind me to water:</label>
-                                <select id="days" value={this.state.selectedWateringFrequencyOption} onChange={this.onChangeWateringFrequencyDays}>
+                                <select id="days" value={this.state.currentPlant.watering_frequency_days} onChange={this.onChangeWateringFrequencyDays}>
                                     <option value="">Select an option</option>
                                     {daysOptions.map((option) => (
                                         <option key={option} value={option}>
