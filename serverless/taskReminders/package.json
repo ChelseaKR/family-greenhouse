@@ -1,0 +1,10 @@
+{
+  "name": "taskReminders",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.321.1",
+    "aws-sdk": "^2.1369.0",
+    "pg": "^8.10.0"
+  }
+}
