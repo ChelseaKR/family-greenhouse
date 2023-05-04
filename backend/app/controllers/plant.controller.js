@@ -22,37 +22,29 @@ exports.create = async (req, res) => {
         description: req.body.description,
     };
 
-    const task = await Task.create({
-        task_type: 'water',
-        task_frequency_days: req.body.task_frequency_days,
-        last_completed: req.body.last_completed,
-        reminder_time: '12:00:00',
-        next_task_date: new Date(Date.now())
-    });
+    try {
+        // Save Plant in the database
+        const createdPlant = await Plant.create(plant);
 
-    // Save Plant in the database
-    Plant.create(plant)
-        .then(data => {
-            res.send(data);
-        })
-        .catch(err => {
-            res.status(500).send({
-                message:
-                    err.message || "Some error occurred while creating the plant."
-            });
+        // Create a Task associated with the created Plant
+        const task = {
+            plant_id: createdPlant.id,
+            task_type: 'water',
+            task_frequency_days: req.body.task_frequency_days,
+            last_completed: req.body.last_completed,
+            reminder_time: '12:00:00',
+            next_task_date: new Date(Date.now())
+        };
+
+        // Save Task in the database
+        const createdTask = await Task.create(task);
+
+        res.send({ plant: createdPlant, task: createdTask });
+    } catch (err) {
+        res.status(500).send({
+            message: err.message || "Some error occurred while creating the plant and task."
         });
-
-/*    // Save task in the database
-    Plant.create(task)
-        .then(data => {
-            res.send(data);
-        })
-        .catch(err => {
-            res.status(500).send({
-                message:
-                    err.message || "Some error occurred while creating the task."
-            });
-        });*/
+    }
 };
 
 // Retrieve all Plants from the database.

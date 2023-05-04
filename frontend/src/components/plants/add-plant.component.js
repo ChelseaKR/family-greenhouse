@@ -165,6 +165,8 @@ class AddPlant extends Component {
                 description: "",
             },
             newTask: {
+                id: null,
+                plant_id: null,
                 task_type: 'water',
                 reminder_time: null,
                 next_task_date: null,
