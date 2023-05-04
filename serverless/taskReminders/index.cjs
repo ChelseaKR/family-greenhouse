@@ -1,11 +1,12 @@
 const SecretsManagerClient = require("@aws-sdk/client-secrets-manager").SecretsManagerClient;
 const GetSecretValueCommand = require("@aws-sdk/client-secrets-manager").GetSecretValueCommand;
-const pkg = require('pg');
 
+//const { RDSClient, DescribeDBInstancesCommand } = require("@aws-sdk/client-rds");
+const RDSClient = require("@aws-sdk/client-rds").RDSClient;
+const DescribeDBInstancesCommand = require("@aws-sdk/client-rds").DescribeDBInstancesCommand;
+const { Client, Pool } = require('pg');
 
 exports.handler = async (event) => {
-    const Pool = pkg.Pool;
-
     const secretsManager = new SecretsManagerClient({
         region: "us-west-2",
     });
@@ -14,36 +15,34 @@ exports.handler = async (event) => {
         SecretId: 'arn:aws:secretsmanager:us-west-2:014248889144:secret:family-greenhouse/db/postgres-xMOkKx'
     };
 
-        const result = await secretsManager.send(
-            new GetSecretValueCommand(secretParams)
-        );
-        const secrets = JSON.parse(result.SecretString);
-        const fin = JSON.stringify(secrets);
-        console.log(JSON.stringify(secrets))
-        // const rdsParams = {
-        //   DBInstanceIdentifier: secrets.rdsInstanceIdentifier,
-        //   MasterUsername: secrets.rdsUsername,
-        //   MasterUserPassword: secrets.rdsPassword
-        // };
+    const result = await secretsManager.send(
+        new GetSecretValueCommand(secretParams)
+    );
+    const secrets = JSON.parse(result.SecretString);
+    console.log(JSON.stringify(secrets))
 
-        // const rdsResult = await rds.describeDBInstances(rdsParams).promise();
-        // const dbEndpoint = rdsResult.DBInstances[0].Endpoint;
+    const pool = new Pool({
+        host: secrets.host,
+        user: secrets.username,
+        password: secrets.password,
+        database: secrets.dbInstanceIdentifier,
+        port: secrets.port
+    });
+    const query = {
+        text: 'SELECT * FROM tasks t WHERE t.next_task_date = $1 AND t.task_type = $2',
+        values: [new Date().getDate(), 'water']
+    };
 
-        // const pool = new Pool({
-        //   host: dbEndpoint.Address,
-        //   user: secrets.rdsUsername,
-        //   password: secrets.rdsPassword,
-        //   database: secrets.rdsDatabaseName,
-        //   port: dbEndpoint.Port
-        // });
+    try {
 
-        // const query = {
-        //   text: 'SELECT * FROM tasks t WHERE t.next_task_date = $1 AND t.task_type = $2',
-        //   values: [new Date(), 'water']
-        // };
+        const queryResult = pool.query(query);
+        console.log("HELLO");
 
-        // const result = await pool.query(query);
-        // console.log('SQL results: ', result.rows);
-        // // do something with the results
-        // pool.end();
+        console.log('SQL results: ', queryResult.rows);
+        // do something with the results
+    } catch (err) {
+        console.error('Error executing query:', err);
+    } finally {
+        pool.end();
+    }
 };
