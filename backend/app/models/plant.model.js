@@ -17,12 +17,6 @@ module.exports = (sequelize, Sequelize) => {
         },
         description: {
             type: Sequelize.STRING
-        },
-        watering_frequency_days: {
-            type: Sequelize.INTEGER
-        },
-        last_watered: {
-            type: Sequelize.DATE
         }
     });
 

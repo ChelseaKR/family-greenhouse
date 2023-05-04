@@ -9,7 +9,7 @@ class AddPlant extends Component {
         this.onChangeType = this.onChangeType.bind(this);
         this.onChangeLocation = this.onChangeLocation.bind(this);
         this.onChangeDescription = this.onChangeDescription.bind(this);
-        this.onChangeWateringFrequencyDays = this.onChangeWateringFrequencyDays.bind(this);
+        this.onChangeTaskFrequencyDays = this.onChangeTaskFrequencyDays.bind(this);
         this.savePlant = this.savePlant.bind(this);
         this.newPlant = this.newPlant.bind(this);
 
@@ -24,14 +24,14 @@ class AddPlant extends Component {
                 type: "",
                 location: "",
                 description: "",
-                watering_frequency_days: 0
             },
             newTask: {
                 task_type: 'water',
                 reminder_time: null,
                 next_task_date: null,
+                task_frequency_days: 0
             },
-            selectedWateringFrequencyOption: "",
+            selectedWaterFrequencyOption: "",
             submitted: false
         };
     }
@@ -86,13 +86,13 @@ class AddPlant extends Component {
         }));
     }
 
-    onChangeWateringFrequencyDays(e) {
-        const wateringFrequencyDays = e.target.value;
+    onChangeTaskFrequencyDays(e) {
+        const taskFrequencyDays = e.target.value;
 
         this.setState(prevState => ({
-            newPlant: {
-                ...prevState.newPlant,
-                watering_frequency_days: wateringFrequencyDays
+            newTask: {
+                ...prevState.newTask,
+                task_frequency_days: taskFrequencyDays
             }
         }));
     }
@@ -118,7 +118,7 @@ class AddPlant extends Component {
             type: this.state.newPlant.type,
             location: this.state.newPlant.location,
             description: this.state.newPlant.description,
-            watering_frequency_days: this.state.newPlant.watering_frequency_days,
+            task_frequency_days: this.state.newTask.task_frequency_days,
             taskTime: this.state.newTask.reminder_time
         };
 
@@ -133,12 +133,13 @@ class AddPlant extends Component {
                         type: response.data.type,
                         location: response.data.location,
                         description: response.data.description,
-                        watering_frequency_days: response.data.watering_frequency_days,
                     },
                     newTask: {
+                        plant_id: response.data.id,
                         task_type: response.data.task_type,
-                        reminder_time: response.data.reminder_time,
+                        task_frequency_days: response.data.task_frequency_days,
                         next_task_date: response.data.next_task_date,
+                        reminder_time: response.data.reminder_time,
                     },
                     selectedWateringFrequencyOption: "",
 
@@ -239,7 +240,7 @@ class AddPlant extends Component {
                         </div>
                         <div className="form-group">
                             <label htmlFor={`days-watering`}>Remind me to water:</label>
-                            <select id="days" value={this.state.newPlant.watering_frequency_days} onChange={this.onChangeWateringFrequencyDays}>
+                            <select id="days" value={this.state.newPlant.task_frequency_days} onChange={this.onChangeTaskFrequencyDays}>
                                 <option value="">Select an option</option>
                                 {daysOptions.map((option) => (
                                     <option key={option} value={option}>
