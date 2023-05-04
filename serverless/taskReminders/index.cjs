@@ -1,7 +1,8 @@
 const SecretsManagerClient = require("@aws-sdk/client-secrets-manager").SecretsManagerClient;
 const GetSecretValueCommand = require("@aws-sdk/client-secrets-manager").GetSecretValueCommand;
-
-const { Client, Pool } = require('pg');
+const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { Pool } = require('pg');
+const { Auth0 } = require('auth0');
 
 exports.handler = async (event) => {
     const secretsManager = new SecretsManagerClient({
@@ -26,18 +27,22 @@ exports.handler = async (event) => {
         port: secrets.port
     });
     const query = {
-        text: 'SELECT * FROM plants p'
-
-        /*        text: 'SELECT * FROM tasks t WHERE t.task_type = $1;',
-                values: [new Date().getDate(), 'water']*/
+        text: 'SELECT * FROM tasks t JOIN plants p ON t.plants_id = p.id WHERE t.next_task_date = $1;', // TODO: FILTER BY REMINDER TIME AS WELL
+        values: [new Date().getDate()]
     };
 
     try {
-
         const queryResult = await pool.query(query);
+        const queryRows = queryResult.rows;
 
-        console.log('SQL results: ', queryResult.rows);
-        // do something with the results
+        for (let i=0; i < queryRows.length(); i++) {
+            const plantId = queryRows["plant_id"];
+            const taskFrequencyDays = queryRows["watering_frequency_days"];
+            const today = new Date().getDate();
+            const next_task_date = new Date(today + taskFrequencyDays);
+
+
+        }
     } catch (err) {
         console.error('Error executing query:', err);
     } finally {
