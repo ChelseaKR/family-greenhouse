@@ -1,9 +1,6 @@
 const SecretsManagerClient = require("@aws-sdk/client-secrets-manager").SecretsManagerClient;
 const GetSecretValueCommand = require("@aws-sdk/client-secrets-manager").GetSecretValueCommand;
 
-//const { RDSClient, DescribeDBInstancesCommand } = require("@aws-sdk/client-rds");
-const RDSClient = require("@aws-sdk/client-rds").RDSClient;
-const DescribeDBInstancesCommand = require("@aws-sdk/client-rds").DescribeDBInstancesCommand;
 const { Client, Pool } = require('pg');
 
 exports.handler = async (event) => {
@@ -25,18 +22,19 @@ exports.handler = async (event) => {
         host: secrets.host,
         user: secrets.username,
         password: secrets.password,
-        database: secrets.dbInstanceIdentifier,
+        database: 'db_family_greenhouse',
         port: secrets.port
     });
     const query = {
-        text: 'SELECT * FROM tasks t WHERE t.next_task_date = $1 AND t.task_type = $2',
-        values: [new Date().getDate(), 'water']
+        text: 'SELECT * FROM plants p'
+
+        /*        text: 'SELECT * FROM tasks t WHERE t.task_type = $1;',
+                values: [new Date().getDate(), 'water']*/
     };
 
     try {
 
-        const queryResult = pool.query(query);
-        console.log("HELLO");
+        const queryResult = await pool.query(query);
 
         console.log('SQL results: ', queryResult.rows);
         // do something with the results
