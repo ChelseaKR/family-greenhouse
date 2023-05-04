@@ -20,6 +20,8 @@ exports.create = async (req, res) => {
         type: req.body.type,
         location: req.body.location,
         description: req.body.description,
+        water_frequency_days: req.body.water_frequency_days,
+        water_reminder_time: '12:00:00',
     };
 
     try {
@@ -30,9 +32,7 @@ exports.create = async (req, res) => {
         const task = {
             plant_id: createdPlant.id,
             task_type: 'water',
-            task_frequency_days: req.body.task_frequency_days,
             last_completed: req.body.last_completed,
-            reminder_time: '12:00:00',
             next_task_date: new Date(Date.now())
         };
 

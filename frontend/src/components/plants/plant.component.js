@@ -9,7 +9,7 @@ class Plant extends Component {
         this.onChangeType = this.onChangeType.bind(this);
         this.onChangeLocation = this.onChangeLocation.bind(this);
         this.onChangeDescription = this.onChangeDescription.bind(this);
-        this.onChangeWateringFrequencyDays = this.onChangeWateringFrequencyDays.bind(this);
+        this.onChangeWaterFrequencyDays = this.onChangeWaterFrequencyDays.bind(this);
         this.getPlant = this.getPlant.bind(this);
         this.updatePlant = this.updatePlant.bind(this);
         this.deletePlant = this.deletePlant.bind(this);
@@ -22,14 +22,14 @@ class Plant extends Component {
                 type: "",
                 location: "",
                 description: "",
-                watering_frequency_days: 0,
+                water_frequency_days: 0,
             },
             currentTask: {
                 task_type: 'water',
                 reminder_time: null,
                 next_task_date: null,
             },
-            selectedWateringFrequencyOption: "",
+            selectedWaterFrequencyOption: "",
             message: ""
         };
     }
@@ -88,24 +88,24 @@ class Plant extends Component {
         }));
     }
 
-    onChangeWateringFrequencyDays(e) {
-        const wateringFrequencyDays = e.target.value;
+    onChangeWaterFrequencyDays(e) {
+        const waterFrequencyDays = e.target.value;
 
         this.setState(prevState => ({
             currentPlant: {
                 ...prevState.currentPlant,
-                watering_frequency_days: wateringFrequencyDays
+                water_frequency_days: waterFrequencyDays
             }
         }));
     }
 
     onChangeTaskTime(e) {
-        const wateringFrequencyTaskTime = e.target.value;
+        const waterReminderTime = e.target.value;
 
         this.setState(prevState => ({
             currentTask: {
                 ...prevState.currentTask,
-                reminder_time: wateringFrequencyTaskTime
+                reminder_time: waterReminderTime
             }
         }));
     }
@@ -206,8 +206,8 @@ class Plant extends Component {
                                 />
                             </div>
                             <div className="form-group">
-                                <label htmlFor={`days-watering`}>Remind me to water:</label>
-                                <select id="days" value={this.state.currentPlant.task_frequency_days} onChange={this.onChangeWateringFrequencyDays}>
+                                <label htmlFor={`days-water`}>Remind me to water:</label>
+                                <select id="days" value={this.state.currentPlant.water_frequency_days} onChange={this.onChangeWaterFrequencyDays}>
                                     <option value="">Select an option</option>
                                     {daysOptions.map((option) => (
                                         <option key={option} value={option}>
@@ -218,12 +218,12 @@ class Plant extends Component {
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="watering_task_time">Watering Reminder Time</label>
+                                <label htmlFor="water_task_time">Water Reminder Time</label>
                                 <input
                                     type="text"
                                     className="form-control"
-                                    id="watering_task_time"
-                                    value={currentTask.reminder_time}
+                                    id="water_task_time"
+                                    value={currentPlant.water_reminder_time}
                                     onChange={this.onChangeTaskTime}
                                 />
                             </div>
