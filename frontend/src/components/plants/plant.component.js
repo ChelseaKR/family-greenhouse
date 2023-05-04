@@ -207,7 +207,7 @@ class Plant extends Component {
                             </div>
                             <div className="form-group">
                                 <label htmlFor={`days-watering`}>Remind me to water:</label>
-                                <select id="days" value={this.state.currentPlant.watering_frequency_days} onChange={this.onChangeWateringFrequencyDays}>
+                                <select id="days" value={this.state.currentPlant.task_frequency_days} onChange={this.onChangeWateringFrequencyDays}>
                                     <option value="">Select an option</option>
                                     {daysOptions.map((option) => (
                                         <option key={option} value={option}>

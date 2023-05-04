@@ -98,12 +98,12 @@ class AddPlant extends Component {
     }
 
     onChangeTaskTime(e) {
-        const wateringFrequencyTaskTime = e.target.value;
+        const reminderTime = e.target.value;
 
         this.setState(prevState => ({
             newTask: {
                 ...prevState.newTask,
-                reminder_time: wateringFrequencyTaskTime
+                reminder_time: reminderTime
             }
         }));
     }
