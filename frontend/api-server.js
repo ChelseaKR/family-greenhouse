@@ -1,4 +1,3 @@
-const dotenv = require("dotenv");
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
@@ -6,20 +5,19 @@ const helmet = require("helmet");
 const { expressjwt: jwt } = require("express-jwt");
 const jwksRsa = require("jwks-rsa");
 
-dotenv.config();
 const app = express();
 
 const port = process.env.API_PORT || 3001;
 const appPort = process.env.SERVER_PORT || 3000;
-const appOrigin = `http://localhost:${appPort}`;
+const appOrigin = process.env.REACT_APP_APP_CORS_ORIGIN || `http://localhost:${appPort}`;
 
 if (
   !process.env.REACT_APP_AUTH0_DOMAIN ||
   !process.env.REACT_APP_AUTH0_AUDIENCE ||
-    process.env.REACT_APP_AUTH0_AUDIENCE === "YOUR_API_IDENTIFIER"
+    process.env.REACT_APP_AUTH0_AUDIENCE=== "YOUR_API_IDENTIFIER"
 ) {
   console.log(
-    "Exiting: Please make sure that auth_config.json is in place and populated with valid domain and audience values"
+    "Exiting: Please make sure that environment variables are in place and populated with valid domain and audience values"
   );
 
   process.exit();

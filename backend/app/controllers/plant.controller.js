@@ -1,9 +1,10 @@
 const db = require("../models");
 const Plant = db.plants;
+const Task = db.tasks;
 const Op = db.Sequelize.Op;
 
 // Create and Save a new Plant
-exports.create = (req, res) => {
+exports.create = async (req, res) => {
     // Validate request
     if (!req.body.userId || !req.body.greenhouse) {
         res.status(400).send({
@@ -18,20 +19,32 @@ exports.create = (req, res) => {
         name: req.body.name,
         type: req.body.type,
         location: req.body.location,
-        description: req.body.description
+        description: req.body.description,
+        water_frequency_days: req.body.water_frequency_days,
+        water_reminder_time: '12:00:00',
     };
 
-    // Save Plant in the database
-    Plant.create(plant)
-        .then(data => {
-            res.send(data);
-        })
-        .catch(err => {
-            res.status(500).send({
-                message:
-                    err.message || "Some error occurred while creating the Plant."
-            });
+    try {
+        // Save Plant in the database
+        const createdPlant = await Plant.create(plant);
+
+        // Create a Task associated with the created Plant
+        const task = {
+            plant_id: createdPlant.id,
+            task_type: 'water',
+            last_completed: req.body.last_completed,
+            next_task_date: new Date(Date.now())
+        };
+
+        // Save Task in the database
+        const createdTask = await Task.create(task);
+
+        res.send({ plant: createdPlant, task: createdTask });
+    } catch (err) {
+        res.status(500).send({
+            message: err.message || "Some error occurred while creating the plant and task."
         });
+    }
 };
 
 // Retrieve all Plants from the database.

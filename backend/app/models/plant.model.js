@@ -17,6 +17,12 @@ module.exports = (sequelize, Sequelize) => {
         },
         description: {
             type: Sequelize.STRING
+        },
+        water_frequency_days: {
+            type: Sequelize.INTEGER
+        },
+        water_reminder_time: {
+            type: Sequelize.TIME
         }
     });
 
