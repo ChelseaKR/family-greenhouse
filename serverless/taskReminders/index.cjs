@@ -2,7 +2,7 @@ const dotenv = require('dotenv');
 const axios = require('axios');
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const { Pool } = require('pg');
-const { Auth0Client } = require('auth0');
+const { ManagementClient } = require('auth0');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 dotenv.config();
@@ -24,7 +24,7 @@ exports.handler = async (event) => {
     const auth0ManagementApiToken = await getManagementApiToken(auth0Domain, clientId, clientSecret);
     const result = await secretsManagerClient.send(new GetSecretValueCommand(secretParams));
     const secrets = JSON.parse(result.SecretString);
-    const today = new Date().toISOString().slice(0, 10); // today's day in YYYY-MM-DD string
+    const today = now.toISOString().slice(0, 10); // today's date in YYYY-MM-DD string
 
     const pool = new Pool({
         host: secrets.host,
@@ -51,9 +51,10 @@ exports.handler = async (event) => {
             const taskType = queryRows[i]["task_type"];
             const taskFrequencyDays = queryRows[i]["watering_frequency_days"];
             const taskNextDate = queryRows[i]["next_task_date"].toISOString().slice(0, 10);
-            const waterReminderTime = new Date(queryRows[i]["water_reminder_time"]);
+            const waterReminderTime = queryRows[i]["water_reminder_time"];
+            const waterReminderTimeHours = Number(waterReminderTime.split(':')[0]);
 
-            if (taskNextDate == today && waterReminderTime.getHours() == now.getHours()) {
+            if (taskNextDate == today && waterReminderTimeHours == now.getHours()) {
                 console.log("Entering time comparison if statement...");
                 const emailAddresses = await getUsersByEmailWithGreenhouseId(auth0Domain, auth0ManagementApiToken, greenhouseId);
                 const newTaskNextDate = new Date(today + taskFrequencyDays).getDate();
@@ -107,7 +108,7 @@ async function getManagementApiToken(auth0Domain, clientId, clientSecret) {
 }
 
 async function getUsersByEmailWithGreenhouseId(auth0Domain, managementApiToken, greenhouseId) {
-    const auth0Client = new Auth0Client({
+    const auth0Client = new ManagementClient({
         domain: auth0Domain,
         token: managementApiToken,
     });
