@@ -42,13 +42,13 @@ const NavBar = () => {
     <div className="nav-container">
       <Navbar color="light" light expand="md">
         <Container>
+          <NavbarToggler onClick={toggle} />
           <NavbarBrand className="logo" />
           <a className="navbar-brand" href="/">
             <img src={logo} width="40" height="30"
                  className="d-inline-block align-top" alt=""/>
             Family Greenhouse
           </a>
-          <NavbarToggler onClick={toggle} />
           <Collapse isOpen={isOpen} navbar>
             <Nav className="mr-auto" navbar>
 {/*              <NavItem>
