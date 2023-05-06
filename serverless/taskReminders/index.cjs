@@ -24,7 +24,7 @@ exports.handler = async (event) => {
     const auth0ManagementApiToken = await getManagementApiToken(auth0Domain, clientId, clientSecret);
     const result = await secretsManagerClient.send(new GetSecretValueCommand(secretParams));
     const secrets = JSON.parse(result.SecretString);
-    const today = new Date().getDate();
+    const today = new Date().toISOString().slice(0, 10); // today's day in YYYY-MM-DD string
 
     const pool = new Pool({
         host: secrets.host,
@@ -35,24 +35,23 @@ exports.handler = async (event) => {
     });
 
     const selectQuery = {
-        text: 'SELECT * FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = $1;', // TODO: FILTER BY REMINDER TIME AS WELL
-        values: [new Date().getDate()]
+        text: 'SELECT * FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = CURRENT_DATE;',
     };
 
     try {
         const queryResult = await pool.query(selectQuery);
         const queryRows = queryResult.rows;
 
-        for (let i=0; i < queryRows.length(); i++) {
-            const taskId = queryRows["t.id"];
-            const greenhouseId = queryRows["greenhouse"];
-            const plantName = queryRows["name"];
-            const plantType = queryRows["type"];
-            const plantLocation = queryRows["location"];
-            const taskType = queryRows["task_type"];
-            const taskFrequencyDays = queryRows["watering_frequency_days"];
-            const taskNextDate = queryRows["t.next_task_date"];
-            const waterReminderTime = queryRows["water_reminder_time"];
+        for (let i=0; i < queryRows.length; i++) {
+            const taskId = queryRows[i]["t.id"];
+            const greenhouseId = queryRows[i]["greenhouse"];
+            const plantName = queryRows[i]["name"];
+            const plantType = queryRows[i]["type"];
+            const plantLocation = queryRows[i]["location"];
+            const taskType = queryRows[i]["task_type"];
+            const taskFrequencyDays = queryRows[i]["watering_frequency_days"];
+            const taskNextDate = queryRows[i]["next_task_date"].toISOString().slice(0, 10);
+            const waterReminderTime = new Date(queryRows[i]["water_reminder_time"]);
 
             if (taskNextDate == today && waterReminderTime.getHours() == now.getHours()) {
                 console.log("Entering time comparison if statement...");
