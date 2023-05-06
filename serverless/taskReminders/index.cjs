@@ -58,13 +58,13 @@ exports.handler = async (event) => {
                 console.log("Entering time comparison if statement...");
                 const emailAddresses = await getUsersByEmailWithGreenhouseId(auth0Domain, auth0ManagementApiToken, greenhouseId);
                 const newTaskNextDate = new Date(today + taskFrequencyDays).getDate();
-                const htmlBody = generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate);
+                const htmlBody = await generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate);
                 const subject = `Reminder to ${taskType} ${plantName}`;
                 await sendEmail("DO-NOT-REPLY@familygreenhouse.net", emailAddresses, subject, htmlBody);
 
                 const updateTaskQuery = {
                     text: 'UPDATE tasks SET next_task_date = $1, last_completed=$2 WHERE id = $3;',
-                    values: [newTaskNextDate, new Date().getDate(), taskId]
+                    values: [newTaskNextDate, new Date(), taskId]
                 };
 
                 try {
