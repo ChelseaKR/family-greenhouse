@@ -1,4 +1,5 @@
-const { dotenv } = require('dotenv');
+const dotenv = require('dotenv');
+const axios = require('axios');
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const { Pool } = require('pg');
 const { Auth0Client } = require('auth0');
@@ -11,7 +12,7 @@ const auth0Domain = process.env.AUTH0_DOMAIN;
 const clientId = process.env.AUTH0_CLIENTID;
 const clientSecret = process.env.AUTH0_CLIENTSECRET;
 
-const AWS_REGION="us-wes-2";
+const AWS_REGION="us-west-2";
 const secretsManagerClient = new SecretsManagerClient({region: AWS_REGION});
 const sesClient = new SESClient({ region: AWS_REGION });
 
