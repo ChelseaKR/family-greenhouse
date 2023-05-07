@@ -17,7 +17,7 @@ const Hero = () => {
                 <Button
                     id="qsLoginBtn"
                     color="primary"
-                    className="btn-margin"
+                    className="btn-margin color-btn-primary"
                     onClick={() => loginWithRedirect()}
                 >
                     Log in or Sign Up to get started!

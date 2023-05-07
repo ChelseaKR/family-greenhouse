@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { NavLink as RouterNavLink } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import logo from "../../assets/logo.svg";
+import "../../index.css";
 
 import { Collapse,
   Container,
@@ -38,8 +39,8 @@ const NavBar = () => {
       });
 
   return (
-      <div className="nav-container">
-        <Navbar color="light" light expand="md">
+      <div className="nav-container color-nav">
+        <Navbar light expand="md">
           <Container className="d-flex justify-content-between">
             <NavbarBrand className="logo" href="/">
               <img
@@ -48,7 +49,7 @@ const NavBar = () => {
                   height="30"
                   alt=""
               />
-              Family Greenhouse
+              <b>Family Greenhouse</b>
             </NavbarBrand>
             <NavbarToggler onClick={toggle} />
             <Collapse isOpen={isOpen} navbar>

@@ -1,10 +1,6 @@
 import http from "../http-common";
 
 class UserDataService {
-/*    getAll(data) {
-        return http.get("/users", data);
-    }*/
-
     get(id) {
         return http.get(`/users/${id}`);
     }
