@@ -21,6 +21,7 @@ import UsersList from "./components/plants/plants-list.component";
 
 import "./App.css";
 import GreenhouseAgenda from "./components/greenhouse/agenda.component";
+import Profile from "./views/Profile";
 initFontAwesome();
 
 const App = () => {
@@ -41,6 +42,7 @@ const App = () => {
         <Container className="flex-grow-1 mt-5">
           <Routes>
             <Route path="/" element={<Home/>} />
+            <Route path="/profile" element={<Profile/>} />
             <Route path="/greenhouse" element={<Greenhouse/>} />
             <Route path="/greenhouse/agenda" element={<GreenhouseAgenda/>} />
 
