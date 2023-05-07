@@ -10,6 +10,7 @@
     "mysql2": "^3.2.4",
     "pg": "^8.10.0",
     "postgresql": "^0.0.1",
+    "react-scripts": "^5.0",
     "sequelize": "^6.31.0",
     "sequelize-cli": "^6.6.0"
   },
