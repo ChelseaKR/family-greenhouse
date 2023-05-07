@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from "react";
-import AgendaDataService from "../../services/agenda.service";
+import HistoryDataService from "../../services/history.service";
 import { withAuth0 } from "@auth0/auth0-react";
-import AgendaItem from "./agenda-item";
+import HistoryItem from "./history-item";
 
-const Agenda = ({ auth0 }) => {
+const History = ({ auth0 }) => {
     const { user } = auth0;
     const [greenhouse, setGreenhouse] = useState(user.greenhouse);
     const [plants, setPlants] = useState([]);
     const [currentPlant, setCurrentPlant] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(-1);
 
-    const retrieveAgendaItems = useCallback(() => {
-        AgendaDataService.findByGreenhouse(greenhouse)
+    const retrieveHistoryItems = useCallback(() => {
+        HistoryDataService.findByGreenhouse(greenhouse)
             .then((response) => {
                 setPlants(response.data);
                 console.log(response.data);
@@ -36,7 +36,7 @@ const Agenda = ({ auth0 }) => {
             </div>
             <div className="col-md-12">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h3>Agenda</h3>
+                    <h3>History</h3>
                 </div>
 
                 <ul className="list-group">
@@ -56,4 +56,4 @@ const Agenda = ({ auth0 }) => {
     );
 };
 
-export default withAuth0(Agenda);
+export default withAuth0(History);

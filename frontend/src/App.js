@@ -20,7 +20,7 @@ import User from "./components/plants/plant.component";
 import UsersList from "./components/plants/plants-list.component";
 
 import "./App.css";
-import Agenda from "./components/agenda/agenda.component";
+import History from "./components/history/history.component";
 import Profile from "./views/Profile";
 initFontAwesome();
 
@@ -44,7 +44,7 @@ const App = () => {
             <Route path="/" element={<Home/>} />
             <Route path="/profile" element={<Profile/>} />
             <Route path="/greenhouse" element={<Greenhouse/>} />
-            <Route path="/greenhouse/agenda" element={<GreenhouseAgenda/>} />
+            <Route path="/greenhouse/history" element={<History/>} />
 
             <Route path="/plants" element={<PlantsList/>} />
             <Route path="/plants/:id" element={<Plant/>} />

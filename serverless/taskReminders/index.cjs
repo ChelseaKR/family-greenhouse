@@ -55,7 +55,6 @@ exports.handler = async (event) => {
             const waterReminderTimeHours = Number(waterReminderTime.split(':')[0]);
 
             if (taskNextDate == today && waterReminderTimeHours == now.getHours()) {
-                console.log("Entering time comparison if statement...");
                 const emailAddresses = await getUsersByEmailWithGreenhouseId(auth0Domain, auth0ManagementApiToken, greenhouseId);
                 const newTaskNextDate = new Date(today + taskFrequencyDays).getDate();
                 const htmlBody = await generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate);
@@ -71,6 +70,17 @@ exports.handler = async (event) => {
                     await pool.query(updateTaskQuery);
                 } catch (err) {
                     console.error('Error executing task UPDATE query:', err);
+                }
+
+                const insertTaskEventQuery = {
+                    text: 'INSERT INTO task_events VALUES ($1, $2, $3, $4, $5);',
+                    values: [taskId, new Date(), false, null, null]
+                };
+
+                try {
+                    await pool.query(insertTaskEventQuery);
+                } catch (err) {
+                    console.error('Error executing task event INSERT query:', err);
                 }
             }
         }

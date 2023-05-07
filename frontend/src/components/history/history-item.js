@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-const AgendaItem = ({ task_event, index, currentIndex, onSetActive }) => {
+const HistoryItem = ({ task_event, index, currentIndex, onSetActive }) => {
     return (
         <li
             className={"list-group-item " + (index === currentIndex ? "active" : "")}
@@ -20,4 +20,4 @@ const AgendaItem = ({ task_event, index, currentIndex, onSetActive }) => {
     );
 };
 
-export default React.memo(AgendaItem);
+export default React.memo(HistoryItem);
