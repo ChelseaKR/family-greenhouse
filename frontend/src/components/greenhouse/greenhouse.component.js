@@ -1,5 +1,4 @@
 import React, { Component } from "react";
-import PlantDataService from "../../services/plant.service";
 import { withRouter } from '../common/with-router';
 import UsersListComponent from "./users-list.component";
 
