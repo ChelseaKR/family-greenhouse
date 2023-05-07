@@ -6,15 +6,14 @@ import HistoryItem from "./history-item";
 const History = ({ auth0 }) => {
     const { user } = auth0;
     const [greenhouse, setGreenhouse] = useState(user.greenhouse);
-    const [plants, setPlants] = useState([]);
-    const [currentPlant, setCurrentPlant] = useState(null);
+    const [historyItems, setHistoryItems] = useState([]);
+    const [currentHistoryItem, setCurrentHistoryItem] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(-1);
 
     const retrieveHistoryItems = useCallback(() => {
         HistoryDataService.findByGreenhouse(greenhouse)
             .then((response) => {
-                setPlants(response.data);
-                console.log(response.data);
+                setHistoryItems(response.data);
             })
             .catch((e) => {
                 console.log(e);
@@ -22,11 +21,11 @@ const History = ({ auth0 }) => {
     }, [greenhouse]);
 
     useEffect(() => {
-        retrievePlants();
-    }, [retrievePlants]);
+        retrieveHistoryItems();
+    }, [retrieveHistoryItems]);
 
-    const setActivePlant = (plant, index) => {
-        setCurrentPlant(plant);
+    const setActiveHistoryItem = (plant, index) => {
+        setCurrentHistoryItem(plant);
         setCurrentIndex(index);
     };
 
@@ -40,14 +39,14 @@ const History = ({ auth0 }) => {
                 </div>
 
                 <ul className="list-group">
-                    {plants &&
-                        plants.map((plant, index) => (
-                            <PlantsListItem
-                                key={plant.id}
-                                plant={plant}
+                    {Array.isArray(historyItems) &&
+                        historyItems.map((historyItem, index) => (
+                            <HistoryItem
+                                key={historyItem.id}
+                                historyItem={historyItem}
                                 index={index}
                                 currentIndex={currentIndex}
-                                onSetActive={setActivePlant}
+                                onSetActive={setActiveHistoryItem}
                             />
                         ))}
                 </ul>

@@ -21,7 +21,6 @@ const PlantsList = ({ auth0 }) => {
         PlantDataService.findByGreenhouse(greenhouse)
             .then((response) => {
                 setPlants(response.data);
-                console.log(response.data);
             })
             .catch((e) => {
                 console.log(e);
