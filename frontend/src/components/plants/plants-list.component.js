@@ -14,6 +14,7 @@ export class PlantsList extends Component {
         this.removeAllPlants = this.removeAllPlants.bind(this);
         this.searchName = this.searchName.bind(this);
         this.searchGreenhouse = this.searchGreenhouse.bind(this);
+        this.handleSortChange = this.handleSortChange.bind(this);
 
         const { user } = this.props.auth0;
 
@@ -115,8 +116,29 @@ export class PlantsList extends Component {
             });
     }
 
+    sortPlants(property, order) {
+        const sortedPlants = this.state.plants.sort((a, b) => {
+            if (a[property] < b[property]) return order === "asc" ? -1 : 1;
+            if (a[property] > b[property]) return order === "asc" ? 1 : -1;
+            return 0;
+        });
+
+        this.setState({
+            plants: sortedPlants
+        });
+    }
+
+    handleSortChange(e) {
+        const selectedOption = e.target.value;
+        const [property, order] = selectedOption.split("_");
+
+        if (property && order) {
+            this.sortPlants(property, order);
+        }
+    }
+
     render() {
-        const { searchName, plants, currentPlant, currentIndex } = this.state;
+        const { searchName, plants, currentIndex } = this.state;
 
         return (
             <div className="list row">
@@ -141,13 +163,30 @@ export class PlantsList extends Component {
                     </div>
                 </div>
                 <div className="col-md-12">
-                    <h3>Plants List
-                    <a
-                        className="btn btn-sm btn-success" style={{float: "right"}}
-                        href="/plants/add"
-                    >
-                        <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
-                    </a></h3>
+                    <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                        <h3>Plants List</h3>
+                        <div>
+                            <div style={{display: "inline-block", marginRight: "2em"}}>
+                                Sort by:
+                                <select className="custom-select custom-select-sm custom-dropdown ml-2" onChange={e => this.handleSortChange(e)}>
+                                    <option value="">Select</option>
+                                    <option value="name_asc">Name (A-Z)</option>
+                                    <option value="name_desc">Name (Z-A)</option>
+                                    <option value="type_asc">Type (A-Z)</option>
+                                    <option value="type_desc">Type (Z-A)</option>
+                                    <option value="location_asc">Location (A-Z)</option>
+                                    <option value="location_desc">Location (Z-A)</option>
+                                </select>
+                            </div>
+                            <a
+                                className="btn btn-sm btn-success"
+                                href="/plants/add"
+                            >
+                                <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
+                            </a>
+                        </div>
+                    </div>
+
                     <ul className="list-group">
                         {plants && plants.map((plant, index) => (
                                 <li
