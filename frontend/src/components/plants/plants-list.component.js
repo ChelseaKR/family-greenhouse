@@ -32,15 +32,17 @@ const PlantsList = ({ auth0 }) => {
         retrievePlants();
     }, [retrievePlants]);
 
-    const onChangeSearchName = (e) => {
-        setSearchName(e.target.value);
+    const onChangeSearchName = (value) => {
+        setSearchName(value);
+        searchNameFn(value);
     };
 
-    const searchNameFn = () => {
+
+    const searchNameFn = (searchValue) => {
         setCurrentPlant(null);
         setCurrentIndex(-1);
 
-        PlantDataService.findByName(greenhouse, searchName)
+        PlantDataService.findByName(greenhouse, searchValue)
             .then((response) => {
                 setPlants(response.data);
                 console.log(response.data);
@@ -73,7 +75,7 @@ const PlantsList = ({ auth0 }) => {
     return (
         <div className="list row">
             <div className="col-md-12">
-                <SearchBar value={searchName} onChange={onChangeSearchName} onSearch={searchNameFn} />
+                <SearchBar value={searchName} onChange={onChangeSearchName} />
             </div>
             <div className="col-md-12">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

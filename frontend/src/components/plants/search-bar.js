@@ -1,6 +1,11 @@
 import React from "react";
 
-const SearchBar = ({ value, onChange, onSearch }) => {
+const SearchBar = ({ value, onChange }) => {
+    const handleChange = (event) => {
+        const { value } = event.target;
+        onChange(value);
+    };
+
     return (
         <div className="input-group mb-3">
             <input
@@ -8,13 +13,8 @@ const SearchBar = ({ value, onChange, onSearch }) => {
                 className="form-control"
                 placeholder="Search by name"
                 value={value}
-                onChange={onChange}
+                onChange={handleChange}
             />
-            <div className="input-group-append">
-                <button className="btn btn-outline-secondary" type="button" onClick={onSearch}>
-                    Search
-                </button>
-            </div>
         </div>
     );
 };
