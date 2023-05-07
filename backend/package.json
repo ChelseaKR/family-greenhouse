@@ -16,6 +16,13 @@
   },
   "scripts": {
     "start": "node server.js",
-    "build": "npm run build"
+    "build": "npm run build",
+    "test": "test"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.21.8",
+    "@babel/preset-env": "^7.21.5",
+    "babel-jest": "^29.5.0",
+    "jest": "^27.5.1"
   }
 }

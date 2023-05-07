@@ -1,0 +1,9 @@
+{
+  "name": "family-greenhouse",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "./scripts/prod-start.sh",
+    "build": "./scripts/build.sh",
+    "install": "./scripts/install-all.sh"
+  }
+}
