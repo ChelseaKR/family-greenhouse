@@ -20,7 +20,7 @@ import User from "./components/plants/plant.component";
 import UsersList from "./components/plants/plants-list.component";
 
 import "./App.css";
-import GreenhouseAgenda from "./components/greenhouse/agenda.component";
+import Agenda from "./components/agenda/agenda.component";
 import Profile from "./views/Profile";
 initFontAwesome();
 
