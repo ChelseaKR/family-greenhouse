@@ -1,7 +1,7 @@
 import React from "react";
+import { Button } from "reactstrap";
+import { useAuth0 } from '@auth0/auth0-react';
 import logo from "../../assets/logo.svg";
-import {Button} from "reactstrap";
-import {useAuth0} from "@auth0/auth0-react";
 
 const Hero = () => {
     const {loginWithRedirect} = useAuth0();
@@ -25,7 +25,6 @@ const Hero = () => {
             </p>
         </div>
     );
-
 };
 
 export default Hero;
