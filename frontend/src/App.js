@@ -10,7 +10,6 @@ import { useAuth0 } from "@auth0/auth0-react";
 import history from "./utils/history";
 import initFontAwesome from "./utils/initFontAwesome";
 
-
 import AddPlant from "./components/plants/add-plant.component";
 import Plant from "./components/plants/plant.component";
 import PlantsList from "./components/plants/plants-list.component";
@@ -21,6 +20,7 @@ import User from "./components/plants/plant.component";
 import UsersList from "./components/plants/plants-list.component";
 
 import "./App.css";
+import GreenhouseAgenda from "./components/greenhouse/agenda.component";
 initFontAwesome();
 
 const App = () => {
@@ -42,6 +42,7 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home/>} />
             <Route path="/greenhouse" element={<Greenhouse/>} />
+            <Route path="/greenhouse/agenda" element={<GreenhouseAgenda/>} />
 
             <Route path="/plants" element={<PlantsList/>} />
             <Route path="/plants/:id" element={<Plant/>} />

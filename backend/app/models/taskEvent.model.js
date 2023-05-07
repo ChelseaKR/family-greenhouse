@@ -12,7 +12,7 @@ module.exports = (sequelize, Sequelize) => {
         completed_by: {
             type: Sequelize.STRING
         },
-        completed_on: {
+        date_completed: {
             type: Sequelize.DATE
         }
     });
