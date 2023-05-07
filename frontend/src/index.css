@@ -17,3 +17,17 @@ code {
   margin-left: 0.5rem;
   width: auto;
 }
+
+.color-nav {
+  background-color: rgb(202, 250, 209);
+}
+
+.btn-primary {
+  background-color: #5e3a16;
+  border-color: #5e3a16;
+}
+
+.btn-primary:hover {
+  background-color: #a01eee;
+  border-color: #a01eee;
+}

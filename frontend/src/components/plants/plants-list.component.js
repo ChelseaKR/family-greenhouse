@@ -7,10 +7,8 @@ import SearchBar from "./search-bar";
 import SortDropdown from "./sort-dropdown";
 import PlantsListItem from "./plants-list-item";
 
-
 const PlantsList = ({ auth0 }) => {
     const { user } = auth0;
-    const [userId, setUserId] = useState(user.sub);
     const [greenhouse, setGreenhouse] = useState(user.greenhouse);
     const [plants, setPlants] = useState([]);
     const [currentPlant, setCurrentPlant] = useState(null);
@@ -21,7 +19,6 @@ const PlantsList = ({ auth0 }) => {
         PlantDataService.findByGreenhouse(greenhouse)
             .then((response) => {
                 setPlants(response.data);
-                console.log(response.data);
             })
             .catch((e) => {
                 console.log(e);
@@ -36,7 +33,6 @@ const PlantsList = ({ auth0 }) => {
         setSearchName(value);
         searchNameFn(value);
     };
-
 
     const searchNameFn = (searchValue) => {
         setCurrentPlant(null);

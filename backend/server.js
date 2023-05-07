@@ -31,10 +31,6 @@ db.sequelize.sync()
 const frontendDistPath = path.join(__dirname, 'dist');
 app.use(express.static(frontendDistPath));
 
-app.get("/", (req, res) => {
-    res.json({ message: "Hello world" });
-});
-
 require("./app/routes/plant.routes")(app);
 require("./app/routes/user.routes")(app);
 
