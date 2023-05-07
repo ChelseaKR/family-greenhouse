@@ -1,5 +1,5 @@
 const express = require("express");
-const bodyParser = require("body-parser");
+const path = require('path');
 const cors = require("cors");
 const dotenv = require("dotenv");
 
@@ -27,10 +27,9 @@ db.sequelize.sync()
         console.log("Failed to sync db: " + err.message);
     });
 
-// drop the table if it already exists
-// db.sequelize.sync({ force: true }).then(() => {
-//   console.log("Drop and re-sync db.");
-// });
+// Serve the frontend build output as static files
+const frontendDistPath = path.join(__dirname, 'dist');
+app.use(express.static(frontendDistPath));
 
 app.get("/", (req, res) => {
     res.json({ message: "Hello world" });
@@ -38,6 +37,11 @@ app.get("/", (req, res) => {
 
 require("./app/routes/plant.routes")(app);
 require("./app/routes/user.routes")(app);
+
+// If no other routes match, serve the frontend index.html file
+app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
 
 // set port, listen for requests
 const PORT = process.env.PORT || 8080;
