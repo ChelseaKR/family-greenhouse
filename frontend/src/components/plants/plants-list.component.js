@@ -141,13 +141,13 @@ export class PlantsList extends Component {
                     </div>
                 </div>
                 <div className="col-md-12">
-                    <h4>Plants List
+                    <h3>Plants List
                     <a
                         className="btn btn-sm btn-success" style={{float: "right"}}
                         href="/plants/add"
                     >
                         <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
-                    </a></h4>
+                    </a></h3>
                     <ul className="list-group">
                         {plants && plants.map((plant, index) => (
                                 <li
@@ -155,9 +155,8 @@ export class PlantsList extends Component {
                                     onClick={() => this.setActivePlant(plant, index)}
                                     key={index}
                                 >
-                                    {plant.name}
-                                    <br></br>
-
+                                    <h4>{plant.name}</h4>
+                                    <div>{plant.type} {plant.type && plant.location ? '•' : ''} {plant.location}</div>
                                     <Link
                                         to={"/plants/" + plant.id}
                                         className="badge badge-warning"
