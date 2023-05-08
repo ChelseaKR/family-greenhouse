@@ -33,13 +33,20 @@ exports.create = async (req, res) => {
             plant_id: createdPlant.id,
             task_type: 'water',
             last_completed: req.body.last_completed,
-            next_task_date: new Date(Date.now())
+            next_task_date: new Date(new Date().getTime() + createdPlant.water_frequency_days * 24 * 60 * 60 * 1000)
         };
 
-        // Save Task in the database
-        const createdTask = await Task.create(task);
+        try {
+            // Save Task in the database
+            const createdTask = await Task.create(task);
+            res.send({ plant: createdPlant, task: createdTask });
 
-        res.send({ plant: createdPlant, task: createdTask });
+        } catch (err) {
+            res.status(500).send({
+                message: err.message || "Some error occurred while creating the plant and task."
+            })
+        }
+
     } catch (err) {
         res.status(500).send({
             message: err.message || "Some error occurred while creating the plant and task."
