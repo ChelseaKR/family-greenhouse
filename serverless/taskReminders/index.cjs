@@ -32,18 +32,21 @@ exports.handler = async (event) => {
         port: secrets.port
     });
 
-    const selectQuery = {
-        text: 'SELECT * FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = CURRENT_DATE;',
-    };
-
     const now = new Date();
     const timeZone = "America/Los_Angeles";
     const pacificDateObj = new Date(now.toLocaleString('en-US', { timeZone: timeZone }));
+    const pacificDateString = pacificDateObj.toDateString();
+
+    const selectQuery = {
+        text: 'SELECT * FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = $1;',
+        values: [pacificDateObj.toISOString().slice(0, 10)]
+    };
+
     try {
         const queryResult = await pool.query(selectQuery);
         const queryRows = queryResult.rows;
         console.log('SELECT query executed:', queryRows.length, 'rows returned');
-
+        console.log(JSON.stringify(queryRows.rows));
         for (let i=0; i < queryRows.length; i++) {
             const taskId = queryRows[i]["t.id"];
             const greenhouseId = queryRows[i]["greenhouse"];
@@ -51,23 +54,28 @@ exports.handler = async (event) => {
             const plantType = queryRows[i]["type"];
             const plantLocation = queryRows[i]["location"];
             const taskType = queryRows[i]["task_type"];
-            const taskFrequencyDays = queryRows[i]["watering_frequency_days"];
+            const taskFrequencyDays = Number(queryRows[i]["water_frequency_days"]);
             const taskNextDate = queryRows[i]["next_task_date"];
             const waterReminderTime = queryRows[i]["water_reminder_time"];
             const waterReminderTimeHours = Number(waterReminderTime.split(':')[0]);
-            const strToday = now.toISOString().slice(0, 10); // utc yyyy-mm-dd string
-            const strTaskNextDate = taskNextDate.toISOString().slice(0, 10);
+            const strTaskNextDate = taskNextDate.toDateString();
+            console.log('strTaskNextDate:', strTaskNextDate);
+            console.log('taskNextDate:', taskNextDate);
+            console.log('now:', now);
+            console.log('taskFrequencyDays:', taskFrequencyDays);
+            console.log('now + taskFrequencyDays:', now.getTime() + (taskFrequencyDays * 24 * 60 * 60 * 1000));
 
-            if (strTaskNextDate == strToday && waterReminderTimeHours == pacificDateObj.getHours()) {
+            if (strTaskNextDate == pacificDateString && waterReminderTimeHours == pacificDateObj.getHours()) {
                 const emailAddresses = await getUsersByEmailWithGreenhouseId(auth0Domain, auth0ManagementApiToken, greenhouseId);
                 console.log('Email addresses:', emailAddresses);
-                const newTaskNextDate = new Date(now + taskFrequencyDays).getDate();
+                const newTaskNextDate = new Date(pacificDateObj.getTime() + taskFrequencyDays * 24 * 60 * 60 * 1000);
+
                 const htmlBody = await generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate);
                 const subject = `Reminder to ${taskType} ${plantName}`;
                 await sendEmail("DO-NOT-REPLY@familygreenhouse.net", emailAddresses, subject, htmlBody);
 
                 const updateTaskQuery = {
-                    text: 'UPDATE tasks SET next_task_date = $1, last_completed=$2 WHERE id = $3;',
+                    text: 'UPDATE tasks SET next_task_date = $1, last_completed=$2 WHERE id=$3;',
                     values: [newTaskNextDate, new Date(), taskId]
                 };
 
@@ -79,8 +87,8 @@ exports.handler = async (event) => {
                 }
 
                 const insertTaskEventQuery = {
-                    text: 'INSERT INTO task_events VALUES ($1, $2, $3, $4, $5);',
-                    values: [taskId, new Date(), false, null, null]
+                    text: 'INSERT INTO task_events (task_id, datetime, is_completed, completed_by, date_completed, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7);',
+                    values: [taskId, now, false, null, null, now, now]
                 };
 
                 try {
@@ -164,7 +172,7 @@ async function generateEmailBody(taskType, plantName, plantType, plantLocation, 
           <h1>Hello from <a href="https://familygreenhouse.net/">Family Greenhouse!</a></h1>
           <p>
               This is a reminder to ${taskType} ${plantName}, the ${plantType} in your ${plantLocation}. Your next
-               reminder to ${taskType} ${plantName} will occur on ${fullDate.toISOString().slice(0, 10)}.
+               reminder to ${taskType} ${plantName} will occur on ${fullDate}.
           </p>
           <p>
               To change settings for these reminders, please change your plant's settings in

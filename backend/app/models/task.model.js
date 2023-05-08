@@ -10,7 +10,7 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.DATE
         },
         next_task_date: {
-            type: Sequelize.DATEONLY
+            type: Sequelize.DATE
         }
     });
 
