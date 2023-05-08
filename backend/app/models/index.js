@@ -31,6 +31,6 @@ db.sequelize = sequelize;
 
 db.plants = require("./plant.model.js")(sequelize, Sequelize);
 db.tasks = require("./task.model.js")(sequelize, Sequelize);
-db.tasks = require("./taskEvent.model.js")(sequelize, Sequelize);
+db.taskEvents = require("./taskEvent.model.js")(sequelize, Sequelize);
 
 module.exports = db;
