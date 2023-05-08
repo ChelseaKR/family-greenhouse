@@ -69,34 +69,33 @@ const PlantsList = ({ auth0 }) => {
     };
 
     return (
-        <div className="list row">
-            <div className="col-md-12">
-                <SearchBar value={searchName} onChange={onChangeSearchName} />
-            </div>
-            <div className="col-md-12">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h3>Plants List</h3>
-                    <div>
-                        <SortDropdown onChange={handleSortChange} />
-                        <Link className="btn btn-sm btn-success" to="/plants/add">
-                            <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
-                        </Link>
-                    </div>
-                </div>
+        <div>
+            <div className="list row">
+                <div className="col-md-12"><h3>Plants List</h3></div></div>
 
-                <ul className="list-group">
-                    {plants &&
-                        plants.map((plant, index) => (
-                            <PlantsListItem
-                                key={plant.id}
-                                plant={plant}
-                                index={index}
-                                currentIndex={currentIndex}
-                                onSetActive={setActivePlant}
-                            />
-                        ))}
-                </ul>
+                <div className="list row" style={{ alignItems: "baseline", justifyContent: "space-between" }}>
+                <div className="col-md-6">
+                    <SearchBar value={searchName} onChange={onChangeSearchName} />
+                </div>
+                <div className="col-xs-3">
+                    <SortDropdown onChange={handleSortChange} />
+                </div>
+                <div className="col-xs-3">
+                    <Link className="btn btn-success" to="/plants/add">
+                        <FontAwesomeIcon icon="plus" className="mr-1" /> New Plant!
+                    </Link>
+                </div>
             </div>
+                {plants &&
+                    plants.map((plant, index) => (
+                        <PlantsListItem
+                            key={plant.id}
+                            plant={plant}
+                            index={index}
+                            currentIndex={currentIndex}
+                            onSetActive={setActivePlant}
+                        />
+                    ))}
         </div>
     );
 };

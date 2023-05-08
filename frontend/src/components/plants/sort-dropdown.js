@@ -2,8 +2,8 @@ import React from "react";
 
 const SortDropdown = ({ onChange }) => {
     return (
-        <div style={{ display: "inline-block", marginRight: "2em" }}>
-            Sort by:
+        <div>
+            Sort:
             <select className="custom-select custom-select-sm custom-dropdown ml-2" onChange={onChange}>
                 <option value="">Select</option>
                 <option value="name_asc">Name (A-Z)</option>
