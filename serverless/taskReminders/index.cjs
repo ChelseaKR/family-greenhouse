@@ -38,7 +38,7 @@ exports.handler = async (event) => {
     const pacificDateString = pacificDateObj.toDateString();
 
     const selectQuery = {
-        text: 'SELECT * FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = $1;',
+        text: 'SELECT t.id AS task_id, p.id AS plant_id, t.plant_id, p.greenhouse, t.task_type, p.water_frequency_days, t.next_task_date, p.water_reminder_time, p.name, p.type, p.location FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = $1;',
         values: [pacificDateObj.toISOString().slice(0, 10)]
     };
 
@@ -46,9 +46,9 @@ exports.handler = async (event) => {
         const queryResult = await pool.query(selectQuery);
         const queryRows = queryResult.rows;
         console.log('SELECT query executed:', queryRows.length, 'rows returned');
-        console.log(JSON.stringify(queryRows.rows));
+        console.log(JSON.stringify(queryRows));
         for (let i=0; i < queryRows.length; i++) {
-            const taskId = queryRows[i]["t.id"];
+            const taskId = queryRows[i]["task_id"];
             const greenhouseId = queryRows[i]["greenhouse"];
             const plantName = queryRows[i]["name"];
             const plantType = queryRows[i]["type"];
@@ -59,16 +59,21 @@ exports.handler = async (event) => {
             const waterReminderTime = queryRows[i]["water_reminder_time"];
             const waterReminderTimeHours = Number(waterReminderTime.split(':')[0]);
             const strTaskNextDate = taskNextDate.toDateString();
+            let newTaskNextDate = pacificDateObj;
+            newTaskNextDate.setDate(newTaskNextDate.getDate() + taskFrequencyDays);
+
             console.log('strTaskNextDate:', strTaskNextDate);
             console.log('taskNextDate:', taskNextDate);
             console.log('now:', now);
-            console.log('taskFrequencyDays:', taskFrequencyDays);
-            console.log('now + taskFrequencyDays:', now.getTime() + (taskFrequencyDays * 24 * 60 * 60 * 1000));
+            console.log('pacificDateString:', pacificDateString);
+            console.log('waterReminderTimeHours', waterReminderTimeHours);
+            console.log('pacificDateHours', pacificDateObj.getHours());
+            console.log('taskFrequencyDays', taskFrequencyDays);
+            console.log('newTaskNextDate', newTaskNextDate);
 
             if (strTaskNextDate == pacificDateString && waterReminderTimeHours == pacificDateObj.getHours()) {
                 const emailAddresses = await getUsersByEmailWithGreenhouseId(auth0Domain, auth0ManagementApiToken, greenhouseId);
                 console.log('Email addresses:', emailAddresses);
-                const newTaskNextDate = new Date(pacificDateObj.getTime() + taskFrequencyDays * 24 * 60 * 60 * 1000);
 
                 const htmlBody = await generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate);
                 const subject = `Reminder to ${taskType} ${plantName}`;
