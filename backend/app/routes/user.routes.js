@@ -1,4 +1,3 @@
-const users = require("../controllers/user.controller");
 module.exports = app => {
     const users = require("../controllers/user.controller.js");
 
