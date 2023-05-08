@@ -3,6 +3,11 @@ const Plant = db.plants;
 const Task = db.tasks;
 const Op = db.Sequelize.Op;
 
+const now = new Date();
+const timeZone = "America/Los_Angeles";
+const pacificDateObj = new Date(now.toLocaleString('en-US', { timeZone: timeZone }));
+const pacificDateString = pacificDateObj.toDateString();
+
 // Create and Save a new Plant
 exports.create = async (req, res) => {
     // Validate request
@@ -33,7 +38,7 @@ exports.create = async (req, res) => {
             plant_id: createdPlant.id,
             task_type: 'water',
             last_completed: req.body.last_completed,
-            next_task_date: new Date(new Date().getTime() + createdPlant.water_frequency_days * 24 * 60 * 60 * 1000)
+            next_task_date: new Date(pacificDateObj + createdPlant.water_frequency_days * 24 * 60 * 60 * 1000)
         };
 
         try {
