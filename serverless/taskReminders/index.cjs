@@ -6,7 +6,6 @@ const { ManagementClient } = require('auth0');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 dotenv.config();
-const now = new Date();
 
 const auth0Domain = process.env.AUTH0_DOMAIN;
 const clientId = process.env.AUTH0_CLIENTID;
@@ -24,7 +23,6 @@ exports.handler = async (event) => {
     const auth0ManagementApiToken = await getManagementApiToken(auth0Domain, clientId, clientSecret);
     const result = await secretsManagerClient.send(new GetSecretValueCommand(secretParams));
     const secrets = JSON.parse(result.SecretString);
-    const today = now.toISOString().slice(0, 10); // today's date in YYYY-MM-DD string
 
     const pool = new Pool({
         host: secrets.host,
@@ -38,9 +36,13 @@ exports.handler = async (event) => {
         text: 'SELECT * FROM tasks t JOIN plants p ON t.plant_id = p.id WHERE t.next_task_date = CURRENT_DATE;',
     };
 
+    const now = new Date();
+    const timeZone = "America/Los_Angeles";
+    const pacificDateObj = new Date(now.toLocaleString('en-US', { timeZone: timeZone }));
     try {
         const queryResult = await pool.query(selectQuery);
         const queryRows = queryResult.rows;
+        console.log('SELECT query executed:', queryRows.length, 'rows returned');
 
         for (let i=0; i < queryRows.length; i++) {
             const taskId = queryRows[i]["t.id"];
@@ -50,13 +52,16 @@ exports.handler = async (event) => {
             const plantLocation = queryRows[i]["location"];
             const taskType = queryRows[i]["task_type"];
             const taskFrequencyDays = queryRows[i]["watering_frequency_days"];
-            const taskNextDate = queryRows[i]["next_task_date"].toISOString().slice(0, 10);
+            const taskNextDate = queryRows[i]["next_task_date"];
             const waterReminderTime = queryRows[i]["water_reminder_time"];
             const waterReminderTimeHours = Number(waterReminderTime.split(':')[0]);
+            const strToday = now.toISOString().slice(0, 10); // utc yyyy-mm-dd string
+            const strTaskNextDate = taskNextDate.toISOString().slice(0, 10);
 
-            if (taskNextDate == today && waterReminderTimeHours == now.getHours()) {
+            if (strTaskNextDate == strToday && waterReminderTimeHours == pacificDateObj.getHours()) {
                 const emailAddresses = await getUsersByEmailWithGreenhouseId(auth0Domain, auth0ManagementApiToken, greenhouseId);
-                const newTaskNextDate = new Date(today + taskFrequencyDays).getDate();
+                console.log('Email addresses:', emailAddresses);
+                const newTaskNextDate = new Date(now + taskFrequencyDays).getDate();
                 const htmlBody = await generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate);
                 const subject = `Reminder to ${taskType} ${plantName}`;
                 await sendEmail("DO-NOT-REPLY@familygreenhouse.net", emailAddresses, subject, htmlBody);
@@ -68,6 +73,7 @@ exports.handler = async (event) => {
 
                 try {
                     await pool.query(updateTaskQuery);
+                    console.log('Task UPDATE query executed successfully');
                 } catch (err) {
                     console.error('Error executing task UPDATE query:', err);
                 }
@@ -79,6 +85,7 @@ exports.handler = async (event) => {
 
                 try {
                     await pool.query(insertTaskEventQuery);
+                    console.log('Task event INSERT query executed successfully');
                 } catch (err) {
                     console.error('Error executing task event INSERT query:', err);
                 }
@@ -126,6 +133,7 @@ async function getUsersByEmailWithGreenhouseId(auth0Domain, managementApiToken, 
     try {
         const searchQuery = `user_metadata.greenhouse:"${greenhouseId}"`;
         const users = await auth0Client.getUsers({ q: searchQuery, search_engine: 'v3' });
+        console.log('Users retrieved:', users.length);
 
         if (users && users.length > 0) {
             const userEmails = users.map((user) => user.email);
@@ -141,6 +149,14 @@ async function getUsersByEmailWithGreenhouseId(auth0Domain, managementApiToken, 
 }
 
 async function generateEmailBody(taskType, plantName, plantType, plantLocation, taskNextDate) {
+    console.log('Generating email body');
+    const options = {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    };
+
+    const fullDate = taskNextDate.toLocaleDateString('en-US', options);
     const htmlBody = `
       <html>
         <head></head>
@@ -148,7 +164,7 @@ async function generateEmailBody(taskType, plantName, plantType, plantLocation, 
           <h1>Hello from <a href="https://familygreenhouse.net/">Family Greenhouse!</a></h1>
           <p>
               This is a reminder to ${taskType} ${plantName}, the ${plantType} in your ${plantLocation}. Your next
-               reminder to ${taskType} ${plantName} will occur on ${taskNextDate}.
+               reminder to ${taskType} ${plantName} will occur on ${fullDate.toISOString().slice(0, 10)}.
           </p>
           <p>
               To change settings for these reminders, please change your plant's settings in
