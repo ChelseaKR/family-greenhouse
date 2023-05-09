@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PlantDataService from "../../services/plant.service";
 import { withAuth0 } from '@auth0/auth0-react';
 
@@ -9,6 +10,7 @@ function useInput(initialValue) {
 }
 
 function AddPlant({ auth0 }) {
+    const navigate = useNavigate();
     const { user } = auth0;
 
     const name = useInput("");
@@ -35,7 +37,7 @@ function AddPlant({ auth0 }) {
             .then((response) => {
                 console.log("creating plant in greenhouse: " + user.greenhouse);
                 setSubmitted(true);
-                console.log(response.data);
+                navigate('/');
             })
             .catch((e) => {
                 console.log(e);
