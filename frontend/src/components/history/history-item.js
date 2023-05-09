@@ -17,9 +17,9 @@ const HistoryItem = ({ event, index, currentIndex, onSetActive }) => {
             onClick={() => onSetActive(event, index)}
         >
             <td>{event.datetime.slice(0, 10)}</td>
-            <td>{event.task.task_type}</td>
-            <td>{event.task.plant.name}</td>
-            <td>{event.task.plant.type}</td>
+            <td>{event.task ? event.task.task_type : ""}</td>
+            <td>{event.task.plant ? event.task.plant.name : ""}</td>
+            <td>{event.task.plant ? event.task.plant.type : ""}</td>
             <td>{event.is_completed ? "Yes" : "No"}</td>
             <td>{event.completed_by}</td>
             <td>{event.date_completed}</td>
