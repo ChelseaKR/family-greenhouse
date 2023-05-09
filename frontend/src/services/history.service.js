@@ -2,19 +2,19 @@ import http from "../http-common";
 
 class HistoryDataService {
     get(id) {
-        return http.get(`/history/${id}`);
+        return http.get(`/greenhouse/history/${id}`);
     }
 
     update(id, data) {
-        return http.put(`/history/${id}`, data);
+        return http.put(`/greenhouse/history/${id}`, data);
     }
 
     delete(id) {
-        return http.delete(`/history/${id}`);
+        return http.delete(`/greenhouse/history/${id}`);
     }
 
     deleteAll() {
-        return http.delete(`/history`);
+        return http.delete(`/greenhouse/history`);
     }
 
     findByGreenhouse(greenhouse) {

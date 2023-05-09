@@ -24,13 +24,13 @@ const History = ({ auth0 }) => {
         retrieveHistoryItems();
     }, [retrieveHistoryItems]);
 
-    const setActiveHistoryItem = (plant, index) => {
-        setCurrentHistoryItem(plant);
+    const setActiveHistoryItem = (item, index) => {
+        setCurrentHistoryItem(item);
         setCurrentIndex(index);
     };
 
     return (
-        <div className="list row">
+        <div>        <div className="list row">
             <div className="col-md-12">
             </div>
             <div className="col-md-12">
@@ -38,19 +38,33 @@ const History = ({ auth0 }) => {
                     <h3>History</h3>
                 </div>
 
-                <ul className="list-group">
-                    {Array.isArray(historyItems) &&
+                <table className="table table-striped">
+                    <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Task</th>
+                        <th>Plant Name</th>
+                        <th>Plant Type</th>
+                        <th>Completed?</th>
+                        <th>Completed By</th>
+                        <th>Date Completed</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {historyItems &&
                         historyItems.map((historyItem, index) => (
                             <HistoryItem
                                 key={historyItem.id}
-                                historyItem={historyItem}
+                                event={historyItem}
                                 index={index}
                                 currentIndex={currentIndex}
                                 onSetActive={setActiveHistoryItem}
                             />
                         ))}
-                </ul>
+                    </tbody>
+                </table>
             </div>
+        </div>
         </div>
     );
 };

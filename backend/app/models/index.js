@@ -17,20 +17,22 @@ const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
 
 const Plant = require('./plant.model')(sequelize, Sequelize);
 const Task = require('./task.model')(sequelize, Sequelize);
-const TaskEvent = require('./taskEvent.model')(sequelize, Sequelize);
+const Event = require('./event.model')(sequelize, Sequelize);
 
 
-Plant.hasMany(Task, { as: 'task', foreignKey: 'id' });
-Task.belongsTo(Plant, { as: 'plant', foreignKey: 'plant_id' });
-TaskEvent.belongsTo(Task, {as: 'task', foreignKey: 'task_id' });
 
 const db = {};
 
 db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
-db.plants = require("./plant.model.js")(sequelize, Sequelize);
-db.tasks = require("./task.model.js")(sequelize, Sequelize);
-db.taskEvents = require("./taskEvent.model.js")(sequelize, Sequelize);
+db.plants = Plant;
+db.tasks = Task;
+db.events = Event;
+
+db.plants.hasMany(db.tasks, { foreignKey: 'plant_id' });
+db.tasks.belongsTo(db.plants, { foreignKey: 'plant_id' });
+db.tasks.hasMany(db.events, { foreignKey: 'task_id' });
+db.events.belongsTo(db.tasks, { foreignKey: 'task_id' });
 
 module.exports = db;

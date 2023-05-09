@@ -31,6 +31,7 @@ db.sequelize.sync()
 const frontendDistPath = path.join(__dirname, 'dist');
 app.use(express.static(frontendDistPath));
 
+require("./app/routes/history.routes")(app);
 require("./app/routes/plant.routes")(app);
 require("./app/routes/user.routes")(app);
 

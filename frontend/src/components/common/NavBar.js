@@ -58,7 +58,7 @@ const NavBar = () => {
                     <NavItem>
                       <NavLink
                           tag={RouterNavLink}
-                          to="/greenhouse/history"
+                          to="/history"
                           exact
                           activeClassName="router-link-exact-active"
                       >

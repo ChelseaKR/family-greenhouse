@@ -1,5 +1,10 @@
 module.exports = (sequelize, Sequelize) => {
     const Plant = sequelize.define("plant", {
+        id: {
+            type: Sequelize.INTEGER,
+            primaryKey: true,
+            autoIncrement: true,
+        },
         userId: {
             type: Sequelize.STRING
         },

@@ -1,21 +1,15 @@
 module.exports = app => {
-    const taskItems = require("../controllers/history.controller.js");
+    const events = require("../controllers/history.controller.js");
 
     var router = require("express").Router();
 
-    router.post("/add", taskItems.create);
+    router.get("/", events.findAll);
 
-    router.get("/", taskItems.findAll);
+/*    router.get("/:id", events.findOne);
 
-    router.get("/:id", taskItems.findOne);
+    router.put("/:id", events.update);*/
 
-    router.put("/:id", taskItems.update);
+   router.get("/history", events.findAll);
 
-    router.delete("/:id", taskItems.delete);
-
-    router.get("/:userId", taskItems.findAll);
-
-    router.delete("/", taskItems.deleteAll);
-
-    app.use("/api/taskItems", router);
+    app.use("/api/history", router);
 };

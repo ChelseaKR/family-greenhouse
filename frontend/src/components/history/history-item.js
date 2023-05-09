@@ -1,22 +1,29 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-const HistoryItem = ({ task_event, index, currentIndex, onSetActive }) => {
+const HistoryItem = ({ event, index, currentIndex, onSetActive }) => {
+    if (!event) {
+        return (
+            <tr>
+                <td colSpan="5">No event data available.</td>
+            </tr>
+        );
+    }
+
+    console.log(JSON.stringify(event));
     return (
-        <li
-            className={"list-group-item " + (index === currentIndex ? "active" : "")}
-            onClick={() => onSetActive(task_event, index)}
+        <tr
+            className={index === currentIndex ? "table-active" : ""}
+            onClick={() => onSetActive(event, index)}
         >
-            <h4>{task_event.type}</h4>
-            <div>
-{/*
-                {plant.type} {plant.type && plant.location ? "•" : ""} {plant.location}
-*/}
-            </div>
-{/*            <Link to={"/plants/" + plant.id} className="badge badge-warning">
-                Edit
-            </Link>*/}
-        </li>
+            <td>{event.datetime.slice(0, 10)}</td>
+            <td>{event.task.task_type}</td>
+            <td>{event.task.plant.name}</td>
+            <td>{event.task.plant.type}</td>
+            <td>{event.is_completed ? "Yes" : "No"}</td>
+            <td>{event.completed_by}</td>
+            <td>{event.date_completed}</td>
+        </tr>
     );
 };
 

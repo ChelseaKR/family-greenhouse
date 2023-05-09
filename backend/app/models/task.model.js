@@ -1,5 +1,10 @@
 module.exports = (sequelize, Sequelize) => {
     const Task = sequelize.define("task", {
+        id: {
+            type: Sequelize.INTEGER,
+            primaryKey: true,
+            autoIncrement: true,
+        },
         plant_id: {
             type: Sequelize.INTEGER
         },
@@ -10,7 +15,7 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.DATE
         },
         next_task_date: {
-            type: Sequelize.DATE
+            type: Sequelize.DATEONLY
         }
     });
 

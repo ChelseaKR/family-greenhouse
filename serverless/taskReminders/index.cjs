@@ -91,16 +91,16 @@ exports.handler = async (event) => {
                     console.error('Error executing task UPDATE query:', err);
                 }
 
-                const insertTaskEventQuery = {
-                    text: 'INSERT INTO task_events (task_id, datetime, is_completed, completed_by, date_completed, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7);',
+                const insertEventQuery = {
+                    text: 'INSERT INTO events (task_id, datetime, is_completed, completed_by, date_completed, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7);',
                     values: [taskId, now, false, null, null, now, now]
                 };
 
                 try {
-                    await pool.query(insertTaskEventQuery);
-                    console.log('Task event INSERT query executed successfully');
+                    await pool.query(insertEventQuery);
+                    console.log('Event INSERT query executed successfully');
                 } catch (err) {
-                    console.error('Error executing task event INSERT query:', err);
+                    console.error('Error executing event INSERT query:', err);
                 }
             }
         }

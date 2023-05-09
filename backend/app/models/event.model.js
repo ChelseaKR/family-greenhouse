@@ -1,5 +1,10 @@
 module.exports = (sequelize, Sequelize) => {
-    const TaskEvent = sequelize.define("task_event", {
+    const Event = sequelize.define("event", {
+        id: {
+            type: Sequelize.INTEGER,
+            primaryKey: true,
+            autoIncrement: true,
+        },
         task_id: {
             type: Sequelize.INTEGER
         },
@@ -10,12 +15,12 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.BOOLEAN
         },
         completed_by: {
-            type: Sequelize.STRING
+            type: Sequelize.DATE
         },
         date_completed: {
             type: Sequelize.DATE
-        }
+        },
     });
 
-    return TaskEvent;
+    return Event;
 };
