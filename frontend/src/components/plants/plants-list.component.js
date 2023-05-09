@@ -14,16 +14,21 @@ const PlantsList = ({ auth0 }) => {
     const [currentPlant, setCurrentPlant] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(-1);
     const [searchName, setSearchName] = useState("");
+    const [loading, setLoading] = useState(true);
 
     const retrievePlants = useCallback(() => {
+        setLoading(true);
         PlantDataService.findByGreenhouse(greenhouse)
             .then((response) => {
                 setPlants(response.data);
+                setLoading(false);
             })
             .catch((e) => {
                 console.log(e);
+                setLoading(false);
             });
     }, [greenhouse]);
+
 
     useEffect(() => {
         retrievePlants();
@@ -86,16 +91,23 @@ const PlantsList = ({ auth0 }) => {
                     </Link>
                 </div>
             </div>
-                {plants &&
-                    plants.map((plant, index) => (
-                        <PlantsListItem
-                            key={plant.id}
-                            plant={plant}
-                            index={index}
-                            currentIndex={currentIndex}
-                            onSetActive={setActivePlant}
-                        />
-                    ))}
+            {loading ? (
+                <p>Loading...</p>
+            ) : plants.length === 0 ? (
+                <li className="list-group">
+                    <li className="list-group-item">No plants yet. Add some to get started!</li>
+                </li>
+            ) : (
+                plants.map((plant, index) => (
+                    <PlantsListItem
+                        key={plant.id}
+                        plant={plant}
+                        index={index}
+                        currentIndex={currentIndex}
+                        onSetActive={setActivePlant}
+                    />
+                ))
+            )}
         </div>
     );
 };
