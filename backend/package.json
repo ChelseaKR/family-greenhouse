@@ -12,17 +12,20 @@
     "postgresql": "^0.0.1",
     "react-scripts": "^5.0",
     "sequelize": "^6.31.0",
-    "sequelize-cli": "^6.6.0"
+    "sequelize-cli": "^6.6.0",
+    "uuid": "^9.0.0"
   },
   "scripts": {
     "start": "node server.js",
     "build": "npm run build",
-    "test": "test"
+    "test": "jest"
   },
   "devDependencies": {
     "@babel/core": "^7.21.8",
+    "@babel/plugin-transform-runtime": "^7.21.4",
     "@babel/preset-env": "^7.21.5",
     "babel-jest": "^29.5.0",
-    "jest": "^27.5.1"
+    "jest": "^27.5.1",
+    "supertest": "^6.3.3"
   }
 }

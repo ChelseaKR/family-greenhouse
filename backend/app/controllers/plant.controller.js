@@ -91,11 +91,17 @@ exports.findOne = (req, res) => {
 
     Plant.findByPk(id)
         .then(data => {
-            res.send(data);
+            if (data) {
+                res.send(data);
+            } else {
+                res.status(404).send({
+                    message: `Plant not found with id ${id}.`
+                });
+            }
         })
         .catch(err => {
             res.status(500).send({
-                message: "Error retrieving Plant with id=" + id
+                message: `Error retrieving Plant with id=${id}`
             });
         });
 };

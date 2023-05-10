@@ -35,4 +35,12 @@ db.tasks.belongsTo(db.plants, { foreignKey: 'plant_id' });
 db.tasks.hasMany(db.events, { foreignKey: 'task_id' });
 db.events.belongsTo(db.tasks, { foreignKey: 'task_id' });
 
+db.sequelize.sync()
+    .then(() => {
+        console.log("Synced db.");
+    })
+    .catch((err) => {
+        console.log("Failed to sync db: " + err.message);
+    });
+
 module.exports = db;
