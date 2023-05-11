@@ -6,12 +6,11 @@ const uuid = require('uuid');
 describe('Plants Controller', () => {
     beforeAll(async () => {
         try {
-            await db.sequelize.sync({ force: true });
+            await db.sequelize.sync();
         } catch (error) {
             console.error('Error during database setup:', error);
         }
     });
-
 
     afterEach(async () => {
         await db.plants.destroy({ where: {} });
