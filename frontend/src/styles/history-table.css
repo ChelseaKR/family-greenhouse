@@ -32,35 +32,38 @@ table {
 }
 
 @media only screen and (max-width: 768px) {
-    table, thead, tbody, th, td, tr {
-        display: block;
-    }
-
+    /* Hide table headers on small screens */
     th {
         display: none;
     }
 
+    /* Force table to not be like tables anymore */
+    table, thead, tbody, td, tr {
+        display: block;
+    }
+
     tr {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 50px;
-        align-items: center;
         border-bottom: 1px solid #ccc;
     }
 
     td {
-        grid-column: span 2;
+        display: flex;
+        align-items: center;
+        min-height: 40px;
     }
 
     td::before {
-        grid-column: 1;
+        content: attr(data-label);
+        flex-basis: 50%;
         font-weight: bold;
     }
 
-    .hide-on-mobile {
-        display: none;
+    td::before,
+    td {
+        padding: 6px;
     }
 
+    /* Label the data */
     td:nth-of-type(1)::before { content: "Completed?"; }
     td:nth-of-type(2)::before { content: "Date/Time"; }
     td:nth-of-type(3)::before { content: "Task"; }
