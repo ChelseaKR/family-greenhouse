@@ -1,10 +1,4 @@
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '/frontend/.env') });
-
 Cypress.Commands.add('login', (client_id, client_secret, email, password) => {
-    console.log('Domain: ', Cypress.env('REACT_APP_AUTH0_DOMAIN'));
-    console.log('Audience: ', Cypress.env('REACT_APP_AUTH0_AUDIENCE'));
-
     cy.request({
         method: 'POST',
         url: `https://${Cypress.env('REACT_APP_AUTH0_DOMAIN')}/oauth/token`,
@@ -22,7 +16,6 @@ Cypress.Commands.add('login', (client_id, client_secret, email, password) => {
 
         cy.server();
 
-        // If you're using local storage to store the tokens
         window.localStorage.setItem('access_token', access_token);
         window.localStorage.setItem('id_token', id_token);
         window.localStorage.setItem('expires_at', expires_in);
