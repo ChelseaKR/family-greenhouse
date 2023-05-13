@@ -19,7 +19,7 @@ import AddUser from "./components/greenhouse/add-user.component";
 import User from "./components/plants/plant.component";
 import UsersList from "./components/plants/plants-list.component";
 
-import "./App.css";
+import "./styles/App.css";
 import History from "./components/history/history.component";
 import Profile from "./views/Profile";
 initFontAwesome();

@@ -18,6 +18,7 @@ function AddPlant({ auth0 }) {
     const location = useInput("");
     const description = useInput("");
     const waterFrequencyDays = useInput(0);
+    const waterReminderTime = useInput("");
 
     const [submitted, setSubmitted] = useState(false);
 
@@ -30,8 +31,7 @@ function AddPlant({ auth0 }) {
             location: location.value,
             description: description.value,
             water_frequency_days: waterFrequencyDays.value,
-            water_reminder_time: null, // You can add a hook for this if needed
-        };
+            water_reminder_time: waterReminderTime.value,        };
 
         PlantDataService.create(data)
             .then((response) => {
@@ -50,22 +50,20 @@ function AddPlant({ auth0 }) {
         location.onChange({ target: { value: "" } });
         description.onChange({ target: { value: "" } });
         waterFrequencyDays.onChange({ target: { value: 0 } });
+        waterReminderTime.onChange({ target: { value: "" } });
 
         setSubmitted(false);
     };
 
     const daysOptions = Array.from({ length: 365 }, (_, i) => i + 1);
+    const hoursOptions = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, "0")}:00`);
 
     return (
-        <div className="submit-form">
-            {submitted ? (
-                <div>
-                    <h4>Your plant has been added successfully!</h4>
-                    <button className="btn btn-success" onClick={newPlant}>
-                        Add
-                    </button>
-                </div>
-            ) : (
+        <>
+            <div>
+                <h3>Add a Plant</h3>
+            </div>
+            <div className="submit-form">
                 <div>
                     <div className="form-group">
                         <label htmlFor="Name">Name</label>
@@ -122,12 +120,23 @@ function AddPlant({ auth0 }) {
                             ))}
                         </select>
                     </div>
+                    <div className="form-group">
+                        <label htmlFor="water-reminder-time">Water Reminder Time:</label>
+                        <select id="time" {...waterReminderTime}>
+                            <option value="">Select an option (Pacific Time)</option>
+                            {hoursOptions.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                     <button onClick={savePlant} className="btn btn-success">
                         Submit
                     </button>
                 </div>
-            )}
-        </div>
+            </div>
+        </>
     );
 }
 
