@@ -26,7 +26,7 @@ exports.create = async (req, res) => {
         location: req.body.location,
         description: req.body.description,
         water_frequency_days: req.body.water_frequency_days,
-        water_reminder_time: '12:00:00',
+        water_reminder_time: req.body.water_reminder_time,
     };
 
     try {

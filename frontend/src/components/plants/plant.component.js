@@ -1,121 +1,34 @@
-import React, { Component } from "react";
+import React, { useState, useEffect } from "react";
 import PlantDataService from "../../services/plant.service";
 import { withRouter } from "../common/with-router";
 
-class Plant extends Component {
-    constructor(props) {
-        super(props);
-        this.onChangeName = this.onChangeName.bind(this);
-        this.onChangeType = this.onChangeType.bind(this);
-        this.onChangeLocation = this.onChangeLocation.bind(this);
-        this.onChangeDescription = this.onChangeDescription.bind(this);
-        this.onChangeWaterFrequencyDays = this.onChangeWaterFrequencyDays.bind(this);
-        this.getPlant = this.getPlant.bind(this);
-        this.updatePlant = this.updatePlant.bind(this);
-        this.deletePlant = this.deletePlant.bind(this);
+const Plant = ({ router }) => {
+    const [currentPlant, setCurrentPlant] = useState({
+        id: null,
+        greenhouse: "",
+        name: "",
+        type: "",
+        location: "",
+        description: "",
+        water_frequency_days: 0,
+        water_reminder_time: null,
+    });
 
-        this.state = {
-            currentPlant: {
-                id: null,
-                greenhouse: "",
-                name: "",
-                type: "",
-                location: "",
-                description: "",
-                water_frequency_days: 0,
-            },
-            currentTask: {
-                task_type: 'water',
-                reminder_time: null,
-                next_task_date: null,
-            },
-            selectedWaterFrequencyOption: "",
-            message: ""
-        };
-    }
+    const [currentTask, setCurrentTask] = useState({
+        task_type: 'water',
+        next_task_date: null,
+    });
 
-    componentDidMount() {
-        this.getPlant(this.props.router.params.id);
-    }
+    const [message, setMessage] = useState("");
 
-    onChangeName(e) {
-        const name = e.target.value;
+    useEffect(() => {
+        getPlant(router.params.id);
+    }, [router.params.id]);
 
-        this.setState(function(prevState) {
-            return {
-                currentPlant: {
-                    ...prevState.currentPlant,
-                    name: name
-                }
-            };
-        });
-    }
-
-    onChangeType(e) {
-        const type = e.target.value;
-
-        this.setState(function(prevState) {
-            return {
-                currentPlant: {
-                    ...prevState.currentPlant,
-                    type: type
-                }
-            };
-        });
-    }
-
-    onChangeLocation(e) {
-        const location = e.target.value;
-
-        this.setState(function(prevState) {
-            return {
-                currentPlant: {
-                    ...prevState.currentPlant,
-                    location: location
-                }
-            };
-        });
-    }
-
-    onChangeDescription(e) {
-        const description = e.target.value;
-
-        this.setState(prevState => ({
-            currentPlant: {
-                ...prevState.currentPlant,
-                description: description
-            }
-        }));
-    }
-
-    onChangeWaterFrequencyDays(e) {
-        const waterFrequencyDays = e.target.value;
-
-        this.setState(prevState => ({
-            currentPlant: {
-                ...prevState.currentPlant,
-                water_frequency_days: waterFrequencyDays
-            }
-        }));
-    }
-
-    onChangeTaskTime(e) {
-        const waterReminderTime = e.target.value;
-
-        this.setState(prevState => ({
-            currentTask: {
-                ...prevState.currentTask,
-                reminder_time: waterReminderTime
-            }
-        }));
-    }
-
-    getPlant(id) {
+    const getPlant = (id) => {
         PlantDataService.get(id)
             .then(response => {
-                this.setState({
-                    currentPlant: response.data,
-                });
+                setCurrentPlant(response.data);
                 console.log(response.data);
             })
             .catch(e => {
@@ -123,137 +36,138 @@ class Plant extends Component {
             });
     }
 
-    updatePlant() {
+    const updatePlant = () => {
         PlantDataService.update(
-            this.state.currentPlant.id,
-            this.state.currentPlant,
-            this.state.currentTask
+            currentPlant.id,
+            currentPlant,
+            currentTask
         )
             .then(response => {
                 console.log(response.data);
-                this.setState({
-                    message: "The plant's info was updated successfully!"
-                });
+                setMessage("The plant's info was updated successfully!");
             })
             .catch(e => {
                 console.log(e);
             });
     }
 
-    deletePlant() {
-        PlantDataService.delete(this.state.currentPlant.id)
+    const deletePlant = () => {
+        PlantDataService.delete(currentPlant.id)
             .then(response => {
                 console.log(response.data);
-                this.props.router.navigate('/plants');
+                router.navigate('/plants');
             })
             .catch(e => {
                 console.log(e);
             });
     }
 
-    render() {
-        const currentPlant = this.state.currentPlant;
-        const currentTask = this.state.currentTask;
-
-        const daysOptions = Array.from({ length: 365 }, (_, i) => {
-            return i + 1;
+    const onChange = (field) => (e) => {
+        setCurrentPlant({
+            ...currentPlant,
+            [field]: e.target.value,
         });
-
-        return (
-            <div>
-                {currentPlant ? (
-                    <div className="edit-form">
-                        <h4>Plant</h4>
-                        <form>
-                            <div className="form-group">
-                                <label htmlFor="name">Name</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="name"
-                                    value={currentPlant.name}
-                                    onChange={this.onChangeName}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="type">Type</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="type"
-                                    value={currentPlant.type}
-                                    onChange={this.onChangeType}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="location">Location</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="location"
-                                    value={currentPlant.location}
-                                    onChange={this.onChangeLocation}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="description">Description</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="description"
-                                    value={currentPlant.description}
-                                    onChange={this.onChangeDescription}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor={`days-water`}>Remind me to water:</label>
-                                <select id="days" value={this.state.currentPlant.water_frequency_days} onChange={this.onChangeWaterFrequencyDays}>
-                                    <option value="">Select an option</option>
-                                    {daysOptions.map((option) => (
-                                        <option key={option} value={option}>
-                                            Every {option} {option > 1 ? 'days' : 'day'}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="water_task_time">Water Reminder Time</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="water_task_time"
-                                    value={currentPlant.water_reminder_time}
-                                    onChange={this.onChangeTaskTime}
-                                />
-                            </div>
-                        </form>
-
-                        <button
-                            className="badge badge-danger mr-2"
-                            onClick={this.deletePlant}
-                        >
-                            Delete
-                        </button>
-
-                        <button
-                            type="submit"
-                            className="badge badge-success"
-                            onClick={this.updatePlant}
-                        >
-                            Update
-                        </button>
-                        <p>{this.state.message}</p>
-                    </div>
-                ) : (
-                    <div>
-                        <br />
-                        <p>Select a plant</p>
-                    </div>
-                )}
-            </div>
-        );
     }
+
+    const daysOptions = Array.from({ length: 365 }, (_, i) => { return i + 1; });
+    const hoursOptions = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, "0")}:00:00`);
+
+    return (
+        <div>
+            {currentPlant ? (
+                <div className="edit-form">
+                    <h4>Plant</h4>
+                    <form>
+                        <div className="form-group">
+                            <label htmlFor="name">Name</label>
+                            <input
+                                type="text"
+                                className="form-control"
+                                id="name"
+                                value={currentPlant.name}
+                                onChange={onChange('name')}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="type">Type</label>
+                            <input
+                                type="text"
+                                className="form-control"
+                                id="type"
+                                value={currentPlant.type}
+                                onChange={onChange('type')}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="location">Location</label>
+                            <input
+                                type="text"
+                                className="form-control"
+                                id="location"
+                                value={currentPlant.location}
+                                onChange={onChange('location')}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="description">Description</label>
+                            <input
+                                type="text"
+                                className="form-control"
+                                id="description"
+                                value={currentPlant.description}
+                                onChange={onChange('description')}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor={`days-water`}>Remind me to water:</label>
+                            <select id="days" value={currentPlant.water_frequency_days} onChange={onChange('water_frequency_days')}>
+                                <option value="">Select an option</option>
+                                {daysOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                        Every {option} {option > 1 ? 'days' : 'day'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="water-reminder-time">Water Reminder Time:</label>
+                            <select id="time" value={currentPlant.water_reminder_time} onChange={onChange('water_reminder_time')}>
+                                <option value="">Select an option (Pacific Time)</option>
+                                {hoursOptions.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </form>
+
+                    <button
+                        className="badge badge-danger mr-2"
+                        onClick={deletePlant}
+                    >
+                        Delete
+                    </button>
+
+                    <button
+                        type="submit"
+                        className="badge badge-success"
+                        onClick={updatePlant}
+                    >
+                        Update
+                    </button>
+                    <p>{message}</p>
+                </div>
+            ) : (
+                <div>
+                    <br />
+                    <p>Please select a plant...</p>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default withRouter(Plant);
