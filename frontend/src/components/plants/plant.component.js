@@ -10,6 +10,7 @@ class Plant extends Component {
         this.onChangeLocation = this.onChangeLocation.bind(this);
         this.onChangeDescription = this.onChangeDescription.bind(this);
         this.onChangeWaterFrequencyDays = this.onChangeWaterFrequencyDays.bind(this);
+        this.onChangeWaterReminderTime = this.onChangeWaterReminderTime.bind(this);
         this.getPlant = this.getPlant.bind(this);
         this.updatePlant = this.updatePlant.bind(this);
         this.deletePlant = this.deletePlant.bind(this);
@@ -23,13 +24,12 @@ class Plant extends Component {
                 location: "",
                 description: "",
                 water_frequency_days: 0,
+                water_reminder_time: null,
             },
             currentTask: {
                 task_type: 'water',
-                reminder_time: null,
                 next_task_date: null,
             },
-            selectedWaterFrequencyOption: "",
             message: ""
         };
     }
@@ -99,13 +99,13 @@ class Plant extends Component {
         }));
     }
 
-    onChangeTaskTime(e) {
+    onChangeWaterReminderTime(e) {
         const waterReminderTime = e.target.value;
 
         this.setState(prevState => ({
-            currentTask: {
-                ...prevState.currentTask,
-                reminder_time: waterReminderTime
+            currentPlant: {
+                ...prevState.currentPlant,
+                water_reminder_time: waterReminderTime
             }
         }));
     }
@@ -153,11 +153,12 @@ class Plant extends Component {
 
     render() {
         const currentPlant = this.state.currentPlant;
-        const currentTask = this.state.currentTask;
 
         const daysOptions = Array.from({ length: 365 }, (_, i) => {
             return i + 1;
         });
+        const hoursOptions = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, "0")}:00:00`);
+
 
         return (
             <div>
@@ -218,14 +219,15 @@ class Plant extends Component {
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="water_task_time">Water Reminder Time</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    id="water_task_time"
-                                    value={currentPlant.water_reminder_time}
-                                    onChange={this.onChangeTaskTime}
-                                />
+                                <label htmlFor="water-reminder-time">Water Reminder Time:</label>
+                                <select id="time" value={this.state.currentPlant.water_reminder_time} onChange={this.onChangeWaterReminderTime}>
+                                    <option value="">Select an option (Pacific Time)</option>
+                                    {hoursOptions.map((option) => (
+                                        <option key={option} value={option}>
+                                            {option}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </form>
 
