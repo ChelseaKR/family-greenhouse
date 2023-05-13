@@ -1,3 +1,4 @@
+const plants = require("../controllers/plant.controller");
 module.exports = app => {
     const events = require("../controllers/history.controller.js");
 
@@ -5,11 +6,11 @@ module.exports = app => {
 
     router.get("/", events.findAll);
 
-/*    router.get("/:id", events.findOne);
+    router.put("/:id", events.update);
 
-    router.put("/:id", events.update);*/
+    router.delete("/:id", events.delete);
 
-   router.get("/history", events.findAll);
+    router.get("/history", events.findAll);
 
     app.use("/api/history", router);
 };
