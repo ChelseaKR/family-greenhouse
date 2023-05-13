@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import HistoryDataService from "../../services/history.service";
 import { withAuth0 } from "@auth0/auth0-react";
-import HistoryItem from "./history-item";
+import HistoryItem from "./history-item.component";
 
 const History = ({ auth0 }) => {
     const { user } = auth0;

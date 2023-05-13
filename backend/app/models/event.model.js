@@ -15,7 +15,7 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.BOOLEAN
         },
         completed_by: {
-            type: Sequelize.DATE
+            type: Sequelize.STRING
         },
         date_completed: {
             type: Sequelize.DATE
