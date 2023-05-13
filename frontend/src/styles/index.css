@@ -9,8 +9,7 @@ body {
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 
 .custom-dropdown {
@@ -30,6 +29,11 @@ code {
 .btn-primary:hover {
   background-color: #a01eee;
   border-color: #a01eee;
+}
+
+table {
+  table-layout: fixed;
+  width: 100%;
 }
 
 .table-responsive {

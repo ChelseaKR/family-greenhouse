@@ -2,6 +2,8 @@ import React, {useEffect, useRef, useState} from "react";
 import axios from 'axios';
 import { useAuth0 } from "@auth0/auth0-react";
 
+import "../../styles/history-table.css";
+
 const HistoryItemComponent = ({ event, index, currentIndex, onSetActive }) => {
     const [isCompleted, setIsCompleted] = useState(event.is_completed);
     const [isLoading, setIsLoading] = useState(false);
@@ -21,7 +23,7 @@ const HistoryItemComponent = ({ event, index, currentIndex, onSetActive }) => {
         const date_completed = !isCompleted ? new Date() : null;
 
         try {
-            const response = await axios.put(
+            await axios.put(
                 `${process.env.REACT_APP_APP_API_URL}/history/${event.id}`,
                 {
                     is_completed: !isCompleted,
@@ -52,6 +54,15 @@ const HistoryItemComponent = ({ event, index, currentIndex, onSetActive }) => {
         );
     }
 
+    const formatDate = (dateObj) => {
+        const date = new Date(dateObj);
+
+        const dateString = date.toLocaleDateString();
+        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        return `${dateString} ${timeString}`;
+    };
+
     return (
         <>
             {error && <div>{error}</div>}
@@ -59,7 +70,7 @@ const HistoryItemComponent = ({ event, index, currentIndex, onSetActive }) => {
                 className={index === currentIndex ? "table-active" : ""}
                 onClick={() => onSetActive(event, index)}
             >
-                <td data-label="Completed?">
+                <td className="completedColumn" data-label="Completed?">
                     <input
                         type="checkbox"
                         checked={isCompleted}
@@ -67,14 +78,19 @@ const HistoryItemComponent = ({ event, index, currentIndex, onSetActive }) => {
                         onChange={handleCheckboxChange}
                     />
                 </td>
-                <td data-label="Date/Time">{event.datetime}</td>
-                <td data-label="Task">{event.task ? event.task.task_type : ""}</td>
-                <td data-label="Plant Name">{event.task.plant ? event.task.plant.name : ""}</td>
-                <td data-label="Plant Type">{event.task.plant ? event.task.plant.type : ""}</td>
-                <td data-label="Completed By">{event.completed_by}</td>
-                <td data-label="Date Completed">{event.date_completed ? new Date(event.date_completed).toLocaleString() : ""}</td>            </tr>
+                <td className="datetimeColumn" data-label="Date/Time">{event.datetime ? formatDate(event.datetime) : ""}</td>
+                <td className="taskColumn" data-label="Task">{event.task ? event.task.task_type : ""}</td>
+                <td className="plantNameColumn" data-label="Plant Name">{event.task.plant ? event.task.plant.name : ""}</td>
+                <td className="plantTypeColumn" data-label="Plant Type">{event.task.plant ? event.task.plant.type : ""}</td>
+                <td className={`completedByColumn ${!isCompleted ? 'hide-on-mobile' : ''}`} data-label="Completed By">{event.completed_by}</td>
+                <td className={`dateCompletedColumn ${!isCompleted ? 'hide-on-mobile' : ''}`} data-label="Date Completed">{event.date_completed ? formatDate(event.date_completed) : ""}</td>
+            </tr>
         </>
     );
+
 };
+
+
+
 
 export default React.memo(HistoryItemComponent);
