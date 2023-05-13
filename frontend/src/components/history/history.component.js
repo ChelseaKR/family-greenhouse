@@ -41,11 +41,11 @@ const History = ({ auth0 }) => {
                 <table className="table table-striped">
                     <thead>
                     <tr>
+                        <th>Completed?</th>
                         <th>Date/Time</th>
                         <th>Task</th>
                         <th>Plant Name</th>
                         <th>Plant Type</th>
-                        <th>Completed?</th>
                         <th>Completed By</th>
                         <th>Date Completed</th>
                     </tr>

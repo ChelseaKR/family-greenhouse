@@ -29,14 +29,19 @@ exports.findAll = (req, res) => {
     });
 };
 
-// Update a Plant by the id in the request
+// Update an Event by the id in the request
 exports.update = (req, res) => {
     const id = req.params.id;
+
+    console.log('Updating event with ID:', id);
+    console.log('Request body:', req.body);
 
     Event.update(req.body, {
         where: { id: id }
     })
         .then(num => {
+            console.log('Update result:', num);
+
             if (num == 1) {
                 res.send({
                     message: "Event was updated successfully."
@@ -48,6 +53,7 @@ exports.update = (req, res) => {
             }
         })
         .catch(err => {
+            console.error('Error updating event:', err);
             res.status(500).send({
                 message: "Error updating Event with id=" + id
             });
