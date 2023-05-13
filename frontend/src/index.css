@@ -32,3 +32,22 @@ code {
   border-color: #a01eee;
 }
 
+.table-responsive {
+  display: block;
+  overflow-x: auto;
+}
+
+@media screen and (max-width: 768px) {
+  .table-responsive thead {
+    display: none;
+  }
+  .table-responsive tbody td {
+    display: block;
+    text-align: right;
+  }
+  .table-responsive tbody td:before {
+    content: attr(data-label);
+    float: left;
+    font-weight: bold;
+  }
+}

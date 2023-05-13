@@ -38,7 +38,7 @@ const History = ({ auth0 }) => {
                     <h3>History</h3>
                 </div>
 
-                <table className="table table-striped">
+                <table className="table table-striped table-responsive">
                     <thead>
                     <tr>
                         <th>Completed?</th>

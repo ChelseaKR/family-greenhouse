@@ -35,7 +35,7 @@ const HistoryItem = ({ event, index, currentIndex, onSetActive }) => {
                 className={index === currentIndex ? "table-active" : ""}
                 onClick={() => onSetActive(event, index)}
             >
-                <td>
+                <td data-label="Completed?">
                     <input
                         type="checkbox"
                         checked={isCompleted}
@@ -43,13 +43,12 @@ const HistoryItem = ({ event, index, currentIndex, onSetActive }) => {
                         onChange={handleCheckboxChange}
                     />
                 </td>
-                <td>{event.datetime.slice(0, 10)}</td>
-                <td>{event.task ? event.task.task_type : ""}</td>
-                <td>{event.task.plant ? event.task.plant.name : ""}</td>
-                <td>{event.task.plant ? event.task.plant.type : ""}</td>
-
-                <td>{event.completed_by}</td>
-                <td>{event.date_completed}</td>
+                <td data-label="Date/Time">{event.datetime}</td>
+                <td data-label="Task">{event.task ? event.task.task_type : ""}</td>
+                <td data-label="Plant Name">{event.task.plant ? event.task.plant.name : ""}</td>
+                <td data-label="Plant Type">{event.task.plant ? event.task.plant.type : ""}</td>
+                <td data-label="Completed By">{event.completed_by}</td>
+                <td data-label="Date Completed">{event.date_completed}</td>
             </tr>
         </>
     );
