@@ -1,0 +1,9 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "password",
+    "database": "db_family_greenhouse",
+    "host": "localhost",
+    "dialect": "postgres"
+  }
+}
