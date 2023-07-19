@@ -43,7 +43,7 @@
     "reactstrap": "^9.1"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^5.16",
+    "@testing-library/jest-dom": "^5.17",
     "@testing-library/react": "^12.1",
     "cypress": "^12.12.0",
     "jest-environment-jsdom": "^29.5",
