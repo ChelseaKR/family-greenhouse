@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 230" width="400" height="230">
+  
+  <defs>
+    <style>
+      .wm { font-family: Georgia, serif; font-size: 34px; font-weight: 700; fill: #27500A; }
+      .tg { font-family: Arial, sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 3px; fill: #639922; }
+    </style>
+  </defs>
+  <g transform="translate(144,6) scale(1)">
+    <!-- Roof -->
+    <polygon points="56,0 0,44 112,44" fill="#C0DD97" stroke="#3B6D11" stroke-width="2.5" stroke-linejoin="round"/>
+    <rect x="47" y="-5" width="18" height="11" rx="3" fill="#3B6D11"/>
+    <!-- Body -->
+    <rect x="0" y="44" width="112" height="100" rx="3" fill="#EAF3DE" stroke="#3B6D11" stroke-width="2.5"/>
+    <line x1="56" y1="2" x2="56" y2="44" stroke="#3B6D11" stroke-width="1.2" opacity="0.4"/>
+    <line x1="56" y1="44" x2="56" y2="144" stroke="#3B6D11" stroke-width="1" opacity="0.3"/>
+    <!-- Door -->
+    <rect x="38" y="100" width="36" height="44" rx="3" fill="#C0DD97" stroke="#3B6D11" stroke-width="1.8"/>
+    <circle cx="70" cy="124" r="3" fill="#3B6D11"/>
+
+    <!-- LEFT PLANT -->
+    <line x1="26" y1="142" x2="26" y2="74" stroke="#27500A" stroke-width="3" stroke-linecap="round"/>
+    <!-- leaf 1: lower left -->
+    <path d="M26 108 Q6 96 4 76 Q24 74 26 100" fill="#3B6D11"/>
+    <!-- leaf 2: lower right -->
+    <path d="M26 118 Q46 104 48 84 Q30 83 26 110" fill="#639922"/>
+    <!-- leaf 3: mid left -->
+    <path d="M26 94 Q10 82 12 66 Q26 65 26 88" fill="#97C459"/>
+    <!-- leaf 4: top sprout (new) — small upward leaf at tip -->
+    <path d="M26 78 Q16 64 20 52 Q32 56 26 74" fill="#639922"/>
+
+    <!-- RIGHT PLANT -->
+    <line x1="86" y1="142" x2="86" y2="70" stroke="#27500A" stroke-width="3" stroke-linecap="round"/>
+    <!-- leaf 1: lower right -->
+    <path d="M86 104 Q106 90 110 70 Q90 69 86 96" fill="#3B6D11"/>
+    <!-- leaf 2: lower left -->
+    <path d="M86 116 Q66 103 62 83 Q80 82 86 108" fill="#639922"/>
+    <!-- leaf 3: mid right -->
+    <path d="M86 90 Q104 78 106 62 Q90 61 86 84" fill="#97C459"/>
+    <!-- leaf 4: top sprout (new) -->
+    <path d="M86 74 Q96 60 92 48 Q80 52 86 70" fill="#639922"/>
+
+    <!-- Soil -->
+    <rect x="4" y="142" width="104" height="6" rx="2" fill="#888780" opacity="0.45"/>
+
+  </g>
+  <text x="200" y="182" text-anchor="middle" class="wm">Family Greenhouse</text>
+  <text x="200" y="202" text-anchor="middle" class="tg">GROW TOGETHER</text>
+</svg>

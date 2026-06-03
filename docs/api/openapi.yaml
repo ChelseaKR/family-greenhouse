@@ -1,0 +1,164 @@
+# Family Greenhouse public API v1
+#
+# Read-only endpoints scoped to the household that owns the API key. Issue
+# keys from Settings → API keys (Greenhouse plan only). Authenticate either
+# with `Authorization: Bearer fg_...` or `X-Api-Key: fg_...`.
+#
+# Rate limit: 60 requests / minute / IP / route. The 429 response body
+# carries `{ "message": "Too many requests..." }`.
+openapi: 3.1.0
+info:
+  title: Family Greenhouse API
+  version: 1.0.0
+  description: |
+    Read-only access to your household's plants, tasks, and activity feed.
+    Designed for personal automations (Home Assistant, scripts, dashboards).
+    Write access is not provided in v1 — use the web app to make changes.
+servers:
+  - url: https://api.family-greenhouse.example/api/v1
+    description: Production
+  - url: http://localhost:4000/api/v1
+    description: Local dev server
+
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: fg_
+  schemas:
+    Plant:
+      type: object
+      required: [id, householdId, name, createdAt, createdBy, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        householdId: { type: string, format: uuid }
+        name: { type: string, maxLength: 100 }
+        species: { type: string, nullable: true, maxLength: 100 }
+        location: { type: string, nullable: true, maxLength: 100 }
+        imageUrl: { type: string, nullable: true, format: uri }
+        notes: { type: string, nullable: true, maxLength: 1000 }
+        tags:
+          type: array
+          items: { type: string, maxLength: 40 }
+          maxItems: 10
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+    Task:
+      type: object
+      required: [id, householdId, plantId, type, frequency, nextDue]
+      properties:
+        id: { type: string, format: uuid }
+        householdId: { type: string, format: uuid }
+        plantId: { type: string, format: uuid }
+        plantName: { type: string }
+        type:
+          type: string
+          enum: [water, fertilize, prune, repot, custom]
+        customType: { type: string, nullable: true }
+        frequency: { type: integer, minimum: 1, maximum: 365 }
+        lastCompleted: { type: string, format: date-time, nullable: true }
+        nextDue: { type: string, format: date-time }
+        assignedTo: { type: string, nullable: true }
+        assignedToName: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    Completion:
+      type: object
+      required: [id, householdId, plantId, taskId, completedAt]
+      properties:
+        id: { type: string, format: uuid }
+        householdId: { type: string, format: uuid }
+        plantId: { type: string, format: uuid }
+        taskId: { type: string, format: uuid }
+        taskType: { type: string }
+        completedBy: { type: string }
+        completedByName: { type: string }
+        completedAt: { type: string, format: date-time }
+        notes: { type: string, nullable: true }
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+security:
+  - apiKey: []
+
+paths:
+  /me:
+    get:
+      summary: Identify the household this key belongs to
+      responses:
+        '200':
+          description: Household info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  householdId: { type: string, format: uuid }
+                  apiVersion: { type: string, example: v1 }
+        '401':
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /plants:
+    get:
+      summary: List all plants in the household
+      responses:
+        '200':
+          description: Plant list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Plant' }
+  /plants/{id}:
+    get:
+      summary: Get a single plant by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Plant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Plant' }
+        '404':
+          description: Plant not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /tasks:
+    get:
+      summary: List all tasks in the household
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+  /activity:
+    get:
+      summary: List recent task completions across the household
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Newest-first list of completions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Completion' }

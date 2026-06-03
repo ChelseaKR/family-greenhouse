@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Emerald primary; updated to satisfy WCAG AA contrast with white. */
+    --color-primary: 5 150 105;
+    --color-secondary: 234 179 8;
+  }
+
+  /* Dark theme set by prefsStore.applyTheme(). Inverts only the surface +
+     body text tokens; component-level classes (bg-white etc.) keep their
+     light values unless they explicitly opt into a dark variant. */
+  html[data-theme='dark'] {
+    color-scheme: dark;
+  }
+  html[data-theme='dark'] body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  html[data-density='compact'] .card {
+    @apply p-4;
+  }
+
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  /* Skip link for keyboard navigation */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-md;
+  }
+
+  /* Focus visible styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+
+  /* Reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-touch min-w-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  }
+
+  .btn-primary {
+    /* primary-700 (#047857) clears WCAG AA contrast (5:1) with white text;
+       primary-600 was 3.76:1, just under the 4.5 threshold for normal-size body text. */
+    @apply btn bg-primary-700 text-white hover:bg-primary-800 focus-visible:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus-visible:ring-primary-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500;
+  }
+
+  .input {
+    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm;
+  }
+
+  .input-error {
+    @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+
+  .error-message {
+    @apply mt-1 text-sm text-red-600;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  }
+
+  /* Long-form prose used by /blog/:slug post bodies. We don't ship the
+     @tailwindcss/typography plugin (bundle cost vs. one prose surface),
+     so styles here are deliberately minimal: a comfortable reading
+     column, generous line height, consistent block spacing. The display
+     font picks up via h2/h3 selectors. */
+  .prose-fg {
+    @apply text-gray-800 text-base leading-relaxed;
+  }
+  .prose-fg .lead {
+    @apply text-lg text-gray-700;
+  }
+  .prose-fg p {
+    @apply mt-4;
+  }
+  .prose-fg h2 {
+    @apply mt-10 font-serif text-2xl font-semibold tracking-tight text-gray-900;
+  }
+  .prose-fg h3 {
+    @apply mt-8 font-serif text-xl font-semibold tracking-tight text-gray-900;
+  }
+  .prose-fg ul,
+  .prose-fg ol {
+    @apply mt-4 ml-6 space-y-2;
+  }
+  .prose-fg ul {
+    @apply list-disc;
+  }
+  .prose-fg ol {
+    @apply list-decimal;
+  }
+  .prose-fg a {
+    @apply text-primary-700 underline underline-offset-2 hover:text-primary-800;
+  }
+  .prose-fg em {
+    @apply italic;
+  }
+  .prose-fg strong {
+    @apply font-semibold text-gray-900;
+  }
+}

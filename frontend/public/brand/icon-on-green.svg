@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Family Greenhouse">
+  <!-- Maskable variant — same potted-leaf composition on Leaf Mid background so
+       circular Android masks don't crop the silhouette. Same leaf path, recolored. -->
+  <rect width="512" height="512" fill="#639922"/>
+
+  <!-- Terracotta pot -->
+  <path d="M 220 470
+           L 226 432
+           L 286 432
+           L 292 470
+           Q 256 482, 220 470 Z"
+        fill="#DC6C1F" stroke="#7E3219" stroke-width="6" stroke-linejoin="round"/>
+  <line x1="218" y1="436" x2="294" y2="436" stroke="#7E3219" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Stem in dark green so it reads against the cream leaf above -->
+  <path d="M 256 432 C 256 410, 244 388, 240 360"
+        stroke="#27500A" stroke-width="14" stroke-linecap="round" fill="none"/>
+
+  <!-- Leaf in cream — inverts the standard icon's contrast -->
+  <path d="M 250 90
+           C 178 120, 130 200, 130 280
+           C 132 332, 184 366, 246 364
+           C 252 364, 256 364, 260 364
+           C 322 360, 380 320, 384 248
+           C 380 168, 326 110, 250 90 Z"
+        fill="#EAF3DE"
+        stroke="#27500A"
+        stroke-width="10"
+        stroke-linejoin="round"/>
+
+  <path d="M 250 360 Q 254 230 250 100"
+        stroke="#27500A" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M 252 180 Q 220 196 190 222" stroke="#27500A" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M 252 180 Q 290 196 320 222" stroke="#27500A" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M 250 270 Q 216 288 188 318" stroke="#27500A" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M 250 270 Q 294 288 322 318" stroke="#27500A" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.55"/>
+</svg>

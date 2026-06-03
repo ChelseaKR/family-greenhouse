@@ -1,0 +1,359 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., v1.0.0)'
+        required: true
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  AWS_REGION: us-east-1
+  ENVIRONMENT: production
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format: $VERSION"
+            exit 1
+          fi
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ vars.PRODUCTION_API_URL }}
+          VITE_COGNITO_USER_POOL_ID: ${{ vars.PRODUCTION_COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ vars.PRODUCTION_COGNITO_CLIENT_ID }}
+          VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
+        run: npm run build
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ needs.validate.outputs.version }}
+          path: frontend/dist
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist-${{ needs.validate.outputs.version }}
+          path: backend/dist
+
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    defaults:
+      run:
+        working-directory: infrastructure
+    outputs:
+      frontend_bucket: ${{ steps.outputs.outputs.frontend_bucket }}
+      cloudfront_id: ${{ steps.outputs.outputs.cloudfront_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -var-file=environments/production/terraform.tfvars -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get outputs
+        id: outputs
+        run: |
+          echo "frontend_bucket=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [validate, terraform]
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-${{ needs.validate.outputs.version }}
+          path: dist
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+            --delete \
+            --cache-control "max-age=31536000,public" \
+            --exclude "index.html" \
+            --exclude "*.json"
+
+          aws s3 cp dist/index.html s3://${{ needs.terraform.outputs.frontend_bucket }}/index.html \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.terraform.outputs.cloudfront_id }} \
+            --paths "/*"
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [validate, terraform]
+    # The `production` environment requires manual approval per its rule
+    # configuration in GitHub. cd jobs gated on this won't run until a
+    # required reviewer approves the deployment.
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist-${{ needs.validate.outputs.version }}
+          path: dist
+
+      - name: Capture previous Lambda versions for rollback
+        id: prev
+        run: |
+          set -euo pipefail
+          versions=""
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders; do
+            FUNCTION_NAME="family-greenhouse-${handler}-production"
+            ver=$(aws lambda get-function --function-name "$FUNCTION_NAME" \
+              --query 'Configuration.Version' --output text)
+            versions="${versions}${handler}=${ver}\n"
+          done
+          printf "$versions" > prev-versions.txt
+          cat prev-versions.txt
+
+      - name: Upload prev-versions artifact (for rollback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: prev-versions-${{ needs.validate.outputs.version }}
+          path: prev-versions.txt
+
+      - name: Deploy Lambda functions
+        run: |
+          set -euo pipefail
+          # esbuild emits ESM bundles named after the handler group
+          # (e.g. `auth.js`). Each Lambda is wired with
+          # `handler = "handler.handler"`, so the zip MUST contain a
+          # `handler.mjs` (NOT `auth.js`) or the runtime can't load it.
+          # The .mjs extension forces Node ESM regardless of any
+          # package.json in the zip.
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders; do
+            FUNCTION_NAME="family-greenhouse-${handler}-production"
+            SRC="dist/${handler}.js"
+            test -f "$SRC" || { echo "Missing bundle: $SRC"; exit 1; }
+
+            WORK=$(mktemp -d)
+            cp "$SRC" "${WORK}/handler.mjs"
+            [ -f "${SRC}.map" ] && cp "${SRC}.map" "${WORK}/handler.mjs.map" || true
+            (cd "$WORK" && zip -q -r "/tmp/${handler}.zip" .)
+
+            aws lambda update-function-code \
+              --function-name "$FUNCTION_NAME" \
+              --zip-file "fileb:///tmp/${handler}.zip" \
+              --publish > /dev/null
+            echo "  ✓ ${FUNCTION_NAME}"
+            rm -rf "$WORK" "/tmp/${handler}.zip"
+          done
+
+      - name: Smoke test (public route proves routing + dispatch are live)
+        run: |
+          # /health doesn't exist on the deployed API (no such route in any
+          # handler group). /billing/plans is the canonical public route
+          # that proves Lambda boots + the per-route dispatcher works.
+          url="${{ vars.PRODUCTION_API_URL }}/billing/plans"
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+          echo "GET /billing/plans -> $code"
+          test "$code" = "200" || { echo "Smoke test failed"; exit 1; }
+
+  smoke-tests:
+    name: Post-deploy smoke (Playwright e2e against prod)
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend, deploy-backend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Configure AWS credentials (Cognito admin for test-user create+delete)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Frontend HTTP reachability
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }})
+          test "$code" = "200" || { echo "Frontend HTTP $code"; exit 1; }
+
+      - name: Critical-path e2e (post-deploy-smoke)
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: ${{ vars.PRODUCTION_URL }}
+          E2E_USER_POOL_ID: ${{ vars.PRODUCTION_COGNITO_USER_POOL_ID }}
+        run: npx playwright test --config tests/e2e/playwright.smoke.config.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-report-${{ needs.validate.outputs.version }}
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+
+  rollback:
+    name: Auto-rollback Lambda on smoke failure
+    runs-on: ubuntu-latest
+    needs: [validate, deploy-backend, smoke-tests]
+    if: failure() && needs.deploy-backend.result == 'success'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download previous versions
+        uses: actions/download-artifact@v4
+        with:
+          name: prev-versions-${{ needs.validate.outputs.version }}
+
+      - name: Restore previous Lambda versions
+        run: |
+          set -euo pipefail
+          while IFS='=' read -r handler ver; do
+            test -z "$handler" && continue
+            FUNCTION_NAME="family-greenhouse-${handler}-production"
+            echo "Rolling back ${FUNCTION_NAME} -> v${ver}"
+            # `update-alias` would be the cleanest path once an alias
+            # exists; until then we re-tag the previous published version
+            # by copying its code to $LATEST.
+            aws lambda update-function-code \
+              --function-name "$FUNCTION_NAME" \
+              --s3-bucket family-greenhouse-tfstate-014248889144 \
+              --s3-key "lambda-versions/${handler}-v${ver}.zip" \
+              --publish > /dev/null 2>&1 || echo "  ! ${FUNCTION_NAME}: no prior-version artifact found"
+          done < prev-versions.txt
+
+      - name: Notify (rollback)
+        run: |
+          echo "::error::Production deploy of ${{ needs.validate.outputs.version }} failed smoke. Lambda code rolled back where possible. Investigate CloudWatch + the playwright-smoke report artifact."
+          exit 1
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [validate, deploy-frontend, deploy-backend, smoke-tests]
+    if: always()
+    steps:
+      - name: Deployment notification
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          if [ "${{ needs.smoke-tests.result }}" == "success" ]; then
+            echo "Production deployment of $VERSION successful!"
+          else
+            echo "Production deployment of $VERSION failed!"
+            exit 1
+          fi

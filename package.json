@@ -1,0 +1,47 @@
+{
+  "name": "family-greenhouse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A collaborative plant care management application for families",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.2.1",
+    "@commitlint/config-conventional": "^19.1.0",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.3"
+  },
+  "lint-staged": {
+    "{backend,frontend}/src/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "*.{ts,tsx,json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "overrides": {
+    "tmp": "^0.2.6"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

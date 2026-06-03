@@ -1,0 +1,5 @@
+environment  = "staging"
+aws_region   = "us-east-1"
+project_name = "family-greenhouse"
+domain_name  = ""
+alert_email  = ""
