@@ -12,6 +12,7 @@ import {
   QueryCommand,
   UpdateCommand,
   BatchWriteCommand,
+  DeleteCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
@@ -216,10 +217,13 @@ export async function updatePlant(
   };
 }
 
-export async function deletePlant(householdId: string, plantId: string): Promise<void> {
-  // Cascade: collect all task rows for this plant, all completion rows under
-  // the plant's completion partition, and the plant row itself; batch-delete in
-  // chunks of 25 (the BatchWriteItem service limit).
+export async function deletePlant(householdId: string, plantId: string): Promise<Plant | null> {
+  // Cascade: collect all task rows for this plant and all completion rows under
+  // the plant's completion partition; batch-delete in chunks of 25 (the
+  // BatchWriteItem service limit). The plant row itself is deleted last with
+  // ConditionExpression + ALL_OLD so we get a single atomic "did it exist?"
+  // check + the deleted attributes back — saves the handler a GetItem
+  // roundtrip and lets us return the plant data for audit logging.
   const taskRows = await dynamodb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -249,15 +253,9 @@ export async function deletePlant(householdId: string, plantId: string): Promise
     SK: c.SK as string,
   }));
 
-  const allKeys = [
-    ...taskKeysForPlant,
-    ...completionKeys,
-    { PK: `HOUSEHOLD#${householdId}`, SK: `PLANT#${plantId}` },
-  ];
-
-  // BatchWriteItem accepts at most 25 ops per request.
-  for (let i = 0; i < allKeys.length; i += 25) {
-    const chunk = allKeys.slice(i, i + 25);
+  const cascadeKeys = [...taskKeysForPlant, ...completionKeys];
+  for (let i = 0; i < cascadeKeys.length; i += 25) {
+    const chunk = cascadeKeys.slice(i, i + 25);
     await dynamodb.send(
       new BatchWriteCommand({
         RequestItems: {
@@ -267,8 +265,47 @@ export async function deletePlant(householdId: string, plantId: string): Promise
     );
   }
 
+  let deleted: Plant | null = null;
+  try {
+    const result = await dynamodb.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: `PLANT#${plantId}` },
+        ConditionExpression: 'attribute_exists(PK)',
+        ReturnValues: 'ALL_OLD',
+      })
+    );
+    if (result.Attributes) {
+      const item = result.Attributes;
+      deleted = {
+        id: item.id as string,
+        householdId: item.householdId as string,
+        name: item.name as string,
+        species: (item.species as string | null | undefined) ?? null,
+        location: (item.location as string | null | undefined) ?? null,
+        imageUrl: (item.imageUrl as string | null | undefined) ?? null,
+        notes: (item.notes as string | null | undefined) ?? null,
+        tags: (item.tags as string[] | undefined) ?? [],
+        perenualSpeciesId: (item.perenualSpeciesId as number | null | undefined) ?? null,
+        createdAt: item.createdAt as string,
+        createdBy: item.createdBy as string,
+        updatedAt: item.updatedAt as string,
+      };
+    }
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      // Cascade already nuked the related rows for a plant that no longer
+      // exists. Rare (TOCTOU between this call and a concurrent delete);
+      // surface as 404 to the handler.
+      return null;
+    }
+    throw err;
+  }
+
   // Now that the DDB rows are gone, sweep the plant's uploaded images from S3.
   await deletePlantImages(householdId, plantId);
+
+  return deleted;
 }
 
 /**
