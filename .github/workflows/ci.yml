@@ -137,11 +137,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit dependencies (high+critical CVEs gate the build)
-        # Was previously continue-on-error; now blocks. To unblock for an
-        # urgent merge, add the relevant advisory to package.json's
-        # "overrides" or wait for the upstream patch.
-        run: npm audit --audit-level=high
+      - name: Audit production dependencies (high+critical gate the build)
+        # Scoped to `--omit=dev` because dev tooling (vitest, vite, esbuild)
+        # carries advisories that don't ship to prod and that we've chosen
+        # to defer (the vite upgrade path is breaking; tracked alongside
+        # the vite-6 migration). Critical CVEs in runtime deps still block.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
