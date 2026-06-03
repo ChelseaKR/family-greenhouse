@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Theme color is the Leaf Mid green (#639922) per brand guidelines —
+         the recognizable brand pop, not the darker Canopy text color. -->
+    <meta name="theme-color" content="#639922" />
+    <meta name="color-scheme" content="light" />
+
+    <title>Family Greenhouse — Grow together</title>
+    <meta
+      name="description"
+      content="A collaborative plant care app for households. Add plants, schedule recurring care, share tasks, and grow together."
+    />
+
+    <!-- Open Graph + Twitter Card. v2 brand kit ships purpose-built PNGs
+         (1200×630 OG, 1600×800 Twitter) in /brand/. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Family Greenhouse" />
+    <meta
+      property="og:description"
+      content="Collaborative plant care for households — share tasks, get reminders, grow together."
+    />
+    <meta property="og:image" content="/brand/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/brand/twitter-card.png" />
+
+    <!-- Icons. v2 brand kit covers favicon (.ico + 32px PNG), apple-touch
+         (180×180), and the PWA manifest icons (192/512). All ship from
+         /brand/ so they're cleanly grouped with the rest of the kit. -->
+    <link rel="icon" type="image/svg+xml" href="/brand/icon.svg" />
+    <link rel="icon" type="image/x-icon" href="/brand/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Performance: preconnect to the API origin so the first XHR is faster.
+         Override at build time by replacing this with the real API origin. -->
+    <link rel="preconnect" href="http://localhost:4000" crossorigin />
+
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!--
+      Content Security Policy — defense-in-depth complement to the CloudFront
+      response-headers policy that ships in production. Limitations of the
+      meta-tag approach are documented in docs/security.md; the network-edge
+      header is the authoritative one.
+      Notes:
+        - 'unsafe-inline' on style-src is required because we ship inline
+          `style` attributes for progress bars + marketing clipPath.
+        - connect-src includes https: so Stripe Checkout + plant-id can call
+          out. Tighten to specific origins once the prod domain is final.
+        - We don't allow `frame-src` because we don't embed iframes; Stripe
+          Checkout runs as a redirect, not an embedded iframe.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://localhost:4000 https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p style="padding: 2rem; text-align: center; font-family: sans-serif">
+        Family Greenhouse needs JavaScript to run. Please enable it and reload.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

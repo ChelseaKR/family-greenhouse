@@ -1,0 +1,6 @@
+# Pre-push: full quality gate before code reaches origin. Roughly mirrors what
+# CI runs, so a green pre-push almost always means a green CI run.
+#
+# To skip in an emergency: `git push --no-verify`. Don't make this a habit.
+npm run typecheck
+npm test

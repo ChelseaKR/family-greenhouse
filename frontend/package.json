@@ -1,0 +1,103 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/build-sitemap.mjs",
+    "build": "tsc -b && vite build",
+    "sitemap": "node scripts/build-sitemap.mjs",
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "lighthouse": "lhci autorun --config=lighthouserc.cjs",
+    "lighthouse:desktop": "lhci autorun --config=lighthouserc.cjs",
+    "lighthouse:mobile": "lhci autorun --config=lighthouserc.mobile.cjs",
+    "size": "size-limit"
+  },
+  "size-limit": [
+    {
+      "name": "Initial JS (gzipped)",
+      "path": "dist/assets/index-*.js",
+      "limit": "40 kB"
+    },
+    {
+      "name": "Vendor chunk (gzipped)",
+      "path": "dist/assets/vendor-*.js",
+      "limit": "60 kB"
+    },
+    {
+      "name": "All JS combined (gzipped)",
+      "path": "dist/assets/*.js",
+      "limit": "230 kB"
+    },
+    {
+      "name": "CSS (gzipped)",
+      "path": "dist/assets/*.css",
+      "limit": "10 kB"
+    }
+  ],
+  "dependencies": {
+    "@fontsource-variable/instrument-sans": "^5.0.10",
+    "@fontsource/gloock": "^5.0.10",
+    "@headlessui/react": "^2.0.3",
+    "@heroicons/react": "^2.1.3",
+    "@sentry/react": "^10.50.0",
+    "@tanstack/react-query": "^5.29.0",
+    "axios": "^1.6.8",
+    "clsx": "^2.1.0",
+    "i18next": "^26.0.8",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.51.2",
+    "react-i18next": "^17.0.4",
+    "react-router-dom": "^6.22.3",
+    "vite-plugin-pwa": "^1.2.0",
+    "zod": "^3.22.4",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
+    "@aws-sdk/client-dynamodb": "^3.1057.0",
+    "@axe-core/playwright": "^4.11.2",
+    "@axe-core/react": "^4.8.5",
+    "@hookform/resolvers": "^3.3.4",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.43.0",
+    "@size-limit/preset-app": "^12.1.0",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.2",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/jest-axe": "^3.5.9",
+    "@types/react": "^18.2.74",
+    "@types/react-dom": "^18.2.24",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^1.6.1",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.0",
+    "eslint-plugin-i18next": "^6.1.4",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "jest-axe": "^10.0.0",
+    "jsdom": "^24.0.0",
+    "msw": "^2.2.13",
+    "postcss": "^8.4.38",
+    "size-limit": "^12.1.0",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.3",
+    "vite": "^5.2.8",
+    "vitest": "^1.4.0"
+  }
+}

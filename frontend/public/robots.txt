@@ -1,0 +1,32 @@
+# Family Greenhouse robots.txt
+#
+# Public marketing routes are crawlable. Anything behind auth (dashboard,
+# plant detail, settings, etc.) gets disallowed because crawling them is
+# wasted effort — they 401-redirect to /login. The /api/* prefix is off-
+# limits since it's machine-readable JSON, not user-facing pages.
+
+User-agent: *
+Allow: /
+Allow: /blog
+Allow: /pricing
+Allow: /changelog
+Allow: /legal
+Allow: /status
+
+Disallow: /api/
+Disallow: /auth/
+Disallow: /dashboard
+Disallow: /plants
+Disallow: /tasks
+Disallow: /analytics
+Disallow: /household
+Disallow: /settings
+Disallow: /onboarding
+Disallow: /welcome
+Disallow: /confirm-email
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /join/
+Disallow: /coming-soon
+
+Sitemap: https://app.familygreenhouse.com/sitemap.xml

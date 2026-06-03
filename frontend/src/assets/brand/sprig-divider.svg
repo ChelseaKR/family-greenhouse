@@ -1,0 +1,18 @@
+<!-- Hand-drawn botanical divider. Centered between two horizontal rules — use
+     wherever a section needs a softer break than `border-b border-gray-200`.
+     Renders cleanly at sizes 80px–240px wide. Stroke is currentColor so
+     consumers can recolor via Tailwind's text-* classes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Left rule -->
+  <line x1="0" y1="16" x2="56" y2="16" opacity="0.4"/>
+  <!-- Right rule -->
+  <line x1="104" y1="16" x2="160" y2="16" opacity="0.4"/>
+  <!-- Center sprig: short stem with three small leaves -->
+  <path d="M 80 24 Q 80 18 80 8"/>
+  <!-- left leaf -->
+  <path d="M 80 14 Q 72 12 68 18 Q 76 18 80 14 Z" fill="currentColor" opacity="0.85"/>
+  <!-- right leaf -->
+  <path d="M 80 18 Q 88 16 92 22 Q 84 22 80 18 Z" fill="currentColor" opacity="0.85"/>
+  <!-- top bud -->
+  <circle cx="80" cy="8" r="2.2" fill="currentColor" opacity="0.9"/>
+</svg>

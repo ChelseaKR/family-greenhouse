@@ -1,0 +1,1192 @@
+openapi: 3.0.3
+info:
+  title: Family Greenhouse API
+  description: API for collaborative plant care management
+  version: 1.0.0
+  contact:
+    name: Family Greenhouse Team
+
+servers:
+  - url: https://api.family-greenhouse.example.com
+    description: Production
+  - url: https://api-staging.family-greenhouse.example.com
+    description: Staging
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/signup:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/login:
+    post:
+      summary: Authenticate user
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /plants:
+    get:
+      summary: List all plants
+      tags: [Plants]
+      responses:
+        '200':
+          description: List of plants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plant'
+    post:
+      summary: Create a new plant
+      tags: [Plants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlantRequest'
+      responses:
+        '201':
+          description: Plant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plant'
+
+  /plants/{id}:
+    get:
+      summary: Get plant details
+      tags: [Plants]
+      parameters:
+        - $ref: '#/components/parameters/PlantId'
+      responses:
+        '200':
+          description: Plant details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantWithTasks'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update plant
+      tags: [Plants]
+      parameters:
+        - $ref: '#/components/parameters/PlantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlantRequest'
+      responses:
+        '200':
+          description: Plant updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plant'
+    delete:
+      summary: Delete plant
+      tags: [Plants]
+      parameters:
+        - $ref: '#/components/parameters/PlantId'
+      responses:
+        '204':
+          description: Plant deleted
+
+  /tasks:
+    get:
+      summary: List tasks
+      tags: [Tasks]
+      parameters:
+        - name: plantId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: dueWithin
+          in: query
+          schema:
+            type: integer
+        - name: overdue
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+    post:
+      summary: Create a new task
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /tasks/{id}/complete:
+    post:
+      summary: Mark task as complete
+      tags: [Tasks]
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /households:
+    post:
+      summary: Create a new household
+      tags: [Households]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHouseholdRequest'
+      responses:
+        '201':
+          description: Household created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Household'
+
+  /households/{id}:
+    get:
+      summary: Get household details
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: Household details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseholdWithMembers'
+
+  # --- Auth: secondary flows ---
+  /auth/confirm:
+    post:
+      summary: Confirm a new account with the emailed code
+      tags: [Auth]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /auth/resend-code:
+    post:
+      summary: Resend the email-confirmation code
+      tags: [Auth]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /auth/refresh:
+    post:
+      summary: Exchange a refresh token for a new access token
+      tags: [Auth]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/forgot-password:
+    post:
+      summary: Send a password-reset code to the user's email
+      tags: [Auth]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /auth/reset-password:
+    post:
+      summary: Reset password with the emailed reset code
+      tags: [Auth]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /auth/change-password:
+    post:
+      summary: Change password while authenticated
+      tags: [Auth]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/me:
+    get:
+      summary: Current authenticated user (identity + display name)
+      tags: [Auth]
+      responses:
+        '200':
+          description: The current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  email: { type: string }
+                  name: { type: string }
+                  householdId: { type: [string, 'null'] }
+                  householdRole: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      summary: Update editable profile attributes (currently `name` only)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  email: { type: string }
+                  name: { type: string }
+
+  # --- Me ---
+  /me:
+    delete:
+      summary: GDPR self-delete (account + household-membership wipe)
+      tags: [Me]
+      responses:
+        '204': { description: Account deleted }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /me/export:
+    get:
+      summary: GDPR data-portability export (profile, prefs, memberships, plants, tasks)
+      tags: [Me]
+      responses:
+        '200':
+          description: Downloadable JSON document of the caller's data
+          content:
+            application/json:
+              schema:
+                type: object
+  /me/households:
+    get:
+      summary: All households the caller is a member of
+      tags: [Me]
+      responses:
+        '200':
+          description: Household memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+  /me/calendar.ics:
+    get:
+      summary: iCalendar feed of plant care tasks for the active household
+      tags: [Me]
+      responses:
+        '200':
+          description: iCalendar (RFC 5545) feed
+          content:
+            text/calendar:
+              schema:
+                type: string
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # --- Plants: photos, history, image upload, templates ---
+  /plants/{id}/photos:
+    get:
+      summary: Plant photo timeline
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/{plantId}/history:
+    get:
+      summary: Combined task-completion + photo history for a plant
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantIdAlt' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/{id}/image:
+    post:
+      summary: Issue a presigned S3 upload URL for a plant photo
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/{id}/image/confirm:
+    post:
+      summary: Confirm a photo upload landed and link it to the plant
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/{plantId}/apply-template:
+    post:
+      summary: Apply a recurring task template to a single plant
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantIdAlt' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/apply-template-bulk:
+    post:
+      summary: Apply a task template to up to 50 plants at once
+      tags: [Plants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plantIds, templateId]
+              properties:
+                plantIds:
+                  type: array
+                  maxItems: 50
+                  items: { type: string, format: uuid }
+                templateId: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # --- Tasks: detail, snooze, templates, upcoming ---
+  /tasks/{id}:
+    get:
+      summary: Get a single task
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Update task fields (frequency, assignee, notes, etc.)
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Delete a task
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '204': { description: Task deleted }
+  /tasks/upcoming:
+    get:
+      summary: Tasks due in the near term across the active household
+      tags: [Tasks]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /tasks/templates:
+    get:
+      summary: Public catalog of recurring task templates
+      tags: [Tasks]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /tasks/{id}/snooze:
+    post:
+      summary: Snooze a task by N days (or skip a cycle)
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # --- Households: invites, activity, analytics, members ---
+  /households/invites/{inviteCode}:
+    get:
+      summary: Validate an invite code (used by the join landing page)
+      tags: [Households]
+      security: []
+      parameters: [{ $ref: '#/components/parameters/InviteCode' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /households/join/{inviteCode}:
+    post:
+      summary: Join a household with a valid invite code
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/InviteCode' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /households/{id}/invites:
+    post:
+      summary: Generate a fresh household invite (admin only)
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /households/{id}/activity:
+    get:
+      summary: Recent household activity feed
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /households/{id}/analytics/daily:
+    get:
+      summary: Daily completion analytics for the last N days
+      tags: [Households]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 90 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /households/{id}/year-in-review:
+    get:
+      summary: Year-in-review aggregation for a given calendar year
+      tags: [Households]
+      parameters:
+        - { $ref: '#/components/parameters/HouseholdId' }
+        - name: year
+          in: query
+          schema: { type: integer, minimum: 2024 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /households/{householdId}/members/{userId}/role:
+    put:
+      summary: Promote/demote a household member (admin only)
+      tags: [Households]
+      parameters:
+        - name: householdId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /households/{id}/climate:
+    get:
+      summary: Current local weather + derived climate-aware care tips
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /households/{id}/location:
+    put:
+      summary: Save (or clear with `null`) the household's location for climate features
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - type: object
+                  required: [city]
+                  properties:
+                    city: { type: string, minLength: 1, maxLength: 120 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /households/{householdId}/members/{userId}:
+    delete:
+      summary: Remove a member from a household (admin only)
+      tags: [Households]
+      parameters:
+        - name: householdId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Member removed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # --- Notifications ---
+  /notifications/prefs:
+    get:
+      summary: Read the caller's notification preferences
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    put:
+      summary: Update the caller's notification preferences
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/subscribe:
+    post:
+      summary: Register a Web Push subscription for browser notifications
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/unsubscribe:
+    post:
+      summary: Remove a Web Push subscription
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # --- Billing ---
+  /billing/plans:
+    get:
+      summary: Public list of subscription plans
+      tags: [Billing]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /billing/me:
+    get:
+      summary: Current household subscription state
+      tags: [Billing]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /billing/checkout:
+    post:
+      summary: Start a Stripe checkout session for a plan upgrade
+      tags: [Billing]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /billing/portal:
+    post:
+      summary: Open the Stripe customer portal for plan management
+      tags: [Billing]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /billing/webhook:
+    post:
+      summary: Stripe webhook receiver (signature-verified; raw body)
+      tags: [Billing]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # --- API Keys (Greenhouse plan only) ---
+  /api-keys:
+    get:
+      summary: List API keys for the active household
+      tags: [API Keys]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      summary: Mint a new API key (returned once, plaintext)
+      tags: [API Keys]
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+  /api-keys/{id}:
+    delete:
+      summary: Revoke an API key
+      tags: [API Keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Revoked }
+
+  # --- Public API (api-key auth) ---
+  /api/v1/me:
+    get:
+      summary: Public-API caller identity
+      tags: [Public API]
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /api/v1/plants:
+    get:
+      summary: Public-API plant list
+      tags: [Public API]
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /api/v1/plants/{id}:
+    get:
+      summary: Public-API plant detail
+      tags: [Public API]
+      security:
+        - apiKeyAuth: []
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /api/v1/tasks:
+    get:
+      summary: Public-API task list
+      tags: [Public API]
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /api/v1/activity:
+    get:
+      summary: Public-API household activity feed
+      tags: [Public API]
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # --- Species (Perenual-backed) ---
+  /species/search:
+    get:
+      summary: Species autocomplete (Perenual-backed; falls back to disabled when unconfigured)
+      tags: [Species]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /species/{id}:
+    get:
+      summary: Species detail
+      tags: [Species]
+      parameters: [{ $ref: '#/components/parameters/SpeciesId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /species/{id}/care-suggestions:
+    get:
+      summary: Derived care suggestion (watering cadence + sunlight summary)
+      tags: [Species]
+      parameters: [{ $ref: '#/components/parameters/SpeciesId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /species/{id}/thumbnail:
+    get:
+      summary: 302 redirect to the cached species thumbnail URL
+      tags: [Species]
+      parameters: [{ $ref: '#/components/parameters/SpeciesId' }]
+      responses:
+        '302': { description: Redirect to thumbnail }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /species/{id}/guide:
+    get:
+      summary: Long-form species care guide
+      tags: [Species]
+      parameters:
+        - { $ref: '#/components/parameters/SpeciesId' }
+        - name: locale
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # --- Plants ID (Plant.id integration) ---
+  /plants/identify:
+    post:
+      summary: Identify a plant from a base64-encoded image
+      tags: [Plants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  description: Base64-encoded JPEG/PNG or a data URL. Cap at 256 KB after encoding.
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '502': { description: Plant.id upstream failed }
+
+  # --- Notifications: manual reminder kick (also runs hourly via EventBridge) ---
+  /notifications/run-reminders:
+    post:
+      summary: Manually trigger reminder delivery for the caller's household
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: Admin-only }
+
+  # --- Chat (Bedrock Claude + tool use + RAG; internal-only, surface unstable) ---
+  /chat/messages:
+    post:
+      summary: Send a chat turn (text in, text + proposals out)
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, minLength: 1, maxLength: 4000 }
+                conversationId: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '429': { description: Monthly token budget exhausted }
+  /chat/conversations/{id}/messages:
+    get:
+      summary: Replay a conversation's persisted message history
+      tags: [Chat]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /chat/budget:
+    get:
+      summary: Current month's chat budget usage for the active household
+      tags: [Chat]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    PlantId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PlantIdAlt:
+      name: plantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    HouseholdId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InviteCode:
+      name: inviteCode
+      in: path
+      required: true
+      schema:
+        type: string
+    SpeciesId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+
+  responses:
+    Ok:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    SignupRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 2
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        householdId:
+          type: string
+          format: uuid
+          nullable: true
+        householdRole:
+          type: string
+          enum: [admin, member]
+          nullable: true
+
+    Plant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        householdId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        species:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+        updatedAt:
+          type: string
+          format: date-time
+
+    PlantWithTasks:
+      allOf:
+        - $ref: '#/components/schemas/Plant'
+        - type: object
+          properties:
+            upcomingTasks:
+              type: array
+              items:
+                $ref: '#/components/schemas/Task'
+            recentCompletions:
+              type: array
+              items:
+                $ref: '#/components/schemas/TaskCompletion'
+
+    CreatePlantRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        species:
+          type: string
+          maxLength: 100
+        location:
+          type: string
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 1000
+
+    UpdatePlantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        species:
+          type: string
+          maxLength: 100
+          nullable: true
+        location:
+          type: string
+          maxLength: 100
+          nullable: true
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        plantId:
+          type: string
+          format: uuid
+        plantName:
+          type: string
+        type:
+          type: string
+          enum: [water, fertilize, prune, repot, custom]
+        customType:
+          type: string
+          nullable: true
+        frequency:
+          type: integer
+        lastCompleted:
+          type: string
+          format: date-time
+          nullable: true
+        nextDue:
+          type: string
+          format: date-time
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        assignedToName:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    TaskCompletion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        taskType:
+          type: string
+        completedBy:
+          type: string
+          format: uuid
+        completedByName:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+
+    CreateTaskRequest:
+      type: object
+      required: [plantId, type, frequency]
+      properties:
+        plantId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [water, fertilize, prune, repot, custom]
+        customType:
+          type: string
+          maxLength: 50
+        frequency:
+          type: integer
+          minimum: 1
+          maximum: 365
+        assignedTo:
+          type: string
+          format: uuid
+        notes:
+          type: string
+          maxLength: 500
+
+    Household:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+
+    HouseholdWithMembers:
+      allOf:
+        - $ref: '#/components/schemas/Household'
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/HouseholdMember'
+
+    HouseholdMember:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, member]
+        joinedAt:
+          type: string
+          format: date-time
+
+    CreateHouseholdRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: object

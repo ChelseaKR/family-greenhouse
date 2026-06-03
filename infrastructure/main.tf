@@ -1,0 +1,144 @@
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = "family-greenhouse"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
+# Provider for CloudFront certificates (must be us-east-1)
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = "family-greenhouse"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
+# Email module (SES domain identity + DKIM + SPF + DMARC).
+# Only created when a domain is set — otherwise Cognito falls back to its
+# default no-DKIM service mailbox (fine for dev/staging).
+module "email" {
+  source = "./modules/email"
+  count  = var.domain_name == "" ? 0 : 1
+
+  environment     = var.environment
+  project_name    = var.project_name
+  domain_name     = var.domain_name
+  dmarc_rua_email = var.dmarc_rua_email
+}
+
+# Auth module (Cognito). When the email module is present, hand its identity
+# ARN over so Cognito sends DKIM-aligned mail from the project domain.
+# depends_on the email module so the SES identity verification completes
+# before Cognito tries to switch to DEVELOPER mode against an unverified
+# identity (Terraform's implicit dependency only tracks the identity ARN,
+# not the verification resource).
+module "auth" {
+  source = "./modules/auth"
+
+  environment        = var.environment
+  project_name       = var.project_name
+  email_identity_arn = var.domain_name == "" ? "" : module.email[0].identity_arn
+  email_from_address = var.email_from_address
+  email_reply_to     = var.email_reply_to
+
+  depends_on = [module.email]
+}
+
+# Database module (DynamoDB)
+module "database" {
+  source = "./modules/database"
+
+  environment  = var.environment
+  project_name = var.project_name
+}
+
+# API module (API Gateway + Lambda)
+module "api" {
+  source = "./modules/api"
+
+  environment          = var.environment
+  project_name         = var.project_name
+  cognito_user_pool_id = module.auth.user_pool_id
+  cognito_client_id    = module.auth.client_id
+  dynamodb_table_name  = module.database.table_name
+  dynamodb_table_arn   = module.database.table_arn
+  images_bucket_name   = module.frontend.images_bucket_name
+  images_bucket_arn    = module.frontend.images_bucket_arn
+  allowed_origin       = module.frontend.site_url
+
+  # External integrations. Empty defaults disable the corresponding feature
+  # — set via tfvars when you have credentials.
+  # Perenual uses the Secrets-Manager-ID indirection so the API key never
+  # touches Terraform state (see modules/api/main.tf IAM block).
+  perenual_api_key_secret_id = var.perenual_api_key_secret_id
+}
+
+# Frontend module (S3 + CloudFront)
+module "frontend" {
+  source = "./modules/frontend"
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  environment  = var.environment
+  project_name = var.project_name
+  domain_name  = var.domain_name
+}
+
+# Monitoring module (CloudWatch)
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  environment           = var.environment
+  project_name          = var.project_name
+  api_gateway_name      = module.api.api_gateway_name
+  lambda_function_names = module.api.lambda_function_names
+  alert_email           = var.alert_email
+  dynamodb_table_name   = module.database.table_name
+}
+
+# Security module (WAF, IAM)
+module "security" {
+  source = "./modules/security"
+
+  environment     = var.environment
+  project_name    = var.project_name
+  api_gateway_arn = module.api.api_gateway_arn
+  cloudfront_arn  = module.frontend.cloudfront_arn
+}
+
+# GitHub OIDC + deploy role for CI/CD. Skipped (count=0) until github_org +
+# github_repo are set, so first-time `terraform apply` doesn't try to
+# provision an OIDC provider before the repo exists.
+module "cicd" {
+  source = "./modules/cicd"
+  count  = var.github_org == "" || var.github_repo == "" ? 0 : 1
+
+  project_name = var.project_name
+  github_org   = var.github_org
+  github_repo  = var.github_repo
+}

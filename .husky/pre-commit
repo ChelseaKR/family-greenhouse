@@ -1,0 +1,3 @@
+# Pre-commit: cheap, mechanical checks that finish in seconds. Anything slow
+# (full test suite, typecheck across both workspaces) belongs in pre-push.
+npx lint-staged

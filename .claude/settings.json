@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --workspace backend run typecheck *)",
+      "Bash(npm --workspace frontend run typecheck *)",
+      "Bash(aws logs tail *)",
+      "Bash(terraform plan *)",
+      "Bash(aws cognito-idp list-users *)",
+      "Bash(terraform show *)",
+      "Bash(aws route53domains get-operation-detail *)"
+    ]
+  }
+}
