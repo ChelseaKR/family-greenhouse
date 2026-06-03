@@ -153,13 +153,10 @@ export const deletePlant = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
 
-    // Verify plant exists
-    const plant = await plantService.getPlant(user.householdId!, plantId);
+    const plant = await plantService.deletePlant(user.householdId!, plantId);
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
     }
-
-    await plantService.deletePlant(user.householdId!, plantId);
 
     audit('plant.deleted', {
       actorId: user.userId,

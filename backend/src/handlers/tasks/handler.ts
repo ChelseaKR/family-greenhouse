@@ -154,13 +154,10 @@ export const deleteTask = createHandler(
       throw createHttpError(400, 'Task ID is required');
     }
 
-    // Verify task exists
-    const task = await taskService.getTask(user.householdId!, taskId);
-    if (!task) {
+    const deleted = await taskService.deleteTask(user.householdId!, taskId);
+    if (!deleted) {
       throw createHttpError(404, 'Task not found');
     }
-
-    await taskService.deleteTask(user.householdId!, taskId);
 
     return noContentResponse();
   }

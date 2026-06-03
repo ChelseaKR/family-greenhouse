@@ -249,16 +249,28 @@ export async function updateTask(
   return itemToTask(result.Attributes);
 }
 
-export async function deleteTask(householdId: string, taskId: string): Promise<void> {
-  await dynamodb.send(
-    new DeleteCommand({
-      TableName: TABLE_NAME,
-      Key: {
-        PK: `HOUSEHOLD#${householdId}`,
-        SK: `TASK#${taskId}`,
-      },
-    })
-  );
+export async function deleteTask(householdId: string, taskId: string): Promise<boolean> {
+  try {
+    await dynamodb.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: {
+          PK: `HOUSEHOLD#${householdId}`,
+          SK: `TASK#${taskId}`,
+        },
+        // Atomic existence check — saves a GetItem roundtrip in the handler
+        // and folds the not-found case into a single ConditionalCheckFailed
+        // exception instead of a TOCTOU window.
+        ConditionExpression: 'attribute_exists(PK)',
+      })
+    );
+    return true;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export async function completeTask(

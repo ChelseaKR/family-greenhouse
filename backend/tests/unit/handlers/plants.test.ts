@@ -227,7 +227,7 @@ describe('plants handler', () => {
   it('deletePlant returns 204 on success', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const { deletePlant } = await import('../../../src/handlers/plants/handler.js');
-    vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+    vi.mocked(plantService.deletePlant).mockResolvedValueOnce({
       id: 'p1',
       householdId: 'hh-1',
       name: 'Pothos',
@@ -235,11 +235,11 @@ describe('plants handler', () => {
       location: null,
       imageUrl: null,
       notes: null,
+      tags: [],
       createdAt: '',
       createdBy: '',
       updatedAt: '',
     });
-    vi.mocked(plantService.deletePlant).mockResolvedValueOnce(undefined);
     const event = buildEvent({
       httpMethod: 'DELETE',
       pathParameters: { id: 'p1' },
@@ -247,6 +247,18 @@ describe('plants handler', () => {
     const res = (await deletePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(204);
     expect(plantService.deletePlant).toHaveBeenCalledWith('hh-1', 'p1');
+  });
+
+  it('deletePlant returns 404 when service reports plant not found', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const { deletePlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(plantService.deletePlant).mockResolvedValueOnce(null);
+    const event = buildEvent({
+      httpMethod: 'DELETE',
+      pathParameters: { id: 'missing' },
+    });
+    const res = (await deletePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(404);
   });
 
   it('getImageUploadUrl returns presigned URL but does not commit imageUrl', async () => {

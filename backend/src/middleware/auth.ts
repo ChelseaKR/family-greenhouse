@@ -13,6 +13,11 @@ import middy from '@middy/core';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
 import { getMemberByUserId } from '../services/householdService.js';
+import {
+  getCachedMembership,
+  setCachedMembership,
+  __resetMembershipCacheForTests as __resetCache,
+} from '../utils/membershipCache.js';
 
 /**
  * The shape we attach to every authenticated event. `householdId` and
@@ -46,14 +51,13 @@ interface CognitoClaims {
  * Project Cognito claims onto `event.user`. Throws 401 when the request was
  * never authenticated — usually means the route is missing the Cognito
  * authorizer in API Gateway, not a runtime issue.
+ *
+ * Membership lookups for the X-Household-Id override go through a small
+ * per-warm-container cache (see utils/membershipCache.ts). Mutations that
+ * change membership (setMemberRole, removeMember) invalidate the cache
+ * synchronously so a kicked-out user loses access on the very next
+ * request rather than at the 60s TTL.
  */
-// In-warm-container membership cache. Keyed by `<userId>#<householdId>`,
-// holds the resolved role for a few minutes. Eliminates the per-request
-// DDB GetItem for repeat requests from the same client without crossing
-// the trust boundary.
-const MEMBERSHIP_CACHE_TTL_MS = 60_000;
-const membershipCache = new Map<string, { role: 'admin' | 'member'; expiresAt: number }>();
-
 export const authMiddleware = (): middy.MiddlewareObj<
   APIGatewayProxyEvent,
   APIGatewayProxyResult
@@ -97,21 +101,14 @@ export const authMiddleware = (): middy.MiddlewareObj<
       if (headerOverride === user.householdId) {
         // role stays as the claim-derived one
       } else {
-        const cacheKey = `${claims.sub}#${headerOverride}`;
-        const cached = membershipCache.get(cacheKey);
-        let role: 'admin' | 'member' | undefined;
-        if (cached && cached.expiresAt > Date.now()) {
-          role = cached.role;
-        } else {
+        let role = getCachedMembership(claims.sub, headerOverride);
+        if (!role) {
           const member = await getMemberByUserId(headerOverride, claims.sub);
           if (!member) {
             throw createHttpError(403, 'Not a member of the requested household');
           }
           role = member.role;
-          membershipCache.set(cacheKey, {
-            role,
-            expiresAt: Date.now() + MEMBERSHIP_CACHE_TTL_MS,
-          });
+          setCachedMembership(claims.sub, headerOverride, role);
         }
         user.householdId = headerOverride;
         user.householdRole = role;
@@ -125,9 +122,7 @@ export const authMiddleware = (): middy.MiddlewareObj<
 };
 
 // Exposed for tests that need to force a re-check.
-export function __resetMembershipCacheForTests(): void {
-  membershipCache.clear();
-}
+export const __resetMembershipCacheForTests = __resetCache;
 
 /**
  * 403 if the caller hasn't joined or created a household. Most resource

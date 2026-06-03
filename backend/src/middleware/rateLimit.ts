@@ -47,7 +47,12 @@ export function rateLimit(opts: {
       return;
     }
     if (existing.count >= opts.max) {
-      audit('rate_limit.tripped', { metadata: { key } });
+      // `actorId` populated when this fires after `authMiddleware`. For pre-auth
+      // routes (login, signup, validateInvite) the bucket key is the only
+      // identifier we have — that's still useful for forensics when correlated
+      // to the access log's sourceIp + requestId.
+      const actorId = (request.event as AuthenticatedEvent).user?.userId;
+      audit('rate_limit.tripped', { actorId, metadata: { key } });
       throw createHttpError(429, 'Too many requests. Please slow down and try again.');
     }
     existing.count += 1;
@@ -103,7 +108,7 @@ export function userRateLimit(
       return;
     }
     if (existing.count >= opts.max) {
-      audit('rate_limit.tripped', { metadata: { key } });
+      audit('rate_limit.tripped', { actorId: userId, metadata: { key } });
       throw createHttpError(429, 'Too many requests. Please slow down and try again.');
     }
     existing.count += 1;

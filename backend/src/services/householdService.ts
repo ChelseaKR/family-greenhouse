@@ -19,6 +19,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { invalidateMembership } from '../utils/membershipCache.js';
 import { Household, HouseholdMember, HouseholdInvite, DynamoDBItem } from '../models/types.js';
 import { CreateHouseholdInput } from '../models/schemas.js';
 
@@ -92,6 +93,9 @@ export async function setMemberRole(
   );
 
   if (!result.Attributes) return null;
+  // Drop the cached membership so authMiddleware re-reads the new role on
+  // the next request from this user instead of waiting out the TTL.
+  invalidateMembership(userId, householdId);
   return {
     householdId: result.Attributes.householdId as string,
     userId: result.Attributes.userId as string,
@@ -308,6 +312,9 @@ export async function removeMember(householdId: string, userId: string): Promise
       },
     })
   );
+  // Drop the cached membership so the removed user loses access on their
+  // very next request instead of at the 60s TTL.
+  invalidateMembership(userId, householdId);
 }
 
 /**

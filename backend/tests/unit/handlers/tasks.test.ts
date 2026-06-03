@@ -263,7 +263,7 @@ describe('tasks handler', () => {
     const taskService = await import('../../../src/services/taskService.js');
     const { deleteTask } = await import('../../../src/handlers/tasks/handler.js');
 
-    vi.mocked(taskService.getTask).mockResolvedValueOnce(null);
+    vi.mocked(taskService.deleteTask).mockResolvedValueOnce(false);
     const missing = (await deleteTask(
       buildEvent({ httpMethod: 'DELETE', pathParameters: { id: 'x' } }),
       fakeContext,
@@ -271,23 +271,7 @@ describe('tasks handler', () => {
     )) as APIGatewayProxyResult;
     expect(missing.statusCode).toBe(404);
 
-    vi.mocked(taskService.getTask).mockResolvedValueOnce({
-      id: 't1',
-      householdId: 'hh-1',
-      plantId: 'p1',
-      plantName: 'Pothos',
-      type: 'water',
-      customType: null,
-      frequency: 7,
-      lastCompleted: null,
-      nextDue: '',
-      assignedTo: null,
-      assignedToName: null,
-      notes: null,
-      createdBy: '',
-      createdAt: '',
-    });
-    vi.mocked(taskService.deleteTask).mockResolvedValueOnce(undefined);
+    vi.mocked(taskService.deleteTask).mockResolvedValueOnce(true);
     const ok = (await deleteTask(
       buildEvent({ httpMethod: 'DELETE', pathParameters: { id: 't1' } }),
       fakeContext,
