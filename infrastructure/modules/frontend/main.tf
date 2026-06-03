@@ -165,7 +165,12 @@ resource "aws_cloudfront_distribution" "frontend" {
     cloudfront_default_certificate = var.domain_name == ""
     acm_certificate_arn            = var.domain_name == "" ? null : aws_acm_certificate_validation.frontend[0].certificate_arn
     ssl_support_method             = var.domain_name == "" ? null : "sni-only"
-    minimum_protocol_version       = var.domain_name == "" ? "TLSv1" : "TLSv1.2_2021"
+    # CloudFront's default cert only supports up to TLSv1 when you don't
+    # specify, but we use real auth tokens in every environment (including
+    # the no-domain dev one). Enforce TLSv1.2_2021 unconditionally — the
+    # only browsers that can't negotiate it are EOL'd and shouldn't be
+    # touching production-class credentials anyway.
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = {

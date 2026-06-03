@@ -4,9 +4,16 @@ resource "aws_apigatewayv2_api" "main" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins     = [var.allowed_origin]
-    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers     = ["Content-Type", "Authorization"]
+    allow_origins = [var.allowed_origin]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    # X-Household-Id pins a non-default household per request (see
+    # docs/multi-household.md). X-Cognito-Access-Token carries the Cognito
+    # access token alongside the ID token for Cognito-direct calls (see
+    # docs/security-review-2026-05-31.md token-split fix). Both must be
+    # declared here or strict browsers (Safari, Firefox) reject the
+    # preflight before the request reaches Lambda — failure mode is a
+    # silent CORS block with no log on our side.
+    allow_headers     = ["Content-Type", "Authorization", "X-Household-Id", "X-Cognito-Access-Token"]
     allow_credentials = true
     max_age           = 300
   }
