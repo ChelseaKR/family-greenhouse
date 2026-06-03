@@ -143,22 +143,36 @@ describe('plantService', () => {
           },
         ],
       });
-      // 3rd send: BatchWrite.
+      // 3rd send: BatchWrite (cascade tasks + completions).
       vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+      // 4th send: DeleteCommand for the plant row itself, ALL_OLD returns
+      // the deleted attributes so the handler can use them for audit.
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Pothos',
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      });
 
       await deletePlant('hh', 'p1');
 
       const calls = vi.mocked(dynamodb.send).mock.calls;
-      expect(calls).toHaveLength(3);
+      expect(calls).toHaveLength(4);
       const batch = calls[2][0] as unknown as {
         input: { RequestItems: Record<string, Array<{ DeleteRequest: { Key: { SK: string } } }>> };
       };
       const tableName = Object.keys(batch.input.RequestItems)[0];
       const sks = batch.input.RequestItems[tableName].map((r) => r.DeleteRequest.Key.SK);
-      // task t1 (matching plant), the completion, and the plant row itself.
+      // task t1 (matching plant) and the completion ride in the batch.
       expect(sks).toContain('TASK#t1');
       expect(sks).toContain('COMPLETION#2025#abc');
-      expect(sks).toContain('PLANT#p1');
+      // The plant row itself is no longer in the batch — it gets a separate
+      // conditional Delete so we can detect "didn't exist" atomically.
+      expect(sks).not.toContain('PLANT#p1');
       // task t2 belongs to a different plant — must NOT be deleted.
       expect(sks).not.toContain('TASK#t2');
     });
@@ -175,10 +189,19 @@ describe('plantService', () => {
         })),
       });
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] });
-      vi.mocked(dynamodb.send).mockResolvedValue({});
+      vi.mocked(dynamodb.send).mockResolvedValue({
+        Attributes: {
+          id: 'p1',
+          householdId: 'hh',
+          name: 'p',
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      });
       await deletePlant('hh', 'p1');
-      // 2 query calls + 2 batch calls (30 + 1 plant row = 31 -> 25 + 6).
-      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(4);
+      // 2 query calls + 2 batch calls (30 tasks chunked 25+5) + 1 plant Delete.
+      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(5);
     });
 
     it('does not touch S3 when IMAGES_BUCKET is unset (dev/test default)', async () => {
@@ -186,7 +209,16 @@ describe('plantService', () => {
       const { deletePlant } = await import('../../../src/services/plantService');
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // tasks
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // completions
-      vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // batch delete (plant row)
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'p1',
+          householdId: 'hh',
+          name: 'p',
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      });
       await deletePlant('hh', 'p1');
       expect(s3Send).not.toHaveBeenCalled();
     });
@@ -198,7 +230,16 @@ describe('plantService', () => {
         const { deletePlant } = await import('../../../src/services/plantService');
         vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // tasks
         vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // completions
-        vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // batch delete (plant row)
+        vi.mocked(dynamodb.send).mockResolvedValueOnce({
+          Attributes: {
+            id: 'p1',
+            householdId: 'hh',
+            name: 'p',
+            createdAt: '',
+            createdBy: '',
+            updatedAt: '',
+          },
+        }); // plant row delete
         // S3: one page listing one object, then the delete call.
         s3Send.mockResolvedValueOnce({
           Contents: [{ Key: 'plants/hh/p1/photo.jpg' }],
