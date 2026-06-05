@@ -43,6 +43,9 @@ For everything else (running tests, deploying, configuring channels) follow the 
 - [`docs/billing.md`](docs/billing.md) — Stripe integration, plan caps, webhook flow
 - [`docs/public-api.md`](docs/public-api.md) — read-only public API: key auth, scopes, rate limits, endpoints
 - [`docs/production-checklist.md`](docs/production-checklist.md) — gating list for going live
+- [`docs/incidents.md`](docs/incidents.md) — severity levels, the first 15 minutes, post-mortem template
+- [`docs/runbooks.md`](docs/runbooks.md) — step-by-step fixes (rollback, DDB throttle, Stripe webhooks, PITR…)
+- [`docs/support.md`](docs/support.md) — user-issue triage + common resolutions
 
 ## What works today
 
