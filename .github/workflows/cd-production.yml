@@ -18,6 +18,8 @@ env:
   NODE_VERSION: '20'
   AWS_REGION: us-east-1
   ENVIRONMENT: production
+  # Bucket holding per-version Lambda zips that auto-rollback restores from.
+  ARTIFACT_BUCKET: family-greenhouse-tfstate-014248889144
 
 permissions:
   id-token: write
@@ -236,11 +238,20 @@ jobs:
             [ -f "${SRC}.map" ] && cp "${SRC}.map" "${WORK}/handler.mjs.map" || true
             (cd "$WORK" && zip -q -r "/tmp/${handler}.zip" .)
 
-            aws lambda update-function-code \
+            PUBLISHED_VER=$(aws lambda update-function-code \
               --function-name "$FUNCTION_NAME" \
               --zip-file "fileb:///tmp/${handler}.zip" \
-              --publish > /dev/null
-            echo "  ✓ ${FUNCTION_NAME}"
+              --publish --query 'Version' --output text)
+            echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})"
+
+            # Archive this version's zip keyed by the version number we just
+            # published, so a later run's auto-rollback (which restores by
+            # version number from prev-versions.txt) can actually find the
+            # artifact. Without this, the rollback job's S3 source path is
+            # never populated and rollback silently no-ops.
+            aws s3 cp "/tmp/${handler}.zip" \
+              "s3://${ARTIFACT_BUCKET}/lambda-versions/${handler}-v${PUBLISHED_VER}.zip" \
+              --only-show-errors
             rm -rf "$WORK" "/tmp/${handler}.zip"
           done
 
@@ -327,12 +338,14 @@ jobs:
             test -z "$handler" && continue
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             echo "Rolling back ${FUNCTION_NAME} -> v${ver}"
-            # `update-alias` would be the cleanest path once an alias
-            # exists; until then we re-tag the previous published version
-            # by copying its code to $LATEST.
+            # Restore the previous version's code from the per-version zip the
+            # deploy job archived to S3 (keyed by published version number).
+            # `update-alias` would be cleaner once aliases exist; until then we
+            # re-publish the previous version's code to $LATEST. The fallback
+            # only fires for versions deployed before artifact archival existed.
             aws lambda update-function-code \
               --function-name "$FUNCTION_NAME" \
-              --s3-bucket family-greenhouse-tfstate-014248889144 \
+              --s3-bucket "$ARTIFACT_BUCKET" \
               --s3-key "lambda-versions/${handler}-v${ver}.zip" \
               --publish > /dev/null 2>&1 || echo "  ! ${FUNCTION_NAME}: no prior-version artifact found"
           done < prev-versions.txt
