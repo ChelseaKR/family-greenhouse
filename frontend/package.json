@@ -66,7 +66,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
-    "@aws-sdk/client-dynamodb": "^3.1057.0",
+    "@aws-sdk/client-dynamodb": "^3.1063.0",
     "@axe-core/playwright": "^4.11.2",
     "@axe-core/react": "^4.8.5",
     "@hookform/resolvers": "^3.3.4",
