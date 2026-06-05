@@ -8,6 +8,16 @@ if [[ "$ENVIRONMENT" != "staging" && "$ENVIRONMENT" != "production" ]]; then
     exit 1
 fi
 
+# The whole stack lives in us-east-1. Terraform pins the region via its
+# provider, but the raw `aws` CLI calls below (lambda, s3, cloudfront) inherit
+# the caller's default region — which on a dev machine may be anything (a
+# us-west-2 default once silently sent every `update-function-code` to the
+# wrong region, 404ing while the loop's `|| echo` hid the failure). Pin it.
+export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-1}"
+# Bucket that holds per-version Lambda zips the CD auto-rollback restores from;
+# manual deploys archive here too so a later rollback can find this version.
+ARTIFACT_BUCKET="family-greenhouse-tfstate-014248889144"
+
 echo "Deploying to $ENVIRONMENT..."
 
 # Backend bundle must exist before the post-apply Lambda push.
@@ -63,7 +73,7 @@ aws cloudfront create-invalidation \
 # repackage each bundle as `handler.mjs` so Node resolves the right module
 # regardless of the zip's package.json.
 echo "Deploying Lambda functions..."
-HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders)
+HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat)
 for handler in "${HANDLERS[@]}"; do
     FUNCTION_NAME="family-greenhouse-${handler}-${ENVIRONMENT}"
     SRC="backend/dist/${handler}.js"
@@ -79,12 +89,18 @@ for handler in "${HANDLERS[@]}"; do
     ZIP="$(pwd)/.deploy-${handler}.zip"
     (cd "$WORK" && zip -q -r "$ZIP" .)
 
-    aws lambda update-function-code \
+    PUBLISHED_VER=$(aws lambda update-function-code \
         --function-name "$FUNCTION_NAME" \
+        --region us-east-1 \
         --zip-file "fileb://${ZIP}" \
-        --publish >/dev/null \
-        && echo "  ✓ ${FUNCTION_NAME}" \
-        || echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"
+        --publish --query 'Version' --output text 2>/dev/null) \
+        && echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})" \
+        || { echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"; rm -rf "$WORK" "$ZIP"; continue; }
+
+    # Archive this version's zip so CD auto-rollback can restore it later.
+    aws s3 cp "$ZIP" \
+        "s3://${ARTIFACT_BUCKET}/lambda-versions/${handler}-v${PUBLISHED_VER}.zip" \
+        --region us-east-1 --only-show-errors || true
 
     rm -rf "$WORK" "$ZIP"
 done
