@@ -40,7 +40,7 @@ export function CommandPalette() {
 
   const { data: plants } = useQuery({
     queryKey: ['plants'],
-    queryFn: plantService.getPlants,
+    queryFn: () => plantService.getPlants(),
     enabled: isAuthenticated && open,
   });
 

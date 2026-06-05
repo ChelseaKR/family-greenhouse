@@ -96,10 +96,17 @@ describe('plantService', () => {
 
       const result = await getPlant('household-123', 'plant-123');
 
-      // Service hydrates a `tags` array (defaulting to []) and a
-      // perenualSpeciesId (defaulting to null) so the response shape stays
-      // stable for clients that always expect the fields.
-      expect(result).toEqual({ ...mockPlant, tags: [], perenualSpeciesId: null });
+      // Service hydrates a `tags` array (defaulting to []), a
+      // perenualSpeciesId (defaulting to null), and the lifecycle status
+      // (legacy rows with no status hydrate to 'active') so the response
+      // shape stays stable for clients that always expect the fields.
+      expect(result).toEqual({
+        ...mockPlant,
+        tags: [],
+        perenualSpeciesId: null,
+        status: 'active',
+        statusChangedAt: null,
+      });
     });
 
     it('should return null if plant not found', async () => {
@@ -297,6 +304,27 @@ describe('plantService', () => {
       const result = await getPlants('household-123');
 
       expect(result).toEqual([]);
+    });
+
+    it('filters by lifecycle status (legacy rows count as active)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlants } = await import('../../../src/services/plantService');
+
+      const rows = [
+        { id: 'a', name: 'Active', householdId: 'h' }, // no status → active
+        { id: 'b', name: 'Explicit', householdId: 'h', status: 'active' },
+        { id: 'c', name: 'Dead', householdId: 'h', status: 'died' },
+        { id: 'd', name: 'Gifted', householdId: 'h', status: 'gave_away' },
+      ];
+      // One mock per call (default active, then past, then all).
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({ Items: rows })
+        .mockResolvedValueOnce({ Items: rows })
+        .mockResolvedValueOnce({ Items: rows });
+
+      expect((await getPlants('h')).map((p) => p.id)).toEqual(['a', 'b']);
+      expect((await getPlants('h', 'past')).map((p) => p.id)).toEqual(['c', 'd']);
+      expect((await getPlants('h', 'all')).map((p) => p.id)).toEqual(['a', 'b', 'c', 'd']);
     });
   });
 });

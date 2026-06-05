@@ -12,6 +12,7 @@
  */
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
+import * as plantService from './plantService.js';
 import * as notifier from './notifier.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -29,10 +30,15 @@ export async function remindHousehold(
   const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() + DUE_WINDOW_MS).toISOString();
 
+  // Don't remind about plants that are no longer active (died / gave away).
+  // getPlants defaults to active-only, so any task whose plant isn't in this
+  // set belongs to a past plant and is skipped.
+  const activePlantIds = new Set((await plantService.getPlants(householdId)).map((p) => p.id));
+
   let sent = 0;
   for (const member of members) {
     const tasks = await taskService.getTasks(householdId, { assignedTo: member.userId });
-    const due = tasks.filter((t) => t.nextDue <= cutoff);
+    const due = tasks.filter((t) => t.nextDue <= cutoff && activePlantIds.has(t.plantId));
     if (due.length === 0) continue;
 
     const overdue = due.filter((t) => t.nextDue < nowIso).length;

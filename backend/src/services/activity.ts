@@ -17,6 +17,8 @@ export type ActivityType =
   | 'task.completed'
   | 'plant.created'
   | 'plant.deleted'
+  | 'plant.died'
+  | 'plant.gave_away'
   | 'photo.uploaded'
   | 'member.joined'
   | 'member.left';

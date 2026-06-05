@@ -60,6 +60,8 @@ export const createPlantSchema = z.object({
   perenualSpeciesId: z.number().int().positive().optional(),
 });
 
+export const plantStatusEnum = z.enum(['active', 'died', 'gave_away']);
+
 export const updatePlantSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   species: z.string().max(100).optional().nullable(),
@@ -67,6 +69,10 @@ export const updatePlantSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),
+  // Lifecycle transition. Setting 'died'/'gave_away' records an outcome
+  // (drops the plant out of active views/cap/reminders, keeps history);
+  // 'active' restores it.
+  status: plantStatusEnum.optional(),
 });
 
 // Task schemas

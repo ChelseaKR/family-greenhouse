@@ -29,14 +29,18 @@ export function PlantsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
+  // 'active' is the default living collection; 'past' shows died/gave-away
+  // plants whose history we keep. Active stays under the bare ['plants'] key
+  // so existing invalidations + the add-flow's cache read keep working.
+  const [view, setView] = useState<'active' | 'past'>('active');
 
   const {
     data: plants,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['plants'],
-    queryFn: plantService.getPlants,
+    queryKey: view === 'active' ? ['plants'] : ['plants', 'past'],
+    queryFn: () => plantService.getPlants(view),
   });
 
   const filteredPlants = plants?.filter(
@@ -71,6 +75,27 @@ export function PlantsPage() {
       />
 
       <BulkApplyTemplateDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
+
+      {/* Active vs past (died / gave away) collection */}
+      <div className="flex gap-1 border-b border-primary-100/70" role="tablist" aria-label="Plant collection">
+        {(['active', 'past'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => setView(v)}
+            className={clsx(
+              '-mb-px border-b-2 px-3 py-2 text-sm font-medium min-h-touch',
+              view === v
+                ? 'border-primary-600 text-primary-800'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            {v === 'active' ? 'Active' : 'Past plants'}
+          </button>
+        ))}
+      </div>
 
       {/* Search and filters */}
       <div className="flex flex-col sm:flex-row gap-4">

@@ -879,12 +879,15 @@ app.post('/households/join', authMiddleware, (req, res) => {
 
 app.get('/plants', authMiddleware, (req, res) => {
   const user = (req as any).user;
+  const filter = req.query.filter === 'past' || req.query.filter === 'all' ? req.query.filter : 'active';
   const plants: Plant[] = [];
 
   for (const plant of db.plants.values()) {
-    if (plant.householdId === user.householdId) {
-      plants.push(plant);
-    }
+    if (plant.householdId !== user.householdId) continue;
+    const status = plant.status ?? 'active';
+    if (filter === 'active' && status !== 'active') continue;
+    if (filter === 'past' && status === 'active') continue;
+    plants.push(plant);
   }
 
   res.json(plants);
@@ -900,7 +903,9 @@ app.post('/plants', authMiddleware, (req, res) => {
 
   const h = db.households.get(user.householdId);
   const plan = PLANS[h?.planId ?? 'seedling'];
-  const existing = [...db.plants.values()].filter((p) => p.householdId === user.householdId);
+  const existing = [...db.plants.values()].filter(
+    (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
+  );
   if (existing.length >= plan.maxPlants) {
     return res.status(402).json({
       message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`,
@@ -918,6 +923,8 @@ app.post('/plants', authMiddleware, (req, res) => {
     location: location || null,
     imageUrl: null,
     notes: notes || null,
+    status: 'active',
+    statusChangedAt: null,
     tags: Array.isArray(tags)
       ? tags
           .map((t: unknown) => String(t).trim())
@@ -973,7 +980,7 @@ app.put('/plants/:id', authMiddleware, (req, res) => {
     return res.status(404).json({ message: 'Plant not found' });
   }
 
-  const { name, species, location, notes, tags, perenualSpeciesId } = req.body;
+  const { name, species, location, notes, tags, perenualSpeciesId, status } = req.body;
 
   plant.name = name ?? plant.name;
   plant.species = species ?? plant.species;
@@ -989,6 +996,10 @@ app.put('/plants/:id', authMiddleware, (req, res) => {
     plant.perenualSpeciesId = null;
   } else if (typeof perenualSpeciesId === 'number' && perenualSpeciesId > 0) {
     plant.perenualSpeciesId = perenualSpeciesId;
+  }
+  if (status === 'active' || status === 'died' || status === 'gave_away') {
+    plant.status = status;
+    plant.statusChangedAt = new Date().toISOString();
   }
   plant.updatedAt = new Date().toISOString();
 
