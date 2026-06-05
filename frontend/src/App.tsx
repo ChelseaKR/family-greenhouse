@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { NotFoundPage } from '@/components/NotFoundPage';
+import { Toaster } from '@/components/Toaster';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -110,6 +111,7 @@ function App() {
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
+      <Toaster />
       <Suspense fallback={<RouteFallback />}>
         <div id="main-content" tabIndex={-1}>
           <Routes>

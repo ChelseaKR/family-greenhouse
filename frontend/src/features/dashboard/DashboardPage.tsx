@@ -22,6 +22,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { toast } from '@/store/toastStore';
 
 function formatDueDate(dateString: string): string {
   const date = new Date(dateString);
@@ -122,7 +123,9 @@ export function DashboardPage() {
     mutationFn: (taskId: string) => taskService.completeTask(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task completed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const handleCompleteTask = async (taskId: string) => {

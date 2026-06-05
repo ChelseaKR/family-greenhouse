@@ -16,6 +16,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { toast } from '@/store/toastStore';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
@@ -78,7 +79,9 @@ export function TasksPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['plants'] });
+      toast.success('Task completed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const filteredTasks = tasks?.filter((task) => {

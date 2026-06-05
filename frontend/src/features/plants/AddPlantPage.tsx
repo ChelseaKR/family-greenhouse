@@ -18,6 +18,7 @@ import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
 import { generatePlantName } from '@/utils/plantNameGenerator';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { toast } from '@/store/toastStore';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -178,6 +179,7 @@ export function AddPlantPage() {
         ordinal: existing && existing.length > 0 ? 'subsequent' : 'first',
       });
       queryClient.invalidateQueries({ queryKey: ['plants'] });
+      toast.success(`${plant.name} added`);
       navigate(`/plants/${plant.id}`);
     },
     onError: (err) => {

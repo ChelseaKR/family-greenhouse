@@ -30,6 +30,7 @@ import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import clsx from 'clsx';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
+import { toast } from '@/store/toastStore';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -67,8 +68,10 @@ export function PlantDetailPage() {
     mutationFn: () => plantService.deletePlant(plantId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants'] });
+      toast.success('Plant deleted');
       navigate('/plants');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const completeTaskMutation = useMutation({
@@ -76,7 +79,9 @@ export function PlantDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task completed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const snoozeTaskMutation = useMutation({
@@ -85,7 +90,9 @@ export function PlantDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.info('Task snoozed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   if (isLoading) {
