@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
@@ -12,15 +14,21 @@ import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { AuthShell } from './AuthShell';
 
-const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
+// Built per-render from the active locale so validation messages are
+// translated (zod resolves the message at schema-construction time, so the
+// schema has to be rebuilt when the language changes — not defined at module
+// load when no `t` exists yet).
+const makeLoginSchema = (t: TFunction) =>
+  z.object({
+    email: z.string().email(t('auth.invalidEmail')),
+    password: z.string().min(1, t('auth.passwordRequired')),
+  });
 
-type LoginFormData = z.infer<typeof loginSchema>;
+type LoginFormData = z.infer<ReturnType<typeof makeLoginSchema>>;
 
 export function LoginPage() {
   useDocumentTitle('Sign in');
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { setUser, setTokens } = useAuthStore();
@@ -28,6 +36,7 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+  const loginSchema = useMemo(() => makeLoginSchema(t), [t]);
 
   const {
     register,

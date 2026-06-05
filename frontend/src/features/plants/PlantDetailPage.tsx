@@ -29,22 +29,8 @@ import { CareGuideCard } from './CareGuideCard';
 import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import clsx from 'clsx';
-
-const taskTypeLabels: Record<string, string> = {
-  water: 'Water',
-  fertilize: 'Fertilize',
-  prune: 'Prune',
-  repot: 'Repot',
-  custom: 'Custom',
-};
-
-const taskTypeColors: Record<string, string> = {
-  water: 'bg-blue-100 text-blue-900',
-  fertilize: 'bg-green-100 text-green-900',
-  prune: 'bg-orange-100 text-orange-900',
-  repot: 'bg-purple-100 text-purple-900',
-  custom: 'bg-gray-100 text-gray-900',
-};
+import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
+import { toast } from '@/store/toastStore';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -82,8 +68,10 @@ export function PlantDetailPage() {
     mutationFn: () => plantService.deletePlant(plantId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants'] });
+      toast.success('Plant deleted');
       navigate('/plants');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const completeTaskMutation = useMutation({
@@ -91,7 +79,9 @@ export function PlantDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task completed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const snoozeTaskMutation = useMutation({
@@ -100,7 +90,9 @@ export function PlantDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.info('Task snoozed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   if (isLoading) {
@@ -357,7 +349,7 @@ function TaskRow({
         <span
           className={clsx(
             'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-            taskTypeColors[task.type]
+            taskTypeStyle(task.type).chip
           )}
         >
           {task.customType || taskTypeLabels[task.type]}

@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/outline';
 import { plantService, IdentificationSuggestion } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
@@ -18,19 +20,22 @@ import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
 import { generatePlantName } from '@/utils/plantNameGenerator';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { toast } from '@/store/toastStore';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-const addPlantSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name is too long'),
-  species: z.string().max(100, 'Species name is too long').optional(),
-  location: z.string().max(100, 'Location is too long').optional(),
-  notes: z.string().max(1000, 'Notes are too long').optional(),
-  tags: z.string().max(200, 'Too many tags').optional(),
-});
+// Rebuilt per-render from the active locale so validation messages translate.
+const makeAddPlantSchema = (t: TFunction) =>
+  z.object({
+    name: z.string().min(1, t('validation.nameRequired')).max(100, t('validation.nameTooLong')),
+    species: z.string().max(100, t('validation.speciesTooLong')).optional(),
+    location: z.string().max(100, t('validation.locationTooLong')).optional(),
+    notes: z.string().max(1000, t('validation.notesTooLong')).optional(),
+    tags: z.string().max(200, t('validation.tooManyTags')).optional(),
+  });
 
-type AddPlantFormData = z.infer<typeof addPlantSchema>;
+type AddPlantFormData = z.infer<ReturnType<typeof makeAddPlantSchema>>;
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,8 +48,10 @@ async function fileToBase64(file: File): Promise<string> {
 
 export function AddPlantPage() {
   useDocumentTitle('Add plant');
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const addPlantSchema = useMemo(() => makeAddPlantSchema(t), [t]);
   const [error, setError] = useState<string | null>(null);
   const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [pickedPreview, setPickedPreview] = useState<string | null>(null);
@@ -178,6 +185,7 @@ export function AddPlantPage() {
         ordinal: existing && existing.length > 0 ? 'subsequent' : 'first',
       });
       queryClient.invalidateQueries({ queryKey: ['plants'] });
+      toast.success(`${plant.name} added`);
       navigate(`/plants/${plant.id}`);
     },
     onError: (err) => {
