@@ -12,7 +12,7 @@ import { ClimateCard } from './ClimateCard';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PlantGridSkeleton, ListSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyActivity } from '@/components/illustrations/EmptyActivity';
 import { Alert } from '@/components/Alert';
@@ -190,8 +190,8 @@ export function DashboardPage() {
         </div>
 
         {tasksLoading ? (
-          <div className="flex justify-center py-12">
-            <LoadingSpinner />
+          <div className="px-6 py-2">
+            <ListSkeleton rows={4} />
           </div>
         ) : tasksError ? (
           <div className="p-6">
@@ -235,9 +235,7 @@ export function DashboardPage() {
         />
 
         {plantsLoading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner />
-          </div>
+          <PlantGridSkeleton count={8} />
         ) : plantsError ? (
           <Alert variant="error">{getErrorMessage(plantsError)}</Alert>
         ) : !plants || plants.length === 0 ? (
