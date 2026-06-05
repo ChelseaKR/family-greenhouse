@@ -134,10 +134,13 @@ resource "aws_wafv2_web_acl_logging_configuration" "api" {
   resource_arn            = aws_wafv2_web_acl.api.arn
 }
 
-# Associate the regional web ACL with the API Gateway stage. HTTP API (v2)
-# stages have supported WAFv2 association since 2021 — the previous note
-# claiming otherwise was stale, so the ACL existed but protected nothing.
-resource "aws_wafv2_web_acl_association" "api" {
-  resource_arn = var.api_gateway_stage_arn
-  web_acl_arn  = aws_wafv2_web_acl.api.arn
-}
+# NOTE: WAFv2 CANNOT be associated with an API Gateway *HTTP* API (v2).
+# AWS WAF supports REST API stages, ALB, CloudFront, AppSync, Cognito, and App
+# Runner — but not apigatewayv2 HTTP APIs: AssociateWebACL rejects the
+# `/apis/<id>/stages/<stage>` ARN with WAFInvalidParameterException. (An earlier
+# attempt to associate it here failed in production for exactly this reason.)
+#
+# The regional web ACL above is retained but unassociated. To actually enforce
+# it, front the HTTP API with CloudFront and attach a CLOUDFRONT-scoped ACL
+# there, or migrate the API to a REST API. Until then, edge protection relies on
+# the CloudFront WAF (frontend module) + the API's stage-level throttling.
