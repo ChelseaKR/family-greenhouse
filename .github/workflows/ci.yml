@@ -132,6 +132,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks scans every commit, not just the tip —
+          # a secret committed then removed still needs to be caught.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -149,18 +153,19 @@ jobs:
         # the vite-6 migration). Critical CVEs in runtime deps still block.
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Run Gitleaks
-        # gitleaks-action@v2 requires a paid GITLEAKS_LICENSE for private
-        # repos; without one it errors "Resource not accessible by
-        # integration" and gates every build. Mark advisory until either
-        # the license is provisioned or we move to a license-free scanner
-        # (e.g. trufflehog OSS). The repo is private — leak risk on push
-        # is minimal — but we should still wire some scanner before going
-        # public-history.
-        continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
+      - name: Run Gitleaks (license-free CLI, blocking)
+        # The gitleaks-action@v2 wrapper needs a paid GITLEAKS_LICENSE for
+        # private repos. The gitleaks BINARY is MIT-licensed and free, so we
+        # run it directly and let a non-zero exit (leaks found) gate the
+        # build. `--redact` keeps any match out of the public log.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.21.2
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
 
   terraform-validate:
     name: Terraform Validate

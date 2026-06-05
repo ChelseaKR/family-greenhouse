@@ -1,0 +1,13 @@
+# Gitleaks config for Family Greenhouse.
+# Extends the upstream default ruleset and adds a narrow allowlist for the
+# dev/test bearer-token format, which appears in docs and test fixtures and
+# is NOT a real credential (the local Express mock accepts `mock-token-*`
+# instead of a Cognito JWT — see backend/src/local-server.ts).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dev/test mock bearer tokens (local-server.ts auth shim) — not real secrets"
+regexes = [
+  '''mock-token-[0-9a-fA-F-]+''',
+]
