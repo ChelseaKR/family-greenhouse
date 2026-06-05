@@ -93,6 +93,10 @@ module "api" {
   # Perenual uses the Secrets-Manager-ID indirection so the API key never
   # touches Terraform state (see modules/api/main.tf IAM block).
   perenual_api_key_secret_id = var.perenual_api_key_secret_id
+  perenual_daily_budget      = var.perenual_daily_budget
+  openweather_api_key        = var.openweather_api_key
+  openweather_daily_budget   = var.openweather_daily_budget
+  bedrock_embed_model_id     = var.bedrock_embed_model_id
 }
 
 # Frontend module (S3 + CloudFront)

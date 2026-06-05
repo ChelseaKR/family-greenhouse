@@ -74,3 +74,30 @@ variable "perenual_api_key_secret_id" {
   type        = string
   default     = ""
 }
+
+variable "perenual_daily_budget" {
+  description = "Max Perenual API calls per day. Blank lets the code default (80) apply."
+  type        = string
+  default     = ""
+}
+
+# OpenWeather powers the climate/weather features. Without the key the weather
+# service short-circuits to null and those features silently disable in prod.
+variable "openweather_api_key" {
+  description = "OpenWeather API key. Blank disables the climate/weather features."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "openweather_daily_budget" {
+  description = "Max OpenWeather API calls per day. Blank lets the code default (800) apply."
+  type        = string
+  default     = ""
+}
+
+variable "bedrock_embed_model_id" {
+  description = "Bedrock embedding model ID for the chat RAG corpus. Blank lets the code default (amazon.titan-embed-text-v2:0) apply."
+  type        = string
+  default     = ""
+}
