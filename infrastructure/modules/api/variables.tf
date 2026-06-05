@@ -137,6 +137,33 @@ variable "perenual_api_key_secret_id" {
   default     = ""
 }
 
+variable "perenual_daily_budget" {
+  description = "Max Perenual API calls per day. Empty lets the code default (80) apply."
+  type        = string
+  default     = ""
+}
+
+# --- OpenWeather (climate / weather) integration ---
+variable "openweather_api_key" {
+  description = "OpenWeather API key. Optional, but without it the weather service short-circuits to null and the climate features silently disable."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "openweather_daily_budget" {
+  description = "Max OpenWeather API calls per day. Empty lets the code default (800) apply."
+  type        = string
+  default     = ""
+}
+
+# --- Bedrock embeddings (chat RAG corpus) ---
+variable "bedrock_embed_model_id" {
+  description = "Bedrock embedding model ID for the chat RAG corpus. Empty lets the code default (amazon.titan-embed-text-v2:0) apply."
+  type        = string
+  default     = ""
+}
+
 # --- Sentry / release tagging ---
 variable "sentry_dsn" {
   description = "Sentry DSN. Empty = Sentry disabled (instrument() falls through to a no-op wrapper)."

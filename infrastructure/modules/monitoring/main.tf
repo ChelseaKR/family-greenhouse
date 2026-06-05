@@ -15,6 +15,45 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alert_email
 }
 
+# Monthly cost guardrail. A serverless household app should cost a few
+# dollars/month; a runaway (e.g. a DDB throttle retry-storm or a Bedrock
+# loop) is the realistic surprise. Budgets only support email/SNS
+# subscribers directly, so notifications go to alert_email — the same
+# address already on the alerts topic — when one is configured. The budget
+# itself is always created for console visibility.
+resource "aws_budgets_budget" "monthly_cost" {
+  name         = "${var.project_name}-monthly-cost-${var.environment}"
+  budget_type  = "COST"
+  limit_amount = var.monthly_budget_usd
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  # Alert at 80% of actual spend (early warning)...
+  dynamic "notification" {
+    for_each = var.alert_email != "" ? [1] : []
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = 80
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = [var.alert_email]
+    }
+  }
+
+  # ...and when the month is *forecast* to exceed 100% (catches a spike
+  # before the bill actually lands).
+  dynamic "notification" {
+    for_each = var.alert_email != "" ? [1] : []
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = 100
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "FORECASTED"
+      subscriber_email_addresses = [var.alert_email]
+    }
+  }
+}
+
 # CloudWatch Dashboard
 #
 # Layout (24-col grid):
@@ -240,5 +279,55 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
 
   tags = {
     Name = "${var.project_name}-api-5xx-alarm-${var.environment}"
+  }
+}
+
+# --- Synthetic uptime monitor ---
+# A Route53 health check continuously probes the public GET /health endpoint
+# from AWS's global checker fleet — catching a hard outage (the API down) or a
+# degraded state (the body no longer contains "status":"ok", e.g. DDB
+# unreachable) even when no real user is hitting the app. Its metric
+# (AWS/Route53 HealthCheckStatus) only publishes in us-east-1, which is also
+# our primary region, so the alarm lives here too. Created only when an API
+# endpoint is supplied.
+resource "aws_route53_health_check" "api" {
+  count = var.api_endpoint == "" ? 0 : 1
+
+  # fqdn wants the bare host; api_endpoint is https://<host> with no path.
+  fqdn              = replace(replace(var.api_endpoint, "https://", ""), "http://", "")
+  port              = 443
+  type              = "HTTPS_STR_MATCH"
+  resource_path     = "/${var.environment}/health"
+  search_string     = "\"status\":\"ok\""
+  request_interval  = 30
+  failure_threshold = 3
+
+  tags = {
+    Name = "${var.project_name}-api-health-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_health" {
+  count = var.api_endpoint == "" ? 0 : 1
+
+  alarm_name          = "${var.project_name}-api-health-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "Public /health endpoint is failing (unreachable, non-2xx, or status != ok)"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.api[0].id
+  }
+
+  tags = {
+    Name = "${var.project_name}-api-health-alarm-${var.environment}"
   }
 }

@@ -28,12 +28,38 @@ export type LangCode = (typeof ALL_LANGS)[number];
  * exposing them would mislead users into thinking the app speaks Spanish
  * when half the strings still fall through to English.
  *
- * Flip `VITE_ENABLE_NON_ENGLISH_LOCALES=true` at build time once translator
- * output lands and there's a strings-coverage check we trust. Until then,
- * the picker hides itself and the runtime forces `en` even if a stale
- * localStorage entry says otherwise.
+ * Three layered opt-ins, evaluated in order:
+ *   1. URL query param `?locales=on` — flips the flag for this tab and
+ *      persists into localStorage. Lets internal/QA testers exercise the
+ *      Spanish path without a rebuild.
+ *   2. localStorage key `feature:non_english_locales` (set by #1, or
+ *      pushed via the browser console).
+ *   3. Build-time `VITE_ENABLE_NON_ENGLISH_LOCALES=true` — the global
+ *      switch for "ship Spanish to everyone." Stays off by default.
+ *
+ * Order matters: the build-time flag is the broadest signal, so any of the
+ * narrower opt-ins also enables. Disabling is just "remove the localStorage
+ * key + leave the env var unset" — the safe default wins on a cold reload.
  */
-const nonEnglishEnabled = import.meta.env.VITE_ENABLE_NON_ENGLISH_LOCALES === 'true';
+const LS_KEY_NON_ENGLISH = 'feature:non_english_locales';
+
+function readNonEnglishOptIn(): boolean {
+  if (import.meta.env.VITE_ENABLE_NON_ENGLISH_LOCALES === 'true') return true;
+  if (typeof window === 'undefined') return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('locales') === 'on') {
+      window.localStorage.setItem(LS_KEY_NON_ENGLISH, 'true');
+      return true;
+    }
+    return window.localStorage.getItem(LS_KEY_NON_ENGLISH) === 'true';
+  } catch {
+    // Private mode etc.; fall through to the safe default.
+    return false;
+  }
+}
+
+const nonEnglishEnabled = readNonEnglishOptIn();
 
 export const SUPPORTED_LANGS = nonEnglishEnabled
   ? ALL_LANGS

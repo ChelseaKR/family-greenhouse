@@ -271,14 +271,23 @@ resource "aws_lambda_function" "handlers" {
       WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
       SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
       PLANT_ID_API_KEY           = var.plant_id_api_key
+      # OpenWeather powers the climate/weather features. Without the key the
+      # weather service short-circuits to null and those features silently
+      # disable in prod — so it must be wired here, not left to drift.
+      OPENWEATHER_API_KEY      = var.openweather_api_key
+      OPENWEATHER_DAILY_BUDGET = var.openweather_daily_budget
       # Perenual key is held in Secrets Manager (runtime fetch). Pass the
       # SECRET NAME, not the value — the value never reaches Terraform state.
       PERENUAL_API_KEY_SECRET_ID = var.perenual_api_key_secret_id
-      SENTRY_DSN                 = var.sentry_dsn
-      SENTRY_TRACES_SAMPLE_RATE  = var.sentry_traces_sample_rate
-      GIT_SHA                    = var.git_sha
-      CHAT_BUDGET_INPUT_TOKENS   = var.chat_budget_input_tokens
-      CHAT_BUDGET_OUTPUT_TOKENS  = var.chat_budget_output_tokens
+      PERENUAL_DAILY_BUDGET      = var.perenual_daily_budget
+      # Bedrock embedding model for the chat RAG corpus. Empty lets the code
+      # default to amazon.titan-embed-text-v2:0.
+      BEDROCK_EMBED_MODEL_ID    = var.bedrock_embed_model_id
+      SENTRY_DSN                = var.sentry_dsn
+      SENTRY_TRACES_SAMPLE_RATE = var.sentry_traces_sample_rate
+      GIT_SHA                   = var.git_sha
+      CHAT_BUDGET_INPUT_TOKENS  = var.chat_budget_input_tokens
+      CHAT_BUDGET_OUTPUT_TOKENS = var.chat_budget_output_tokens
     }
   }
 
@@ -419,6 +428,9 @@ locals {
     "GET /api-keys"         = { group = "apiKeys", auth = "jwt" }
     "POST /api-keys"        = { group = "apiKeys", auth = "jwt" }
     "DELETE /api-keys/{id}" = { group = "apiKeys", auth = "jwt" }
+
+    # --- health (unauthenticated liveness probe for synthetic monitoring) ---
+    "GET /health" = { group = "api", auth = "none" }
 
     # --- public API v1 (authenticated by API key inside the handler) ---
     "GET /api/v1/me"          = { group = "api", auth = "none" }
