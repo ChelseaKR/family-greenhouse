@@ -35,7 +35,7 @@
     "stripe": "^22.1.0",
     "uuid": "^9.0.1",
     "web-push": "^3.6.7",
-    "zod": "^3.22.4"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.136",
