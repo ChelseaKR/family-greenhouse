@@ -2,6 +2,9 @@ import '@testing-library/jest-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { server } from './msw/server';
+// Initialize i18next so components rendered in tests resolve real strings
+// (e.g. zod validation messages built from `t(...)`) instead of raw keys.
+import '@/i18n';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());

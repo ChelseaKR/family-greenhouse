@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { NotFoundPage } from '@/components/NotFoundPage';
+import { Toaster } from '@/components/Toaster';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 
 // Route-level code splitting. Each feature module compiles into its own
@@ -111,6 +112,7 @@ function App() {
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
+      <Toaster />
       <RouteErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <div id="main-content" tabIndex={-1}>

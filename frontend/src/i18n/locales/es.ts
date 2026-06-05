@@ -100,4 +100,12 @@ export const es: Translation = {
     email: 'Correo',
     sms: 'Mensaje de texto',
   },
+  validation: {
+    nameRequired: 'El nombre es obligatorio',
+    nameTooLong: 'El nombre es demasiado largo',
+    speciesTooLong: 'El nombre de la especie es demasiado largo',
+    locationTooLong: 'La ubicación es demasiado larga',
+    notesTooLong: 'Las notas son demasiado largas',
+    tooManyTags: 'Demasiadas etiquetas',
+  },
 };

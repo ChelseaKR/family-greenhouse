@@ -12,64 +12,17 @@ import { ClimateCard } from './ClimateCard';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PlantGridSkeleton, ListSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyActivity } from '@/components/illustrations/EmptyActivity';
 import { Alert } from '@/components/Alert';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
-import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
-import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
-import { PruneIcon } from '@/components/icons/PruneIcon';
-import { RepotIcon } from '@/components/icons/RepotIcon';
-import { CustomTaskIcon } from '@/components/icons/CustomTaskIcon';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-
-const taskTypeLabels: Record<string, string> = {
-  water: 'Water',
-  fertilize: 'Fertilize',
-  prune: 'Prune',
-  repot: 'Repot',
-  custom: 'Custom',
-};
-
-/**
- * Task-type styling. Each kind gets its own botanical icon and a soft
- * background tinted to a brand-adjacent hue (no raw Tailwind primaries).
- * Keeps the row scannable while staying inside the journal palette.
- */
-const taskTypeStyles: Record<
-  string,
-  { Icon: (p: { className?: string }) => JSX.Element; chip: string; iconColor: string }
-> = {
-  water: {
-    Icon: WaterDropIcon,
-    chip: 'bg-sky-50 text-sky-900 ring-sky-200/70',
-    iconColor: 'text-sky-700',
-  },
-  fertilize: {
-    Icon: FertilizeIcon,
-    chip: 'bg-primary-50 text-primary-900 ring-primary-200/70',
-    iconColor: 'text-primary-700',
-  },
-  prune: {
-    Icon: PruneIcon,
-    chip: 'bg-accent-50 text-accent-900 ring-accent-200/70',
-    iconColor: 'text-accent-700',
-  },
-  repot: {
-    Icon: RepotIcon,
-    chip: 'bg-amber-50 text-amber-900 ring-amber-200/70',
-    iconColor: 'text-amber-800',
-  },
-  custom: {
-    Icon: CustomTaskIcon,
-    chip: 'bg-stone-100 text-stone-900 ring-stone-200/70',
-    iconColor: 'text-stone-700',
-  },
-};
+import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { toast } from '@/store/toastStore';
 
 function formatDueDate(dateString: string): string {
   const date = new Date(dateString);
@@ -170,7 +123,9 @@ export function DashboardPage() {
     mutationFn: (taskId: string) => taskService.completeTask(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task completed');
     },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const handleCompleteTask = async (taskId: string) => {
@@ -235,8 +190,8 @@ export function DashboardPage() {
         </div>
 
         {tasksLoading ? (
-          <div className="flex justify-center py-12">
-            <LoadingSpinner />
+          <div className="px-6 py-2">
+            <ListSkeleton rows={4} />
           </div>
         ) : tasksError ? (
           <div className="p-6">
@@ -280,9 +235,7 @@ export function DashboardPage() {
         />
 
         {plantsLoading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner />
-          </div>
+          <PlantGridSkeleton count={8} />
         ) : plantsError ? (
           <Alert variant="error">{getErrorMessage(plantsError)}</Alert>
         ) : !plants || plants.length === 0 ? (

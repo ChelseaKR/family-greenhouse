@@ -12,7 +12,7 @@ import { plantService } from '@/services/plantService';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PlantGridSkeleton, ListSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyPlants } from '@/components/illustrations/EmptyPlants';
 import { Alert } from '@/components/Alert';
@@ -122,9 +122,11 @@ export function PlantsPage() {
 
       {/* Plant list */}
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <LoadingSpinner size="lg" />
-        </div>
+        viewMode === 'grid' ? (
+          <PlantGridSkeleton />
+        ) : (
+          <ListSkeleton rows={6} />
+        )
       ) : error ? (
         <Alert variant="error">{getErrorMessage(error)}</Alert>
       ) : !filteredPlants || filteredPlants.length === 0 ? (

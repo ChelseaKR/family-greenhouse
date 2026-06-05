@@ -99,6 +99,14 @@ export const en = {
     email: 'Email',
     sms: 'Text message',
   },
+  validation: {
+    nameRequired: 'Name is required',
+    nameTooLong: 'Name is too long',
+    speciesTooLong: 'Species name is too long',
+    locationTooLong: 'Location is too long',
+    notesTooLong: 'Notes are too long',
+    tooManyTags: 'Too many tags',
+  },
 };
 
 // Recursively widen string-literal types to `string` so other locales supply
