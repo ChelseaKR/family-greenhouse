@@ -242,3 +242,53 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
     Name = "${var.project_name}-api-5xx-alarm-${var.environment}"
   }
 }
+
+# --- Synthetic uptime monitor ---
+# A Route53 health check continuously probes the public GET /health endpoint
+# from AWS's global checker fleet — catching a hard outage (the API down) or a
+# degraded state (the body no longer contains "status":"ok", e.g. DDB
+# unreachable) even when no real user is hitting the app. Its metric
+# (AWS/Route53 HealthCheckStatus) only publishes in us-east-1, which is also
+# our primary region, so the alarm lives here too. Created only when an API
+# endpoint is supplied.
+resource "aws_route53_health_check" "api" {
+  count = var.api_endpoint == "" ? 0 : 1
+
+  # fqdn wants the bare host; api_endpoint is https://<host> with no path.
+  fqdn              = replace(replace(var.api_endpoint, "https://", ""), "http://", "")
+  port              = 443
+  type              = "HTTPS_STR_MATCH"
+  resource_path     = "/${var.environment}/health"
+  search_string     = "\"status\":\"ok\""
+  request_interval  = 30
+  failure_threshold = 3
+
+  tags = {
+    Name = "${var.project_name}-api-health-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_health" {
+  count = var.api_endpoint == "" ? 0 : 1
+
+  alarm_name          = "${var.project_name}-api-health-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "Public /health endpoint is failing (unreachable, non-2xx, or status != ok)"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.api[0].id
+  }
+
+  tags = {
+    Name = "${var.project_name}-api-health-alarm-${var.environment}"
+  }
+}

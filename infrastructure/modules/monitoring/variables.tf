@@ -29,3 +29,9 @@ variable "dynamodb_table_name" {
   type        = string
   default     = ""
 }
+
+variable "api_endpoint" {
+  description = "API Gateway base endpoint (https://host, no stage path) for the uptime health check. Empty disables the synthetic monitor."
+  type        = string
+  default     = ""
+}
