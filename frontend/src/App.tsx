@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { NotFoundPage } from '@/components/NotFoundPage';
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -110,65 +111,67 @@ function App() {
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
-      <Suspense fallback={<RouteFallback />}>
-        <div id="main-content" tabIndex={-1}>
-          <Routes>
-            {/* Public routes */}
-            <Route
-              path="/"
-              element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />}
-            />
-            <Route
-              path="/login"
-              element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
-            />
-            <Route
-              path="/register"
-              element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />}
-            />
-            <Route path="/confirm-email" element={<ConfirmEmailPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/join/:inviteCode" element={<JoinHouseholdPage />} />
-            <Route path="/blog" element={<BlogIndex />} />
-            <Route path="/blog/:slug" element={<BlogPost />} />
-            <Route path="/changelog" element={<ChangelogPage />} />
-            <Route path="/legal/privacy" element={<PrivacyPage />} />
-            <Route path="/legal/terms" element={<TermsPage />} />
-            <Route path="/status" element={<StatusPage />} />
-            <Route path="/pricing" element={<PricingPage />} />
-
-            {/* Protected routes */}
-            <Route element={<ProtectedRoute />}>
+      <RouteErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <div id="main-content" tabIndex={-1}>
+            <Routes>
+              {/* Public routes */}
               <Route
-                path="/onboarding"
-                element={
-                  // `?mode=add` lets users create an additional household
-                  // from the switcher without bouncing them off this route.
-                  <OnboardingGate hasHousehold={hasHousehold} />
-                }
+                path="/"
+                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />}
               />
-              <Route path="/welcome" element={<WelcomeFlow />} />
+              <Route
+                path="/login"
+                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+              />
+              <Route
+                path="/register"
+                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />}
+              />
+              <Route path="/confirm-email" element={<ConfirmEmailPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/join/:inviteCode" element={<JoinHouseholdPage />} />
+              <Route path="/blog" element={<BlogIndex />} />
+              <Route path="/blog/:slug" element={<BlogPost />} />
+              <Route path="/changelog" element={<ChangelogPage />} />
+              <Route path="/legal/privacy" element={<PrivacyPage />} />
+              <Route path="/legal/terms" element={<TermsPage />} />
+              <Route path="/status" element={<StatusPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
 
-              <Route element={hasHousehold ? <Layout /> : <Navigate to="/onboarding" replace />}>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/plants" element={<PlantsPage />} />
-                <Route path="/plants/new" element={<AddPlantPage />} />
-                <Route path="/plants/:plantId" element={<PlantDetailPage />} />
-                <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/chat" element={<ChatPage />} />
-                <Route path="/household" element={<HouseholdPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/settings/billing" element={<SettingsPage />} />
-                <Route path="/help" element={<HelpPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
+              {/* Protected routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route
+                  path="/onboarding"
+                  element={
+                    // `?mode=add` lets users create an additional household
+                    // from the switcher without bouncing them off this route.
+                    <OnboardingGate hasHousehold={hasHousehold} />
+                  }
+                />
+                <Route path="/welcome" element={<WelcomeFlow />} />
+
+                <Route element={hasHousehold ? <Layout /> : <Navigate to="/onboarding" replace />}>
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/plants" element={<PlantsPage />} />
+                  <Route path="/plants/new" element={<AddPlantPage />} />
+                  <Route path="/plants/:plantId" element={<PlantDetailPage />} />
+                  <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/chat" element={<ChatPage />} />
+                  <Route path="/household" element={<HouseholdPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings/billing" element={<SettingsPage />} />
+                  <Route path="/help" element={<HelpPage />} />
+                  <Route path="/analytics" element={<AnalyticsPage />} />
+                </Route>
               </Route>
-            </Route>
 
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </div>
-      </Suspense>
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </div>
+        </Suspense>
+      </RouteErrorBoundary>
     </>
   );
 }
