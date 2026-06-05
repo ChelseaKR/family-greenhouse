@@ -1,0 +1,75 @@
+version: 2
+updates:
+  # --- npm workspaces ---
+  # Root holds shared tooling (eslint, prettier, husky); the two workspaces
+  # carry their own runtime deps. Dependabot needs one entry per manifest.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Batch low-risk dev tooling so we get one PR, not a dozen.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      aws-sdk:
+        patterns:
+          - '@aws-sdk/*'
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - backend
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - frontend
+
+  # --- GitHub Actions ---
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+
+  # --- Terraform providers/modules ---
+  - package-ecosystem: terraform
+    directory: /infrastructure
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - infra
