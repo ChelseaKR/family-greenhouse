@@ -15,6 +15,45 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alert_email
 }
 
+# Monthly cost guardrail. A serverless household app should cost a few
+# dollars/month; a runaway (e.g. a DDB throttle retry-storm or a Bedrock
+# loop) is the realistic surprise. Budgets only support email/SNS
+# subscribers directly, so notifications go to alert_email — the same
+# address already on the alerts topic — when one is configured. The budget
+# itself is always created for console visibility.
+resource "aws_budgets_budget" "monthly_cost" {
+  name         = "${var.project_name}-monthly-cost-${var.environment}"
+  budget_type  = "COST"
+  limit_amount = var.monthly_budget_usd
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  # Alert at 80% of actual spend (early warning)...
+  dynamic "notification" {
+    for_each = var.alert_email != "" ? [1] : []
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = 80
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = [var.alert_email]
+    }
+  }
+
+  # ...and when the month is *forecast* to exceed 100% (catches a spike
+  # before the bill actually lands).
+  dynamic "notification" {
+    for_each = var.alert_email != "" ? [1] : []
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = 100
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "FORECASTED"
+      subscriber_email_addresses = [var.alert_email]
+    }
+  }
+}
+
 # CloudWatch Dashboard
 #
 # Layout (24-col grid):
