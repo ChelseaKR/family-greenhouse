@@ -129,10 +129,11 @@ module "monitoring" {
 module "security" {
   source = "./modules/security"
 
-  environment     = var.environment
-  project_name    = var.project_name
-  api_gateway_arn = module.api.api_gateway_arn
-  cloudfront_arn  = module.frontend.cloudfront_arn
+  environment           = var.environment
+  project_name          = var.project_name
+  api_gateway_arn       = module.api.api_gateway_arn
+  api_gateway_stage_arn = module.api.api_gateway_stage_arn
+  cloudfront_arn        = module.frontend.cloudfront_arn
 }
 
 # GitHub OIDC + deploy role for CI/CD. Skipped (count=0) until github_org +

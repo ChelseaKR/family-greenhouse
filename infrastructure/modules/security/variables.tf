@@ -13,6 +13,11 @@ variable "api_gateway_arn" {
   type        = string
 }
 
+variable "api_gateway_stage_arn" {
+  description = "API Gateway stage ARN — the resource the WAF web ACL associates with"
+  type        = string
+}
+
 variable "cloudfront_arn" {
   description = "CloudFront distribution ARN"
   type        = string

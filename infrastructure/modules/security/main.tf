@@ -134,7 +134,10 @@ resource "aws_wafv2_web_acl_logging_configuration" "api" {
   resource_arn            = aws_wafv2_web_acl.api.arn
 }
 
-# Note: WAF association with API Gateway is done separately
-# as API Gateway v2 (HTTP API) doesn't support WAF directly.
-# For production, consider using API Gateway REST API or
-# CloudFront in front of the HTTP API.
+# Associate the regional web ACL with the API Gateway stage. HTTP API (v2)
+# stages have supported WAFv2 association since 2021 — the previous note
+# claiming otherwise was stale, so the ACL existed but protected nothing.
+resource "aws_wafv2_web_acl_association" "api" {
+  resource_arn = var.api_gateway_stage_arn
+  web_acl_arn  = aws_wafv2_web_acl.api.arn
+}
