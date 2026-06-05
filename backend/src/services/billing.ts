@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import { Plan, PlanId, getPlan, PLANS } from '../models/plans.js';
@@ -201,7 +201,46 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
   }
 }
 
+/**
+ * Record a Stripe event id exactly once, so a redelivered webhook can't
+ * re-apply the same subscription change. Stripe retries webhooks (and may
+ * deliver duplicates) and our handler is otherwise last-write-wins, which
+ * means a re-delivered stale `created` could clobber a later `deleted`.
+ *
+ * Returns `true` when this is the first time we've seen the event (caller
+ * should proceed), `false` when it was already processed (caller should skip).
+ * The ledger row carries a 30-day TTL so the table sweeps it automatically.
+ */
+export async function recordStripeEventOnce(eventId: string): Promise<boolean> {
+  const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `STRIPE_EVENT#${eventId}`,
+          SK: 'METADATA',
+          entityType: 'StripeEvent',
+          ttl,
+        },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      })
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw err;
+  }
+}
+
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
+  const isNew = await recordStripeEventOnce(event.id);
+  if (!isNew) {
+    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_skipped');
+    return;
+  }
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
   await updateHouseholdSubscription(delta.householdId, delta.fields);
