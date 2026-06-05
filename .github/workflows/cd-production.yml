@@ -85,13 +85,13 @@ jobs:
         run: npm run build
 
       - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist-${{ needs.validate.outputs.version }}
           path: frontend/dist
 
       - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-dist-${{ needs.validate.outputs.version }}
           path: backend/dist
@@ -214,7 +214,7 @@ jobs:
           cat prev-versions.txt
 
       - name: Upload prev-versions artifact (for rollback)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: prev-versions-${{ needs.validate.outputs.version }}
           path: prev-versions.txt
@@ -308,7 +308,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-smoke-report-${{ needs.validate.outputs.version }}
           path: frontend/playwright-report
