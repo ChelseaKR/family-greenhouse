@@ -7,6 +7,7 @@
  * changes go behind `/api/v2`. Backwards-compatible additions land in v1.
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import createHttpError from 'http-errors';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
@@ -15,6 +16,7 @@ import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import type { AuthenticatedEvent } from '../../middleware/auth.js';
 import * as plantService from '../../services/plantService.js';
 import * as taskService from '../../services/taskService.js';
+import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
 import { successResponse } from '../../utils/response.js';
 
 // Two-layer rate limit on the public API:
@@ -102,8 +104,48 @@ export const listActivity = createHandler(
   .use(perKeyRateLimit())
   .use(requireApiScope('read:activity'));
 
+// GET /health
+// Unauthenticated liveness probe: proves the Lambda boots, the router
+// dispatches end-to-end, and the data plane is reachable. Returns the build
+// SHA so a synthetic monitor can also catch a stuck/old deploy, not just a
+// hard outage. No auth and no rate limit — it must stay cheap and always
+// reachable for uptime checks (the prod smoke test previously had to use
+// /billing/plans because no health route existed).
+//
+// Shape matches the local-server mock + the /status page contract:
+//   { status, version, checkedAt, components: { database, auth, mail } }
+// `database` is a real reachability probe (a cheap GetItem on a sentinel
+// key). `auth`/`mail` are reported passively for now — they're not actively
+// probed, so they stay 'ok' until a dedicated check is added.
+export const health = createHandler(async (): Promise<APIGatewayProxyResult> => {
+  let database: 'ok' | 'error' = 'ok';
+  try {
+    await dynamodb.send(
+      new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: 'HEALTHCHECK', SK: 'PROBE' },
+      })
+    );
+  } catch {
+    database = 'error';
+  }
+
+  const overall = database === 'ok' ? 'ok' : 'degraded';
+  return successResponse({
+    status: overall,
+    version: process.env.GIT_SHA ?? 'unknown',
+    checkedAt: new Date().toISOString(),
+    components: {
+      database: { status: database },
+      auth: { status: 'ok' },
+      mail: { status: 'ok' },
+    },
+  });
+});
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
+  'GET /health': health,
   'GET /api/v1/me': me,
   'GET /api/v1/plants': listPlants,
   'GET /api/v1/plants/{id}': getPlant,

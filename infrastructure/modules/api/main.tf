@@ -429,6 +429,9 @@ locals {
     "POST /api-keys"        = { group = "apiKeys", auth = "jwt" }
     "DELETE /api-keys/{id}" = { group = "apiKeys", auth = "jwt" }
 
+    # --- health (unauthenticated liveness probe for synthetic monitoring) ---
+    "GET /health" = { group = "api", auth = "none" }
+
     # --- public API v1 (authenticated by API key inside the handler) ---
     "GET /api/v1/me"          = { group = "api", auth = "none" }
     "GET /api/v1/plants"      = { group = "api", auth = "none" }

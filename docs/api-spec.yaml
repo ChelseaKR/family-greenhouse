@@ -16,6 +16,13 @@ security:
   - bearerAuth: []
 
 paths:
+  /health:
+    get:
+      summary: Unauthenticated liveness probe (status + build SHA)
+      tags: [System]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
   /auth/signup:
     post:
       summary: Register a new user
