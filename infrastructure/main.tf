@@ -123,6 +123,7 @@ module "monitoring" {
   lambda_function_names = module.api.lambda_function_names
   alert_email           = var.alert_email
   dynamodb_table_name   = module.database.table_name
+  api_endpoint          = module.api.api_gateway_endpoint
   monthly_budget_usd    = var.monthly_budget_usd
 }
 

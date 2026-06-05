@@ -30,6 +30,12 @@ variable "dynamodb_table_name" {
   default     = ""
 }
 
+variable "api_endpoint" {
+  description = "API Gateway base endpoint (https://host, no stage path) for the uptime health check. Empty disables the synthetic monitor."
+  type        = string
+  default     = ""
+}
+
 variable "monthly_budget_usd" {
   description = "Monthly AWS cost budget in USD; breaching 80% actual / 100% forecast emails alert_email."
   type        = string
