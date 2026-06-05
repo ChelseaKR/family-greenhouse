@@ -246,16 +246,34 @@ if (typeof window !== 'undefined') {
     if (e.key !== 'auth-storage') return;
     // If the local-side payload disappears or no longer carries an idToken,
     // mirror logout into this tab so its in-memory zustand state matches.
+    //
+    // The payload is same-origin (the `storage` event only fires for our own
+    // localStorage key) so the trust boundary is the same as any other
+    // localStorage read — but we still validate shape before reading nested
+    // fields. A bare `?? null` would coerce both "missing" and "wrong type"
+    // to logout; that's the right action either way, but typeof-checking
+    // first keeps the read explicit and the failure mode obvious.
+    if (!e.newValue) {
+      useAuthStore.getState().logout();
+      return;
+    }
     try {
-      const parsed = e.newValue
-        ? (JSON.parse(e.newValue) as { state?: { idToken?: string | null } })
-        : null;
-      const idToken = parsed?.state?.idToken ?? null;
+      const parsed = JSON.parse(e.newValue) as unknown;
+      const idToken =
+        parsed &&
+        typeof parsed === 'object' &&
+        'state' in parsed &&
+        parsed.state &&
+        typeof parsed.state === 'object' &&
+        'idToken' in parsed.state &&
+        typeof (parsed.state as { idToken?: unknown }).idToken === 'string'
+          ? (parsed.state as { idToken: string }).idToken
+          : null;
       if (!idToken) {
         useAuthStore.getState().logout();
       }
     } catch {
-      // Malformed payload — safer to log out than to keep stale auth state.
+      // Malformed JSON — safer to log out than to keep stale auth state.
       useAuthStore.getState().logout();
     }
   });

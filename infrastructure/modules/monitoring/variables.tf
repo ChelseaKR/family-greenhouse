@@ -35,3 +35,9 @@ variable "api_endpoint" {
   type        = string
   default     = ""
 }
+
+variable "monthly_budget_usd" {
+  description = "Monthly AWS cost budget in USD; breaching 80% actual / 100% forecast emails alert_email."
+  type        = string
+  default     = "50"
+}

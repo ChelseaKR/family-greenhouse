@@ -93,6 +93,10 @@ module "api" {
   # Perenual uses the Secrets-Manager-ID indirection so the API key never
   # touches Terraform state (see modules/api/main.tf IAM block).
   perenual_api_key_secret_id = var.perenual_api_key_secret_id
+  perenual_daily_budget      = var.perenual_daily_budget
+  openweather_api_key        = var.openweather_api_key
+  openweather_daily_budget   = var.openweather_daily_budget
+  bedrock_embed_model_id     = var.bedrock_embed_model_id
 }
 
 # Frontend module (S3 + CloudFront)
@@ -120,16 +124,18 @@ module "monitoring" {
   alert_email           = var.alert_email
   dynamodb_table_name   = module.database.table_name
   api_endpoint          = module.api.api_gateway_endpoint
+  monthly_budget_usd    = var.monthly_budget_usd
 }
 
 # Security module (WAF, IAM)
 module "security" {
   source = "./modules/security"
 
-  environment     = var.environment
-  project_name    = var.project_name
-  api_gateway_arn = module.api.api_gateway_arn
-  cloudfront_arn  = module.frontend.cloudfront_arn
+  environment           = var.environment
+  project_name          = var.project_name
+  api_gateway_arn       = module.api.api_gateway_arn
+  api_gateway_stage_arn = module.api.api_gateway_stage_arn
+  cloudfront_arn        = module.frontend.cloudfront_arn
 }
 
 # GitHub OIDC + deploy role for CI/CD. Skipped (count=0) until github_org +

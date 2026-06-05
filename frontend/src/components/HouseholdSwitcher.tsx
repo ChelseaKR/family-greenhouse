@@ -64,9 +64,27 @@ export function HouseholdSwitcher() {
               onClick={(e) => {
                 setActiveHouseholdId(m.householdId === user?.householdId ? null : m.householdId);
                 track('household_switched');
-                // Drop every cached query — they were scoped to the
-                // previous household and would render stale data.
-                queryClient.invalidateQueries();
+                // Drop only household-scoped queries (plants, tasks, household
+                // detail, activity, billing). The unscoped invalidation we
+                // used to do thundered every cached query — even ones that
+                // are user-scoped or genuinely shared (templates, species
+                // catalog) — and produced a visible refetch lag on switch.
+                queryClient.invalidateQueries({
+                  predicate: (q) => {
+                    const k = q.queryKey[0];
+                    return (
+                      k === 'plants' ||
+                      k === 'tasks' ||
+                      k === 'household' ||
+                      k === 'households' ||
+                      k === 'activity' ||
+                      k === 'subscription' ||
+                      k === 'notification-prefs' ||
+                      k === 'chat-budget' ||
+                      k === 'climate'
+                    );
+                  },
+                });
                 (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
               }}
             >

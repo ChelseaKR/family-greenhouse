@@ -32,6 +32,12 @@ variable "alert_email" {
   default     = ""
 }
 
+variable "monthly_budget_usd" {
+  description = "Monthly AWS cost budget in USD; breaching 80% actual / 100% forecast emails alert_email."
+  type        = string
+  default     = "50"
+}
+
 variable "email_from_address" {
   description = "Friendly From header for Cognito mail (signup confirmations, password resets). E.g. 'Family Greenhouse <hello@familygreenhouse.net>'. Required when domain_name is set."
   type        = string
@@ -71,6 +77,33 @@ variable "github_repo" {
 
 variable "perenual_api_key_secret_id" {
   description = "Secrets Manager secret name holding the Perenual API key (e.g. 'family-greenhouse/perenual-api-key'). Leave blank to disable Perenual integration."
+  type        = string
+  default     = ""
+}
+
+variable "perenual_daily_budget" {
+  description = "Max Perenual API calls per day. Blank lets the code default (80) apply."
+  type        = string
+  default     = ""
+}
+
+# OpenWeather powers the climate/weather features. Without the key the weather
+# service short-circuits to null and those features silently disable in prod.
+variable "openweather_api_key" {
+  description = "OpenWeather API key. Blank disables the climate/weather features."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "openweather_daily_budget" {
+  description = "Max OpenWeather API calls per day. Blank lets the code default (800) apply."
+  type        = string
+  default     = ""
+}
+
+variable "bedrock_embed_model_id" {
+  description = "Bedrock embedding model ID for the chat RAG corpus. Blank lets the code default (amazon.titan-embed-text-v2:0) apply."
   type        = string
   default     = ""
 }
