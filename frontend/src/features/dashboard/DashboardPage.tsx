@@ -18,58 +18,10 @@ import { EmptyActivity } from '@/components/illustrations/EmptyActivity';
 import { Alert } from '@/components/Alert';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
-import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
-import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
-import { PruneIcon } from '@/components/icons/PruneIcon';
-import { RepotIcon } from '@/components/icons/RepotIcon';
-import { CustomTaskIcon } from '@/components/icons/CustomTaskIcon';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-
-const taskTypeLabels: Record<string, string> = {
-  water: 'Water',
-  fertilize: 'Fertilize',
-  prune: 'Prune',
-  repot: 'Repot',
-  custom: 'Custom',
-};
-
-/**
- * Task-type styling. Each kind gets its own botanical icon and a soft
- * background tinted to a brand-adjacent hue (no raw Tailwind primaries).
- * Keeps the row scannable while staying inside the journal palette.
- */
-const taskTypeStyles: Record<
-  string,
-  { Icon: (p: { className?: string }) => JSX.Element; chip: string; iconColor: string }
-> = {
-  water: {
-    Icon: WaterDropIcon,
-    chip: 'bg-sky-50 text-sky-900 ring-sky-200/70',
-    iconColor: 'text-sky-700',
-  },
-  fertilize: {
-    Icon: FertilizeIcon,
-    chip: 'bg-primary-50 text-primary-900 ring-primary-200/70',
-    iconColor: 'text-primary-700',
-  },
-  prune: {
-    Icon: PruneIcon,
-    chip: 'bg-accent-50 text-accent-900 ring-accent-200/70',
-    iconColor: 'text-accent-700',
-  },
-  repot: {
-    Icon: RepotIcon,
-    chip: 'bg-amber-50 text-amber-900 ring-amber-200/70',
-    iconColor: 'text-amber-800',
-  },
-  custom: {
-    Icon: CustomTaskIcon,
-    chip: 'bg-stone-100 text-stone-900 ring-stone-200/70',
-    iconColor: 'text-stone-700',
-  },
-};
+import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 
 function formatDueDate(dateString: string): string {
   const date = new Date(dateString);

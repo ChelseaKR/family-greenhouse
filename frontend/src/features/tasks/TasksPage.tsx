@@ -15,58 +15,9 @@ import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
-import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
-import { PruneIcon } from '@/components/icons/PruneIcon';
-import { RepotIcon } from '@/components/icons/RepotIcon';
-import { CustomTaskIcon } from '@/components/icons/CustomTaskIcon';
+import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
-
-const taskTypeLabels: Record<string, string> = {
-  water: 'Water',
-  fertilize: 'Fertilize',
-  prune: 'Prune',
-  repot: 'Repot',
-  custom: 'Custom',
-};
-
-/**
- * Each task type gets a botanical icon paired with a soft brand-tinted
- * chip. Keeps each row scannable on a `bg-paper` card without leaning on
- * raw Tailwind primaries (the prior blue/green/orange chips clashed with
- * the journal palette).
- */
-const taskTypeStyles: Record<
-  string,
-  { Icon: (p: { className?: string }) => JSX.Element; chip: string; iconColor: string }
-> = {
-  water: {
-    Icon: WaterDropIcon,
-    chip: 'bg-sky-50 text-sky-900 ring-sky-200/70',
-    iconColor: 'text-sky-700',
-  },
-  fertilize: {
-    Icon: FertilizeIcon,
-    chip: 'bg-primary-50 text-primary-900 ring-primary-200/70',
-    iconColor: 'text-primary-700',
-  },
-  prune: {
-    Icon: PruneIcon,
-    chip: 'bg-accent-50 text-accent-900 ring-accent-200/70',
-    iconColor: 'text-accent-700',
-  },
-  repot: {
-    Icon: RepotIcon,
-    chip: 'bg-amber-50 text-amber-900 ring-amber-200/70',
-    iconColor: 'text-amber-800',
-  },
-  custom: {
-    Icon: CustomTaskIcon,
-    chip: 'bg-stone-100 text-stone-900 ring-stone-200/70',
-    iconColor: 'text-stone-700',
-  },
-};
 
 function formatDueDate(dateString: string): string {
   const date = new Date(dateString);
