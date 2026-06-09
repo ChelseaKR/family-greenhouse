@@ -16,6 +16,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://app.familygreenhouse.com/care</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://app.familygreenhouse.com/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
@@ -58,5 +63,23 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-04-25</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/pothos</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-08</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/snake-plant</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-08</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/monstera</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-08</lastmod>
   </url>
 </urlset>

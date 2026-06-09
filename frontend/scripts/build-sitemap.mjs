@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const POSTS = join(ROOT, 'src', 'features', 'blog', 'posts', 'index.ts');
+const CARE = join(ROOT, 'src', 'features', 'care', 'careGuides.ts');
 const OUT = join(ROOT, 'public', 'sitemap.xml');
 
 const SITE = process.env.SITE_URL || 'https://app.familygreenhouse.com';
@@ -30,6 +31,7 @@ const STATIC_ROUTES = [
   { path: '/', priority: 1.0, changefreq: 'weekly' },
   { path: '/pricing', priority: 0.9, changefreq: 'monthly' },
   { path: '/blog', priority: 0.8, changefreq: 'weekly' },
+  { path: '/care', priority: 0.8, changefreq: 'weekly' },
   { path: '/changelog', priority: 0.5, changefreq: 'weekly' },
   { path: '/status', priority: 0.3, changefreq: 'daily' },
   { path: '/legal/privacy', priority: 0.3, changefreq: 'yearly' },
@@ -51,6 +53,18 @@ function readBlogSlugs() {
 function readBlogDates() {
   const src = readFileSync(POSTS, 'utf8');
   const re = /slug:\s*'([^']+)'[\s\S]*?date:\s*'([^']+)'/g;
+  const out = new Map();
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    out.set(m[1], m[2]);
+  }
+  return out;
+}
+
+// Care guides share the manifest-regex approach: `slug: 'x'` + `reviewed: 'date'`.
+function readCareGuides() {
+  const src = readFileSync(CARE, 'utf8');
+  const re = /slug:\s*'([^']+)'[\s\S]*?reviewed:\s*'([^']+)'/g;
   const out = new Map();
   let m;
   while ((m = re.exec(src)) !== null) {
@@ -82,7 +96,15 @@ function build() {
     lastmod: dates.get(slug) ?? today,
   }));
 
-  const all = [...STATIC_ROUTES, ...blogEntries];
+  const care = readCareGuides();
+  const careEntries = [...care.entries()].map(([slug, reviewed]) => ({
+    path: `/care/${slug}`,
+    priority: 0.7,
+    changefreq: 'monthly',
+    lastmod: reviewed ?? today,
+  }));
+
+  const all = [...STATIC_ROUTES, ...blogEntries, ...careEntries];
 
   const xml = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
