@@ -17,3 +17,7 @@ perenual_api_key_secret_id = "family-greenhouse/perenual-api-key"
 # the 'production' GitHub environment.
 github_org  = "ChelseaKR"
 github_repo = "family-greenhouse"
+
+# Cost guardrail. The running app is ~$2-3/mo; this catches a runaway. Cost
+# Anomaly Detection (monitoring module) handles spend *spikes* separately.
+monthly_budget_usd = "30"

@@ -127,16 +127,12 @@ module "monitoring" {
   monthly_budget_usd    = var.monthly_budget_usd
 }
 
-# Security module (WAF, IAM)
-module "security" {
-  source = "./modules/security"
-
-  environment           = var.environment
-  project_name          = var.project_name
-  api_gateway_arn       = module.api.api_gateway_arn
-  api_gateway_stage_arn = module.api.api_gateway_stage_arn
-  cloudfront_arn        = module.frontend.cloudfront_arn
-}
+# NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its
+# regional web ACL could not attach to the HTTP API (WAFv2 doesn't support
+# apigatewayv2; see git history / PR #34) and protected nothing. Edge defense
+# now rests on API Gateway stage throttling + Cognito threat protection +
+# in-code rate limiting. To reintroduce real edge WAF, front the API with
+# CloudFront and attach a CLOUDFRONT-scoped ACL there.
 
 # GitHub OIDC + deploy role for CI/CD. Skipped (count=0) until github_org +
 # github_repo are set, so first-time `terraform apply` doesn't try to

@@ -18,11 +18,6 @@ output "api_gateway_endpoint" {
   value       = aws_apigatewayv2_api.main.api_endpoint
 }
 
-output "api_gateway_stage_arn" {
-  description = "API Gateway stage ARN (the resource a WAF web ACL associates with)"
-  value       = aws_apigatewayv2_stage.main.arn
-}
-
 output "lambda_function_names" {
   description = "Lambda function names"
   value       = [for k, v in aws_lambda_function.handlers : v.function_name]

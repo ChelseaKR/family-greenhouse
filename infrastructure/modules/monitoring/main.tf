@@ -54,6 +54,41 @@ resource "aws_budgets_budget" "monthly_cost" {
   }
 }
 
+# Cost anomaly detection. Catches an unusual spend spike per-service (e.g. a
+# Bedrock day that 10x's the baseline) even when it's still under the monthly
+# budget — the budget alarm only fires at a fixed dollar ceiling, this fires on
+# *shape*. Free. Cost Explorer is a us-east-1-global service (this stack's
+# region), so it lives in the default provider.
+resource "aws_ce_anomaly_monitor" "services" {
+  name              = "${var.project_name}-anomaly-${var.environment}"
+  monitor_type      = "DIMENSIONAL"
+  monitor_dimension = "SERVICE"
+}
+
+resource "aws_ce_anomaly_subscription" "alerts" {
+  count = var.alert_email == "" ? 0 : 1
+  name  = "${var.project_name}-anomaly-sub-${var.environment}"
+  # EMAIL subscribers only support DAILY/WEEKLY (IMMEDIATE needs an SNS topic).
+  # DAILY = one digest email of the day's anomalies.
+  frequency        = "DAILY"
+  monitor_arn_list = [aws_ce_anomaly_monitor.services.arn]
+
+  subscriber {
+    type    = "EMAIL"
+    address = var.alert_email
+  }
+
+  # Alert when a single anomaly's total impact is >= $10. Tune up if normal
+  # dev-tooling (Claude Code on Bedrock) noise trips it too often.
+  threshold_expression {
+    dimension {
+      key           = "ANOMALY_TOTAL_IMPACT_ABSOLUTE"
+      match_options = ["GREATER_THAN_OR_EQUAL"]
+      values        = ["10"]
+    }
+  }
+}
+
 # CloudWatch Dashboard
 #
 # Layout (24-col grid):
