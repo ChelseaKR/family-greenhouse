@@ -122,6 +122,7 @@ module "monitoring" {
   api_gateway_name      = module.api.api_gateway_name
   lambda_function_names = module.api.lambda_function_names
   alert_email           = var.alert_email
+  alert_sms_number      = var.alert_sms_number
   dynamodb_table_name   = module.database.table_name
   api_endpoint          = module.api.api_gateway_endpoint
   monthly_budget_usd    = var.monthly_budget_usd
