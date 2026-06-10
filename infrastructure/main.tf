@@ -125,6 +125,7 @@ module "monitoring" {
   dynamodb_table_name   = module.database.table_name
   api_endpoint          = module.api.api_gateway_endpoint
   monthly_budget_usd    = var.monthly_budget_usd
+  lambda_dlq_name       = module.api.lambda_dlq_name
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its
