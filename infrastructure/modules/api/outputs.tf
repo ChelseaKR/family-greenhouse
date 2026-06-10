@@ -22,3 +22,8 @@ output "lambda_function_names" {
   description = "Lambda function names"
   value       = [for k, v in aws_lambda_function.handlers : v.function_name]
 }
+
+output "lambda_dlq_name" {
+  description = "Name of the Lambda/EventBridge dead-letter queue (monitoring alarms on its depth)."
+  value       = aws_sqs_queue.lambda_dlq.name
+}
