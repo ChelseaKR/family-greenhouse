@@ -30,7 +30,18 @@ npm --workspace backend run build
 # Terraform
 echo "Applying Terraform..."
 cd infrastructure
-terraform init
+# Per-environment state isolation. Production keeps the original
+# `terraform.tfstate` key (backend.tf default) so its existing state is
+# untouched; staging gets its OWN key. Without this the two environments
+# share one state file — and a `terraform apply -var-file=staging` against
+# the prod-populated state would rename every `-production` resource to
+# `-staging` and destroy the live stack. `-reconfigure` re-points the backend
+# cleanly when alternating environments locally.
+if [[ "$ENVIRONMENT" == "staging" ]]; then
+    terraform init -reconfigure -backend-config="key=staging/terraform.tfstate"
+else
+    terraform init -reconfigure
+fi
 terraform apply -var-file="environments/${ENVIRONMENT}/terraform.tfvars" -auto-approve
 
 # Read outputs needed for the frontend build + asset sync
