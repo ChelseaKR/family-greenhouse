@@ -65,6 +65,8 @@ const JoinHouseholdPage = lazyNamed(
 );
 const BlogIndex = lazyNamed(() => import('@/features/blog/BlogIndex'), 'BlogIndex');
 const BlogPost = lazyNamed(() => import('@/features/blog/BlogPost'), 'BlogPost');
+const CareIndex = lazyNamed(() => import('@/features/care/CareIndex'), 'CareIndex');
+const CareGuidePage = lazyNamed(() => import('@/features/care/CareGuidePage'), 'CareGuidePage');
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -135,6 +137,8 @@ function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/join/:inviteCode" element={<JoinHouseholdPage />} />
               <Route path="/blog" element={<BlogIndex />} />
+              <Route path="/care" element={<CareIndex />} />
+              <Route path="/care/:slug" element={<CareGuidePage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />
