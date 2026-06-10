@@ -28,6 +28,7 @@ import { CareGuidanceCard } from './CareGuidanceCard';
 import { CareGuideCard } from './CareGuideCard';
 import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { RemovePlantDialog } from './RemovePlantDialog';
 import clsx from 'clsx';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { toast } from '@/store/toastStore';
@@ -48,6 +49,7 @@ export function PlantDetailPage() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [showEditPlant, setShowEditPlant] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRemove, setShowRemove] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const {
@@ -70,6 +72,24 @@ export function PlantDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['plants'] });
       toast.success('Plant deleted');
       navigate('/plants');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (status: 'active' | 'died' | 'gave_away') =>
+      plantService.setPlantStatus(plantId!, status),
+    onSuccess: (_data, status) => {
+      queryClient.invalidateQueries({ queryKey: ['plants'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
+      setShowRemove(false);
+      if (status === 'active') {
+        toast.success('Plant restored');
+      } else {
+        // It's left the active list — back to the (active) plants view.
+        toast.success(status === 'died' ? 'Recorded as died' : 'Recorded as given away');
+        navigate('/plants');
+      }
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -169,7 +189,19 @@ export function PlantDetailPage() {
         <div className="flex-1">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{plant.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-gray-900">{plant.name}</h1>
+                {plant.status === 'died' && (
+                  <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-700">
+                    Died
+                  </span>
+                )}
+                {plant.status === 'gave_away' && (
+                  <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-900 ring-1 ring-sky-200/70">
+                    Gave away
+                  </span>
+                )}
+              </div>
               {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
             </div>
             <div className="flex gap-2">
@@ -181,14 +213,25 @@ export function PlantDetailPage() {
               >
                 Edit
               </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setShowDeleteConfirm(true)}
-                leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
-              >
-                Delete
-              </Button>
+              {(plant.status ?? 'active') === 'active' ? (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setShowRemove(true)}
+                  leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
+                >
+                  Remove
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => statusMutation.mutate('active')}
+                  isLoading={statusMutation.isPending}
+                >
+                  Restore
+                </Button>
+              )}
             </div>
           </div>
 
@@ -300,12 +343,26 @@ export function PlantDetailPage() {
         <EditTaskModal task={editingTask} isOpen={true} onClose={() => setEditingTask(null)} />
       )}
 
+      <RemovePlantDialog
+        isOpen={showRemove}
+        plantName={plant.name}
+        isLoading={statusMutation.isPending || deleteMutation.isPending}
+        onClose={() => setShowRemove(false)}
+        onDied={() => statusMutation.mutate('died')}
+        onGaveAway={() => statusMutation.mutate('gave_away')}
+        onDelete={() => {
+          // Permanent delete gets a second, explicit confirm.
+          setShowRemove(false);
+          setShowDeleteConfirm(true);
+        }}
+      />
+
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={() => deleteMutation.mutate()}
         title="Delete plant"
-        message={`Are you sure you want to delete "${plant.name}"? This will also delete all associated tasks and history.`}
+        message={`Are you sure you want to delete "${plant.name}"? This permanently removes the plant and all its tasks and history. Use "It died" or "I gave it away" instead if you want to keep the record.`}
         confirmLabel="Delete"
         isLoading={deleteMutation.isPending}
       />

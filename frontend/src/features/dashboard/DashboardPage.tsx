@@ -99,7 +99,7 @@ export function DashboardPage() {
     error: plantsError,
   } = useQuery({
     queryKey: ['plants'],
-    queryFn: plantService.getPlants,
+    queryFn: () => plantService.getPlants(),
   });
 
   useOverdueAlerts(upcomingTasks);

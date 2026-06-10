@@ -1,6 +1,11 @@
 import { api } from './api';
 import { track } from './analytics';
 
+export type PlantStatus = 'active' | 'died' | 'gave_away';
+
+/** List filter mirroring the backend: active (default), past, or all. */
+export type PlantFilter = 'active' | 'past' | 'all';
+
 export interface Plant {
   id: string;
   householdId: string;
@@ -9,6 +14,9 @@ export interface Plant {
   location: string | null;
   imageUrl: string | null;
   notes: string | null;
+  /** Lifecycle status; legacy rows may omit it → treat as 'active'. */
+  status?: PlantStatus;
+  statusChangedAt?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
   createdAt: string;
@@ -32,6 +40,7 @@ export interface UpdatePlantData {
   notes?: string;
   tags?: string[];
   perenualSpeciesId?: number | null;
+  status?: PlantStatus;
 }
 
 export interface PlantWithTasks extends Plant {
@@ -80,8 +89,14 @@ export interface PlantPhoto {
 }
 
 export const plantService = {
-  async getPlants(): Promise<Plant[]> {
-    const response = await api.get<Plant[]>('/plants');
+  async getPlants(filter: PlantFilter = 'active'): Promise<Plant[]> {
+    const response = await api.get<Plant[]>('/plants', { params: { filter } });
+    return response.data;
+  },
+
+  /** Record a lifecycle outcome (died / gave_away) or restore to active. */
+  async setPlantStatus(id: string, status: PlantStatus): Promise<Plant> {
+    const response = await api.put<Plant>(`/plants/${id}`, { status });
     return response.data;
   },
 

@@ -83,7 +83,7 @@ describe('plants handler', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body).toHaveLength(1);
-    expect(plantService.getPlants).toHaveBeenCalledWith('hh-1');
+    expect(plantService.getPlants).toHaveBeenCalledWith('hh-1', 'active');
   });
 
   it('listPlants returns 403 when user has no household', async () => {

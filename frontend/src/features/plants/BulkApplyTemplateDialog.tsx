@@ -27,7 +27,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
 
   const { data: plants } = useQuery({
     queryKey: ['plants'],
-    queryFn: plantService.getPlants,
+    queryFn: () => plantService.getPlants(),
     enabled: isOpen,
   });
 

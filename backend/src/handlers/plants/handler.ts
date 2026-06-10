@@ -27,11 +27,14 @@ import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
 import { audit } from '../../utils/auditLog.js';
 import { logger } from '../../utils/logger.js';
 
-// GET /plants
+// GET /plants?filter=active|past|all  (default: active)
 export const listPlants = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
-    const plants = await plantService.getPlants(user.householdId!);
+    const raw = event.queryStringParameters?.filter;
+    const filter: plantService.PlantFilter =
+      raw === 'past' || raw === 'all' ? raw : 'active';
+    const plants = await plantService.getPlants(user.householdId!, filter);
     return successResponse(plants);
   }
 )
@@ -134,6 +137,22 @@ export const updatePlant = createHandler(
 
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
+    }
+
+    // Record the lifecycle outcome on the activity feed (feeds the
+    // plant-survival metric). Best-effort, same as plant.created.
+    if (validatedBody.status === 'died' || validatedBody.status === 'gave_away') {
+      activity
+        .recordActivity({
+          type: validatedBody.status === 'died' ? 'plant.died' : 'plant.gave_away',
+          householdId: user.householdId!,
+          actorId: user.userId,
+          actorName: await cognitoUsers.getUserName(user.userId, user.email),
+          payload: { plantId: plant.id, plantName: plant.name },
+        })
+        .catch((err) => {
+          logger.warn({ err }, 'activity_record_failed');
+        });
     }
 
     return successResponse(plant);
