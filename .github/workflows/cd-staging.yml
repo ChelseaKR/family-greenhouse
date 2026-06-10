@@ -1,17 +1,16 @@
 name: Deploy to Staging
 
-# ⚠️ DISABLED auto-deploy on push. The Terraform backend uses a single state
-# key (`terraform.tfstate`, no workspace / no per-env key — see backend.tf),
-# so this job's `terraform apply -var-file=staging` runs against the SAME
-# state that holds production. Because resource names embed
-# `${var.environment}`, a staging apply would rename every `-production`
-# resource to `-staging` — i.e. destroy the live Cognito pool / DynamoDB /
-# API / CloudFront. This never fired before only because CD had no AWS creds.
+# State is now ISOLATED: the Terraform Apply step below inits with
+# `-backend-config="key=staging/terraform.tfstate"`, so staging has its own
+# state file and a staging apply can no longer touch the production stack
+# (which lives under the default `terraform.tfstate` key). The prod-destruction
+# landmine is closed.
 #
-# DO NOT re-enable `push: main` until staging has an ISOLATED state, e.g.
-# `terraform init -backend-config="key=staging/terraform.tfstate"` in the
-# init step here (and a real, separate staging stack is intended). Left as
-# manual-only so a human who understands the above can still trigger it.
+# Still kept MANUAL (workflow_dispatch only), deliberately: a staging apply now
+# stands up a full *separate* staging stack (Cognito/DDB/API/CloudFront...),
+# which costs money — that should be an intentional choice, not something every
+# push to main provisions. Re-enable `push: main` only when a standing staging
+# environment is actually wanted.
 on:
   workflow_dispatch:
 
@@ -96,8 +95,9 @@ jobs:
           terraform_version: 1.5.7
           terraform_wrapper: false
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Terraform Init (isolated staging state)
+        # Staging gets its OWN state key so it can never apply onto prod's state.
+        run: terraform init -backend-config="key=staging/terraform.tfstate"
 
       - name: Terraform Plan
         run: terraform plan -var-file=environments/staging/terraform.tfvars -out=tfplan
