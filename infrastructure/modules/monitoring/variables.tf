@@ -41,3 +41,9 @@ variable "monthly_budget_usd" {
   type        = string
   default     = "50"
 }
+
+variable "lambda_dlq_name" {
+  description = "Name of the Lambda/EventBridge dead-letter queue to alarm on. Empty disables the DLQ alarm."
+  type        = string
+  default     = ""
+}

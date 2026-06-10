@@ -146,6 +146,12 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = "*"
       },
       {
+        # Send failed async invocations to the dead-letter queue.
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.lambda_dlq.arn
+      },
+      {
         # Bedrock for the chat handler. Two ARN shapes are needed:
         #   - The foundation-model ARN (the underlying Claude or Titan
         #     weights) is global (no account in the ARN).
@@ -293,6 +299,13 @@ resource "aws_lambda_function" "handlers" {
 
   tracing_config {
     mode = "Active"
+  }
+
+  # Failed async invocations (the EventBridge-driven `reminders` Lambda) land
+  # in the DLQ after Lambda's internal retries instead of vanishing. No-op for
+  # the sync API-Gateway handlers, which return errors to the caller.
+  dead_letter_config {
+    target_arn = aws_sqs_queue.lambda_dlq.arn
   }
 
   tags = {
@@ -469,6 +482,15 @@ resource "aws_cloudwatch_event_rule" "reminders" {
 resource "aws_cloudwatch_event_target" "reminders" {
   rule = aws_cloudwatch_event_rule.reminders.name
   arn  = aws_lambda_function.handlers["reminders"].arn
+
+  # Bounded retry, then dead-letter so a delivery failure isn't lost silently.
+  retry_policy {
+    maximum_retry_attempts       = 4
+    maximum_event_age_in_seconds = 3600
+  }
+  dead_letter_config {
+    arn = aws_sqs_queue.lambda_dlq.arn
+  }
 }
 
 resource "aws_lambda_permission" "reminders_eventbridge" {
@@ -477,4 +499,37 @@ resource "aws_lambda_permission" "reminders_eventbridge" {
   function_name = aws_lambda_function.handlers["reminders"].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.reminders.arn
+}
+
+# Dead-letter queue for failed ASYNCHRONOUS Lambda invocations. The only async
+# path today is the hourly reminders scan (EventBridge → reminders Lambda); a
+# sync API-Gateway invoke returns its error to the caller and doesn't use this.
+# Without a DLQ, an async failure after Lambda's 2 internal retries is lost
+# silently — a whole hour of reminders could vanish with no trace. The queue +
+# the monitoring alarm on its depth make that visible. 14-day retention gives
+# ample time to inspect/redrive.
+resource "aws_sqs_queue" "lambda_dlq" {
+  name                      = "${var.project_name}-lambda-dlq-${var.environment}"
+  message_retention_seconds = 1209600 # 14 days
+
+  tags = {
+    Name = "${var.project_name}-lambda-dlq-${var.environment}"
+  }
+}
+
+# SQS queue policy: allow EventBridge to send dead-lettered events here.
+resource "aws_sqs_queue_policy" "lambda_dlq" {
+  queue_url = aws_sqs_queue.lambda_dlq.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sqs:SendMessage"
+      Resource  = aws_sqs_queue.lambda_dlq.arn
+      Condition = {
+        ArnEquals = { "aws:SourceArn" = aws_cloudwatch_event_rule.reminders.arn }
+      }
+    }]
+  })
 }

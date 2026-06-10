@@ -366,3 +366,67 @@ resource "aws_cloudwatch_metric_alarm" "api_health" {
     Name = "${var.project_name}-api-health-alarm-${var.environment}"
   }
 }
+
+# Dead-letter queue depth. Any message here = an async invocation (the hourly
+# reminders scan) failed past its retries and was dropped to the DLQ — silent
+# data loss we want to know about immediately. treat_missing_data=notBreaching
+# so a normally-empty queue (no metric emitted) doesn't false-alarm.
+resource "aws_cloudwatch_metric_alarm" "lambda_dlq_depth" {
+  count = var.lambda_dlq_name == "" ? 0 : 1
+
+  alarm_name          = "${var.project_name}-lambda-dlq-not-empty-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  alarm_description   = "Messages in the Lambda DLQ — an async invocation (reminders) failed and was dead-lettered. Inspect + redrive."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = var.lambda_dlq_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-lambda-dlq-alarm-${var.environment}"
+  }
+}
+
+# Audit alarm: failed-login spike (possible credential stuffing / brute force).
+# A metric filter turns the structured audit log line (pino JSON,
+# `event: "auth.login.failure"`) on the auth Lambda's log group into a metric;
+# the alarm pages when it spikes. The log group is Lambda-auto-created, so it
+# must exist (the auth fn has run in prod) for the filter to apply.
+resource "aws_cloudwatch_log_metric_filter" "auth_login_failure" {
+  name           = "${var.project_name}-auth-login-failure-${var.environment}"
+  log_group_name = "/aws/lambda/${var.project_name}-auth-${var.environment}"
+  pattern        = "{ $.event = \"auth.login.failure\" }"
+
+  metric_transformation {
+    name          = "AuthLoginFailures"
+    namespace     = "FamilyGreenhouse/Audit"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
+  alarm_name          = "${var.project_name}-auth-login-failure-spike-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.auth_login_failure.metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Audit"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "More than 10 failed logins in 5 min — possible credential stuffing / brute force."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-auth-login-failure-alarm-${var.environment}"
+  }
+}
