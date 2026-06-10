@@ -89,16 +89,30 @@ Then re-run `GET /health` and the smoke check. **Frontend** rollback = re-sync t
 
 **Symptom:** data corruption or accidental deletion needing point-in-time recovery.
 
-> ⚠️ This is destructive and rarely rehearsed — **read fully before running**, and prefer restoring to a _new_ table over overwriting.
+> ✅ **Drilled 2026-06-09** against the live table (restore to a throwaway table, validated, deleted). PITR is enabled; the procedure below works.
+> **Observed RTO ≈ 3.5 min** (35-item table → ACTIVE; larger tables take longer — minutes, not seconds, even when small). **RPO ≈ 5 min** (DynamoDB PITR's restore granularity — you can lose up to ~5 min of writes).
+> ⚠️ Restoring is non-destructive *if* you restore to a NEW table (below). Never restore over the live table.
 
-1. PITR is enabled on the production table. Restore to a **new** table name:
+1. Confirm PITR + the restorable window:
+   ```bash
+   aws dynamodb describe-continuous-backups --table-name family-greenhouse-production \
+     --query 'ContinuousBackupsDescription.PointInTimeRecoveryDescription.{status:PointInTimeRecoveryStatus,earliest:EarliestRestorableDateTime,latest:LatestRestorableDateTime}'
+   ```
+2. Restore to a **new** table (note `--billing-mode-override` so the restore inherits on-demand billing, not provisioned):
    ```bash
    aws dynamodb restore-table-to-point-in-time \
-     --source-table-name FamilyGreenhouse-production \
-     --target-table-name FamilyGreenhouse-restore-<date> \
-     --use-latest-restorable-time   # or --restore-date-time <ISO8601>
+     --source-table-name family-greenhouse-production \
+     --target-table-name family-greenhouse-restore-<date> \
+     --use-latest-restorable-time \
+     --billing-mode-override PAY_PER_REQUEST     # or --restore-date-time <ISO8601>
+   aws dynamodb wait table-exists --table-name family-greenhouse-restore-<date>
    ```
-2. Validate the restored data out-of-band before any cutover.
-3. Cutover (point Lambdas at the new table via `TABLE_NAME`, or copy the needed items back) is a deliberate, reviewed step — not done mid-panic.
+3. **Validate before any cutover.** `ItemCount` metadata lags ~6h, so count for real with a scan:
+   ```bash
+   aws dynamodb scan --table-name family-greenhouse-restore-<date> --select COUNT --query Count
+   # compare to the source; spot-check a known PK/SK (e.g. SK = METADATA rows)
+   ```
+4. **Cutover** (deliberate, reviewed — not mid-panic): point the Lambdas at the restored table by setting `TABLE_NAME` (the table name is the only thing they key on), **or** copy the needed items back into the live table. The GSIs are restored automatically.
+5. **Clean up** the throwaway table when done: `aws dynamodb delete-table --table-name family-greenhouse-restore-<date>`.
 
-A real restore drill is still outstanding (see [`production-checklist.md`](production-checklist.md) / [`deferred-resilience.md`](deferred-resilience.md)); run one in staging before you ever need it for real.
+Re-run this drill ~quarterly (it's cheap — a few cents on a tiny table).
