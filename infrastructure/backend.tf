@@ -20,7 +20,13 @@
 #
 terraform {
   backend "s3" {
-    bucket         = "family-greenhouse-tfstate-014248889144"
+    bucket = "family-greenhouse-tfstate-014248889144"
+    # This is the PRODUCTION state key. Per-environment isolation is done at
+    # init time, NOT here: staging runs `terraform init
+    # -backend-config="key=staging/terraform.tfstate"` (see scripts/deploy.sh
+    # + cd-staging.yml) so it gets its own state and can never apply onto prod.
+    # Do not parameterize this default to anything other than the prod key, or
+    # a plain `terraform init` for prod would target the wrong (empty) state.
     key            = "terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
