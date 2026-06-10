@@ -15,6 +15,17 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alert_email
 }
 
+# Optional SMS paging — alarms text this number in addition to email. Inert
+# until alert_sms_number is set in tfvars (E.164). Needs the account out of
+# the SNS SMS sandbox to deliver to unverified numbers.
+resource "aws_sns_topic_subscription" "sms" {
+  count = var.alert_sms_number != "" ? 1 : 0
+
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "sms"
+  endpoint  = var.alert_sms_number
+}
+
 # Monthly cost guardrail. A serverless household app should cost a few
 # dollars/month; a runaway (e.g. a DDB throttle retry-storm or a Bedrock
 # loop) is the realistic surprise. Budgets only support email/SNS
