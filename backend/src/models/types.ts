@@ -43,6 +43,16 @@ export interface HouseholdInvite {
   expiresAt: string;
 }
 
+/**
+ * Plant lifecycle. We don't "delete" a plant you cared for — we record its
+ * outcome, so the history (and the plant-survival metric) survives. `active`
+ * plants are the ones being cared for; `died`/`gave_away` are past outcomes
+ * that drop out of the default list, the plan cap, and the reminder scan but
+ * keep all their history. True hard-delete is reserved for mistakes.
+ * Legacy rows with no `status` are treated as `active`.
+ */
+export type PlantStatus = 'active' | 'died' | 'gave_away';
+
 export interface Plant {
   id: string;
   householdId: string;
@@ -51,6 +61,10 @@ export interface Plant {
   location: string | null;
   imageUrl: string | null;
   notes: string | null;
+  /** Lifecycle status; absent on legacy rows → treated as 'active'. */
+  status: PlantStatus;
+  /** When status last changed (set on died/gave_away/restore). */
+  statusChangedAt?: string | null;
   /** Free-form tags for filtering. Max 10 tags, ≤40 chars each. */
   tags: string[];
   /** Perenual species id, set when the user picks an enrichment-backed

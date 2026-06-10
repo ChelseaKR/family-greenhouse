@@ -18,7 +18,7 @@ import {
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
-import { Plant, DynamoDBItem } from '../models/types.js';
+import { Plant, PlantStatus, DynamoDBItem } from '../models/types.js';
 import { CreatePlantInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -45,6 +45,8 @@ export async function createPlant(
     location: input.location || null,
     imageUrl: null,
     notes: input.notes || null,
+    status: 'active',
+    statusChangedAt: null,
     tags,
     perenualSpeciesId: input.perenualSpeciesId ?? null,
     createdAt: now,
@@ -87,6 +89,8 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
     location: result.Item.location as string | null,
     imageUrl: result.Item.imageUrl as string | null,
     notes: result.Item.notes as string | null,
+    status: (result.Item.status as PlantStatus | undefined) ?? 'active',
+    statusChangedAt: (result.Item.statusChangedAt as string | null | undefined) ?? null,
     tags: (result.Item.tags as string[] | undefined) ?? [],
     perenualSpeciesId: (result.Item.perenualSpeciesId as number | undefined) ?? null,
     createdAt: result.Item.createdAt as string,
@@ -100,7 +104,20 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
 // pagination needs early if a workload trends bigger.
 export const MAX_QUERY_LIMIT = 200;
 
-export async function getPlants(householdId: string): Promise<Plant[]> {
+/**
+ * List a household's plants, filtered by lifecycle.
+ *   - 'active' (default): the plants being cared for — this is what the cap
+ *     counts and the main list shows.
+ *   - 'past': died + gave_away (the history view).
+ *   - 'all': everything.
+ * Filtering is in-memory; a household is capped well under MAX_QUERY_LIMIT.
+ */
+export type PlantFilter = 'active' | 'past' | 'all';
+
+export async function getPlants(
+  householdId: string,
+  filter: PlantFilter = 'active'
+): Promise<Plant[]> {
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -113,20 +130,28 @@ export async function getPlants(householdId: string): Promise<Plant[]> {
     })
   );
 
-  return (result.Items || []).map((item) => ({
-    id: item.id as string,
-    householdId: item.householdId as string,
-    name: item.name as string,
-    species: item.species as string | null,
-    location: item.location as string | null,
-    imageUrl: item.imageUrl as string | null,
-    notes: item.notes as string | null,
-    tags: (item.tags as string[] | undefined) ?? [],
-    perenualSpeciesId: (item.perenualSpeciesId as number | undefined) ?? null,
-    createdAt: item.createdAt as string,
-    createdBy: item.createdBy as string,
-    updatedAt: item.updatedAt as string,
-  }));
+  return (result.Items || [])
+    .map((item) => ({
+      id: item.id as string,
+      householdId: item.householdId as string,
+      name: item.name as string,
+      species: item.species as string | null,
+      location: item.location as string | null,
+      imageUrl: item.imageUrl as string | null,
+      notes: item.notes as string | null,
+      status: (item.status as PlantStatus | undefined) ?? 'active',
+      statusChangedAt: (item.statusChangedAt as string | null | undefined) ?? null,
+      tags: (item.tags as string[] | undefined) ?? [],
+      perenualSpeciesId: (item.perenualSpeciesId as number | undefined) ?? null,
+      createdAt: item.createdAt as string,
+      createdBy: item.createdBy as string,
+      updatedAt: item.updatedAt as string,
+    }))
+    .filter((p) => {
+      if (filter === 'all') return true;
+      if (filter === 'past') return p.status !== 'active';
+      return p.status === 'active';
+    });
 }
 
 export async function updatePlant(
@@ -178,6 +203,14 @@ export async function updatePlant(
     expressionAttributeValues[':perenualSpeciesId'] = input.perenualSpeciesId;
   }
 
+  if (input.status !== undefined) {
+    updateExpressions.push('#status = :status', '#statusChangedAt = :statusChangedAt');
+    expressionAttributeNames['#status'] = 'status';
+    expressionAttributeNames['#statusChangedAt'] = 'statusChangedAt';
+    expressionAttributeValues[':status'] = input.status;
+    expressionAttributeValues[':statusChangedAt'] = new Date().toISOString();
+  }
+
   updateExpressions.push('#updatedAt = :updatedAt');
   expressionAttributeNames['#updatedAt'] = 'updatedAt';
   expressionAttributeValues[':updatedAt'] = new Date().toISOString();
@@ -209,6 +242,8 @@ export async function updatePlant(
     location: result.Attributes.location as string | null,
     imageUrl: result.Attributes.imageUrl as string | null,
     notes: result.Attributes.notes as string | null,
+    status: (result.Attributes.status as PlantStatus | undefined) ?? 'active',
+    statusChangedAt: (result.Attributes.statusChangedAt as string | null | undefined) ?? null,
     tags: (result.Attributes.tags as string[] | undefined) ?? [],
     perenualSpeciesId: (result.Attributes.perenualSpeciesId as number | undefined) ?? null,
     createdAt: result.Attributes.createdAt as string,
@@ -285,6 +320,8 @@ export async function deletePlant(householdId: string, plantId: string): Promise
         location: (item.location as string | null | undefined) ?? null,
         imageUrl: (item.imageUrl as string | null | undefined) ?? null,
         notes: (item.notes as string | null | undefined) ?? null,
+        status: (item.status as PlantStatus | undefined) ?? 'active',
+        statusChangedAt: (item.statusChangedAt as string | null | undefined) ?? null,
         tags: (item.tags as string[] | undefined) ?? [],
         perenualSpeciesId: (item.perenualSpeciesId as number | null | undefined) ?? null,
         createdAt: item.createdAt as string,

@@ -72,7 +72,7 @@ export function AnalyticsPage() {
 
   const { data: plants } = useQuery({
     queryKey: ['plants'],
-    queryFn: plantService.getPlants,
+    queryFn: () => plantService.getPlants(),
     enabled: !!householdId,
   });
 
