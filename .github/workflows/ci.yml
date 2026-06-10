@@ -167,6 +167,33 @@ jobs:
             | tar -xz -C /tmp gitleaks
           /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
 
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    # Semgrep OSS is free and tokenless (CodeQL would need GitHub Advanced
+    # Security, which isn't available on this private repo's plan). Runs the
+    # community rulesets relevant to our stack and gates on ERROR-severity
+    # findings only — high-confidence issues, low false-positive noise. Tune
+    # the rulesets / severity as the codebase grows.
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Semgrep scan
+        run: |
+          semgrep scan \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/react \
+            --config p/nodejs \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --severity ERROR \
+            --error \
+            --metrics off
+
   terraform-validate:
     name: Terraform Validate
     runs-on: ubuntu-latest
