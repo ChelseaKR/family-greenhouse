@@ -24,6 +24,12 @@ variable "alert_email" {
   default     = ""
 }
 
+variable "alert_sms_number" {
+  description = "E.164 phone number (e.g. +15551234567) to SMS-page on alerts. Empty = no SMS paging. Requires the account to be out of the SNS SMS sandbox."
+  type        = string
+  default     = ""
+}
+
 variable "dynamodb_table_name" {
   description = "DynamoDB table name for throttle metrics"
   type        = string

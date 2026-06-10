@@ -32,6 +32,12 @@ variable "alert_email" {
   default     = ""
 }
 
+variable "alert_sms_number" {
+  description = "E.164 phone number to SMS-page on alerts (e.g. +15551234567). Empty = no SMS paging."
+  type        = string
+  default     = ""
+}
+
 variable "monthly_budget_usd" {
   description = "Monthly AWS cost budget in USD; breaching 80% actual / 100% forecast emails alert_email."
   type        = string
