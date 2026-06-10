@@ -68,6 +68,8 @@ If any one step after the first fails, the rows drift. Today the user can retry 
 
 **Sketched path.** Same-day work: verify `point_in_time_recovery.enabled = true` on the prod table, then run a staging restore drill (`aws dynamodb restore-table-to-point-in-time` against a non-prod target table name, validate the restored data, document the runbook). Add the runbook to `production-checklist.md` and the deployment workflow.
 
+**✅ DONE 2026-06-09.** PITR confirmed enabled; restore drill run against the live table → throwaway target, **35/35 items validated, RTO ≈ 3.5 min, RPO ≈ 5 min**, throwaway table deleted. Full procedure (with the validation + cutover steps) is in [`runbooks.md` → Data restore (DynamoDB PITR)](runbooks.md#data-restore-dynamodb-pitr). Re-run ~quarterly.
+
 ---
 
 ## Items that are _not_ deferred
