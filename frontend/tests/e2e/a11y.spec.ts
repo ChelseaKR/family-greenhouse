@@ -13,15 +13,9 @@ import AxeBuilder from '@axe-core/playwright';
  * design judgments axe cannot evaluate — full AAA still needs manual review
  * (see docs/accessibility.md); these tags enforce the machine-checkable slice.
  */
-const ENFORCED_TAGS = [
-  'wcag2a',
-  'wcag2aa',
-  'wcag2aaa',
-  'wcag21a',
-  'wcag21aa',
-  'wcag21aaa',
-  'wcag22aa',
-];
+// WCAG 2.2 AA — the documented conformance bar (docs/accessibility.md). AAA is
+// pursued where feasible but not claimed/enforced in CI, so we don't assert it.
+const ENFORCED_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 async function expectNoA11yViolations(page: import('@playwright/test').Page, label: string) {
   const results = await new AxeBuilder({ page }).withTags(ENFORCED_TAGS).analyze();

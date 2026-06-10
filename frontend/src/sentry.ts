@@ -1,13 +1,20 @@
-import * as Sentry from '@sentry/react';
-
 /**
- * Init Sentry only when VITE_SENTRY_DSN is set at build time. Staging/dev
- * builds without the env var ship a no-op. Call from main.tsx before
- * mounting React.
+ * Sentry, loaded only when a DSN is configured.
+ *
+ * `import.meta.env.VITE_SENTRY_DSN` is inlined by Vite at build time. When it's
+ * unset (the current prod build has no DSN), the `if` below is dead code and
+ * Rollup tree-shakes the dynamic `import('@sentry/react')` away entirely — the
+ * ~35 KB SDK never ships. When a DSN *is* present at build, Sentry loads as a
+ * lazy chunk fetched right after mount, so it stays out of the initial bundle.
+ *
+ * This replaces a static top-level `import * as Sentry` that shipped the SDK to
+ * every user regardless of DSN.
  */
-export function initSentry(): void {
+export async function initSentry(): Promise<void> {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
   if (!dsn) return;
+
+  const Sentry = await import('@sentry/react');
   Sentry.init({
     dsn,
     environment: import.meta.env.MODE,
@@ -17,5 +24,3 @@ export function initSentry(): void {
     replaysOnErrorSampleRate: 1.0,
   });
 }
-
-export { Sentry };
