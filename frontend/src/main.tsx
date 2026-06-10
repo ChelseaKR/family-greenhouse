@@ -15,7 +15,9 @@ import '@fontsource/gloock/400.css';
 import '@fontsource-variable/instrument-sans/index.css';
 import './index.css';
 
-initSentry();
+// Fire-and-forget: Sentry (when a DSN is configured) loads as a lazy chunk
+// after mount; errors before it loads are caught by the route error boundary.
+void initSentry();
 
 // Apply persisted preferences before React mounts so we don't get a flash of
 // light theme on dark-mode users / wrong density on first paint.
