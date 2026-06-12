@@ -84,7 +84,10 @@ aws cloudfront create-invalidation \
 # repackage each bundle as `handler.mjs` so Node resolves the right module
 # regardless of the zip's package.json.
 echo "Deploying Lambda functions..."
-HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat)
+# chat-stream is the Function-URL streaming handler (bundle chat-stream.js);
+# digests is the EventBridge weekly/yearly email job. Keep this list in sync
+# with infrastructure/modules/api locals + the CD workflow's deploy loop.
+HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests chat-stream)
 for handler in "${HANDLERS[@]}"; do
     FUNCTION_NAME="family-greenhouse-${handler}-${ENVIRONMENT}"
     SRC="backend/dist/${handler}.js"
