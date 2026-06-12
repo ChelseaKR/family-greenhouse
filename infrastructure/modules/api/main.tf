@@ -453,19 +453,40 @@ resource "aws_lambda_permission" "chat_stream_url" {
 }
 
 # Since the October 2025 Lambda policy change, NONE-auth Function URLs reject
-# requests with 403 unless the resource policy grants lambda:InvokeFunction in
-# ADDITION to lambda:InvokeFunctionUrl. Verified empirically on first deploy:
-# with only the statement above, every URL call returned the front-door
-# "Forbidden ... urls-auth" body and the function was never invoked. The
-# function_url_auth_type condition keeps this grant URL-only — it does not
-# permit direct Invoke calls.
-resource "aws_lambda_permission" "chat_stream_url_invoke" {
-  statement_id           = "AllowPublicFunctionUrlInvokeFunction"
-  action                 = "lambda:InvokeFunction"
-  function_name          = aws_lambda_function.chat_stream.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
-}
+# requests with a front-door 403 unless the resource policy ALSO grants
+# lambda:InvokeFunction (verified empirically on first deploy: the function
+# was never invoked). AWS's canonical NONE-auth policy scopes that second
+# statement with the `lambda:InvokedViaFunctionUrl` condition so it permits
+# URL calls ONLY — but the AWS provider only gained an
+# `invoked_via_function_url` argument in major version 6 (we pin ~> 5.0, and
+# its `function_url_auth_type` argument is rejected by the API for the
+# InvokeFunction action: "FunctionUrlAuthType is only supported for
+# lambda:InvokeFunctionUrl").
+#
+# Until the provider-6 upgrade lands (dependabot PR #56), this ONE statement
+# is managed OUTSIDE Terraform via the CLI (same out-of-band convention as
+# Secrets Manager values). To (re)create it:
+#
+#   aws lambda add-permission \
+#     --region us-east-1 \
+#     --function-name family-greenhouse-chat-stream-production \
+#     --statement-id AllowPublicFunctionUrlInvokeFunction \
+#     --action lambda:InvokeFunction \
+#     --principal "*" \
+#     --invoked-via-function-url
+#
+# Without it the chat-stream URL 403s at the AWS front door — harmless while
+# streaming is feature-flagged off (PRODUCTION_CHAT_STREAM_URL unset), but it
+# must exist before enabling streaming. When provider 6 lands, replace the
+# CLI statement with:
+#
+#   resource "aws_lambda_permission" "chat_stream_url_invoke" {
+#     statement_id              = "AllowPublicFunctionUrlInvokeFunction"
+#     action                    = "lambda:InvokeFunction"
+#     function_name             = aws_lambda_function.chat_stream.function_name
+#     principal                 = "*"
+#     invoked_via_function_url  = true
+#   }
 
 # API Routes
 resource "aws_apigatewayv2_integration" "handlers" {

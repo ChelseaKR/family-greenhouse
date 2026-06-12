@@ -1,6 +1,7 @@
 {
   "name": "family-greenhouse",
   "version": "0.1.0",
+  "license": "Elastic-2.0",
   "private": true,
   "description": "A collaborative plant care management application for families",
   "workspaces": [
