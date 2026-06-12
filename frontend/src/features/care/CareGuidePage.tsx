@@ -175,8 +175,8 @@ export function CareGuidePage() {
             Stop guessing when you watered it
           </p>
           <p className="mt-2 text-sm text-gray-600">
-            Family Greenhouse tracks your {guide.commonName.toLowerCase()}’s schedule and reminds the
-            right person — so “I thought you watered it” stops being a thing. Free for up to 10
+            Family Greenhouse tracks your {guide.commonName.toLowerCase()}’s schedule and reminds
+            the right person — so “I thought you watered it” stops being a thing. Free for up to 10
             plants, no card.
           </p>
           <div className="mt-4">

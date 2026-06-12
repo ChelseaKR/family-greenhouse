@@ -14,11 +14,12 @@ The discipline that makes this work (and keeps Google happy): **the model writes
 >
 > **Voice:** warm, practical, never preachy — the friend who reminds you the plant's wilting, not the one lecturing about chlorophyll. Plain words. Specific numbers from the data. Light humor only in the `honestBit`, never in the care instructions a worried owner is reading. Bans: "in today's world", "unlock", "elevate", "dive into", "lush green companion", "thrive in your space".
 >
-> **The differentiator you must weave in once, naturally:** this plant's care is easy to *know* and easy to *forget* — and in a shared home the failure mode is "I thought you watered it." One section (`sharedCare`) should address keeping the plant alive when more than one person lives there. Don't make it an ad; make it genuinely useful.
+> **The differentiator you must weave in once, naturally:** this plant's care is easy to _know_ and easy to _forget_ — and in a shared home the failure mode is "I thought you watered it." One section (`sharedCare`) should address keeping the plant alive when more than one person lives there. Don't make it an ad; make it genuinely useful.
 >
 > **SEO:** the `faqs` (3–4) should answer the actual long-tail questions people type ("how often", "why yellow leaves", "is it toxic to cats", "how much light"). Keep each answer 1–3 sentences, grounded.
 >
 > DATA:
+>
 > ```
 > commonName: [e.g. Pothos]
 > alsoKnownAs: [Devil's Ivy, Epipremnum aureum]
@@ -33,6 +34,7 @@ The discipline that makes this work (and keeps Google happy): **the model writes
 > ```
 >
 > Output ONLY this JSON (no prose around it):
+>
 > ```ts
 > {
 >   slug: string,            // kebab-case, e.g. "pothos"

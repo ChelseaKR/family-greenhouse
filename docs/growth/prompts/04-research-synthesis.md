@@ -12,12 +12,13 @@ Your strategy doc's #1 priority is real telemetry from the first users. This tur
 > 2. **The job they're hiring us for** — in their words, not mine. Is it "remember to water" or "stop fighting with my partner about chores" or something I didn't expect?
 > 3. **Friction**: where did people say (or imply) they almost didn't sign up / almost gave up.
 > 4. **Feature requests vs. underlying needs** — separate the literal ask from the need behind it.
-> 5. **The one thing** the data says I should build/fix next, and why — and the one thing on my roadmap this data suggests is *less* important than I think.
+> 5. **The one thing** the data says I should build/fix next, and why — and the one thing on my roadmap this data suggests is _less_ important than I think.
 > 6. **Quotes I could use** (with permission) as testimonials or landing-page copy.
 >
 > Be blunt. If the replies don't actually support a clear next step, say so rather than inventing one.
 >
 > REPLIES:
+>
 > ```
 > [paste, one per line or separated by ---]
 > ```
