@@ -91,7 +91,7 @@ Then re-run `GET /health` and the smoke check. **Frontend** rollback = re-sync t
 
 > ✅ **Drilled 2026-06-09** against the live table (restore to a throwaway table, validated, deleted). PITR is enabled; the procedure below works.
 > **Observed RTO ≈ 3.5 min** (35-item table → ACTIVE; larger tables take longer — minutes, not seconds, even when small). **RPO ≈ 5 min** (DynamoDB PITR's restore granularity — you can lose up to ~5 min of writes).
-> ⚠️ Restoring is non-destructive *if* you restore to a NEW table (below). Never restore over the live table.
+> ⚠️ Restoring is non-destructive _if_ you restore to a NEW table (below). Never restore over the live table.
 
 1. Confirm PITR + the restorable window:
    ```bash

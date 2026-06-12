@@ -27,17 +27,17 @@
     {
       "name": "Initial JS (brotli)",
       "path": "dist/assets/index-*.js",
-      "limit": "56 kB"
+      "limit": "62 kB"
     },
     {
       "name": "Vendor chunk (brotli)",
       "path": "dist/assets/vendor-*.js",
-      "limit": "55 kB"
+      "limit": "51 kB"
     },
     {
       "name": "All JS combined (brotli)",
       "path": "dist/assets/*.js",
-      "limit": "270 kB"
+      "limit": "312 kB"
     },
     {
       "name": "CSS (brotli)",

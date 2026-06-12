@@ -14,12 +14,13 @@ One article → four distribution assets in one prompt. Amortizes the writing co
 > 4. **Cross-link block**: which 2 of my other articles/care pages this should link to, and the one-line anchor text for each.
 >
 > ARTICLE:
+>
 > ```
 > [paste]
 > ```
 
 ## Rules of the road (so this doesn't get you banned)
 
-- **Reddit:** comment 80%, post 20%. Build karma first. One *earned* product mention per week max. If it feels like a chore, stop — performative Reddit is worse than none. (Your `marketing-plan.md` already says this.)
+- **Reddit:** comment 80%, post 20%. Build karma first. One _earned_ product mention per week max. If it feels like a chore, stop — performative Reddit is worse than none. (Your `marketing-plan.md` already says this.)
 - **Twitter:** only if you'd genuinely enjoy posting 2–3×/week. Otherwise skip.
 - **Newsletter:** publish biweekly, not weekly — an empty cadence is worse than a slower one.

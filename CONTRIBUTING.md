@@ -39,7 +39,7 @@ Run locally before pushing: `npm run typecheck && npm run lint && npm test`.
 type(scope): subject in lowercase, ≤100 chars
 ```
 
-Types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `chore` `ci` `build` `revert`. **The subject must be lowercase** (commitlint rejects `Bump` / capitalized first words — a common Dependabot-PR gotcha). Body explains *why*, not *what*.
+Types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `chore` `ci` `build` `revert`. **The subject must be lowercase** (commitlint rejects `Bump` / capitalized first words — a common Dependabot-PR gotcha). Body explains _why_, not _what_.
 
 ## Conventions that matter
 
