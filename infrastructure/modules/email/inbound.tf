@@ -131,9 +131,14 @@ resource "aws_iam_role_policy" "forwarder" {
         Resource = "${aws_s3_bucket.inbound_mail.arn}/*"
       },
       {
+        # identity/* (account-scoped), not just the domain identity: while the
+        # account is in the SES sandbox, sends are ALSO authorized against the
+        # recipient's verified-identity ARN (the forward destination is a
+        # verified address), and denying that breaks forwarding with
+        # "not authorized to perform ses:SendRawEmail on identity/<dest>".
         Effect   = "Allow"
         Action   = ["ses:SendRawEmail"]
-        Resource = aws_ses_domain_identity.main.arn
+        Resource = "arn:aws:ses:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:identity/*"
       },
     ]
   })
@@ -169,11 +174,16 @@ resource "aws_cloudwatch_log_group" "forwarder" {
 }
 
 resource "aws_lambda_permission" "ses_invoke" {
-  statement_id   = "AllowSESInvoke"
-  action         = "lambda:InvokeFunction"
-  function_name  = aws_lambda_function.forwarder.function_name
-  principal      = "ses.amazonaws.com"
+  statement_id  = "AllowSESInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.forwarder.function_name
+  principal     = "ses.amazonaws.com"
+  # source_arn is built by hand instead of referencing the rule resource:
+  # SES validates invoke permission AT rule creation, so the permission must
+  # exist first and a resource reference would be a dependency cycle. The
+  # receipt-rule ARN format is stable and the rule name is fixed below.
   source_account = data.aws_caller_identity.current.account_id
+  source_arn     = "arn:aws:ses:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:receipt-rule-set/${aws_ses_receipt_rule_set.main.rule_set_name}:receipt-rule/forward-to-maintainer"
 }
 
 # --- Receipt rules ----------------------------------------------------------
