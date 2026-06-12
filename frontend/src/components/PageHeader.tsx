@@ -37,8 +37,11 @@ export function PageHeader({
     <header className={clsx('mb-8', className)}>
       <div className="flex items-start justify-between gap-6">
         <div className="flex-1 min-w-0">
+          {/* Eyebrow uses full-strength primary-700 — an /opacity modifier
+              blends it into the paper background and drops small-text
+              contrast below WCAG AA (4.5:1). */}
           {eyebrow && (
-            <p className="text-xs uppercase tracking-[0.18em] text-primary-700/70 font-semibold mb-2">
+            <p className="text-xs uppercase tracking-[0.18em] text-primary-700 font-semibold mb-2">
               {eyebrow}
             </p>
           )}

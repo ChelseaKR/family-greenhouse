@@ -297,14 +297,15 @@ export function PlantDetailPage() {
               <dt className="text-sm font-medium text-gray-500">Added</dt>
               <dd className="text-sm text-gray-900">{formatDate(plant.createdAt)}</dd>
             </div>
+            {/* Notes lives inside the <dl> — a <dt>/<dd> pair outside a <dl>
+                fails axe's `dlitem` rule. */}
+            {plant.notes && (
+              <div className="col-span-2">
+                <dt className="text-sm font-medium text-gray-500">Notes</dt>
+                <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{plant.notes}</dd>
+              </div>
+            )}
           </dl>
-
-          {plant.notes && (
-            <div className="mt-4">
-              <dt className="text-sm font-medium text-gray-500">Notes</dt>
-              <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{plant.notes}</dd>
-            </div>
-          )}
         </div>
       </div>
 

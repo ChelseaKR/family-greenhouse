@@ -292,14 +292,17 @@ export function AddPlantPage() {
                   </div>
                 )}
               </div>
-              <div className="flex-1 space-y-2">
+              {/* min-w-0 + w-full/max-w-full: <input type="file"> has a large
+                  intrinsic min-width in Chrome, which otherwise overflows the
+                  viewport on small screens and breaks tap targets. */}
+              <div className="min-w-0 flex-1 space-y-2">
                 <label className="block">
                   <span className="sr-only">Choose a photo</span>
                   <input
                     type="file"
                     accept={ACCEPTED_TYPES.join(',')}
                     onChange={handleFilePick}
-                    className="block text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+                    className="block w-full max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
                   />
                 </label>
                 {pickedFile && (

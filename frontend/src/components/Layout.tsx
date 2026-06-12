@@ -126,8 +126,11 @@ export function Layout() {
 
       {/* Main content */}
       <div className="lg:pl-72">
-        {/* Mobile header */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-primary-100/80 bg-paper/95 backdrop-blur px-4 sm:gap-x-6 sm:px-6 lg:hidden">
+        {/* Mobile header. Solid bg-paper (no /opacity + blur): a translucent
+            sticky bar lets page text show through at reduced contrast while
+            scrolling, which both fails WCAG AA for the underlying text and
+            makes axe color-contrast results nondeterministic. */}
+        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-primary-100/80 bg-paper px-4 sm:gap-x-6 sm:px-6 lg:hidden">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"

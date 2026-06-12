@@ -67,14 +67,16 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
   return (
     <div className="space-y-3">
       {error && <Alert variant="error">{error}</Alert>}
-      <label className="inline-block">
+      {/* max-w-full: <input type="file"> has a large intrinsic min-width in
+          Chrome, which otherwise overflows narrow containers/viewports. */}
+      <label className="block max-w-full">
         <span className="sr-only">Upload plant photo</span>
         <input
           type="file"
           accept={ACCEPTED_TYPES.join(',')}
           onChange={onPick}
           disabled={upload.isPending}
-          className="block text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+          className="block w-full max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
         />
       </label>
       {upload.isPending && (

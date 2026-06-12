@@ -451,7 +451,7 @@ export function HelpPage() {
           <>
             Quick answers to the questions we hear most. Still stuck? Email us at{' '}
             <a
-              className="text-primary-700 hover:text-primary-800"
+              className="text-primary-700 underline hover:text-primary-800"
               href="mailto:hello@family-greenhouse.example"
             >
               hello@family-greenhouse.example

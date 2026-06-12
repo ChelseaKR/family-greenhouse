@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { navigateTo } from './helpers';
 
 // This suite assumes the local Express dev server is running on :4000
 // (npm --workspace backend run dev) AND the Vite dev server on :3000.
@@ -20,17 +21,16 @@ test.describe('Happy path', () => {
 
     await expect(page).toHaveURL(/\/dashboard/);
 
-    await page
-      .getByRole('link', { name: /plants/i })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/plants$/);
+    // Mobile-aware: opens the sidebar drawer first on small viewports.
+    await navigateTo(page, /^plants$/i, /\/plants$/);
     await page
       .getByRole('link', { name: /Monstera/i })
       .first()
       .click();
 
-    await expect(page.getByRole('heading', { name: 'Monstera' })).toBeVisible();
+    // exact: true — the species-care card adds a "Caring for Monstera"
+    // heading that the default substring match would also hit.
+    await expect(page.getByRole('heading', { name: 'Monstera', exact: true })).toBeVisible();
     // Regression: this page used to crash with TypeError on plant.upcomingTasks.length.
     expect(consoleErrors.filter((e) => /upcomingTasks/i.test(e))).toEqual([]);
   });

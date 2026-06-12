@@ -307,7 +307,7 @@ function TaskSection({
           )}
         >
           {title}
-          <span className="ml-2 text-gray-500 font-normal">({tasks.length})</span>
+          <span className="ml-2 text-gray-600 font-normal">({tasks.length})</span>
         </h2>
       </div>
       <ul className="divide-y divide-primary-100/60">
