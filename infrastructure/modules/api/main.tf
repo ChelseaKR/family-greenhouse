@@ -452,6 +452,21 @@ resource "aws_lambda_permission" "chat_stream_url" {
   function_url_auth_type = "NONE"
 }
 
+# Since the October 2025 Lambda policy change, NONE-auth Function URLs reject
+# requests with 403 unless the resource policy grants lambda:InvokeFunction in
+# ADDITION to lambda:InvokeFunctionUrl. Verified empirically on first deploy:
+# with only the statement above, every URL call returned the front-door
+# "Forbidden ... urls-auth" body and the function was never invoked. The
+# function_url_auth_type condition keeps this grant URL-only — it does not
+# permit direct Invoke calls.
+resource "aws_lambda_permission" "chat_stream_url_invoke" {
+  statement_id           = "AllowPublicFunctionUrlInvokeFunction"
+  action                 = "lambda:InvokeFunction"
+  function_name          = aws_lambda_function.chat_stream.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
 # API Routes
 resource "aws_apigatewayv2_integration" "handlers" {
   for_each = local.lambda_handlers
