@@ -8,9 +8,23 @@ export interface LoggedEvent extends APIGatewayProxyEvent {
 }
 
 /**
+ * Read user identity off the event lazily. `loggingMiddleware`'s `before`
+ * hook runs ahead of `authMiddleware` in the middy chain (it's registered
+ * in `createHandler`, auth is layered on per-resource afterwards), so
+ * `event.user` only exists by the time the `after`/`onError` hooks fire.
+ * Binding it into the child logger at `before` time would freeze userId and
+ * householdId as undefined for the whole request.
+ */
+function identityOf(event: APIGatewayProxyEvent): { userId?: string; householdId?: string } {
+  const auth = (event as AuthenticatedEvent).user;
+  return { userId: auth?.userId, householdId: auth?.householdId ?? undefined };
+}
+
+/**
  * Attach a request-scoped logger and log a one-line "request" + "response"
- * record per invocation. Should sit late in the chain (after auth) so the
- * logger picks up user-id and household-id when present.
+ * record per invocation. The request-scoped logger carries requestId and
+ * traceId; user-id and household-id are resolved lazily in the response
+ * hooks because auth hasn't run yet when `before` fires.
  */
 export function loggingMiddleware(): middy.MiddlewareObj<
   APIGatewayProxyEvent,
@@ -24,11 +38,8 @@ export function loggingMiddleware(): middy.MiddlewareObj<
         (typeof event.headers?.['x-request-id'] === 'string'
           ? event.headers['x-request-id']
           : undefined);
-      const auth = (event as AuthenticatedEvent).user;
       const log = withRequest({
         requestId,
-        userId: auth?.userId,
-        householdId: auth?.householdId ?? undefined,
         traceId: currentTraceId(),
       });
       (event as LoggedEvent).log = log;
@@ -50,6 +61,7 @@ export function loggingMiddleware(): middy.MiddlewareObj<
       log.info(
         {
           status: request.response?.statusCode,
+          ...identityOf(request.event),
           msg: 'response',
         },
         'response'
@@ -57,7 +69,10 @@ export function loggingMiddleware(): middy.MiddlewareObj<
     },
     onError: (request) => {
       const log = (request.event as LoggedEvent).log ?? logger;
-      log.error({ err: request.error, msg: 'handler_error' }, 'handler_error');
+      log.error(
+        { err: request.error, ...identityOf(request.event), msg: 'handler_error' },
+        'handler_error'
+      );
     },
   };
 }

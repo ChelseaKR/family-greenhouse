@@ -12,12 +12,32 @@ export interface Plan {
   maxMembers: number;
 }
 
+/** Current usage vs. the active plan's caps, from GET /billing/me. */
+export interface PlanUsage {
+  plantCount: number;
+  maxPlants: number;
+  memberCount: number;
+  maxMembers: number;
+}
+
 export interface SubscriptionState {
   planId: PlanId;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   status?: string;
   currentPeriodEnd?: string;
+  /** Optional: older backends don't send it; treat absence as "unknown". */
+  usage?: PlanUsage;
+}
+
+/**
+ * True when the household holds more plants or members than its current plan
+ * allows — only possible after a downgrade (or an admin-side plan change).
+ * Existing data stays readable/editable; only adding is blocked server-side.
+ */
+export function isOverPlanLimit(usage?: PlanUsage | null): boolean {
+  if (!usage) return false;
+  return usage.plantCount > usage.maxPlants || usage.memberCount > usage.maxMembers;
 }
 
 export const billingService = {

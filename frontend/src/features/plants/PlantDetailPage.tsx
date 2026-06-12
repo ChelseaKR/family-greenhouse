@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -8,6 +9,9 @@ import {
   PlusIcon,
   CheckIcon,
   ClockIcon,
+  ScissorsIcon,
+  ShareIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { plantService, Task } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
@@ -19,6 +23,7 @@ import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { computeStreak, streakLabel } from '@/utils/streaks';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { AddTaskModal } from './AddTaskModal';
 import { EditPlantModal } from './EditPlantModal';
 import { EditTaskModal } from './EditTaskModal';
@@ -29,6 +34,9 @@ import { CareGuideCard } from './CareGuideCard';
 import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { RemovePlantDialog } from './RemovePlantDialog';
+import { PlantLineageCard } from './PlantLineageCard';
+import { ShareCuttingDialog } from './ShareCuttingDialog';
+import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { toast } from '@/store/toastStore';
@@ -43,13 +51,17 @@ function formatDate(dateString: string | null): string {
 }
 
 export function PlantDetailPage() {
+  const { t } = useTranslation();
   const { plantId } = useParams<{ plantId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
   const [showAddTask, setShowAddTask] = useState(false);
   const [showEditPlant, setShowEditPlant] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRemove, setShowRemove] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [showLeafHealth, setShowLeafHealth] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const {
@@ -57,7 +69,7 @@ export function PlantDetailPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['plants', plantId],
+    queryKey: ['plants', householdId, plantId],
     queryFn: () => plantService.getPlant(plantId!),
     enabled: !!plantId,
   });
@@ -69,7 +81,7 @@ export function PlantDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: () => plantService.deletePlant(plantId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       toast.success('Plant deleted');
       navigate('/plants');
     },
@@ -80,8 +92,9 @@ export function PlantDetailPage() {
     mutationFn: (status: 'active' | 'died' | 'gave_away') =>
       plantService.setPlantStatus(plantId!, status),
     onSuccess: (_data, status) => {
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
-      queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
+      // ['plants', householdId] is a prefix of the detail key, so this
+      // invalidates both the list and this plant's detail/photos queries.
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       setShowRemove(false);
       if (status === 'active') {
         toast.success('Plant restored');
@@ -97,8 +110,8 @@ export function PlantDetailPage() {
   const completeTaskMutation = useMutation({
     mutationFn: (taskId: string) => taskService.completeTask(taskId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success('Task completed');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -108,8 +121,8 @@ export function PlantDetailPage() {
     mutationFn: ({ taskId, days }: { taskId: string; days: number }) =>
       taskService.snoozeTask(taskId, days),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.info('Task snoozed');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -183,6 +196,15 @@ export function PlantDetailPage() {
             )}
           </div>
           <PlantImageUpload plantId={plant.id} />
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            onClick={() => setShowLeafHealth(true)}
+            leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
+          >
+            {t('plants.leafHealth.action')}
+          </Button>
           <PhotoTimeline plantId={plant.id} />
         </div>
 
@@ -204,7 +226,36 @@ export function PlantDetailPage() {
               </div>
               {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              {(plant.status ?? 'active') === 'active' && (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      // Prefill the add form and link the new plant back here.
+                      navigate('/plants/new', {
+                        state: {
+                          parentPlantId: plant.id,
+                          parentName: plant.name,
+                          species: plant.species,
+                        },
+                      })
+                    }
+                    leftIcon={<ScissorsIcon className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    {t('plants.propagate.action')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowShare(true)}
+                    leftIcon={<ShareIcon className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    {t('plants.share.action')}
+                  </Button>
+                </>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -259,6 +310,10 @@ export function PlantDetailPage() {
 
       {/* Curated care guidance — only renders if plant.species matches a known entry */}
       <CareGuidanceCard species={plant.species} />
+
+      {/* Propagation lineage — parent link + cuttings (renders nothing when
+          the plant has no lineage at all) */}
+      <PlantLineageCard lineage={plant.lineage} />
 
       {/* Tasks */}
       <Card>
@@ -332,6 +387,18 @@ export function PlantDetailPage() {
 
       {/* Modals */}
       <AddTaskModal plantId={plantId!} isOpen={showAddTask} onClose={() => setShowAddTask(false)} />
+
+      <ShareCuttingDialog
+        plantId={plant.id}
+        isOpen={showShare}
+        onClose={() => setShowShare(false)}
+      />
+
+      <LeafHealthCard
+        plantId={plant.id}
+        isOpen={showLeafHealth}
+        onClose={() => setShowLeafHealth(false)}
+      />
 
       <EditPlantModal
         plant={plant}

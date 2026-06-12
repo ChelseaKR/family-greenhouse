@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Task } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
 import { getErrorMessage } from '@/services/api';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
@@ -29,6 +30,7 @@ interface EditTaskModalProps {
 
 export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
 
   const {
     register,
@@ -66,8 +68,8 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       onClose();
     },
   });

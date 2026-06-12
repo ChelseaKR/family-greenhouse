@@ -1,8 +1,12 @@
-import Stripe from 'stripe';
+// Type-only import: erased at compile time. The runtime Stripe SDK is
+// dynamically imported inside getStripe() so handlers that merely import
+// billing.ts for getHouseholdSubscription (plants, api-keys, households…)
+// don't pay Stripe's module-evaluation cost on every cold start.
+import type Stripe from 'stripe';
 import { UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
-import { Plan, PlanId, getPlan, PLANS } from '../models/plans.js';
+import { Plan, PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 
 let cachedClient: Stripe | null = null;
@@ -10,12 +14,14 @@ let cachedClient: Stripe | null = null;
 /**
  * Lazy Stripe client. Tests don't need a real key (we don't reach the network
  * in unit tests), and the dev local-server doesn't require Stripe at all.
+ * Async because the SDK itself is loaded on first use (cold-start hygiene).
  */
-export function getStripe(): Stripe {
+export async function getStripe(): Promise<Stripe> {
   if (cachedClient) return cachedClient;
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('STRIPE_SECRET_KEY is required for billing operations');
-  cachedClient = new Stripe(key);
+  const { default: StripeCtor } = await import('stripe');
+  cachedClient = new StripeCtor(key);
   return cachedClient;
 }
 
@@ -47,10 +53,23 @@ export async function getHouseholdSubscription(
   };
 }
 
+/**
+ * Write subscription fields onto the household metadata row.
+ *
+ * When `stripeEventCreated` (the Stripe event's `created` unix timestamp) is
+ * supplied, the write is conditioned on it being >= the last applied event's
+ * timestamp, and the timestamp is stored alongside the fields. That guards
+ * against out-of-order webhook delivery: a delayed/retried stale `updated`
+ * can no longer clobber a newer `deleted` (or vice versa).
+ *
+ * Returns `true` when the write was applied, `false` when it was skipped as
+ * out-of-order.
+ */
 export async function updateHouseholdSubscription(
   householdId: string,
-  fields: Partial<HouseholdSubscription>
-): Promise<void> {
+  fields: Partial<HouseholdSubscription>,
+  stripeEventCreated?: number
+): Promise<boolean> {
   const expressions: string[] = [];
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = {};
@@ -70,17 +89,41 @@ export async function updateHouseholdSubscription(
     names[`#${attr}`] = attr;
     values[`:${attr}`] = value;
   }
-  if (expressions.length === 0) return;
+  if (expressions.length === 0) return true;
 
-  await dynamodb.send(
-    new UpdateCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
-      UpdateExpression: `SET ${expressions.join(', ')}`,
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-    })
-  );
+  let conditionExpression: string | undefined;
+  if (typeof stripeEventCreated === 'number') {
+    expressions.push('#lastStripeEventCreated = :lastStripeEventCreated');
+    names['#lastStripeEventCreated'] = 'lastStripeEventCreated';
+    values[':lastStripeEventCreated'] = stripeEventCreated;
+    // <= (not <) so two events minted in the same second still both apply;
+    // Stripe's `created` has 1s resolution.
+    conditionExpression =
+      'attribute_not_exists(lastStripeEventCreated) OR lastStripeEventCreated <= :lastStripeEventCreated';
+  }
+
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: `SET ${expressions.join(', ')}`,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+        ConditionExpression: conditionExpression,
+      })
+    );
+    return true;
+  } catch (err) {
+    if (
+      conditionExpression &&
+      err instanceof Error &&
+      err.name === 'ConditionalCheckFailedException'
+    ) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export interface CheckoutSessionResult {
@@ -100,7 +143,7 @@ export async function createCheckoutSession(args: {
   if (!priceId) throw new Error(`Missing ${plan.stripePriceEnv} for plan ${plan.id}`);
 
   const sub = await getHouseholdSubscription(args.householdId);
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: sub.stripeCustomerId,
@@ -127,7 +170,7 @@ export async function createPortalSession(
   if (!sub.stripeCustomerId) {
     throw new Error('No Stripe customer on file for this household');
   }
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: sub.stripeCustomerId,
     return_url: returnUrl,
@@ -145,13 +188,34 @@ export interface SubscriptionDelta {
   fields: Partial<HouseholdSubscription>;
 }
 
+/**
+ * Resolve the planId from event metadata. We stamp `planId` onto both the
+ * checkout session and the subscription at creation time, so a missing or
+ * unknown value means the event wasn't minted by us (or our metadata
+ * contract broke). NEVER default to a paid plan — that would grant paid
+ * entitlements off a malformed event. Log loudly and skip instead.
+ */
+function planIdFromMetadata(
+  event: Stripe.Event,
+  metadata: Record<string, string> | null | undefined
+): PlanId | null {
+  const raw = metadata?.planId;
+  if (isPlanId(raw)) return raw;
+  logger.error(
+    { stripeEventId: event.id, type: event.type, planId: raw ?? null },
+    'stripe_event_missing_or_unknown_plan_id'
+  );
+  return null;
+}
+
 export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | null {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
       const householdId = session.metadata?.householdId ?? session.client_reference_id ?? '';
-      const planId = (session.metadata?.planId as PlanId | undefined) ?? 'garden';
       if (!householdId) return null;
+      const planId = planIdFromMetadata(event, session.metadata);
+      if (!planId) return null;
       return {
         householdId,
         fields: {
@@ -171,7 +235,8 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
       const sub = event.data.object;
       const householdId = (sub.metadata?.householdId as string | undefined) ?? '';
       if (!householdId) return null;
-      const planId = (sub.metadata?.planId as PlanId | undefined) ?? 'garden';
+      const planId = planIdFromMetadata(event, sub.metadata);
+      if (!planId) return null;
       // current_period_end moved off the top-level Subscription object in
       // newer Stripe API versions and now lives on the subscription item.
       const periodEnd =
@@ -202,13 +267,16 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
 }
 
 /**
- * Record a Stripe event id exactly once, so a redelivered webhook can't
- * re-apply the same subscription change. Stripe retries webhooks (and may
- * deliver duplicates) and our handler is otherwise last-write-wins, which
- * means a re-delivered stale `created` could clobber a later `deleted`.
+ * Record a Stripe event id in the dedupe ledger. Returns `true` the first
+ * time an id is seen, `false` on a redelivery.
  *
- * Returns `true` when this is the first time we've seen the event (caller
- * should proceed), `false` when it was already processed (caller should skip).
+ * NOTE on ordering: the ledger is written AFTER the subscription update is
+ * applied (see applyStripeEvent). Recording first would mean a failed apply
+ * is permanently skipped when Stripe retries — the retry would hit the
+ * ledger, see "duplicate", and drop the event. Re-applying on a true
+ * duplicate is harmless (last-write-wins fields, guarded against
+ * out-of-order delivery by `lastStripeEventCreated`), so the ledger is
+ * observability/cheap-skip only, not the correctness mechanism.
  * The ledger row carries a 30-day TTL so the table sweeps it automatically.
  */
 export async function recordStripeEventOnce(eventId: string): Promise<boolean> {
@@ -236,14 +304,28 @@ export async function recordStripeEventOnce(eventId: string): Promise<boolean> {
 }
 
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
-  const isNew = await recordStripeEventOnce(event.id);
-  if (!isNew) {
-    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_skipped');
-    return;
-  }
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
-  await updateHouseholdSubscription(delta.householdId, delta.fields);
+
+  // Apply FIRST, record SECOND. If the apply throws, we return 5xx to Stripe
+  // without having touched the ledger, so Stripe's retry gets a clean run.
+  // (The old record-first order permanently skipped an event whose apply
+  // failed once.) The `event.created` guard inside the update makes a stale
+  // redelivery a no-op rather than a clobber.
+  const applied = await updateHouseholdSubscription(delta.householdId, delta.fields, event.created);
+  if (!applied) {
+    logger.info(
+      { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
+      'stripe_event_out_of_order_skipped'
+    );
+    return;
+  }
+
+  const isNew = await recordStripeEventOnce(event.id);
+  if (!isNew) {
+    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_reapplied');
+  }
+
   logger.info(
     { householdId: delta.householdId, fields: delta.fields, msg: 'subscription_updated' },
     'subscription_updated'

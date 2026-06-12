@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader } from '@/components/Card';
 import { householdService } from '@/services/householdService';
-import { useAuthStore } from '@/store/authStore';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 const TYPE_LABELS: Record<string, string> = {
   water: 'Watering',
@@ -21,7 +21,7 @@ const TYPE_LABELS: Record<string, string> = {
  * than show empty bars.
  */
 export function YearInReviewCard() {
-  const householdId = useAuthStore((s) => s.user?.householdId);
+  const householdId = useActiveHouseholdId();
   const year = new Date().getFullYear();
 
   const { data: review } = useQuery({

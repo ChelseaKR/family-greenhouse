@@ -345,6 +345,7 @@ type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export const updateProfile = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { validatedBody } = event as ValidatedEvent<UpdateProfileInput>;
+    const ev = event as AuthenticatedEvent;
     // Read the Cognito access token from a dedicated header so the
     // Authorization header stays the ID token (which API Gateway's JWT
     // authorizer validates + which authMiddleware reads custom claims from).
@@ -355,14 +356,31 @@ export const updateProfile = createHandler(
       throw createHttpError(401, 'Missing Cognito access token');
     }
 
+    // Verify the access token actually belongs to the authenticated caller
+    // before mutating attributes with it. Without this check, a caller could
+    // present THEIR ID token (passing authMiddleware) alongside someone
+    // else's access token and rewrite that other user's profile — and our
+    // DDB fan-out below would then run under the wrong identity.
+    let tokenSub: string | null;
+    try {
+      const tokenUser = await cognito.send(new GetUserCommand({ AccessToken: accessToken }));
+      tokenSub =
+        tokenUser.UserAttributes?.find((a) => a.Name === 'sub')?.Value ??
+        tokenUser.Username ??
+        null;
+    } catch {
+      throw createHttpError(401, 'Invalid Cognito access token');
+    }
+    if (!tokenSub || tokenSub !== ev.user?.userId) {
+      throw createHttpError(403, 'Access token does not match the authenticated user');
+    }
+
     await cognito.send(
       new UpdateUserAttributesCommand({
         AccessToken: accessToken,
         UserAttributes: [{ Name: 'name', Value: validatedBody.name }],
       })
     );
-
-    const ev = event as AuthenticatedEvent;
     if (ev.user?.userId) {
       // Best-effort fan-out: if the DDB update fails partway, Cognito and
       // member rows can drift, but the user can re-submit and converge.
@@ -383,6 +401,8 @@ export const updateProfile = createHandler(
     });
   }
 )
+  // Same throttle as the other auth-mutation endpoints (changePassword etc.)
+  .use(authRateLimit())
   .use(authMiddleware())
   .use(validateBody(updateProfileSchema));
 
@@ -407,7 +427,10 @@ export const changePassword = createHandler(
         })
       );
       const ev = event as AuthenticatedEvent;
-      audit('auth.password_reset_completed', {
+      // 'auth.password_changed', not 'auth.password_reset_completed' — this
+      // is the knows-current-password flow; reset events belong to the
+      // forgot-password flow and the two must stay distinguishable in audit.
+      audit('auth.password_changed', {
         actorId: ev.user?.userId,
         actorEmail: ev.user?.email,
       });

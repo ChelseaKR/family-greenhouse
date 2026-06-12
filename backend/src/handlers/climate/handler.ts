@@ -26,6 +26,13 @@ export const getClimate = createHandler(
     const { user } = event as AuthenticatedEvent;
     const householdId = event.pathParameters?.id ?? user.householdId;
     if (!householdId) throw createHttpError(400, 'Household id required');
+    // The path param must match the caller's resolved household. The
+    // X-Household-Id override in authMiddleware is membership-validated, so
+    // this equality check is sufficient even for multi-household users
+    // (mirrors households/handler.ts).
+    if (householdId !== user.householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
 
     const household = await householdService.getHousehold(householdId);
     if (!household) throw createHttpError(404, 'Household not found');
@@ -52,7 +59,9 @@ export const getClimate = createHandler(
       { maxAgeSeconds: 30 * 60, visibility: 'private' }
     );
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
 
 // PUT /households/:id/location
 // Save (or clear) the household's location. Free-text `city` is geocoded
@@ -72,6 +81,12 @@ export const setLocation = createHandler(
     const { user } = event as AuthenticatedEvent;
     const householdId = event.pathParameters?.id ?? user.householdId;
     if (!householdId) throw createHttpError(400, 'Household id required');
+    // Same cross-household guard as getClimate: the admin check below only
+    // proves the caller is an admin of their OWN household — without this
+    // equality check they could overwrite any other household's location.
+    if (householdId !== user.householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
     if (user.householdRole !== 'admin') {
       throw createHttpError(403, 'Only household admins can set the location');
     }

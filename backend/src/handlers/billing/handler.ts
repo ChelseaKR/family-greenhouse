@@ -1,7 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
-import Stripe from 'stripe';
+// Type-only: the runtime SDK is lazily loaded via billing.getStripe() so the
+// webhook bundle doesn't evaluate Stripe at cold start.
+import type Stripe from 'stripe';
 import { createHandler, createRawBodyHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import {
@@ -13,7 +15,10 @@ import {
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import * as billing from '../../services/billing.js';
 import { ALL_PLANS } from '../../services/billing.js';
+import { getHouseholdCounters } from '../../services/householdUsage.js';
+import { getPlan } from '../../models/plans.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
+import { logger } from '../../utils/logger.js';
 
 const checkoutSchema = z.object({
   planId: z.enum(['garden', 'greenhouse']),
@@ -35,11 +40,27 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
 });
 
 // GET /billing/me
+// Returns the subscription plus current usage against the plan's caps
+// ({plantCount, maxPlants, memberCount, maxMembers}) so the UI can render
+// usage meters and an over-limit notice after a downgrade. Counters missing
+// from legacy METADATA rows read as 0 (see services/householdUsage.ts).
 export const getCurrentSubscription = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
-    const sub = await billing.getHouseholdSubscription(user.householdId!);
-    return successResponse(sub);
+    const [sub, counters] = await Promise.all([
+      billing.getHouseholdSubscription(user.householdId!),
+      getHouseholdCounters(user.householdId!),
+    ]);
+    const plan = getPlan(sub.planId);
+    return successResponse({
+      ...sub,
+      usage: {
+        plantCount: counters.plantCount,
+        maxPlants: plan.maxPlants,
+        memberCount: counters.memberCount,
+        maxMembers: plan.maxMembers,
+      },
+    });
   }
 )
   .use(authMiddleware())
@@ -61,7 +82,13 @@ export const checkout = createHandler(
       });
       return successResponse(session);
     } catch (err) {
-      throw createHttpError(502, `Stripe checkout failed: ${(err as Error).message}`);
+      // Don't echo the raw Stripe SDK error to clients — log it, return a
+      // safe upstream-failure message. `expose: true` marks this 502 as
+      // intentional so the JSON error handler keeps the message.
+      logger.error({ err }, 'stripe_checkout_failed');
+      throw createHttpError(502, 'Stripe checkout failed. Please try again shortly.', {
+        expose: true,
+      });
     }
   }
 )
@@ -82,7 +109,18 @@ export const portal = createHandler(
       );
       return successResponse(result);
     } catch (err) {
-      throw createHttpError(400, (err as Error).message);
+      // The only client-correctable failure is "household has never checked
+      // out" — map that to a friendly 400. Everything else is an upstream
+      // Stripe problem: log the raw error, return a safe 502 (never echo the
+      // SDK message to clients).
+      if ((err as Error).message?.includes('No Stripe customer on file')) {
+        throw createHttpError(
+          400,
+          'No Stripe customer on file for this household. Subscribe to a plan first.'
+        );
+      }
+      logger.error({ err }, 'stripe_portal_failed');
+      throw createHttpError(502, 'Billing portal is temporarily unavailable.', { expose: true });
     }
   }
 )
@@ -103,7 +141,9 @@ export const webhook = createRawBodyHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const signature = event.headers['stripe-signature'] || event.headers['Stripe-Signature'];
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!secret) throw createHttpError(500, 'Webhook secret not configured');
+    // expose: true — this 500 is an intentional, safe operator-facing
+    // message that should reach the Stripe dashboard's delivery log.
+    if (!secret) throw createHttpError(500, 'Webhook secret not configured', { expose: true });
     if (!signature || typeof signature !== 'string') {
       throw createHttpError(400, 'Missing Stripe signature');
     }
@@ -123,7 +163,8 @@ export const webhook = createRawBodyHandler(
       : event.body;
     let stripeEvent: Stripe.Event;
     try {
-      stripeEvent = billing.getStripe().webhooks.constructEvent(rawBody, signature, secret);
+      const stripe = await billing.getStripe();
+      stripeEvent = stripe.webhooks.constructEvent(rawBody, signature, secret);
     } catch (err) {
       throw createHttpError(400, `Webhook signature failed: ${(err as Error).message}`);
     }

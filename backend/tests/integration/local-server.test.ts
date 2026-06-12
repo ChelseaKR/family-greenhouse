@@ -21,6 +21,41 @@ async function loginAsSeed(): Promise<string> {
   return res.body.accessToken as string;
 }
 
+// Signup → confirm → login. Production's confirm endpoint returns only a
+// message (no tokens), so every flow that needs a token must login.
+async function createConfirmedUser(
+  email: string,
+  password = 'password-123',
+  name = 'Test Person'
+): Promise<string> {
+  const signup = await request(app).post('/auth/signup').send({ email, password, name });
+  expect(signup.status).toBe(201);
+  const confirm = await request(app).post('/auth/confirm').send({ email, code: '123456' });
+  expect(confirm.status).toBe(200);
+  const login = await request(app).post('/auth/login').send({ email, password });
+  expect(login.status).toBe(200);
+  return login.body.accessToken as string;
+}
+
+/** Direct-fixture helper: membership records are the auth source of truth. */
+function seedMember(
+  id: string,
+  email: string,
+  role: 'admin' | 'member',
+  householdId = seedHouseholdId
+): void {
+  db.users.set(id, {
+    id,
+    email,
+    password: 'password-123',
+    name: `User ${id}`,
+    confirmed: true,
+    householdId,
+    householdRole: role,
+    memberships: [{ householdId, role, joinedAt: new Date().toISOString() }],
+  } as never);
+}
+
 beforeEach(() => {
   resetDb();
 });
@@ -51,47 +86,66 @@ describe('GET /health', () => {
 
 describe('auth routes', () => {
   describe('POST /auth/signup', () => {
-    it('creates a pending user and returns id', async () => {
+    it('creates a pending user (no user id in the response, like production)', async () => {
       const res = await request(app)
         .post('/auth/signup')
-        .send({ email: 'new@example.com', password: 'pw1', name: 'New User' });
+        .send({ email: 'new@example.com', password: 'password-123', name: 'New User' });
       expect(res.status).toBe(201);
-      expect(res.body.userId).toBeTruthy();
-      const created = db.users.get(res.body.userId);
+      expect(res.body.userId).toBeUndefined();
+      expect(typeof res.body.message).toBe('string');
+      const created = [...db.users.values()].find((u) => u.email === 'new@example.com');
       expect(created?.confirmed).toBe(false);
       expect(db.pendingConfirmations.get('new@example.com')).toBe('123456');
     });
 
-    it('rejects missing fields', async () => {
+    it('rejects missing fields with the Zod validation contract', async () => {
       const res = await request(app).post('/auth/signup').send({ email: 'a@b.com' });
       expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Validation failed');
+      expect(res.body.details).toHaveProperty('password');
+      expect(res.body.details).toHaveProperty('name');
+    });
+
+    it('rejects too-short passwords (signupSchema min 8)', async () => {
+      const res = await request(app)
+        .post('/auth/signup')
+        .send({ email: 'short@example.com', password: 'pw1', name: 'Shorty' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Validation failed');
+      expect(res.body.details).toHaveProperty('password');
     });
 
     it('rejects duplicate email', async () => {
       const res = await request(app)
         .post('/auth/signup')
-        .send({ email: SEED_EMAIL, password: 'x', name: 'Dup' });
+        .send({ email: SEED_EMAIL, password: 'password-123', name: 'Dup User' });
       expect(res.status).toBe(400);
+      expect(res.body.message).toBe('An account with this email already exists');
     });
   });
 
   describe('POST /auth/confirm', () => {
-    it('confirms the user with the right code and returns tokens', async () => {
+    it('confirms the user and returns only a message — production never returns tokens here', async () => {
       await request(app)
         .post('/auth/signup')
-        .send({ email: 'c@example.com', password: 'pw', name: 'C' });
+        .send({ email: 'c@example.com', password: 'password-123', name: 'Cee' });
       const res = await request(app)
         .post('/auth/confirm')
         .send({ email: 'c@example.com', code: '123456' });
       expect(res.status).toBe(200);
-      expect(res.body.accessToken).toMatch(/^mock-token-/);
-      expect(res.body.user.email).toBe('c@example.com');
+      expect(res.body).toEqual({ message: 'Email confirmed successfully. Please login.' });
+      // The user can now login.
+      const login = await request(app)
+        .post('/auth/login')
+        .send({ email: 'c@example.com', password: 'password-123' });
+      expect(login.status).toBe(200);
+      expect(login.body.accessToken).toMatch(/^mock-token-/);
     });
 
     it('rejects invalid code', async () => {
       await request(app)
         .post('/auth/signup')
-        .send({ email: 'd@example.com', password: 'pw', name: 'D' });
+        .send({ email: 'd@example.com', password: 'password-123', name: 'Dee' });
       const res = await request(app)
         .post('/auth/confirm')
         .send({ email: 'd@example.com', code: '999999' });
@@ -113,6 +167,11 @@ describe('auth routes', () => {
         .send({ email: SEED_EMAIL, password: SEED_PASSWORD });
       expect(res.status).toBe(200);
       expect(res.body.user.id).toBe(seedUserId);
+      // Production login returns idToken + accessToken + refreshToken +
+      // expiresIn (the ID token carries household claims; the access token
+      // is for Cognito-direct calls).
+      expect(res.body.idToken).toMatch(/^mock-token-/);
+      expect(typeof res.body.expiresIn).toBe('number');
       // Regression: tokens were previously parsed by splitting on '-',
       // which broke when the userId itself was a UUID with dashes.
       const meRes = await request(app)
@@ -139,11 +198,12 @@ describe('auth routes', () => {
     it('rejects unconfirmed user', async () => {
       await request(app)
         .post('/auth/signup')
-        .send({ email: 'u@example.com', password: 'pw', name: 'U' });
+        .send({ email: 'u@example.com', password: 'password-123', name: 'Uma' });
       const res = await request(app)
         .post('/auth/login')
-        .send({ email: 'u@example.com', password: 'pw' });
+        .send({ email: 'u@example.com', password: 'password-123' });
       expect(res.status).toBe(401);
+      expect(res.body.message).toBe('Please confirm your email first');
     });
   });
 
@@ -157,6 +217,10 @@ describe('auth routes', () => {
         .send({ refreshToken: login.body.refreshToken });
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toMatch(/^mock-token-/);
+      expect(res.body.idToken).toMatch(/^mock-token-/);
+      // Cognito does not rotate refresh tokens — production echoes the
+      // original back so the frontend never clobbers its stored value.
+      expect(res.body.refreshToken).toBe(login.body.refreshToken);
     });
 
     it('rejects garbage refresh tokens', async () => {
@@ -164,9 +228,10 @@ describe('auth routes', () => {
       expect(res.status).toBe(401);
     });
 
-    it('requires a refresh token', async () => {
+    it('requires a refresh token (Zod 400)', async () => {
       const res = await request(app).post('/auth/refresh').send({});
       expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Validation failed');
     });
   });
 
@@ -186,7 +251,7 @@ describe('auth routes', () => {
     it('regenerates the pending code for unconfirmed users', async () => {
       await request(app)
         .post('/auth/signup')
-        .send({ email: 'r@example.com', password: 'pw', name: 'R' });
+        .send({ email: 'r@example.com', password: 'password-123', name: 'Ria' });
       // Tamper with the stored code so we can verify resend overwrites it.
       db.pendingConfirmations.set('r@example.com', 'OLD');
       const res = await request(app).post('/auth/resend-code').send({ email: 'r@example.com' });
@@ -210,21 +275,22 @@ describe('auth routes', () => {
 
 describe('households routes', () => {
   it('creates a household and promotes the creator to admin', async () => {
-    await request(app)
-      .post('/auth/signup')
-      .send({ email: 'h@example.com', password: 'pw', name: 'H' });
-    const confirm = await request(app)
-      .post('/auth/confirm')
-      .send({ email: 'h@example.com', code: '123456' });
-    const token = confirm.body.accessToken as string;
+    const token = await createConfirmedUser('h@example.com');
 
     const res = await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'New Home' });
     expect(res.status).toBe(201);
-    expect(res.body.role).toBe('admin');
+    // Production returns the household record itself (no `role` field).
     expect(res.body.id).toBeTruthy();
+    expect(res.body.name).toBe('New Home');
+    expect(res.body.createdBy).toBeTruthy();
+    // …but the creator's membership record is admin.
+    const creator = [...db.users.values()].find((u) => u.email === 'h@example.com')!;
+    expect(creator.memberships).toContainEqual(
+      expect.objectContaining({ householdId: res.body.id, role: 'admin' })
+    );
   });
 
   it('returns the seed household with members', async () => {
@@ -254,12 +320,16 @@ describe('households routes', () => {
     expect(res.body.url).toContain(res.body.code);
   });
 
-  it('returns 404 for unknown household', async () => {
+  it('403s a household the caller is not scoped to (production checks access before existence)', async () => {
     const token = await loginAsSeed();
     const res = await request(app)
       .get('/households/00000000-0000-0000-0000-000000000000')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(404);
+    // Production compares the path id against the caller's resolved
+    // household BEFORE looking it up — an unknown id is indistinguishable
+    // from someone else's household: 403, not 404.
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Access denied');
   });
 });
 
@@ -347,26 +417,79 @@ describe('tasks routes', () => {
     expect(res.body.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('creates a task scheduled `frequency` days in the future', async () => {
+  it('creates a task due immediately by default (production semantics)', async () => {
     const token = await loginAsSeed();
     const res = await request(app)
       .post('/tasks')
       .set('Authorization', `Bearer ${token}`)
       .send({ plantId: seedPlantId, type: 'fertilize', frequency: 14 });
     expect(res.status).toBe(201);
+    // Production taskService.createTask: nextDue defaults to NOW (the task
+    // is due immediately) unless the client passes an explicit nextDue. The
+    // mock previously scheduled `frequency` days out — that was drift.
     const due = new Date(res.body.nextDue).getTime();
-    const expected = Date.now() + 14 * 24 * 60 * 60 * 1000;
-    expect(Math.abs(due - expected)).toBeLessThan(60 * 1000);
+    expect(Math.abs(due - Date.now())).toBeLessThan(60 * 1000);
+  });
+
+  it('honors an explicit nextDue on task creation', async () => {
+    const token = await loginAsSeed();
+    const nextDue = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const res = await request(app)
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plantId: seedPlantId, type: 'fertilize', frequency: 14, nextDue });
+    expect(res.status).toBe(201);
+    expect(res.body.nextDue).toBe(nextDue);
+  });
+
+  it('400s task creation with a missing frequency (Zod, no RangeError crash)', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plantId: seedPlantId, type: 'water' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Validation failed');
+    expect(res.body.details).toHaveProperty('frequency');
+  });
+
+  it('400s GET /tasks?dueWithin=<non-numeric>', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .get('/tasks?dueWithin=soon')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('dueWithin must be a non-negative integer');
+  });
+
+  it('GET /tasks/:id returns the task, household-scoped', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .get(`/tasks/${seedTaskId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(seedTaskId);
+    expect(res.body.plantName).toBe('Monstera');
+  });
+
+  it('filters tasks of died/gave_away plants out of task lists', async () => {
+    const token = await loginAsSeed();
+    const mark = await request(app)
+      .put(`/plants/${seedPlantId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'died' });
+    expect(mark.status).toBe(200);
+    const list = await request(app).get('/tasks').set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body).toEqual([]);
+    const upcoming = await request(app)
+      .get('/tasks/upcoming')
+      .set('Authorization', `Bearer ${token}`);
+    expect(upcoming.body).toEqual([]);
   });
 
   it('refuses to create a task on a plant from a different household', async () => {
-    await request(app)
-      .post('/auth/signup')
-      .send({ email: 'x@example.com', password: 'pw', name: 'X' });
-    const confirm = await request(app)
-      .post('/auth/confirm')
-      .send({ email: 'x@example.com', code: '123456' });
-    const otherToken = confirm.body.accessToken as string;
+    const otherToken = await createConfirmedUser('x@example.com');
     await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${otherToken}`)
@@ -417,21 +540,22 @@ describe('tasks routes', () => {
 describe('PUT /households/:id/members/:userId/role', () => {
   it('promotes a member to admin via the role endpoint', async () => {
     // Seed a second user on the same household.
-    db.users.set('user-2', {
-      id: 'user-2',
-      email: 'two@example.com',
-      password: 'pw',
-      name: 'Two',
-      confirmed: true,
-      householdId: seedHouseholdId,
-      householdRole: 'member',
-    });
+    seedMember('user-2', 'two@example.com', 'member');
     const token = await loginAsSeed();
     const res = await request(app)
       .put(`/households/${seedHouseholdId}/members/user-2/role`)
       .set('Authorization', `Bearer ${token}`)
       .send({ role: 'admin' });
     expect(res.status).toBe(200);
+    // Production returns the updated member row.
+    expect(res.body).toMatchObject({
+      householdId: seedHouseholdId,
+      userId: 'user-2',
+      role: 'admin',
+    });
+    // The membership record (auth source of truth) is updated…
+    expect(db.users.get('user-2')?.memberships[0].role).toBe('admin');
+    // …and so is the claim default, since this is user-2's default household.
     expect(db.users.get('user-2')?.householdRole).toBe('admin');
   });
 
@@ -445,23 +569,58 @@ describe('PUT /households/:id/members/:userId/role', () => {
   });
 
   it('rejects non-admin callers with 403', async () => {
-    db.users.set('user-3', {
-      id: 'user-3',
-      email: 'three@example.com',
-      password: 'pw',
-      name: 'Three',
-      confirmed: true,
-      householdId: seedHouseholdId,
-      householdRole: 'member',
-    });
+    seedMember('user-3', 'three@example.com', 'member');
     const login = await request(app)
       .post('/auth/login')
-      .send({ email: 'three@example.com', password: 'pw' });
+      .send({ email: 'three@example.com', password: 'password-123' });
     const res = await request(app)
       .put(`/households/${seedHouseholdId}/members/${seedUserId}/role`)
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .send({ role: 'member' });
     expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Admin access required');
+  });
+});
+
+describe('DELETE /households/:householdId/members/:userId', () => {
+  it('lets an admin remove a member and clears their default-household claim', async () => {
+    seedMember('member-r', 'removeme@example.com', 'member');
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .delete(`/households/${seedHouseholdId}/members/member-r`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(204);
+    const removed = db.users.get('member-r')!;
+    expect(removed.memberships).toEqual([]);
+    // Claim semantics: this was their default household → cleared.
+    expect(removed.householdId).toBeNull();
+    expect(removed.householdRole).toBeNull();
+    // …and the removed member is locked out on their next request.
+    const login = await request(app)
+      .post('/auth/login')
+      .send({ email: 'removeme@example.com', password: 'password-123' });
+    const plants = await request(app)
+      .get('/plants')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .set('X-Household-Id', seedHouseholdId);
+    expect(plants.status).toBe(403);
+  });
+
+  it('refuses self-removal', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .delete(`/households/${seedHouseholdId}/members/${seedUserId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Cannot remove yourself from household');
+  });
+
+  it('404s an unknown member', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .delete(`/households/${seedHouseholdId}/members/no-such-user`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -478,13 +637,32 @@ describe('POST /tasks/:id/snooze', () => {
     expect(after - before).toBeGreaterThan(2.9 * 24 * 60 * 60 * 1000);
   });
 
-  it('rejects bogus days', async () => {
+  it('bases the snooze on now for an overdue task (max(now, nextDue))', async () => {
+    const token = await loginAsSeed();
+    // Make the seed task 10 days overdue.
+    db.tasks.get(seedTaskId)!.nextDue = new Date(
+      Date.now() - 10 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const res = await request(app)
+      .post(`/tasks/${seedTaskId}/snooze`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ days: 3 });
+    expect(res.status).toBe(200);
+    // Production snoozes from max(now, nextDue): 3 days from NOW, not from
+    // the stale overdue date (which would leave it still overdue).
+    const after = new Date(res.body.nextDue).getTime();
+    const expected = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(after - expected)).toBeLessThan(60 * 1000);
+  });
+
+  it('rejects bogus days (Zod 400)', async () => {
     const token = await loginAsSeed();
     const res = await request(app)
       .post(`/tasks/${seedTaskId}/snooze`)
       .set('Authorization', `Bearer ${token}`)
       .send({ days: 0 });
     expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Validation failed');
   });
 });
 
@@ -515,13 +693,7 @@ describe('GET /households/:id/activity', () => {
   });
 
   it('blocks cross-household access', async () => {
-    await request(app)
-      .post('/auth/signup')
-      .send({ email: 'q@example.com', password: 'pw', name: 'Q' });
-    const confirm = await request(app)
-      .post('/auth/confirm')
-      .send({ email: 'q@example.com', code: '123456' });
-    const otherToken = confirm.body.accessToken as string;
+    const otherToken = await createConfirmedUser('q@example.com');
     await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${otherToken}`)
@@ -562,6 +734,152 @@ describe('DELETE /me', () => {
   });
 });
 
+describe('invite + join flow', () => {
+  async function upgradeSeedHousehold(token: string, planId: 'garden' | 'greenhouse' = 'garden') {
+    const res = await request(app)
+      .post('/billing/checkout')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ planId });
+    expect(res.status).toBe(200);
+  }
+
+  it('POST /households/join/:inviteCode joins via a valid invite and returns the household', async () => {
+    const adminToken = await loginAsSeed();
+    await upgradeSeedHousehold(adminToken); // seedling caps members at 1
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(invite.status).toBe(201);
+
+    const joinerToken = await createConfirmedUser('joiner@example.com');
+    const join = await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+    expect(join.status).toBe(200);
+    // Production returns the household record.
+    expect(join.body.id).toBe(seedHouseholdId);
+    expect(join.body.name).toBe('Test Household');
+    const joiner = [...db.users.values()].find((u) => u.email === 'joiner@example.com')!;
+    expect(joiner.memberships).toContainEqual(
+      expect.objectContaining({ householdId: seedHouseholdId, role: 'member' })
+    );
+  });
+
+  it('400s an unknown or expired invite code', async () => {
+    const token = await createConfirmedUser('lost@example.com');
+    const unknown = await request(app)
+      .post('/households/join/deadbeefdeadbeefdeadbeefdeadbeef')
+      .set('Authorization', `Bearer ${token}`);
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.message).toBe('Invalid or expired invite');
+
+    // Expired invite: backdate expiresAt.
+    db.invites.set('expiredcode000000000000000000000', {
+      code: 'expiredcode000000000000000000000',
+      householdId: seedHouseholdId,
+      createdBy: seedUserId,
+      createdAt: new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+    });
+    const expired = await request(app)
+      .post('/households/join/expiredcode000000000000000000000')
+      .set('Authorization', `Bearer ${token}`);
+    expect(expired.status).toBe(400);
+    expect(expired.body.message).toBe('Invalid or expired invite');
+  });
+
+  it('402s a join that would exceed the plan member cap', async () => {
+    // Seed household stays on seedling (maxMembers: 1, already full).
+    const adminToken = await loginAsSeed();
+    await upgradeSeedHousehold(adminToken, 'garden');
+    // Downgrade back so the cap check trips with an existing valid invite.
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    db.households.get(seedHouseholdId)!.planId = 'seedling';
+    const joinerToken = await createConfirmedUser('capped@example.com');
+    const join = await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+    expect(join.status).toBe(402);
+    expect(join.body.message).toMatch(/limited to 1 members/);
+  });
+
+  it('400s a double-join into the same household', async () => {
+    const adminToken = await loginAsSeed();
+    await upgradeSeedHousehold(adminToken);
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const joinerToken = await createConfirmedUser('twice@example.com');
+    await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+    const again = await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+    expect(again.status).toBe(400);
+    expect(again.body.message).toBe('You are already a member of this household');
+  });
+
+  it('GET /households/invites/:code validates publicly (no auth)', async () => {
+    const adminToken = await loginAsSeed();
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const valid = await request(app).get(`/households/invites/${invite.body.code}`);
+    expect(valid.status).toBe(200);
+    expect(valid.body).toEqual({
+      valid: true,
+      household: { id: seedHouseholdId, name: 'Test Household' },
+    });
+    const bogus = await request(app).get('/households/invites/nope');
+    expect(bogus.status).toBe(200);
+    expect(bogus.body).toEqual({ valid: false });
+  });
+
+  it('non-admin members cannot create invites', async () => {
+    seedMember('member-i', 'mi@example.com', 'member');
+    const login = await request(app)
+      .post('/auth/login')
+      .send({ email: 'mi@example.com', password: 'password-123' });
+    const res = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${login.body.accessToken}`);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Admin access required');
+  });
+});
+
+describe('POST /plants/:id/image', () => {
+  it('defaults to jpeg and matches the key extension to the contentType', async () => {
+    const token = await loginAsSeed();
+    const dflt = await request(app)
+      .post(`/plants/${seedPlantId}/image`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(dflt.status).toBe(200);
+    expect(dflt.body.imageUrl).toMatch(/\.jpg$/);
+    expect(dflt.body.imageUrl).toContain(`/plants/${seedHouseholdId}/${seedPlantId}/`);
+
+    const webp = await request(app)
+      .post(`/plants/${seedPlantId}/image`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentType: 'image/webp' });
+    expect(webp.status).toBe(200);
+    expect(webp.body.imageUrl).toMatch(/\.webp$/);
+  });
+
+  it('400s an unsupported contentType', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post(`/plants/${seedPlantId}/image`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentType: 'image/gif' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Validation failed');
+  });
+});
+
 describe('POST /plants/:id/image/confirm', () => {
   it('accepts the imageUrl returned by the upload-url endpoint', async () => {
     const token = await loginAsSeed();
@@ -588,28 +906,57 @@ describe('POST /plants/:id/image/confirm', () => {
 });
 
 describe('notification preferences', () => {
+  const PHONE = '+15551234567';
+
+  /** Full verification round-trip using the mock's dev-only `devCode` echo. */
+  async function verifyPhone(token: string, phone = PHONE): Promise<void> {
+    const start = await request(app)
+      .post('/notifications/phone/start-verification')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone });
+    expect(start.status).toBe(200);
+    expect(start.body.sent).toBe(true);
+    const confirm = await request(app)
+      .post('/notifications/phone/confirm-verification')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: start.body.devCode });
+    expect(confirm.status).toBe(200);
+    expect(confirm.body.phoneVerified).toBe(true);
+    expect(confirm.body.phone).toBe(phone);
+  }
+
   it('GET /notifications/prefs returns defaults for a fresh user', async () => {
     const token = await loginAsSeed();
     const res = await request(app)
       .get('/notifications/prefs')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ browser: false, email: true, sms: false, phone: '' });
+    expect(res.body).toMatchObject({
+      browser: false,
+      email: true,
+      sms: false,
+      phone: '',
+      weeklyDigest: true, // default-on because email defaults on
+      phoneVerified: false,
+    });
   });
 
-  it('PUT /notifications/prefs persists toggles', async () => {
+  it('PUT /notifications/prefs persists toggles (verified phone) and weeklyDigest opt-out', async () => {
     const token = await loginAsSeed();
+    await verifyPhone(token);
     const res = await request(app)
       .put('/notifications/prefs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ browser: true, email: false, sms: true, phone: '+15551234567' });
+      .send({ browser: true, email: false, sms: true, phone: PHONE, weeklyDigest: false });
     expect(res.status).toBe(200);
     expect(res.body.sms).toBe(true);
-    expect(res.body.phone).toBe('+15551234567');
+    expect(res.body.phone).toBe(PHONE);
+    expect(res.body.weeklyDigest).toBe(false);
     const reread = await request(app)
       .get('/notifications/prefs')
       .set('Authorization', `Bearer ${token}`);
-    expect(reread.body.phone).toBe('+15551234567');
+    expect(reread.body.phone).toBe(PHONE);
+    expect(reread.body.weeklyDigest).toBe(false);
   });
 
   it('PUT /notifications/prefs rejects SMS without a valid phone', async () => {
@@ -621,17 +968,153 @@ describe('notification preferences', () => {
     expect(res.status).toBe(400);
   });
 
-  it('disabling SMS clears the stored phone number', async () => {
+  it('PUT /notifications/prefs rejects enabling SMS on an unverified phone', async () => {
     const token = await loginAsSeed();
-    await request(app)
+    const res = await request(app)
       .put('/notifications/prefs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ browser: false, email: true, sms: true, phone: '+15551234567' });
+      .send({ browser: false, email: true, sms: true, phone: PHONE });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Phone number must be verified before enabling SMS reminders');
+  });
+
+  it('disabling SMS keeps the verified phone; changing it clears verification', async () => {
+    const token = await loginAsSeed();
+    await verifyPhone(token);
+    // SMS off: number + verified status persist (no re-verification needed).
     const off = await request(app)
       .put('/notifications/prefs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ browser: false, email: true, sms: false, phone: '+15551234567' });
-    expect(off.body.phone).toBe('');
+      .send({ browser: false, email: true, sms: false, phone: PHONE });
+    expect(off.body.phone).toBe(PHONE);
+    expect(off.body.phoneVerified).toBe(true);
+    // New number: verification is cleared until confirmed again.
+    const changed = await request(app)
+      .put('/notifications/prefs')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ browser: false, email: true, sms: false, phone: '+15559876543' });
+    expect(changed.body.phoneVerified).toBe(false);
+  });
+
+  it('confirm-verification rejects a wrong code, burns attempts, locks at 5', async () => {
+    const token = await loginAsSeed();
+    const start = await request(app)
+      .post('/notifications/phone/start-verification')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phone: PHONE });
+    const wrongCode = start.body.devCode === '000000' ? '000001' : '000000';
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post('/notifications/phone/confirm-verification')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ code: wrongCode });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Incorrect verification code.');
+    }
+    // Even the right code is locked out after 5 misses.
+    const locked = await request(app)
+      .post('/notifications/phone/confirm-verification')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: start.body.devCode });
+    expect(locked.status).toBe(429);
+  });
+
+  it('confirm-verification without a pending code is a 400', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post('/notifications/phone/confirm-verification')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: '123456' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Verification code expired or not found. Request a new code.');
+  });
+});
+
+describe('weekly digest + year recap manual triggers', () => {
+  it('POST /notifications/run-digests counts digest-enabled members when plants are overdue', async () => {
+    const token = await loginAsSeed();
+    // Seed task is due "now" (not overdue); push it into the past.
+    db.tasks.get(seedTaskId)!.nextDue = new Date(
+      Date.now() - 3 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const res = await request(app)
+      .post('/notifications/run-digests')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.sent).toBe(1); // seed admin has email + weeklyDigest defaults
+  });
+
+  it('POST /notifications/run-digests skips households with nothing overdue', async () => {
+    const token = await loginAsSeed();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const res = await request(app)
+      .post('/notifications/run-digests')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.sent).toBe(0);
+  });
+
+  it('POST /notifications/run-digests skips members who opted out of the digest', async () => {
+    const token = await loginAsSeed();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await request(app)
+      .put('/notifications/prefs')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ browser: false, email: true, sms: false, phone: '', weeklyDigest: false });
+    const res = await request(app)
+      .post('/notifications/run-digests')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.sent).toBe(0);
+  });
+
+  it('POST /notifications/run-digests requires admin', async () => {
+    seedMember('member-1', 'member1@example.com', 'member');
+    const login = await request(app)
+      .post('/auth/login')
+      .send({ email: 'member1@example.com', password: 'password-123' });
+    const res = await request(app)
+      .post('/notifications/run-digests')
+      .set('Authorization', `Bearer ${login.body.accessToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('POST /notifications/run-year-recap sends once per household per year', async () => {
+    const token = await loginAsSeed();
+    const year = new Date().getUTCFullYear() - 1;
+    // One completion inside the recap year.
+    db.completions.set('c1', {
+      id: 'c1',
+      householdId: seedHouseholdId,
+      plantId: seedPlantId,
+      taskId: seedTaskId,
+      taskType: 'water',
+      completedBy: seedUserId,
+      completedByName: 'Test User',
+      completedAt: `${year}-06-15T12:00:00.000Z`,
+      notes: null,
+    });
+    const first = await request(app)
+      .post('/notifications/run-year-recap')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ year });
+    expect(first.status).toBe(200);
+    expect(first.body).toEqual({ sent: 1, year });
+    // Retried run: once-per-year marker makes it a no-op.
+    const second = await request(app)
+      .post('/notifications/run-year-recap')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ year });
+    expect(second.body).toEqual({ sent: 0, year });
+  });
+
+  it('POST /notifications/run-year-recap with no completions that year sends nothing', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post('/notifications/run-year-recap')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ year: 2001 });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ sent: 0, year: 2001 });
   });
 });
 
@@ -751,21 +1234,40 @@ describe('public API + API keys', () => {
 });
 
 describe('multi-household via X-Household-Id', () => {
-  it('routes scope to the header household when present', async () => {
+  it('403s an X-Household-Id override naming a household the caller is NOT a member of', async () => {
     const token = await loginAsSeed();
     const otherHouseholdId = '11111111-1111-1111-1111-111111111111';
     db.households.set(otherHouseholdId, {
       id: otherHouseholdId,
       name: 'Other house',
       createdAt: new Date().toISOString(),
-      createdBy: seedUserId,
+      createdBy: 'someone-else',
     });
+    // The seed user has NO membership in otherHouseholdId. Production's
+    // authMiddleware validates the override against the membership table
+    // and rejects — honoring the header here was the security inversion
+    // that let any caller read any household.
     const res = await request(app)
       .get(`/households/${otherHouseholdId}`)
       .set('Authorization', `Bearer ${token}`)
       .set('X-Household-Id', otherHouseholdId);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Not a member of the requested household');
+  });
+
+  it('honors the override for a household the caller IS a member of, with the membership role', async () => {
+    const token = await loginAsSeed();
+    const create = await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Second house' });
+    const newId = create.body.id as string;
+    const res = await request(app)
+      .get(`/households/${newId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Household-Id', newId);
     expect(res.status).toBe(200);
-    expect(res.body.name).toBe('Other house');
+    expect(res.body.name).toBe('Second house');
   });
 });
 
@@ -858,18 +1360,10 @@ describe('billing', () => {
   });
 
   it('non-admin cannot checkout', async () => {
-    db.users.set('member-2', {
-      id: 'member-2',
-      email: 'm2@example.com',
-      password: 'pw',
-      name: 'M2',
-      confirmed: true,
-      householdId: seedHouseholdId,
-      householdRole: 'member',
-    });
+    seedMember('member-2', 'm2@example.com', 'member');
     const login = await request(app)
       .post('/auth/login')
-      .send({ email: 'm2@example.com', password: 'pw' });
+      .send({ email: 'm2@example.com', password: 'password-123' });
     const res = await request(app)
       .post('/billing/checkout')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
@@ -928,7 +1422,7 @@ describe('climate', () => {
     expect(res.body).toMatchObject({ configured: false, weather: null, tips: [] });
   });
 
-  it('saves a household location and reflects it on subsequent climate reads', async () => {
+  it('saves a household location (climate reads never echo it — production contract)', async () => {
     const token = await loginAsSeed();
     const set = await request(app)
       .put(`/households/${seedHouseholdId}/location`)
@@ -937,11 +1431,27 @@ describe('climate', () => {
     expect(set.status).toBe(200);
     expect(set.body.location.city).toBe('Austin, US');
 
+    // Production getClimate returns exactly { configured, weather, tips } —
+    // the mock used to add a `location` field production never returns.
     const climate = await request(app)
       .get(`/households/${seedHouseholdId}/climate`)
       .set('Authorization', `Bearer ${token}`);
     expect(climate.status).toBe(200);
-    expect(climate.body.location.city).toBe('Austin, US');
+    expect(climate.body.location).toBeUndefined();
+    expect(Object.keys(climate.body).sort()).toEqual(['configured', 'tips', 'weather']);
+  });
+
+  it('403s climate reads for a household the caller does not belong to', async () => {
+    const otherToken = await createConfirmedUser('clim@example.com');
+    await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ name: 'Climate Home' });
+    const res = await request(app)
+      .get(`/households/${seedHouseholdId}/climate`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Access denied');
   });
 
   it('rejects empty location payload', async () => {
@@ -1012,13 +1522,7 @@ describe('multi-household per user', () => {
 
 describe('cross-household isolation', () => {
   it('a different household cannot see the seed household plants', async () => {
-    await request(app)
-      .post('/auth/signup')
-      .send({ email: 'iso@example.com', password: 'pw', name: 'Iso' });
-    const confirm = await request(app)
-      .post('/auth/confirm')
-      .send({ email: 'iso@example.com', code: '123456' });
-    const token = confirm.body.accessToken as string;
+    const token = await createConfirmedUser('iso@example.com');
     await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
@@ -1077,5 +1581,28 @@ describe('GET /me/export', () => {
     const ids = (JSON.parse(res.text).households as { id: string }[]).map((h) => h.id);
     expect(ids).toContain(seedHouseholdId);
     expect(ids).toContain(newId);
+  });
+});
+
+describe('production contract details', () => {
+  it('GET /species/:id/thumbnail is unauthenticated (served to anonymous <img> tags)', async () => {
+    const res = await request(app).get('/species/123/thumbnail');
+    // No enrichment locally → 404, but crucially NOT 401.
+    expect(res.status).toBe(404);
+  });
+
+  it('unknown routes return the production JSON 404 shape', async () => {
+    const res = await request(app).get('/definitely/not/a/route');
+    expect(res.status).toBe(404);
+    expect(res.body.message).toMatch(/^No route handler for /);
+  });
+
+  it('malformed JSON bodies are a 400, not a 500', async () => {
+    const res = await request(app)
+      .post('/auth/login')
+      .set('Content-Type', 'application/json')
+      .send('{"email": ');
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: 'Invalid JSON body' });
   });
 });

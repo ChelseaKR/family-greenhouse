@@ -71,6 +71,13 @@ describe('auth handler', () => {
     // intentionally simulating fresh requests.
     const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
     __resetRateLimitForTests();
+    // authMiddleware validates the claim household against the membership
+    // table; pre-warm the cache so the partial householdService mock (which
+    // doesn't implement getMemberByUserId) never gets consulted for it.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
   });
 
   describe('signup', () => {
@@ -337,7 +344,14 @@ describe('auth handler', () => {
       const { updateMemberNameAcrossHouseholds } =
         await import('../../../src/services/householdService.js');
       const { updateProfile } = await import('../../../src/handlers/auth/handler.js');
-      vi.mocked(cognito.send).mockResolvedValueOnce({} as never);
+      // 1st send = GetUser (access-token subject verification),
+      // 2nd send = UpdateUserAttributes.
+      vi.mocked(cognito.send)
+        .mockResolvedValueOnce({
+          Username: 'user-1',
+          UserAttributes: [{ Name: 'sub', Value: 'user-1' }],
+        } as never)
+        .mockResolvedValueOnce({} as never);
 
       const res = (await updateProfile(
         buildEvent({
@@ -352,6 +366,54 @@ describe('auth handler', () => {
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(res.body).name).toBe('Renamed');
       expect(updateMemberNameAcrossHouseholds).toHaveBeenCalledWith('user-1', 'Renamed');
+    });
+
+    it('403s when the access token belongs to a different user than the ID token', async () => {
+      const { cognito } = await import('../../../src/utils/cognito.js');
+      const { updateMemberNameAcrossHouseholds } =
+        await import('../../../src/services/householdService.js');
+      const { updateProfile } = await import('../../../src/handlers/auth/handler.js');
+      // GetUser resolves to a DIFFERENT subject than the authenticated caller:
+      // confused-deputy attempt (their ID token + someone else's access token).
+      vi.mocked(cognito.send).mockResolvedValueOnce({
+        Username: 'user-9',
+        UserAttributes: [{ Name: 'sub', Value: 'user-9' }],
+      } as never);
+
+      const res = (await updateProfile(
+        buildEvent({
+          httpMethod: 'PATCH',
+          headers: { Authorization: 'Bearer id-token', 'x-cognito-access-token': 'stolen-token' },
+          body: JSON.stringify({ name: 'Hijack' }),
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toMatch(/does not match/i);
+      // No attribute write, no DDB fan-out under the wrong identity.
+      expect(vi.mocked(cognito.send)).toHaveBeenCalledTimes(1);
+      expect(updateMemberNameAcrossHouseholds).not.toHaveBeenCalled();
+    });
+
+    it('401s when the access token is invalid (GetUser rejects)', async () => {
+      const { cognito } = await import('../../../src/utils/cognito.js');
+      const { updateProfile } = await import('../../../src/handlers/auth/handler.js');
+      vi.mocked(cognito.send).mockRejectedValueOnce(new CognitoError('NotAuthorizedException'));
+
+      const res = (await updateProfile(
+        buildEvent({
+          httpMethod: 'PATCH',
+          headers: { Authorization: 'Bearer id-token', 'x-cognito-access-token': 'expired' },
+          body: JSON.stringify({ name: 'Renamed' }),
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toMatch(/invalid cognito access token/i);
     });
 
     it('400s on empty name (Zod rejects min(1) trimmed)', async () => {

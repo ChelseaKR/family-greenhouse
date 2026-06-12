@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { plantService, type Plant } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
 import { getErrorMessage } from '@/services/api';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 interface BulkApplyTemplateDialogProps {
   isOpen: boolean;
@@ -22,11 +23,12 @@ interface BulkApplyTemplateDialogProps {
  */
 export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDialogProps) {
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [selectedPlants, setSelectedPlants] = useState<Set<string>>(new Set());
 
   const { data: plants } = useQuery({
-    queryKey: ['plants'],
+    queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
     enabled: isOpen,
   });
@@ -40,8 +42,8 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
   const apply = useMutation({
     mutationFn: () => taskService.applyTemplateBulk([...selectedPlants], selectedTemplate),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       handleClose();
     },
   });

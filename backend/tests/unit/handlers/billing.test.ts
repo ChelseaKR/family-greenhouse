@@ -20,6 +20,14 @@ vi.mock('../../../src/services/billing.js', async () => {
   };
 });
 
+// The METADATA counter read behind GET /billing/me's usage block — mocked so
+// tests never touch DynamoDB. Defaults are re-seeded in beforeEach (the
+// global resetAllMocks wipes implementations).
+vi.mock('../../../src/services/householdUsage.js', () => ({
+  getHouseholdCounters: vi.fn(),
+}));
+import { getHouseholdCounters } from '../../../src/services/householdUsage.js';
+
 function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
     body: null,
@@ -51,10 +59,19 @@ function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayPr
 const ctx = {} as Context;
 
 describe('billing handler', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.FRONTEND_URL = 'https://test.familygreenhouse.net';
+    // authMiddleware validates the claim household against the membership
+    // table; pre-warm the cache so the un-mocked householdService is never
+    // consulted. Tests for non-admin callers re-warm with role 'member'.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
+    // Counters default to "nothing recorded" — individual tests override.
+    vi.mocked(getHouseholdCounters).mockResolvedValue({ plantCount: 0, memberCount: 0 });
   });
 
   describe('listPlans', () => {
@@ -98,6 +115,66 @@ describe('billing handler', () => {
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(res.body)).toMatchObject({ planId: 'garden', stripeCustomerId: 'cus_1' });
       expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+    });
+
+    it('includes usage (counters + plan caps) so the UI can render meters', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'garden' });
+      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 42, memberCount: 3 });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).usage).toEqual({
+        plantCount: 42,
+        maxPlants: 500,
+        memberCount: 3,
+        maxMembers: 6,
+      });
+      expect(getHouseholdCounters).toHaveBeenCalledWith('hh-1');
+    });
+
+    it('reports over-limit usage verbatim after a downgrade (caps come from the NEW plan)', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+      // Household downgraded to seedling while holding 25 plants / 4 members.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 25, memberCount: 4 });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      const usage = JSON.parse(res.body).usage;
+      expect(usage).toEqual({ plantCount: 25, maxPlants: 10, memberCount: 4, maxMembers: 1 });
+      expect(usage.plantCount).toBeGreaterThan(usage.maxPlants);
+    });
+
+    it('tolerates missing counters (legacy households) as zero usage', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'greenhouse' });
+      // Default beforeEach mock: { plantCount: 0, memberCount: 0 }.
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(JSON.parse(res.body).usage).toEqual({
+        plantCount: 0,
+        maxPlants: 5000,
+        memberCount: 0,
+        maxMembers: 50,
+      });
     });
 
     it('returns 403 when the caller has no household claim', async () => {
@@ -150,6 +227,8 @@ describe('billing handler', () => {
     });
 
     it('returns 403 when the caller is a non-admin household member', async () => {
+      const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+      setCachedMembership('user-1', 'hh-1', 'member');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');
       const res = (await checkout(
         buildEvent({
@@ -188,11 +267,13 @@ describe('billing handler', () => {
       expect(res.statusCode).toBe(400);
     });
 
-    it('translates upstream Stripe errors to a 5xx', async () => {
+    it('translates upstream Stripe errors to an intentional 502 with a safe JSON body', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');
 
-      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(new Error('upstream down'));
+      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(
+        new Error('upstream down: sk_live_secret hint')
+      );
 
       const res = (await checkout(
         buildEvent({
@@ -203,12 +284,13 @@ describe('billing handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
 
-      // The handler throws `createHttpError(502, ...)`, but the default middy
-      // `httpErrorHandler` masks all 5xx responses to a generic 500 (no body)
-      // because `http-errors` sets `expose: false` on 5xx. We assert the
-      // observable behavior: any 5xx is acceptable here.
-      expect(res.statusCode).toBeGreaterThanOrEqual(500);
-      expect(res.statusCode).toBeLessThan(600);
+      // New error contract: intentional 502s (expose: true) keep their safe
+      // message as JSON {message}; the raw SDK error never reaches clients.
+      expect(res.statusCode).toBe(502);
+      expect(res.headers?.['Content-Type']).toBe('application/json');
+      const body = JSON.parse(res.body);
+      expect(body.message).toMatch(/stripe checkout failed/i);
+      expect(res.body).not.toContain('sk_live_secret');
     });
   });
 

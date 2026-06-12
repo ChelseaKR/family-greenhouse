@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plant, plantService } from '@/services/plantService';
 import { getErrorMessage } from '@/services/api';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
@@ -28,6 +29,7 @@ interface EditPlantModalProps {
 
 export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) {
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
 
   const {
     register,
@@ -64,7 +66,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       onClose();
     },
   });

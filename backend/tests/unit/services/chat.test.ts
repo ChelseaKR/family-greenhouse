@@ -184,43 +184,167 @@ describe('chat tools registry', () => {
 });
 
 describe('propose_reminder_task tool', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const bertha = {
+    id: 'p1',
+    householdId: 'hh-1',
+    name: 'Bertha',
+    species: 'Monstera',
+    location: null,
+    imageUrl: null,
+    notes: null,
+    status: 'active' as const,
+    statusChangedAt: null,
+    tags: [],
+    createdAt: '',
+    createdBy: 'u1',
+    updatedAt: '',
+  };
+  const ctx = { userId: 'u1', householdId: 'hh-1', toolCallNumber: 1 };
+  const tool = () => findTool('propose_reminder_task')!;
+
+  type Result = {
+    status: 'proposed' | 'invalid';
+    reason?: string;
+    proposal?: Record<string, unknown>;
+  };
+
   it('refuses when the plant is not in the caller household (anti-hallucination)', async () => {
     vi.mocked(plantService.getPlant).mockResolvedValueOnce(null);
-    const tool = findTool('propose_reminder_task')!;
-    const out = (await tool.execute(
+    const out = (await tool().execute(
       { plantId: 'fake-uuid', type: 'water', frequencyDays: 7 } as never,
-      { userId: 'u1', householdId: 'hh-1', toolCallNumber: 1 }
-    )) as { accepted: boolean; reason?: string };
-    expect(out.accepted).toBe(false);
+      ctx
+    )) as Result;
+    expect(out.status).toBe('invalid');
     expect(out.reason).toMatch(/not found/i);
   });
 
-  it('returns the validated proposal when the plant exists', async () => {
-    vi.mocked(plantService.getPlant).mockResolvedValueOnce({
-      id: 'p1',
-      householdId: 'hh-1',
-      name: 'Bertha',
-      species: 'Monstera',
-      location: null,
-      imageUrl: null,
-      notes: null,
-      tags: [],
-      createdAt: '',
-      createdBy: 'u1',
-      updatedAt: '',
-    });
-    const tool = findTool('propose_reminder_task')!;
-    const out = (await tool.execute(
+  it('refuses when the plant is no longer active (died/gave_away)', async () => {
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce({ ...bertha, status: 'died' });
+    const out = (await tool().execute(
+      { plantId: 'p1', type: 'water', frequencyDays: 7 } as never,
+      ctx
+    )) as Result;
+    expect(out.status).toBe('invalid');
+    expect(out.reason).toMatch(/no longer active/i);
+    expect(out.proposal).toBeUndefined();
+  });
+
+  it('refuses an unknown task type even if it slipped past schema validation', async () => {
+    const out = (await tool().execute(
+      { plantId: 'p1', type: 'sing_to_it', frequencyDays: 7 } as never,
+      ctx
+    )) as Result;
+    expect(out.status).toBe('invalid');
+    expect(out.reason).toMatch(/task type/i);
+    // Rejected before any DB read.
+    expect(plantService.getPlant).not.toHaveBeenCalled();
+  });
+
+  it('refuses out-of-bounds or non-integer frequencies (task schema bounds)', async () => {
+    for (const frequencyDays of [0, 366, 2.5, NaN]) {
+      const out = (await tool().execute(
+        { plantId: 'p1', type: 'water', frequencyDays } as never,
+        ctx
+      )) as Result;
+      expect(out.status).toBe('invalid');
+      expect(out.reason).toMatch(/between 1 and 365/);
+    }
+  });
+
+  it('requires a customType label for custom tasks', async () => {
+    const out = (await tool().execute(
+      { plantId: 'p1', type: 'custom', frequencyDays: 14 } as never,
+      ctx
+    )) as Result;
+    expect(out.status).toBe('invalid');
+    expect(out.reason).toMatch(/customType/);
+  });
+
+  it('refuses an assignee who is not a member of the household', async () => {
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce(bertha);
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      {
+        householdId: 'hh-1',
+        userId: 'member-1',
+        name: 'Chelsea',
+        email: 'c@example.com',
+        role: 'admin',
+        joinedAt: '',
+      },
+    ]);
+    const out = (await tool().execute(
+      { plantId: 'p1', type: 'water', frequencyDays: 7, assignedTo: 'stranger-9' } as never,
+      ctx
+    )) as Result;
+    expect(out.status).toBe('invalid');
+    expect(out.reason).toMatch(/not a member/i);
+  });
+
+  it('enforces the per-turn proposal cap', async () => {
+    const out = (await tool().execute({ plantId: 'p1', type: 'water', frequencyDays: 7 } as never, {
+      ...ctx,
+      proposalsThisTurn: 3,
+    })) as Result;
+    expect(out.status).toBe('invalid');
+    expect(out.reason).toMatch(/cap/i);
+    expect(plantService.getPlant).not.toHaveBeenCalled();
+  });
+
+  it('returns the validated proposal (with proposalId + plantName) when everything checks out', async () => {
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce(bertha);
+    const out = (await tool().execute(
       { plantId: 'p1', type: 'water', frequencyDays: 7, rationale: 'tropicals' } as never,
-      { userId: 'u1', householdId: 'hh-1', toolCallNumber: 1 }
-    )) as {
-      accepted: boolean;
-      proposal: { plantName: string; type: string; frequencyDays: number };
-    };
-    expect(out.accepted).toBe(true);
-    expect(out.proposal.plantName).toBe('Bertha');
-    expect(out.proposal.type).toBe('water');
-    expect(out.proposal.frequencyDays).toBe(7);
+      { ...ctx, proposalsThisTurn: 0 }
+    )) as Result;
+    expect(out.status).toBe('proposed');
+    expect(out.proposal).toMatchObject({
+      plantId: 'p1',
+      plantName: 'Bertha',
+      type: 'water',
+      frequencyDays: 7,
+      rationale: 'tropicals',
+      assignedTo: null,
+      assigneeName: null,
+    });
+    expect(typeof out.proposal!.proposalId).toBe('string');
+    expect((out.proposal!.proposalId as string).length).toBeGreaterThan(0);
+  });
+
+  it('echoes the member assignee with their display name', async () => {
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce(bertha);
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      {
+        householdId: 'hh-1',
+        userId: 'member-1',
+        name: 'Chelsea',
+        email: 'c@example.com',
+        role: 'admin',
+        joinedAt: '',
+      },
+    ]);
+    const out = (await tool().execute(
+      {
+        plantId: 'p1',
+        type: 'custom',
+        customType: 'mist leaves',
+        frequencyDays: 3,
+        assignedTo: 'member-1',
+        note: 'use filtered water',
+      } as never,
+      ctx
+    )) as Result;
+    expect(out.status).toBe('proposed');
+    expect(out.proposal).toMatchObject({
+      type: 'custom',
+      customType: 'mist leaves',
+      assignedTo: 'member-1',
+      assigneeName: 'Chelsea',
+      note: 'use filtered water',
+    });
   });
 });
 

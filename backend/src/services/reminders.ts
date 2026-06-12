@@ -9,50 +9,241 @@
  * a busy household doesn't get one ping per plant. Delivery goes through
  * `notifier.sendToUser`, which respects per-user channel prefs + the DND window
  * and degrades to a structured log line when a channel isn't configured.
+ *
+ * Spam control: the scan is hourly and the due window is 24h, so the same due
+ * task is eligible on every run. A per-user, per-day dedupe marker (conditional
+ * Put on USER#{id} / REMINDED#{yyyy-mm-dd}) caps delivery at one reminder per
+ * user per UTC day — email/SMS are billed per send, so this matters.
+ *
+ * Query shape: ONE GSI1 due-window query per household (the same pattern as
+ * getUpcomingTasks), grouped by assignee in memory. The old shape was one GSI2
+ * query per member, which both multiplied reads and silently dropped
+ * unassigned tasks (they're in nobody's GSI2 partition).
  */
+import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { logger } from '../utils/logger.js';
+import type { Task } from '../models/types.js';
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
 import * as plantService from './plantService.js';
+import * as notificationPrefs from './notificationPrefs.js';
+import * as pestAlerts from './pestAlerts.js';
 import * as notifier from './notifier.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
+// Markers outlive their day by a comfortable margin; DynamoDB TTL sweeps them.
+const MARKER_TTL_SECONDS = 48 * 60 * 60;
+
+function dateKey(now: Date): string {
+  return now.toISOString().slice(0, 10); // yyyy-mm-dd (UTC)
+}
 
 /**
- * Notify each member of one household about tasks assigned to them that are
- * due within the next 24h (or already overdue). Returns how many members were
- * sent a reminder.
+ * Conditionally claim the user's "reminded today" slot. Returns true when the
+ * marker was absent (we own today's send), false when a previous run already
+ * sent today. Written BEFORE sending: if the send then fails the user misses
+ * one day's reminder, which is the safer failure mode than double-billing
+ * email/SMS on every hourly run.
+ */
+async function claimDailyReminderSlot(userId: string, now: Date): Promise<boolean> {
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `USER#${userId}`,
+          SK: `REMINDED#${dateKey(now)}`,
+          entityType: 'ReminderMarker',
+          sentAt: now.toISOString(),
+          ttl: Math.floor(now.getTime() / 1000) + MARKER_TTL_SECONDS,
+        },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      })
+    );
+    return true;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Notify each member of one household about tasks due within the next 24h
+ * (or already overdue): the member's own assigned tasks plus the household's
+ * unassigned ones (otherwise unassigned tasks would notify nobody). Returns
+ * how many members were sent a reminder.
  */
 export async function remindHousehold(
   householdId: string,
   now: Date = new Date()
 ): Promise<number> {
-  const members = await householdService.getHouseholdMembers(householdId);
   const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() + DUE_WINDOW_MS).toISOString();
 
-  // Don't remind about plants that are no longer active (died / gave away).
-  // getPlants defaults to active-only, so any task whose plant isn't in this
-  // set belongs to a past plant and is skipped.
-  const activePlantIds = new Set((await plantService.getPlants(householdId)).map((p) => p.id));
+  // One due-window query for the whole household. When nothing is due we
+  // skip the member + plant reads entirely — the common case most hours.
+  const dueWindowTasks = await taskService.getTasksDueBy(householdId, cutoff);
+
+  let due: Task[] = [];
+  if (dueWindowTasks.length > 0) {
+    // Don't remind about plants that are no longer active (died / gave away).
+    // getPlants defaults to active-only, so any task whose plant isn't in this
+    // set belongs to a past plant and is skipped.
+    const activePlantIds = new Set((await plantService.getPlants(householdId)).map((p) => p.id));
+    due = dueWindowTasks.filter((t) => activePlantIds.has(t.plantId));
+  }
 
   let sent = 0;
-  for (const member of members) {
-    const tasks = await taskService.getTasks(householdId, { assignedTo: member.userId });
-    const due = tasks.filter((t) => t.nextDue <= cutoff && activePlantIds.has(t.plantId));
-    if (due.length === 0) continue;
+  if (due.length > 0) {
+    const members = await householdService.getHouseholdMembers(householdId);
+    const memberIds = new Set(members.map((m) => m.userId));
 
-    const overdue = due.filter((t) => t.nextDue < nowIso).length;
-    const body = overdue
-      ? `${overdue} overdue, ${due.length - overdue} due soon`
-      : `${due.length} task${due.length === 1 ? '' : 's'} due in the next 24h`;
+    // Vacation mode (read-time mapping): tasks assigned to a member with a
+    // currently-active window are delivered to their cover instead. Windows
+    // auto-expire — getActiveVacationMap filters by start/end, so the day
+    // after endDate everything routes back to the original assignee with no
+    // data rewrite.
+    const vacations = await taskService.getActiveVacationMap(householdId, now);
 
-    await notifier.sendToUser(
-      { userId: member.userId, email: member.email },
-      { title: 'Plant care reminder', body, tag: 'reminder' }
-    );
-    sent += 1;
+    /** Who a task's reminder should go to right now (null = unassigned). */
+    const effectiveAssignee = (t: Task): string | null => {
+      if (!t.assignedTo) return null;
+      const w = vacations.get(t.assignedTo);
+      if (w && w.coveredBy !== t.assignedTo && memberIds.has(w.coveredBy)) return w.coveredBy;
+      return t.assignedTo;
+    };
+
+    /** Can this user actually receive the reminder? Members who are away
+     *  are skipped below, so a task routed to them must roll up instead
+     *  (covers "the designated cover has since left the household"). */
+    const deliverable = (userId: string | null): boolean =>
+      userId !== null && memberIds.has(userId) && !vacations.has(userId);
+
+    // Unassigned tasks — and tasks whose effective assignee can't be
+    // reached (left the household, or away with no valid cover) — roll up
+    // into every member's reminder so they don't silently fall on the floor.
+    const unassigned = due.filter((t) => !deliverable(effectiveAssignee(t)));
+
+    for (const member of members) {
+      // A member who is away gets no reminders at all — that's the point of
+      // vacation mode. Their tasks are in someone else's `mine` below.
+      if (vacations.has(member.userId)) continue;
+
+      const mine = due.filter((t) => effectiveAssignee(t) === member.userId);
+      const tasksForMember = [...mine, ...unassigned];
+      if (tasksForMember.length === 0) continue;
+
+      // Per-user daily dedupe — see module docstring.
+      if (!(await claimDailyReminderSlot(member.userId, now))) continue;
+
+      const overdue = tasksForMember.filter((t) => t.nextDue < nowIso).length;
+      let body = overdue
+        ? `${overdue} overdue, ${tasksForMember.length - overdue} due soon`
+        : `${tasksForMember.length} task${tasksForMember.length === 1 ? '' : 's'} due in the next 24h`;
+
+      // Tell the cover whose tasks they're picking up.
+      const coveringNames = [
+        ...new Set(
+          mine
+            .filter((t) => t.assignedTo && t.assignedTo !== member.userId)
+            .map(
+              (t) =>
+                members.find((m) => m.userId === t.assignedTo)?.name ??
+                t.assignedToName ??
+                'a housemate'
+            )
+        ),
+      ];
+      if (coveringNames.length > 0) {
+        body += ` (covering for ${coveringNames.join(', ')})`;
+      }
+
+      await notifier.sendToUser(
+        { userId: member.userId, email: member.email },
+        { title: 'Plant care reminder', body, tag: 'reminder' }
+      );
+      sent += 1;
+    }
   }
+
+  // Seasonal pest alerts ride along with the reminder run (the prefs toggle
+  // previously had no caller at all). Best-effort: a pest evaluation failure
+  // must never fail task reminders.
+  try {
+    await runPestAlerts(householdId, now);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, householdId }, 'reminders.pest_alerts_failed');
+  }
+
   return sent;
+}
+
+/**
+ * Evaluate + deliver seasonal pest alerts for one household, for members who
+ * opted in via notification prefs (`pestAlerts: true`).
+ *
+ * Gated by a per-household, per-day marker: the reminder scan is hourly, but
+ * pest evaluation reads every member's prefs and (on cache miss) the Perenual
+ * API — once a day is plenty for a "this season" heads-up.
+ *
+ * The 90-day per-plant/pest suppression marker is written only AFTER at least
+ * one successful delivery, so a failed send doesn't mute the alert for a
+ * quarter.
+ */
+async function runPestAlerts(householdId: string, now: Date): Promise<void> {
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `HOUSEHOLD#${householdId}`,
+          SK: `PEST_CHECK#${dateKey(now)}`,
+          entityType: 'PestCheckMarker',
+          checkedAt: now.toISOString(),
+          ttl: Math.floor(now.getTime() / 1000) + MARKER_TTL_SECONDS,
+        },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      })
+    );
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return; // already evaluated today
+    }
+    throw err;
+  }
+
+  const members = await householdService.getHouseholdMembers(householdId);
+  const optedIn = [];
+  for (const member of members) {
+    const prefs = await notificationPrefs.getPreferences(member.userId);
+    if (prefs.pestAlerts) optedIn.push(member);
+  }
+  if (optedIn.length === 0) return;
+
+  const alerts = await pestAlerts.evaluatePestAlerts(householdId, now);
+  for (const alert of alerts) {
+    let delivered = false;
+    for (const member of optedIn) {
+      try {
+        await notifier.sendToUser(
+          { userId: member.userId, email: member.email },
+          { title: 'Pest season heads-up', body: alert.message, tag: 'pest-alert' }
+        );
+        delivered = true;
+      } catch (err) {
+        logger.warn(
+          { err: (err as Error).message, householdId, userId: member.userId },
+          'reminders.pest_alert_send_failed'
+        );
+      }
+    }
+    if (delivered) {
+      await pestAlerts.markAlerted(alert.plantId, alert.pestId);
+    }
+  }
 }
 
 /**
@@ -67,9 +258,11 @@ export async function remindAllHouseholds(
   for (const id of ids) {
     try {
       sent += await remindHousehold(id, now);
-    } catch {
-      // Swallow — a single household's failure shouldn't stop the scan.
-      // notifier/service internals already log the underlying error.
+    } catch (err) {
+      // Best-effort, but never silent: a swallowed error here previously hid
+      // real failures (e.g. Intl throwing on a corrupt stored timezone, which
+      // aborted reminders for every member after the bad one).
+      logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
     }
   }
   return { households: ids.length, sent };

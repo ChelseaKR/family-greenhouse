@@ -114,11 +114,19 @@ resource "aws_cognito_user_pool_client" "main" {
     "custom:household_role",
   ]
 
+  # SECURITY: custom:household_id / custom:household_role are AUTHORIZATION
+  # attributes — they decide which household a user belongs to and what they
+  # may do there. They must NEVER appear in write_attributes: any attribute
+  # listed there is self-service writable by the end user via
+  # UpdateUserAttributes with nothing but their own access token, which would
+  # let anyone join an arbitrary household or grant themselves "owner"
+  # (privilege escalation). They stay in read_attributes (above) so they flow
+  # into ID-token claims, and are mutated exclusively by the backend through
+  # AdminUpdateUserAttributes (see the cognito-idp grant in modules/api),
+  # which enforces membership/role rules first.
   write_attributes = [
     "email",
     "name",
-    "custom:household_id",
-    "custom:household_role",
   ]
 
   access_token_validity  = 1  # hours

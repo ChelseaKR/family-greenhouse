@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -19,6 +20,7 @@ import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { BulkApplyTemplateDialog } from './BulkApplyTemplateDialog';
 import { PlantImage } from '@/components/PlantImage';
 
@@ -26,20 +28,22 @@ type ViewMode = 'grid' | 'list';
 
 export function PlantsPage() {
   useDocumentTitle('Plants');
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
   // 'active' is the default living collection; 'past' shows died/gave-away
-  // plants whose history we keep. Active stays under the bare ['plants'] key
+  // plants whose history we keep. Active stays under the ['plants', hh] key
   // so existing invalidations + the add-flow's cache read keep working.
   const [view, setView] = useState<'active' | 'past'>('active');
+  const householdId = useActiveHouseholdId();
 
   const {
     data: plants,
     isLoading,
     error,
   } = useQuery({
-    queryKey: view === 'active' ? ['plants'] : ['plants', 'past'],
+    queryKey: view === 'active' ? ['plants', householdId] : ['plants', householdId, 'past'],
     queryFn: () => plantService.getPlants(view),
   });
 
@@ -48,6 +52,14 @@ export function PlantsPage() {
       plant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       plant.species?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       plant.location?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Propagation cue: plants that have cuttings get a 🌱 mark on their card.
+  // Derived from the already-fetched list (parentPlantId is on every plant),
+  // so it costs no extra request. Note the current view only sees parents
+  // whose cuttings are in the SAME view — good enough for a cue.
+  const plantsWithCuttings = new Set(
+    (plants ?? []).map((p) => p.parentPlantId).filter((id): id is string => !!id)
   );
 
   return (
@@ -77,7 +89,11 @@ export function PlantsPage() {
       <BulkApplyTemplateDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
 
       {/* Active vs past (died / gave away) collection */}
-      <div className="flex gap-1 border-b border-primary-100/70" role="tablist" aria-label="Plant collection">
+      <div
+        className="flex gap-1 border-b border-primary-100/70"
+        role="tablist"
+        aria-label="Plant collection"
+      >
         {(['active', 'past'] as const).map((v) => (
           <button
             key={v}
@@ -194,7 +210,19 @@ export function PlantsPage() {
                 />
               </div>
               <div className="p-4">
-                <p className="text-sm font-medium text-ink truncate">{plant.name}</p>
+                <p className="text-sm font-medium text-ink truncate">
+                  {plant.name}
+                  {plantsWithCuttings.has(plant.id) && (
+                    <span
+                      className="ml-1"
+                      role="img"
+                      aria-label={t('plants.lineage.hasCuttings')}
+                      title={t('plants.lineage.hasCuttings')}
+                    >
+                      🌱
+                    </span>
+                  )}
+                </p>
                 {plant.species && (
                   <p className="text-xs text-gray-500 truncate italic">{plant.species}</p>
                 )}
@@ -218,7 +246,19 @@ export function PlantsPage() {
                     <PlantImage plant={plant} width={48} height={48} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink">{plant.name}</p>
+                    <p className="text-sm font-medium text-ink">
+                      {plant.name}
+                      {plantsWithCuttings.has(plant.id) && (
+                        <span
+                          className="ml-1"
+                          role="img"
+                          aria-label={t('plants.lineage.hasCuttings')}
+                          title={t('plants.lineage.hasCuttings')}
+                        >
+                          🌱
+                        </span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-600">
                       {[plant.species, plant.location].filter(Boolean).join(' • ') || 'No details'}
                     </p>

@@ -43,6 +43,29 @@ export async function clearHouseholdClaims(userId: string): Promise<void> {
   );
 }
 
+/**
+ * Read the household claims currently stamped on the Cognito user. Returns
+ * nulls when the attributes are unset/empty (user has no default household).
+ * Used by handlers that must decide whether a membership change affects the
+ * user's *claim* household before mutating Cognito state.
+ */
+export async function getHouseholdClaims(
+  userId: string
+): Promise<{ householdId: string | null; role: 'admin' | 'member' | null }> {
+  const result = await cognito.send(
+    new AdminGetUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: userId,
+    })
+  );
+  const attr = (name: string) => result.UserAttributes?.find((a) => a.Name === name)?.Value || null;
+  const role = attr('custom:household_role');
+  return {
+    householdId: attr('custom:household_id'),
+    role: role === 'admin' || role === 'member' ? role : null,
+  };
+}
+
 export async function deleteUser(userId: string): Promise<void> {
   await cognito.send(
     new AdminDeleteUserCommand({

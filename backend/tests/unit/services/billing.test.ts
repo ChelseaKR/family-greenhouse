@@ -75,6 +75,34 @@ describe('deltaForStripeEvent', () => {
     } as unknown as Stripe.Event;
     expect(deltaForStripeEvent(event)).toBeNull();
   });
+
+  it('rejects checkout events with missing planId metadata instead of defaulting to a paid plan', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      id: 'evt_no_plan',
+      type: 'checkout.session.completed',
+      data: {
+        object: { metadata: { householdId: 'hh-1' }, customer: 'cus_1', subscription: 'sub_1' },
+      },
+    } as unknown as Stripe.Event;
+    expect(deltaForStripeEvent(event)).toBeNull();
+  });
+
+  it('rejects subscription events with an unknown planId', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      id: 'evt_bad_plan',
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'active',
+          metadata: { householdId: 'hh-1', planId: 'toString' },
+        },
+      },
+    } as unknown as Stripe.Event;
+    expect(deltaForStripeEvent(event)).toBeNull();
+  });
 });
 
 describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
@@ -105,34 +133,119 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
     expect(await recordStripeEventOnce('evt_dup')).toBe(false);
   });
 
-  it('does not apply a subscription update for a duplicate event', async () => {
-    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
-    const conditionErr = Object.assign(new Error('exists'), {
-      name: 'ConditionalCheckFailedException',
-    });
-    // First send = the ledger PutCommand, which fails the condition (duplicate).
-    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditionErr);
-    const { applyStripeEvent } = await import('../../../src/services/billing.js');
-    await applyStripeEvent({
-      id: 'evt_dup',
-      type: 'checkout.session.completed',
-      data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' } } },
-    } as unknown as Stripe.Event);
-    // Only the ledger write was attempted — no follow-up UpdateCommand.
-    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
-  });
-
-  it('applies the subscription update for a first-seen event', async () => {
+  it('applies the subscription update BEFORE recording the dedupe ledger row', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValue({});
     const { applyStripeEvent } = await import('../../../src/services/billing.js');
     await applyStripeEvent({
       id: 'evt_new',
+      created: 1_700_000_000,
       type: 'checkout.session.completed',
       data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' }, customer: 'cus_1' } },
     } as unknown as Stripe.Event);
-    // Ledger Put + subscription Update.
+    const calls = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: Record<string, unknown> });
+    expect(calls).toHaveLength(2);
+    // Apply-first ordering: a failed apply must NOT leave a ledger row behind,
+    // or Stripe's retry would be skipped as a "duplicate" forever.
+    expect(calls[0].kind).toBe('Update');
+    expect(calls[1].kind).toBe('Put');
+    expect((calls[1].input as { Item: { PK: string } }).Item.PK).toBe('STRIPE_EVENT#evt_new');
+  });
+
+  it('a failed apply leaves no ledger row, so the Stripe retry succeeds', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      id: 'evt_retry',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' }, customer: 'cus_1' } },
+    } as unknown as Stripe.Event;
+
+    // First delivery: the household Update throws (transient DDB failure) and
+    // the error propagates → webhook returns 5xx → Stripe will retry.
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('DDB throttled'));
+    await expect(applyStripeEvent(event)).rejects.toThrow('DDB throttled');
+    // Crucially: no ledger Put was attempted before the failure.
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+
+    // Retry delivery: both writes succeed.
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    await applyStripeEvent(event);
+    const retryCalls = vi
+      .mocked(dynamodb.send)
+      .mock.calls.slice(1)
+      .map((c) => c[0] as unknown as { kind: string });
+    expect(retryCalls.map((c) => c.kind)).toEqual(['Update', 'Put']);
+  });
+
+  it('still applies (harmlessly) when the ledger says duplicate', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const conditionErr = Object.assign(new Error('exists'), {
+      name: 'ConditionalCheckFailedException',
+    });
+    // Apply succeeds, ledger Put reports duplicate — must not throw.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}).mockRejectedValueOnce(conditionErr);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_dup',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' }, customer: 'cus_1' } },
+    } as unknown as Stripe.Event);
     expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips out-of-order events (stored lastStripeEventCreated is newer)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const conditionErr = Object.assign(new Error('stale'), {
+      name: 'ConditionalCheckFailedException',
+    });
+    // The conditioned household Update fails: a newer event already applied.
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditionErr);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_stale',
+      created: 1_600_000_000,
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'active',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    // Update attempted, skipped as stale; no ledger write, no throw.
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+
+  it('stamps event.created on the household row with an out-of-order guard condition', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { updateHouseholdSubscription } = await import('../../../src/services/billing.js');
+    const applied = await updateHouseholdSubscription(
+      'hh-1',
+      { planId: 'garden', status: 'active' },
+      1_700_000_123
+    );
+    expect(applied).toBe(true);
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: {
+        ConditionExpression: string;
+        UpdateExpression: string;
+        ExpressionAttributeValues: Record<string, unknown>;
+      };
+    };
+    expect(cmd.input.ConditionExpression).toContain(
+      'lastStripeEventCreated <= :lastStripeEventCreated'
+    );
+    expect(cmd.input.UpdateExpression).toContain(
+      '#lastStripeEventCreated = :lastStripeEventCreated'
+    );
+    expect(cmd.input.ExpressionAttributeValues[':lastStripeEventCreated']).toBe(1_700_000_123);
   });
 });
 

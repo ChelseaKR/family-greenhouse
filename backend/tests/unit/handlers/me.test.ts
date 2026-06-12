@@ -13,6 +13,12 @@ vi.mock('../../../src/services/householdService.js');
 vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/notificationPrefs.js');
+vi.mock('../../../src/services/pushSubscriptions.js');
+vi.mock('../../../src/services/apiKeys.js');
+vi.mock('../../../src/utils/dynamodb.js', () => ({
+  dynamodb: { send: vi.fn() },
+  TABLE_NAME: 'test-table',
+}));
 vi.mock('../../../src/services/icsExport.js', () => ({
   buildIcs: vi.fn(() => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'),
 }));
@@ -49,17 +55,40 @@ function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayPr
 const ctx = {} as Context;
 
 describe('me handler', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
+    // authMiddleware validates the claim household against the membership
+    // table; pre-warm the cache so the automocked householdService doesn't
+    // 403 every request that carries the hh-1 claim.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
   });
 
   describe('deleteMe', () => {
-    it('returns 204 when the lone member deletes their account (cascades plant cleanup)', async () => {
+    // The deleteMe flow touches push subscriptions + notification prefs even
+    // when the user has no memberships; default those mocks to empty here so
+    // each test only declares what it cares about.
+    async function mockUserScopedCleanup() {
+      const pushSubscriptions = await import('../../../src/services/pushSubscriptions.js');
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      vi.mocked(pushSubscriptions.getUserSubscriptions).mockResolvedValue([]);
+      vi.mocked(pushSubscriptions.deleteSubscription).mockResolvedValue(undefined);
+      vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+    }
+
+    it('returns 204 when the lone member deletes their account (cascades plant + key cleanup)', async () => {
       const householdService = await import('../../../src/services/householdService.js');
       const plantService = await import('../../../src/services/plantService.js');
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const apiKeys = await import('../../../src/services/apiKeys.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
 
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '' },
+      ]);
       vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
         {
           householdId: 'hh-1',
@@ -85,6 +114,19 @@ describe('me handler', () => {
         },
       ]);
       vi.mocked(plantService.deletePlant).mockResolvedValueOnce(undefined);
+      vi.mocked(apiKeys.listApiKeys).mockResolvedValueOnce([
+        {
+          id: 'key-1',
+          householdId: 'hh-1',
+          label: 'old key',
+          last4: 'abcd',
+          scopes: ['read:plants'],
+          createdAt: '',
+          createdBy: 'user-1',
+          lastUsedAt: null,
+        },
+      ]);
+      vi.mocked(apiKeys.revokeApiKey).mockResolvedValueOnce(true);
       vi.mocked(householdService.removeMember).mockResolvedValueOnce(undefined);
       vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
 
@@ -96,16 +138,110 @@ describe('me handler', () => {
 
       expect(res.statusCode).toBe(204);
       expect(plantService.deletePlant).toHaveBeenCalledWith('hh-1', 'p1');
+      expect(apiKeys.revokeApiKey).toHaveBeenCalledWith('hh-1', 'key-1');
       expect(householdService.removeMember).toHaveBeenCalledWith('hh-1', 'user-1');
       expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
     });
 
-    it('refuses when caller is the only admin in a multi-member household', async () => {
+    it('cleans up EVERY household membership, push subscriptions, and prefs (multi-household)', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const plantService = await import('../../../src/services/plantService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const apiKeys = await import('../../../src/services/apiKeys.js');
+      const pushSubscriptions = await import('../../../src/services/pushSubscriptions.js');
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+
+      // hh-1: solo household (full wipe). hh-2: multi-member household where
+      // the caller is a plain member (just remove the row).
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '' },
+        { householdId: 'hh-2', role: 'member', name: 'Cabin', joinedAt: '' },
+      ]);
+      vi.mocked(householdService.getHouseholdMembers).mockImplementation(async (hh: string) =>
+        hh === 'hh-1'
+          ? [
+              {
+                householdId: 'hh-1',
+                userId: 'user-1',
+                name: 'Test User',
+                email: 'test@example.com',
+                role: 'admin',
+                joinedAt: '',
+              },
+            ]
+          : [
+              {
+                householdId: 'hh-2',
+                userId: 'user-1',
+                name: 'Test User',
+                email: 'test@example.com',
+                role: 'member',
+                joinedAt: '',
+              },
+              {
+                householdId: 'hh-2',
+                userId: 'user-9',
+                name: 'Owner',
+                email: 'o@x.com',
+                role: 'admin',
+                joinedAt: '',
+              },
+            ]
+      );
+      vi.mocked(plantService.getPlants).mockResolvedValue([]);
+      vi.mocked(apiKeys.listApiKeys).mockResolvedValue([]);
+      vi.mocked(householdService.removeMember).mockResolvedValue(undefined);
+      vi.mocked(pushSubscriptions.getUserSubscriptions).mockResolvedValueOnce([
+        {
+          userId: 'user-1',
+          householdId: 'hh-1',
+          endpoint: 'https://push.example/ep1',
+          keys: { p256dh: 'k', auth: 'a' },
+          createdAt: '',
+        },
+      ]);
+      vi.mocked(pushSubscriptions.deleteSubscription).mockResolvedValue(undefined);
+      vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+      vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(204);
+      // Member rows removed from BOTH households, not just the active claim one.
+      expect(householdService.removeMember).toHaveBeenCalledWith('hh-1', 'user-1');
+      expect(householdService.removeMember).toHaveBeenCalledWith('hh-2', 'user-1');
+      // Solo household hh-1 had its keys enumerated; multi-member hh-2 did not.
+      expect(apiKeys.listApiKeys).toHaveBeenCalledWith('hh-1');
+      expect(apiKeys.listApiKeys).not.toHaveBeenCalledWith('hh-2');
+      // Push subscription deleted via the service surface.
+      expect(pushSubscriptions.deleteSubscription).toHaveBeenCalledWith(
+        'user-1',
+        'https://push.example/ep1'
+      );
+      // Notification prefs row deleted inline (USER#{id}/PREFS).
+      const prefDelete = vi
+        .mocked(dynamodb.send)
+        .mock.calls.map((c) => c[0] as unknown as { input?: { Key?: Record<string, string> } })
+        .find((c) => c.input?.Key?.SK === 'PREFS');
+      expect(prefDelete?.input?.Key).toEqual({ PK: 'USER#user-1', SK: 'PREFS' });
+      expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
+    });
+
+    it('refuses when caller is the only admin in ANY multi-member household, before deleting anything', async () => {
       const householdService = await import('../../../src/services/householdService.js');
       const plantService = await import('../../../src/services/plantService.js');
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
 
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '' },
+      ]);
       vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
         {
           householdId: 'hh-1',
@@ -135,6 +271,7 @@ describe('me handler', () => {
       expect(res.body).toMatch(/promote another member/i);
       // Make sure we didn't get past the guardrail.
       expect(plantService.deletePlant).not.toHaveBeenCalled();
+      expect(householdService.removeMember).not.toHaveBeenCalled();
       expect(cognitoUsers.deleteUser).not.toHaveBeenCalled();
     });
 
@@ -307,7 +444,7 @@ describe('me handler', () => {
       expect(taskService.getTasks).toHaveBeenCalledWith('hh-1');
     });
 
-    it('returns 400 when the caller has no active household', async () => {
+    it('returns 403 when the caller has no active household', async () => {
       const { calendarIcs } = await import('../../../src/handlers/me/handler.js');
       const res = (await calendarIcs(
         buildEvent({
@@ -325,7 +462,8 @@ describe('me handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
 
-      expect(res.statusCode).toBe(400);
+      // 403 per convention: well-formed request, identity lacks a household.
+      expect(res.statusCode).toBe(403);
       expect(res.body).toMatch(/no household/i);
     });
   });

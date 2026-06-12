@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -263,6 +263,13 @@ export function AccountSettings() {
             Download CSV
           </Button>
         </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Moving in the other direction?{' '}
+          <RouterLink to="/plants/import" className="font-medium text-primary-700 underline">
+            Import plants from a CSV or JSON file
+          </RouterLink>{' '}
+          — including exports from this app.
+        </p>
       </Card>
 
       <Card>

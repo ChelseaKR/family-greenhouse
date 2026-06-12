@@ -40,6 +40,7 @@ const QUARTER_DAYS = 90;
 export interface PestAlert {
   plantId: string;
   plantName: string;
+  pestId: number;
   pestName: string;
   message: string;
 }
@@ -48,14 +49,26 @@ function currentMonthName(now = new Date()): string {
   return MONTHS[now.getUTCMonth()];
 }
 
-function pestActiveThisMonth(pest: PerenualPestSummary, monthName: string): boolean {
-  const text = (pest.description ?? '').toLowerCase();
+function capitalize(m: string): string {
+  return m[0].toUpperCase() + m.slice(1);
+}
+
+// Case-SENSITIVE, word-boundary match on capitalized month names. The old
+// lowercase `includes()` check treated the verb "may" ("aphids may appear")
+// as the month May — virtually every pest description contains "may", so
+// every pest looked May-only. Heuristic trade-off, documented: a lowercased
+// month mid-sentence is missed (falls through to "no month mentioned →
+// always relevant" more often), and a sentence-initial "May ..." verb still
+// false-positives; both are far rarer than the old failure mode.
+const ANY_MONTH_RE = new RegExp(`\\b(${MONTHS.map(capitalize).join('|')})\\b`);
+
+export function pestActiveThisMonth(pest: PerenualPestSummary, monthName: string): boolean {
+  const text = pest.description ?? '';
   // If no description mentions any month at all, treat the pest as
   // "always relevant" — better to notify than to silently skip species
   // with thin upstream data.
-  const anyMonth = MONTHS.some((m) => text.includes(m));
-  if (!anyMonth) return true;
-  return text.includes(monthName);
+  if (!ANY_MONTH_RE.test(text)) return true;
+  return new RegExp(`\\b${capitalize(monthName)}\\b`).test(text);
 }
 
 async function lastAlertedAt(plantId: string, pestId: number): Promise<string | null> {
@@ -68,7 +81,12 @@ async function lastAlertedAt(plantId: string, pestId: number): Promise<string | 
   return (result.Item?.alertedAt as string) ?? null;
 }
 
-async function recordAlertedAt(plantId: string, pestId: number): Promise<void> {
+/**
+ * Write the 90-day suppression marker for a plant+pest pair. Exported so the
+ * caller (the reminder run) records it only AFTER a successful delivery — a
+ * failed send must not suppress the alert for a whole quarter.
+ */
+export async function markAlerted(plantId: string, pestId: number): Promise<void> {
   await dynamodb.send(
     new PutCommand({
       TableName: TABLE_NAME,
@@ -115,10 +133,12 @@ export async function evaluatePestAlerts(
       alerts.push({
         plantId: plant.id,
         plantName: plant.name,
+        pestId: pest.id,
         pestName: pest.commonName,
         message: `Your ${plant.name} may be entering ${pest.commonName} season — give it a quick check.`,
       });
-      await recordAlertedAt(plant.id, pest.id);
+      // NOTE: the suppression marker is deliberately NOT written here — the
+      // caller calls markAlerted() after the notification actually goes out.
       break;
     }
   }

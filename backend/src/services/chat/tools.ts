@@ -9,6 +9,7 @@
  *     no createdBy fields. Tool results land directly in the next prompt;
  *     leaking PII here leaks it to Bedrock.
  */
+import { v4 as uuid } from 'uuid';
 import * as plantService from '../plantService.js';
 import * as taskService from '../taskService.js';
 import * as climateService from '../climate.js';
@@ -140,23 +141,55 @@ const searchCareKnowledge: ToolDefinition<{ query: string }> = {
  * a Confirm/Cancel card. Confirmation hits POST /tasks separately —
  * keeps the model from doing destructive writes without a user-in-the-loop.
  *
- * The TASK_TYPES enum mirrors the server-side task schema; if those drift
- * apart Zod validation will reject the resulting POST /tasks call.
+ * The TASK_TYPES enum + the bounds below mirror createTaskSchema in
+ * models/schemas.ts (type enum, frequency 1–365, customType ≤50, notes
+ * ≤500). The executor re-validates everything — Claude's JSON-schema
+ * validation is best-effort, and a card that POST /tasks would reject is
+ * worse than an invalid tool_result the model can recover from.
  */
 const TASK_TYPES = ['water', 'fertilize', 'prune', 'repot', 'custom'] as const;
 type TaskType = (typeof TASK_TYPES)[number];
 
+/** Max confirm cards a single turn may produce. Mirrored in the system prompt. */
+export const MAX_PROPOSALS_PER_TURN = 3;
+
 interface ProposeReminderInput {
   plantId: string;
   type: TaskType;
+  customType?: string;
   frequencyDays: number;
+  assignedTo?: string;
+  note?: string;
   rationale?: string;
+}
+
+export interface ReminderProposal {
+  /** Server-assigned id — lets the UI key cards stably across re-renders. */
+  proposalId: string;
+  plantId: string;
+  plantName: string;
+  type: TaskType;
+  customType: string | null;
+  frequencyDays: number;
+  assignedTo: string | null;
+  /** Display name of the assignee, looked up server-side. */
+  assigneeName: string | null;
+  note: string | null;
+  rationale: string | null;
+}
+
+export type ProposeReminderResult =
+  | { status: 'proposed'; proposal: ReminderProposal }
+  | { status: 'invalid'; reason: string };
+
+function invalid(reason: string): ProposeReminderResult {
+  return { status: 'invalid', reason };
 }
 
 const proposeReminderTask: ToolDefinition<ProposeReminderInput> = {
   name: 'propose_reminder_task',
   description:
-    "Propose a recurring reminder task for one of the user's plants. This does NOT create the task — it shows the user a confirm card; they tap Confirm to actually create it. Use this when the user asks 'can you set up a watering schedule' or 'remind me to fertilize Bertha monthly'. ALWAYS look up the plant first with list_household_plants to get its real plantId. Include a concise rationale explaining the recommendation (e.g. 'tropicals like Monstera want roughly weekly watering in the growing season').",
+    "Propose a recurring reminder task for one of the user's plants. This does NOT create the task — it shows the user a 'Create task' card; the task only exists after the user confirms it there. Never tell the user the task/reminder was created or set up — say you've suggested it and they should confirm via the card. Use this when the user asks for reminders or schedules, e.g. 'can you set up a watering schedule' or 'remind me to fertilize Bertha monthly'. ALWAYS look up the plant first with list_household_plants to get its real plantId. At most 3 proposals per turn. Include a concise rationale explaining the recommendation (e.g. 'tropicals like Monstera want roughly weekly watering in the growing season').",
   input_schema: {
     type: 'object',
     properties: {
@@ -170,11 +203,27 @@ const proposeReminderTask: ToolDefinition<ProposeReminderInput> = {
         enum: [...TASK_TYPES],
         description: 'Task type. Use "custom" only when none of water/fertilize/prune/repot fit.',
       },
+      customType: {
+        type: 'string',
+        maxLength: 50,
+        description:
+          'Short label for the task when type is "custom" (e.g. "mist leaves"). Required for custom tasks, ignored otherwise.',
+      },
       frequencyDays: {
         type: 'integer',
         minimum: 1,
         maximum: 365,
         description: 'How often the task should recur, in days.',
+      },
+      assignedTo: {
+        type: 'string',
+        description:
+          'Optional userId of the household member to assign the task to. Only when the user explicitly asked for it; must be a real member userId.',
+      },
+      note: {
+        type: 'string',
+        maxLength: 500,
+        description: 'Optional note to store on the task itself (visible on the task afterwards).',
       },
       rationale: {
         type: 'string',
@@ -184,25 +233,80 @@ const proposeReminderTask: ToolDefinition<ProposeReminderInput> = {
     },
     required: ['plantId', 'type', 'frequencyDays'],
   },
-  execute: async (input, ctx) => {
-    // Verify the plant actually belongs to the caller's household. The model
-    // could hallucinate a UUID or recall one from training; either is a
-    // confirmation card pointed at nothing. Refuse server-side.
+  execute: async (input, ctx): Promise<ProposeReminderResult> => {
+    // Per-turn cap. The orchestrator tracks accepted proposals; refuse
+    // beyond the cap so one turn can't wallpaper the chat with cards.
+    if ((ctx.proposalsThisTurn ?? 0) >= MAX_PROPOSALS_PER_TURN) {
+      return invalid(
+        `Proposal cap reached (${MAX_PROPOSALS_PER_TURN} per turn). Ask the user before suggesting more reminders.`
+      );
+    }
+
+    // Re-validate against the task schema bounds — Claude's schema check is
+    // advisory, and a proposal POST /tasks would reject must never card.
+    if (!TASK_TYPES.includes(input.type)) {
+      return invalid(
+        `Unknown task type "${String(input.type)}". Use one of: ${TASK_TYPES.join(', ')}.`
+      );
+    }
+    const freq = Number(input.frequencyDays);
+    if (!Number.isInteger(freq) || freq < 1 || freq > 365) {
+      return invalid('frequencyDays must be an integer between 1 and 365.');
+    }
+    const customType = input.customType?.trim();
+    if (input.type === 'custom' && !customType) {
+      return invalid('customType is required when type is "custom" — give the task a short label.');
+    }
+    if (customType && customType.length > 50) {
+      return invalid('customType must be 50 characters or fewer.');
+    }
+    if (input.note && input.note.length > 500) {
+      return invalid('note must be 500 characters or fewer.');
+    }
+
+    // Verify the plant actually belongs to the caller's household AND is
+    // still being cared for. The model could hallucinate a UUID or recall
+    // one from training; either is a confirmation card pointed at nothing.
     const plant = await plantService.getPlant(ctx.householdId, input.plantId);
     if (!plant) {
-      return {
-        accepted: false,
-        reason: `Plant ${input.plantId} not found in this household. Re-call list_household_plants and use a real id.`,
-      };
+      return invalid(
+        `Plant ${input.plantId} not found in this household. Re-call list_household_plants and use a real id.`
+      );
     }
+    if (plant.status !== 'active') {
+      return invalid(
+        `Plant "${plant.name}" is no longer active (${plant.status}) — reminders can only be proposed for active plants.`
+      );
+    }
+
+    // If the model wants to assign the task, the assignee must be a real
+    // member of THIS household — anything else is a card that 400s on
+    // confirm (or worse, leaks a cross-household assignment attempt).
+    let assigneeName: string | null = null;
+    if (input.assignedTo) {
+      const members = await householdService.getHouseholdMembers(ctx.householdId);
+      const member = members.find((m) => m.userId === input.assignedTo);
+      if (!member) {
+        return invalid(
+          `assignedTo "${input.assignedTo}" is not a member of this household. Omit it or use a real member userId.`
+        );
+      }
+      assigneeName = member.name;
+    }
+
     return {
-      accepted: true,
+      status: 'proposed',
       proposal: {
+        proposalId: uuid(),
         plantId: input.plantId,
         plantName: plant.name,
         type: input.type,
-        frequencyDays: input.frequencyDays,
-        rationale: input.rationale ?? null,
+        customType: input.type === 'custom' ? (customType ?? null) : null,
+        frequencyDays: freq,
+        assignedTo: input.assignedTo ?? null,
+        assigneeName,
+        note: input.note?.trim() || null,
+        rationale: input.rationale?.trim() || null,
       },
     };
   },

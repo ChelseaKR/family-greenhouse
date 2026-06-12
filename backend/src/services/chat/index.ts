@@ -11,8 +11,19 @@
 import createHttpError from 'http-errors';
 import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
-import { invokeChatModel, type BedrockMessage } from './bedrock.js';
-import { findTool, TOOL_REGISTRY } from './tools.js';
+import {
+  invokeChatModel,
+  invokeChatModelStream,
+  type BedrockChatResponse,
+  type BedrockMessage,
+} from './bedrock.js';
+import {
+  findTool,
+  MAX_PROPOSALS_PER_TURN,
+  TOOL_REGISTRY,
+  type ProposeReminderResult,
+  type ReminderProposal,
+} from './tools.js';
 import {
   appendMessage,
   getBudget,
@@ -62,8 +73,19 @@ Rules:
    yet — set it in Settings → Climate so I can give weather-aware tips.").
 6. Never invent plant identification from descriptions alone. Recommend the
    user use the Add Plant flow with a photo if they're unsure.
+7. When the user asks for a reminder or care schedule, offer it via the
+   propose_reminder_task tool (look the plant up first to get its real id).
+   A proposal is only a SUGGESTION: the user sees a card with a "Create
+   task" button and the task exists only after they press it. Always tell
+   the user to confirm via the card, and NEVER say the reminder/task was
+   created or scheduled — it wasn't. Propose at most ${MAX_PROPOSALS_PER_TURN}
+   reminders in a single reply.
 
 Output: plain text. No markdown headers. Lightweight bullet points are okay.`;
+
+// Exported for tests (the prompt's proposal rules are part of the safe-write
+// contract: the model must route writes through the confirm card).
+export { SYSTEM_PROMPT };
 
 export interface RunChatTurnInput {
   userId: string;
@@ -73,13 +95,12 @@ export interface RunChatTurnInput {
   message: string;
 }
 
-export interface ProposedReminderTask {
-  plantId: string;
-  plantName: string;
-  type: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
-  frequencyDays: number;
-  rationale?: string | null;
-}
+/**
+ * The validated proposal shape produced by the propose_reminder_task tool
+ * (see tools.ts). Re-exported under the name the handler/frontend have
+ * always used.
+ */
+export type ProposedReminderTask = ReminderProposal;
 
 export interface RunChatTurnResult {
   conversationId: string;
@@ -108,9 +129,29 @@ function toBedrockMessages(history: ChatMessageRecord[]): BedrockMessage[] {
   }));
 }
 
-function trimHistory(history: ChatMessageRecord[]): ChatMessageRecord[] {
+/**
+ * Trim history to the model's window without orphaning tool blocks.
+ *
+ * A naive `slice(-N)` can cut between an assistant tool_use message and the
+ * user tool_result message that answers it — Bedrock rejects either half on
+ * its own. Instead, advance the window's start to the next plain user text
+ * message: every assistant tool_use we keep then has its tool_result kept
+ * too (we only ever cut from the front), and the window starts with a user
+ * turn as the API requires. The current turn's user message is always last
+ * in history, so this terminates and never returns an empty window.
+ *
+ * Exported for tests.
+ */
+export function trimHistory(history: ChatMessageRecord[]): ChatMessageRecord[] {
   if (history.length <= MAX_HISTORY_MESSAGES) return history;
-  return history.slice(-MAX_HISTORY_MESSAGES);
+  let start = history.length - MAX_HISTORY_MESSAGES;
+  while (
+    start < history.length &&
+    (history[start].role !== 'user' || history[start].content.some((b) => b.type === 'tool_result'))
+  ) {
+    start += 1;
+  }
+  return history.slice(start);
 }
 
 function extractAssistantText(blocks: ContentBlock[]): string {
@@ -122,10 +163,55 @@ function extractAssistantText(blocks: ContentBlock[]): string {
 }
 
 /**
+ * Events yielded by the streaming turn generator. Deltas and tool events are
+ * TRANSPORT-ONLY — persistence always happens on completed messages, so a
+ * dropped stream never corrupts the conversation. The terminal `done` event
+ * carries the same RunChatTurnResult the sync endpoint returns.
+ */
+export type ChatStreamEvent =
+  | { type: 'start'; conversationId: string }
+  | { type: 'delta'; text: string }
+  | { type: 'tool_start'; name: string }
+  | { type: 'proposal'; proposal: ProposedReminderTask }
+  | { type: 'done'; result: RunChatTurnResult };
+
+/**
  * Run a single chat turn: append user message, loop until end_turn or the
  * tool-call cap, persist assistant message, update budget.
+ *
+ * Sync default — drains the shared generator without streaming Bedrock.
  */
 export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnResult> {
+  const gen = turnEvents(input, { streaming: false });
+  for (;;) {
+    const next = await gen.next();
+    if (next.done) return next.value;
+  }
+}
+
+/**
+ * Streaming variant: same budget gate, tool loop, and persistence semantics
+ * as runChatTurn, but Bedrock responses arrive via
+ * InvokeModelWithResponseStream and text deltas are yielded as they land.
+ * Consume with manual `next()` (or `for await` if you only want events —
+ * the final result is also delivered as the `done` event).
+ */
+export function streamChatTurn(
+  input: RunChatTurnInput
+): AsyncGenerator<ChatStreamEvent, RunChatTurnResult> {
+  return turnEvents(input, { streaming: true });
+}
+
+/**
+ * The single source of truth for a chat turn. Both entry points share this
+ * generator so the sync and streaming paths can never drift on persistence,
+ * budgeting, or tool semantics — the only difference is which Bedrock
+ * operation each model call uses and whether deltas get forwarded.
+ */
+async function* turnEvents(
+  input: RunChatTurnInput,
+  opts: { streaming: boolean }
+): AsyncGenerator<ChatStreamEvent, RunChatTurnResult> {
   const { userId, householdId, message } = input;
   const conversationId = input.conversationId ?? newConversationId();
 
@@ -137,6 +223,8 @@ export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnR
       "You've used this month's chat allowance. The budget resets on the 1st of next month."
     );
   }
+
+  yield { type: 'start', conversationId };
 
   const now = new Date();
   const userMessageRecord: ChatMessageRecord = {
@@ -161,12 +249,37 @@ export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnR
   const proposals: ProposedReminderTask[] = [];
 
   for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
-    const response = await invokeChatModel({
+    const modelArgs = {
       system: SYSTEM_PROMPT,
       messages: messagesForModel,
       tools: TOOL_REGISTRY,
       maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
-    });
+    };
+
+    let response: BedrockChatResponse;
+    if (opts.streaming) {
+      // Manual iteration: `for await` would discard the generator's return
+      // value (the assembled response). Forward each text delta as it lands.
+      const stream = invokeChatModelStream(modelArgs);
+      let sawText = false;
+      for (;;) {
+        const next = await stream.next();
+        if (next.done) {
+          response = next.value;
+          break;
+        }
+        sawText = true;
+        yield { type: 'delta', text: next.value.text };
+      }
+      // A tool-use turn often opens with text ("Let me check your
+      // plants…"). Separate it from the next iteration's text so the
+      // streamed transcript stays readable. Transport-only.
+      if (sawText && response.stopReason === 'tool_use') {
+        yield { type: 'delta', text: '\n\n' };
+      }
+    } else {
+      response = await invokeChatModel(modelArgs);
+    }
 
     totalInputTokens += response.inputTokens;
     totalOutputTokens += response.outputTokens;
@@ -214,22 +327,27 @@ export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnR
         });
         continue;
       }
+      yield { type: 'tool_start', name: use.name };
       try {
         const out = await tool.execute(use.input as never, {
           userId,
           householdId,
           toolCallNumber: toolCallCount,
+          // Lets propose_reminder_task enforce its own per-turn cap.
+          proposalsThisTurn: proposals.length,
         });
         // For propose_reminder_task: the executor returns
-        // { accepted: true, proposal: {...} } when the plant exists. Pull
-        // the proposal out of the loop and into the API response so the
-        // UI can render a Confirm/Cancel card. Note we use the validated
-        // server-side proposal (with plantName looked up), not the raw
-        // tool input, so a hallucinated plantId is rejected at this layer.
+        // { status: 'proposed', proposal: {...} } when the proposal passed
+        // validation. Pull the proposal out of the loop and into the API
+        // response so the UI can render a confirm card. Note we use the
+        // validated server-side proposal (with plantName/assigneeName
+        // looked up and a server-assigned proposalId), not the raw tool
+        // input, so a hallucinated plantId/assignee is rejected here.
         if (use.name === 'propose_reminder_task') {
-          const result = out as { accepted: boolean; proposal?: ProposedReminderTask };
-          if (result.accepted && result.proposal) {
+          const result = out as ProposeReminderResult;
+          if (result.status === 'proposed' && result.proposal) {
             proposals.push(result.proposal);
+            yield { type: 'proposal', proposal: result.proposal };
           }
         }
         resultsContent.push({
@@ -255,6 +373,20 @@ export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnR
         conversationId,
       },
     });
+
+    // Persist the tool_result turn alongside the assistant tool_use turn.
+    // The next user turn rebuilds history from DDB; replaying an assistant
+    // tool_use with no matching tool_result is a Bedrock ValidationException,
+    // which would hard-fail every conversation right after a tool turn.
+    // Content blocks are stored as-is (DocumentClient marshals the nested
+    // maps/lists), so getConversation round-trips them verbatim.
+    const toolResultRecord: ChatMessageRecord = {
+      conversationId,
+      timestamp: new Date().toISOString(),
+      role: 'user',
+      content: resultsContent,
+    };
+    await appendMessage(householdId, toolResultRecord);
 
     // Append the assistant turn + tool_result turn to the next iteration's
     // message list. Don't re-fetch DDB; we already have authoritative state
@@ -285,7 +417,7 @@ export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnR
     },
   });
 
-  return {
+  const result: RunChatTurnResult = {
     conversationId,
     assistantText:
       extractAssistantText(finalAssistantBlocks) ||
@@ -302,6 +434,9 @@ export async function runChatTurn(input: RunChatTurnInput): Promise<RunChatTurnR
       ),
     },
   };
+
+  yield { type: 'done', result };
+  return result;
 }
 
 export async function getConversationHistory(

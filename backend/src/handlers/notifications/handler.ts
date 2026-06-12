@@ -5,9 +5,11 @@ import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
+import { authRateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
 import { remindHousehold } from '../../services/reminders.js';
+import { digestHousehold, recapHousehold, defaultRecapYear } from '../../services/digest.js';
 import { successResponse, noContentResponse } from '../../utils/response.js';
 
 const subscribeSchema = z.object({
@@ -44,9 +46,33 @@ const prefsSchema = z.object({
   timezone: z.string().min(1).max(64).default('UTC'),
   /** Opt-in seasonal pest pressure alerts. Defaults false. */
   pestAlerts: z.boolean().default(false),
+  /** Weekly "plants at risk" digest. Optional so older clients that don't
+   *  send it keep the stored value (default-on when email is enabled). */
+  weeklyDigest: z.boolean().optional(),
 });
 
 type PrefsInput = z.infer<typeof prefsSchema>;
+
+const startVerificationSchema = z.object({
+  phone: z.string().regex(/^\+[1-9]\d{6,14}$/u, 'Phone must be in E.164 format, e.g. +15551234567'),
+});
+
+type StartVerificationInput = z.infer<typeof startVerificationSchema>;
+
+const confirmVerificationSchema = z.object({
+  code: z.string().regex(/^\d{6}$/u, 'Verification code is 6 digits'),
+});
+
+type ConfirmVerificationInput = z.infer<typeof confirmVerificationSchema>;
+
+/** Optional body — `POST /notifications/run-year-recap` accepts `{year}` or
+ *  no body at all (null/undefined normalize to an empty object). */
+const recapSchema = z
+  .object({ year: z.number().int().min(2000).max(2100).optional() })
+  .nullish()
+  .transform((v) => v ?? {});
+
+type RecapInput = z.infer<typeof recapSchema>;
 
 // GET /notifications/prefs
 export const getPrefs = createHandler(
@@ -75,6 +101,7 @@ export const updatePrefs = createHandler(
       dndEnd: validatedBody.dndEnd,
       timezone: validatedBody.timezone,
       pestAlerts: validatedBody.pestAlerts,
+      weeklyDigest: validatedBody.weeklyDigest,
     });
     return successResponse(updated);
   }
@@ -140,7 +167,109 @@ export const runReminders = createHandler(
   }
 )
   .use(authMiddleware())
-  .use(requireHousehold());
+  .use(requireHousehold())
+  // Fans out push/email/SMS to the whole household — each call costs real
+  // money on the paid notification channels. "Send reminders now" is a
+  // break-glass button, not a polling target: 2/hour per admin.
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 2 }));
+
+/**
+ * POST /notifications/run-digests
+ *
+ * Manual trigger for the weekly "plants at risk" digest, scoped to the
+ * caller's household (the weekly EventBridge scan in handlers/digests covers
+ * everyone). Admin-only and tightly rate limited, mirroring run-reminders.
+ * The per-user weekly dedupe marker still applies, so re-triggering inside
+ * the same ISO week is a no-op.
+ */
+// POST /notifications/run-digests
+export const runDigests = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    if (user.householdRole !== 'admin') {
+      throw createHttpError(403, 'Admin access required');
+    }
+    const sent = await digestHousehold(user.householdId!);
+    return successResponse({ sent });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  // Same budget rationale as run-reminders: email costs money per send.
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 2 }));
+
+/**
+ * POST /notifications/run-year-recap
+ *
+ * Manual trigger for the end-of-year recap, scoped to the caller's household.
+ * Accepts an optional `{year}`; defaults to the previous calendar year (the
+ * same default the yearly EventBridge run uses). The per-household yearly
+ * marker makes retries a no-op.
+ */
+// POST /notifications/run-year-recap
+export const runYearRecap = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<RecapInput>;
+    if (user.householdRole !== 'admin') {
+      throw createHttpError(403, 'Admin access required');
+    }
+    const year = validatedBody.year ?? defaultRecapYear();
+    const sent = await recapHousehold(user.householdId!, year);
+    return successResponse({ sent, year });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(validateBody(recapSchema))
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 2 }));
+
+/**
+ * POST /notifications/phone/start-verification
+ *
+ * Sends a 6-digit code to the submitted E.164 number. Each request costs an
+ * SMS, and unthrottled it would let an attacker spray texts at arbitrary
+ * numbers from our SNS origination identity — hence the IP limiter PLUS a
+ * tight 3/hour per-user budget.
+ */
+// POST /notifications/phone/start-verification
+export const startPhoneVerification = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<StartVerificationInput>;
+    await notificationPrefs.startPhoneVerification(user.userId, validatedBody.phone);
+    return successResponse({ sent: true });
+  }
+)
+  .use(authRateLimit())
+  .use(authMiddleware())
+  .use(validateBody(startVerificationSchema))
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 3 }));
+
+/**
+ * POST /notifications/phone/confirm-verification
+ *
+ * Confirms the code; on success stamps `phoneVerified` + the verified number
+ * on the prefs row and returns the updated prefs. Wrong codes burn one of 5
+ * attempts (tracked in DDB, not per-container memory). The route limiter is
+ * defence-in-depth on top of that counter.
+ */
+// POST /notifications/phone/confirm-verification
+export const confirmPhoneVerification = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<ConfirmVerificationInput>;
+    const updated = await notificationPrefs.confirmPhoneVerification(
+      user.userId,
+      validatedBody.code
+    );
+    return successResponse(updated);
+  }
+)
+  .use(authRateLimit())
+  .use(authMiddleware())
+  .use(validateBody(confirmVerificationSchema))
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 10 }));
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
@@ -149,4 +278,8 @@ export const handler = createRouter({
   'POST /notifications/subscribe': subscribe,
   'POST /notifications/unsubscribe': unsubscribe,
   'POST /notifications/run-reminders': runReminders,
+  'POST /notifications/run-digests': runDigests,
+  'POST /notifications/run-year-recap': runYearRecap,
+  'POST /notifications/phone/start-verification': startPhoneVerification,
+  'POST /notifications/phone/confirm-verification': confirmPhoneVerification,
 });

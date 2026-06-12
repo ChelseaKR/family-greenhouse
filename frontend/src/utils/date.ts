@@ -1,3 +1,16 @@
+/**
+ * Calendar-day difference `to - from`, immune to DST. Subtracting local
+ * midnights gives 23h/25h days across DST transitions, and Math.ceil over
+ * a 25h gap reports "2 days" for yesterday. Instead we re-anchor both
+ * local calendar dates at UTC noon, where every day is exactly 24h.
+ * Positive = `to` is after `from`; negative = before.
+ */
+export function calendarDaysBetween(from: Date, to: Date): number {
+  const a = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate(), 12);
+  const b = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate(), 12);
+  return Math.round((b - a) / (24 * 60 * 60 * 1000));
+}
+
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return 'Never';
 
@@ -11,28 +24,20 @@ export function formatDate(dateString: string | null | undefined): string {
 
 export function formatRelativeDate(dateString: string): string {
   const date = new Date(dateString);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const diff = calendarDaysBetween(new Date(), date);
 
-  today.setHours(0, 0, 0, 0);
-  tomorrow.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-
-  if (date.getTime() < today.getTime()) {
-    const daysOverdue = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysOverdue === 1) return 'Yesterday';
-    return `${daysOverdue} days ago`;
+  if (diff < 0) {
+    if (diff === -1) return 'Yesterday';
+    return `${-diff} days ago`;
   }
-  if (date.getTime() === today.getTime()) {
+  if (diff === 0) {
     return 'Today';
   }
-  if (date.getTime() === tomorrow.getTime()) {
+  if (diff === 1) {
     return 'Tomorrow';
   }
 
-  const daysUntil = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntil <= 7) {
+  if (diff <= 7) {
     return date.toLocaleDateString(undefined, { weekday: 'long' });
   }
 

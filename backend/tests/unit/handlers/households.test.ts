@@ -56,6 +56,17 @@ describe('households handler', () => {
     // resolved promise so callers can keep chaining.
     const activity = await import('../../../src/services/activity.js');
     vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
+    // authMiddleware now validates the claim household against the
+    // membership table. Pre-warm the cache for the default admin caller so
+    // per-test `getMemberByUserId` Once-mocks stay reserved for the
+    // handlers' own target-member lookups. Tests that need a non-admin
+    // caller re-warm with role 'member'.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
   });
 
   it('createHousehold allows a user with an existing household to create another (multi-household)', async () => {
@@ -130,6 +141,10 @@ describe('households handler', () => {
   });
 
   it('createInvite requires admin role', async () => {
+    // The membership row (here: the warmed cache) is authoritative for the
+    // caller's role — re-warm as a plain member.
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
     const { createInvite } = await import('../../../src/handlers/households/handler.js');
     const event = buildEvent(memberClaims, {
       httpMethod: 'POST',
@@ -217,7 +232,7 @@ describe('households handler', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('removeMember clears Cognito household claims after removal', async () => {
+  it('removeMember clears claims when removed from the claim household with no other memberships', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
     const { removeMember } = await import('../../../src/handlers/households/handler.js');
@@ -230,6 +245,12 @@ describe('households handler', () => {
       joinedAt: '',
     });
     vi.mocked(householdService.removeMember).mockResolvedValueOnce(undefined);
+    // hh-1 IS user-2's claim household, and they have no other memberships.
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      role: 'member',
+    });
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([]);
     vi.mocked(cognitoUsers.clearHouseholdClaims).mockResolvedValueOnce(undefined);
     const event = buildEvent(adminClaims, {
       httpMethod: 'DELETE',
@@ -238,6 +259,68 @@ describe('households handler', () => {
     const res = (await removeMember(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(204);
     expect(cognitoUsers.clearHouseholdClaims).toHaveBeenCalledWith('user-2');
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+  });
+
+  it('removeMember on a SECONDARY household preserves the claim household untouched', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { removeMember } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(householdService.removeMember).mockResolvedValueOnce(undefined);
+    // user-2's claim household is hh-OTHER; being removed from hh-1 must not
+    // log them out of hh-OTHER (the pre-fix bug: unconditional clear).
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValueOnce({
+      householdId: 'hh-other',
+      role: 'admin',
+    });
+    const event = buildEvent(adminClaims, {
+      httpMethod: 'DELETE',
+      pathParameters: { householdId: 'hh-1', userId: 'user-2' },
+    });
+    const res = (await removeMember(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(204);
+    expect(cognitoUsers.clearHouseholdClaims).not.toHaveBeenCalled();
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+    expect(householdService.getMembershipsByUser).not.toHaveBeenCalled();
+  });
+
+  it('removeMember from the claim household re-points claims at a remaining membership', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { removeMember } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(householdService.removeMember).mockResolvedValueOnce(undefined);
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      role: 'member',
+    });
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+      { householdId: 'hh-2', role: 'admin', name: 'Cabin', joinedAt: '' },
+    ]);
+    vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+    const event = buildEvent(adminClaims, {
+      httpMethod: 'DELETE',
+      pathParameters: { householdId: 'hh-1', userId: 'user-2' },
+    });
+    const res = (await removeMember(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(204);
+    expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-2', 'admin');
+    expect(cognitoUsers.clearHouseholdClaims).not.toHaveBeenCalled();
   });
 
   it('updateMemberRole refuses self-demotion', async () => {
@@ -252,7 +335,7 @@ describe('households handler', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('updateMemberRole writes role + Cognito claim', async () => {
+  it('updateMemberRole writes role + Cognito claim when this is the claim household', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
     const { updateMemberRole } = await import('../../../src/handlers/households/handler.js');
@@ -272,6 +355,10 @@ describe('households handler', () => {
       role: 'admin',
       joinedAt: '',
     });
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      role: 'member',
+    });
     vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
     const event = buildEvent(adminClaims, {
       httpMethod: 'PUT',
@@ -282,6 +369,114 @@ describe('households handler', () => {
     const res = (await updateMemberRole(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-1', 'admin');
+  });
+
+  it('updateMemberRole does NOT rewrite claims when the target claims a different household', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { updateMemberRole } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-2',
+      name: 'B',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(householdService.setMemberRole).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-2',
+      name: 'B',
+      email: 'b@b.com',
+      role: 'admin',
+      joinedAt: '',
+    });
+    // user-2's default household is hh-other: a role change in hh-1 must not
+    // hijack their default household (the pre-fix bug: unconditional set).
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValueOnce({
+      householdId: 'hh-other',
+      role: 'member',
+    });
+    const event = buildEvent(adminClaims, {
+      httpMethod: 'PUT',
+      pathParameters: { householdId: 'hh-1', userId: 'user-2' },
+      body: JSON.stringify({ role: 'admin' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = (await updateMemberRole(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+  });
+
+  it('joinHousehold maps the addMember conditional-write race to "already a member"', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'admin',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    });
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    // Pre-check sees no member row…
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    // …but a concurrent join wins the transacted conditional Put (the
+    // service surfaces the member-row CancellationReason under the
+    // long-established ConditionalCheckFailedException name).
+    vi.mocked(householdService.addMember).mockRejectedValueOnce(
+      Object.assign(new Error('exists'), { name: 'ConditionalCheckFailedException' })
+    );
+    const event = buildEvent(
+      { sub: 'user-2', email: 'b@b.com' },
+      { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+    );
+    const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatch(/already a member/i);
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+  });
+
+  it('joinHousehold returns 402 (not 400) when the transacted member cap loses', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'admin',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    });
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    // The memberCount increment lost against the plan cap inside the
+    // service's TransactWriteCommand (e.g. a concurrent join took the last
+    // Garden slot) — distinguishable from duplicate-join by error name.
+    vi.mocked(householdService.addMember).mockRejectedValueOnce(
+      Object.assign(new Error('Member limit of 6 reached'), { name: 'PlanLimitError' })
+    );
+    const event = buildEvent(
+      { sub: 'user-2', email: 'b@b.com' },
+      { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+    );
+    const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    expect(res.body).toMatch(/Garden plan, limited to 6 members/);
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
 
   it('getActivity blocks cross-household callers', async () => {
@@ -329,7 +524,7 @@ describe('households handler', () => {
       createdBy: 'admin',
     });
     vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
-    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([]);
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
     vi.mocked(householdService.addMember).mockResolvedValueOnce({
       householdId: 'hh-9',
       userId: 'user-2',
@@ -345,6 +540,11 @@ describe('households handler', () => {
     );
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
+    // Cap enforcement moved into the service transaction — the handler hands
+    // the plan's maxMembers down (default billing mock = garden → 6) and no
+    // longer pre-counts member rows.
+    expect(householdService.addMember).toHaveBeenCalledWith('hh-9', 'user-2', 'Bob', 'b@b.com', 6);
+    expect(householdService.getHouseholdMembers).not.toHaveBeenCalled();
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-9', 'member');
   });
 });

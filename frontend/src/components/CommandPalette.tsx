@@ -7,6 +7,7 @@ import { plantService, type Plant, type Task } from '@/services/plantService';
 import { EmptySearch } from '@/components/illustrations/EmptySearch';
 import { taskService } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 type Result =
   | { kind: 'plant'; id: string; label: string; sub: string | null; href: string }
@@ -38,14 +39,16 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const householdId = useActiveHouseholdId();
+
   const { data: plants } = useQuery({
-    queryKey: ['plants'],
+    queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
     enabled: isAuthenticated && open,
   });
 
   const { data: tasks } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', householdId],
     queryFn: () => taskService.getTasks(),
     enabled: isAuthenticated && open,
   });

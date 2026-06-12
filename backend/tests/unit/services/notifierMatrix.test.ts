@@ -56,6 +56,8 @@ interface PrefsOverride {
   dndEnd?: string;
   timezone?: string;
   pestAlerts?: boolean;
+  weeklyDigest?: boolean;
+  phoneVerified?: boolean;
 }
 
 function prefs(
@@ -71,6 +73,8 @@ function prefs(
     dndEnd: '',
     timezone: 'UTC',
     pestAlerts: false,
+    weeklyDigest: true,
+    phoneVerified: false,
     updatedAt: '',
     ...over,
   };
@@ -117,8 +121,14 @@ const CASES: Row[] = [
     expect: { email: false, sms: false, browser: false },
   },
   {
-    name: 'sms with a phone number fires',
-    prefs: { email: false, sms: true, phone: '+15551234567' },
+    name: 'sms to an UNVERIFIED phone is skipped (structured-log skip)',
+    prefs: { email: false, sms: true, phone: '+15551234567', phoneVerified: false },
+    now: '2026-04-25T14:00:00Z',
+    expect: { email: false, sms: false, browser: false },
+  },
+  {
+    name: 'sms with a verified phone number fires',
+    prefs: { email: false, sms: true, phone: '+15551234567', phoneVerified: true },
     now: '2026-04-25T14:00:00Z',
     expect: { email: false, sms: true, browser: false },
   },
@@ -131,7 +141,14 @@ const CASES: Row[] = [
   },
   {
     name: 'inside DND, SMS is suppressed',
-    prefs: { email: false, sms: true, phone: '+15551234567', dndStart: '13:00', dndEnd: '15:00' },
+    prefs: {
+      email: false,
+      sms: true,
+      phone: '+15551234567',
+      phoneVerified: true,
+      dndStart: '13:00',
+      dndEnd: '15:00',
+    },
     now: '2026-04-25T14:00:00Z',
     expect: { email: false, sms: false, browser: false },
   },
@@ -206,6 +223,7 @@ const CASES: Row[] = [
       email: true,
       sms: true,
       phone: '+15551234567',
+      phoneVerified: true,
       dndStart: '00:00',
       dndEnd: '23:59',
     },

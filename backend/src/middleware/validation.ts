@@ -13,8 +13,20 @@ export const validateBody = <T>(
   const before: middy.MiddlewareFn<APIGatewayProxyEvent, APIGatewayProxyResult> = (request) => {
     const event = request.event;
 
+    // Parse separately from validation: a malformed body is a client error
+    // (400), not an internal one. Without this, the bare JSON.parse throws a
+    // SyntaxError that the error handler masks as a 500.
+    let body: unknown;
     try {
-      const body: unknown = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+      body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw createHttpError(400, 'Invalid JSON body');
+      }
+      throw error;
+    }
+
+    try {
       const validated = schema.parse(body);
       (event as ValidatedEvent<T>).validatedBody = validated;
     } catch (error) {
