@@ -1,32 +1,40 @@
 import { test, expect, Page } from '@playwright/test';
+import { provisionAccount, uiLogin, navigateTo, ProvisionedAccount } from './helpers';
 
 /**
  * Task completion + filter behavior on the Tasks page.
  *
- * The local backend seeds one water task on the Monstera plant with
- * `nextDue` set to `new Date().toISOString()` at boot, so it lands in the
- * "Today" bucket. Each test logs in via the UI to avoid the
- * zustand-persist rehydration race that bounces a `page.goto('/tasks')`
- * back to /login (see notes in `visual.spec.ts`).
+ * Each worker provisions its own account with one Monstera water task whose
+ * `nextDue` is "now" (the Today bucket) — the same shape as the shared seed
+ * account, but isolated so the browser projects running this spec in
+ * parallel can't complete each other's task out from under the "due today"
+ * assertions. Each test logs in via the UI to avoid the zustand-persist
+ * rehydration race that bounces a `page.goto('/tasks')` back to /login
+ * (see notes in `visual.spec.ts`).
  */
 
+let account: ProvisionedAccount;
+
+test.beforeAll(async () => {
+  account = await provisionAccount({
+    emailPrefix: 'task-completion',
+    plant: { name: 'Monstera', species: 'Monstera deliciosa', location: 'Living Room' },
+    waterTask: { frequency: 7 }, // nextDue defaults to "now" → Today bucket
+  });
+});
+
 async function login(page: Page) {
-  await page.goto('/login');
-  await page.getByLabel(/email/i).fill('test@example.com');
-  await page.getByLabel(/password/i).fill('password123');
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await uiLogin(page, account.email, account.password);
 }
 
 async function goToTasks(page: Page) {
-  await page.getByRole('link', { name: /^tasks$/i }).click();
-  await expect(page).toHaveURL(/\/tasks$/);
+  await navigateTo(page, /^tasks$/i, /\/tasks$/);
 }
 
 test.describe('Task completion', () => {
-  // The local backend's in-memory task store is shared across parallel
-  // workers, so the read-only filter assertions need to run before the
-  // mutating "mark done" test. Serial mode preserves that order.
+  // This file's provisioned task store is shared by its own tests, so the
+  // read-only filter assertions need to run before the mutating "mark
+  // done" test. Serial mode preserves that order.
   test.describe.configure({ mode: 'serial' });
 
   test('filter pills toggle the active filter', async ({ page }) => {

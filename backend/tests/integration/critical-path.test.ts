@@ -39,20 +39,24 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(signup.status).toBe(201);
 
     // 2. Confirm with the well-known dev code (local-server uses 123456).
+    //    Production returns ONLY a message — no tokens, no user object; the
+    //    client must login next.
     const confirm = await request(app)
       .post('/auth/confirm')
       .send({ email: NEW_EMAIL, code: '123456' });
     expect(confirm.status).toBe(200);
-    expect(confirm.body.user.email).toBe(NEW_EMAIL);
-    expect(confirm.body.user.householdId).toBeNull();
+    expect(confirm.body).toEqual({ message: 'Email confirmed successfully. Please login.' });
+    expect(confirm.body.accessToken).toBeUndefined();
 
     // 3. Login — user is confirmed but has no household yet.
     const login = await request(app)
       .post('/auth/login')
       .send({ email: NEW_EMAIL, password: NEW_PASSWORD });
     expect(login.status).toBe(200);
+    expect(login.body.idToken).toBeTruthy();
     expect(login.body.accessToken).toBeTruthy();
     expect(login.body.refreshToken).toBeTruthy();
+    expect(typeof login.body.expiresIn).toBe('number');
     expect(login.body.user.householdId).toBeNull();
     const token = login.body.accessToken as string;
 
@@ -76,9 +80,19 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(meHousehold.status).toBe(200);
     expect(meHousehold.body.id).toBe(householdId);
 
-    // 6. Add the user's first plant.
+    // 6. Add the user's first plant. The create schema requires `name` —
+    //    a body missing it (e.g. legacy `nickname`) is a Zod 400 in
+    //    production, never a silent 201.
+    const badPlant = await request(app)
+      .post('/plants')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nickname: 'Bertha', species: 'Monstera deliciosa' });
+    expect(badPlant.status).toBe(400);
+    expect(badPlant.body.message).toBe('Validation failed');
+    expect(badPlant.body.details).toHaveProperty('name');
+
     const plant = await request(app).post('/plants').set('Authorization', `Bearer ${token}`).send({
-      nickname: 'Bertha',
+      name: 'Bertha',
       species: 'Monstera deliciosa',
       location: 'Living room',
     });
@@ -119,7 +133,7 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(types).toContain('task.completed');
   });
 
-  it('returns an empty plant list to a fresh, householdless user (no leak across households)', async () => {
+  it('403s a fresh, householdless user on /plants (requireHousehold, no leak)', async () => {
     // Signup, confirm, login — no household yet.
     await request(app)
       .post('/auth/signup')
@@ -130,13 +144,12 @@ describe('critical path: signup → household → plant → task → complete', 
       .send({ email: NEW_EMAIL, password: NEW_PASSWORD });
     const token = login.body.accessToken as string;
 
-    // local-server filters by household-id-or-undefined; the production
-    // Lambda enforces requireHousehold and returns 403 (see Playwright e2e
-    // for the production-behavior assertion). Either way: a brand-new user
-    // must NOT see anyone else's plants.
+    // Production enforces requireHousehold on every plant route: a brand-new
+    // user without a household gets a 403 — and certainly never sees anyone
+    // else's plants.
     const plants = await request(app).get('/plants').set('Authorization', `Bearer ${token}`);
-    expect(plants.status).toBe(200);
-    expect(plants.body).toEqual([]);
+    expect(plants.status).toBe(403);
+    expect(plants.body.message).toBe('User must belong to a household');
   });
 
   it('rejects login when the password is wrong without leaking account existence', async () => {

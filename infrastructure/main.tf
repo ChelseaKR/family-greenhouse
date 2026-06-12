@@ -87,6 +87,9 @@ module "api" {
   images_bucket_name   = module.frontend.images_bucket_name
   images_bucket_arn    = module.frontend.images_bucket_arn
   allowed_origin       = module.frontend.site_url
+  # Scopes the Lambda role's SES send grant to the verified domain identity
+  # (instead of Resource "*") when the email module is provisioned.
+  ses_identity_arn = var.domain_name == "" ? "" : module.email[0].identity_arn
 
   # External integrations. Empty defaults disable the corresponding feature
   # — set via tfvars when you have credentials.

@@ -22,6 +22,12 @@ import type { AuthenticatedEvent } from './auth.js';
 /** Event shape after `apiKeyMiddleware` runs — carries the key's scopes. */
 export interface ApiKeyEvent extends AuthenticatedEvent {
   apiScopes: ApiScope[];
+  /**
+   * Identity of the key itself, for attribution on write routes (activity
+   * rows, audit logs). `createdBy` is the Cognito user id of the admin who
+   * issued the key.
+   */
+  apiKey: { id: string; label: string; createdBy: string };
 }
 
 export const apiKeyMiddleware = (): middy.MiddlewareObj<
@@ -53,13 +59,24 @@ export const apiKeyMiddleware = (): middy.MiddlewareObj<
     // Attach a minimal user shape. We deliberately don't synthesize an email
     // (no associated Cognito user); routes that need email should refuse
     // here. For the read-only public API surface, householdId is enough.
+    //
+    // `isApiKey: true` marks this principal as a machine key so write routes
+    // can structurally reject it. `householdRole: 'member'` is kept only for
+    // backward compatibility with read-path gates (`requireHousehold` etc.) —
+    // do NOT use the role to distinguish keys from humans.
     (event as AuthenticatedEvent).user = {
       userId: `apikey:${record.id}`,
       email: '',
       householdId: record.householdId,
       householdRole: 'member',
+      isApiKey: true,
     };
     (event as ApiKeyEvent).apiScopes = record.scopes;
+    (event as ApiKeyEvent).apiKey = {
+      id: record.id,
+      label: record.label,
+      createdBy: record.createdBy,
+    };
   };
 
   return { before };

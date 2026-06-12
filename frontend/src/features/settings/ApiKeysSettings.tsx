@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { TrashIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -7,8 +8,16 @@ import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { apiKeyService, API_SCOPES, SCOPE_LABELS, type ApiScope } from '@/services/apiKeyService';
+import {
+  apiKeyService,
+  API_SCOPES,
+  READ_API_SCOPES,
+  WRITE_API_SCOPES,
+  SCOPE_LABELS,
+  type ApiScope,
+} from '@/services/apiKeyService';
 import { useAuthStore } from '@/store/authStore';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { getErrorMessage } from '@/services/api';
 
 /**
@@ -21,12 +30,14 @@ import { getErrorMessage } from '@/services/api';
  * dismisses the banner they have to revoke and re-issue if they lost it.
  */
 export function ApiKeysSettings() {
+  const { t } = useTranslation();
   const isAdmin = useAuthStore((s) => s.user?.householdRole === 'admin');
+  const householdId = useActiveHouseholdId();
   const queryClient = useQueryClient();
   const [label, setLabel] = useState('');
-  // Default to the full read surface — the common case is "give me a key that
-  // works"; narrowing is opt-in.
-  const [scopes, setScopes] = useState<ApiScope[]>([...API_SCOPES]);
+  // Default to the full READ surface — the common case is "give me a key that
+  // works"; narrowing is opt-in and write access is always an explicit grant.
+  const [scopes, setScopes] = useState<ApiScope[]>([...READ_API_SCOPES]);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [createdPlaintext, setCreatedPlaintext] = useState<string | null>(null);
   const [copyOk, setCopyOk] = useState(false);
@@ -38,8 +49,11 @@ export function ApiKeysSettings() {
   };
 
   const keysQuery = useQuery({
-    queryKey: ['api-keys'],
+    // API keys are household-scoped — the active household lives in the key
+    // so switching households can never show another household's keys.
+    queryKey: ['api-keys', householdId],
     queryFn: apiKeyService.list,
+    enabled: !!householdId,
     // Keys are stable; refetch only when we mutate.
     staleTime: 60_000,
   });
@@ -50,15 +64,15 @@ export function ApiKeysSettings() {
     onSuccess: (result) => {
       setCreatedPlaintext(result.plaintext);
       setLabel('');
-      setScopes([...API_SCOPES]);
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      setScopes([...READ_API_SCOPES]);
+      queryClient.invalidateQueries({ queryKey: ['api-keys', householdId] });
     },
   });
 
   const revokeMutation = useMutation({
     mutationFn: (id: string) => apiKeyService.revoke(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      queryClient.invalidateQueries({ queryKey: ['api-keys', householdId] });
       setRevokeId(null);
     },
   });
@@ -83,7 +97,7 @@ export function ApiKeysSettings() {
       <Card>
         <CardHeader
           title="API keys"
-          description="Issue keys for read-only access to your household data — Home Assistant, scripts, etc. Greenhouse plan only."
+          description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Greenhouse plan only."
         />
 
         {createdPlaintext && (
@@ -153,6 +167,11 @@ export function ApiKeysSettings() {
                   </label>
                 ))}
               </div>
+              {scopes.some((s) => WRITE_API_SCOPES.includes(s)) && (
+                <Alert variant="warning" className="mt-3">
+                  {t('settings.apiKeys.writeScopeWarning')}
+                </Alert>
+              )}
               {scopes.length === 0 && (
                 <p className="mt-1 text-xs text-red-600">Select at least one scope.</p>
               )}

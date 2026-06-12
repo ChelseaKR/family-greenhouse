@@ -53,9 +53,18 @@ describe('buildIcs', () => {
     expect(ics).toMatch(/DTSTART;VALUE=DATE:20260426/);
   });
 
-  it('encodes recurrence via RRULE driven by task frequency', () => {
+  it('emits a single occurrence at nextDue — no RRULE (re-anchored server-side)', () => {
+    // An RRULE anchored at export-time DTSTART drifts from the app's
+    // re-anchored nextDue after the first completion; the feed now emits one
+    // occurrence and relies on calendar subscription refresh instead.
     const ics = buildIcs([task({ frequency: 3 })], now);
-    expect(ics).toMatch(/RRULE:FREQ=DAILY;INTERVAL=3/);
+    expect(ics).not.toMatch(/RRULE/);
+    expect(ics).toMatch(/DTSTART;VALUE=DATE:20260426/);
+  });
+
+  it('renders legacy rows with an empty type as "Care task" instead of throwing', () => {
+    const ics = buildIcs([task({ type: '' as never })], now);
+    expect(ics).toMatch(/SUMMARY:Care task — Monstera/);
   });
 
   it('escapes commas, semicolons, and newlines in description', () => {

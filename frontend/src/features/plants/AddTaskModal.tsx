@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { taskService } from '@/services/taskService';
 import { getErrorMessage } from '@/services/api';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
@@ -28,6 +29,7 @@ interface AddTaskModalProps {
 
 export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
 
   const {
     register,
@@ -48,8 +50,8 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
   const mutation = useMutation({
     mutationFn: taskService.createTask,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants', plantId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       reset();
       onClose();
     },

@@ -13,9 +13,11 @@
  * `X-Cognito-Access-Token` only for the two routes that need it for
  * Cognito-direct calls: PATCH /auth/me and POST /auth/change-password.
  *
- * Concurrency: a global `isRefreshing` flag avoids stampedes when many
- * requests 401 simultaneously. The first request to 401 owns the refresh;
- * subsequent ones wait for it implicitly via the retry path.
+ * Concurrency: a single shared `refreshPromise` serializes refreshes when
+ * many requests 401 simultaneously. The first request to 401 starts the
+ * refresh; every subsequent 401 awaits the SAME promise and retries its own
+ * original request with the new token. If the refresh fails, all waiters
+ * reject and logout fires exactly once (from the refresh promise itself).
  */
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
@@ -54,8 +56,32 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Track if we're already handling a 401 to prevent loops
-let isRefreshing = false;
+// Shared in-flight refresh. While set, every 401 awaits this single promise
+// instead of racing its own refresh (Cognito refresh tokens are reusable, but
+// a stampede still burns requests and can interleave setTokens writes).
+// Resolves with the bearer token to retry with; rejects if the refresh failed.
+let refreshPromise: Promise<string> | null = null;
+
+function startRefresh(refreshToken: string): Promise<string> {
+  return axios
+    .post(`${API_URL}/auth/refresh`, { refreshToken })
+    .then((response) => {
+      const { idToken, accessToken, refreshToken: newRefreshToken } = response.data;
+      useAuthStore.getState().setTokens(idToken, accessToken, newRefreshToken);
+      // Prefer the ID token (household claims); tolerate refresh responses
+      // that only carry an access token, mirroring the request interceptor.
+      return (idToken ?? accessToken) as string;
+    })
+    .catch((refreshError) => {
+      // Fires once, here, no matter how many requests are waiting.
+      // Silently logout - don't force redirect, let ProtectedRoute handle it.
+      useAuthStore.getState().logout();
+      throw refreshError;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+}
 
 // Response interceptor for token refresh
 api.interceptors.response.use(
@@ -74,29 +100,28 @@ api.interceptors.response.use(
 
       const refreshToken = useAuthStore.getState().refreshToken;
 
-      if (refreshToken && !isRefreshing) {
-        isRefreshing = true;
-        try {
-          const response = await axios.post(`${API_URL}/auth/refresh`, {
-            refreshToken,
-          });
+      if (!refreshToken) {
+        // No refresh token in THIS tab (refresh tokens are sessionStorage-
+        // only). Clear this tab's in-memory session without rewriting the
+        // shared localStorage payload — other tabs may hold valid sessions
+        // and a full logout() here would cascade to all of them.
+        useAuthStore.getState().clearLocalSession();
+        return Promise.reject(error);
+      }
 
-          const { idToken, accessToken, refreshToken: newRefreshToken } = response.data;
-          useAuthStore.getState().setTokens(idToken, accessToken, newRefreshToken);
+      if (!refreshPromise) {
+        refreshPromise = startRefresh(refreshToken);
+      }
 
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${idToken}`;
-          }
-          isRefreshing = false;
-          return api(originalRequest);
-        } catch {
-          isRefreshing = false;
-          // Silently logout - don't force redirect, let ProtectedRoute handle it
-          useAuthStore.getState().logout();
+      try {
+        const bearer = await refreshPromise;
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${bearer}`;
         }
-      } else if (!refreshToken) {
-        // No refresh token, just logout silently
-        useAuthStore.getState().logout();
+        return api(originalRequest);
+      } catch {
+        // Refresh failed — logout already happened inside startRefresh.
+        // Reject with the original 401 so callers see a consistent error.
       }
     }
 
@@ -115,14 +140,45 @@ export interface ApiError {
 }
 
 /**
- * Best-effort error-to-string for displaying in toasts/alerts. Prefer the
- * server's `message` if axios captured one; otherwise fall back to the JS
- * Error message; otherwise a generic string. Never throws.
+ * Best-effort error-to-string for displaying in toasts/alerts. The backend
+ * standardizes errors to JSON `{"message": string, "details"?: unknown}`,
+ * but we still tolerate plain-string bodies (legacy text/plain responses,
+ * proxies, or JSON the client failed to parse). Falls back to the JS Error
+ * message, then a generic string. Never throws.
  */
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as ApiError | undefined;
-    return data?.message || error.message || 'An unexpected error occurred';
+    const data: unknown = error.response?.data;
+    // Standard contract: JSON body with a string `message`.
+    if (
+      data &&
+      typeof data === 'object' &&
+      typeof (data as { message?: unknown }).message === 'string' &&
+      (data as { message: string }).message
+    ) {
+      return (data as { message: string }).message;
+    }
+    // Plain-string body. It may still be JSON text if the server mislabeled
+    // the content type — try to pull `message` out before using it verbatim.
+    if (typeof data === 'string' && data.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(data);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          typeof (parsed as { message?: unknown }).message === 'string'
+        ) {
+          return (parsed as { message: string }).message;
+        }
+      } catch {
+        // Not JSON — fall through to the raw string.
+      }
+      // Don't surface gateway HTML error pages as toast text.
+      if (!data.trimStart().startsWith('<')) {
+        return data;
+      }
+    }
+    return error.message || 'An unexpected error occurred';
   }
   if (error instanceof Error) {
     return error.message;

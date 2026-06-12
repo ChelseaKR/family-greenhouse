@@ -27,6 +27,7 @@ export interface NotConfiguredResult {
 export type IdentifyResponse = IdentificationResult | NotConfiguredResult;
 
 const PLANT_ID_ENDPOINT = 'https://plant.id/api/v3/identification';
+const TIMEOUT_MS = 5000;
 
 interface PlantIdSuggestion {
   name?: string;
@@ -52,17 +53,33 @@ export async function identifyPlant(base64Image: string): Promise<IdentifyRespon
   const apiKey = process.env.PLANT_ID_API_KEY;
   if (!apiKey) return { configured: false };
 
-  const res = await fetch(`${PLANT_ID_ENDPOINT}?details=common_names`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Api-Key': apiKey,
-    },
-    body: JSON.stringify({
-      images: [base64Image],
-      similar_images: false,
-    }),
-  });
+  // Bound the upstream call so a hung Plant.id connection can't hold the
+  // Lambda (and the user) for the full function timeout. Same 5s
+  // AbortController pattern as perenual.ts / weather.ts.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${PLANT_ID_ENDPOINT}?details=common_names`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Api-Key': apiKey,
+      },
+      body: JSON.stringify({
+        images: [base64Image],
+        similar_images: false,
+      }),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      throw new Error(`plant.id timed out after ${TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const text = await res.text();

@@ -32,20 +32,55 @@ export interface TaskFilters {
   overdue?: boolean;
 }
 
+/** Why a snooze happened — mirrored from backend snoozeReasonEnum. */
+export type SnoozeReason = 'rain' | 'frost' | 'heat' | 'other';
+
+/**
+ * Task plus the read-time vacation annotation the backend adds when the
+ * assignee has an active vacation window. `assignedTo` is never rewritten;
+ * these fields simply disappear when the window expires.
+ */
+export interface TaskWithCoverage extends Task {
+  effectiveAssignee?: string;
+  effectiveAssigneeName?: string | null;
+  /** Name of the away assignee — drives the "Covering for X" badge. */
+  coveringFor?: string | null;
+}
+
+/** Vacation window (care handoff), one per member. */
+export interface VacationWindow {
+  householdId: string;
+  userId: string;
+  coveredBy: string;
+  coveredByName: string | null;
+  startDate: string;
+  endDate: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SetVacationData {
+  /** Defaults to the caller; setting for someone else requires admin. */
+  userId?: string;
+  coveredBy: string;
+  startDate: string;
+  endDate: string;
+}
+
 export const taskService = {
-  async getTasks(filters?: TaskFilters): Promise<Task[]> {
+  async getTasks(filters?: TaskFilters): Promise<TaskWithCoverage[]> {
     const params = new URLSearchParams();
     if (filters?.plantId) params.set('plantId', filters.plantId);
     if (filters?.assignedTo) params.set('assignedTo', filters.assignedTo);
     if (filters?.dueWithin) params.set('dueWithin', filters.dueWithin.toString());
     if (filters?.overdue !== undefined) params.set('overdue', filters.overdue.toString());
 
-    const response = await api.get<Task[]>(`/tasks?${params.toString()}`);
+    const response = await api.get<TaskWithCoverage[]>(`/tasks?${params.toString()}`);
     return response.data;
   },
 
-  async getUpcomingTasks(): Promise<Task[]> {
-    const response = await api.get<Task[]>('/tasks/upcoming');
+  async getUpcomingTasks(): Promise<TaskWithCoverage[]> {
+    const response = await api.get<TaskWithCoverage[]>('/tasks/upcoming');
     return response.data;
   },
 
@@ -77,10 +112,45 @@ export const taskService = {
     return response.data;
   },
 
-  async snoozeTask(id: string, days: number): Promise<Task> {
-    const response = await api.post<Task>(`/tasks/${id}/snooze`, { days });
+  async snoozeTask(
+    id: string,
+    days: number,
+    opts?: { reason?: SnoozeReason; note?: string }
+  ): Promise<Task> {
+    const body: Record<string, unknown> = { days };
+    if (opts?.reason) body.reason = opts.reason;
+    if (opts?.note) body.note = opts.note;
+    const response = await api.post<Task>(`/tasks/${id}/snooze`, body);
     track('task_snoozed');
     return response.data;
+  },
+
+  /** Take an unassigned ("up for grabs") task. 409 = someone beat you to it. */
+  async claimTask(id: string): Promise<Task> {
+    const response = await api.post<Task>(`/tasks/${id}/claim`, {});
+    return response.data;
+  },
+
+  /** Release a task you're assigned to. */
+  async unclaimTask(id: string): Promise<Task> {
+    const response = await api.post<Task>(`/tasks/${id}/unclaim`, {});
+    return response.data;
+  },
+
+  // --- Vacation windows (care handoff) ---
+
+  async getVacationWindows(): Promise<VacationWindow[]> {
+    const response = await api.get<VacationWindow[]>('/tasks/vacation');
+    return response.data;
+  },
+
+  async setVacation(data: SetVacationData): Promise<VacationWindow> {
+    const response = await api.put<VacationWindow>('/tasks/vacation', data);
+    return response.data;
+  },
+
+  async cancelVacation(userId: string): Promise<void> {
+    await api.delete(`/tasks/vacation/${userId}`);
   },
 
   async listTemplates(): Promise<TaskTemplate[]> {

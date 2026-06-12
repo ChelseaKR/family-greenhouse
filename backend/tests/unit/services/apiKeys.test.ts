@@ -44,12 +44,24 @@ describe('apiKeys service', () => {
     expect(cmd.input.Item.scopes).toEqual(['read:plants']);
   });
 
-  it('createApiKey defaults to all read scopes when none requested', async () => {
+  it('createApiKey defaults to all READ scopes (never write) when none requested', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({});
-    const { createApiKey, API_SCOPES } = await import('../../../src/services/apiKeys.js');
+    const { createApiKey, READ_API_SCOPES } = await import('../../../src/services/apiKeys.js');
     const result = await createApiKey('hh-1', 'user-1', 'unscoped');
-    expect(result.record.scopes).toEqual([...API_SCOPES]);
+    expect(result.record.scopes).toEqual([...READ_API_SCOPES]);
+    expect(result.record.scopes).not.toContain('write:tasks');
+  });
+
+  it('createApiKey stores write:tasks when explicitly requested', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    const { createApiKey } = await import('../../../src/services/apiKeys.js');
+    const result = await createApiKey('hh-1', 'user-1', 'automation', [
+      'read:tasks',
+      'write:tasks',
+    ]);
+    expect(result.record.scopes).toEqual(['read:tasks', 'write:tasks']);
   });
 
   it('lookupApiKey treats a legacy row with no scopes as all read scopes', async () => {
@@ -72,9 +84,12 @@ describe('apiKeys service', () => {
         ],
       })
       .mockResolvedValueOnce({});
-    const { lookupApiKey, API_SCOPES } = await import('../../../src/services/apiKeys.js');
+    const { lookupApiKey, READ_API_SCOPES } = await import('../../../src/services/apiKeys.js');
     const result = await lookupApiKey('fg_legacy');
-    expect(result?.scopes).toEqual([...API_SCOPES]);
+    // Legacy expansion is read-only: keys minted under the read-only API
+    // contract must NEVER silently gain write scopes.
+    expect(result?.scopes).toEqual([...READ_API_SCOPES]);
+    expect(result?.scopes).not.toContain('write:tasks');
   });
 
   it('lookupApiKey returns null for keys without the fg_ prefix', async () => {
@@ -114,6 +129,75 @@ describe('apiKeys service', () => {
     const result = await lookupApiKey('fg_anything');
     expect(result?.id).toBe('k1');
     expect(result?.householdId).toBe('hh');
+  });
+
+  it('lookupApiKey awaits a CONDITIONED lastUsedAt bump (no revoked-key resurrection)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'APIKEY#k1',
+            id: 'k1',
+            householdId: 'hh',
+            label: 'thing',
+            last4: 'abcd',
+            createdAt: '2026',
+            createdBy: 'u',
+            lastUsedAt: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({});
+    const { lookupApiKey } = await import('../../../src/services/apiKeys.js');
+    await lookupApiKey('fg_anything');
+    // The bump runs before lookupApiKey resolves (awaited, not fire-and-forget).
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+    const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      kind: string;
+      input: { ConditionExpression: string };
+    };
+    expect(update.kind).toBe('Update');
+    // attribute_exists: an unconditioned Update would re-create a bare row
+    // for a key revoked between the GSI read and the bump.
+    expect(update.input.ConditionExpression).toBe('attribute_exists(PK)');
+  });
+
+  it('lookupApiKey returns null when the key was revoked concurrently (bump condition fails)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'APIKEY#k1',
+            id: 'k1',
+            householdId: 'hh',
+            label: 'thing',
+            last4: 'abcd',
+            createdAt: '2026',
+            createdBy: 'u',
+            lastUsedAt: null,
+          },
+        ],
+      })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('gone'), { name: 'ConditionalCheckFailedException' })
+      );
+    const { lookupApiKey } = await import('../../../src/services/apiKeys.js');
+    expect(await lookupApiKey('fg_anything')).toBeNull();
+  });
+
+  it('revokeApiKey returns true on delete, false when the key never existed', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { revokeApiKey } = await import('../../../src/services/apiKeys.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    expect(await revokeApiKey('hh', 'k1')).toBe(true);
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('missing'), { name: 'ConditionalCheckFailedException' })
+    );
+    expect(await revokeApiKey('hh', 'nope')).toBe(false);
   });
 
   it('listApiKeys queries the household partition for APIKEY rows', async () => {

@@ -11,6 +11,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware } from '../../middleware/auth.js';
+import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import * as enrichment from '../../services/enrichment.js';
 import { isConfigured } from '../../services/perenual.js';
@@ -37,7 +38,11 @@ export const search = createHandler(
       { maxAgeSeconds: 300, visibility: 'public' }
     );
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  // Cache misses hit the metered Perenual API; 30/min per user comfortably
+  // covers autocomplete-as-you-type while capping a runaway client.
+  .use(userRateLimit({ perWindowMs: 60_000, max: 30 }));
 
 // GET /species/{id}
 // Botanical detail rarely changes; cache for an hour at the edge.
@@ -49,14 +54,32 @@ export const detail = createHandler(
       return successResponse({ result: null });
     }
     const detail = await enrichment.getSpeciesCached(id);
-    return cacheableResponse({ result: detail }, { maxAgeSeconds: 3600, visibility: 'public' });
+    // Surface `thumbnailUrl` directly (allowlist-sanitized, same policy as
+    // the /thumbnail redirect) so clients can render the image without the
+    // extra redirect hop. A poisoned upstream URL is nulled rather than
+    // handed to the client.
+    const result = detail
+      ? {
+          ...detail,
+          thumbnailUrl: pickAllowedThumbnailUrl(detail.thumbnailUrl, detail.defaultImageUrl),
+        }
+      : null;
+    return cacheableResponse({ result }, { maxAgeSeconds: 3600, visibility: 'public' });
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  .use(userRateLimit({ perWindowMs: 60_000, max: 30 }));
 
 // GET /species/{id}/thumbnail — returns a redirect to the Perenual thumbnail
 // URL (or a 404 if we have no enrichment for this species). Living behind
 // our domain means the frontend doesn't need to know Perenual's CDN host
 // and we can swap providers without a frontend change.
+//
+// PUBLIC ROUTE (auth=none at the gateway): <img> tags can't send JWTs, so
+// this handler must stay safe for anonymous callers — numeric-id parse only
+// (no user input is ever echoed), redirects restricted to the host
+// allowlist below, and an IP-scoped rate limit since there's no user to key
+// on.
 export const thumbnail = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const idStr = event.pathParameters?.id ?? '';
@@ -85,7 +108,10 @@ export const thumbnail = createHandler(
       body: '',
     };
   }
-).use(authMiddleware());
+  // No authMiddleware: served to anonymous <img> requests. IP-scoped limit;
+  // 60/min absorbs a plant-list page full of thumbnails (cold browser cache)
+  // while blunting anonymous scraping of the enrichment cache.
+).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
 
 const ALLOWED_THUMBNAIL_HOSTS = new Set([
   'perenual.com',
@@ -103,6 +129,14 @@ function isAllowedThumbnailHost(rawUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** First of the candidate URLs that passes the host allowlist, else null. */
+function pickAllowedThumbnailUrl(...candidates: Array<string | null>): string | null {
+  for (const c of candidates) {
+    if (c && isAllowedThumbnailHost(c)) return c;
+  }
+  return null;
 }
 
 // GET /species/{id}/guide — long-form care guide for the plant detail page.
@@ -145,7 +179,10 @@ export const guide = createHandler(
       },
     });
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  // AI/enrichment-backed; tighter cap than search/detail.
+  .use(userRateLimit({ perWindowMs: 60_000, max: 10 }));
 
 // GET /species/{id}/care-suggestions — small derived view used by the
 // AddPlant flow to seed a default watering schedule. Separate endpoint so
@@ -161,7 +198,10 @@ export const careSuggestions = createHandler(
     if (!detail) return successResponse({ result: null });
     return successResponse({ result: deriveCareSuggestion(detail) });
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  // AI/enrichment-backed; tighter cap than search/detail.
+  .use(userRateLimit({ perWindowMs: 60_000, max: 10 }));
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({

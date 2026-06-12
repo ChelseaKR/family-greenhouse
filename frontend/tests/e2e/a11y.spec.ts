@@ -18,6 +18,32 @@ import AxeBuilder from '@axe-core/playwright';
 const ENFORCED_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 async function expectNoA11yViolations(page: import('@playwright/test').Page, label: string) {
+  // Let entrance animations (`motion-safe:animate-fade-in` cards) finish
+  // before sampling colors: axe computes blended colors from mid-animation
+  // opacity, which reports the transient frame rather than the settled UI.
+  // Poll until quiescent — cards mount progressively as queries resolve, so
+  // a single getAnimations() snapshot misses late-starting fades. Infinite
+  // animations (e.g. spinners) are excluded; their `finished` never settles.
+  await page.evaluate(async () => {
+    const finite = (a: Animation) => {
+      const timing = a.effect?.getComputedTiming();
+      return !!timing && timing.endTime !== Infinity;
+    };
+    const deadline = Date.now() + 3000;
+    let calmFrames = 0;
+    while (Date.now() < deadline && calmFrames < 2) {
+      const running = document
+        .getAnimations()
+        .filter((a) => a.playState === 'running' && finite(a));
+      if (running.length === 0) {
+        calmFrames += 1;
+      } else {
+        calmFrames = 0;
+        await Promise.allSettled(running.map((a) => a.finished));
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  });
   const results = await new AxeBuilder({ page }).withTags(ENFORCED_TAGS).analyze();
   if (results.violations.length > 0) {
     // Print a compact, debuggable summary on failure.

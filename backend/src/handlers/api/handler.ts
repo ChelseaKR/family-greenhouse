@@ -1,6 +1,7 @@
 /**
- * Public API v1. Read-only endpoints scoped to the household that owns the
- * API key. Reuses existing service functions so behavior matches the
+ * Public API v1. Endpoints scoped to the household that owns the API key —
+ * read routes plus two task-write routes gated on the explicit `write:tasks`
+ * scope. Reuses existing service functions so behavior matches the
  * authenticated UI; only the auth layer differs.
  *
  * Versioning: the path prefix `/api/v1` is the contract. New incompatible
@@ -9,13 +10,17 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import createHttpError from 'http-errors';
+import { z } from 'zod';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
-import { apiKeyMiddleware, requireApiScope } from '../../middleware/apiKey.js';
+import { apiKeyMiddleware, requireApiScope, type ApiKeyEvent } from '../../middleware/apiKey.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
+import { validateBody, type ValidatedEvent } from '../../middleware/validation.js';
 import type { AuthenticatedEvent } from '../../middleware/auth.js';
 import * as plantService from '../../services/plantService.js';
 import * as taskService from '../../services/taskService.js';
+import { recordActivity } from '../../services/activity.js';
+import { audit } from '../../utils/auditLog.js';
 import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
 import { successResponse } from '../../utils/response.js';
 
@@ -104,6 +109,108 @@ export const listActivity = createHandler(
   .use(perKeyRateLimit())
   .use(requireApiScope('read:activity'));
 
+// ---------------------------------------------------------------------------
+// Write routes (scope: write:tasks)
+//
+// API-key principals act AS THE HOUSEHOLD, not as a human user: mutations are
+// attributed to the synthetic actor `apikey:{keyId}` (the same id the rate
+// limiter buckets on) with the key's label as the display name, so the
+// activity feed shows which integration acted. taskService is consumed via
+// its exported functions only — same call shape as the app's task handlers.
+// ---------------------------------------------------------------------------
+
+// Bodies are optional on both write routes (a bare POST is the common
+// integration case), so the schemas accept a null/absent body. Handlers read
+// fields with `?.` instead of relying on a transform, keeping the schemas'
+// input and output types identical (what `validateBody`'s generic expects).
+const apiCompleteTaskSchema = z.object({ notes: z.string().max(500).optional() }).nullish();
+type ApiCompleteTaskInput = z.infer<typeof apiCompleteTaskSchema>;
+
+const apiSnoozeTaskSchema = z
+  .object({ days: z.number().int().min(1).max(365).optional() })
+  .nullish();
+type ApiSnoozeTaskInput = z.infer<typeof apiSnoozeTaskSchema>;
+
+// POST /api/v1/tasks/{id}/complete
+export const completeTask = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user, apiKey } = event as ApiKeyEvent;
+    const { validatedBody } = event as ValidatedEvent<ApiCompleteTaskInput>;
+    const taskId = event.pathParameters?.id;
+    if (!taskId) throw createHttpError(400, 'Task ID is required');
+
+    const task = await taskService.completeTask(
+      user.householdId!,
+      taskId,
+      user.userId, // "apikey:{keyId}" — explicit machine actor
+      apiKey?.label ?? 'API',
+      validatedBody?.notes
+    );
+    if (!task) throw createHttpError(404, 'Task not found');
+
+    audit('api.task_completed', {
+      actorId: user.userId,
+      householdId: user.householdId ?? undefined,
+      metadata: { taskId, keyId: apiKey?.id },
+    });
+    return successResponse(task);
+  }
+)
+  .use(apiRateLimit())
+  .use(apiKeyMiddleware())
+  .use(perKeyRateLimit())
+  .use(requireApiScope('write:tasks'))
+  .use(validateBody(apiCompleteTaskSchema));
+
+// POST /api/v1/tasks/{id}/snooze
+// body: { days? } — omitted days defaults to the task's own frequency, i.e.
+// "skip one cycle", matching what the app's skip suggestions do.
+export const snoozeTask = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user, apiKey } = event as ApiKeyEvent;
+    const { validatedBody } = event as ValidatedEvent<ApiSnoozeTaskInput>;
+    const taskId = event.pathParameters?.id;
+    if (!taskId) throw createHttpError(400, 'Task ID is required');
+
+    const existing = await taskService.getTask(user.householdId!, taskId);
+    if (!existing) throw createHttpError(404, 'Task not found');
+    const days = validatedBody?.days ?? existing.frequency;
+
+    const task = await taskService.snoozeTask(user.householdId!, taskId, days);
+    if (!task) throw createHttpError(404, 'Task not found');
+
+    // Same activity-feed entry the app's snooze writes (recordActivity
+    // logs-and-continues on failure, so this can't fail the request).
+    await recordActivity({
+      type: 'task.snoozed',
+      householdId: user.householdId!,
+      actorId: user.userId,
+      actorName: apiKey?.label ?? 'API',
+      payload: {
+        taskId,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        days,
+        reason: null,
+        note: null,
+      },
+    });
+
+    audit('api.task_snoozed', {
+      actorId: user.userId,
+      householdId: user.householdId ?? undefined,
+      metadata: { taskId, keyId: apiKey?.id, days },
+    });
+    return successResponse(task);
+  }
+)
+  .use(apiRateLimit())
+  .use(apiKeyMiddleware())
+  .use(perKeyRateLimit())
+  .use(requireApiScope('write:tasks'))
+  .use(validateBody(apiSnoozeTaskSchema));
+
 // GET /health
 // Unauthenticated liveness probe: proves the Lambda boots, the router
 // dispatches end-to-end, and the data plane is reachable. Returns the build
@@ -151,4 +258,6 @@ export const handler = createRouter({
   'GET /api/v1/plants/{id}': getPlant,
   'GET /api/v1/tasks': listTasks,
   'GET /api/v1/activity': listActivity,
+  'POST /api/v1/tasks/{id}/complete': completeTask,
+  'POST /api/v1/tasks/{id}/snooze': snoozeTask,
 });

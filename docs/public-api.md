@@ -1,11 +1,13 @@
 # Public API (v1)
 
-A small, read-only HTTP API over your household's plant data — for Home
-Assistant, dashboards, personal scripts, and the like. It reuses the same
-service layer as the app, so what you read here matches what you see in the UI.
+A small HTTP API over your household's plant data — for Home Assistant,
+dashboards, personal scripts, and the like. It reuses the same service layer
+as the app, so what you read here matches what you see in the UI.
 
-> **Status:** read-only and key-authenticated. Write access and OAuth are the
-> remaining gates before we call this GA — see [Roadmap](#roadmap--limits).
+> **Status:** key-authenticated; read endpoints plus an opt-in `write:tasks`
+> scope for completing/snoozing tasks. OAuth is the remaining gate before we
+> call this GA — see [Roadmap](#roadmap--limits) and
+> [oauth-design.md](oauth-design.md).
 
 ## Eligibility
 
@@ -34,37 +36,71 @@ Manage keys under **Settings → API keys**.
 
 ## Scopes
 
-Keys carry least-privilege read scopes. Grant only what a key needs; a request
+Keys carry least-privilege scopes. Grant only what a key needs; a request
 to an endpoint outside the key's scopes is refused with `403` naming the
 missing scope.
 
-| Scope           | Grants                                          |
-| --------------- | ----------------------------------------------- |
-| `read:plants`   | `GET /api/v1/plants`, `GET /api/v1/plants/{id}` |
-| `read:tasks`    | `GET /api/v1/tasks`                             |
-| `read:activity` | `GET /api/v1/activity`                          |
+| Scope           | Grants                                                               |
+| --------------- | -------------------------------------------------------------------- |
+| `read:plants`   | `GET /api/v1/plants`, `GET /api/v1/plants/{id}`                      |
+| `read:tasks`    | `GET /api/v1/tasks`                                                  |
+| `read:activity` | `GET /api/v1/activity`                                               |
+| `write:tasks`   | `POST /api/v1/tasks/{id}/complete`, `POST /api/v1/tasks/{id}/snooze` |
 
 `GET /api/v1/me` returns only identity (the household the key belongs to) and
 needs no scope. Keys created without an explicit scope selection are granted
-all read scopes. Keys issued before scopes existed are treated as all-read for
-backward compatibility.
+all **read** scopes. Keys issued before scopes existed are treated as all-read
+for backward compatibility — they never gain write access implicitly.
+
+> **Write keys are a trust decision.** A key with `write:tasks` can mutate
+> your household's task schedule. Create write-scoped keys only for
+> integrations you trust, give each integration its own key (so you can
+> revoke one without breaking the rest), and prefer read-only keys everywhere
+> else. Write access is always an explicit grant — it is never included in
+> any default.
 
 ## Endpoints
 
 Base URL: `https://<your-api-domain>/api/v1`
 
-| Method & path           | Scope           | Returns                                                   |
-| ----------------------- | --------------- | --------------------------------------------------------- |
-| `GET /me`               | —               | `{ householdId, apiVersion }`                             |
-| `GET /plants`           | `read:plants`   | Array of plants                                           |
-| `GET /plants/{id}`      | `read:plants`   | One plant, or `404`                                       |
-| `GET /tasks`            | `read:tasks`    | Array of tasks (with `plantName`)                         |
-| `GET /activity?limit=N` | `read:activity` | Recent activity, newest first (`limit` 1–200, default 50) |
+| Method & path               | Scope           | Returns                                                   |
+| --------------------------- | --------------- | --------------------------------------------------------- |
+| `GET /me`                   | —               | `{ householdId, apiVersion }`                             |
+| `GET /plants`               | `read:plants`   | Array of plants                                           |
+| `GET /plants/{id}`          | `read:plants`   | One plant, or `404`                                       |
+| `GET /tasks`                | `read:tasks`    | Array of tasks (with `plantName`)                         |
+| `GET /activity?limit=N`     | `read:activity` | Recent activity, newest first (`limit` 1–200, default 50) |
+| `POST /tasks/{id}/complete` | `write:tasks`   | The completed task (schedule advanced), or `404`          |
+| `POST /tasks/{id}/snooze`   | `write:tasks`   | The snoozed task (nextDue pushed out), or `404`           |
+
+### Write endpoints
+
+`POST /tasks/{id}/complete` — body optional: `{ "notes": "…" }` (≤500 chars).
+Marks the task done now and advances `nextDue` by the task's frequency,
+exactly like completing it in the app.
+
+`POST /tasks/{id}/snooze` — body optional: `{ "days": N }` (1–365). When
+`days` is omitted, the snooze defaults to the task's own frequency — i.e.
+"skip one cycle", the same semantics as the app's skip suggestions. The new
+due date is based on `max(now, current nextDue)` so an overdue task always
+lands in the future.
+
+**Attribution:** API keys act as the household, not as a person. Mutations
+made with a key are recorded with the actor id `apikey:{keyId}` and the key's
+label as the display name, so the activity feed shows which integration acted
+(e.g. "Home Assistant completed Watering"). Both write endpoints are also
+audit-logged server-side with the key id.
 
 ### Example
 
 ```bash
 curl -H "Authorization: Bearer $FG_KEY" https://api.example.com/api/v1/plants
+
+# Complete a task from an automation (requires write:tasks):
+curl -X POST -H "Authorization: Bearer $FG_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"notes":"auto-watered by irrigation controller"}' \
+  https://api.example.com/api/v1/tasks/TASK_ID/complete
 ```
 
 ## Rate limits
@@ -84,10 +120,11 @@ fields, new endpoints) land in `v1`; anything breaking goes behind `/api/v2`.
 
 ## Roadmap / limits
 
-- **Read-only today.** No write endpoints — by design until the auth story
-  below lands.
+- **Writes are task-only today.** `write:tasks` covers complete/snooze; no
+  create/delete surface yet, and no write access to plants or households.
 - **OAuth** for third-party apps acting on a user's behalf is the gate before
-  GA; API keys cover first-party scripts in the meantime.
+  GA; API keys cover first-party scripts in the meantime. Design:
+  [oauth-design.md](oauth-design.md).
 - **No webhooks yet.** Poll `GET /activity` for changes.
 
 See [`roadmap.md`](roadmap.md) (Y2Q4) for where this sits.

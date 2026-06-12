@@ -3,7 +3,8 @@
  * token budget.
  *
  * Schema:
- *   - Messages: PK=HOUSEHOLD#<id>, SK=CHAT#<conversationId>#MSG#<isoTimestamp>
+ *   - Messages: PK=HOUSEHOLD#<id>,
+ *               SK=CHAT#<conversationId>#MSG#<isoTimestamp>#<seq><rand>
  *   - Budget:   PK=HOUSEHOLD#<id>, SK=CHATBUDGET#<YYYY-MM>
  *
  * Both rows carry a `ttl` so they auto-expire (30 days for messages, ~95
@@ -28,6 +29,21 @@ function yearMonth(d: Date = new Date()): string {
   return `${yyyy}-${mm}`;
 }
 
+// Tool turns write several messages back-to-back, often within the same
+// millisecond — a bare-timestamp SK silently overwrites the earlier write.
+// Suffix the SK with a per-process monotonic counter (zero-padded so
+// lexicographic SK order matches write order within an instance) plus a uuid
+// fragment for uniqueness across Lambda instances. The timestamp still leads,
+// so cross-turn ordering is unchanged and `begins_with` prefix queries still
+// match.
+let messageSeq = 0;
+
+function messageSortKey(message: ChatMessageRecord): string {
+  messageSeq = (messageSeq + 1) % 1_000_000;
+  const seq = String(messageSeq).padStart(6, '0');
+  return `CHAT#${message.conversationId}#MSG#${message.timestamp}#${seq}${uuid().slice(0, 8)}`;
+}
+
 export async function appendMessage(
   householdId: string,
   message: ChatMessageRecord
@@ -37,7 +53,7 @@ export async function appendMessage(
       TableName: TABLE_NAME,
       Item: {
         PK: `HOUSEHOLD#${householdId}`,
-        SK: `CHAT#${message.conversationId}#MSG#${message.timestamp}`,
+        SK: messageSortKey(message),
         entityType: 'ChatMessage',
         ...message,
         ttl: Math.floor(Date.now() / 1000) + CONVERSATION_TTL_SECONDS,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -14,6 +15,7 @@ import {
 } from '@/utils/notifications';
 import { notificationService } from '@/services/notificationService';
 import { getErrorMessage } from '@/services/api';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY ?? '') as string;
 
@@ -41,12 +43,16 @@ async function registerPushSubscription(): Promise<PushSubscription | null> {
 const E164 = /^\+[1-9]\d{6,14}$/;
 
 export function NotificationSettings() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
   const [permission, setPermission] = useState<ReturnType<typeof getPermission>>(getPermission());
   const [browserActive, setBrowserActive] = useState(isEnabledLocally());
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phoneDraft, setPhoneDraft] = useState('');
+  const [codeDraft, setCodeDraft] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
   const [dndStartDraft, setDndStartDraft] = useState('');
   const [dndEndDraft, setDndEndDraft] = useState('');
   // Default to the user's actual timezone if the server doesn't have one
@@ -61,7 +67,8 @@ export function NotificationSettings() {
   }, []);
 
   const prefsQuery = useQuery({
-    queryKey: ['notification-prefs'],
+    // Preferences are stored per household membership — scope by household.
+    queryKey: ['notification-prefs', householdId],
     queryFn: notificationService.getPreferences,
   });
 
@@ -77,7 +84,7 @@ export function NotificationSettings() {
   const saveMutation = useMutation({
     mutationFn: notificationService.updatePreferences,
     onSuccess: (updated) => {
-      queryClient.setQueryData(['notification-prefs'], updated);
+      queryClient.setQueryData(['notification-prefs', householdId], updated);
       setInfo('Preferences saved.');
       setError(null);
     },
@@ -100,6 +107,7 @@ export function NotificationSettings() {
       dndEnd: string;
       timezone: string;
       pestAlerts: boolean;
+      weeklyDigest: boolean;
     }>
   ): void {
     const current = prefsQuery.data;
@@ -113,9 +121,33 @@ export function NotificationSettings() {
       dndEnd: dndEndDraft,
       timezone: tzDraft,
       pestAlerts: current.pestAlerts ?? false,
+      weeklyDigest: current.weeklyDigest ?? true,
       ...overrides,
     });
   }
+
+  const sendCodeMutation = useMutation({
+    mutationFn: () => notificationService.startPhoneVerification(phoneDraft),
+    onSuccess: () => {
+      setCodeSent(true);
+      setCodeDraft('');
+      setInfo(t('notifications.phoneCodeSent'));
+      setError(null);
+    },
+    onError: (err) => setError(getErrorMessage(err)),
+  });
+
+  const verifyCodeMutation = useMutation({
+    mutationFn: () => notificationService.confirmPhoneVerification(codeDraft),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['notification-prefs', householdId], updated);
+      setCodeSent(false);
+      setCodeDraft('');
+      setInfo(t('notifications.phoneVerifySuccess'));
+      setError(null);
+    },
+    onError: (err) => setError(getErrorMessage(err)),
+  });
 
   const enableBrowser = useMutation({
     mutationFn: async () => {
@@ -188,6 +220,10 @@ export function NotificationSettings() {
 
   const prefs = prefsQuery.data!;
   const canEnableBrowser = permission !== 'denied';
+  // Verified status applies to the SAVED number; editing the field to a
+  // different number drops back to the unverified flow until confirmed.
+  const phoneIsVerified =
+    (prefs.phoneVerified ?? false) && prefs.phone !== '' && phoneDraft === prefs.phone;
 
   return (
     <Card>
@@ -249,13 +285,39 @@ export function NotificationSettings() {
           </label>
         </div>
 
+        {/* Weekly digest */}
+        <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {t('notifications.weeklyDigestTitle')}
+            </p>
+            <p className="text-sm text-gray-500">
+              {prefs.email
+                ? t('notifications.weeklyDigestDescription')
+                : t('notifications.weeklyDigestRequiresEmail')}
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer">
+            <span className="sr-only">{t('notifications.weeklyDigestTitle')}</span>
+            <input
+              type="checkbox"
+              className="h-5 w-5"
+              checked={(prefs.weeklyDigest ?? true) && prefs.email}
+              disabled={!prefs.email}
+              onChange={(e) => save({ weeklyDigest: e.target.checked })}
+            />
+          </label>
+        </div>
+
         {/* SMS */}
         <div className="space-y-3 pb-2">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-900">Text message</p>
               <p className="text-sm text-gray-500">
-                Short SMS reminders when tasks slip past due. Standard message rates may apply.
+                {phoneIsVerified || prefs.sms
+                  ? 'Short SMS reminders when tasks slip past due. Standard message rates may apply.'
+                  : t('notifications.phoneUnverifiedHint')}
               </p>
             </div>
             <label className="inline-flex items-center cursor-pointer">
@@ -264,8 +326,9 @@ export function NotificationSettings() {
                 type="checkbox"
                 className="h-5 w-5"
                 checked={prefs.sms}
-                disabled={prefs.sms ? false : !E164.test(phoneDraft)}
-                onChange={(e) => save({ sms: e.target.checked, phone: phoneDraft })}
+                // Allow turning OFF anytime; turning ON requires a verified number.
+                disabled={prefs.sms ? false : !phoneIsVerified}
+                onChange={(e) => save({ sms: e.target.checked, phone: prefs.phone })}
               />
             </label>
           </div>
@@ -278,21 +341,54 @@ export function NotificationSettings() {
                 placeholder="+15551234567"
                 helperText="E.164 format. Leading + and country code required."
                 value={phoneDraft}
-                onChange={(e) => setPhoneDraft(e.target.value.trim())}
+                onChange={(e) => {
+                  setPhoneDraft(e.target.value.trim());
+                  setCodeSent(false);
+                }}
                 error={
                   phoneDraft && !E164.test(phoneDraft) ? 'Use the format +15551234567' : undefined
                 }
               />
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => save({ phone: phoneDraft })}
-              isLoading={saveMutation.isPending}
-              disabled={!!phoneDraft && !E164.test(phoneDraft)}
-            >
-              Save phone
-            </Button>
+            {phoneIsVerified ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800"
+                data-testid="phone-verified-badge"
+              >
+                ✓ {t('notifications.phoneVerifiedBadge')}
+              </span>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={() => sendCodeMutation.mutate()}
+                isLoading={sendCodeMutation.isPending}
+                disabled={!E164.test(phoneDraft)}
+              >
+                {t('notifications.phoneSendCode')}
+              </Button>
+            )}
           </div>
+          {codeSent && !phoneIsVerified && (
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  label={t('notifications.phoneCodeLabel')}
+                  inputMode="numeric"
+                  placeholder="123456"
+                  helperText={t('notifications.phoneCodeHelper')}
+                  value={codeDraft}
+                  onChange={(e) => setCodeDraft(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                />
+              </div>
+              <Button
+                onClick={() => verifyCodeMutation.mutate()}
+                isLoading={verifyCodeMutation.isPending}
+                disabled={codeDraft.length !== 6}
+              >
+                {t('notifications.phoneVerifyButton')}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Pest alerts */}

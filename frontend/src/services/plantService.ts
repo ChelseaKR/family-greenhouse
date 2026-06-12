@@ -19,6 +19,8 @@ export interface Plant {
   statusChangedAt?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
+  /** Propagation lineage: the same-household plant this was cut from. */
+  parentPlantId?: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -31,6 +33,8 @@ export interface CreatePlantData {
   notes?: string;
   tags?: string[];
   perenualSpeciesId?: number;
+  /** Set when adding a cutting via "Propagate" — links it to its parent. */
+  parentPlantId?: string;
 }
 
 export interface UpdatePlantData {
@@ -43,9 +47,44 @@ export interface UpdatePlantData {
   status?: PlantStatus;
 }
 
+/** One node in a plant's propagation lineage. */
+export interface LineageEntry {
+  id: string;
+  name: string;
+  status: PlantStatus;
+}
+
+export interface PlantLineage {
+  /** The plant this one was cut from (omitted if none / hard-deleted). */
+  parent?: LineageEntry;
+  /** Cuttings taken from this plant, oldest first — died ones included. */
+  children: Array<LineageEntry & { createdAt: string }>;
+}
+
 export interface PlantWithTasks extends Plant {
   upcomingTasks: Task[];
   recentCompletions: TaskCompletion[];
+  lineage?: PlantLineage;
+}
+
+/** Response of POST /plants/{id}/share. */
+export interface PlantShareLink {
+  code: string;
+  url: string;
+  expiresAt: string;
+}
+
+/** Public share preview (GET /plants/shared/{code} — no auth). */
+export interface SharedPlantPreview {
+  plant: {
+    name: string;
+    species: string | null;
+    notes: string | null;
+    imageUrl: string | null;
+    tags: string[];
+  };
+  householdName: string;
+  expiresAt: string;
 }
 
 export interface Task {
@@ -72,6 +111,41 @@ export interface TaskCompletion {
   completedByName: string;
   completedAt: string;
   notes: string | null;
+}
+
+/** One task definition riding along with a bulk-imported plant. */
+export interface ImportTaskData {
+  type: Task['type'];
+  customType?: string;
+  frequency: number;
+  assignedTo?: string;
+  notes?: string;
+}
+
+/** One plant row in a POST /plants/import request (max 100 per call). */
+export interface ImportPlantData {
+  name: string;
+  species?: string;
+  location?: string;
+  notes?: string;
+  tags?: string[];
+  /** Accepted for export round-trips; not persisted server-side (yet). */
+  acquiredAt?: string;
+  tasks?: ImportTaskData[];
+}
+
+export interface ImportRowResult {
+  index: number;
+  status: 'created' | 'skipped';
+  plantId?: string;
+  error?: string;
+}
+
+export interface ImportPlantsResponse {
+  results: ImportRowResult[];
+  created: number;
+  skipped: number;
+  planLimitHit: boolean;
 }
 
 export interface ImageUploadResponse {
@@ -110,6 +184,17 @@ export const plantService = {
     return response.data;
   },
 
+  /**
+   * Bulk import (max 100 plants per call — the page batches larger files).
+   * Partial success by contract: a 200 may still carry skipped rows, and
+   * `planLimitHit` flags that the household's plan cap stopped the batch.
+   */
+  async importPlants(plants: ImportPlantData[]): Promise<ImportPlantsResponse> {
+    track('plants_imported', { context: String(plants.length) });
+    const response = await api.post<ImportPlantsResponse>('/plants/import', { plants });
+    return response.data;
+  },
+
   async updatePlant(id: string, data: UpdatePlantData): Promise<Plant> {
     const response = await api.put<Plant>(`/plants/${id}`, data);
     return response.data;
@@ -119,14 +204,22 @@ export const plantService = {
     await api.delete(`/plants/${id}`);
   },
 
-  async getImageUploadUrl(plantId: string): Promise<ImageUploadResponse> {
-    const response = await api.post<ImageUploadResponse>(`/plants/${plantId}/image`);
+  /**
+   * Presign an image upload. `contentType` must be one of image/jpeg,
+   * image/png, image/webp and MUST match the Content-Type header of the
+   * subsequent PUT — the backend signs the URL against it.
+   */
+  async getImageUploadUrl(plantId: string, contentType: string): Promise<ImageUploadResponse> {
+    const response = await api.post<ImageUploadResponse>(`/plants/${plantId}/image`, {
+      contentType,
+    });
     return response.data;
   },
 
   async uploadImage(
     uploadUrl: string,
-    file: File,
+    blob: Blob,
+    contentType: string,
     onProgress?: (fraction: number) => void
   ): Promise<void> {
     // We use XMLHttpRequest rather than fetch because fetch lacks built-in
@@ -135,7 +228,8 @@ export const plantService = {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', uploadUrl);
-      xhr.setRequestHeader('Content-Type', file.type);
+      // Must match the contentType the presign request was made with.
+      xhr.setRequestHeader('Content-Type', contentType);
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable && onProgress) {
           onProgress(event.loaded / event.total);
@@ -146,7 +240,7 @@ export const plantService = {
         else reject(new Error(`Upload failed with status ${xhr.status}`));
       };
       xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.send(file);
+      xhr.send(blob);
     });
   },
 
@@ -174,6 +268,39 @@ export const plantService = {
     });
     return response.data;
   },
+
+  /**
+   * Leaf-health check: send a (downscaled!) photo as a data URL / base64
+   * string and get back a strict visual assessment. Same transport and body
+   * cap as identify — downscale before calling, never the raw camera file.
+   */
+  async checkLeafHealth(plantId: string, imageBase64: string): Promise<LeafHealthResult> {
+    track('leaf_health_checked');
+    const response = await api.post<LeafHealthResult>(`/plants/${plantId}/health-check`, {
+      imageBase64,
+    });
+    return response.data;
+  },
+
+  /** Mint a 14-day share link for a plant card (any member may share). */
+  async sharePlant(id: string): Promise<PlantShareLink> {
+    track('plant_shared');
+    const response = await api.post<PlantShareLink>(`/plants/${id}/share`);
+    return response.data;
+  },
+
+  /** Public share preview — works logged-out (the route has no auth). */
+  async getSharedPlant(code: string): Promise<SharedPlantPreview> {
+    const response = await api.get<SharedPlantPreview>(`/plants/shared/${code}`);
+    return response.data;
+  },
+
+  /** Copy a shared cutting card into the caller's household (plan cap → 402). */
+  async acceptSharedPlant(code: string): Promise<Plant> {
+    track('plant_share_accepted');
+    const response = await api.post<Plant>(`/plants/shared/${code}/accept`);
+    return response.data;
+  },
 };
 
 export interface IdentificationSuggestion {
@@ -185,4 +312,23 @@ export interface IdentificationSuggestion {
 export interface IdentifyResponse {
   configured: boolean;
   suggestions?: IdentificationSuggestion[];
+}
+
+/** Mirrors backend services/leafHealth.ts LeafHealthAssessment. */
+export type LeafHealthOverall = 'healthy' | 'monitor' | 'concern';
+export type LeafHealthConfidence = 'low' | 'medium' | 'high';
+
+export interface LeafHealthObservation {
+  sign: string;
+  confidence: LeafHealthConfidence;
+  note: string;
+}
+
+export interface LeafHealthResult {
+  overall: LeafHealthOverall;
+  observations: LeafHealthObservation[];
+  suggestion: string;
+  disclaimer: string;
+  /** True when the server returned the canned fallback (no Bedrock access). */
+  demo?: boolean;
 }

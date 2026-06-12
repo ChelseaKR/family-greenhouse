@@ -63,4 +63,45 @@ describe('plantIdentification', () => {
     const { identifyPlant } = await import('../../../src/services/plantIdentification.js');
     await expect(identifyPlant('AAAA')).rejects.toThrow(/503/);
   });
+
+  it('passes an abort signal to fetch and aborts after the 5s timeout', async () => {
+    process.env = { ...ORIGINAL, PLANT_ID_API_KEY: 'k' };
+    vi.useFakeTimers();
+    try {
+      // Simulate a hung upstream: never resolves, only rejects on abort —
+      // exactly how undici surfaces an AbortController firing.
+      fetchMock.mockImplementationOnce(
+        (_url: string, opts: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => {
+              const err = new Error('This operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          })
+      );
+      const { identifyPlant } = await import('../../../src/services/plantIdentification.js');
+      const pending = identifyPlant('AAAA');
+      const assertion = expect(pending).rejects.toThrow(/timed out after 5000ms/);
+      await vi.advanceTimersByTimeAsync(5001);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not time out a fast upstream response', async () => {
+    process.env = { ...ORIGINAL, PLANT_ID_API_KEY: 'k' };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ result: { classification: { suggestions: [] } } }),
+    });
+    const { identifyPlant } = await import('../../../src/services/plantIdentification.js');
+    await expect(identifyPlant('AAAA')).resolves.toEqual({
+      configured: true,
+      suggestions: [],
+    });
+    // The request carried the timeout signal.
+    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
 });

@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Controllable Secrets Manager so we can exercise the resolveApiKey caching
+// semantics (transient failure must NOT cache the 'unset' sentinel).
+const secretsSend = vi.hoisted(() => vi.fn());
+vi.mock('@aws-sdk/client-secrets-manager', () => ({
+  SecretsManagerClient: vi.fn(() => ({ send: secretsSend })),
+  GetSecretValueCommand: vi.fn((input: unknown) => input),
+}));
+vi.mock('aws-xray-sdk-core', () => ({
+  default: { captureAWSv3Client: (client: unknown) => client },
+}));
+
 const ORIGINAL = process.env;
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -7,6 +18,7 @@ beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   vi.resetModules();
+  secretsSend.mockReset();
 });
 
 afterEach(() => {
@@ -67,6 +79,50 @@ describe('perenual client', () => {
     fetchMock.mockRejectedValueOnce(new Error('ETIMEDOUT'));
     const perenual = await import('../../../src/services/perenual.js');
     expect(await perenual.getSpecies(99)).toBeNull();
+  });
+
+  it('retries secret resolution after a transient Secrets Manager failure', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY_SECRET_ID: 'arn:aws:sm:secret' };
+    delete process.env.PERENUAL_API_KEY;
+    const perenual = await import('../../../src/services/perenual.js');
+    perenual.__resetApiKeyForTests();
+
+    // First call: Secrets Manager throttles. The integration must degrade
+    // for THIS call only — not cache 'unset' for the container lifetime.
+    secretsSend.mockRejectedValueOnce(new Error('ThrottlingException'));
+    expect(await perenual.isConfigured()).toBe(false);
+
+    // Next call (same warm container, NO test reset): fetch succeeds and
+    // the integration comes back.
+    secretsSend.mockResolvedValueOnce({ SecretString: 'real-key' });
+    expect(await perenual.isConfigured()).toBe(true);
+    expect(secretsSend).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to the env literal when the secret fetch fails transiently', async () => {
+    process.env = {
+      ...ORIGINAL,
+      PERENUAL_API_KEY_SECRET_ID: 'arn:aws:sm:secret',
+      PERENUAL_API_KEY: 'literal-key',
+    };
+    const perenual = await import('../../../src/services/perenual.js');
+    perenual.__resetApiKeyForTests();
+
+    secretsSend.mockRejectedValueOnce(new Error('network'));
+    expect(await perenual.isConfigured()).toBe(true);
+  });
+
+  it('caches the unset sentinel only for a genuinely empty secret', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY_SECRET_ID: 'arn:aws:sm:secret' };
+    delete process.env.PERENUAL_API_KEY;
+    const perenual = await import('../../../src/services/perenual.js');
+    perenual.__resetApiKeyForTests();
+
+    // Deliberately blank secret: cache 'unset' and don't re-fetch.
+    secretsSend.mockResolvedValue({ SecretString: '   ' });
+    expect(await perenual.isConfigured()).toBe(false);
+    expect(await perenual.isConfigured()).toBe(false);
+    expect(secretsSend).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes species detail watering enum and pet toxicity', async () => {

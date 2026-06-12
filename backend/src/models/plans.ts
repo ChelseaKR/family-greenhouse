@@ -47,6 +47,14 @@ export const PLANS: Record<PlanId, Plan> = {
 };
 
 export function getPlan(id: string | undefined | null): Plan {
-  if (id && id in PLANS) return PLANS[id as PlanId];
+  // Object.hasOwn (not `in`): `in` also matches inherited prototype
+  // properties, so e.g. getPlan('toString') would return undefined and crash
+  // the caller instead of falling back to the free tier.
+  if (id && Object.hasOwn(PLANS, id)) return PLANS[id as PlanId];
   return PLANS.seedling;
+}
+
+/** True iff `id` names a real plan in the catalog. */
+export function isPlanId(id: unknown): id is PlanId {
+  return typeof id === 'string' && Object.hasOwn(PLANS, id);
 }

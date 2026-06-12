@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { PutCommand, GetCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 
@@ -15,12 +16,15 @@ export interface StoredPushSubscription {
  */
 function endpointKey(endpoint: string): string {
   // Hashing to keep SKs short and predictable; the endpoint URL is too long
-  // and contains URL-unsafe chars for a SK.
-  let hash = 0;
-  for (let i = 0; i < endpoint.length; i++) {
-    hash = (hash * 31 + endpoint.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
+  // and contains URL-unsafe chars for a SK. Truncated SHA-256 (64 bits) —
+  // the previous 32-bit rolling hash had a realistic birthday-collision risk
+  // across endpoints, which would silently overwrite one device's
+  // subscription with another's.
+  //
+  // Rows written under the old 32-bit hash are simply orphaned: the browser
+  // re-registers on next visit (new SHA-based SK) and the stale rows die via
+  // the 404/410 cleanup path in notifier.sendBrowserPush.
+  return createHash('sha256').update(endpoint).digest('hex').slice(0, 16);
 }
 
 export async function saveSubscription(sub: StoredPushSubscription): Promise<void> {

@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
+import { DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware, AuthenticatedEvent } from '../../middleware/auth.js';
@@ -8,23 +9,27 @@ import * as plantService from '../../services/plantService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as taskService from '../../services/taskService.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
+import * as pushSubscriptions from '../../services/pushSubscriptions.js';
+import * as apiKeys from '../../services/apiKeys.js';
+import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
 import { buildIcs } from '../../services/icsExport.js';
 import { noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 
 /**
- * Refuse the deletion if the caller is the last admin in a household with
+ * Refuse the deletion if the user is the last admin in a household with
  * other members. Without this guardrail the household would be locked
  * out — invites can't be issued and roles can't be changed without an
  * admin. Callers must promote someone else first.
  */
 function refuseIfOnlyAdmin(
-  user: AuthenticatedEvent['user'],
+  userId: string,
+  role: 'admin' | 'member',
   members: { userId: string; role: 'admin' | 'member' }[]
 ): void {
-  if (user.householdRole !== 'admin') return;
+  if (role !== 'admin') return;
   const admins = members.filter((m) => m.role === 'admin');
-  const isLoneAdmin = admins.length === 1 && admins[0].userId === user.userId;
+  const isLoneAdmin = admins.length === 1 && admins[0].userId === userId;
   if (isLoneAdmin && members.length > 1) {
     throw createHttpError(400, 'Promote another member to admin before deleting your account');
   }
@@ -44,11 +49,16 @@ async function wipeSoloHouseholdPlants(householdId: string, members: unknown[]):
 }
 
 // DELETE /me
-// Self-service account deletion. The flow is:
-//   1. If the user is the lone admin of a multi-member household, refuse.
-//   2. If they're the only member, wipe their plants (cascading).
-//   3. Remove their household-member row.
-//   4. Delete their Cognito user.
+// Self-service account deletion (GDPR right to erasure). The flow, across
+// EVERY household the user is a member of (not just the active claim one):
+//   1. If the user is the lone admin of any multi-member household, refuse
+//      (consistent with the long-standing single-household guard).
+//   2. For households where they're the only member, wipe plants (cascading
+//      task/photo cleanup) and revoke the household's API keys — the
+//      household is being abandoned.
+//   3. Remove their member row from each household.
+//   4. Delete user-scoped rows: notification prefs + push subscriptions.
+//   5. Delete their Cognito user.
 // We deliberately don't anonymize past completions — those still belong to the
 // household's history. The user's display name on those rows becomes a
 // historical artifact.
@@ -56,12 +66,50 @@ export const deleteMe = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
 
-    if (user.householdId) {
-      const members = await householdService.getHouseholdMembers(user.householdId);
-      refuseIfOnlyAdmin(user, members);
-      await wipeSoloHouseholdPlants(user.householdId, members);
-      await householdService.removeMember(user.householdId, user.userId);
+    const memberships = await householdService.getMembershipsByUser(user.userId);
+
+    // Guard pass FIRST: refuse before any destructive work so a rejection
+    // can't leave the account half-deleted.
+    const membersByHousehold = new Map<
+      string,
+      Awaited<ReturnType<typeof householdService.getHouseholdMembers>>
+    >();
+    for (const m of memberships) {
+      const members = await householdService.getHouseholdMembers(m.householdId);
+      membersByHousehold.set(m.householdId, members);
+      refuseIfOnlyAdmin(user.userId, m.role, members);
     }
+
+    // Destructive pass.
+    for (const m of memberships) {
+      const members = membersByHousehold.get(m.householdId) ?? [];
+      if (members.length === 1) {
+        // Sole member: the household is being abandoned. Cascade-delete its
+        // plants and revoke its API keys so no orphaned credential keeps
+        // reading the dead household's data.
+        await wipeSoloHouseholdPlants(m.householdId, members);
+        const keys = await apiKeys.listApiKeys(m.householdId);
+        for (const key of keys) {
+          await apiKeys.revokeApiKey(m.householdId, key.id);
+        }
+      }
+      await householdService.removeMember(m.householdId, user.userId);
+    }
+
+    // User-scoped personal data. Push subscriptions go through the service's
+    // existing exports; notification prefs have no delete export (module is
+    // owned elsewhere), so delete the row inline with its documented key
+    // shape USER#{id}/PREFS.
+    const subs = await pushSubscriptions.getUserSubscriptions(user.userId);
+    for (const sub of subs) {
+      await pushSubscriptions.deleteSubscription(user.userId, sub.endpoint);
+    }
+    await dynamodb.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${user.userId}`, SK: 'PREFS' },
+      })
+    );
 
     await cognitoUsers.deleteUser(user.userId);
 
@@ -69,6 +117,7 @@ export const deleteMe = createHandler(
       actorId: user.userId,
       actorEmail: user.email,
       householdId: user.householdId ?? undefined,
+      metadata: { householdsCleaned: memberships.map((m) => m.householdId) },
     });
 
     return noContentResponse();
@@ -166,7 +215,9 @@ export const calendarIcs = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     if (!user.householdId) {
-      throw createHttpError(400, 'No household selected');
+      // 403 (not 400): the request is well-formed; the caller's identity
+      // simply lacks a household — matches the requireHousehold convention.
+      throw createHttpError(403, 'No household selected');
     }
     const tasks = await taskService.getTasks(user.householdId);
     const ics = buildIcs(tasks);

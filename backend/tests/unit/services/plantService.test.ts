@@ -10,6 +10,7 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   DeleteCommand: vi.fn((input) => ({ input, kind: 'Delete' })),
   UpdateCommand: vi.fn((input) => ({ input, kind: 'Update' })),
   BatchWriteCommand: vi.fn((input) => ({ input, kind: 'BatchWrite' })),
+  TransactWriteCommand: vi.fn((input) => ({ input, kind: 'TransactWrite' })),
 }));
 
 vi.mock('@aws-sdk/client-s3', () => ({
@@ -31,10 +32,31 @@ describe('plantService', () => {
   });
 
   describe('createPlant', () => {
-    it('should create a plant with required fields', async () => {
+    // Shape of the TransactWrite payload createPlant sends.
+    type CreateTransact = {
+      kind: string;
+      input: {
+        TransactItems: [
+          {
+            Update: {
+              UpdateExpression: string;
+              ConditionExpression: string;
+              ExpressionAttributeValues: Record<string, unknown>;
+              Key: { PK: string; SK: string };
+            };
+          },
+          { Put: { Item: Record<string, unknown> } },
+        ];
+      };
+    };
+
+    it('should create a plant with required fields via an atomic counter transact', async () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb');
       const { createPlant } = await import('../../../src/services/plantService');
 
+      // 1st send: METADATA read (counter exists → no backfill query).
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { plantCount: 3 } });
+      // 2nd send: TransactWrite (counter increment + plant Put).
       vi.mocked(dynamodb.send).mockResolvedValueOnce({});
 
       const input = {
@@ -43,7 +65,7 @@ describe('plantService', () => {
         location: 'Living Room',
       };
 
-      const result = await createPlant(input, 'household-123', 'user-456');
+      const result = await createPlant(input, 'household-123', 'user-456', 10);
 
       expect(result).toMatchObject({
         name: 'Monstera',
@@ -55,22 +77,130 @@ describe('plantService', () => {
 
       expect(result.id).toBeDefined();
       expect(result.createdAt).toBeDefined();
-      expect(dynamodb.send).toHaveBeenCalledTimes(1);
+      expect(dynamodb.send).toHaveBeenCalledTimes(2);
+
+      const transact = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as CreateTransact;
+      expect(transact.kind).toBe('TransactWrite');
+      const counterUpdate = transact.input.TransactItems[0].Update;
+      expect(counterUpdate.Key).toEqual({ PK: 'HOUSEHOLD#household-123', SK: 'METADATA' });
+      expect(counterUpdate.UpdateExpression).toBe(
+        'SET plantCount = if_not_exists(plantCount, :base) + :one'
+      );
+      expect(counterUpdate.ConditionExpression).toBe(
+        'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
+      );
+      expect(counterUpdate.ExpressionAttributeValues).toEqual({
+        ':base': 0,
+        ':one': 1,
+        ':max': 10,
+      });
+      expect(transact.input.TransactItems[1].Put.Item).toMatchObject({
+        SK: `PLANT#${result.id}`,
+        name: 'Monstera',
+      });
     });
 
     it('should set null for optional fields if not provided', async () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb');
       const { createPlant } = await import('../../../src/services/plantService');
 
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { plantCount: 0 } });
       vi.mocked(dynamodb.send).mockResolvedValueOnce({});
 
       const input = { name: 'Basic Plant' };
 
-      const result = await createPlant(input, 'household-123', 'user-456');
+      const result = await createPlant(input, 'household-123', 'user-456', 10);
 
       expect(result.species).toBeNull();
       expect(result.location).toBeNull();
       expect(result.notes).toBeNull();
+    });
+
+    it('maps a TransactionCanceled cap-condition failure to PlanLimitError (concurrent creates)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { createPlant } = await import('../../../src/services/plantService');
+
+      // Counter says 9 of 10 — two concurrent creates both pass any local
+      // check, but DynamoDB serializes the transactions and the loser's
+      // condition fails at commit time.
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { plantCount: 10 } });
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(
+        Object.assign(new Error('Transaction cancelled'), {
+          name: 'TransactionCanceledException',
+          CancellationReasons: [{ Code: 'ConditionalCheckFailed' }, { Code: 'None' }],
+        })
+      );
+
+      await expect(createPlant({ name: 'Over cap' }, 'hh', 'u', 10)).rejects.toMatchObject({
+        name: 'PlanLimitError',
+      });
+    });
+
+    it('rethrows non-cap transaction failures untouched', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { createPlant } = await import('../../../src/services/plantService');
+
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { plantCount: 1 } });
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(
+        Object.assign(new Error('throttled'), {
+          name: 'TransactionCanceledException',
+          CancellationReasons: [{ Code: 'TransactionConflict' }, { Code: 'None' }],
+        })
+      );
+
+      await expect(createPlant({ name: 'x' }, 'hh', 'u', 10)).rejects.toMatchObject({
+        name: 'TransactionCanceledException',
+      });
+    });
+
+    it('lazily backfills plantCount from the real ACTIVE count on legacy rows', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { createPlant } = await import('../../../src/services/plantService');
+
+      // METADATA exists but predates the counter.
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { id: 'hh', name: 'Legacy' } });
+      // Backfill query: 2 active + 1 died → base must be 2 (cap counts ACTIVE).
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [
+          { id: 'a', householdId: 'hh' },
+          { id: 'b', householdId: 'hh', status: 'active' },
+          { id: 'c', householdId: 'hh', status: 'died' },
+        ],
+      });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite
+
+      await createPlant({ name: 'Third' }, 'hh', 'u', 10);
+
+      const calls = vi.mocked(dynamodb.send).mock.calls;
+      expect(calls).toHaveLength(3);
+      const transact = calls[2][0] as unknown as CreateTransact;
+      expect(transact.kind).toBe('TransactWrite');
+      expect(transact.input.TransactItems[0].Update.ExpressionAttributeValues[':base']).toBe(2);
+    });
+
+    it('rejects with PlanLimitError before writing when a legacy row is already at cap', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { createPlant } = await import('../../../src/services/plantService');
+
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { id: 'hh' } }); // no plantCount
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, householdId: 'hh' })),
+      });
+
+      await expect(createPlant({ name: 'eleventh' }, 'hh', 'u', 10)).rejects.toMatchObject({
+        name: 'PlanLimitError',
+      });
+      // Get + backfill query only — no TransactWrite was attempted.
+      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(2);
+    });
+
+    it('throws when the household METADATA row is missing', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { createPlant } = await import('../../../src/services/plantService');
+
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
+
+      await expect(createPlant({ name: 'x' }, 'hh-gone', 'u', 10)).rejects.toThrow(/not found/);
     });
   });
 
@@ -97,8 +227,9 @@ describe('plantService', () => {
       const result = await getPlant('household-123', 'plant-123');
 
       // Service hydrates a `tags` array (defaulting to []), a
-      // perenualSpeciesId (defaulting to null), and the lifecycle status
-      // (legacy rows with no status hydrate to 'active') so the response
+      // perenualSpeciesId (defaulting to null), the lifecycle status
+      // (legacy rows with no status hydrate to 'active'), and the
+      // propagation parent link (defaulting to null) so the response
       // shape stays stable for clients that always expect the fields.
       expect(result).toEqual({
         ...mockPlant,
@@ -106,6 +237,7 @@ describe('plantService', () => {
         perenualSpeciesId: null,
         status: 'active',
         statusChangedAt: null,
+        parentPlantId: null,
       });
     });
 
@@ -164,11 +296,26 @@ describe('plantService', () => {
           updatedAt: '',
         },
       });
+      // 5th send: plantCount decrement (deleted row has no status → active).
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
 
       await deletePlant('hh', 'p1');
 
       const calls = vi.mocked(dynamodb.send).mock.calls;
-      expect(calls).toHaveLength(4);
+      expect(calls).toHaveLength(5);
+      const decrement = calls[4][0] as unknown as {
+        kind: string;
+        input: { Key: { SK: string }; UpdateExpression: string; ConditionExpression: string };
+      };
+      expect(decrement.kind).toBe('Update');
+      expect(decrement.input.Key.SK).toBe('METADATA');
+      expect(decrement.input.UpdateExpression).toBe(
+        'SET plantCount = if_not_exists(plantCount, :one) - :one'
+      );
+      // Floor at 0: refuses to go negative (and tolerates a missing counter).
+      expect(decrement.input.ConditionExpression).toBe(
+        'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount > :zero)'
+      );
       const batch = calls[2][0] as unknown as {
         input: { RequestItems: Record<string, Array<{ DeleteRequest: { Key: { SK: string } } }>> };
       };
@@ -207,8 +354,54 @@ describe('plantService', () => {
         },
       });
       await deletePlant('hh', 'p1');
-      // 2 query calls + 2 batch calls (30 tasks chunked 25+5) + 1 plant Delete.
-      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(5);
+      // 2 query calls + 2 batch calls (30 tasks chunked 25+5) + 1 plant
+      // Delete + 1 plantCount decrement.
+      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(6);
+    });
+
+    it('does NOT decrement plantCount when the deleted plant had already left active', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { deletePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // tasks
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // completions
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'p1',
+          householdId: 'hh',
+          name: 'p',
+          status: 'died', // counter was decremented at the status transition
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      });
+      const deleted = await deletePlant('hh', 'p1');
+      expect(deleted?.status).toBe('died');
+      // tasks query + completions query + plant Delete — no counter Update.
+      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(3);
+    });
+
+    it('swallows the decrement floor (ConditionalCheckFailed) so the delete still succeeds', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { deletePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // tasks
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // completions
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'p1',
+          householdId: 'hh',
+          name: 'p',
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      });
+      // Counter already at 0 (drift) — must not turn the delete into an error.
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(
+        Object.assign(new Error('floor'), { name: 'ConditionalCheckFailedException' })
+      );
+      const deleted = await deletePlant('hh', 'p1');
+      expect(deleted?.id).toBe('p1');
     });
 
     it('does not touch S3 when IMAGES_BUCKET is unset (dev/test default)', async () => {
@@ -278,6 +471,145 @@ describe('plantService', () => {
     });
   });
 
+  describe('updatePlant', () => {
+    type TransitionTransact = {
+      kind: string;
+      input: {
+        TransactItems: [
+          {
+            Update: {
+              Key: { SK: string };
+              ConditionExpression: string;
+              ExpressionAttributeValues: Record<string, unknown>;
+            };
+          },
+          {
+            Update: {
+              Key: { SK: string };
+              UpdateExpression: string;
+            };
+          },
+        ];
+      };
+    };
+
+    const plantRow = (status?: string) => ({
+      Item: {
+        id: 'p1',
+        householdId: 'hh',
+        name: 'Pothos',
+        species: null,
+        location: null,
+        imageUrl: null,
+        notes: null,
+        ...(status ? { status } : {}),
+        createdAt: '',
+        createdBy: '',
+        updatedAt: '',
+      },
+    });
+
+    it('non-status updates use a single conditional UpdateCommand (no counter reads)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: plantRow('active').Item });
+      const result = await updatePlant('hh', 'p1', { name: 'Renamed' });
+      expect(result?.id).toBe('p1');
+      const calls = vi.mocked(dynamodb.send).mock.calls;
+      expect(calls).toHaveLength(1);
+      expect((calls[0][0] as unknown as { kind: string }).kind).toBe('Update');
+    });
+
+    it('active → died decrements plantCount in the same transaction as the status write', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('active')); // read current
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died')); // re-read
+
+      const result = await updatePlant('hh', 'p1', { status: 'died' });
+      expect(result?.status).toBe('died');
+
+      const transact = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as TransitionTransact;
+      expect(transact.kind).toBe('TransactWrite');
+      const [plantUpdate, counterUpdate] = transact.input.TransactItems;
+      // Conditioned on the status we read — tolerating legacy rows that
+      // never had a status attribute (they hydrate to 'active').
+      expect(plantUpdate.Update.Key.SK).toBe('PLANT#p1');
+      expect(plantUpdate.Update.ConditionExpression).toBe(
+        'attribute_exists(PK) AND (attribute_not_exists(#status) OR #status = :oldStatus)'
+      );
+      expect(plantUpdate.Update.ExpressionAttributeValues[':oldStatus']).toBe('active');
+      expect(counterUpdate.Update.Key.SK).toBe('METADATA');
+      expect(counterUpdate.Update.UpdateExpression).toBe(
+        'SET plantCount = if_not_exists(plantCount, :one) - :one'
+      );
+    });
+
+    it('died → active increments plantCount (returning to the capped population)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died'));
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('active'));
+
+      const result = await updatePlant('hh', 'p1', { status: 'active' });
+      expect(result?.status).toBe('active');
+
+      const transact = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as TransitionTransact;
+      const [plantUpdate, counterUpdate] = transact.input.TransactItems;
+      expect(plantUpdate.Update.ConditionExpression).toBe(
+        'attribute_exists(PK) AND #status = :oldStatus'
+      );
+      expect(plantUpdate.Update.ExpressionAttributeValues[':oldStatus']).toBe('died');
+      expect(counterUpdate.Update.UpdateExpression).toBe(
+        'SET plantCount = if_not_exists(plantCount, :zero) + :one'
+      );
+    });
+
+    it('died → gave_away does not move the counter (never left the non-active population)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died')); // read current
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: plantRow('gave_away').Item });
+
+      const result = await updatePlant('hh', 'p1', { status: 'gave_away' });
+      expect(result?.status).toBe('gave_away');
+      const calls = vi.mocked(dynamodb.send).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect((calls[1][0] as unknown as { kind: string }).kind).toBe('Update');
+    });
+
+    it('retries once after losing a concurrent status-transition race', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      // 1st attempt: read active, transact loses the :oldStatus condition
+      // (someone else marked it died in between).
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('active'));
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(
+        Object.assign(new Error('cancelled'), {
+          name: 'TransactionCanceledException',
+          CancellationReasons: [{ Code: 'ConditionalCheckFailed' }, { Code: 'None' }],
+        })
+      );
+      // 2nd attempt: re-read sees died → died→died is a no-op transition,
+      // plain update path.
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died'));
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: plantRow('died').Item });
+
+      const result = await updatePlant('hh', 'p1', { status: 'died' });
+      expect(result?.status).toBe('died');
+      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(4);
+    });
+
+    it('returns null when the plant disappeared before a status transition', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
+      expect(await updatePlant('hh', 'gone', { status: 'died' })).toBeNull();
+    });
+  });
+
   describe('getPlants', () => {
     it('should return all plants for a household', async () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb');
@@ -304,6 +636,39 @@ describe('plantService', () => {
       const result = await getPlants('household-123');
 
       expect(result).toEqual([]);
+    });
+
+    it('follows LastEvaluatedKey so large collections are not truncated at one page', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlants } = await import('../../../src/services/plantService');
+
+      // Paid plans allow 500–5,000 plants; the old single-page query
+      // silently dropped everything after the first 200.
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({
+          Items: Array.from({ length: 200 }, (_, i) => ({
+            id: `p${i}`,
+            name: `Plant ${i}`,
+            householdId: 'h',
+          })),
+          LastEvaluatedKey: { PK: 'HOUSEHOLD#h', SK: 'PLANT#p199' },
+        })
+        .mockResolvedValueOnce({
+          Items: Array.from({ length: 50 }, (_, i) => ({
+            id: `p${200 + i}`,
+            name: `Plant ${200 + i}`,
+            householdId: 'h',
+          })),
+        });
+
+      const result = await getPlants('h');
+      expect(result).toHaveLength(250);
+      const calls = vi.mocked(dynamodb.send).mock.calls;
+      expect(calls).toHaveLength(2);
+      const second = calls[1][0] as unknown as {
+        input: { ExclusiveStartKey: Record<string, string> };
+      };
+      expect(second.input.ExclusiveStartKey).toEqual({ PK: 'HOUSEHOLD#h', SK: 'PLANT#p199' });
     });
 
     it('filters by lifecycle status (legacy rows count as active)', async () => {

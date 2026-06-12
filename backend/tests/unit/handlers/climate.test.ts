@@ -41,9 +41,27 @@ function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayPr
 
 const ctx = {} as Context;
 
+/** Membership row authMiddleware resolves for the claim household. */
+async function mockMembership(role: 'admin' | 'member' = 'admin', householdId = 'hh-1') {
+  const householdService = await import('../../../src/services/householdService.js');
+  vi.mocked(householdService.getMemberByUserId).mockResolvedValue({
+    householdId,
+    userId: 'user-1',
+    name: 'Tester',
+    email: 'test@example.com',
+    role,
+    joinedAt: '',
+  });
+}
+
 describe('climate handler', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
+    // authMiddleware validates the claim household against the (mocked)
+    // membership table and caches the result — reset both per test.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    await mockMembership('admin');
   });
 
   describe('getClimate', () => {
@@ -150,7 +168,7 @@ describe('climate handler', () => {
       vi.mocked(householdService.getHousehold).mockResolvedValueOnce(null);
 
       const res = (await getClimate(
-        buildEvent({ pathParameters: { id: 'hh-missing' } }),
+        buildEvent({ pathParameters: { id: 'hh-1' } }),
         ctx,
         () => {}
       )) as APIGatewayProxyResult;
@@ -159,7 +177,7 @@ describe('climate handler', () => {
       expect(res.body).toMatch(/household not found/i);
     });
 
-    it('returns 400 when no household id can be inferred', async () => {
+    it('returns 403 when the caller has no household (requireHousehold)', async () => {
       const { getClimate } = await import('../../../src/handlers/climate/handler.js');
 
       const res = (await getClimate(
@@ -172,8 +190,24 @@ describe('climate handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
 
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toMatch(/household id required/i);
+      expect(res.statusCode).toBe(403);
+    });
+
+    it("returns 403 when the path household is not the caller's (cross-household IDOR)", async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const { getClimate } = await import('../../../src/handlers/climate/handler.js');
+
+      // Caller is a validated member of hh-1 but requests hh-2's climate.
+      const res = (await getClimate(
+        buildEvent({ pathParameters: { id: 'hh-2' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toMatch(/access denied/i);
+      // Must never even read the foreign household's data.
+      expect(householdService.getHousehold).not.toHaveBeenCalled();
     });
   });
 
@@ -278,6 +312,9 @@ describe('climate handler', () => {
     it('rejects non-admin household members with 403', async () => {
       const { setLocation } = await import('../../../src/handlers/climate/handler.js');
 
+      // Role comes from the membership row, not the JWT claim.
+      await mockMembership('member');
+
       const res = (await setLocation(
         buildEvent({
           httpMethod: 'PUT',
@@ -301,6 +338,46 @@ describe('climate handler', () => {
 
       expect(res.statusCode).toBe(403);
       expect(res.body).toMatch(/admin/i);
+    });
+
+    it("returns 403 when an admin targets another household's location (cross-household IDOR)", async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const { setLocation } = await import('../../../src/handlers/climate/handler.js');
+
+      // Caller is an admin of hh-1 but tries to overwrite hh-2's location.
+      const res = (await setLocation(
+        buildEvent({
+          httpMethod: 'PUT',
+          pathParameters: { id: 'hh-2' },
+          body: JSON.stringify({ city: 'Austin' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toMatch(/access denied/i);
+      expect(householdService.setHouseholdLocation).not.toHaveBeenCalled();
+    });
+
+    it('cannot clear another household location with a null body either', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const { setLocation } = await import('../../../src/handlers/climate/handler.js');
+
+      const res = (await setLocation(
+        buildEvent({
+          httpMethod: 'PUT',
+          pathParameters: { id: 'hh-2' },
+          body: JSON.stringify(null),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(403);
+      expect(householdService.setHouseholdLocation).not.toHaveBeenCalled();
     });
 
     it('returns 403 when caller has no household claim (requireHousehold)', async () => {

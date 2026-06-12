@@ -121,6 +121,9 @@ export interface ActivityEvent {
   id: string;
   type:
     | 'task.completed'
+    | 'task.snoozed'
+    | 'task.claimed'
+    | 'task.unclaimed'
     | 'plant.created'
     | 'plant.deleted'
     | 'photo.uploaded'

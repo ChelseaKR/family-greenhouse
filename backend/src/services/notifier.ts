@@ -109,13 +109,23 @@ export async function sendToUser(
     );
   }
   if (prefs.sms && prefs.phone && !inDnd) {
-    work.push(
-      smsNotifier
-        .sendSms({ to: prefs.phone, text: `${payload.title}: ${payload.body}` })
-        .catch((err) =>
-          logger.warn({ err, userId: recipient.userId, msg: 'sms_failed' }, 'sms_failed')
-        )
-    );
+    if (!prefs.phoneVerified) {
+      // SMS only ever goes to numbers their owner has confirmed — an
+      // unverified number (incl. rows that predate verification) is a
+      // structured-log skip, never a send.
+      logger.info(
+        { userId: recipient.userId, msg: 'sms_skipped_unverified' },
+        'sms_skipped_unverified'
+      );
+    } else {
+      work.push(
+        smsNotifier
+          .sendSms({ to: prefs.phone, text: `${payload.title}: ${payload.body}` })
+          .catch((err) =>
+            logger.warn({ err, userId: recipient.userId, msg: 'sms_failed' }, 'sms_failed')
+          )
+      );
+    }
   }
   if (inDnd && (prefs.email || prefs.sms)) {
     logger.info({ userId: recipient.userId, msg: 'dnd_skipped' }, 'dnd_skipped');

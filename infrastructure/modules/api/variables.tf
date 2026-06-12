@@ -92,6 +92,12 @@ variable "stripe_price_id_greenhouse" {
 }
 
 # --- Notification delivery ---
+variable "ses_identity_arn" {
+  description = "ARN of the verified SES identity (domain) reminder emails are sent from. Used to scope the Lambda role's ses:SendEmail/SendRawEmail grant. Empty (no domain provisioned) falls back to Resource \"*\"."
+  type        = string
+  default     = ""
+}
+
 variable "ses_from_email" {
   description = "Verified SES sender address for reminder emails, e.g. 'reminders@familygreenhouse.net'."
   type        = string

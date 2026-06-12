@@ -13,6 +13,15 @@ output "api_url" {
   value       = module.api.api_url
 }
 
+# Streaming chat is OFF by default in the frontend. To turn it on, set
+# VITE_CHAT_STREAM_URL to this value in the frontend CI build (GitHub repo
+# var PRODUCTION_CHAT_STREAM_URL feeds cd-production.yml); leaving it unset
+# keeps the synchronous /chat/messages path.
+output "chat_stream_url" {
+  description = "Lambda Function URL for streaming chat (SSE, in-handler JWT auth)"
+  value       = module.api.chat_stream_function_url
+}
+
 output "cognito_user_pool_id" {
   description = "Cognito User Pool ID"
   value       = module.auth.user_pool_id

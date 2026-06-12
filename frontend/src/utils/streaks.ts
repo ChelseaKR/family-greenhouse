@@ -21,6 +21,12 @@ export function computeStreak(task: Task, completions: TaskCompletion[]): number
   const frequencyMs = task.frequency * 24 * 60 * 60 * 1000;
   const slack = frequencyMs * 1.5;
 
+  // A streak is only *current* if the newest completion is recent. Without
+  // this check a streak that ended months ago still renders as live — the
+  // same slack window that links two completions also bounds "still going".
+  const newestAt = new Date(own[0].completedAt).getTime();
+  if (Date.now() - newestAt > slack) return 0;
+
   let streak = 1; // we have at least one completion
   for (let i = 0; i < own.length - 1; i++) {
     const newer = new Date(own[i].completedAt).getTime();

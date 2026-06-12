@@ -35,7 +35,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
         <Link to="/" aria-label="Family Greenhouse home" className="inline-block">
           <img src="/brand/icon.svg" alt="" aria-hidden="true" className="mx-auto h-14 w-auto" />
           <p className="mt-3 font-serif text-xl text-ink leading-none">Family Greenhouse</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-primary-700/70 font-semibold">
+          <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-primary-700 font-semibold">
             Grow together
           </p>
         </Link>

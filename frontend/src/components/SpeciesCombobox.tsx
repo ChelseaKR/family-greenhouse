@@ -134,7 +134,14 @@ export function SpeciesCombobox({
           // The visible label is the scientific name (the canonical value we
           // store); the `label` attribute lets browsers like Firefox render
           // the common name beside it.
-          <option key={entry.scientific} value={entry.scientific} label={entry.common} />
+          // The catalog can hold two entries with the same scientific name
+          // (e.g. "Bell pepper" / "Hot pepper" are both Capsicum annuum), so
+          // the key needs the common name too to stay unique.
+          <option
+            key={`${entry.scientific}|${entry.common}`}
+            value={entry.scientific}
+            label={entry.common}
+          />
         ))}
       </datalist>
       {error ? (

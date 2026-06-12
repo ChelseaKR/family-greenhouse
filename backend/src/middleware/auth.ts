@@ -29,6 +29,13 @@ export interface AuthenticatedUser {
   email: string;
   householdId: string | null;
   householdRole: 'admin' | 'member' | null;
+  /**
+   * True when the principal is an API key (`apiKeyMiddleware`), not a human
+   * Cognito user. Write routes should structurally reject key principals by
+   * checking this flag rather than relying on `householdRole`, which is kept
+   * at `'member'` for backward compatibility with read-path gates.
+   */
+  isApiKey?: boolean;
 }
 
 export interface AuthenticatedEvent extends APIGatewayProxyEvent {
@@ -52,11 +59,22 @@ interface CognitoClaims {
  * never authenticated — usually means the route is missing the Cognito
  * authorizer in API Gateway, not a runtime issue.
  *
- * Membership lookups for the X-Household-Id override go through a small
- * per-warm-container cache (see utils/membershipCache.ts). Mutations that
- * change membership (setMemberRole, removeMember) invalidate the cache
- * synchronously so a kicked-out user loses access on the very next
- * request rather than at the 60s TTL.
+ * Every household context — whether it comes from the `X-Household-Id`
+ * override header or from the JWT's `custom:household_id` claim — is
+ * validated against the membership table before being attached to
+ * `event.user`. The `custom:household_*` claims are defense-in-depth only
+ * and are NEVER trusted on their own: the membership row is authoritative
+ * for both membership and role, so a stale or tampered claim can't grant
+ * access (and a removed member loses access well before the ~1h token
+ * lifetime would expire the claim).
+ *
+ * Lookups go through a small per-warm-container cache
+ * (utils/membershipCache.ts, 60s TTL — roughly one DDB read per user per
+ * minute per container). Mutations that change membership (setMemberRole,
+ * removeMember) invalidate the cache synchronously, but only in the
+ * container that processed the mutation: other warm containers keep their
+ * cached entry until the TTL lapses. The honest staleness bound is
+ * therefore ≤60s cross-container, not "the very next request".
  */
 export const authMiddleware = (): middy.MiddlewareObj<
   APIGatewayProxyEvent,
@@ -79,12 +97,12 @@ export const authMiddleware = (): middy.MiddlewareObj<
       throw createHttpError(401, 'Unauthorized');
     }
 
-    // Default identity from Cognito claims.
+    // Identity from Cognito claims; household context is resolved below.
     const user: AuthenticatedUser = {
       userId: claims.sub,
       email: claims.email,
-      householdId: claims['custom:household_id'] || null,
-      householdRole: claims['custom:household_role'] || null,
+      householdId: null,
+      householdRole: null,
     };
 
     // Multi-household support via `X-Household-Id`. The middleware MUST
@@ -94,25 +112,34 @@ export const authMiddleware = (): middy.MiddlewareObj<
     // handlers can't be relied on for this check: most of them compare
     // `user.householdId` to a path param, which is `headerValue ===
     // pathValue` after the override.
+    //
+    // The claim-derived default household goes through the SAME validation.
+    // The `custom:household_*` claims are user-influenced attributes (and
+    // even once locked down at the pool level they lag membership changes
+    // by the token lifetime), so the claim is only a *hint* for which
+    // household to resolve — the membership row decides membership AND
+    // role. A user who was removed from their household gets a 403 within
+    // the 60s cache TTL instead of keeping access until token expiry.
     const headerOverride = event.headers?.['x-household-id'] ?? event.headers?.['X-Household-Id'];
-    if (typeof headerOverride === 'string' && headerOverride.length > 0) {
-      // Cheap pre-check: the override IS the user's default household.
-      // No DDB lookup needed (the claim already proves membership).
-      if (headerOverride === user.householdId) {
-        // role stays as the claim-derived one
-      } else {
-        let role = getCachedMembership(claims.sub, headerOverride);
-        if (!role) {
-          const member = await getMemberByUserId(headerOverride, claims.sub);
-          if (!member) {
-            throw createHttpError(403, 'Not a member of the requested household');
-          }
-          role = member.role;
-          setCachedMembership(claims.sub, headerOverride, role);
+    const claimHouseholdId = claims['custom:household_id'] || null;
+    const requestedHouseholdId =
+      typeof headerOverride === 'string' && headerOverride.length > 0
+        ? headerOverride
+        : claimHouseholdId;
+
+    if (requestedHouseholdId) {
+      let role = getCachedMembership(claims.sub, requestedHouseholdId);
+      if (!role) {
+        const member = await getMemberByUserId(requestedHouseholdId, claims.sub);
+        if (!member) {
+          throw createHttpError(403, 'Not a member of the requested household');
         }
-        user.householdId = headerOverride;
-        user.householdRole = role;
+        role = member.role;
+        setCachedMembership(claims.sub, requestedHouseholdId, role);
       }
+      user.householdId = requestedHouseholdId;
+      // Membership row is authoritative — never the claim's role.
+      user.householdRole = role;
     }
 
     (event as AuthenticatedEvent).user = user;

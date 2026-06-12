@@ -62,6 +62,25 @@ describe('computeStreak', () => {
     const cs = [completion('t1', 0), completion('other', 7)];
     expect(computeStreak(baseTask, cs)).toBe(1);
   });
+
+  describe('staleness (a lapsed streak is not a current streak)', () => {
+    it('returns 0 when the newest completion is older than 1.5x frequency', () => {
+      // A perfect weekly run… that ended 17 months ago. Not current.
+      const cs = [completion('t1', 510), completion('t1', 517), completion('t1', 524)];
+      expect(computeStreak(baseTask, cs)).toBe(0);
+    });
+
+    it('returns 0 just past the slack window and the streak just inside it', () => {
+      // frequency 7 → slack 10.5 days.
+      expect(computeStreak(baseTask, [completion('t1', 11), completion('t1', 18)])).toBe(0);
+      expect(computeStreak(baseTask, [completion('t1', 10), completion('t1', 17)])).toBe(2);
+    });
+
+    it('still reports the lapsed run via longestStreak', () => {
+      const cs = [completion('t1', 510), completion('t1', 517), completion('t1', 524)];
+      expect(longestStreak(baseTask, cs)).toBe(3);
+    });
+  });
 });
 
 describe('longestStreak', () => {
