@@ -219,8 +219,13 @@ jobs:
           # esbuild's dist/*.js bundles + the terraform function names).
           for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
-            ver=$(aws lambda get-function --function-name "$FUNCTION_NAME" \
-              --query 'Configuration.Version' --output text)
+            # get-function without a qualifier reports Version "$LATEST",
+            # which broke rollback (it looked for "<handler>-v\$LATEST.zip"
+            # artifacts that can never exist — observed in the v0.2.0 run).
+            # The newest PUBLISHED version number is what deploys archive.
+            ver=$(aws lambda list-versions-by-function --function-name "$FUNCTION_NAME" \
+              --query 'max_by(Versions[?Version!=`$LATEST`], &to_number(Version)).Version' \
+              --output text)
             versions="${versions}${handler}=${ver}\n"
           done
           printf "$versions" > prev-versions.txt
