@@ -34,7 +34,7 @@ Add to the privacy policy (US/California users).
 > **Your California privacy rights (CCPA/CPRA)**
 > We **do not sell or share** your personal information, and we never have.
 > You can access or delete your data at any time from **Settings → Account**
-> (export as JSON/CSV; permanent deletion via *Delete account*), or email
+> (export as JSON/CSV; permanent deletion via _Delete account_), or email
 > <support@familygreenhouse.net>. We will not discriminate against you for
 > exercising these rights.
 
@@ -51,7 +51,7 @@ For any EU user/customer:
 - **Data subject rights:** access + erasure are self-serve (export / delete account). Document the request path in the privacy policy.
 - **Sub-processors:** AWS (hosting), Stripe (billing), and the optional enrichment APIs (Perenual, Plant.id, OpenWeather) when enabled. Maintain a public sub-processor list; each has a standard DPA you reference rather than negotiate.
 - **DPA:** offer AWS's and Stripe's standard DPAs by reference; provide a short Family-Greenhouse DPA addendum for B2B customers who ask. Not needed for consumer users in most cases, but have a template ready.
-- **Account deletion caveat to disclose:** `DELETE /me` removes login + personal data but preserves household *activity history* under a pseudonymized member name (so a shared household's record stays coherent). State this explicitly in the privacy policy.
+- **Account deletion caveat to disclose:** `DELETE /me` removes login + personal data but preserves household _activity history_ under a pseudonymized member name (so a shared household's record stays coherent). State this explicitly in the privacy policy.
 
 ---
 
@@ -60,7 +60,7 @@ For any EU user/customer:
 SMS notifications are currently **gated off** (`SMS_NOTIFICATIONS_ENABLED` unset). **Do not enable SMS in production until all of the following exist**, or you risk TCPA liability (statutory damages per message):
 
 1. **Explicit, logged opt-in** — the user must affirmatively check a box to receive SMS, with consent timestamp + the exact consent language stored. A pre-checked box is not consent.
-2. **Phone-number verification** — send a one-time code and verify it before the number can receive any notification (prevents sending to a number the user mistyped or doesn't own). *This flow does not exist yet — it's the blocking work item.*
+2. **Phone-number verification** — send a one-time code and verify it before the number can receive any notification (prevents sending to a number the user mistyped or doesn't own). _This flow does not exist yet — it's the blocking work item._
 3. **STOP / unsubscribe** — honor inbound STOP, and include opt-out guidance ("Reply STOP to unsubscribe") in messages. Wire SNS opt-out handling.
 4. **Quiet hours / DND** — already implemented (`isInDndWindow`); keep it.
 5. **Records** — retain consent + opt-out records.

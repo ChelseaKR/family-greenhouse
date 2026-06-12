@@ -823,6 +823,119 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Ok' }
 
+  # --- 2026-06 roadmap wave: claiming, vacation, import, share, health,
+  # --- digests, phone verification, public-API writes ---
+  /tasks/{id}/claim:
+    post:
+      summary: Claim an unassigned ("up for grabs") task (409 if already claimed)
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /tasks/{id}/unclaim:
+    post:
+      summary: Release a task you claimed (assignee only)
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /tasks/vacation:
+    get:
+      summary: List active and upcoming vacation coverage windows
+      tags: [Tasks]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    put:
+      summary: Set a vacation coverage window (admin required to set for others)
+      tags: [Tasks]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /tasks/vacation/{userId}:
+    delete:
+      summary: Clear a member's vacation window (self or admin)
+      tags: [Tasks]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/import:
+    post:
+      summary: Bulk import up to 100 plants (+tasks); partial success at plan cap
+      tags: [Plants]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/{id}/share:
+    post:
+      summary: Mint a 14-day cutting-share link for a plant snapshot
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/shared/{code}:
+    get:
+      summary: Public preview of a shared cutting card (snapshot + household name)
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /plants/shared/{code}/accept:
+    post:
+      summary: Copy a shared cutting into the caller's household (plan-capped)
+      tags: [Plants]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+  /plants/{id}/health-check:
+    post:
+      summary: Leaf-health assessment of an uploaded photo (Bedrock vision)
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/run-digests:
+    post:
+      summary: Manually trigger the weekly plants-at-risk digest (admin, rate-limited)
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/run-year-recap:
+    post:
+      summary: Manually trigger the year-in-review recap email (admin, rate-limited)
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/phone/start-verification:
+    post:
+      summary: Send an SMS verification code to a phone number (3/hour)
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/phone/confirm-verification:
+    post:
+      summary: Confirm the SMS code and mark the phone verified
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /api/v1/tasks/{id}/complete:
+    post:
+      summary: Complete a task via API key (requires write:tasks scope)
+      tags: [Public API]
+      security: [{ apiKeyAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /api/v1/tasks/{id}/snooze:
+    post:
+      summary: Snooze a task via API key (requires write:tasks scope)
+      tags: [Public API]
+      security: [{ apiKeyAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
 components:
   securitySchemes:
     bearerAuth:

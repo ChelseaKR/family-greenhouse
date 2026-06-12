@@ -34,16 +34,22 @@ jobs:
     steps:
       - name: Determine version
         id: version
+        # Workflow-dispatch input flows through an env var, never ${{ }}
+        # interpolation inside `run:` — github context in a run script is a
+        # shell-injection vector (semgrep run-shell-injection).
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
+          if [ "$GITHUB_EVENT_NAME" == "push" ]; then
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate version format
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid version format: $VERSION"
             exit 1
