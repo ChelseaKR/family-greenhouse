@@ -55,11 +55,13 @@ updates:
       - frontend
 
   # --- GitHub Actions ---
+  # Daily while the Node 20 runner deprecation window is open (GitHub forces
+  # actions onto Node 24 starting 2026-06-16; checkout@v4 / setup-node@v4 /
+  # codecov@v4 need major bumps). Drop back to weekly once those land.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     labels:
       - dependencies
       - ci
