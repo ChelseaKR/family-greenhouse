@@ -76,6 +76,13 @@ export interface ToolExecutionContext {
    * to enforce the per-turn cap without piping it through every signature.
    */
   toolCallNumber: number;
+  /**
+   * How many reminder proposals have already been ACCEPTED this turn.
+   * Maintained by the orchestrator; lets propose_reminder_task enforce its
+   * own per-turn cap (the model can't spam confirm cards). Optional so
+   * read-only tools (and their tests) never have to care.
+   */
+  proposalsThisTurn?: number;
 }
 
 /** Per-household monthly token budget — gates Bedrock calls. */

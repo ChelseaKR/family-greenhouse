@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Card } from '@/components/Card';
 import { climateService } from '@/services/climateService';
-import { useAuthStore } from '@/store/authStore';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { EmptyClimate } from '@/components/illustrations/EmptyClimate';
 
 /**
@@ -22,7 +22,7 @@ import { EmptyClimate } from '@/components/illustrations/EmptyClimate';
  * their saved city isn't doing anything yet.
  */
 export function ClimateCard() {
-  const householdId = useAuthStore((s) => s.user?.householdId);
+  const householdId = useActiveHouseholdId();
 
   const { data, isLoading } = useQuery({
     queryKey: ['household', householdId, 'climate'],

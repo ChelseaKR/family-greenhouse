@@ -85,4 +85,22 @@ describe('isInDndWindow', () => {
     // UTC 18:00 = NY 14:00 EDT — well outside DND.
     expect(isInDndWindow(prefs, new Date('2026-04-25T18:00:00Z'))).toBe(false);
   });
+
+  it('falls back to "not in DND" instead of throwing on a corrupt timezone', async () => {
+    const { isInDndWindow } = await import('../../../src/services/notificationPrefs.js');
+    // Legacy rows could hold any string; Intl throws on unknown zones, which
+    // used to abort the household's whole reminder run.
+    const prefs = {
+      userId: 'u',
+      browser: false,
+      email: true,
+      sms: false,
+      phone: '',
+      dndStart: '22:00',
+      dndEnd: '07:00',
+      timezone: 'Not/A_Zone',
+      updatedAt: '',
+    };
+    expect(isInDndWindow(prefs, new Date('2026-04-26T03:00:00Z'))).toBe(false);
+  });
 });

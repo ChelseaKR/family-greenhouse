@@ -32,7 +32,9 @@ export const resetPasswordSchema = z.object({
 });
 
 export const refreshTokenSchema = z.object({
-  refreshToken: z.string(),
+  // Cognito refresh tokens are ~1–2 KB; 4096 caps abuse payloads without
+  // ever rejecting a legitimate token.
+  refreshToken: z.string().min(1).max(4096),
 });
 
 // Household schemas
@@ -41,7 +43,9 @@ export const createHouseholdSchema = z.object({
 });
 
 export const joinHouseholdSchema = z.object({
-  inviteCode: z.string(),
+  // Invite codes are 32 hex chars today (see householdService.createInvite);
+  // 64 leaves headroom while bounding hostile input.
+  inviteCode: z.string().min(1).max(64),
 });
 
 export const updateMemberRoleSchema = z.object({
@@ -58,6 +62,9 @@ export const createPlantSchema = z.object({
   location: z.string().max(100).optional(),
   notes: z.string().max(1000).optional(),
   perenualSpeciesId: z.number().int().positive().optional(),
+  // Propagation: the same-household plant this cutting was taken from.
+  // Existence (same household, not self) is validated in the handler.
+  parentPlantId: z.string().uuid().optional(),
 });
 
 export const plantStatusEnum = z.enum(['active', 'died', 'gave_away']);
@@ -73,6 +80,9 @@ export const updatePlantSchema = z.object({
   // (drops the plant out of active views/cap/reminders, keeps history);
   // 'active' restores it.
   status: plantStatusEnum.optional(),
+  // Propagation lineage: set/replace the parent link, or null to detach.
+  // Same handler validation as create (same household, not self).
+  parentPlantId: z.string().uuid().nullable().optional(),
 });
 
 // Task schemas
@@ -97,13 +107,66 @@ export const updateTaskSchema = z.object({
   nextDue: z.string().datetime().optional(),
 });
 
+// Bulk import (POST /plants/import). Composed from the single-create shapes
+// so the import contract can never drift from createPlant/createTask.
+// `plantId` is omitted from the task shape — the server assigns it after the
+// plant row is created. `acquiredAt` is accepted for round-trip compatibility
+// with exports (CSV `createdAt` column / JSON export) but is not persisted —
+// createdAt is always the import time.
+export const importTaskSchema = createTaskSchema.omit({ plantId: true });
+
+export const importPlantSchema = createPlantSchema.extend({
+  acquiredAt: z.string().max(40).optional(),
+  tasks: z.array(importTaskSchema).max(10).optional(),
+});
+
+export const importPlantsSchema = z.object({
+  plants: z.array(importPlantSchema).min(1).max(100),
+});
+
 export const completeTaskSchema = z.object({
   notes: z.string().max(500).optional(),
 });
 
+// Why the task was snoozed — feeds the activity feed ("snoozed (rain
+// expected)") and lets climate-aware skip suggestions tag their snoozes.
+export const snoozeReasonEnum = z.enum(['rain', 'frost', 'heat', 'other']);
+
 export const snoozeTaskSchema = z.object({
   days: z.number().int().min(1).max(365),
+  reason: snoozeReasonEnum.optional(),
+  note: z.string().max(200).optional(),
 });
+
+// Vacation window (care handoff). userId defaults to the caller; setting it
+// for someone else requires the admin role (enforced in the handler, which
+// knows the caller). coveredBy membership + coveredBy !== userId are also
+// handler checks because userId may be defaulted. Date sanity lives here.
+const MAX_VACATION_DAYS = 90;
+export const setVacationSchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    coveredBy: z.string().uuid(),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime(),
+  })
+  .superRefine((val, ctx) => {
+    const start = Date.parse(val.startDate);
+    const end = Date.parse(val.endDate);
+    if (end <= start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endDate'],
+        message: 'endDate must be after startDate',
+      });
+    } else if (end - start > MAX_VACATION_DAYS * 24 * 60 * 60 * 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endDate'],
+        message: `Vacation window cannot exceed ${MAX_VACATION_DAYS} days`,
+      });
+    }
+  });
 
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1).max(80),
@@ -144,7 +207,13 @@ export const taskFiltersSchema = z.object({
   plantId: z.string().uuid().optional(),
   assignedTo: z.string().uuid().optional(),
   dueWithin: z.coerce.number().int().min(1).optional(),
-  overdue: z.coerce.boolean().optional(),
+  // NOT z.coerce.boolean(): that coerces any non-empty string ("false",
+  // "0", "no") to true. Query params arrive as strings, so accept only the
+  // two literal spellings and map them explicitly.
+  overdue: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 // Type exports
@@ -165,10 +234,15 @@ export type UpdatePlantInput = z.infer<typeof updatePlantSchema>;
 
 export type TaskType = z.infer<typeof taskTypeEnum>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+export type ImportTaskInput = z.infer<typeof importTaskSchema>;
+export type ImportPlantItem = z.infer<typeof importPlantSchema>;
+export type ImportPlantsInput = z.infer<typeof importPlantsSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type ApplyTemplateInput = z.infer<typeof applyTemplateSchema>;
 export type ApplyTemplateBulkInput = z.infer<typeof applyTemplateBulkSchema>;
 export type ConfirmImageUploadInput = z.infer<typeof confirmImageUploadSchema>;
 export type CompleteTaskInput = z.infer<typeof completeTaskSchema>;
 export type SnoozeTaskInput = z.infer<typeof snoozeTaskSchema>;
+export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
+export type SetVacationInput = z.infer<typeof setVacationSchema>;
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;

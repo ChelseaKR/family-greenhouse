@@ -5,6 +5,9 @@ import {
   createPlantSchema,
   createTaskSchema,
   createHouseholdSchema,
+  refreshTokenSchema,
+  joinHouseholdSchema,
+  taskFiltersSchema,
 } from '../../../src/models/schemas';
 
 describe('Validation Schemas', () => {
@@ -161,6 +164,48 @@ describe('Validation Schemas', () => {
 
       const result = createTaskSchema.safeParse(input);
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('refreshTokenSchema', () => {
+    it('accepts a realistic Cognito refresh token length', () => {
+      expect(refreshTokenSchema.safeParse({ refreshToken: 'a'.repeat(2000) }).success).toBe(true);
+    });
+
+    it('rejects empty and oversized refresh tokens', () => {
+      expect(refreshTokenSchema.safeParse({ refreshToken: '' }).success).toBe(false);
+      expect(refreshTokenSchema.safeParse({ refreshToken: 'a'.repeat(4097) }).success).toBe(false);
+    });
+  });
+
+  describe('joinHouseholdSchema', () => {
+    it('accepts the current 32-hex invite code shape', () => {
+      expect(joinHouseholdSchema.safeParse({ inviteCode: 'f'.repeat(32) }).success).toBe(true);
+    });
+
+    it('rejects oversized invite codes', () => {
+      expect(joinHouseholdSchema.safeParse({ inviteCode: 'f'.repeat(65) }).success).toBe(false);
+    });
+  });
+
+  describe('taskFiltersSchema', () => {
+    it('maps overdue="false" to boolean false (z.coerce.boolean would yield true)', () => {
+      const result = taskFiltersSchema.parse({ overdue: 'false' });
+      expect(result.overdue).toBe(false);
+    });
+
+    it('maps overdue="true" to boolean true', () => {
+      const result = taskFiltersSchema.parse({ overdue: 'true' });
+      expect(result.overdue).toBe(true);
+    });
+
+    it('rejects other overdue spellings instead of guessing', () => {
+      expect(taskFiltersSchema.safeParse({ overdue: '0' }).success).toBe(false);
+      expect(taskFiltersSchema.safeParse({ overdue: 'no' }).success).toBe(false);
+    });
+
+    it('leaves overdue undefined when absent', () => {
+      expect(taskFiltersSchema.parse({}).overdue).toBeUndefined();
     });
   });
 

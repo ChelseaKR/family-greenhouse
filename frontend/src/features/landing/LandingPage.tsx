@@ -223,7 +223,7 @@ function AppMockup() {
             <main className="flex-1 p-4 sm:p-6 min-w-0">
               <header className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-primary-700/70 font-semibold">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-primary-700 font-semibold">
                     Your household
                   </p>
                   <h2 className="mt-1 font-serif text-2xl text-ink leading-tight">
@@ -484,7 +484,7 @@ export function LandingPage() {
                   </div>
                 </div>
               )}
-              <p className="text-xs uppercase tracking-[0.22em] text-primary-700/80 font-semibold mb-6">
+              <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
                 A garden journal for the whole house
               </p>
               <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl leading-[1.05]">
@@ -805,7 +805,7 @@ interface SectionHeadingProps {
 function SectionHeading({ eyebrow, title, description }: SectionHeadingProps) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700/80">
+      <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
         {eyebrow}
       </p>
       <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight">

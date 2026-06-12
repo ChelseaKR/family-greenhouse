@@ -71,6 +71,11 @@ export interface Plant {
    *  suggestion from the species autocomplete. Optional — free-text species
    *  names without a Perenual match leave this null. */
   perenualSpeciesId?: number | null;
+  /** Propagation lineage: the plant this one was cut from. Always within
+   *  the same household; null/absent for plants that aren't cuttings. The
+   *  parent may itself die or be given away — the link is history, not a
+   *  foreign key, so it intentionally survives parent status changes. */
+  parentPlantId?: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

@@ -15,10 +15,16 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { MemberVacation } from './MemberVacation';
+import { useVacationWindows } from './useVacationWindows';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
   const user = useAuthStore((state) => state.user);
+  // Operate on the ACTIVE household (multi-household users can switch);
+  // user.householdId is only the Cognito-claim default.
+  const householdId = useActiveHouseholdId();
   const queryClient = useQueryClient();
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -29,39 +35,40 @@ export function HouseholdPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['household', user?.householdId],
-    queryFn: () => householdService.getHousehold(user!.householdId!),
-    enabled: !!user?.householdId,
+    queryKey: ['household', householdId],
+    queryFn: () => householdService.getHousehold(householdId!),
+    enabled: !!householdId,
   });
 
   const createInviteMutation = useMutation({
-    mutationFn: () => householdService.createInvite(user!.householdId!),
+    mutationFn: () => householdService.createInvite(householdId!),
     onSuccess: (data) => {
       setInviteLink(data.url);
     },
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: (userId: string) => householdService.removeMember(user!.householdId!, userId),
+    mutationFn: (userId: string) => householdService.removeMember(householdId!, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['household'] });
+      queryClient.invalidateQueries({ queryKey: ['household', householdId] });
       setMemberToRemove(null);
     },
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: 'admin' | 'member' }) =>
-      householdService.updateMemberRole(user!.householdId!, userId, role),
+      householdService.updateMemberRole(householdId!, userId, role),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['household'] });
+      queryClient.invalidateQueries({ queryKey: ['household', householdId] });
     },
   });
 
   const setLocationMutation = useMutation({
-    mutationFn: (city: string | null) => climateService.setLocation(user!.householdId!, city),
+    mutationFn: (city: string | null) => climateService.setLocation(householdId!, city),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['household'] });
-      queryClient.invalidateQueries({ queryKey: ['household', user?.householdId, 'climate'] });
+      // ['household', householdId] is a prefix of the climate key, so this
+      // refreshes both the household detail and the dashboard ClimateCard.
+      queryClient.invalidateQueries({ queryKey: ['household', householdId] });
     },
   });
   const [locationDraft, setLocationDraft] = useState('');
@@ -75,6 +82,9 @@ export function HouseholdPage() {
   };
 
   const isAdmin = user?.householdRole === 'admin';
+
+  // Vacation windows (care handoff) — one query for all member rows.
+  const { data: vacationWindows } = useVacationWindows(householdId);
 
   if (isLoading) {
     return (
@@ -242,6 +252,15 @@ export function HouseholdPage() {
                     )}
                   </p>
                   <p className="text-sm text-gray-500">{member.email}</p>
+                  {householdId && (
+                    <MemberVacation
+                      householdId={householdId}
+                      member={member}
+                      members={household.members}
+                      canManage={isAdmin || member.userId === user?.id}
+                      window={vacationWindows?.find((w) => w.userId === member.userId)}
+                    />
+                  )}
                 </div>
               </div>
 

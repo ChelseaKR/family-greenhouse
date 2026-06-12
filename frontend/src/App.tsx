@@ -42,6 +42,14 @@ const PlantDetailPage = lazyNamed(
   'PlantDetailPage'
 );
 const AddPlantPage = lazyNamed(() => import('@/features/plants/AddPlantPage'), 'AddPlantPage');
+const ImportPlantsPage = lazyNamed(
+  () => import('@/features/plants/ImportPlantsPage'),
+  'ImportPlantsPage'
+);
+const SharedPlantPage = lazyNamed(
+  () => import('@/features/plants/SharedPlantPage'),
+  'SharedPlantPage'
+);
 const TasksPage = lazyNamed(() => import('@/features/tasks/TasksPage'), 'TasksPage');
 const HouseholdPage = lazyNamed(
   () => import('@/features/household/HouseholdPage'),
@@ -136,6 +144,9 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/join/:inviteCode" element={<JoinHouseholdPage />} />
+              {/* Public cutting-share landing page — works logged-out (the
+                  preview endpoint has no auth, like invite validation). */}
+              <Route path="/shared/:code" element={<SharedPlantPage />} />
               <Route path="/blog" element={<BlogIndex />} />
               <Route path="/care" element={<CareIndex />} />
               <Route path="/care/:slug" element={<CareGuidePage />} />
@@ -162,6 +173,7 @@ function App() {
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/plants" element={<PlantsPage />} />
                   <Route path="/plants/new" element={<AddPlantPage />} />
+                  <Route path="/plants/import" element={<ImportPlantsPage />} />
                   <Route path="/plants/:plantId" element={<PlantDetailPage />} />
                   <Route path="/tasks" element={<TasksPage />} />
                   <Route path="/chat" element={<ChatPage />} />

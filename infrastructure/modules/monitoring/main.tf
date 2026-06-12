@@ -235,8 +235,75 @@ resource "aws_cloudwatch_dashboard" "main" {
 data "aws_region" "current" {}
 
 # CloudWatch Alarms
+#
+# Alarm strategy (cost-driven consolidation): standard alarms are ~$0.10/mo
+# each, and 2 alarms x 13 Lambdas was ~$2.60/mo mostly spent watching
+# zero-traffic functions. Instead:
+#   - TWO account-aggregate alarms (AWS/Lambda Errors + Throttles with no
+#     FunctionName dimension — CloudWatch publishes these account-level
+#     series natively) catch a failure in ANY function.
+#   - Per-function Errors/Duration alarms are kept ONLY for the two
+#     functions where attribution + tighter signal matter: `reminders`
+#     (async/cron — a sync API failure surfaces via the api-5xx alarm and
+#     the user, an async one surfaces nowhere else) and `chat` (Bedrock
+#     tool-loop, the latency/cost outlier).
+locals {
+  critical_lambda_names = [
+    for name in var.lambda_function_names : name
+    if length(regexall("-(reminders|chat)-", name)) > 0
+  ]
+}
+
+# Any Lambda error anywhere in the account/region. Coarse by design — the
+# dashboard's per-function Errors widget gives the attribution.
+resource "aws_cloudwatch_metric_alarm" "lambda_errors_aggregate" {
+  alarm_name          = "${var.project_name}-lambda-errors-aggregate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "Aggregate Lambda errors across all functions exceeded threshold — check the dashboard's per-function Errors widget for attribution"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-lambda-errors-aggregate-alarm-${var.environment}"
+  }
+}
+
+# Aggregate Throttles rather than aggregate Duration: chat legitimately runs
+# 10-30s per turn, so at this app's low traffic an account-wide AVERAGE
+# duration alarm would false-page whenever chat is the dominant traffic.
+# Throttles is the unambiguous account-wide signal (any value > 0 means we
+# hit concurrency limits and shed requests); per-function Duration alarms
+# below cover latency for the two functions where it matters, and the
+# dashboard's p95 widget covers the rest.
+resource "aws_cloudwatch_metric_alarm" "lambda_throttles_aggregate" {
+  alarm_name          = "${var.project_name}-lambda-throttles-aggregate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "Lambda invocations throttled somewhere in the account — concurrency limit hit, requests are being shed"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-lambda-throttles-aggregate-alarm-${var.environment}"
+  }
+}
+
+# Per-function alarms for the critical pair only (see strategy note above).
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  for_each = toset(var.lambda_function_names)
+  for_each = toset(local.critical_lambda_names)
 
   alarm_name          = "${each.value}-errors"
   comparison_operator = "GreaterThanThreshold"
@@ -260,7 +327,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  for_each = toset(var.lambda_function_names)
+  for_each = toset(local.critical_lambda_names)
 
   alarm_name          = "${each.value}-duration"
   comparison_operator = "GreaterThanThreshold"
@@ -269,9 +336,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
   namespace           = "AWS/Lambda"
   period              = 300
   statistic           = "Average"
-  threshold           = 10000 # 10 seconds
-  alarm_description   = "Lambda function ${each.value} duration exceeded threshold"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
+  # chat legitimately runs 10-30s per turn (Bedrock tool loop, 90s timeout),
+  # so it alarms at 60s; everything else keeps the 10s bar.
+  threshold         = length(regexall("-chat-", each.value)) > 0 ? 60000 : 10000
+  alarm_description = "Lambda function ${each.value} duration exceeded threshold"
+  alarm_actions     = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     FunctionName = each.value

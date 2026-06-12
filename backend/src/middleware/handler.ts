@@ -7,18 +7,62 @@
  *   2. httpJsonBodyParser  — parse application/json (no-op for other types)
  *   3. httpCors            — add CORS headers; refuses to start in prod without ALLOWED_ORIGIN
  *   4. loggingMiddleware   — pino child logger keyed to request-id + user-id
- *   5. httpErrorHandler    — convert thrown HttpError → JSON response
+ *   5. jsonErrorHandler    — convert thrown errors → JSON {message, details?}
  *
  * Resource-specific middleware (auth, validation) layer on top via `.use()`.
  */
 import middy from '@middy/core';
 import httpCors from '@middy/http-cors';
-import httpErrorHandler from '@middy/http-error-handler';
 import httpJsonBodyParser from '@middy/http-json-body-parser';
 import { Handler } from 'aws-lambda';
 import { bodySizeGuard } from './bodySize.js';
 import { loggingMiddleware } from './logging.js';
 import { securityHeaders } from './securityHeaders.js';
+
+/**
+ * Error-body contract: EVERY error response is JSON
+ *
+ *     { "message": string, "details"?: unknown }
+ *
+ * with `Content-Type: application/json` and the thrown status code.
+ *
+ *   - 4xx: the thrown message (and `details`, e.g. Zod field errors from
+ *     `validateBody`) is always exposed — these are client-actionable.
+ *   - 5xx: a generic "Internal Server Error" by default so internals never
+ *     leak, UNLESS the error was thrown with `expose: true`
+ *     (`createHttpError(502, 'safe message', { expose: true })`), which marks
+ *     it as an intentional, safe-to-show upstream failure.
+ *
+ * This replaces @middy/http-error-handler, whose defaults stripped intentional
+ * 5xx bodies entirely and emitted text/plain for everything else.
+ */
+function jsonErrorHandler(): middy.MiddlewareObj<unknown, unknown> {
+  const onError: middy.MiddlewareFn<unknown, unknown> = (request) => {
+    // Another onError middleware already produced a response — leave it.
+    if (request.response !== undefined && request.response !== null) return;
+    const err = request.error as
+      | (Error & { statusCode?: unknown; expose?: unknown; details?: unknown })
+      | null;
+
+    const rawStatus = typeof err?.statusCode === 'number' ? err.statusCode : 500;
+    const statusCode = rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+
+    let message = 'Internal Server Error';
+    let details: unknown;
+    const exposable = statusCode < 500 || err?.expose === true;
+    if (exposable) {
+      message = err?.message || message;
+      details = err?.details;
+    }
+
+    request.response = {
+      statusCode,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(details === undefined ? { message } : { message, details }),
+    };
+  };
+  return { onError };
+}
 
 function resolveCorsOrigin(): string {
   const allowed = process.env.ALLOWED_ORIGIN;
@@ -46,7 +90,7 @@ export function createHandler<TEvent, TResult>(handler: Handler<TEvent, TResult>
         })
       )
       .use(loggingMiddleware())
-      .use(httpErrorHandler())
+      .use(jsonErrorHandler())
   );
 }
 
@@ -70,5 +114,5 @@ export function createRawBodyHandler<TEvent, TResult>(handler: Handler<TEvent, T
       })
     )
     .use(loggingMiddleware())
-    .use(httpErrorHandler());
+    .use(jsonErrorHandler());
 }

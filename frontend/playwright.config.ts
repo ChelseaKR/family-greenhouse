@@ -16,6 +16,14 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // The app honors prefers-reduced-motion (cards use
+    // `motion-safe:animate-fade-in`); prefer the calm rendering in tests.
+    // NOTE: the @playwright/test page fixture does not reliably apply this
+    // option (manual newContext() does), so the a11y specs additionally
+    // wait for document.getAnimations() to finish before running axe —
+    // otherwise axe samples mid-fade opacity and reports blended colors as
+    // contrast violations.
+    reducedMotion: 'reduce',
   },
   projects: [
     {

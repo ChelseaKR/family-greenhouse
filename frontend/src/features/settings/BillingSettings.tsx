@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { CheckIcon, SparklesIcon } from '@heroicons/react/24/outline';
-import { billingService, Plan, PlanId } from '@/services/billingService';
+import {
+  billingService,
+  isOverPlanLimit,
+  Plan,
+  PlanId,
+  PlanUsage,
+} from '@/services/billingService';
 import { getErrorMessage } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
@@ -13,6 +21,7 @@ import { IS_BETA, BETA_NOTICE } from '@/lib/betaMode';
 import clsx from 'clsx';
 
 export function BillingSettings() {
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.householdRole === 'admin';
   const [searchParams] = useSearchParams();
@@ -24,11 +33,14 @@ export function BillingSettings() {
     if (status === 'cancel') setNotice('Checkout cancelled — no changes were made.');
   }, [searchParams]);
 
+  const householdId = useActiveHouseholdId();
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
   const subQuery = useQuery({
-    queryKey: ['subscription', user?.householdId],
+    // Subscriptions are per-household; the backend resolves the ACTIVE
+    // household (X-Household-Id header), so the key must embed it too.
+    queryKey: ['subscription', householdId],
     queryFn: billingService.getCurrentSubscription,
-    enabled: !!user?.householdId,
+    enabled: !!householdId,
   });
 
   const checkout = useMutation({
@@ -55,6 +67,10 @@ export function BillingSettings() {
 
   const plans = plansQuery.data ?? [];
   const currentPlanId = subQuery.data?.planId ?? 'seedling';
+  const usage = subQuery.data?.usage;
+  // Genuinely over the plan caps — only possible after a downgrade. Reads,
+  // edits, and deletes all keep working; only adding is blocked server-side.
+  const overLimit = isOverPlanLimit(usage);
 
   return (
     <div className="space-y-6">
@@ -79,6 +95,20 @@ export function BillingSettings() {
             {getErrorMessage(checkout.error)}
           </Alert>
         )}
+        {overLimit && (
+          <Alert variant="warning" title={t('settings.billing.overLimitTitle')} className="mb-4">
+            <p>{t('settings.billing.overLimitBody')}</p>
+            {isAdmin && subQuery.data?.stripeCustomerId && (
+              <button
+                type="button"
+                className="mt-2 font-medium underline"
+                onClick={() => portal.mutate()}
+              >
+                {t('settings.billing.manageSubscription')}
+              </button>
+            )}
+          </Alert>
+        )}
         <p className="text-sm text-gray-600">
           Your household is on the{' '}
           <span className="font-medium">
@@ -87,6 +117,7 @@ export function BillingSettings() {
           plan
           {subQuery.data?.status === 'trialing' && ' (free trial)'}.
         </p>
+        {usage && <UsageMeters usage={usage} />}
         {!IS_BETA && isAdmin && subQuery.data?.stripeCustomerId && (
           <Button
             className="mt-4"
@@ -115,6 +146,51 @@ export function BillingSettings() {
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Ambient "n of max" meters for the household's plan caps. Bars turn red when
+ * over the cap (post-downgrade) — purely informational, the server enforces.
+ */
+function UsageMeters({ usage }: { usage: PlanUsage }) {
+  const { t } = useTranslation();
+  const meters = [
+    {
+      label: t('settings.billing.plantsUsage', { n: usage.plantCount, max: usage.maxPlants }),
+      count: usage.plantCount,
+      max: usage.maxPlants,
+    },
+    {
+      label: t('settings.billing.membersUsage', { n: usage.memberCount, max: usage.maxMembers }),
+      count: usage.memberCount,
+      max: usage.maxMembers,
+    },
+  ];
+  return (
+    <div className="mt-4 space-y-3" data-testid="usage-meters">
+      <p className="text-sm font-medium text-gray-700">{t('settings.billing.usageTitle')}</p>
+      {meters.map((m) => {
+        const over = m.count > m.max;
+        const pct = m.max > 0 ? Math.min(100, Math.round((m.count / m.max) * 100)) : 0;
+        return (
+          <div key={m.label}>
+            <p className={clsx('text-xs', over ? 'text-red-600 font-medium' : 'text-gray-600')}>
+              {m.label}
+            </p>
+            <div
+              className="mt-1 h-1.5 w-full max-w-xs rounded-full bg-gray-100"
+              role="presentation"
+            >
+              <div
+                className={clsx('h-1.5 rounded-full', over ? 'bg-red-500' : 'bg-primary-500')}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

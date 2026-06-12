@@ -19,6 +19,30 @@
  */
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import { instrument } from '../utils/sentry.js';
+import { _securityHeaders } from './securityHeaders.js';
+
+/**
+ * The inline 404 below never passes through the per-route middy stack, so it
+ * misses the `securityHeaders` and `httpCors` middleware every real response
+ * gets. Without CORS headers the browser surfaces an opaque CORS error
+ * instead of the 404 body. Mirror `resolveCorsOrigin` in handler.ts (not
+ * exported there); unlike the cold-start check there we don't throw on a
+ * missing ALLOWED_ORIGIN — a 404 without a CORS header beats failing the
+ * whole dispatch.
+ */
+function notFoundHeaders(): Record<string, string> {
+  const origin =
+    process.env.ALLOWED_ORIGIN && process.env.ALLOWED_ORIGIN.length > 0
+      ? process.env.ALLOWED_ORIGIN
+      : 'http://localhost:3000';
+  return {
+    'Content-Type': 'application/json',
+    ..._securityHeaders,
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    Vary: 'Origin',
+  };
+}
 
 /**
  * A middy-wrapped per-route handler. The `event: never` parameter is a
@@ -49,7 +73,7 @@ export function createRouter(routes: Record<string, RouteHandler>): RouterHandle
     if (!route) {
       return Promise.resolve({
         statusCode: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: notFoundHeaders(),
         body: JSON.stringify({ message: `No route handler for ${key}` }),
       });
     }

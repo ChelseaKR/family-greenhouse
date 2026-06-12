@@ -3,10 +3,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
-import { taskService } from '@/services/taskService';
-import { plantService, Task } from '@/services/plantService';
+import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
+import { plantService } from '@/services/plantService';
+import { climateService } from '@/services/climateService';
 import { householdService } from '@/services/householdService';
+import { deriveClimateSignals, climateSkipSuggestion } from '@/features/tasks/climateSignals';
+import {
+  ClaimControls,
+  ClimateSkipChip,
+  CoveringBadge,
+  UpForGrabsBadge,
+} from '@/features/tasks/taskRowExtras';
+import {
+  useClaimTaskMutation,
+  useSkipCycleMutation,
+  useUnclaimTaskMutation,
+} from '@/features/tasks/taskMutations';
 import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
 import { Card, CardHeader } from '@/components/Card';
@@ -61,7 +75,13 @@ function filterActivity(
 ) {
   if (filter === 'all') return events;
   return events.filter((e) => {
-    if (filter === 'tasks') return e.type === 'task.completed';
+    if (filter === 'tasks')
+      return (
+        e.type === 'task.completed' ||
+        e.type === 'task.snoozed' ||
+        e.type === 'task.claimed' ||
+        e.type === 'task.unclaimed'
+      );
     if (filter === 'plants')
       return (
         e.type === 'plant.created' || e.type === 'plant.deleted' || e.type === 'photo.uploaded'
@@ -82,6 +102,7 @@ function isOverdue(dateString: string): boolean {
 export function DashboardPage() {
   useDocumentTitle('Dashboard');
   const user = useAuthStore((state) => state.user);
+  const householdId = useActiveHouseholdId();
   const queryClient = useQueryClient();
 
   const {
@@ -89,7 +110,7 @@ export function DashboardPage() {
     isLoading: tasksLoading,
     error: tasksError,
   } = useQuery({
-    queryKey: ['tasks', 'upcoming'],
+    queryKey: ['tasks', householdId, 'upcoming'],
     queryFn: taskService.getUpcomingTasks,
   });
 
@@ -98,19 +119,19 @@ export function DashboardPage() {
     isLoading: plantsLoading,
     error: plantsError,
   } = useQuery({
-    queryKey: ['plants'],
+    queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
   });
 
   useOverdueAlerts(upcomingTasks);
 
   const { data: activity } = useQuery({
-    queryKey: ['household', user?.householdId, 'activity'],
+    queryKey: ['household', householdId, 'activity'],
     // Pull a wider window so client-side filters have something to chew on;
     // 50 keeps round-trip light while making the "Plants" or "People" pills
     // feel non-empty even when watering dominates the feed.
-    queryFn: () => householdService.getActivity(user!.householdId!, 50),
-    enabled: !!user?.householdId,
+    queryFn: () => householdService.getActivity(householdId!, 50),
+    enabled: !!householdId,
   });
 
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
@@ -122,7 +143,7 @@ export function DashboardPage() {
   const completeTaskMutation = useMutation({
     mutationFn: (taskId: string) => taskService.completeTask(taskId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success('Task completed');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -135,6 +156,24 @@ export function DashboardPage() {
       // Error is handled by the mutation
     }
   };
+
+  // Same climate query the ClimateCard below issues (shared key → one
+  // fetch); powers the "Rain expected — skip this cycle?" chips on rows.
+  const { data: climate } = useQuery({
+    queryKey: ['household', householdId, 'climate'],
+    queryFn: () => climateService.getClimate(householdId!),
+    enabled: !!householdId,
+    staleTime: 30 * 60 * 1000,
+  });
+  const climateSignals = deriveClimateSignals(climate);
+  const tagsByPlantId = useMemo(
+    () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
+    [plants]
+  );
+
+  const claimMutation = useClaimTaskMutation(householdId);
+  const unclaimMutation = useUnclaimTaskMutation(householdId);
+  const skipMutation = useSkipCycleMutation(householdId);
 
   const overdueTasks = upcomingTasks?.filter((task) => isOverdue(task.nextDue)) || [];
   const todayTasks =
@@ -215,6 +254,16 @@ export function DashboardPage() {
                 task={task}
                 onComplete={handleCompleteTask}
                 isCompleting={completeTaskMutation.isPending}
+                skipReason={climateSkipSuggestion(
+                  task,
+                  tagsByPlantId.get(task.plantId),
+                  climateSignals
+                )}
+                onSkip={(t, reason) => skipMutation.mutate({ task: t, reason })}
+                skipPending={skipMutation.isPending}
+                onClaim={(id) => claimMutation.mutate(id)}
+                onUnclaim={(id) => unclaimMutation.mutate(id)}
+                claimPending={claimMutation.isPending || unclaimMutation.isPending}
               />
             ))}
           </ul>
@@ -395,6 +444,41 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
+    case 'task.snoozed': {
+      // "snoozed water for Monstera (rain expected)" — the climate skip
+      // reasons read as why the cycle was skipped.
+      const p = payload as { taskType?: string; plantName?: string; reason?: string | null };
+      const reasonLabel =
+        p.reason === 'rain'
+          ? 'rain expected'
+          : p.reason === 'frost'
+            ? 'frost expected'
+            : p.reason === 'heat'
+              ? 'heat wave'
+              : null;
+      body = (
+        <>
+          <span className="font-medium">{actorName}</span> snoozed{' '}
+          <span className="font-medium">{p.taskType ?? 'a task'}</span>
+          {p.plantName && <> for {p.plantName}</>}
+          {reasonLabel && <> ({reasonLabel})</>}
+        </>
+      );
+      break;
+    }
+    case 'task.claimed':
+    case 'task.unclaimed': {
+      const p = payload as { taskType?: string; plantName?: string };
+      body = (
+        <>
+          <span className="font-medium">{actorName}</span>{' '}
+          {type === 'task.claimed' ? 'claimed' : 'released'}{' '}
+          <span className="font-medium">{p.taskType ?? 'a task'}</span>
+          {p.plantName && <> for {p.plantName}</>}
+        </>
+      );
+      break;
+    }
     case 'plant.created':
       body = (
         <>
@@ -450,12 +534,28 @@ function ActivityRow({ event }: ActivityRowProps) {
 }
 
 interface TaskItemProps {
-  task: Task;
+  task: TaskWithCoverage;
   onComplete: (taskId: string) => void;
   isCompleting: boolean;
+  skipReason: Extract<SnoozeReason, 'rain' | 'frost'> | null;
+  onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
+  skipPending: boolean;
+  onClaim: (taskId: string) => void;
+  onUnclaim: (taskId: string) => void;
+  claimPending: boolean;
 }
 
-function TaskItem({ task, onComplete, isCompleting }: TaskItemProps) {
+function TaskItem({
+  task,
+  onComplete,
+  isCompleting,
+  skipReason,
+  onSkip,
+  skipPending,
+  onClaim,
+  onUnclaim,
+  claimPending,
+}: TaskItemProps) {
   const overdue = isOverdue(task.nextDue);
   const style = taskTypeStyles[task.type] ?? taskTypeStyles.custom;
   const { Icon } = style;
@@ -487,17 +587,38 @@ function TaskItem({ task, onComplete, isCompleting }: TaskItemProps) {
             </span>
             {task.assignedToName && ` • ${task.assignedToName}`}
           </p>
+          {(!task.assignedTo || task.coveringFor || skipReason) && (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {!task.assignedTo && <UpForGrabsBadge />}
+              {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
+              {skipReason && (
+                <ClimateSkipChip
+                  reason={skipReason}
+                  onSkip={() => onSkip(task, skipReason)}
+                  isPending={skipPending}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => onComplete(task.id)}
-        disabled={isCompleting}
-        leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
-      >
-        Done
-      </Button>
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <ClaimControls
+          task={task}
+          onClaim={onClaim}
+          onUnclaim={onUnclaim}
+          isPending={claimPending}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onComplete(task.id)}
+          disabled={isCompleting}
+          leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+        >
+          Done
+        </Button>
+      </div>
     </li>
   );
 }

@@ -9,9 +9,11 @@
  * Key decisions:
  *  - All-day events. Tasks don't have a clock time on them; landing them
  *    on a specific hour would be misleading.
- *  - RRULE-driven recurrence using the task's frequency in days, so the
- *    user's calendar app extrapolates the next year of occurrences
- *    locally instead of us emitting hundreds of explicit VEVENTs.
+ *  - ONE single-occurrence VEVENT per task at its current nextDue — no
+ *    RRULE. The app re-anchors nextDue on every completion/snooze, so an
+ *    RRULE anchored at export-time DTSTART drifts from the real schedule
+ *    almost immediately. Subscribed calendars re-fetch the feed and pick
+ *    up the new date after each completion.
  *  - Stable UID per task (`<taskId>@familygreenhouse.app`) so updates
  *    on our side replace the existing calendar event rather than
  *    duplicating.
@@ -60,15 +62,23 @@ function escapeText(text: string): string {
 
 function eventLines(task: Task, now: Date): string[] {
   const due = new Date(task.nextDue);
+  // Legacy rows can have an empty `type`; `type[0].toUpperCase()` threw on
+  // those and 500'd the whole feed. Fall back to a generic label.
+  const typeLabel = task.type ? `${task.type[0].toUpperCase()}${task.type.slice(1)}` : 'Care task';
   const summary = task.customType
     ? `${task.customType} — ${task.plantName}`
-    : `${task.type[0].toUpperCase()}${task.type.slice(1)} — ${task.plantName}`;
+    : `${typeLabel} — ${task.plantName}`;
   const descriptionParts = [
     `Recurring every ${task.frequency} day${task.frequency === 1 ? '' : 's'}.`,
   ];
   if (task.notes) descriptionParts.push(task.notes);
   if (task.assignedToName) descriptionParts.push(`Assigned to ${task.assignedToName}.`);
 
+  // Deliberately NO RRULE here: completing/snoozing a task re-anchors its
+  // nextDue server-side, so a client-extrapolated recurrence anchored at
+  // export-time DTSTART diverges from the app's real schedule after the
+  // first completion. A single occurrence at the current nextDue is always
+  // accurate; subscription refresh moves the event forward over time.
   return [
     'BEGIN:VEVENT',
     `UID:${task.id}@familygreenhouse.app`,
@@ -76,7 +86,6 @@ function eventLines(task: Task, now: Date): string[] {
     `DTSTART;VALUE=DATE:${formatDate(due)}`,
     `SUMMARY:${escapeText(summary)}`,
     `DESCRIPTION:${escapeText(descriptionParts.join(' '))}`,
-    `RRULE:FREQ=DAILY;INTERVAL=${task.frequency}`,
     'END:VEVENT',
   ];
 }

@@ -49,6 +49,15 @@ interface AuthState {
   setHousehold: (householdId: string, role: 'admin' | 'member') => void;
   setActiveHouseholdId: (id: string | null) => void;
   logout: () => void;
+  /**
+   * Clears THIS tab's in-memory session without touching the persisted
+   * localStorage payload. Used when a tab's session is unusable locally
+   * (e.g. a freshly-opened tab inherited an idToken from localStorage but
+   * has no sessionStorage refresh token) — a full logout() would rewrite
+   * the shared localStorage and the cross-tab `storage` listener would
+   * then log out EVERY tab, including ones holding valid refresh tokens.
+   */
+  clearLocalSession: () => void;
   setLoading: (loading: boolean) => void;
   verifySession: () => Promise<void>;
 }
@@ -95,6 +104,13 @@ function mergeJsonFromSplit(local: string | null, session: string | null): strin
   }
 }
 
+// When true, persist writes are skipped entirely. `clearLocalSession` flips
+// this around its `set` so a tab-local clear never rewrites the shared
+// localStorage payload (which would fire `storage` events in other tabs and
+// cascade the logout). zustand's persist middleware writes synchronously on
+// every set, so a synchronous flag is sufficient.
+let suppressPersistWrites = false;
+
 const splitStorage: StateStorage = {
   getItem: (name) => {
     if (typeof window === 'undefined') return null;
@@ -103,7 +119,7 @@ const splitStorage: StateStorage = {
     return mergeJsonFromSplit(local, session);
   },
   setItem: (name, value) => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || suppressPersistWrites) return;
     const { local, session } = splitJsonByField(value, SESSION_FIELDS);
     window.localStorage.setItem(name, local);
     window.sessionStorage.setItem(`${name}-session`, session);
@@ -169,13 +185,40 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
+      clearLocalSession: () => {
+        resetAnalytics();
+        // Same state reset as logout(), but with persistence suppressed so
+        // the shared localStorage payload survives for other tabs. This
+        // tab's ProtectedRoute will route to /login as usual.
+        suppressPersistWrites = true;
+        try {
+          set({
+            user: null,
+            idToken: null,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isLoading: false,
+            activeHouseholdId: null,
+          });
+        } finally {
+          suppressPersistWrites = false;
+        }
+      },
+
       setLoading: (loading) => set({ isLoading: loading }),
 
       verifySession: async () => {
-        const { idToken, accessToken, logout, setLoading } = get();
+        const { idToken, accessToken, refreshToken, logout, clearLocalSession, setLoading } = get();
         // Prefer ID token (carries the household claims the backend reads).
         // Fall back to access token only to handle pre-fix persisted state.
         const authToken = idToken ?? accessToken;
+
+        // When this tab can't recover the session on its own (no refresh
+        // token — it's sessionStorage-only, so e.g. a freshly-opened tab),
+        // fail tab-locally instead of nuking the shared localStorage that
+        // other tabs with valid refresh tokens still depend on.
+        const failSession = refreshToken ? logout : clearLocalSession;
 
         // No token, just mark as not loading
         if (!authToken) {
@@ -193,8 +236,9 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!response.ok) {
-            // Token is invalid, logout silently
-            logout();
+            // Token is invalid — end the session silently (tab-local when
+            // this tab has no refresh token, full logout otherwise).
+            failSession();
           } else {
             // Token is valid, update user data
             const userData = await response.json();
@@ -205,8 +249,9 @@ export const useAuthStore = create<AuthState>()(
             });
           }
         } catch {
-          // Network error or other issue, logout to be safe
-          logout();
+          // Network error or other issue — fail safe, but only tab-locally
+          // when this tab couldn't have refreshed anyway.
+          failSession();
         }
       },
     }),

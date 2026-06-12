@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CheckIcon } from '@heroicons/react/24/outline';
-import { taskService } from '@/services/taskService';
-import { Task } from '@/services/plantService';
+import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
+import { plantService } from '@/services/plantService';
+import { climateService } from '@/services/climateService';
+import { deriveClimateSignals, climateSkipSuggestion } from './climateSignals';
+import { ClaimControls, ClimateSkipChip, CoveringBadge, UpForGrabsBadge } from './taskRowExtras';
+import {
+  useClaimTaskMutation,
+  useSkipCycleMutation,
+  useUnclaimTaskMutation,
+} from './taskMutations';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -16,28 +24,27 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { calendarDaysBetween } from '@/utils/date';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
 function formatDueDate(dateString: string): string {
   const date = new Date(dateString);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // calendarDaysBetween is DST-safe (UTC-noon anchored) — local-midnight
+  // subtraction + Math.ceil reported "2 days overdue" for yesterday across
+  // the fall-back transition.
+  const diff = calendarDaysBetween(new Date(), date);
 
-  today.setHours(0, 0, 0, 0);
-  tomorrow.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-
-  if (date.getTime() < today.getTime()) {
-    const daysOverdue = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff < 0) {
+    const daysOverdue = -diff;
     return `${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue`;
   }
-  if (date.getTime() === today.getTime()) {
+  if (diff === 0) {
     return 'Today';
   }
-  if (date.getTime() === tomorrow.getTime()) {
+  if (diff === 1) {
     return 'Tomorrow';
   }
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -62,6 +69,7 @@ function isToday(dateString: string): boolean {
 export function TasksPage() {
   useDocumentTitle('Tasks');
   const user = useAuthStore((state) => state.user);
+  const householdId = useActiveHouseholdId();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterType>('all');
 
@@ -70,19 +78,57 @@ export function TasksPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', householdId],
     queryFn: () => taskService.getTasks(),
   });
+
+  // Existing household climate query (shared key with the dashboard's
+  // ClimateCard, so this is usually a cache hit) — drives the one-tap
+  // "skip this cycle" suggestions. No new endpoints.
+  const { data: climate } = useQuery({
+    queryKey: ['household', householdId, 'climate'],
+    queryFn: () => climateService.getClimate(householdId!),
+    enabled: !!householdId,
+    staleTime: 30 * 60 * 1000,
+  });
+  const signals = deriveClimateSignals(climate);
+
+  // Plant tags (for the outdoor-only frost variant) — standard plants query,
+  // also typically already cached.
+  const { data: plants } = useQuery({
+    queryKey: ['plants', householdId],
+    queryFn: () => plantService.getPlants(),
+  });
+  const tagsByPlantId = useMemo(
+    () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
+    [plants]
+  );
 
   const completeTaskMutation = useMutation({
     mutationFn: (taskId: string) => taskService.completeTask(taskId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       toast.success('Task completed');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
+
+  const claimMutation = useClaimTaskMutation(householdId);
+  const unclaimMutation = useUnclaimTaskMutation(householdId);
+  const skipMutation = useSkipCycleMutation(householdId);
+
+  const skipReasonFor = (task: TaskWithCoverage) =>
+    climateSkipSuggestion(task, tagsByPlantId.get(task.plantId), signals);
+
+  const rowExtras: TaskRowExtras = {
+    skipReasonFor,
+    onClaim: (id) => claimMutation.mutate(id),
+    onUnclaim: (id) => unclaimMutation.mutate(id),
+    onSkip: (task, reason) => skipMutation.mutate({ task, reason }),
+    claimPending: claimMutation.isPending || unclaimMutation.isPending,
+    skipPending: skipMutation.isPending,
+  };
 
   const filteredTasks = tasks?.filter((task) => {
     switch (filter) {
@@ -188,6 +234,7 @@ export function TasksPage() {
               onComplete={(id) => completeTaskMutation.mutate(id)}
               isCompleting={completeTaskMutation.isPending}
               variant="danger"
+              extras={rowExtras}
             />
           )}
 
@@ -197,6 +244,7 @@ export function TasksPage() {
               tasks={todayTasks}
               onComplete={(id) => completeTaskMutation.mutate(id)}
               isCompleting={completeTaskMutation.isPending}
+              extras={rowExtras}
             />
           )}
 
@@ -206,6 +254,7 @@ export function TasksPage() {
               tasks={upcomingTasks}
               onComplete={(id) => completeTaskMutation.mutate(id)}
               isCompleting={completeTaskMutation.isPending}
+              extras={rowExtras}
             />
           )}
         </div>
@@ -214,12 +263,23 @@ export function TasksPage() {
   );
 }
 
+/** Claim / vacation / climate-skip plumbing shared by every section row. */
+interface TaskRowExtras {
+  skipReasonFor: (task: TaskWithCoverage) => Extract<SnoozeReason, 'rain' | 'frost'> | null;
+  onClaim: (taskId: string) => void;
+  onUnclaim: (taskId: string) => void;
+  onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
+  claimPending: boolean;
+  skipPending: boolean;
+}
+
 interface TaskSectionProps {
   title: string;
-  tasks: Task[];
+  tasks: TaskWithCoverage[];
   onComplete: (taskId: string) => void;
   isCompleting: boolean;
   variant?: 'default' | 'danger';
+  extras: TaskRowExtras;
 }
 
 function TaskSection({
@@ -228,6 +288,7 @@ function TaskSection({
   onComplete,
   isCompleting,
   variant = 'default',
+  extras,
 }: TaskSectionProps) {
   return (
     <Card variant="paper" padding="none">
@@ -246,13 +307,14 @@ function TaskSection({
           )}
         >
           {title}
-          <span className="ml-2 text-gray-500 font-normal">({tasks.length})</span>
+          <span className="ml-2 text-gray-600 font-normal">({tasks.length})</span>
         </h2>
       </div>
       <ul className="divide-y divide-primary-100/60">
         {tasks.map((task) => {
           const style = taskTypeStyles[task.type] ?? taskTypeStyles.custom;
           const { Icon } = style;
+          const skipReason = extras.skipReasonFor(task);
           return (
             <li
               key={task.id}
@@ -287,17 +349,38 @@ function TaskSection({
                     </span>
                     {task.assignedToName && ` • Assigned to ${task.assignedToName}`}
                   </p>
+                  {(!task.assignedTo || task.coveringFor || skipReason) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {!task.assignedTo && <UpForGrabsBadge />}
+                      {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
+                      {skipReason && (
+                        <ClimateSkipChip
+                          reason={skipReason}
+                          onSkip={() => extras.onSkip(task, skipReason)}
+                          isPending={extras.skipPending}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onComplete(task.id)}
-                disabled={isCompleting}
-                leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
-              >
-                Done
-              </Button>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <ClaimControls
+                  task={task}
+                  onClaim={extras.onClaim}
+                  onUnclaim={extras.onUnclaim}
+                  isPending={extras.claimPending}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onComplete(task.id)}
+                  disabled={isCompleting}
+                  leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+                >
+                  Done
+                </Button>
+              </div>
             </li>
           );
         })}

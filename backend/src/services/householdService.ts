@@ -23,6 +23,31 @@ import { invalidateMembership } from '../utils/membershipCache.js';
 import { Household, HouseholdMember, HouseholdInvite, DynamoDBItem } from '../models/types.js';
 import { CreateHouseholdInput } from '../models/schemas.js';
 
+/**
+ * Raised when a write would exceed the household's plan cap. Handlers map
+ * this to the existing 402 upgrade response. Call sites check `err.name ===
+ * 'PlanLimitError'` (not instanceof) so test automocks of this module stay
+ * compatible.
+ */
+export class PlanLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlanLimitError';
+  }
+}
+
+/**
+ * Pull the per-item CancellationReasons off a TransactWriteCommand failure.
+ * Returns [] for anything that isn't a TransactionCanceledException, so
+ * callers can index into it safely.
+ */
+function transactCancellationReasons(err: unknown): Array<{ Code?: string }> {
+  if (err instanceof Error && err.name === 'TransactionCanceledException') {
+    return (err as { CancellationReasons?: Array<{ Code?: string }> }).CancellationReasons ?? [];
+  }
+  return [];
+}
+
 export async function createHousehold(
   input: CreateHouseholdInput,
   userId: string,
@@ -44,6 +69,11 @@ export async function createHousehold(
     SK: 'METADATA',
     entityType: 'Household',
     ...household,
+    // Atomic plan-cap counters (see addMember / plantService.createPlant).
+    // The creator is the first member; no plants yet. Legacy rows created
+    // before these existed are backfilled lazily via if_not_exists().
+    memberCount: 1,
+    plantCount: 0,
   };
 
   const memberItem: DynamoDBItem = {
@@ -162,8 +192,11 @@ export async function setHouseholdLocation(
  * Implemented as a paginated full-table scan filtered to household-metadata
  * rows. That's fine at beta scale; the documented "what does this cost at
  * 1,000 households?" answer is "one scan/hour" — cheap. If household counts
- * grow into the tens of thousands, move this to a dedicated GSI keyed on a
- * constant partition + householdId so it becomes a bounded Query.
+ * grow into the tens of thousands, the scale fix is a sparse-GSI directory:
+ * write a constant GSI partition key (e.g. GSI1PK = 'HOUSEHOLD_DIRECTORY')
+ * onto Household metadata rows only, so this becomes one bounded Query
+ * instead of a full-table Scan. Deliberately not done in this pass — it's a
+ * schema change requiring a backfill.
  */
 export async function listAllHouseholdIds(): Promise<string[]> {
   const ids: string[] = [];
@@ -270,11 +303,33 @@ export async function getInvite(code: string): Promise<HouseholdInvite | null> {
   return invite;
 }
 
+/**
+ * Insert a member row, atomically enforcing the plan's member cap.
+ *
+ * The member Put stays conditioned on the row not existing (an unconditional
+ * Put let a racing double-join silently overwrite an existing row, e.g.
+ * resetting an admin back to 'member' and clobbering joinedAt). It now rides
+ * in a TransactWriteCommand with a conditional increment of `memberCount` on
+ * the household METADATA row, so two concurrent joins can never both slip
+ * under `maxMembers` (the old check-then-write race).
+ *
+ * Backfill: legacy METADATA rows predate the counter. We read METADATA once;
+ * when `memberCount` is absent we count the member rows and seed the counter
+ * via `if_not_exists(memberCount, :base)` inside the same transaction (same
+ * design as plantService.createPlant — see the comment there).
+ *
+ * Failure mapping (via per-item CancellationReasons):
+ *   - item 0 (member Put) failed   → rethrown with name
+ *     'ConditionalCheckFailedException' so existing callers keep mapping it
+ *     to the friendly "already a member" 400.
+ *   - item 1 (counter) failed      → PlanLimitError (callers map to 402).
+ */
 export async function addMember(
   householdId: string,
   userId: string,
   userName: string,
   userEmail: string,
+  maxMembers: number,
   role: 'admin' | 'member' = 'member'
 ): Promise<HouseholdMember> {
   const now = new Date().toISOString();
@@ -297,21 +352,116 @@ export async function addMember(
     ...member,
   };
 
-  await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  const meta = await dynamodb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+    })
+  );
+  if (!meta.Item) {
+    throw new Error(`Household ${householdId} not found`);
+  }
+  let base = 0;
+  if (typeof meta.Item.memberCount !== 'number') {
+    const members = await getHouseholdMembers(householdId);
+    base = members.length;
+    if (base >= maxMembers) {
+      throw new PlanLimitError(`Member limit of ${maxMembers} reached`);
+    }
+  }
+
+  try {
+    await dynamodb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: item,
+              ConditionExpression: 'attribute_not_exists(PK)',
+            },
+          },
+          {
+            Update: {
+              TableName: TABLE_NAME,
+              Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+              UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :base) + :one',
+              ConditionExpression:
+                'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)',
+              ExpressionAttributeValues: { ':base': base, ':one': 1, ':max': maxMembers },
+            },
+          },
+        ],
+      })
+    );
+  } catch (err) {
+    const reasons = transactCancellationReasons(err);
+    if (reasons[0]?.Code === 'ConditionalCheckFailed') {
+      // Duplicate join lost the race on the member row. Checked BEFORE the
+      // cap reason so "already a member" (400) wins over the cap 402 when
+      // both conditions fail.
+      throw Object.assign(new Error('Member already exists'), {
+        name: 'ConditionalCheckFailedException',
+      });
+    }
+    if (reasons[1]?.Code === 'ConditionalCheckFailed') {
+      throw new PlanLimitError(`Member limit of ${maxMembers} reached`);
+    }
+    throw err;
+  }
 
   return member;
 }
 
+/**
+ * Delete a member row and decrement `memberCount` (floored at 0) in one
+ * transaction. Failure handling preserves the old idempotent semantics:
+ *   - member row already gone → resolve without touching the counter.
+ *   - counter already at 0 / METADATA row missing → fall back to a plain
+ *     unconditional delete (the member must still be removed; the counter
+ *     is already at its floor).
+ */
 export async function removeMember(householdId: string, userId: string): Promise<void> {
-  await dynamodb.send(
-    new DeleteCommand({
-      TableName: TABLE_NAME,
-      Key: {
-        PK: `HOUSEHOLD#${householdId}`,
-        SK: `MEMBER#${userId}`,
-      },
-    })
-  );
+  const memberKey = {
+    PK: `HOUSEHOLD#${householdId}`,
+    SK: `MEMBER#${userId}`,
+  };
+  try {
+    await dynamodb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Delete: {
+              TableName: TABLE_NAME,
+              Key: memberKey,
+              ConditionExpression: 'attribute_exists(PK)',
+            },
+          },
+          {
+            Update: {
+              TableName: TABLE_NAME,
+              Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+              UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :one) - :one',
+              ConditionExpression:
+                'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount > :zero)',
+              ExpressionAttributeValues: { ':one': 1, ':zero': 0 },
+            },
+          },
+        ],
+      })
+    );
+  } catch (err) {
+    const reasons = transactCancellationReasons(err);
+    if (reasons.length === 0) {
+      throw err; // not a cancellation — propagate
+    }
+    if (reasons[0]?.Code !== 'ConditionalCheckFailed') {
+      // Only the counter floor blocked the transaction; the member row still
+      // exists and must go.
+      await dynamodb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: memberKey }));
+    }
+    // else: member row already gone — idempotent no-op, counter untouched.
+  }
   // Drop the cached membership so the removed user loses access on their
   // very next request instead of at the 60s TTL.
   invalidateMembership(userId, householdId);

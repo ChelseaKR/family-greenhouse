@@ -84,9 +84,22 @@ async function resolveApiKey(): Promise<string | undefined> {
         resolvedAt = 'secrets';
         return resolvedKey;
       }
+      // Genuinely empty secret: fall through to the literal/unset path below
+      // — caching 'unset' is correct for a deliberately blank secret.
       logger.warn({ secretId }, 'perenual.secret_empty');
     } catch (err) {
       logger.warn({ err: (err as Error).message, secretId }, 'perenual.secret_fetch_failed');
+      // Transient Secrets Manager failure (throttle, network, IAM blip):
+      // do NOT cache the 'unset' sentinel — leave resolvedAt undefined so
+      // the next call retries instead of disabling the integration for the
+      // container lifetime. Still honor a literal env fallback if present.
+      const fallback = optionalEnv('PERENUAL_API_KEY');
+      if (fallback) {
+        resolvedKey = fallback;
+        resolvedAt = 'env';
+        return resolvedKey;
+      }
+      return undefined;
     }
   }
   const literal = optionalEnv('PERENUAL_API_KEY');

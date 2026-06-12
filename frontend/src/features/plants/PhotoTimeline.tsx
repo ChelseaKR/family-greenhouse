@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { plantService } from '@/services/plantService';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 interface PhotoTimelineProps {
@@ -12,8 +13,9 @@ interface PhotoTimelineProps {
  * already shows the latest, so a one-item timeline would be visual noise).
  */
 export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
+  const householdId = useActiveHouseholdId();
   const { data: photos, isLoading } = useQuery({
-    queryKey: ['plants', plantId, 'photos'],
+    queryKey: ['plants', householdId, plantId, 'photos'],
     queryFn: () => plantService.listPhotos(plantId),
   });
 

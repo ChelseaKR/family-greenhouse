@@ -37,6 +37,40 @@ resource "aws_s3_bucket_versioning" "frontend" {
   }
 }
 
+# Versioning without lifecycle = unbounded growth: every `aws s3 sync
+# --delete` deploy turns the previous build's hashed assets into noncurrent
+# versions that would otherwise live forever. 30 days of noncurrent history
+# is ample rollback window for static frontend builds.
+resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  # Noncurrent-version rules only make sense once versioning is configured;
+  # the provider docs recommend the explicit ordering.
+  depends_on = [aws_s3_bucket_versioning.frontend]
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -127,9 +161,14 @@ resource "aws_cloudfront_distribution" "frontend" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
-  # Cache behavior for images
+  # Cache behavior for plant photos. S3 keys in the images bucket are
+  # `plants/{householdId}/{plantId}/...` (see backend image upload), so the
+  # path pattern MUST be /plants/* — a /images/* pattern matches nothing and
+  # silently falls through to the frontend-bucket default behavior. The
+  # backend mints photo URLs as ${ASSETS_BASE_URL}/plants/... (env var wired
+  # in modules/api), which lands here.
   ordered_cache_behavior {
-    path_pattern           = "/images/*"
+    path_pattern           = "/plants/*"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "S3-images"

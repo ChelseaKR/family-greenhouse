@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { provisionAccount, ProvisionedAccount } from './helpers';
 
 /**
  * Visual regression spec — narrow companion to `visual.spec.ts`. Where
@@ -84,6 +85,30 @@ test.describe('Visual regression — public pages', () => {
 test.describe('Visual regression — authenticated pages', () => {
   test.describe.configure({ mode: 'serial' });
 
+  // A dedicated, freshly provisioned account mirrors the shared seed's
+  // shape (Test User / Test Household / one Monstera with a water task)
+  // WITHOUT sharing its data. The seed account is mutated by the CRUD and
+  // task-completion specs running in parallel across browser projects, so
+  // snapshotting it makes the dashboard nondeterministic. The water task's
+  // nextDue is pinned to the same instant as the mocked clock below, so
+  // "due today" renders identically on every run, on any day.
+  let account: ProvisionedAccount;
+
+  test.beforeAll(async () => {
+    account = await provisionAccount({
+      emailPrefix: 'visual-regression',
+      name: 'Test User',
+      householdName: 'Test Household',
+      plant: {
+        name: 'Monstera',
+        species: 'Monstera deliciosa',
+        location: 'Living Room',
+        notes: 'Needs indirect light',
+      },
+      waterTask: { frequency: 7, nextDue: '2026-06-02T15:00:00Z' },
+    });
+  });
+
   async function login(page: Page) {
     // Pin the clock to a fixed moment before navigation so that
     // time-dependent strings ("Today", "Tomorrow", relative dates on
@@ -92,10 +117,16 @@ test.describe('Visual regression — authenticated pages', () => {
     // and the snapshot diff trips on the date label alone.
     await page.clock.install({ time: new Date('2026-06-02T15:00:00Z') });
     await page.goto('/login');
-    await page.getByLabel(/email/i).fill('test@example.com');
-    await page.getByLabel(/password/i).fill('password123');
+    await page.getByLabel(/email/i).fill(account.email);
+    await page.getByLabel(/password/i).fill(account.password);
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/dashboard/);
+  }
+
+  // The provisioned account's email is unique per run; mask the sidebar
+  // line that renders it so the snapshot stays byte-stable.
+  function maskedOptions(page: Page) {
+    return { ...screenshotOptions, mask: [page.getByText(account.email)] };
   }
 
   const pages = [
@@ -114,7 +145,7 @@ test.describe('Visual regression — authenticated pages', () => {
         await expect(page).toHaveURL(new RegExp(`${path}$`));
       }
       await settle(page);
-      await expect(page).toHaveScreenshot(`${name}-desktop.png`, screenshotOptions);
+      await expect(page).toHaveScreenshot(`${name}-desktop.png`, maskedOptions(page));
     });
 
     test(`${name} (mobile)`, async ({ page }) => {
@@ -130,7 +161,7 @@ test.describe('Visual regression — authenticated pages', () => {
         await page.getByRole('button', { name: /close sidebar/i }).waitFor({ state: 'hidden' });
       }
       await settle(page);
-      await expect(page).toHaveScreenshot(`${name}-mobile.png`, screenshotOptions);
+      await expect(page).toHaveScreenshot(`${name}-mobile.png`, maskedOptions(page));
     });
   }
 });

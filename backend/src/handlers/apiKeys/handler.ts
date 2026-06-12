@@ -64,10 +64,10 @@ export const createKey = createHandler(
       validatedBody.label,
       validatedBody.scopes
     );
-    audit('billing.subscription_changed', {
+    audit('apikey.created', {
       actorId: user.userId,
       householdId: user.householdId ?? undefined,
-      metadata: { event: 'api_key.created', keyId: result.record.id },
+      metadata: { keyId: result.record.id, label: result.record.label },
     });
     return createdResponse(result);
   }
@@ -83,11 +83,16 @@ export const revokeKey = createHandler(
     const { user } = event as AuthenticatedEvent;
     const keyId = event.pathParameters?.id;
     if (!keyId) throw createHttpError(400, 'Key ID is required');
-    await apiKeysService.revokeApiKey(user.householdId!, keyId);
-    audit('billing.subscription_changed', {
+    const deleted = await apiKeysService.revokeApiKey(user.householdId!, keyId);
+    if (!deleted) {
+      // 404 per convention — a 204 for an id that never existed hides typos
+      // and makes "did I actually revoke it?" unanswerable for callers.
+      throw createHttpError(404, 'API key not found');
+    }
+    audit('apikey.revoked', {
       actorId: user.userId,
       householdId: user.householdId ?? undefined,
-      metadata: { event: 'api_key.revoked', keyId },
+      metadata: { keyId },
     });
     return noContentResponse();
   }

@@ -36,6 +36,11 @@ describe('householdService', () => {
     expect(items).toHaveLength(2);
     const memberItem = items.find((i) => i.entityType === 'HouseholdMember');
     expect(memberItem?.role).toBe('admin');
+    // Plan-cap counters are born initialized: the creator is the first
+    // member, and there are no plants yet.
+    const householdItem = items.find((i) => i.entityType === 'Household');
+    expect(householdItem?.memberCount).toBe(1);
+    expect(householdItem?.plantCount).toBe(0);
   });
 
   it('setMemberRole updates and returns the new role', async () => {
@@ -154,21 +159,180 @@ describe('householdService', () => {
     expect(invite?.code).toBe('X');
   });
 
+  // Shape of the TransactWrite payload addMember sends.
+  type AddMemberTransact = {
+    kind: string;
+    input: {
+      TransactItems: [
+        { Put: { Item: Record<string, unknown>; ConditionExpression: string } },
+        {
+          Update: {
+            Key: { SK: string };
+            UpdateExpression: string;
+            ConditionExpression: string;
+            ExpressionAttributeValues: Record<string, unknown>;
+          };
+        },
+      ];
+    };
+  };
+
   it('addMember defaults to member role', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { addMember } = await import('../../../src/services/householdService.js');
-    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
-    const result = await addMember('hh', 'u', 'Name', 'e@x.com');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 1 } }); // METADATA read
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite
+    const result = await addMember('hh', 'u', 'Name', 'e@x.com', 6);
     expect(result.role).toBe('member');
   });
 
-  it('removeMember sends a DeleteCommand', async () => {
+  it('addMember transacts the conditional member Put with a capped memberCount increment', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 2 } });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    await addMember('hh', 'u', 'Name', 'e@x.com', 6);
+    const cmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as AddMemberTransact;
+    expect(cmd.kind).toBe('TransactWrite');
+    const [putItem, counter] = cmd.input.TransactItems;
+    // Without this condition a racing second join silently overwrote the
+    // winner's row (e.g. demoting an admin back to 'member').
+    expect(putItem.Put.ConditionExpression).toBe('attribute_not_exists(PK)');
+    expect(putItem.Put.Item).toMatchObject({ SK: 'MEMBER#u', entityType: 'HouseholdMember' });
+    expect(counter.Update.Key.SK).toBe('METADATA');
+    expect(counter.Update.UpdateExpression).toBe(
+      'SET memberCount = if_not_exists(memberCount, :base) + :one'
+    );
+    expect(counter.Update.ConditionExpression).toBe(
+      'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)'
+    );
+    expect(counter.Update.ExpressionAttributeValues).toEqual({ ':base': 0, ':one': 1, ':max': 6 });
+  });
+
+  it('addMember maps a member-row cancellation to ConditionalCheckFailedException (already a member)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 1 } });
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), {
+        name: 'TransactionCanceledException',
+        CancellationReasons: [{ Code: 'ConditionalCheckFailed' }, { Code: 'None' }],
+      })
+    );
+    await expect(addMember('hh', 'u', 'Name', 'e@x.com', 6)).rejects.toMatchObject({
+      name: 'ConditionalCheckFailedException',
+    });
+  });
+
+  it('addMember maps a memberCount-cap cancellation to PlanLimitError (concurrent joins)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 5 } });
+    // Two concurrent joins both read 5 of 6 — DynamoDB serializes the
+    // transactions; the loser's counter condition fails at commit time.
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), {
+        name: 'TransactionCanceledException',
+        CancellationReasons: [{ Code: 'None' }, { Code: 'ConditionalCheckFailed' }],
+      })
+    );
+    await expect(addMember('hh', 'u', 'Name', 'e@x.com', 6)).rejects.toMatchObject({
+      name: 'PlanLimitError',
+    });
+  });
+
+  it('addMember lazily backfills memberCount from the real member rows on legacy households', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { id: 'hh' } }); // no memberCount
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [
+        { householdId: 'hh', userId: 'a', role: 'admin' },
+        { householdId: 'hh', userId: 'b', role: 'member' },
+      ],
+    }); // member-rows query for the backfill base
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite
+    await addMember('hh', 'u', 'Name', 'e@x.com', 6);
+    const cmd = vi.mocked(dynamodb.send).mock.calls[2][0] as unknown as AddMemberTransact;
+    expect(cmd.input.TransactItems[1].Update.ExpressionAttributeValues[':base']).toBe(2);
+  });
+
+  it('addMember rejects with PlanLimitError before writing when a legacy household is at cap', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { id: 'hh' } });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [{ householdId: 'hh', userId: 'a', role: 'admin' }],
+    });
+    await expect(addMember('hh', 'u', 'Name', 'e@x.com', 1)).rejects.toMatchObject({
+      name: 'PlanLimitError',
+    });
+    // METADATA read + members query only — no TransactWrite attempted.
+    expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(2);
+  });
+
+  it('removeMember transacts the member delete with a floored memberCount decrement', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { removeMember } = await import('../../../src/services/householdService.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({});
     await removeMember('hh', 'u');
-    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as { kind: string };
-    expect(cmd.kind).toBe('Delete');
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: {
+        TransactItems: [
+          { Delete: { Key: { SK: string }; ConditionExpression: string } },
+          {
+            Update: { Key: { SK: string }; UpdateExpression: string; ConditionExpression: string };
+          },
+        ];
+      };
+    };
+    expect(cmd.kind).toBe('TransactWrite');
+    const [del, counter] = cmd.input.TransactItems;
+    expect(del.Delete.Key.SK).toBe('MEMBER#u');
+    expect(del.Delete.ConditionExpression).toBe('attribute_exists(PK)');
+    expect(counter.Update.Key.SK).toBe('METADATA');
+    expect(counter.Update.UpdateExpression).toBe(
+      'SET memberCount = if_not_exists(memberCount, :one) - :one'
+    );
+    // Floor at 0.
+    expect(counter.Update.ConditionExpression).toBe(
+      'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount > :zero)'
+    );
+  });
+
+  it('removeMember stays idempotent when the member row is already gone (no counter touch)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { removeMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), {
+        name: 'TransactionCanceledException',
+        CancellationReasons: [{ Code: 'ConditionalCheckFailed' }, { Code: 'None' }],
+      })
+    );
+    await expect(removeMember('hh', 'u')).resolves.toBeUndefined();
+    // No fallback delete — the row was already gone.
+    expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(1);
+  });
+
+  it('removeMember falls back to a plain delete when only the counter floor blocked the transaction', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { removeMember } = await import('../../../src/services/householdService.js');
+    // Counter already 0 (drift on a legacy row): the member row still exists
+    // and must be removed even though the decrement can't go below 0.
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), {
+        name: 'TransactionCanceledException',
+        CancellationReasons: [{ Code: 'None' }, { Code: 'ConditionalCheckFailed' }],
+      })
+    );
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    await removeMember('hh', 'u');
+    const calls = vi.mocked(dynamodb.send).mock.calls;
+    expect(calls).toHaveLength(2);
+    const fallback = calls[1][0] as unknown as { kind: string; input: { Key: { SK: string } } };
+    expect(fallback.kind).toBe('Delete');
+    expect(fallback.input.Key.SK).toBe('MEMBER#u');
   });
 
   it('getMemberByUserId returns null when missing', async () => {

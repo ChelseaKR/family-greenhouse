@@ -12,13 +12,21 @@
 import { PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { logger } from '../utils/logger.js';
 
 export type ActivityType =
   | 'task.completed'
+  | 'task.snoozed'
+  | 'task.claimed'
+  | 'task.unclaimed'
   | 'plant.created'
+  | 'plants.imported'
   | 'plant.deleted'
   | 'plant.died'
   | 'plant.gave_away'
+  | 'plant.propagated'
+  | 'plant.shared_accepted'
+  | 'plant.health_checked'
   | 'photo.uploaded'
   | 'member.joined'
   | 'member.left';
@@ -51,25 +59,35 @@ export async function recordActivity<T>(input: {
 }): Promise<void> {
   const id = uuid();
   const now = new Date().toISOString();
-  await dynamodb.send(
-    new PutCommand({
-      TableName: TABLE_NAME,
-      Item: {
-        PK: `HOUSEHOLD#${input.householdId}#ACTIVITY`,
-        SK: `EVENT#${now}#${id}`,
-        GSI1PK: `HOUSEHOLD#${input.householdId}#ACTIVITY`,
-        GSI1SK: now,
-        entityType: 'ActivityEvent',
-        id,
-        type: input.type,
-        householdId: input.householdId,
-        actorId: input.actorId,
-        actorName: input.actorName,
-        occurredAt: now,
-        payload: input.payload,
-      },
-    })
-  );
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `HOUSEHOLD#${input.householdId}#ACTIVITY`,
+          SK: `EVENT#${now}#${id}`,
+          GSI1PK: `HOUSEHOLD#${input.householdId}#ACTIVITY`,
+          GSI1SK: now,
+          entityType: 'ActivityEvent',
+          id,
+          type: input.type,
+          householdId: input.householdId,
+          actorId: input.actorId,
+          actorName: input.actorName,
+          occurredAt: now,
+          payload: input.payload,
+        },
+      })
+    );
+  } catch (err) {
+    // Actually best-effort, as the docstring promises: a DDB failure here
+    // logs and returns instead of rejecting, so the caller's main write
+    // (which already succeeded) doesn't turn into a user-visible error.
+    logger.warn(
+      { err: (err as Error).message, householdId: input.householdId, type: input.type },
+      'activity.record_failed'
+    );
+  }
 }
 
 /**

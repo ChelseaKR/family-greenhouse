@@ -78,6 +78,11 @@ jobs:
           VITE_COGNITO_USER_POOL_ID: ${{ vars.PRODUCTION_COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ vars.PRODUCTION_COGNITO_CLIENT_ID }}
           VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
+          # Streaming chat feature flag: set the PRODUCTION_CHAT_STREAM_URL
+          # repo variable to the `chat_stream_url` terraform output to turn
+          # SSE streaming on; leave it unset (empty → falsy) to keep the
+          # synchronous /chat/messages path. Default OFF.
+          VITE_CHAT_STREAM_URL: ${{ vars.PRODUCTION_CHAT_STREAM_URL }}
         run: npm run build
 
       - name: Build backend
@@ -204,7 +209,9 @@ jobs:
         run: |
           set -euo pipefail
           versions=""
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders; do
+          # Keep this list in sync with the deploy loop below (and with
+          # esbuild's dist/*.js bundles + the terraform function names).
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             ver=$(aws lambda get-function --function-name "$FUNCTION_NAME" \
               --query 'Configuration.Version' --output text)
@@ -228,7 +235,11 @@ jobs:
           # `handler.mjs` (NOT `auth.js`) or the runtime can't load it.
           # The .mjs extension forces Node ESM regardless of any
           # package.json in the zip.
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders; do
+          # `chat`/`digests` were missing from this list (their code only
+          # ever shipped via manual deploys); `chat-stream` is the streaming
+          # chat Function URL Lambda (bundle dist/chat-stream.js — a
+          # standalone esbuild entry, not a handler.ts group).
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             SRC="dist/${handler}.js"
             test -f "$SRC" || { echo "Missing bundle: $SRC"; exit 1; }

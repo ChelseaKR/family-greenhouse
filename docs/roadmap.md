@@ -71,61 +71,85 @@ The quality of advice the app gives goes from "you told us 7 days" to "based on 
 
 ### Y2Q4 — Open APIs + integrations _(deferred — design + infra)_
 
-- 🟡 **Public API** — shipped read-only: key auth (`fg_` keys, Greenhouse-gated), two-layer rate limiting, and per-key least-privilege **scopes** (`read:plants`/`read:tasks`/`read:activity`), documented in `docs/public-api.md`. **Remaining gate for GA:** OAuth for third-party apps acting on a user's behalf, and a decision on write access. Until then it covers first-party scripts/integrations.
+- ✅ **Public API** — shipped read-only first: key auth (`fg_` keys, Greenhouse-gated), two-layer rate limiting, and per-key least-privilege **scopes** (`read:plants`/`read:tasks`/`read:activity`), documented in `docs/public-api.md`. **Write scopes shipped 2026-06-11** (complete/snooze tasks under `write:*`, with the consent warning in settings). The OAuth design (authorization-code + PKCE, consent surface) is settled in [`docs/oauth-design.md`](oauth-design.md) — implementation waits for a real third-party integrator, by design.
 - ⏸ **Home Assistant + HealthKit** — integration platforms; out of scope for this repo until there's customer demand. (Unblocked on our side by the read API above — a Home Assistant REST sensor can already poll `/api/v1/*` with a `read:plants`-scoped key.)
 
 ---
 
-## Near-term backlog — next-quarter candidates
+## Near-term backlog — SHIPPED (2026-06-11)
 
-Concrete, in-repo bets sized to the roadmap's principles (smallest thing that
-proves value; each tied to a North-star metric; why stated, not just what).
-These are the realistic "next" after the deferred Y1–Y2 items, most of which
-are blocked on external services, paid APIs, translator content, or infra —
-not on code. Ordered by value × cheapness.
+This list did its job: every entry below landed, alongside a second wave of
+smaller bets that grew out of them. Kept (with the original _why_ trimmed)
+as the record of what shipped and why; the next backlog starts empty, per
+the principles — candidates earn their way on, they don't roll over.
 
-- **End-of-year recap email** — _why:_ retention drops after the novelty
-  fades; a once-a-year "here's the care your household did" recap is a cheap,
-  delightful re-engagement nudge, and the data already exists. The
-  `YearInReviewCard` UI is live; the recap reuses `getYearInReview`, renders to
-  text/HTML, and ships via the existing `notifier` (which already degrades to a
-  structured log line without SES). The only non-code piece is the annual
-  EventBridge trigger (already tracked in `production-checklist.md`); a
-  manual/admin "send me a preview" path is codeable today.
-- **CSV / JSON import** — _why:_ the data-export path exists (`GET /me/export`
-  - CSV), but the highest-friction onboarding moment is a new household with a
-    dozen plants already tracked in a spreadsheet. A bulk importer (validate →
-    preview → commit, reusing the plant zod schema and plan caps) directly lifts
-    activation. Pure code; mirrors the export we already ship.
-- **Plant archive (soft delete)** — _why:_ `deletePlant` hard-deletes and
-  cascades (now including S3 images). A plant that died or was gifted away
-  shouldn't force the user to choose between a cluttered grid and erasing its
-  history — and hard deletes quietly corrupt the **plant-survival** North-star
-  metric (a removed plant looks the same as one that never existed). Add an
-  `archivedAt` flag, hide archived plants by default, keep their history, and
-  reserve hard delete for true erasure.
-- **Weekly "plants at risk" digest (opt-in)** — _why:_ this is the
-  plant-survival metric turned into action. The analytics layer already ranks
-  plants-at-risk by max days overdue; surfacing the top few in an opt-in weekly
-  email/push closes the loop from "we can see the risk" to "the right person is
-  nudged before the plant dies." Reuses existing analytics + notification
-  prefs (respects the DND window already built).
-- **Public API: write access + OAuth (the GA gate)** — _why:_ the read API now
-  ships with scopes, rate limits, and docs (`docs/public-api.md`); the promised
-  "automate your plant care" story needs writes (complete a task, add a plant)
-  and a real third-party auth model. This is the design-heavy item gating GA —
-  scoped here so it isn't lost: design OAuth (authorization-code + PKCE),
-  add `write:*` scopes alongside the existing `read:*`, and decide the consent
-  surface. Until then, first-party key auth stands.
+- ✅ **End-of-year recap email** — retention re-engagement; reuses
+  `getYearInReview`, renders text/HTML, ships via the existing `notifier`.
+  The annual EventBridge trigger remains tracked in
+  `production-checklist.md`; the admin "send me a preview" path works today.
+- ✅ **CSV / JSON import** — bulk onboarding (validate → preview → commit,
+  max 100/batch, plan caps respected, partial success by contract). Mirrors
+  the export we already shipped.
+- ✅ **Plant lifecycle (née "plant archive")** — shipped as
+  `active`/`died`/`gave_away` statuses instead of an `archivedAt` flag:
+  outcomes are first-class (they feed the plant-survival metric directly),
+  past plants keep their history, hard delete is reserved for true erasure.
+- ✅ **Weekly "plants at risk" digest (opt-in)** — the plant-survival metric
+  turned into action; reuses the analytics ranking + notification prefs and
+  respects the DND window.
+- ✅ **Public API: write scopes + OAuth design** — `write:*` scopes shipped
+  alongside `read:*`; the OAuth model (authorization-code + PKCE, consent
+  surface) is designed in [`docs/oauth-design.md`](oauth-design.md) and
+  deliberately unimplemented until a real third-party integrator shows up.
+
+### Also shipped in this wave (2026-06-11)
+
+Smaller items that landed with the backlog, listed so the roadmap stays an
+honest record:
+
+- ✅ **Climate-skip** — "rain/frost expected — skip this cycle?" prompts on
+  weather-affected tasks (Y2Q1 climate awareness turned into action).
+- ✅ **Task claiming** — "up for grabs" tasks any member can claim/release;
+  feeds the active-members-per-household metric directly.
+- ✅ **Vacation mode** — care handoff windows with a covering member;
+  reminders reroute until the window ends.
+- ✅ **Phone verification** — 6-digit SMS code gate before SMS reminders can
+  be enabled (deliverability + compliance posture, see `docs/runbooks.md`).
+- ✅ **Chat write-proposals + streaming groundwork** — the care chatbot can
+  propose a reminder (user confirms; the bot never writes directly), and the
+  Bedrock streaming path is in place behind the same wrapper.
+- ✅ **Identification metering (env-gated)** — per-household monthly
+  Plant.id usage tracked on every call; _enforcement_ stays behind
+  `IDENTIFY_METERING_ENABLED` so flipping it on is a launch decision, not a
+  deploy.
+- ✅ **Downgrade-overage UI** — over-plan households see exactly what keeps
+  working (everything existing) and what pauses (adding more) instead of a
+  surprise hard wall.
+- ✅ **Propagation tracker** — cuttings link to their parent
+  (`parentPlantId`), with a lineage card on the plant page.
+- ✅ **Cutting share** — share a plant card snapshot household-to-household
+  via a 14-day public link; accepts run through the normal plan-capped
+  create.
+- ✅ **Leaf-health check** — the first slice of the Year-3 CV theme, scoped
+  to "is this leaf visibly yellowing/browning/spotted?": one photo → strict
+  JSON assessment from Claude on Bedrock (5s timeout, 5/min cap, demo
+  fallback without Bedrock access), surfaced as a dialog on the plant page.
+  Cosmetic-grade only, never diagnostic — exactly the line the Y3 theme
+  drew.
+
+> **Deliberately still OFF:** the beta/monetization flip. Identification
+> metering enforcement, billing enforcement beyond the existing plan caps,
+> and public pricing pressure all stay dark until we choose to launch them —
+> the code paths exist and are tested, the switch is a product decision.
 
 ## Year 3 — themes only
 
 Far enough out that quarter-level commitments are imaginary. The themes:
 
 - **Plant identification accuracy**: build our own model fine-tuned on customer photos (with explicit consent), instead of paying per Plant.id call.
-- **Computer vision health detection**: from a photo, flag yellowing / overwatering / pests. Cosmetic-grade only, never diagnostic.
-- **Marketplace + community**: not Reddit-replacement, but lightweight sharing of "what's growing in your house?" and trading cuttings within trusted networks.
-- **B2B**: greenhouses + nurseries selling plants ship them with a pre-filled care plan that imports into the buyer's Family Greenhouse household.
+- **Computer vision health detection**: from a photo, flag yellowing / overwatering / pests. Cosmetic-grade only, never diagnostic. _First slice shipped early (2026-06-11) as the leaf-health check — see "Also shipped in this wave" above; the theme's remaining scope is breadth (whole-plant, trends over the photo timeline), not a first proof._
+- **Marketplace + community**: not Reddit-replacement, but lightweight sharing of "what's growing in your house?" and trading cuttings within trusted networks. _The cutting-share link shipped as the smallest proof of the trading half._
+- **B2B**: greenhouses + nurseries selling plants ship them with a pre-filled care plan that imports into the buyer's Family Greenhouse household. _Design worked out in [`docs/b2b-greenhouse-mode.md`](b2b-greenhouse-mode.md) — explicitly pilot-gated: no code until a real nursery signs._
 - **Sustainability angle**: rough water/energy footprint per plant; trade tips on low-water care.
 
 ---

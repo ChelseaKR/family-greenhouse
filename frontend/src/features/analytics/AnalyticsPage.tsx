@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { householdService } from '@/services/householdService';
 import { taskService } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
@@ -55,7 +55,7 @@ function daysOverdue(nextDue: string, now = new Date()): number {
 }
 export function AnalyticsPage() {
   useDocumentTitle('Analytics');
-  const householdId = useAuthStore((s) => s.user?.householdId);
+  const householdId = useActiveHouseholdId();
 
   const { data: daily, isLoading: dailyLoading } = useQuery({
     queryKey: ['household', householdId, 'analytics', 'daily', 30],
@@ -71,13 +71,13 @@ export function AnalyticsPage() {
   });
 
   const { data: plants } = useQuery({
-    queryKey: ['plants'],
+    queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
     enabled: !!householdId,
   });
 
   const { data: tasks } = useQuery({
-    queryKey: ['tasks', 'all'],
+    queryKey: ['tasks', householdId, 'all'],
     queryFn: () => taskService.getTasks(),
     enabled: !!householdId,
   });

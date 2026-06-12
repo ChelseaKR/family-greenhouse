@@ -124,9 +124,11 @@ export const createInvite = createHandler(
     // invite links pointing at a non-existent domain.
     const baseUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
     if (!baseUrl) {
+      // expose: true — intentional config-error message, safe to show.
       throw createHttpError(
         500,
-        'FRONTEND_URL / ALLOWED_ORIGIN must be set to generate invite URLs'
+        'FRONTEND_URL / ALLOWED_ORIGIN must be set to generate invite URLs',
+        { expose: true }
       );
     }
 
@@ -206,13 +208,6 @@ export const joinHousehold = createHandler(
 
     const sub = await billing.getHouseholdSubscription(invite.householdId);
     const plan = getPlan(sub.planId);
-    const existingMembers = await householdService.getHouseholdMembers(invite.householdId);
-    if (existingMembers.length >= plan.maxMembers) {
-      throw createHttpError(
-        402,
-        `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`
-      );
-    }
 
     const userName = await cognitoUsers.getUserName(user.userId, user.email);
 
@@ -223,7 +218,35 @@ export const joinHousehold = createHandler(
       throw createHttpError(400, 'You are already a member of this household');
     }
 
-    await householdService.addMember(invite.householdId, user.userId, userName, user.email);
+    // Member-cap enforcement is atomic in the service (formerly a known
+    // check-then-write race here): the member Put rides a transaction with a
+    // conditional increment of the household's memberCount against the
+    // plan's cap. The two failure modes come back with distinct names.
+    try {
+      await householdService.addMember(
+        invite.householdId,
+        user.userId,
+        userName,
+        user.email,
+        plan.maxMembers
+      );
+    } catch (err) {
+      // A concurrent double-join (two tabs, double-tap) loses the race on
+      // the member row's attribute_not_exists condition — surface the same
+      // "already a member" answer as the pre-check above instead of
+      // overwriting the winner's row.
+      if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
+        throw createHttpError(400, 'You are already a member of this household');
+      }
+      // The memberCount increment lost against the plan cap.
+      if (err instanceof Error && err.name === 'PlanLimitError') {
+        throw createHttpError(
+          402,
+          `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`
+        );
+      }
+      throw err;
+    }
     // Same default-household rule as createHousehold: only stamp the JWT
     // on the first one. Subsequent joins are accessed via the switcher.
     if (!user.householdId) {
@@ -345,7 +368,14 @@ export const updateMemberRole = createHandler(
       throw createHttpError(404, 'Member not found');
     }
 
-    await cognitoUsers.setHouseholdClaims(userId, householdId, validatedBody.role);
+    // Only rewrite the target's Cognito claims when THIS household is their
+    // current claim (default) household. Users belong to many households;
+    // unconditionally stamping claims here would silently re-point a user's
+    // default household to whichever one an admin last touched their role in.
+    const claims = await cognitoUsers.getHouseholdClaims(userId);
+    if (claims.householdId === householdId) {
+      await cognitoUsers.setHouseholdClaims(userId, householdId, validatedBody.role);
+    }
 
     audit('household.role_changed', {
       actorId: user.userId,
@@ -391,7 +421,22 @@ export const removeMember = createHandler(
     }
 
     await householdService.removeMember(householdId, userId);
-    await cognitoUsers.clearHouseholdClaims(userId);
+
+    // Claims hygiene. Removal from a SECONDARY household must not touch the
+    // user's Cognito claims at all (the old unconditional clear logged users
+    // out of their own default household when removed from any other one).
+    // When the removed household IS their claim household, re-point the
+    // claims at one of their remaining memberships, or clear if none remain.
+    const claims = await cognitoUsers.getHouseholdClaims(userId);
+    if (claims.householdId === householdId) {
+      const remaining = await householdService.getMembershipsByUser(userId);
+      const next = remaining.find((m) => m.householdId !== householdId);
+      if (next) {
+        await cognitoUsers.setHouseholdClaims(userId, next.householdId, next.role);
+      } else {
+        await cognitoUsers.clearHouseholdClaims(userId);
+      }
+    }
 
     audit('household.member_removed', {
       actorId: user.userId,

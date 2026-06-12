@@ -1,26 +1,30 @@
 import { test, expect, Page } from '@playwright/test';
+import { navigateTo, provisionAccount, uiLogin, ProvisionedAccount } from './helpers';
 
 /**
  * Plant create / edit / delete round-trip.
  *
- * Each test starts by logging in fresh via the UI (the local backend's
- * in-memory store survives across tests in a single worker, so we use
- * timestamp-suffixed plant names to keep each scenario isolated). SPA
- * navigation via the sidebar avoids the zustand-persist race that bites
- * `page.goto` calls to authenticated routes.
+ * The spec provisions its own account per worker: the shared seed
+ * household is capped at 10 plants by the Seedling plan, so five browser
+ * projects each creating plants against it exhausts the quota mid-run.
+ * Timestamp-suffixed plant names keep each scenario isolated within the
+ * account. SPA navigation via the sidebar avoids the zustand-persist race
+ * that bites `page.goto` calls to authenticated routes.
  */
 
+let account: ProvisionedAccount;
+
+test.beforeAll(async () => {
+  account = await provisionAccount({ emailPrefix: 'plant-crud' });
+});
+
 async function login(page: Page) {
-  await page.goto('/login');
-  await page.getByLabel(/email/i).fill('test@example.com');
-  await page.getByLabel(/password/i).fill('password123');
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  await uiLogin(page, account.email, account.password);
 }
 
 async function goToPlants(page: Page) {
-  await page.getByRole('link', { name: /^plants$/i }).click();
-  await expect(page).toHaveURL(/\/plants$/);
+  // Mobile-aware: opens the sidebar drawer first on small viewports.
+  await navigateTo(page, /^plants$/i, /\/plants$/);
 }
 
 test.describe('Plant CRUD', () => {
@@ -46,7 +50,7 @@ test.describe('Plant CRUD', () => {
     // After save we land on /plants/{id} — the detail page renders the
     // plant name as an h1.
     await expect(page).toHaveURL(/\/plants\/[^/]+$/);
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
     expect(pageErrors).toEqual([]);
   });
 
@@ -54,14 +58,13 @@ test.describe('Plant CRUD', () => {
     await login(page);
     await goToPlants(page);
 
-    // Create a plant to edit so we don't mutate the seeded Monstera (other
-    // specs assume it exists in its original shape).
+    // Create a plant to edit so each scenario works on its own data.
     await page.getByRole('link', { name: /add plant/i }).click();
     await expect(page).toHaveURL(/\/plants\/new/);
     const originalName = `Editable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(originalName);
     await page.getByRole('button', { name: /add plant/i }).click();
-    await expect(page.getByRole('heading', { name: originalName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: originalName })).toBeVisible({ timeout: 15000 });
 
     // Open the Edit plant modal from the detail page header.
     await page.getByRole('button', { name: /^edit$/i }).click();
@@ -75,29 +78,31 @@ test.describe('Plant CRUD', () => {
 
     // Modal closes on success; the detail h1 reflects the new name once
     // the plants query invalidates and refetches.
-    await expect(page.getByRole('heading', { name: newName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: newName })).toBeVisible({ timeout: 15000 });
   });
 
   test('delete a plant → confirm → land on plants list without it', async ({ page }) => {
     await login(page);
     await goToPlants(page);
 
-    // Create a disposable plant so the delete doesn't yank the seeded
-    // Monstera out from under other specs in the same worker run.
+    // Create a disposable plant so the delete works on its own data.
     await page.getByRole('link', { name: /add plant/i }).click();
     await expect(page).toHaveURL(/\/plants\/new/);
     const plantName = `Deletable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(plantName);
     await page.getByRole('button', { name: /add plant/i }).click();
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
 
-    // Open the delete confirm dialog and confirm.
-    await page.getByRole('button', { name: /^delete$/i }).click();
+    // The lifecycle feature (#37) replaced the bare "Delete" button with a
+    // "Remove" flow: Remove → outcome dialog → "Delete permanently" →
+    // explicit ConfirmDialog. Walk the full flow.
+    await page.getByRole('button', { name: /^remove$/i }).click();
+    await expect(page.getByRole('heading', { name: /remove .*\?/i })).toBeVisible();
+    await page.getByRole('button', { name: /delete permanently/i }).click();
     // The ConfirmDialog title doubles as the dialog heading; matching it
     // anchors the dialog so the "Delete" button below is unambiguous.
     await expect(page.getByRole('heading', { name: /delete plant/i })).toBeVisible();
-    // There are now two "Delete" buttons on the page (the trigger and the
-    // dialog's confirm). Scope to the dialog to pick the confirm one.
+    // Scope to the dialog to pick the confirm button unambiguously.
     await page
       .getByRole('dialog')
       .getByRole('button', { name: /^delete$/i })

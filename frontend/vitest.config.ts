@@ -2,6 +2,15 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
+// Pin the test timezone to one that observes DST so the date-math
+// regression tests (tests/unit/utils/date.dst.test.ts) actually exercise
+// the fall-back/spring-forward transitions. This must happen here — in the
+// MAIN vitest process, whose real environment worker threads inherit —
+// because inside workers `process.env` is a proxied snapshot and assigning
+// TZ there never reaches the native tzset. An explicitly exported TZ
+// (e.g. from CI) is respected; the DST suite skips itself in that case.
+process.env.TZ ??= 'America/New_York';
+
 export default defineConfig({
   plugins: [react()],
   test: {

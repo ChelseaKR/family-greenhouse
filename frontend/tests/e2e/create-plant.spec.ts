@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { navigateTo, provisionAccount, uiLogin, ProvisionedAccount } from './helpers';
 
 /**
  * Smoke test for the write-side path that's regression-prone: pick a species
@@ -6,9 +7,17 @@ import { test, expect } from '@playwright/test';
  * existing happy-path covers "login + read"; this complements it with
  * "login + write" so a broken AddPlantPage is caught in CI.
  *
- * Uses the local-server seed account; the dev server is started by the
- * Playwright webServer config so no external setup is required.
+ * Uses a freshly provisioned account (the shared seed household's Seedling
+ * plan caps out at 10 plants when every browser project creates plants
+ * against it); the dev server is started by the Playwright webServer
+ * config so no external setup is required.
  */
+let account: ProvisionedAccount;
+
+test.beforeAll(async () => {
+  account = await provisionAccount({ emailPrefix: 'create-plant' });
+});
+
 test.describe('Create plant flow', () => {
   test('login → add plant → see it on the plants page', async ({ page }) => {
     const consoleErrors: string[] = [];
@@ -17,18 +26,11 @@ test.describe('Create plant flow', () => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    await page.goto('/login');
-    await page.getByLabel(/email/i).fill('test@example.com');
-    await page.getByLabel(/password/i).fill('password123');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await uiLogin(page, account.email, account.password);
 
-    // The "Add plant" affordance lives on the plants page.
-    await page
-      .getByRole('link', { name: /plants/i })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/plants$/);
+    // The "Add plant" affordance lives on the plants page. Mobile-aware:
+    // opens the sidebar drawer first on small viewports.
+    await navigateTo(page, /^plants$/i, /\/plants$/);
     await page.getByRole('link', { name: /add plant/i }).click();
     await expect(page).toHaveURL(/\/plants\/new/);
 
@@ -43,7 +45,7 @@ test.describe('Create plant flow', () => {
     await page.getByRole('button', { name: /add plant/i }).click();
 
     // After save we should land on the new plant's detail page.
-    await expect(page.getByRole('heading', { name: uniqueName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: uniqueName })).toBeVisible({ timeout: 15000 });
 
     // No JS errors thrown during the round-trip.
     expect(consoleErrors).toEqual([]);

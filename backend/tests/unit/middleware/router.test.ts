@@ -46,6 +46,23 @@ describe('createRouter', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('stamps security + CORS headers on the inline 404 (it bypasses the middy stack)', async () => {
+    // Without these the browser reports an opaque CORS failure instead of
+    // surfacing the 404 to the frontend.
+    const handler = createRouter(routes);
+    const res = await handler({ routeKey: 'DELETE /plants/{id}' }, ctx);
+    expect(res.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+      'Access-Control-Allow-Credentials': 'true',
+      Vary: 'Origin',
+    });
+    expect(typeof res.headers?.['Access-Control-Allow-Origin']).toBe('string');
+    expect(res.headers?.['Access-Control-Allow-Origin']).not.toBe('');
+  });
+
   it('exposes its route keys', () => {
     expect(createRouter(routes).routes).toEqual(['GET /plants', 'GET /plants/{id}']);
   });

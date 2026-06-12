@@ -1,36 +1,30 @@
 import { useState, useRef, useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   PaperAirplaneIcon,
   SparklesIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import {
   chatService,
+  getChatStreamUrl,
   type BudgetSnapshot,
-  type ProposedReminderTask,
+  type SendMessageResponse,
 } from '@/services/chatService';
-import { taskService } from '@/services/taskService';
 import { getErrorMessage } from '@/services/api';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-
-interface DisplayMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-  /** Reminder proposals attached to this assistant turn (only on assistant
-   *  messages, and only when the bot called `propose_reminder_task`). */
-  proposals?: ProposedReminderTask[];
-}
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { ProposalCard } from './ProposalCard';
+import { historyToDisplayMessages, type DisplayMessage } from './chatHistory';
 
 /**
  * Plant care chat — Bedrock-backed Claude with read-only tool access to the
  * user's plants/tasks/climate, RAG over a bundled plant-care corpus, and
- * a propose-reminder-task tool that surfaces Confirm/Cancel cards inline.
+ * a propose-reminder-task tool that surfaces confirm cards inline.
  *
- * Synchronous send (3–8s typical for a tool-use turn). See
+ * Send path: synchronous POST by default (3–8s typical for a tool-use turn).
+ * When VITE_CHAT_STREAM_URL is set, replies stream incrementally over SSE
+ * with automatic fallback to the sync POST on any stream error. See
  * docs/chat-rag-design.md for the full design.
  */
 export function ChatPage() {
@@ -39,66 +33,115 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [confirmedProposalKeys, setConfirmedProposalKeys] = useState<Set<string>>(new Set());
-  const [dismissedProposalKeys, setDismissedProposalKeys] = useState<Set<string>>(new Set());
+  const [isSending, setIsSending] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const streamTextRef = useRef('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
+  const streamUrl = getChatStreamUrl();
+
+  // Per-household, per-tab conversation continuity: remember the thread id in
+  // sessionStorage and replay its history (including proposal cards) on
+  // reload. A fresh tab still starts a fresh conversation.
+  const storageKey = householdId ? `chat:conversationId:${householdId}` : null;
+
+  useEffect(() => {
+    if (!storageKey) return;
+    let cancelled = false;
+    const stored = sessionStorage.getItem(storageKey);
+    // Household switch (or first mount): reset to that household's thread.
+    setMessages([]);
+    setConversationId(stored ?? undefined);
+    setError(null);
+    if (!stored) return;
+    chatService
+      .getConversation(stored)
+      .then((history) => {
+        if (!cancelled) setMessages(historyToDisplayMessages(history));
+      })
+      .catch(() => {
+        // Expired/foreign conversation — drop it and start fresh.
+        if (!cancelled) {
+          sessionStorage.removeItem(storageKey);
+          setConversationId(undefined);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey]);
 
   const budgetQuery = useQuery<BudgetSnapshot>({
-    queryKey: ['chat-budget'],
+    // The chat budget is household-scoped.
+    queryKey: ['chat-budget', householdId],
     queryFn: () => chatService.getBudget(),
     staleTime: 60_000,
   });
 
-  const sendMutation = useMutation({
-    mutationFn: (message: string) => chatService.sendMessage(message, conversationId),
-    onSuccess: (data) => {
-      setConversationId(data.conversationId);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          text: data.assistantText,
-          proposals: data.proposals?.length ? data.proposals : undefined,
-        },
-      ]);
-      budgetQuery.refetch();
-    },
-    onError: (err) => {
-      setError(getErrorMessage(err));
-    },
-  });
-
-  const confirmProposalMutation = useMutation({
-    mutationFn: async (proposal: ProposedReminderTask) =>
-      taskService.createTask({
-        plantId: proposal.plantId,
-        type: proposal.type,
-        frequency: proposal.frequencyDays,
-      }),
-    onSuccess: () => {
-      // Invalidate tasks so the Tasks page reflects the new reminder.
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['upcoming-tasks'] });
-    },
-    onError: (err) => {
-      setError(getErrorMessage(err));
-    },
-  });
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, sendMutation.isPending]);
+  }, [messages, isSending, streamingText]);
+
+  function appendAssistant(data: SendMessageResponse, displayText: string): void {
+    setConversationId(data.conversationId);
+    if (storageKey) sessionStorage.setItem(storageKey, data.conversationId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: displayText,
+        proposals: data.proposals?.length ? data.proposals : undefined,
+      },
+    ]);
+  }
+
+  async function deliver(message: string): Promise<void> {
+    setIsSending(true);
+    setError(null);
+    streamTextRef.current = '';
+    setStreamingText('');
+    try {
+      if (streamUrl) {
+        try {
+          const result = await chatService.streamMessage(message, conversationId, (event) => {
+            if (event.type === 'delta') {
+              streamTextRef.current += event.text;
+              setStreamingText(streamTextRef.current);
+            }
+          });
+          // Prefer the streamed transcript (it may include tool-turn
+          // preamble text); the result is authoritative for proposals/ids.
+          appendAssistant(result, streamTextRef.current.trim() || result.assistantText);
+          budgetQuery.refetch();
+          return;
+        } catch {
+          // Any stream failure (network, auth, malformed SSE, error event):
+          // discard partial output and retry once via the sync endpoint.
+          streamTextRef.current = '';
+          setStreamingText('');
+        }
+      }
+      const data = await chatService.sendMessage(message, conversationId);
+      appendAssistant(data, data.assistantText);
+      budgetQuery.refetch();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsSending(false);
+      streamTextRef.current = '';
+      setStreamingText('');
+    }
+  }
 
   function handleSend(): void {
     const trimmed = input.trim();
-    if (!trimmed || sendMutation.isPending) return;
+    if (!trimmed || isSending) return;
     setError(null);
     setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: 'user', text: trimmed }]);
     setInput('');
-    sendMutation.mutate(trimmed);
+    void deliver(trimmed);
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
@@ -107,23 +150,6 @@ export function ChatPage() {
       e.preventDefault();
       handleSend();
     }
-  }
-
-  function proposalKey(messageId: string, idx: number): string {
-    return `${messageId}#${idx}`;
-  }
-
-  function handleConfirmProposal(
-    messageId: string,
-    idx: number,
-    proposal: ProposedReminderTask
-  ): void {
-    setConfirmedProposalKeys((s) => new Set(s).add(proposalKey(messageId, idx)));
-    confirmProposalMutation.mutate(proposal);
-  }
-
-  function handleDismissProposal(messageId: string, idx: number): void {
-    setDismissedProposalKeys((s) => new Set(s).add(proposalKey(messageId, idx)));
   }
 
   const budget = budgetQuery.data;
@@ -165,7 +191,7 @@ export function ChatPage() {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
-        {messages.length === 0 && (
+        {messages.length === 0 && !isSending && (
           <div className="max-w-md mx-auto text-center text-sm text-gray-500 mt-12">
             <p>Try asking:</p>
             <ul className="mt-3 space-y-1">
@@ -177,64 +203,34 @@ export function ChatPage() {
         )}
         {messages.map((m) => (
           <div key={m.id}>
-            <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-xl rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
-                  m.role === 'user' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-900'
-                }`}
-              >
-                {m.text}
+            {m.text && (
+              <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-xl rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
+                    m.role === 'user' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  {m.text}
+                </div>
               </div>
-            </div>
+            )}
             {m.role === 'assistant' && m.proposals && m.proposals.length > 0 && (
               <div className="mt-2 space-y-2 max-w-xl">
-                {m.proposals.map((p, idx) => {
-                  const key = proposalKey(m.id, idx);
-                  const confirmed = confirmedProposalKeys.has(key);
-                  const dismissed = dismissedProposalKeys.has(key);
-                  if (dismissed) return null;
-                  return (
-                    <div
-                      key={key}
-                      className="border border-primary-200 bg-primary-50 rounded-lg p-3 text-sm"
-                    >
-                      <div className="font-medium text-gray-900">
-                        {confirmed ? '✓ Reminder created: ' : 'Suggested reminder: '}
-                        {p.type === 'custom' ? 'Custom task' : p.type} for {p.plantName}
-                      </div>
-                      <div className="text-gray-600 mt-0.5">
-                        Every {p.frequencyDays} day{p.frequencyDays === 1 ? '' : 's'}
-                        {p.rationale ? ` — ${p.rationale}` : ''}
-                      </div>
-                      {!confirmed && (
-                        <div className="mt-2 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmProposal(m.id, idx, p)}
-                            disabled={confirmProposalMutation.isPending}
-                            className="rounded bg-primary-600 text-white px-3 py-1 text-xs font-medium hover:bg-primary-700 disabled:bg-gray-300 flex items-center gap-1"
-                          >
-                            <CheckCircleIcon className="h-4 w-4" />
-                            Confirm
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDismissProposal(m.id, idx)}
-                            className="rounded text-gray-600 px-2 py-1 text-xs hover:bg-gray-100 flex items-center gap-1"
-                          >
-                            <XMarkIcon className="h-4 w-4" />
-                            Dismiss
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {m.proposals.map((p, idx) => (
+                  <ProposalCard key={p.proposalId ?? `${m.id}#${idx}`} proposal={p} />
+                ))}
               </div>
             )}
           </div>
         ))}
-        {sendMutation.isPending && (
+        {isSending && streamingText && (
+          <div className="flex justify-start">
+            <div className="max-w-xl rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap bg-gray-100 text-gray-900">
+              {streamingText}
+            </div>
+          </div>
+        )}
+        {isSending && !streamingText && (
           <div className="flex justify-start">
             <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 text-sm">
               <span className="inline-flex gap-1">
@@ -269,7 +265,7 @@ export function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about your plants..."
-            disabled={sendMutation.isPending}
+            disabled={isSending}
             rows={1}
             className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-50"
             aria-label="Chat message"
@@ -277,7 +273,7 @@ export function ChatPage() {
           <button
             type="button"
             onClick={handleSend}
-            disabled={!input.trim() || sendMutation.isPending}
+            disabled={!input.trim() || isSending}
             className="rounded-lg bg-primary-600 text-white px-3 py-2 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
             aria-label="Send"
           >

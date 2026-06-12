@@ -1,7 +1,7 @@
 /**
- * Per-household API keys for the public read-only API. Each key is plan-gated
- * (Greenhouse only), revocable, and stored as a SHA-256 hash so the plaintext
- * never lives at rest.
+ * Per-household API keys for the public API (read scopes plus the opt-in
+ * `write:tasks` scope). Each key is plan-gated (Greenhouse only), revocable,
+ * and stored as a SHA-256 hash so the plaintext never lives at rest.
  *
  * Key format: `fg_<24-byte hex>`. The `fg_` prefix is stable for log
  * grepping and so users can spot a key in a screenshot. The 24-byte body is
@@ -29,12 +29,19 @@ import { logger } from '../utils/logger.js';
 import { v4 as uuid } from 'uuid';
 
 /**
- * The least-privilege scopes a public-API key can carry. Each maps to a
- * family of `/api/v1` read endpoints. `/api/v1/me` (identity only) needs no
- * scope. Keep this list and the per-route guards in `handlers/api/handler.ts`
- * in sync.
+ * The least-privilege scopes a public-API key can carry. Each read scope maps
+ * to a family of `/api/v1` read endpoints; `write:tasks` unlocks the task
+ * complete/snooze POST routes. `/api/v1/me` (identity only) needs no scope.
+ * Keep this list and the per-route guards in `handlers/api/handler.ts` in
+ * sync.
+ *
+ * Read and write scopes are deliberately split: every implicit default
+ * (legacy keys with no scopes attribute, creates that omit scopes) expands to
+ * READ scopes only. Write access must always be an explicit grant.
  */
-export const API_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as const;
+export const READ_API_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as const;
+export const WRITE_API_SCOPES = ['write:tasks'] as const;
+export const API_SCOPES = ['read:plants', 'read:tasks', 'read:activity', 'write:tasks'] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 
 export function isApiScope(value: string): value is ApiScope {
@@ -60,13 +67,18 @@ export interface ApiKeyRecord {
 /**
  * Project a stored DDB item into an `ApiKeyRecord`. Centralizes the
  * backward-compatible scope default so list + lookup can't drift.
+ *
+ * Legacy rows (no `scopes` attribute, minted before scopes existed) expand to
+ * ALL READ scopes — never write scopes. Those keys were issued under a
+ * read-only API contract, and silently upgrading them to write access would
+ * be a privilege escalation.
  */
 function mapRecord(item: Record<string, unknown>): ApiKeyRecord {
   const rawScopes = item.scopes;
   const scopes: ApiScope[] =
     Array.isArray(rawScopes) && rawScopes.length > 0
       ? rawScopes.filter((s): s is ApiScope => typeof s === 'string' && isApiScope(s))
-      : [...API_SCOPES];
+      : [...READ_API_SCOPES];
   return {
     id: item.id as string,
     householdId: item.householdId as string,
@@ -103,9 +115,10 @@ export async function createApiKey(
   const plaintext = generatePlaintext();
   const last4 = plaintext.slice(-4);
   const now = new Date().toISOString();
-  // No scopes requested → grant the full read surface (matches pre-scopes
+  // No scopes requested → grant the full READ surface (matches pre-scopes
   // behavior and keeps the simple "just give me a key" path one click).
-  const grantedScopes = scopes && scopes.length > 0 ? scopes : [...API_SCOPES];
+  // Write scopes are never granted implicitly.
+  const grantedScopes = scopes && scopes.length > 0 ? scopes : [...READ_API_SCOPES];
   const record: ApiKeyRecord = {
     id,
     householdId,
@@ -147,13 +160,26 @@ export async function listApiKeys(householdId: string): Promise<ApiKeyRecord[]> 
   return (result.Items ?? []).map(mapRecord);
 }
 
-export async function revokeApiKey(householdId: string, keyId: string): Promise<void> {
-  await dynamodb.send(
-    new DeleteCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `HOUSEHOLD#${householdId}`, SK: `APIKEY#${keyId}` },
-    })
-  );
+/**
+ * Delete a key row. Returns `true` when a key was actually deleted, `false`
+ * when no such key existed (caller maps that to a 404 per API conventions).
+ */
+export async function revokeApiKey(householdId: string, keyId: string): Promise<boolean> {
+  try {
+    await dynamodb.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: `APIKEY#${keyId}` },
+        ConditionExpression: 'attribute_exists(PK)',
+      })
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -180,23 +206,31 @@ export async function lookupApiKey(plaintext: string): Promise<ApiKeyRecord | nu
   const item = result.Items?.[0];
   if (!item) return null;
 
-  // Best-effort lastUsedAt bump.
+  // lastUsedAt bump. Awaited — a fire-and-forget promise races the Lambda
+  // freeze after the response is returned and silently never lands.
+  // Conditioned on attribute_exists so a key revoked between the GSI read
+  // and this write can't be resurrected as a bare {PK, SK, lastUsedAt} row.
   const now = new Date().toISOString();
-  dynamodb
-    .send(
+  try {
+    await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: item.PK as string, SK: item.SK as string },
         UpdateExpression: 'SET lastUsedAt = :now',
         ExpressionAttributeValues: { ':now': now },
+        ConditionExpression: 'attribute_exists(PK)',
       })
-    )
-    .catch((err) => {
-      // Telemetry only — the lookup itself already succeeded. We still want
-      // the failure to surface in CloudWatch so it's not invisible if DDB
-      // starts throttling writes.
-      logger.warn({ err }, 'api_key_last_used_update_failed');
-    });
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
+      // Key was revoked concurrently — don't recreate it, and don't honor it.
+      return null;
+    }
+    // Telemetry only — the lookup itself already succeeded. We still want
+    // the failure to surface in CloudWatch so it's not invisible if DDB
+    // starts throttling writes.
+    logger.warn({ err }, 'api_key_last_used_update_failed');
+  }
 
   return mapRecord(item);
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,7 +19,9 @@ import { Alert } from '@/components/Alert';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
 import { generatePlantName } from '@/utils/plantNameGenerator';
+import { downscaleImage } from '@/utils/image';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -37,6 +39,17 @@ const makeAddPlantSchema = (t: TFunction) =>
 
 type AddPlantFormData = z.infer<ReturnType<typeof makeAddPlantSchema>>;
 
+/**
+ * Router state passed by PlantDetailPage's "Propagate cutting" action: the
+ * new plant is prefilled with the parent's species and linked to it via
+ * parentPlantId on submit.
+ */
+interface PropagationState {
+  parentPlantId?: string;
+  parentName?: string;
+  species?: string | null;
+}
+
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -50,8 +63,15 @@ export function AddPlantPage() {
   useDocumentTitle('Add plant');
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const householdId = useActiveHouseholdId();
   const addPlantSchema = useMemo(() => makeAddPlantSchema(t), [t]);
+  // Propagation mode: arriving via "Propagate cutting" links the new plant
+  // to its parent and prefills the species. (Router state survives normal
+  // navigation; a hard refresh just degrades to a plain add — fine.)
+  const propagation = (location.state ?? null) as PropagationState | null;
+  const parentPlantId = propagation?.parentPlantId;
   const [error, setError] = useState<string | null>(null);
   const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [pickedPreview, setPickedPreview] = useState<string | null>(null);
@@ -68,6 +88,9 @@ export function AddPlantPage() {
     formState: { errors },
   } = useForm<AddPlantFormData>({
     resolver: zodResolver(addPlantSchema),
+    defaultValues: {
+      species: propagation?.species ?? undefined,
+    },
   });
 
   const speciesValue = watch('species') ?? '';
@@ -152,10 +175,22 @@ export function AddPlantPage() {
         notes: data.notes || undefined,
         tags: tags.length > 0 ? tags : undefined,
         perenualSpeciesId: perenualSpeciesId ?? undefined,
+        // Propagation mode: link the cutting to its parent.
+        parentPlantId: parentPlantId || undefined,
       });
       if (pickedFile) {
-        const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(plant.id);
-        await plantService.uploadImage(uploadUrl, pickedFile, setUploadProgress);
+        // Downscale client-side (max 1600px long edge, WebP ~0.8 / JPEG
+        // fallback); upload the original if the canvas pipeline fails. The
+        // presign contentType must match the PUT's Content-Type header.
+        const downscaled = await downscaleImage(pickedFile);
+        const blob: Blob =
+          downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : pickedFile;
+        if (blob.size > MAX_BYTES) {
+          throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+        }
+        const contentType = blob.type || pickedFile.type;
+        const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(plant.id, contentType);
+        await plantService.uploadImage(uploadUrl, blob, contentType, setUploadProgress);
         await plantService.confirmImageUpload(plant.id, imageUrl);
       }
       // Best-effort: if Perenual gave us a watering cadence, seed a task. We
@@ -180,11 +215,11 @@ export function AddPlantPage() {
     onSuccess: (plant) => {
       // Read pre-create plants from cache to discriminate the first-plant
       // event (a critical funnel step) from subsequent ones.
-      const existing = queryClient.getQueryData(['plants']) as unknown[] | undefined;
+      const existing = queryClient.getQueryData(['plants', householdId]) as unknown[] | undefined;
       track('plant_added', {
         ordinal: existing && existing.length > 0 ? 'subsequent' : 'first',
       });
-      queryClient.invalidateQueries({ queryKey: ['plants'] });
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       toast.success(`${plant.name} added`);
       navigate(`/plants/${plant.id}`);
     },
@@ -216,6 +251,15 @@ export function AddPlantPage() {
       </div>
 
       <Card>
+        {parentPlantId && (
+          <Alert variant="info" className="mb-6">
+            🌱{' '}
+            {t('plants.propagate.banner', {
+              name: propagation?.parentName ?? t('plants.title'),
+            })}{' '}
+            {t('plants.propagate.bannerHint')}
+          </Alert>
+        )}
         {error && (
           <Alert variant="error" className="mb-6">
             {error}
@@ -248,14 +292,17 @@ export function AddPlantPage() {
                   </div>
                 )}
               </div>
-              <div className="flex-1 space-y-2">
+              {/* min-w-0 + w-full/max-w-full: <input type="file"> has a large
+                  intrinsic min-width in Chrome, which otherwise overflows the
+                  viewport on small screens and breaks tap targets. */}
+              <div className="min-w-0 flex-1 space-y-2">
                 <label className="block">
                   <span className="sr-only">Choose a photo</span>
                   <input
                     type="file"
                     accept={ACCEPTED_TYPES.join(',')}
                     onChange={handleFilePick}
-                    className="block text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+                    className="block w-full max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
                   />
                 </label>
                 {pickedFile && (
