@@ -193,9 +193,9 @@ export function ImportPlantsPage() {
               if (file) void handleFile(file);
             }}
           />
-          {fileName && <p className="text-xs text-gray-500">{fileName}</p>}
+          {fileName && <p className="text-xs text-gray-600">{fileName}</p>}
         </div>
-        <p className="mt-3 text-xs text-gray-500">{t('importPlants.formatHelp')}</p>
+        <p className="mt-3 text-xs text-gray-600">{t('importPlants.formatHelp')}</p>
       </Card>
 
       {rows && (
@@ -215,7 +215,7 @@ export function ImportPlantsPage() {
           <div className="max-h-96 overflow-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead>
-                <tr className="text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr className="text-left text-xs font-medium uppercase tracking-wide text-gray-600">
                   <th className="px-3 py-2">{t('importPlants.preview.colRow')}</th>
                   <th className="px-3 py-2">{t('importPlants.preview.colStatus')}</th>
                   <th className="px-3 py-2">{t('importPlants.preview.colName')}</th>
@@ -260,7 +260,7 @@ export function ImportPlantsPage() {
             </table>
           </div>
           {validRows.length < rows.length && (
-            <p className="mt-3 text-xs text-gray-500">
+            <p className="mt-3 text-xs text-gray-600">
               {t('importPlants.preview.invalidRowsSkipped')}
             </p>
           )}

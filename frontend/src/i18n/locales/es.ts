@@ -231,10 +231,6 @@ export const es: Translation = {
     preferences: {
       title: 'Preferencias',
       description: 'Personaliza la apariencia de la app.',
-      theme: 'Tema',
-      themeLight: 'Claro',
-      themeDark: 'Oscuro',
-      themeSystem: 'Sistema',
       density: 'Densidad',
       densityCozy: 'Cómoda',
       densityCompact: 'Compacta',

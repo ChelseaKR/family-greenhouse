@@ -175,7 +175,7 @@ export function ChatPage() {
           </div>
           {budget && (
             <div
-              className="text-right text-xs text-gray-500"
+              className="text-right text-xs text-gray-600"
               title={`${budgetPct}% of monthly chat budget used`}
             >
               {budgetPct}% used this month
@@ -280,7 +280,7 @@ export function ChatPage() {
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-gray-500 mt-1">
           AI-generated — verify before acting. Refuses pesticide / dosage advice. Reminder
           suggestions wait for your confirm before being created.
         </p>

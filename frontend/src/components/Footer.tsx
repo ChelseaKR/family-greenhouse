@@ -14,7 +14,7 @@ export function Footer() {
         <p className="mt-2 text-sm italic text-gray-500">
           In loving memory of my mom, Joyce - who taught us to keep growing. 🌱
         </p>
-        <p className="mt-2 text-xs text-gray-400">
+        <p className="mt-2 text-xs text-gray-500">
           Plant data powered by{' '}
           <a
             href="https://perenual.com/"

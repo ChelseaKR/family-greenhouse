@@ -101,7 +101,7 @@ export function PlantLineageCard({ lineage }: PlantLineageCardProps) {
                     </Link>
                     <PlantStatusBadge status={child.status} />
                   </span>
-                  <span className="flex-shrink-0 text-xs text-gray-500">
+                  <span className="flex-shrink-0 text-xs text-gray-600">
                     {formatDate(child.createdAt)}
                   </span>
                 </li>

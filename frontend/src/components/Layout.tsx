@@ -157,7 +157,7 @@ export function Layout() {
         <footer className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center gap-4">
             <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block" />
-            <p className="text-center text-xs italic text-gray-500">
+            <p className="text-center text-xs italic text-gray-600">
               In loving memory of my mom, Joyce — who taught us to keep growing.
             </p>
             <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block -scale-x-100" />

@@ -227,10 +227,6 @@ export const en = {
     preferences: {
       title: 'Preferences',
       description: 'Customize how the app looks and feels.',
-      theme: 'Theme',
-      themeLight: 'Light',
-      themeDark: 'Dark',
-      themeSystem: 'System',
       density: 'Density',
       densityCozy: 'Cozy',
       densityCompact: 'Compact',

@@ -121,7 +121,7 @@ export function WelcomeFlow() {
         </div>
       </Card>
 
-      <p className="mt-6 text-center text-xs text-gray-500">
+      <p className="mt-6 text-center text-xs text-gray-600">
         You can revisit any of this from <span className="font-medium">Help</span> in the sidebar.
       </p>
     </div>

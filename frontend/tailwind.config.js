@@ -122,9 +122,19 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        // Gentle side-to-side rock for the decorative hero sprigs, as if
+        // a draft moved through the greenhouse. Pair with `origin-bottom`
+        // so the stems pivot from the soil line, not their center. The
+        // global prefers-reduced-motion rule in index.css zeroes
+        // animation-duration on *, so this is reduced-motion safe.
+        sway: {
+          '0%, 100%': { transform: 'rotate(-1deg)' },
+          '50%': { transform: 'rotate(1deg)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 200ms ease-out both',
+        sway: 'sway 6s ease-in-out infinite',
       },
     },
   },

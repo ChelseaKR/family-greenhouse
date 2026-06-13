@@ -44,25 +44,25 @@
     <loc>https://app.familygreenhouse.com/blog/how-to-remember-to-water-plants</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-04-25</lastmod>
+    <lastmod>2026-05-05</lastmod>
   </url>
   <url>
     <loc>https://app.familygreenhouse.com/blog/sharing-plant-care-without-becoming-the-nag</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-04-25</lastmod>
+    <lastmod>2026-05-13</lastmod>
   </url>
   <url>
     <loc>https://app.familygreenhouse.com/blog/low-maintenance-houseplants-for-forgetful-people</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-04-25</lastmod>
+    <lastmod>2026-05-21</lastmod>
   </url>
   <url>
     <loc>https://app.familygreenhouse.com/blog/how-to-move-plants-without-killing-them</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-04-25</lastmod>
+    <lastmod>2026-05-28</lastmod>
   </url>
   <url>
     <loc>https://app.familygreenhouse.com/care/pothos</loc>
@@ -81,5 +81,11 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-08</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/spider-plant</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-12</lastmod>
   </url>
 </urlset>

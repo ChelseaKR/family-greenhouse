@@ -145,7 +145,7 @@ export function HouseholdPage() {
                   {copied ? 'Copied!' : 'Copy'}
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">This link will expire in 7 days.</p>
+              <p className="text-xs text-gray-600">This link will expire in 7 days.</p>
             </div>
           ) : (
             <Button
