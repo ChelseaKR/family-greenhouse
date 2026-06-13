@@ -1,18 +1,10 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
-import {
-  applyDensity,
-  applyTheme,
-  Density,
-  LangCode,
-  Theme,
-  usePrefsStore,
-} from '@/store/prefsStore';
+import { applyDensity, Density, LangCode, usePrefsStore } from '@/store/prefsStore';
 import { isRTL, SUPPORTED_LANGS } from '@/i18n';
 import clsx from 'clsx';
 
-const THEME_OPTIONS: Theme[] = ['light', 'dark', 'system'];
 const DENSITY_OPTIONS: Density[] = ['cozy', 'compact'];
 const LANGUAGE_LABELS: Record<LangCode, string> = {
   en: 'English',
@@ -25,15 +17,12 @@ const LANGUAGES: { code: LangCode; label: string }[] = SUPPORTED_LANGS.map((code
 
 export function PreferencesSettings() {
   const { t } = useTranslation();
-  const theme = usePrefsStore((s) => s.theme);
   const density = usePrefsStore((s) => s.density);
   const language = usePrefsStore((s) => s.language);
-  const setTheme = usePrefsStore((s) => s.setTheme);
   const setDensity = usePrefsStore((s) => s.setDensity);
   const setLanguage = usePrefsStore((s) => s.setLanguage);
 
   // Mirror prefs to the DOM whenever they change in this tab.
-  useEffect(() => applyTheme(theme), [theme]);
   useEffect(() => applyDensity(density), [density]);
   useEffect(() => {
     document.documentElement.lang = language;
@@ -47,29 +36,10 @@ export function PreferencesSettings() {
         description={t('settings.preferences.description')}
       />
       <div className="space-y-6">
-        {/* Theme */}
-        <fieldset>
-          <legend className="label">{t('settings.preferences.theme')}</legend>
-          <div className="flex gap-2" role="radiogroup">
-            {THEME_OPTIONS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={theme === value}
-                onClick={() => setTheme(value)}
-                className={clsx(
-                  'rounded-md border px-4 py-2 text-sm font-medium min-h-touch',
-                  theme === value
-                    ? 'border-primary-700 bg-primary-50 text-primary-800'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                )}
-              >
-                {t(`settings.preferences.theme${value[0].toUpperCase() + value.slice(1)}`)}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        {/* Theme toggle removed: dark mode shipped half-baked (only the body
+            surface inverted, components stayed light and unreadable). Restore
+            it here once components have real dark variants.
+            See docs/reviews/frontend-audit-2026-06-12.md, item 6. */}
 
         {/* Density */}
         <fieldset>

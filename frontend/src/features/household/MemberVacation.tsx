@@ -124,7 +124,7 @@ export function MemberVacation({
   }
 
   if (coverOptions.length === 0) {
-    return <p className="mt-1 text-xs text-gray-500">{t('household.vacation.noCoverOptions')}</p>;
+    return <p className="mt-1 text-xs text-gray-600">{t('household.vacation.noCoverOptions')}</p>;
   }
 
   return (

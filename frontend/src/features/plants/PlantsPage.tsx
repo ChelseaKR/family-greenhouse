@@ -224,10 +224,10 @@ export function PlantsPage() {
                   )}
                 </p>
                 {plant.species && (
-                  <p className="text-xs text-gray-500 truncate italic">{plant.species}</p>
+                  <p className="text-xs text-gray-600 truncate italic">{plant.species}</p>
                 )}
                 {plant.location && (
-                  <p className="text-xs text-gray-500 truncate mt-1">{plant.location}</p>
+                  <p className="text-xs text-gray-600 truncate mt-1">{plant.location}</p>
                 )}
               </div>
             </Link>

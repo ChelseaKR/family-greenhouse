@@ -9,15 +9,9 @@
     --color-secondary: 234 179 8;
   }
 
-  /* Dark theme set by prefsStore.applyTheme(). Inverts only the surface +
-     body text tokens; component-level classes (bg-white etc.) keep their
-     light values unless they explicitly opt into a dark variant. */
-  html[data-theme='dark'] {
-    color-scheme: dark;
-  }
-  html[data-theme='dark'] body {
-    @apply bg-gray-900 text-gray-100;
-  }
+  /* Dark mode removed until components get real dark variants — the old
+     html[data-theme='dark'] block only inverted the body surface, leaving
+     cards/inputs unreadable (frontend-audit 2026-06-12, item 6). */
 
   html[data-density='compact'] .card {
     @apply p-4;

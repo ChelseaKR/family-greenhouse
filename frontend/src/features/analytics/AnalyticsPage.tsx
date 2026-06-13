@@ -333,7 +333,7 @@ function DailyTrend({ series }: DailyTrendProps) {
           />
         </svg>
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-600">
         Bars: tasks completed per day. Line: 7-day moving average.
       </p>
     </div>
@@ -348,7 +348,7 @@ function KpiTile({ label, value, tone }: { label: string; value: number; tone?: 
         tone === 'warning' ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'
       )}
     >
-      <p className="text-xs font-medium text-gray-500">{label}</p>
+      <p className="text-xs font-medium text-gray-600">{label}</p>
       <p
         className={clsx(
           'mt-1 text-2xl font-semibold tabular-nums',

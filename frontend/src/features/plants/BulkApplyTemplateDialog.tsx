@@ -164,7 +164,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
                                 {p.name}
                               </span>
                               {p.species && (
-                                <span className="text-xs italic text-gray-500 truncate">
+                                <span className="text-xs italic text-gray-600 truncate">
                                   {p.species}
                                 </span>
                               )}

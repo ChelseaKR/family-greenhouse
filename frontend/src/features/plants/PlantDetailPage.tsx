@@ -481,7 +481,7 @@ function TaskRow({
         </span>
         <div>
           <p className="text-sm text-gray-900">Every {task.frequency} days</p>
-          <p className={clsx('text-xs', isOverdue ? 'text-red-600 font-medium' : 'text-gray-500')}>
+          <p className={clsx('text-xs', isOverdue ? 'text-red-600 font-medium' : 'text-gray-600')}>
             Due: {formatDate(task.nextDue)}
             {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
           </p>

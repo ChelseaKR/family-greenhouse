@@ -344,7 +344,7 @@ export function AddPlantPage() {
                       <p className="text-sm font-medium text-gray-900">
                         {s.commonName ?? s.scientificName}
                       </p>
-                      <p className="text-xs italic text-gray-500">
+                      <p className="text-xs italic text-gray-600">
                         {s.scientificName} • {(s.probability * 100).toFixed(0)}% confidence
                       </p>
                     </div>

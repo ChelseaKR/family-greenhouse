@@ -226,6 +226,66 @@ export const CARE_GUIDES: CareGuide[] = [
       },
     ],
   },
+  {
+    slug: 'spider-plant',
+    commonName: 'Spider Plant',
+    scientificName: 'Chlorophytum comosum',
+    alsoKnownAs: ['Airplane Plant', 'Ribbon Plant', 'Spider Ivy'],
+    metaTitle: 'Spider Plant Care: How Often to Water + Why Brown Tips',
+    metaDescription:
+      'How often to water a spider plant, the light it likes, why the leaf tips go brown, and what to do with all the babies it keeps making.',
+    reviewed: '2026-06-12',
+    summary:
+      'The spider plant forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
+    quickFacts: {
+      water: 'About once a week, when the top inch of soil is dry; less in winter',
+      light: 'Bright, indirect light is ideal; tolerates moderate light',
+      difficulty: 'Very easy',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA), though cats love chewing it',
+      humidity: 'Average household humidity is fine; very dry air browns the tips',
+    },
+    sections: {
+      watering: [
+        'Water a spider plant about once a week, when the top inch of soil has dried out. It stores water in thick, tuberous roots, so a missed week is a non-event: the leaves go a little flat and pale, then stand back up within hours of a drink, no grudge held. When you do water, do it properly, until it runs from the drainage holes.',
+        'In winter, stretch the interval to every 10–14 days. The real danger runs the other way: those water-storing roots rot in soil that never dries, and a rotted spider plant is much harder to save than a thirsty one. If you’re not sure it needs water, wait a day or two.',
+      ],
+      light: [
+        'Bright, indirect light keeps a spider plant full, crisply striped, and making babies. It also copes fine with a moderately lit room a few feet from the window; it just grows slower there, and the variegated kinds lose some of their cream stripe.',
+        'What it can’t take is harsh direct sun through glass, which bleaches the leaves and scorches the tips. An east window, or anywhere bright without a direct beam, is the sweet spot. There’s a reason this is the classic hanging-basket plant.',
+      ],
+      problems: [
+        'Brown leaf tips are the spider plant complaint, and the usual culprits are the fluoride and chlorine in tap water, or very dry air. Switching to distilled, filtered, or rain water fixes it for most people. Existing brown tips never turn green again; snip them off at an angle and the plant looks fine.',
+        'Yellow, limp leaves and mush at the base mean overwatering. The tuberous roots are a built-in water tank, and topping up a full tank rots it. Let the soil dry out fully and make sure the pot actually drains.',
+        'No babies? A spider plant only sends out runners when it’s mature, slightly root-bound, and getting decent light. A young plant in a dim corner and a roomy pot has no reason to reproduce. Snug pot, brighter spot, patience.',
+      ],
+      sharedCare: [
+        'The spider plant is unusually good at shared care because it asks out loud: when it’s thirsty, the leaves visibly droop and dull, and they perk up within hours of watering. That makes “does it need water?” a question anyone in the house can answer at a glance, which is more than you can say for almost any other plant on this list.',
+        'The babies are the other superpower. Each plantlet roots in a glass of water in a week or two, so one healthy plant becomes a windowsill of starter plants for kids, housemates, and the friend who swears they kill everything. (Family Greenhouse can track whose plant each one becomes once it’s potted up, but a labelled jam jar does the job too.)',
+      ],
+      honestBit: [
+        'My take: this is the best first plant for a household with kids or cats, full stop. It’s non-toxic, it bounces back from neglect, and a child who rooted their own spiderette in a jam jar will water it without being asked. That’s not true of a single other beginner plant I can name.',
+        'And ignore anyone who calls it dated. The spider plant got filed under “grandma plant” because it’s been quietly surviving in kitchens since the seventies — that’s not a fashion problem, that’s a track record.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a spider plant?',
+        a: 'About once a week, when the top inch of soil is dry, stretching to every 10–14 days in winter. Its tuberous roots store water, so it forgives a late watering far better than a constantly wet pot.',
+      },
+      {
+        q: 'Why are my spider plant’s leaf tips turning brown?',
+        a: 'Usually fluoride and chlorine in tap water, or very dry air. Switch to distilled, filtered, or rain water and new growth comes in clean. Snip existing brown tips off at an angle; they don’t recover.',
+      },
+      {
+        q: 'Are spider plants safe for cats and dogs?',
+        a: 'Yes. The ASPCA lists spider plants as non-toxic to both cats and dogs. Cats do love chewing the dangling leaves, which hurts the plant more than the cat, so hang it up if yours won’t leave it alone.',
+      },
+      {
+        q: 'How do I propagate spider plant babies (spiderettes)?',
+        a: 'Snip a plantlet off the runner and sit its base in a glass of water; roots show within a week or two. Or pin it into a pot of soil while still attached and cut the runner once it takes. Either way works almost every time.',
+      },
+    ],
+  },
 ];
 
 export function findCareGuide(slug: string): CareGuide | undefined {
