@@ -21,9 +21,9 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Seedling',
     price: 'Free',
-    description: 'Perfect for getting started',
-    features: ['Up to 10 plants', '1 household member', 'Basic care reminders', 'Mobile access'],
-    cta: 'Get Started',
+    description: 'Start on the windowsill',
+    features: ['Up to 10 plants', '1 household member', 'Care reminders', 'Works on your phone'],
+    cta: 'Get started',
     highlighted: false,
   },
   {
@@ -34,12 +34,12 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       'Unlimited plants',
       'Up to 6 household members',
-      'Smart scheduling',
+      'Suggested care schedules',
       'Care history & analytics',
       'Photo gallery',
       'Priority support',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Start free trial',
     highlighted: true,
   },
   {
@@ -54,7 +54,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       'Custom care schedules',
       'API access',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Start free trial',
     highlighted: false,
   },
 ];

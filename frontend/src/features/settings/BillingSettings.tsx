@@ -130,7 +130,7 @@ export function BillingSettings() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
         {plans.map((plan) => (
           <PlanCard
             key={plan.id}

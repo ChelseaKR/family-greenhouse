@@ -20,8 +20,8 @@ export function TermsPage() {
       <p className="lead">
         These terms govern your use of Family Greenhouse. We&rsquo;ve kept them readable. If
         anything is unclear, email{' '}
-        <a href="mailto:hello@family-greenhouse.example">hello@family-greenhouse.example</a> and
-        we&rsquo;ll explain.
+        <a href="mailto:hello@familygreenhouse.net">hello@familygreenhouse.net</a> and we&rsquo;ll
+        explain.
       </p>
 
       <h2>The agreement</h2>

@@ -27,8 +27,8 @@ const SIZE_CLASSES: Record<
     tagline: string;
   }
 > = {
-  sm: { icon: 'h-7', title: 'text-base', tagline: 'text-[9px]' },
-  md: { icon: 'h-8', title: 'text-lg', tagline: 'text-[10px]' },
+  sm: { icon: 'h-7', title: 'text-base', tagline: 'text-[11px]' },
+  md: { icon: 'h-8', title: 'text-lg', tagline: 'text-xs' },
   lg: { icon: 'h-10', title: 'text-xl', tagline: 'text-xs' },
 };
 

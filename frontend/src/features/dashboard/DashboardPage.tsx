@@ -202,7 +202,7 @@ export function DashboardPage() {
           page no longer shouts numbers at you; the dashboard art is the
           focal element and these read as a quiet status line beneath the
           title. */}
-      <dl className="flex flex-wrap items-baseline gap-x-8 gap-y-3 -mt-4 text-sm">
+      <dl className="flex flex-wrap items-baseline gap-x-4 sm:gap-x-8 gap-y-3 -mt-4 text-sm">
         <Metric label="Plants" value={plantCount} />
         <Metric label="Due today" value={todayCount} />
         <Metric
@@ -298,7 +298,7 @@ export function DashboardPage() {
             }
           />
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {plants.slice(0, 8).map((plant) => (
               <Link
                 key={plant.id}
@@ -602,7 +602,7 @@ function TaskItem({
           )}
         </div>
       </div>
-      <div className="flex flex-shrink-0 items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <ClaimControls
           task={task}
           onClaim={onClaim}

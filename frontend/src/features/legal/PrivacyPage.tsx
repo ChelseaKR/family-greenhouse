@@ -23,9 +23,8 @@ export function PrivacyPage() {
       <p className="lead">
         This page explains what data Family Greenhouse collects, why, and what you can do about it.
         We&rsquo;ve deliberately written it as plain text rather than a template — if anything is
-        unclear, email{' '}
-        <a href="mailto:hello@family-greenhouse.example">hello@family-greenhouse.example</a> and
-        we&rsquo;ll fix the wording.
+        unclear, email <a href="mailto:hello@familygreenhouse.net">hello@familygreenhouse.net</a>{' '}
+        and we&rsquo;ll fix the wording.
       </p>
 
       <h2>What we collect</h2>
@@ -119,8 +118,8 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Access / correction.</strong> Email{' '}
-          <a href="mailto:privacy@family-greenhouse.example">privacy@family-greenhouse.example</a>{' '}
-          and we&rsquo;ll respond within 30 days. We&rsquo;re a small team; this is the same person
+          <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a> and
+          we&rsquo;ll respond within 30 days. We&rsquo;re a small team; this is the same person
           you&rsquo;d talk to about any other support issue.
         </li>
       </ul>
@@ -130,7 +129,7 @@ export function PrivacyPage() {
         The service is not intended for users under 13. We don&rsquo;t knowingly collect data from
         anyone in that age range. If you&rsquo;re a parent and you think your child created an
         account, email{' '}
-        <a href="mailto:privacy@family-greenhouse.example">privacy@family-greenhouse.example</a> and
+        <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a> and
         we&rsquo;ll delete the account.
       </p>
 
