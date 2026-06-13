@@ -264,7 +264,7 @@ export function HouseholdPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span
                   className={clsx(
                     'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',

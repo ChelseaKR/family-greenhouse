@@ -160,7 +160,7 @@ export function ChatPage() {
   const lowBudget = budgetPct >= 80;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-[calc(100vh-4rem)] [height:calc(100dvh-4rem)]">
       <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-2 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
@@ -267,7 +267,7 @@ export function ChatPage() {
             placeholder="Ask about your plants..."
             disabled={isSending}
             rows={1}
-            className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-50"
+            className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-3 text-base sm:text-sm min-h-[44px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-50"
             aria-label="Chat message"
           />
           <button

@@ -7,7 +7,6 @@ import {
   ChartBarIcon,
   ShieldCheckIcon,
   CheckIcon,
-  StarIcon,
   HomeIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
@@ -27,64 +26,40 @@ import clsx from 'clsx';
 
 const features = [
   {
-    name: 'Smart Care Reminders',
+    name: 'Reminders per plant',
     description:
-      "Never forget to water your plants again. Get personalized reminders based on each plant's specific needs.",
+      "Each plant gets its own schedule, and the nudge goes to whoever the task belongs to. The cactus stops getting watered on the fern's timetable.",
     icon: BellAlertIcon,
   },
   {
-    name: 'Family Collaboration',
+    name: 'Shared, with names attached',
     description:
-      'Share plant care responsibilities with your whole household. Assign tasks and track who did what.',
+      "Everyone in the household sees what's due and what's done. The log shows who did what, which settles the watering arguments quickly.",
     icon: UserGroupIcon,
   },
   {
-    name: 'Care Calendar',
+    name: 'A week you can scan',
     description:
-      'See all upcoming plant care tasks at a glance. Plan your week and never miss a feeding or pruning.',
+      'Every upcoming task on one calendar. A look on Sunday night tells you whether the week ahead is heavy or quiet.',
     icon: CalendarDaysIcon,
   },
   {
-    name: 'Mobile Friendly',
+    name: 'Works at the sink',
     description:
-      'Access your greenhouse from anywhere. Check tasks, mark them complete, and add notes on the go.',
+      'Installs to your phone like any app. Mark a task done with one thumb, add a note, get back to the watering can.',
     icon: DevicePhoneMobileIcon,
   },
   {
-    name: 'Plant Health Tracking',
+    name: 'A memory for each plant',
     description:
-      "Log observations and track your plants' health over time. See patterns and improve your care routine.",
+      'Notes, photos, and the full care log live with the plant. When leaves yellow, you check what happened instead of guessing.',
     icon: ChartBarIcon,
   },
   {
-    name: 'Secure & Private',
+    name: 'Yours to keep',
     description:
-      'Your data stays yours. We use industry-standard encryption to keep your information safe.',
+      "Your household's data is encrypted in transit and at rest, and you can export all of it whenever you like.",
     icon: ShieldCheckIcon,
-  },
-];
-
-const testimonials = [
-  {
-    content:
-      'Family Greenhouse transformed how we care for our 30+ houseplants. No more "I thought you watered it!" arguments.',
-    author: 'Sarah M.',
-    role: 'Plant Mom of 3 Kids',
-    rating: 5,
-  },
-  {
-    content:
-      "Finally, an app that understands plant care isn't a solo job. My partner and I split tasks perfectly now.",
-    author: 'James & Devon',
-    role: 'Apartment Gardeners',
-    rating: 5,
-  },
-  {
-    content:
-      "I travel for work constantly. Now my roommates know exactly what each plant needs while I'm away.",
-    author: 'Michelle K.',
-    role: 'Frequent Traveler',
-    rating: 5,
   },
 ];
 
@@ -103,13 +78,9 @@ const productFacts = [
   { value: 'Open APIs', label: 'Export your data any time' },
 ];
 
-// Build-time flag — testimonials are hidden until we have real, sourced quotes.
-// Flip on by setting `VITE_SHOW_TESTIMONIALS=1` in the env when running
-// `vite build`. Truthy is anything non-empty, non-"0", non-"false".
-const showTestimonials = (() => {
-  const v = (import.meta.env.VITE_SHOW_TESTIMONIALS ?? '') as string;
-  return v !== '' && v !== '0' && v.toLowerCase() !== 'false';
-})();
+// Testimonials were removed outright (not just gated): the quotes were
+// invented, and invented praise has no place on the page. When real,
+// sourced quotes exist, reintroduce a section for them deliberately.
 
 /**
  * Marketing-page mockup of the running app. Structure mirrors the live
@@ -408,13 +379,13 @@ export function LandingPage() {
     <div className="bg-paper">
       {/* Navigation */}
       <header className="absolute inset-x-0 top-0 z-50">
-        <nav className="flex items-center justify-between p-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="flex lg:flex-1 items-center gap-2">
+        <nav className="flex items-center justify-between gap-3 px-4 py-5 sm:p-6 lg:px-8 max-w-7xl mx-auto">
+          <div className="flex lg:flex-1 items-center gap-2 min-w-0">
             <Link to="/" aria-label="Family Greenhouse home">
               <BrandMark variant="wordmark" />
             </Link>
             {IS_BETA && (
-              <span className="rounded-full bg-accent-100 text-accent-800 text-xs font-semibold px-2 py-0.5 border border-accent-200/70">
+              <span className="rounded-full bg-accent-100 text-accent-800 text-xs font-semibold px-2 py-0.5 border border-accent-200/70 whitespace-nowrap">
                 {BETA_BADGE}
               </span>
             )}
@@ -426,14 +397,6 @@ export function LandingPage() {
             >
               Features
             </a>
-            {showTestimonials && (
-              <a
-                href="#testimonials"
-                className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
-              >
-                Testimonials
-              </a>
-            )}
             <a
               href="#pricing"
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
@@ -441,10 +404,10 @@ export function LandingPage() {
               Pricing
             </a>
           </div>
-          <div className="flex flex-1 justify-end items-center gap-x-6">
+          <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
             <Link
               to="/login"
-              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors py-2"
+              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors py-2 whitespace-nowrap"
             >
               Log in
             </Link>
@@ -473,33 +436,24 @@ export function LandingPage() {
         <div className="py-24 sm:py-32 lg:py-40">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
-              {showTestimonials && (
-                <div className="mb-8 flex justify-center">
-                  <div className="relative rounded-full bg-paper px-3 py-1 text-sm text-gray-600 ring-1 ring-primary-200/60 hover:ring-primary-300">
-                    Trusted by 12,000+ plant-loving families.{' '}
-                    <a href="#testimonials" className="font-semibold text-primary-700">
-                      <span className="absolute inset-0" aria-hidden="true" />
-                      See their stories <span aria-hidden="true">&rarr;</span>
-                    </a>
-                  </div>
-                </div>
-              )}
               <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
                 A garden journal for the whole house
               </p>
               <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl leading-[1.05]">
-                Keep your plants thriving, <span className="italic text-primary-700">together</span>
+                &ldquo;I thought <span className="italic text-primary-700">you</span> watered
+                it.&rdquo;
               </h1>
               <div className="mt-4 flex justify-center">
                 <TitleUnderline className="h-4 w-56 text-primary-600" />
               </div>
               <p className="mt-6 text-lg leading-8 text-gray-700">
-                The collaborative plant care app for busy households. Never miss a watering, share
-                responsibilities, and watch your indoor jungle flourish.
+                Family Greenhouse is a shared care journal for the plants in your house. Everyone
+                sees what&rsquo;s due and what&rsquo;s already done, so the fern doesn&rsquo;t get
+                watered twice on Tuesday and then forgotten for two weeks.
               </p>
               <div className="mt-10 flex items-center justify-center gap-x-6">
                 <Link to="/register">
-                  <Button size="lg">Start growing free</Button>
+                  <Button size="lg">Sign up free</Button>
                 </Link>
                 <a
                   href="#features"
@@ -528,7 +482,7 @@ export function LandingPage() {
           aria-hidden="true"
         />
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
             {productFacts.map((fact) => (
               <div key={fact.label} className="text-center">
                 <div className="font-serif text-3xl text-white sm:text-4xl tabular-nums">
@@ -546,15 +500,15 @@ export function LandingPage() {
       </div>
 
       {/* Features Section */}
-      <div id="features" className="py-24 sm:py-32 bg-paper">
+      <div id="features" className="py-20 sm:py-28 bg-paper">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
-            eyebrow="Everything you need"
-            title="Plant care made simple"
-            description="Whether you're a seasoned plant parent or just starting out, Family Greenhouse has the tools to help your plants thrive."
+            eyebrow="What it does"
+            title="One schedule the whole house can see"
+            description="Add a plant once and its schedule, reminders, photos, and history come along. The rest of the household sees the same thing you do."
           />
-          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
-            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-3">
+          <div className="mx-auto mt-12 max-w-2xl sm:mt-16 lg:mt-20 lg:max-w-none">
+            <dl className="mx-auto grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 md:max-w-none md:grid-cols-2 lg:grid-cols-3">
               {features.map((feature) => (
                 <div
                   key={feature.name}
@@ -575,29 +529,29 @@ export function LandingPage() {
       </div>
 
       {/* How It Works Section */}
-      <div className="py-24 sm:py-32 bg-parchment">
+      <div className="py-20 sm:py-28 bg-parchment">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <SectionHeading eyebrow="Simple setup" title="Get started in minutes" />
-          <div className="mx-auto mt-16 max-w-5xl">
+          <SectionHeading eyebrow="Setup" title="Three steps, about five minutes" />
+          <div className="mx-auto mt-12 sm:mt-16 max-w-5xl">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
                 {
                   step: '1',
                   title: 'Add your plants',
                   description:
-                    "Snap a photo and enter basic info. We'll help you set up the perfect care schedule.",
+                    'A name and a photo will do. Pick a watering rhythm yourself or start from a species suggestion.',
                 },
                 {
                   step: '2',
-                  title: 'Invite your family',
+                  title: 'Invite your household',
                   description:
-                    'Share your greenhouse with household members. Everyone gets their own tasks.',
+                    'Send one link. Whoever lives with you joins and sees the same plants and the same task list.',
                 },
                 {
                   step: '3',
-                  title: 'Watch them thrive',
+                  title: 'Split the work',
                   description:
-                    'Get smart reminders, track progress, and enjoy a home full of happy plants.',
+                    "Assign tasks, or let whoever's home claim them. Reminders go out, the history fills in.",
                 },
               ].map((item) => (
                 <div key={item.step} className="text-center">
@@ -616,44 +570,13 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Testimonials Section. Hidden by default — flip on by setting
-          VITE_SHOW_TESTIMONIALS=1 at build time once we have real quotes. */}
-      {showTestimonials && (
-        <div id="testimonials" className="py-24 sm:py-32 bg-paper">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <SectionHeading eyebrow="Testimonials" title="Loved by plant families everywhere" />
-            <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-8 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-              {testimonials.map((testimonial) => (
-                <div
-                  key={testimonial.author}
-                  className="flex flex-col justify-between bg-paper p-8 rounded-2xl shadow-journal border border-primary-100/60"
-                >
-                  <div>
-                    <div className="flex gap-1 mb-4">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <StarIcon key={i} className="h-5 w-5 text-accent-500 fill-accent-500" />
-                      ))}
-                    </div>
-                    <p className="text-gray-700 leading-relaxed">"{testimonial.content}"</p>
-                  </div>
-                  <div className="mt-6 pt-6 border-t border-primary-100/70">
-                    <p className="font-semibold text-ink">{testimonial.author}</p>
-                    <p className="text-sm text-gray-500">{testimonial.role}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Pricing Section */}
-      <div id="pricing" className="py-24 sm:py-32 bg-parchment">
+      <div id="pricing" className="py-20 sm:py-28 bg-parchment">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
             eyebrow="Pricing"
             title="Plans for every greenhouse"
-            description="Start free and grow with us. Upgrade anytime as your plant family expands."
+            description="The free plan covers ten plants and one member. Paid plans add people and take off the plant cap."
           />
           <PricingGrid />
           <p className="mt-12 text-center text-sm text-gray-700">
@@ -675,11 +598,12 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8 lg:flex lg:items-center lg:justify-between">
           <div>
             <h2 className="font-serif text-4xl tracking-tight text-white sm:text-5xl">
-              Ready to grow <span className="italic text-primary-200">together</span>?
+              Set it up before the next{' '}
+              <span className="italic text-primary-200">watering day</span>
             </h2>
             <p className="mt-4 text-lg text-primary-100 max-w-xl">
-              Set up a household, share access with the people you live with, and let the right
-              person be reminded at the right time. Free for up to 10 plants.
+              Make a household, share the link with the people you live with, and the right person
+              gets reminded at the right time. Free for up to 10 plants.
             </p>
           </div>
           <div className="mt-10 flex items-center gap-x-6 lg:mt-0 lg:flex-shrink-0">
@@ -705,13 +629,13 @@ export function LandingPage() {
       {/* Footer */}
       <footer className="bg-primary-900">
         <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="col-span-2 md:col-span-1">
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="col-span-2 sm:col-span-3 lg:col-span-1">
               <Link to="/" aria-label="Family Greenhouse home">
                 <BrandMark variant="wordmark" tone="light" />
               </Link>
               <p className="mt-4 text-sm text-primary-200">
-                Collaborative plant care for households. Grow together.
+                A shared care journal for the plants in your house.
               </p>
             </div>
             <div>
@@ -731,6 +655,16 @@ export function LandingPage() {
                   <a href="/coming-soon" className="text-sm text-primary-200 hover:text-white">
                     Mobile App
                   </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Learn</h3>
+              <ul className="mt-4 space-y-2">
+                <li>
+                  <Link to="/care" className="text-sm text-primary-200 hover:text-white">
+                    Plant care guides
+                  </Link>
                 </li>
                 <li>
                   <Link to="/blog" className="text-sm text-primary-200 hover:text-white">
@@ -752,6 +686,19 @@ export function LandingPage() {
                     About
                   </a>
                 </li>
+                <li>
+                  <a
+                    href="mailto:hello@familygreenhouse.net"
+                    className="text-sm text-primary-200 hover:text-white"
+                  >
+                    Contact
+                  </a>
+                </li>
+                <li>
+                  <Link to="/status" className="text-sm text-primary-200 hover:text-white">
+                    Status
+                  </Link>
+                </li>
               </ul>
             </div>
             <div>
@@ -765,11 +712,6 @@ export function LandingPage() {
                 <li>
                   <Link to="/legal/terms" className="text-sm text-primary-200 hover:text-white">
                     Terms
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/status" className="text-sm text-primary-200 hover:text-white">
-                    Status
                   </Link>
                 </li>
               </ul>

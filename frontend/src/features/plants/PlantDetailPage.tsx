@@ -209,7 +209,7 @@ export function PlantDetailPage() {
         </div>
 
         <div className="flex-1">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold text-gray-900">{plant.name}</h1>
@@ -545,7 +545,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
         <ClockIcon className="h-4 w-4" aria-hidden="true" />
         Snooze
       </summary>
-      <ul className="absolute right-0 z-10 mt-1 w-44 rounded-md bg-white shadow-lg ring-1 ring-black/5 py-1">
+      <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-white shadow-lg ring-1 ring-black/5 py-1">
         {SNOOZE_OPTIONS.map((opt) => (
           <li key={opt.label}>
             <button

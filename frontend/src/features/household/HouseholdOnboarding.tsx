@@ -104,7 +104,7 @@ export function HouseholdOnboarding() {
         </h2>
         {step === 'choice' && !isAddingAnother && (
           <p className="mt-2 max-w-sm text-center text-sm text-gray-600">
-            A household is a group that shares plant care. Most people start fresh; if a partner
+            A household is a group that shares plant care. Create one to start fresh, or if someone
             already invited you, paste their link instead.
           </p>
         )}

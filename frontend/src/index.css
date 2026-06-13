@@ -27,8 +27,10 @@
     @apply antialiased;
   }
 
+  /* Warm paper default so any surface that forgets an explicit background
+     inherits the brand tone instead of stock-Tailwind gray. */
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-paper text-gray-900;
   }
 
   /* Skip link for keyboard navigation */
@@ -66,7 +68,7 @@
   }
 
   .btn-secondary {
-    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus-visible:ring-primary-500;
+    @apply btn bg-paper text-ink border border-primary-300/70 hover:bg-primary-50 focus-visible:ring-primary-500;
   }
 
   .btn-danger {
@@ -74,7 +76,9 @@
   }
 
   .input {
-    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm;
+    /* text-base at mobile keeps iOS from auto-zooming on focus (<16px does);
+       brand-tinted border replaces the stock gray. */
+    @apply block w-full px-3 py-2 border border-primary-200 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
   }
 
   .input-error {
@@ -90,7 +94,7 @@
   }
 
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply bg-white rounded-lg shadow-card border border-primary-100/70 p-6;
   }
 
   /* Long-form prose used by /blog/:slug post bodies. We don't ship the

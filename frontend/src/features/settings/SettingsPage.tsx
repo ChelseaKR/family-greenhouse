@@ -37,7 +37,7 @@ export function SettingsPage() {
       />
 
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex gap-6" aria-label="Settings sections">
+        <nav className="-mb-px flex gap-3 sm:gap-6 overflow-x-auto" aria-label="Settings sections">
           {TABS.map((id) => (
             <button
               key={id}
