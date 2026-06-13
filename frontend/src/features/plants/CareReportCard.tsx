@@ -47,7 +47,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
 
       {plant.upcomingTasks.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
             By task
           </h4>
           <ul className="divide-y divide-gray-200 text-sm">
@@ -64,7 +64,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium text-gray-500">{label}</dt>
+      <dt className="text-xs font-medium text-gray-600">{label}</dt>
       <dd className="mt-1 text-lg font-semibold text-gray-900">{value}</dd>
     </div>
   );

@@ -337,7 +337,7 @@ export function DashboardPage() {
                 </div>
                 <p className="text-sm font-medium text-ink truncate">{plant.name}</p>
                 {plant.location && (
-                  <p className="text-xs text-gray-500 truncate">{plant.location}</p>
+                  <p className="text-xs text-gray-600 truncate">{plant.location}</p>
                 )}
               </Link>
             ))}
@@ -412,7 +412,7 @@ interface MetricProps {
 function Metric({ label, value, emphasis }: MetricProps) {
   return (
     <div className="flex items-baseline gap-2">
-      <dt className="text-xs uppercase tracking-[0.14em] text-gray-500">{label}</dt>
+      <dt className="text-xs uppercase tracking-[0.14em] text-gray-600">{label}</dt>
       <dd
         className={clsx(
           'font-serif text-xl text-ink leading-none',

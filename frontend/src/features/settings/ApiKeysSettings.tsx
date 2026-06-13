@@ -150,7 +150,7 @@ export function ApiKeysSettings() {
             </div>
             <fieldset>
               <legend className="label">Scopes</legend>
-              <p className="mb-2 text-xs text-gray-500">
+              <p className="mb-2 text-xs text-gray-600">
                 Grant only what the key needs. A request to an endpoint outside the key&rsquo;s
                 scopes is refused with a 403.
               </p>

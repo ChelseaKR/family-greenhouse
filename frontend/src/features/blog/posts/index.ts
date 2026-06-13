@@ -34,7 +34,7 @@ export const POSTS: BlogPost[] = [
     title: 'How to actually remember to water your plants',
     description:
       'Why most people forget to water their plants — and the three systems that actually work, ranked from worst to best.',
-    date: '2026-04-25',
+    date: '2026-05-05',
     readingMinutes: 5,
     Component: RememberingToWater,
   },
@@ -43,7 +43,7 @@ export const POSTS: BlogPost[] = [
     title: 'Sharing plant care without becoming the household nag',
     description:
       "Almost every couple I've talked to has the same plant-care argument. Here's the structural fix that doesn't require either of you to remember more.",
-    date: '2026-04-25',
+    date: '2026-05-13',
     readingMinutes: 6,
     Component: SharingPlantCare,
   },
@@ -52,7 +52,7 @@ export const POSTS: BlogPost[] = [
     title: 'Seven houseplants that survive being forgotten',
     description:
       "Most 'low maintenance plant' lists are repeats of each other. Here are seven that genuinely fail in recoverable ways — ranked by how forgiving they are when life gets busy.",
-    date: '2026-04-25',
+    date: '2026-05-21',
     readingMinutes: 5,
     Component: LowWaterPlants,
   },
@@ -61,7 +61,7 @@ export const POSTS: BlogPost[] = [
     title: 'How to move with houseplants without killing them',
     description:
       "I've moved with thirty-seven plants three times. Here's what changed between losing eight, losing three, and losing none — plus the long-distance freeze problem nobody warns you about.",
-    date: '2026-04-25',
+    date: '2026-05-28',
     readingMinutes: 6,
     Component: MovingWithPlants,
   },

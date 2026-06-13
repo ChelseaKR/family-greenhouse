@@ -105,7 +105,7 @@ export function LeafHealthResults({ result }: { result: LeafHealthResult }) {
 
       {result.demo && <p className="text-xs text-amber-700">{t('plants.leafHealth.demoNotice')}</p>}
 
-      <p className="text-xs text-gray-400">{result.disclaimer}</p>
+      <p className="text-xs text-gray-500">{result.disclaimer}</p>
     </div>
   );
 }

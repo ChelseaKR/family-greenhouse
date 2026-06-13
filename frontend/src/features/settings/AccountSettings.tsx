@@ -263,7 +263,7 @@ export function AccountSettings() {
             Download CSV
           </Button>
         </div>
-        <p className="mt-3 text-xs text-gray-500">
+        <p className="mt-3 text-xs text-gray-600">
           Moving in the other direction?{' '}
           <RouterLink to="/plants/import" className="font-medium text-primary-700 underline">
             Import plants from a CSV or JSON file
@@ -341,7 +341,7 @@ function CalendarFeedRow() {
           {copied ? 'Copied!' : 'Copy'}
         </Button>
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-600">
         Paste this URL into your calendar app&rsquo;s &ldquo;subscribe to calendar&rdquo; option.
         The feed shows tasks for your active household; switching households updates what you see
         automatically.

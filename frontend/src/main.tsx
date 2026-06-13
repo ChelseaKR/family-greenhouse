@@ -6,7 +6,7 @@ import App from './App';
 import { initSentry } from './sentry';
 import './i18n';
 import { isRTL } from './i18n';
-import { applyDensity, applyTheme, usePrefsStore } from './store/prefsStore';
+import { applyDensity, usePrefsStore } from './store/prefsStore';
 // Self-hosted brand fonts. Gloock is the display face used in the wordmark
 // and major headlines; Instrument Sans is the body face. Both are loaded
 // at app boot from /node_modules so the page renders in-brand on first
@@ -19,22 +19,15 @@ import './index.css';
 // after mount; errors before it loads are caught by the route error boundary.
 void initSentry();
 
-// Apply persisted preferences before React mounts so we don't get a flash of
-// light theme on dark-mode users / wrong density on first paint.
+// Apply persisted preferences before React mounts so we don't get the wrong
+// density / language direction on first paint.
+// Note: dark mode was removed until components get real dark variants
+// (frontend-audit 2026-06-12, item 6), so the app always renders light.
 {
   const prefs = usePrefsStore.getState();
-  applyTheme(prefs.theme);
   applyDensity(prefs.density);
   document.documentElement.lang = prefs.language;
   document.documentElement.dir = isRTL(prefs.language) ? 'rtl' : 'ltr';
-}
-
-// Re-apply theme when the OS preference flips and the user has theme=system.
-if (typeof window !== 'undefined' && window.matchMedia) {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    const { theme } = usePrefsStore.getState();
-    if (theme === 'system') applyTheme('system');
-  });
 }
 
 const queryClient = new QueryClient({

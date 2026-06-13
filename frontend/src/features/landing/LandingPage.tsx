@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom';
 import {
-  CalendarDaysIcon,
+  // Remaining Heroicons serve the AppMockup chrome only — the marketing
+  // feature grid uses the custom botanical icons below.
   UserGroupIcon,
-  BellAlertIcon,
-  DevicePhoneMobileIcon,
   ChartBarIcon,
-  ShieldCheckIcon,
   CheckIcon,
   HomeIcon,
   ClipboardDocumentListIcon,
@@ -22,6 +20,12 @@ import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
 import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
 import { PruneIcon } from '@/components/icons/PruneIcon';
+import { ReminderBellbloomIcon } from '@/components/icons/ReminderBellbloomIcon';
+import { HouseholdSproutsIcon } from '@/components/icons/HouseholdSproutsIcon';
+import { CalendarLeafIcon } from '@/components/icons/CalendarLeafIcon';
+import { PhoneLeafIcon } from '@/components/icons/PhoneLeafIcon';
+import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
+import { RootLockIcon } from '@/components/icons/RootLockIcon';
 import clsx from 'clsx';
 
 const features = [
@@ -29,37 +33,76 @@ const features = [
     name: 'Reminders per plant',
     description:
       "Each plant gets its own schedule, and the nudge goes to whoever the task belongs to. The cactus stops getting watered on the fern's timetable.",
-    icon: BellAlertIcon,
+    icon: ReminderBellbloomIcon,
   },
   {
     name: 'Shared, with names attached',
     description:
       "Everyone in the household sees what's due and what's done. The log shows who did what, which settles the watering arguments quickly.",
-    icon: UserGroupIcon,
+    icon: HouseholdSproutsIcon,
   },
   {
     name: 'A week you can scan',
     description:
       'Every upcoming task on one calendar. A look on Sunday night tells you whether the week ahead is heavy or quiet.',
-    icon: CalendarDaysIcon,
+    icon: CalendarLeafIcon,
   },
   {
     name: 'Works at the sink',
     description:
       'Installs to your phone like any app. Mark a task done with one thumb, add a note, get back to the watering can.',
-    icon: DevicePhoneMobileIcon,
+    icon: PhoneLeafIcon,
   },
   {
     name: 'A memory for each plant',
     description:
       'Notes, photos, and the full care log live with the plant. When leaves yellow, you check what happened instead of guessing.',
-    icon: ChartBarIcon,
+    icon: GrowthRingsIcon,
   },
   {
     name: 'Yours to keep',
     description:
       "Your household's data is encrypted in transit and at rest, and you can export all of it whenever you like.",
-    icon: ShieldCheckIcon,
+    icon: RootLockIcon,
+  },
+];
+
+// Per-card surface/border/layout variation for the features grid, keyed
+// by index. Breaks the six-identical-cards template read: backgrounds
+// rotate through paper / parchment / white, border tints alternate
+// green and terracotta, and two cards (2nd and 6th) go horizontal at
+// lg. The `chip` class also carries the icon's text color so terracotta
+// cards get a terracotta icon without touching the icon components.
+const featureCardVariants = [
+  {
+    surface: 'bg-paper border-primary-100/60',
+    chip: 'bg-primary-100 ring-primary-200/60 text-primary-700',
+    horizontal: false,
+  },
+  {
+    surface: 'bg-parchment border-primary-200/60',
+    chip: 'bg-primary-100 ring-primary-200/60 text-primary-700',
+    horizontal: true,
+  },
+  {
+    surface: 'bg-white border-accent-200/50',
+    chip: 'bg-accent-50 ring-accent-200/60 text-accent-700',
+    horizontal: false,
+  },
+  {
+    surface: 'bg-white border-primary-200/60',
+    chip: 'bg-primary-100 ring-primary-200/60 text-primary-700',
+    horizontal: false,
+  },
+  {
+    surface: 'bg-paper border-accent-200/50',
+    chip: 'bg-accent-50 ring-accent-200/60 text-accent-700',
+    horizontal: false,
+  },
+  {
+    surface: 'bg-parchment border-primary-100/60',
+    chip: 'bg-primary-100 ring-primary-200/60 text-primary-700',
+    horizontal: true,
   },
 ];
 
@@ -99,7 +142,7 @@ const productFacts = [
  * this is a marketing mock, not a live screenshot. Names and counts
  * aren't claims — they're representative content.
  */
-function AppMockup() {
+function AppMockup({ className }: { className?: string }) {
   const navItems = [
     { name: 'Dashboard', icon: HomeIcon, active: true },
     { name: 'Plants', icon: SidebarLeafIcon, active: false },
@@ -133,7 +176,7 @@ function AppMockup() {
   };
 
   return (
-    <div className="mt-16 sm:mt-24">
+    <div className={className}>
       <div className="relative -m-2 rounded-xl bg-primary-900/10 p-2 ring-1 ring-inset ring-primary-900/15 lg:-m-4 lg:rounded-2xl lg:p-4">
         <div className="rounded-lg bg-paper shadow-2xl ring-1 ring-primary-900/10 overflow-hidden">
           {/* Browser chrome */}
@@ -311,9 +354,10 @@ function Metric({ label, value }: MetricProps) {
 }
 
 /**
- * Decorative cluster of botanical sprigs that flank the hero. Used twice
- * (mirrored) to flank the headline at low opacity so the hero reads as
- * a hand-illustrated garden page rather than a default-Tailwind landing.
+ * Decorative cluster of botanical sprigs behind the hero copy, at low
+ * opacity so the hero reads as a hand-illustrated garden page rather
+ * than a default-Tailwind landing. (Formerly mirrored on the right too;
+ * the asymmetric hero's bleeding app mockup now owns that side.)
  * Stroke is `currentColor` so opacity tints come from the caller.
  */
 function HeroSprigs({
@@ -418,57 +462,60 @@ export function LandingPage() {
         </nav>
       </header>
 
-      {/* Hero Section — botanical wash on paper, no clip-path blurs. The
-          two flanking sprig clusters give the page a hand-drawn feel
-          without the cookie-cutter "abstract gradient blob" pattern. */}
+      {/* Hero Section — botanical wash on paper, no clip-path blurs. At
+          lg the hero goes asymmetric: copy left-aligned in the left
+          column, the app mockup bleeding off the right edge (the
+          overflow-hidden wrapper crops it). Below lg it stays the
+          stacked, centered layout. */}
       <div className="relative isolate pt-14 overflow-hidden">
-        {/* Left botanical wash */}
+        {/* Botanical wash behind the hero copy. `origin-bottom
+            animate-sway` rocks the sprigs from the soil line; the
+            global prefers-reduced-motion rule freezes it. */}
         <HeroSprigs
-          className="pointer-events-none absolute left-0 top-24 -z-10 hidden md:block w-64 h-auto text-primary-300/40"
-          aria-hidden="true"
-        />
-        {/* Right botanical wash, mirrored */}
-        <HeroSprigs
-          className="pointer-events-none absolute right-0 top-32 -z-10 hidden md:block w-72 h-auto text-primary-300/40 -scale-x-100"
+          className="pointer-events-none absolute left-0 top-24 -z-10 hidden md:block w-64 h-auto text-primary-300/25 origin-bottom animate-sway"
           aria-hidden="true"
         />
 
-        <div className="py-24 sm:py-32 lg:py-40">
+        <div className="py-24 sm:py-32 lg:py-36">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="mx-auto max-w-2xl text-center">
-              <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
-                A garden journal for the whole house
-              </p>
-              <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl leading-[1.05]">
-                &ldquo;I thought <span className="italic text-primary-700">you</span> watered
-                it.&rdquo;
-              </h1>
-              <div className="mt-4 flex justify-center">
-                <TitleUnderline className="h-4 w-56 text-primary-600" />
+            <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
+              <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
+                <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
+                  A garden journal for the whole house
+                </p>
+                <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05]">
+                  &ldquo;I thought <span className="italic text-primary-700">you</span> watered
+                  it.&rdquo;
+                </h1>
+                <div className="mt-4 flex justify-center lg:justify-start">
+                  <TitleUnderline className="h-4 w-56 text-primary-600" />
+                </div>
+                <p className="mt-6 text-lg leading-8 text-gray-700">
+                  Family Greenhouse is a shared care journal for the plants in your house. Everyone
+                  sees what&rsquo;s due and what&rsquo;s already done, so the fern doesn&rsquo;t get
+                  watered twice on Tuesday and then forgotten for two weeks.
+                </p>
+                <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
+                  <Link to="/register">
+                    <Button size="lg">Sign up free</Button>
+                  </Link>
+                  <a
+                    href="#features"
+                    className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
+                  >
+                    See how it works <span aria-hidden="true">→</span>
+                  </a>
+                </div>
               </div>
-              <p className="mt-6 text-lg leading-8 text-gray-700">
-                Family Greenhouse is a shared care journal for the plants in your house. Everyone
-                sees what&rsquo;s due and what&rsquo;s already done, so the fern doesn&rsquo;t get
-                watered twice on Tuesday and then forgotten for two weeks.
-              </p>
-              <div className="mt-10 flex items-center justify-center gap-x-6">
-                <Link to="/register">
-                  <Button size="lg">Sign up free</Button>
-                </Link>
-                <a
-                  href="#features"
-                  className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
-                >
-                  See how it works <span aria-hidden="true">→</span>
-                </a>
-              </div>
-            </div>
 
-            {/* App Preview — a faithful mock of the real product chrome
-                styled to match the redesigned dashboard (paper bg,
-                botanical task icons, inline metadata row, Gloock serif
-                welcome). The visual is the product. */}
-            <AppMockup />
+              {/* App Preview — a faithful mock of the real product chrome
+                  styled to match the redesigned dashboard (paper bg,
+                  botanical task icons, inline metadata row, Gloock serif
+                  welcome). The visual is the product. At lg it renders at
+                  a readable fixed width and bleeds off the right edge of
+                  the viewport rather than squeezing into the column. */}
+              <AppMockup className="mt-16 sm:mt-24 lg:mt-0 lg:w-[56rem] lg:max-w-none" />
+            </div>
           </div>
         </div>
       </div>
@@ -509,27 +556,58 @@ export function LandingPage() {
           />
           <div className="mx-auto mt-12 max-w-2xl sm:mt-16 lg:mt-20 lg:max-w-none">
             <dl className="mx-auto grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 md:max-w-none md:grid-cols-2 lg:grid-cols-3">
-              {features.map((feature) => (
-                <div
-                  key={feature.name}
-                  className="relative bg-paper rounded-2xl p-8 shadow-journal hover:shadow-journal-hover transition-shadow border border-primary-100/60"
-                >
-                  <dt className="flex flex-col items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 ring-1 ring-primary-200/60">
-                      <feature.icon className="h-6 w-6 text-primary-700" aria-hidden="true" />
-                    </div>
-                    <span className="text-lg font-semibold leading-7 text-ink">{feature.name}</span>
-                  </dt>
-                  <dd className="mt-2 text-base leading-7 text-gray-700">{feature.description}</dd>
-                </div>
-              ))}
+              {features.map((feature, index) => {
+                const variant = featureCardVariants[index % featureCardVariants.length];
+                return (
+                  <div
+                    key={feature.name}
+                    className={clsx(
+                      'relative rounded-2xl p-8 shadow-journal hover:shadow-journal-hover transition-shadow border',
+                      variant.surface
+                    )}
+                  >
+                    <dt
+                      className={clsx(
+                        'flex flex-col items-start gap-4',
+                        variant.horizontal && 'lg:flex-row lg:items-center'
+                      )}
+                    >
+                      <div
+                        className={clsx(
+                          'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1',
+                          variant.chip
+                        )}
+                      >
+                        <feature.icon className="h-6 w-6" aria-hidden="true" />
+                      </div>
+                      <span className="text-lg font-semibold leading-7 text-ink">
+                        {feature.name}
+                      </span>
+                    </dt>
+                    <dd
+                      className={clsx(
+                        'mt-2 text-base leading-7 text-gray-700',
+                        variant.horizontal && 'lg:ml-16'
+                      )}
+                    >
+                      {feature.description}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
           </div>
         </div>
       </div>
 
-      {/* How It Works Section */}
-      <div className="py-20 sm:py-28 bg-parchment">
+      {/* How It Works Section — a sprig straddles the paper → parchment
+          seam, same pattern as the facts band but ink-tinted since both
+          surfaces are light. */}
+      <div className="py-20 sm:py-28 bg-parchment relative">
+        <SprigDivider
+          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
+          aria-hidden="true"
+        />
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading eyebrow="Setup" title="Three steps, about five minutes" />
           <div className="mx-auto mt-12 sm:mt-16 max-w-5xl">
@@ -570,8 +648,13 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Pricing Section */}
-      <div id="pricing" className="py-20 sm:py-28 bg-parchment">
+      {/* Pricing Section — both sections sit on parchment, so the sprig
+          marks the transition the background no longer can. */}
+      <div id="pricing" className="py-20 sm:py-28 bg-parchment relative">
+        <SprigDivider
+          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
+          aria-hidden="true"
+        />
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
             eyebrow="Pricing"
