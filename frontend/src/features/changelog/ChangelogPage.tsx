@@ -32,6 +32,42 @@ const CATEGORY_STYLES: Record<Category, string> = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-06-12',
+    category: 'Design',
+    title: 'A landing page that sounds like a person',
+    body: (
+      <>
+        Rewrote the marketing copy in plain language and redrew the landing page: a left-aligned
+        hero, six hand-drawn botanical feature icons, varied card layouts, and the sprig dividers
+        the rest of the site already used. Also fixed a batch of small-screen layout bugs (the
+        sign-up button no longer wraps on phones, tablets get proper two-column grids) and bumped
+        low-contrast helper text across the app.
+      </>
+    ),
+  },
+  {
+    date: '2026-06-12',
+    category: 'Feature',
+    title: 'Spider plant care guide',
+    body: (
+      <>
+        Fourth entry in the <Link to="/care">care guides</Link>: the spider plant — why brown tips
+        are usually your tap water, and what to do with all those plantlets.
+      </>
+    ),
+  },
+  {
+    date: '2026-06-12',
+    category: 'Fix',
+    title: 'Dark mode removed (for now)',
+    body: (
+      <>
+        The old toggle only recolored the page background, which left cards and forms unreadable.
+        It&rsquo;s gone until components get real dark variants.
+      </>
+    ),
+  },
+  {
     date: '2026-04-25',
     category: 'Design',
     title: 'New brand identity',
