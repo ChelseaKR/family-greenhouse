@@ -421,7 +421,7 @@ export function NotificationSettings() {
               Disturb settings instead.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-end">
             <Input
               label="Start"
               type="time"

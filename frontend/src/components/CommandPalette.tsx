@@ -129,7 +129,7 @@ export function CommandPalette() {
                   />
                   <Combobox.Input
                     ref={inputRef}
-                    className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 sm:text-sm"
+                    className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 text-base sm:text-sm"
                     placeholder="Search plants and tasks..."
                     onChange={(e) => setQuery(e.target.value)}
                   />

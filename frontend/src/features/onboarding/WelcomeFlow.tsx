@@ -28,17 +28,17 @@ const STEPS: Array<{
   {
     illustration: EmptyPlants,
     title: "You're in",
-    body: "Your household is set up. Let's spend 30 seconds on what makes this app different — then you can add your first plant.",
+    body: 'Your household is set up. Two things worth knowing before you add your first plant.',
   },
   {
     illustration: EmptyMembers,
     title: 'Plant care, shared',
-    body: "Add plants, schedule recurring tasks, and assign them. Whoever's around does the task and marks it done — everyone in the household sees it. No more 'I thought you watered it' arguments.",
+    body: "Add plants, schedule recurring tasks, and assign them. Whoever's around does the task and marks it done, and everyone in the household sees it. No more 'I thought you watered it' arguments.",
   },
   {
     illustration: EmptyActivity,
     title: 'Reminders that find you',
-    body: 'Pick how you want to be reminded — browser, email, or SMS — and we nudge whoever is assigned when something is due. Quiet hours and Do-Not-Disturb are respected. Settings any time, in Settings.',
+    body: 'Pick how you want to be reminded (browser, email, or SMS) and we nudge whoever is assigned when something is due. Quiet hours and Do-Not-Disturb are respected. Change it any time in Settings.',
   },
 ];
 

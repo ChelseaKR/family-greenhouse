@@ -48,7 +48,7 @@ export function PageHeader({
           <h1 className="font-serif text-3xl sm:text-4xl text-ink leading-tight tracking-tight">
             {title}
           </h1>
-          <TitleUnderline className="mt-1 ml-1 h-3 w-44 text-primary-600" />
+          <TitleUnderline className="mt-1 ml-1 h-3 w-28 sm:w-36 md:w-44 text-primary-600" />
           {description && (
             <p className="mt-3 text-sm sm:text-base text-gray-600 max-w-2xl">{description}</p>
           )}

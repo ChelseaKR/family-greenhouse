@@ -23,7 +23,7 @@ export function PricingGrid() {
           <span className="font-semibold">Beta:</span> {BETA_NOTICE}
         </div>
       )}
-      <div className="mx-auto mt-12 grid max-w-lg grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-3">
+      <div className="mx-auto mt-12 grid max-w-lg grid-cols-1 gap-8 md:max-w-none md:grid-cols-3 md:gap-6 lg:gap-8">
         {PRICING_PLANS.map((plan) => (
           <div
             key={plan.name}
