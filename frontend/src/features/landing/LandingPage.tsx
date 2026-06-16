@@ -1,13 +1,21 @@
 import { Link } from 'react-router-dom';
 import {
-  // Remaining Heroicons serve the AppMockup chrome only — the marketing
-  // feature grid uses the custom botanical icons below.
+  // The marketing feature grid uses the custom botanical icons below.
+  // These Heroicons serve the AppMockup chrome plus the secondary
+  // persona / "beyond the basics" bands, where a small line icon reads
+  // as a label rather than competing with the hand-drawn feature icons.
   UserGroupIcon,
   ChartBarIcon,
   CheckIcon,
   HomeIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
+  BriefcaseIcon,
+  SparklesIcon,
+  ChatBubbleLeftRightIcon,
+  CloudIcon,
+  CameraIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/Button';
 import { BrandMark } from '@/components/BrandMark';
@@ -124,6 +132,84 @@ const productFacts = [
 // Testimonials were removed outright (not just gated): the quotes were
 // invented, and invented praise has no place on the page. When real,
 // sourced quotes exist, reintroduce a section for them deliberately.
+
+// "Who it's for" on-ramp band. The hero sells the couple/roommate case
+// hard; these four cards let the other big personas the app actually
+// serves self-identify and jump to the part that's for them. Each claim
+// maps to a shipped feature: assign/claim + activity log; unlimited +
+// CSV import; vacation coverage; the care-guide library.
+const personas = [
+  {
+    icon: HouseholdSproutsIcon,
+    label: 'Sharing a place',
+    body: "A partner, roommates, a family — and no one's sure who watered what. Assign tasks or leave them up for grabs, and the activity log quietly keeps score.",
+    href: '#features',
+  },
+  {
+    icon: GrowthRingsIcon,
+    label: 'A growing collection',
+    body: 'Ten plants turned into forty. Go unlimited, import the spreadsheet you have been keeping, and let one dashboard hold every due date.',
+    href: '#pricing',
+  },
+  {
+    icon: BriefcaseIcon,
+    label: 'Away a lot',
+    body: "Gone for work or just the weekend. Set your dates and your tasks hand off to whoever's covering, marked so nothing quietly lapses.",
+    href: '#features',
+  },
+  {
+    icon: SparklesIcon,
+    label: 'New and a little nervous',
+    body: 'One sad succulent and a dented ego. Start with a plant that forgives you, lean on the care guides, and let the reminders do the remembering.',
+    href: '/care',
+  },
+];
+
+// "Beyond the basics" band. The feature grid covers the shared-schedule
+// core; these are the parts that show up once you have more than a
+// couple of plants, and the ones competitors mostly don't have. Paid
+// gates are stated plainly rather than hidden.
+const differentiators = [
+  {
+    icon: ChatBubbleLeftRightIcon,
+    label: 'Ask the care assistant',
+    body: 'Why are the leaves dropping? Ask in plain words and get an answer that can see your plants. Garden plan and up.',
+  },
+  {
+    icon: CloudIcon,
+    label: 'Weather-aware nudges',
+    body: 'Add your location and the app offers to skip a watering when rain or a cold snap is on the way.',
+  },
+  {
+    icon: CameraIcon,
+    label: 'Check a leaf from a photo',
+    body: 'Upload a struggling leaf and get a read on what might be going wrong. Garden plan and up.',
+  },
+  {
+    icon: PruneIcon,
+    label: 'Share a cutting',
+    body: 'Propagating? Track which plant came from which, and send a friend a link to the cutting you are passing on.',
+  },
+  {
+    icon: BellAlertIcon,
+    label: "Reminders where you'll see them",
+    body: 'Browser, email, or text. Pick the channel, set quiet hours, and both get respected.',
+  },
+  {
+    icon: ChartBarIcon,
+    label: 'A year, looked back on',
+    body: 'Come December, see what the household actually did: plants added, tasks finished, the whole season.',
+  },
+];
+
+// A few care guides to surface by name in the "before you buy" band.
+// Slugs match features/care/careGuides.ts.
+const featuredGuides = [
+  { slug: 'pothos', name: 'Pothos' },
+  { slug: 'snake-plant', name: 'Snake plant' },
+  { slug: 'spider-plant', name: 'Spider plant' },
+  { slug: 'monstera', name: 'Monstera' },
+];
 
 /**
  * Marketing-page mockup of the running app. Structure mirrors the live
@@ -546,6 +632,38 @@ export function LandingPage() {
         />
       </div>
 
+      {/* Who it's for — persona on-ramp. The facts band's bottom sprig
+          already straddles the green → parchment seam above. Each card
+          is a link into the part of the page (or the care guides) that
+          speaks to that persona. */}
+      <div className="py-20 sm:py-28 bg-parchment">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <SectionHeading
+            eyebrow="Who it's for"
+            title="However you ended up with plants"
+            description="The whole house arguing over the watering can is one story. Here are a few of the others."
+          />
+          <div className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-6 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-4">
+            {personas.map((persona) => (
+              <a
+                key={persona.label}
+                href={persona.href}
+                className="group flex flex-col rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 transition hover:ring-accent-300/70 hover:shadow-journal-hover"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-700 ring-1 ring-primary-200/60 transition group-hover:bg-accent-50 group-hover:text-accent-700 group-hover:ring-accent-200/60">
+                  <persona.icon className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="mt-4 font-serif text-lg text-ink">{persona.label}</span>
+                <span className="mt-2 text-sm leading-6 text-gray-700">{persona.body}</span>
+                <span className="mt-4 text-sm font-semibold text-primary-700 group-hover:text-accent-700">
+                  See how <span aria-hidden="true">→</span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Features Section */}
       <div id="features" className="py-20 sm:py-28 bg-paper">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -600,10 +718,41 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* How It Works Section — a sprig straddles the paper → parchment
-          seam, same pattern as the facts band but ink-tinted since both
-          surfaces are light. */}
+      {/* Beyond the basics — the differentiators that show up past a
+          couple of plants. A sprig straddles the paper → parchment seam.
+          Lighter weight than the feature grid: a small line icon + label
+          + one line, so it reads as "and also" rather than a second
+          headline act. */}
       <div className="py-20 sm:py-28 bg-parchment relative">
+        <SprigDivider
+          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
+          aria-hidden="true"
+        />
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <SectionHeading
+            eyebrow="Beyond the basics"
+            title="More than a reminder app"
+            description="The shared schedule is where it starts. These are the parts you grow into."
+          />
+          <dl className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-x-10 gap-y-8 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-3">
+            {differentiators.map((item) => (
+              <div key={item.label} className="flex gap-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 ring-1 ring-primary-200/60">
+                  <item.icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <dt className="font-semibold text-ink">{item.label}</dt>
+                  <dd className="mt-1 text-sm leading-6 text-gray-700">{item.body}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+
+      {/* How It Works Section — now on paper, between two parchment
+          bands; the sprig marks the seam. */}
+      <div className="py-20 sm:py-28 bg-paper relative">
         <SprigDivider
           className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
           aria-hidden="true"
@@ -648,9 +797,64 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Pricing Section — both sections sit on parchment, so the sprig
-          marks the transition the background no longer can. */}
-      <div id="pricing" className="py-20 sm:py-28 bg-parchment relative">
+      {/* Before you buy — the care-guide library doubles as a reason to
+          trust the app and a stop for pet owners and nervous beginners.
+          Two columns: the honest pitch, then a few guides by name. */}
+      <div className="py-20 sm:py-28 bg-parchment relative">
+        <SprigDivider
+          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
+          aria-hidden="true"
+        />
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
+                Before you buy
+              </p>
+              <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight">
+                Know what you&rsquo;re getting into
+              </h2>
+              <TitleUnderline className="mt-2 h-3 w-40 text-primary-600" />
+              <p className="mt-6 text-lg leading-8 text-gray-700">
+                The care guides are honest about the parts the plant-shop label skips: how often it
+                actually needs water, what the brown tips are telling you, and whether it&rsquo;s
+                safe around a cat or a curious toddler. Worth a read before the plant comes home.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 sm:p-8">
+              <h3 className="font-serif text-lg text-ink">Start with a guide</h3>
+              <ul className="mt-4 grid grid-cols-2 gap-3">
+                {featuredGuides.map((guide) => (
+                  <li key={guide.slug}>
+                    <Link
+                      to={`/care/${guide.slug}`}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink ring-1 ring-primary-100/70 transition hover:bg-primary-50 hover:ring-primary-200"
+                    >
+                      <CheckIcon className="h-4 w-4 shrink-0 text-primary-600" aria-hidden="true" />
+                      {guide.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+                <Link to="/care" className="text-primary-700 hover:underline">
+                  All care guides <span aria-hidden="true">→</span>
+                </Link>
+                <Link to="/blog" className="text-primary-700 hover:underline">
+                  Read the blog <span aria-hidden="true">→</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Pricing Section — now on paper after the parchment "before you
+          buy" band; the sprig marks the seam. The description frames the
+          tiers as a path (free → household → unlimited + API) so
+          collectors and power users see themselves, not just abstract
+          plan names. */}
+      <div id="pricing" className="py-20 sm:py-28 bg-paper relative">
         <SprigDivider
           className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
           aria-hidden="true"
@@ -659,7 +863,7 @@ export function LandingPage() {
           <SectionHeading
             eyebrow="Pricing"
             title="Plans for every greenhouse"
-            description="The free plan covers ten plants and one member. Paid plans add people and take off the plant cap."
+            description="Start free with ten plants and one keeper. Add the household on Garden, then go unlimited and open up the API on Greenhouse."
           />
           <PricingGrid />
           <p className="mt-12 text-center text-sm text-gray-700">
@@ -824,9 +1028,9 @@ interface SectionHeadingProps {
   description?: string;
 }
 
-/** Section title pattern shared by Features / How / Pricing /
- *  Testimonials. The Gloock title sits over a TitleUnderline to match
- *  the in-app `PageHeader` rhythm. */
+/** Section title pattern shared by the marketing sections (Who it's
+ *  for, Features, Beyond the basics, Setup, Pricing). The Gloock title
+ *  sits over a TitleUnderline to match the in-app `PageHeader` rhythm. */
 function SectionHeading({ eyebrow, title, description }: SectionHeadingProps) {
   return (
     <div className="mx-auto max-w-2xl text-center">
