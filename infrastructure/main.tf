@@ -105,6 +105,7 @@ module "api" {
   openweather_api_key        = var.openweather_api_key
   openweather_daily_budget   = var.openweather_daily_budget
   bedrock_embed_model_id     = var.bedrock_embed_model_id
+  identify_metering_enabled  = var.identify_metering_enabled
 }
 
 # Frontend module (S3 + CloudFront)

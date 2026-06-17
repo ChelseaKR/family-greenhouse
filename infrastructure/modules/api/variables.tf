@@ -137,6 +137,12 @@ variable "plant_id_api_key" {
   sensitive   = true
 }
 
+variable "identify_metering_enabled" {
+  description = "Set to '1' to ENFORCE the Plant.id identify monthly meter (blocks once a household exceeds its cap). Empty/'' only tracks usage without blocking (beta default). Production should set '1' so the per-call Plant.id credit can't be cost-amplified."
+  type        = string
+  default     = ""
+}
+
 variable "perenual_api_key_secret_id" {
   description = "Secrets Manager secret name (e.g. 'family-greenhouse/perenual-api-key') holding the Perenual API key. The Lambda fetches the value at cold start; the secret material never lands in Terraform state. Empty disables Perenual integration."
   type        = string

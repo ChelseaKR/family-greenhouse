@@ -288,6 +288,11 @@ locals {
     WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
     SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
     PLANT_ID_API_KEY           = var.plant_id_api_key
+    # Plant.id identify monthly meter. "1" enforces the per-household monthly
+    # cap (blocks once exceeded); unset/"" only tracks usage (beta default).
+    # Set to "1" in production so the real per-call Plant.id credit can't be
+    # cost-amplified by concurrency.
+    IDENTIFY_METERING_ENABLED = var.identify_metering_enabled
     # OpenWeather powers the climate/weather features. Without the key the
     # weather service short-circuits to null and those features silently
     # disable in prod — so it must be wired here, not left to drift.
@@ -320,6 +325,11 @@ resource "aws_lambda_function" "handlers" {
   # 90s leaves margin without unbounded; memory bump shortens cold starts.
   timeout     = each.key == "chat" ? 90 : 30
   memory_size = each.key == "chat" ? 512 : 256
+
+  # Cap chat concurrency to bound Bedrock spend + blast radius: a runaway
+  # chat loop can't drain the 1000-account concurrency pool and brown out the
+  # rest of the API. Other handlers stay unreserved (-1 = use the shared pool).
+  reserved_concurrent_executions = each.key == "chat" ? 15 : -1
 
   filename         = "${path.module}/placeholder.zip"
   source_code_hash = filebase64sha256("${path.module}/placeholder.zip")
@@ -385,6 +395,11 @@ resource "aws_lambda_function" "chat_stream" {
   # 5 Bedrock calls per turn at ~2-6s each.
   timeout     = 90
   memory_size = 512
+
+  # Same blast-radius/Bedrock-spend cap as the sync `chat` member of the fleet
+  # above: bound concurrent streaming turns so a runaway loop can't exhaust the
+  # account concurrency pool.
+  reserved_concurrent_executions = 15
 
   filename         = "${path.module}/placeholder.zip"
   source_code_hash = filebase64sha256("${path.module}/placeholder.zip")
