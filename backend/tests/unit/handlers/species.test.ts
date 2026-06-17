@@ -232,6 +232,86 @@ describe('species handler', () => {
     });
   });
 
+  describe('toxicity (public pet-safety lookup)', () => {
+    it('answers an anonymous query with cat/dog verdicts and a public cache header', async () => {
+      const { toxicity } = await import('../../../src/handlers/species/handler.js');
+      const res = (await toxicity(
+        buildAnonymousEvent({
+          path: '/species/toxicity',
+          pathParameters: null,
+          queryStringParameters: { q: 'snake plant' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers?.['Cache-Control']).toMatch(/public/);
+      const body = JSON.parse(res.body);
+      expect(body.results[0]).toMatchObject({
+        slug: 'snake-plant',
+        cats: 'toxic',
+        dogs: 'toxic',
+      });
+      expect(typeof body.results[0].note).toBe('string');
+    });
+
+    it('matches by scientific name and alias, not just common name', async () => {
+      const { toxicity } = await import('../../../src/handlers/species/handler.js');
+      const call = async (q: string) => {
+        const res = (await toxicity(
+          buildAnonymousEvent({ path: '/species/toxicity', queryStringParameters: { q } }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        return JSON.parse(res.body).results;
+      };
+      expect((await call('chlorophytum comosum'))[0].slug).toBe('spider-plant');
+      expect((await call('devils ivy'))[0].slug).toBe('pothos');
+    });
+
+    it('surfaces the safe verdict for a non-toxic plant', async () => {
+      const { toxicity } = await import('../../../src/handlers/species/handler.js');
+      const res = (await toxicity(
+        buildAnonymousEvent({
+          path: '/species/toxicity',
+          queryStringParameters: { q: 'spider plant' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      const body = JSON.parse(res.body);
+      expect(body.results[0]).toMatchObject({ cats: 'non-toxic', dogs: 'non-toxic' });
+    });
+
+    it('returns an empty result set (not an error) for a too-short or unknown query', async () => {
+      const { toxicity } = await import('../../../src/handlers/species/handler.js');
+      const call = async (q: string) => {
+        const res = (await toxicity(
+          buildAnonymousEvent({ path: '/species/toxicity', queryStringParameters: { q } }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        return JSON.parse(res.body).results;
+      };
+      expect(await call('a')).toEqual([]);
+      expect(await call('zzzznotaplant')).toEqual([]);
+    });
+
+    it('applies an IP rate limit (429 after 60 requests/min)', async () => {
+      const { toxicity } = await import('../../../src/handlers/species/handler.js');
+      const event = () =>
+        buildAnonymousEvent({ path: '/species/toxicity', queryStringParameters: { q: 'pothos' } });
+      for (let i = 0; i < 60; i++) {
+        const res = (await toxicity(event(), ctx, () => {})) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+      }
+      const res = (await toxicity(event(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(429);
+    });
+  });
+
   describe('rate limits on metered routes', () => {
     it('guide is capped at 10/min per user', async () => {
       const enrichment = await import('../../../src/services/enrichment.js');

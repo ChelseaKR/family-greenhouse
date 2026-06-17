@@ -619,7 +619,12 @@ locals {
 
     # --- species ---
     "GET /species/search" = { group = "species", auth = "jwt" }
-    "GET /species/{id}"   = { group = "species", auth = "jwt" }
+    # Public, no-auth pet-toxicity lookup behind the free "is this plant safe
+    # for pets?" page. Resolves a hand-curated static table (no Perenual call),
+    # serves no household data, and is cached publicly at the edge. Exact
+    # segment, so it wins over the {id} route below in HTTP API selection.
+    "GET /species/toxicity" = { group = "species", auth = "none" }
+    "GET /species/{id}"     = { group = "species", auth = "jwt" }
     # Thumbnail is fetched by <img> tags, which cannot attach an
     # Authorization header — behind the JWT authorizer every species image
     # 401s. Public by design: the handler only 302-redirects to an
