@@ -18,6 +18,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
+import { SitterLinksCard } from './SitterLinksCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -164,6 +165,10 @@ export function HouseholdPage() {
           )}
         </Card>
       )}
+
+      {/* Plant-sitter links — admin-only, like invites. A separate component
+          so the create/copy/revoke state stays self-contained. */}
+      {isAdmin && householdId && <SitterLinksCard householdId={householdId} />}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

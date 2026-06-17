@@ -89,4 +89,31 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
     await page.waitForLoadState('networkidle');
     await expectNoA11yViolations(page, 'pet-safe');
   });
+
+  test('plant-sitter page (with due tasks)', async ({ page }) => {
+    // The public sitter page fetches GET /sitter/{token}; stub it so the
+    // task-list state (the busiest layout) is what axe scans. No auth needed.
+    await page.route('**/sitter/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          label: 'The Smiths’ plants',
+          expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+          tasks: [
+            {
+              taskId: 't1',
+              plantName: 'Monstera',
+              taskType: 'water',
+              dueDate: new Date(Date.now() - 1000).toISOString(),
+              overdue: true,
+            },
+          ],
+        }),
+      })
+    );
+    await page.goto('/sit/' + 'a'.repeat(64));
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'sitter');
+  });
 });

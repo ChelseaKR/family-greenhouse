@@ -4,7 +4,8 @@ import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
-import { userRateLimit } from '../../middleware/rateLimit.js';
+import { userRateLimit, rateLimit } from '../../middleware/rateLimit.js';
+import * as sitterService from '../../services/sitterService.js';
 import {
   createTaskSchema,
   updateTaskSchema,
@@ -523,6 +524,116 @@ export const listVacations = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
+// ---------------------------------------------------------------------------
+// Plant-sitter public endpoints (auth=none)
+// ---------------------------------------------------------------------------
+//
+// These two routes are reachable WITHOUT a Cognito JWT — a plant sitter opens
+// a link the household member shared and never signs in. The token in the path
+// is the only credential. Security posture:
+//   - No authMiddleware: anonymous by design.
+//   - Hard IP-scoped rate limit (token guessing / scraping brake). The token
+//     is 256-bit so it isn't guessable, but the limiter caps probe volume.
+//   - sitterService.getActiveLink enforces existence + active + within the
+//     [startsAt, expiresAt] window on EVERY call, and is generic on failure so
+//     the endpoint isn't a token-existence oracle (single 404 for any miss).
+//   - The response exposes ONLY the PII-free SitterTask projection — no member
+//     names/emails, no other households, no full plant records, no notes.
+
+// GET /sitter/{token}
+//
+// Validate the token, then return the household's due/overdue tasks in the
+// minimal sitter shape. 404 for an invalid/expired/revoked token (generic —
+// no oracle). The optional `label` is a friendly, non-PII household nickname
+// the creator chose; absent → a generic greeting on the frontend.
+export const getSitterView = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const token = event.pathParameters?.token ?? '';
+    const link = await sitterService.getActiveLink(token);
+    if (!link) {
+      // Generic 404 for every failure mode (missing / expired / revoked /
+      // malformed) so a caller can't distinguish them and enumerate tokens.
+      throw createHttpError(404, 'This sitter link is invalid or has expired.');
+    }
+    const tasks = await taskService.getSitterTasks(link.householdId);
+    return successResponse({
+      label: link.label,
+      expiresAt: link.expiresAt,
+      tasks,
+    });
+  }
+  // No authMiddleware — anonymous sitter. 60/min per IP absorbs the
+  // page-load + a few completions while blunting token scraping.
+).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
+
+// POST /sitter/{token}/tasks/{taskId}/complete
+//
+// Complete a single task on behalf of the sitter. We re-validate the token
+// (it may have expired/been revoked since the page loaded) AND confirm the
+// task belongs to THIS token's household before touching it — a sitter can
+// never reach across households even if they forge a taskId. Attributed as
+// "a plant sitter" (no real user). Idempotent via taskService.completeTask.
+export const completeSitterTask = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const token = event.pathParameters?.token ?? '';
+    const taskId = event.pathParameters?.taskId ?? '';
+    if (!taskId) {
+      throw createHttpError(400, 'Task ID is required');
+    }
+
+    const link = await sitterService.getActiveLink(token);
+    if (!link) {
+      throw createHttpError(404, 'This sitter link is invalid or has expired.');
+    }
+
+    // Cross-household guard: the task MUST live in the token's household. We
+    // read it scoped to link.householdId, so a taskId from any other household
+    // simply isn't found here — there is no path to another partition.
+    const existing = await taskService.getTask(link.householdId, taskId);
+    if (!existing) {
+      throw createHttpError(404, 'Task not found');
+    }
+
+    // Synthetic, non-user actor. `completedByName` shows up in the activity
+    // feed / history exactly as the prompt asks ("a plant sitter"); actorId is
+    // a traceable, non-PII marker tying the action to the specific link.
+    const task = await taskService.completeTask(
+      link.householdId,
+      taskId,
+      `sitter:${link.id}`,
+      'a plant sitter'
+    );
+    if (!task) {
+      // Deleted between the read above and the write — treat as not found.
+      throw createHttpError(404, 'Task not found');
+    }
+
+    await recordActivity({
+      type: 'task.completed',
+      householdId: link.householdId,
+      actorId: `sitter:${link.id}`,
+      actorName: 'a plant sitter',
+      payload: {
+        taskId,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        viaSitter: true,
+      },
+    });
+
+    // Return only the PII-free shape — the sitter never sees the full Task.
+    return successResponse({
+      taskId: task.id,
+      plantName: task.plantName,
+      taskType: task.customType || task.type,
+      dueDate: task.nextDue,
+      overdue: false,
+    });
+  }
+  // Anonymous; tighter than the read (write side). 30/min per IP.
+).use(rateLimit({ perWindowMs: 60_000, max: 30 }));
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'GET /tasks': listTasks,
@@ -541,4 +652,6 @@ export const handler = createRouter({
   'PUT /tasks/vacation': setVacation,
   'DELETE /tasks/vacation/{userId}': deleteVacation,
   'GET /tasks/vacation': listVacations,
+  'GET /sitter/{token}': getSitterView,
+  'POST /sitter/{token}/tasks/{taskId}/complete': completeSitterTask,
 });
