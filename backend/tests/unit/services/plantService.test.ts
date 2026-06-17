@@ -4,19 +4,39 @@ const { s3Send } = vi.hoisted(() => ({ s3Send: vi.fn() }));
 
 // Mock AWS SDK
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  PutCommand: vi.fn((input) => ({ input, kind: 'Put' })),
-  GetCommand: vi.fn((input) => ({ input, kind: 'Get' })),
-  QueryCommand: vi.fn((input) => ({ input, kind: 'Query' })),
-  DeleteCommand: vi.fn((input) => ({ input, kind: 'Delete' })),
-  UpdateCommand: vi.fn((input) => ({ input, kind: 'Update' })),
-  BatchWriteCommand: vi.fn((input) => ({ input, kind: 'BatchWrite' })),
-  TransactWriteCommand: vi.fn((input) => ({ input, kind: 'TransactWrite' })),
+  PutCommand: vi.fn(function (input) {
+    return { input, kind: 'Put' };
+  }),
+  GetCommand: vi.fn(function (input) {
+    return { input, kind: 'Get' };
+  }),
+  QueryCommand: vi.fn(function (input) {
+    return { input, kind: 'Query' };
+  }),
+  DeleteCommand: vi.fn(function (input) {
+    return { input, kind: 'Delete' };
+  }),
+  UpdateCommand: vi.fn(function (input) {
+    return { input, kind: 'Update' };
+  }),
+  BatchWriteCommand: vi.fn(function (input) {
+    return { input, kind: 'BatchWrite' };
+  }),
+  TransactWriteCommand: vi.fn(function (input) {
+    return { input, kind: 'TransactWrite' };
+  }),
 }));
 
 vi.mock('@aws-sdk/client-s3', () => ({
-  S3Client: vi.fn(() => ({ send: s3Send })),
-  ListObjectsV2Command: vi.fn((input) => ({ input, kind: 'ListObjectsV2' })),
-  DeleteObjectsCommand: vi.fn((input) => ({ input, kind: 'DeleteObjects' })),
+  S3Client: vi.fn(function () {
+    return { send: s3Send };
+  }),
+  ListObjectsV2Command: vi.fn(function (input) {
+    return { input, kind: 'ListObjectsV2' };
+  }),
+  DeleteObjectsCommand: vi.fn(function (input) {
+    return { input, kind: 'DeleteObjects' };
+  }),
 }));
 
 vi.mock('../../../src/utils/dynamodb', () => ({

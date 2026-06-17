@@ -2,13 +2,27 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  PutCommand: vi.fn((input) => ({ input, kind: 'Put' })),
-  GetCommand: vi.fn((input) => ({ input, kind: 'Get' })),
-  QueryCommand: vi.fn((input) => ({ input, kind: 'Query' })),
-  DeleteCommand: vi.fn((input) => ({ input, kind: 'Delete' })),
-  UpdateCommand: vi.fn((input) => ({ input, kind: 'Update' })),
-  TransactWriteCommand: vi.fn((input) => ({ input, kind: 'TransactWrite' })),
-  BatchWriteCommand: vi.fn((input) => ({ input, kind: 'BatchWrite' })),
+  PutCommand: vi.fn(function (input) {
+    return { input, kind: 'Put' };
+  }),
+  GetCommand: vi.fn(function (input) {
+    return { input, kind: 'Get' };
+  }),
+  QueryCommand: vi.fn(function (input) {
+    return { input, kind: 'Query' };
+  }),
+  DeleteCommand: vi.fn(function (input) {
+    return { input, kind: 'Delete' };
+  }),
+  UpdateCommand: vi.fn(function (input) {
+    return { input, kind: 'Update' };
+  }),
+  TransactWriteCommand: vi.fn(function (input) {
+    return { input, kind: 'TransactWrite' };
+  }),
+  BatchWriteCommand: vi.fn(function (input) {
+    return { input, kind: 'BatchWrite' };
+  }),
 }));
 
 vi.mock('../../../src/utils/dynamodb.js', () => ({
