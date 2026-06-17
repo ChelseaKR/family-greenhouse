@@ -69,7 +69,7 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
    - Same for "Greenhouse" at $9.99.
 4. **Create a webhook**:
    - Developers → Webhooks → Add endpoint
-   - URL: `https://ux8jg1lns0.execute-api.us-east-1.amazonaws.com/production/billing/webhook`
+   - URL: `https://<api-id>.execute-api.us-east-1.amazonaws.com/production/billing/webhook`
    - Events to send: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
    - After creation, reveal + copy the **Signing secret** (`whsec_…`).
 5. **API key**: Developers → API keys → copy the **Secret key** (`sk_test_…` for test mode).

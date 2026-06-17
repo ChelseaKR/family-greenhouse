@@ -30,7 +30,7 @@ Save the output role ARN:
 
 ```bash
 terraform output -raw github_deploy_role_arn
-# -> arn:aws:iam::014248889144:role/family-greenhouse-github-deploy
+# -> arn:aws:iam::<AWS_ACCOUNT_ID>:role/family-greenhouse-github-deploy
 ```
 
 ## Step 3 — Configure GitHub repo secrets + vars
@@ -46,16 +46,16 @@ In **Settings → Secrets and variables → Actions**:
 
 ### Repository **variables**
 
-| Name                              | Value                                                               |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `PRODUCTION_API_URL`              | `https://ux8jg1lns0.execute-api.us-east-1.amazonaws.com/production` |
-| `PRODUCTION_URL`                  | `https://familygreenhouse.net`                                      |
-| `PRODUCTION_COGNITO_USER_POOL_ID` | `us-east-1_ByXmW6yOy`                                               |
-| `PRODUCTION_COGNITO_CLIENT_ID`    | `700a0dcq5cl94f4hhllmc1ib9d`                                        |
-| `STAGING_API_URL`                 | (defer until staging is provisioned)                                |
-| `STAGING_URL`                     | (defer)                                                             |
-| `STAGING_COGNITO_USER_POOL_ID`    | (defer)                                                             |
-| `STAGING_COGNITO_CLIENT_ID`       | (defer)                                                             |
+| Name                              | Value                                                             |
+| --------------------------------- | ----------------------------------------------------------------- |
+| `PRODUCTION_API_URL`              | `https://<api-id>.execute-api.us-east-1.amazonaws.com/production` |
+| `PRODUCTION_URL`                  | `https://familygreenhouse.net`                                    |
+| `PRODUCTION_COGNITO_USER_POOL_ID` | `us-east-1_XXXXXXXXX`                                             |
+| `PRODUCTION_COGNITO_CLIENT_ID`    | `<cognito-client-id>`                                             |
+| `STAGING_API_URL`                 | (defer until staging is provisioned)                              |
+| `STAGING_URL`                     | (defer)                                                           |
+| `STAGING_COGNITO_USER_POOL_ID`    | (defer)                                                           |
+| `STAGING_COGNITO_CLIENT_ID`       | (defer)                                                           |
 
 The current values can also be re-pulled at any time with `terraform -chdir=infrastructure output`.
 

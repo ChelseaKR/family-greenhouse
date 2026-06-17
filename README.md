@@ -85,10 +85,6 @@ Types we use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore
 
 ## License
 
-Private. All rights reserved.
-
-## License
-
 [Elastic License 2.0](LICENSE) — the source is free to read, run, modify, and
 self-host for your own household. What it doesn't allow is offering Family
 Greenhouse (or a substantial copy of it) to others as a hosted/managed

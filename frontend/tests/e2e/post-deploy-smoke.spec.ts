@@ -10,8 +10,8 @@
  * Usage:
  *
  *   E2E_BASE_URL=https://familygreenhouse.net \
- *   E2E_USER_POOL_ID=us-east-1_ByXmW6yOy \
- *   E2E_USER_POOL_CLIENT_ID=700a0dcq5cl94f4hhllmc1ib9d \
+ *   E2E_USER_POOL_ID=us-east-1_XXXXXXXXX \
+ *   E2E_USER_POOL_CLIENT_ID=<cognito-client-id> \
  *   AWS_REGION=us-east-1 \
  *     npx playwright test post-deploy-smoke --config tests/e2e/playwright.smoke.config.ts
  *
