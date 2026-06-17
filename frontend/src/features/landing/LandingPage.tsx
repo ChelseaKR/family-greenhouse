@@ -224,9 +224,10 @@ const featuredGuides = [
  *    grid), a paper-variant Tasks card with botanical task-type icons,
  *    and an Activity card with avatar initials.
  *
- * The illustrative data is fixed (Sarah / Mike / Emma, a few plants);
- * this is a marketing mock, not a live screenshot. Names and counts
- * aren't claims — they're representative content.
+ * The illustrative data is fixed (Joyce / Briki / Steve / Kaitlin /
+ * Chelsea, a few plants); this is a marketing mock, not a live
+ * screenshot. Names and counts aren't claims — they're representative
+ * content.
  */
 function AppMockup({ className }: { className?: string }) {
   const navItems = [
@@ -249,9 +250,11 @@ function AppMockup({ className }: { className?: string }) {
   ];
 
   const activity = [
-    { name: 'Sarah', action: 'watered', target: 'Fiddle leaf fig', when: '2h ago' },
-    { name: 'Mike', action: 'added', target: 'Pothos', when: '5h ago' },
-    { name: 'Emma', action: 'completed 3 tasks', target: '', when: 'Yesterday' },
+    { name: 'Joyce', action: 'watered', target: 'Fiddle leaf fig', when: '2h ago' },
+    { name: 'Briki', action: 'added', target: 'Pothos', when: '5h ago' },
+    { name: 'Steve', action: 'repotted', target: 'Snake plant', when: 'Yesterday' },
+    { name: 'Kaitlin', action: 'completed 3 tasks', target: '', when: 'Yesterday' },
+    { name: 'Chelsea', action: 'pruned', target: 'Monstera', when: '2 days ago' },
   ];
 
   const taskIcons = { water: WaterDropIcon, fertilize: FertilizeIcon, prune: PruneIcon };
