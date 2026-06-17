@@ -21,6 +21,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://app.familygreenhouse.com/pet-safe</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://app.familygreenhouse.com/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
@@ -65,6 +70,18 @@
     <lastmod>2026-05-28</lastmod>
   </url>
   <url>
+    <loc>https://app.familygreenhouse.com/blog/pet-safe-houseplants-that-are-hard-to-kill</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-15</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/blog/most-common-toxic-houseplants-and-safer-swaps</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-16</lastmod>
+  </url>
+  <url>
     <loc>https://app.familygreenhouse.com/care/pothos</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -87,5 +104,41 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-12</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/peace-lily</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-17</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/heartleaf-philodendron</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-17</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/zz-plant</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-17</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/aloe-vera</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-17</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/dieffenbachia</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-17</lastmod>
+  </url>
+  <url>
+    <loc>https://app.familygreenhouse.com/care/calathea</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-17</lastmod>
   </url>
 </urlset>

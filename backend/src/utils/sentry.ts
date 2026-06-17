@@ -30,7 +30,7 @@ export function initSentry(): Promise<SentryModule | null> {
           tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? '0.1'),
           release: process.env.GIT_SHA,
         });
-        return Sentry as SentryModule;
+        return Sentry;
       })
       .catch((err) => {
         // Sentry being unavailable must never take the function down.

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader } from '@/components/Card';
 import { householdService } from '@/services/householdService';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 
 const TYPE_LABELS: Record<string, string> = {
   water: 'Watering',
@@ -21,14 +21,15 @@ const TYPE_LABELS: Record<string, string> = {
  * than show empty bars.
  */
 export function YearInReviewCard() {
-  const householdId = useActiveHouseholdId();
+  const { householdQuery } = useActiveHousehold();
   const year = new Date().getFullYear();
 
-  const { data: review } = useQuery({
-    queryKey: ['household', householdId, 'year-in-review', year],
-    queryFn: () => householdService.getYearInReview(householdId!, year),
-    enabled: !!householdId,
-  });
+  const { data: review } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'year-in-review', year],
+      (hh) => householdService.getYearInReview(hh, year)
+    )
+  );
 
   if (!review || review.totalCompletions === 0) return null;
 

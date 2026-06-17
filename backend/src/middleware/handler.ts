@@ -40,6 +40,9 @@ function jsonErrorHandler(): middy.MiddlewareObj<unknown, unknown> {
   const onError: middy.MiddlewareFn<unknown, unknown> = (request) => {
     // Another onError middleware already produced a response — leave it.
     if (request.response !== undefined && request.response !== null) return;
+    // The assertion narrows `request.error` (typed `Error | null | undefined`
+    // by middy) to expose the optional http-errors fields we read below;
+    // dropping it loses those properties and trips no-unsafe-member-access.
     const err = request.error as
       | (Error & { statusCode?: unknown; expose?: unknown; details?: unknown })
       | null;

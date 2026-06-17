@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -31,11 +31,20 @@ export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { setUser, setTokens } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+  // An explicit ?redirect= (e.g. from a shared cutting card) wins, then the
+  // ProtectedRoute's saved location, then the dashboard. Only same-origin
+  // app paths are honored — guard against open-redirects.
+  const redirectParam = searchParams.get('redirect');
+  const safeRedirect = redirectParam?.startsWith('/') && !redirectParam.startsWith('//');
+  const from =
+    (safeRedirect ? redirectParam : null) ??
+    (location.state as { from?: { pathname: string } })?.from?.pathname ??
+    '/dashboard';
   const loginSchema = useMemo(() => makeLoginSchema(t), [t]);
 
   const {

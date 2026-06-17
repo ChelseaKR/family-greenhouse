@@ -83,4 +83,63 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
     await page.waitForLoadState('networkidle');
     await expectNoA11yViolations(page, 'forgot-password');
   });
+
+  test('pet-safe checker page', async ({ page }) => {
+    await page.goto('/pet-safe');
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'pet-safe');
+  });
+
+  test('shared cutting card (public graft landing)', async ({ page }) => {
+    // The public cutting card fetches GET /plants/shared/{code}; stub it so
+    // axe scans the populated card (photo placeholder, provenance, graft CTA).
+    // No auth needed — this is the share-worthy face of the viral loop.
+    await page.route('**/plants/shared/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          plant: {
+            name: 'Mother Monstera',
+            species: 'Monstera deliciosa',
+            notes: 'East window, water weekly.',
+            imageUrl: null,
+            tags: ['tropical', 'easy'],
+          },
+          householdName: 'The Smiths',
+          expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        }),
+      })
+    );
+    await page.goto('/shared/' + 'a'.repeat(32));
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'shared-cutting');
+  });
+
+  test('plant-sitter page (with due tasks)', async ({ page }) => {
+    // The public sitter page fetches GET /sitter/{token}; stub it so the
+    // task-list state (the busiest layout) is what axe scans. No auth needed.
+    await page.route('**/sitter/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          label: 'The Smiths’ plants',
+          expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+          tasks: [
+            {
+              taskId: 't1',
+              plantName: 'Monstera',
+              taskType: 'water',
+              dueDate: new Date(Date.now() - 1000).toISOString(),
+              overdue: true,
+            },
+          ],
+        }),
+      })
+    );
+    await page.goto('/sit/' + 'a'.repeat(64));
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'sitter');
+  });
 });

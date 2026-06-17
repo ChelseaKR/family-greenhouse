@@ -329,6 +329,9 @@ async function* turnEvents(
       }
       yield { type: 'tool_start', name: use.name };
       try {
+        // Deliberate `as never` dispatch cast — Claude's JSON-schema validation
+        // is the source of truth for each tool's input shape (see tools.ts).
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         const out = await tool.execute(use.input as never, {
           userId,
           householdId,

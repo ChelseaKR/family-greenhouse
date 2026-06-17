@@ -316,6 +316,10 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_description   = "Lambda function ${each.value} errors exceeded threshold"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
+  # A function with no invocations in the window has no error data; treat that
+  # as healthy (OK) rather than INSUFFICIENT_DATA so a quiet low-traffic
+  # function reads green and a real error still trips the alarm.
+  treat_missing_data = "notBreaching"
 
   dimensions = {
     FunctionName = each.value
@@ -341,6 +345,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
   threshold         = length(regexall("-chat-", each.value)) > 0 ? 60000 : 10000
   alarm_description = "Lambda function ${each.value} duration exceeded threshold"
   alarm_actions     = [aws_sns_topic.alerts.arn]
+  # No invocations = no duration data; quiet reads OK, not INSUFFICIENT_DATA.
+  treat_missing_data = "notBreaching"
 
   dimensions = {
     FunctionName = each.value
@@ -365,6 +371,8 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttle" {
   alarm_description   = "DynamoDB read throttling — capacity issue or hot partition"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
+  # No throttle events published = not throttling = OK, not INSUFFICIENT_DATA.
+  treat_missing_data = "notBreaching"
 
   dimensions = {
     TableName = var.dynamodb_table_name
@@ -387,6 +395,8 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
   alarm_description   = "API Gateway 5XX errors exceeded threshold"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
+  # No 5XX metric published in a quiet window = no server errors = OK.
+  treat_missing_data = "notBreaching"
 
   dimensions = {
     ApiId = var.api_gateway_name

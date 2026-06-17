@@ -4,8 +4,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // client at module scope).
 const bedrockSend = vi.hoisted(() => vi.fn());
 vi.mock('@aws-sdk/client-bedrock-runtime', () => ({
-  BedrockRuntimeClient: vi.fn(() => ({ send: bedrockSend })),
-  InvokeModelCommand: vi.fn((input: unknown) => ({ input })),
+  BedrockRuntimeClient: vi.fn(function () {
+    return { send: bedrockSend };
+  }),
+  InvokeModelCommand: vi.fn(function (input: unknown) {
+    return { input };
+  }),
 }));
 vi.mock('aws-xray-sdk-core', () => ({
   default: { captureAWSv3Client: (client: unknown) => client },

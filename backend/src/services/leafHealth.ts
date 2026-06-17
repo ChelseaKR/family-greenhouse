@@ -236,7 +236,7 @@ export async function assessLeafHealth(image: string): Promise<LeafHealthAssessm
       return DEMO_ASSESSMENT;
     }
     if ((err as Error).name === 'AbortError') {
-      throw new Error(`Bedrock timed out after ${TIMEOUT_MS}ms`);
+      throw new Error(`Bedrock timed out after ${TIMEOUT_MS}ms`, { cause: err });
     }
     throw err;
   } finally {

@@ -286,6 +286,366 @@ export const CARE_GUIDES: CareGuide[] = [
       },
     ],
   },
+  {
+    slug: 'peace-lily',
+    commonName: 'Peace Lily',
+    scientificName: 'Spathiphyllum',
+    alsoKnownAs: ['Spath', 'Closet Plant', 'White Sail Plant'],
+    metaTitle: 'Peace Lily Care: How Often to Water + Are They Toxic?',
+    metaDescription:
+      'How often to water a peace lily, the light it actually wants, why the leaves droop or brown, and whether it’s safe around cats and dogs.',
+    reviewed: '2026-06-17',
+    summary:
+      'The peace lily is the rare plant that tells you out loud when it’s thirsty — it wilts dramatically, then springs back within hours of a drink. That theatrical droop makes it one of the easiest plants to read, and one of the most over-watered when people panic at the first sad leaf.',
+    quickFacts: {
+      water: 'About once a week, when the top inch of soil is dry; it wilts to warn you',
+      light: 'Medium to bright, indirect light; tolerates low light but flowers less',
+      difficulty: 'Easy',
+      toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals)',
+      humidity: 'Likes higher humidity; brown tips in very dry rooms',
+    },
+    sections: {
+      watering: [
+        'Water a peace lily about once a week, when the top inch of soil has dried. Its party trick is the wilt: when it’s genuinely thirsty the whole plant droops and looks half-dead, then recovers within a few hours of watering. That makes it easy to read — but don’t use the droop as your only signal, because repeated dramatic wilts stress the plant over time.',
+        'It drinks less in winter and in lower light, so check the soil rather than counting days. The plant prefers steady, lightly moist soil to a hard drought-then-flood cycle, but it will not forgive sitting in a saucer of water — that’s root rot, the one thing it doesn’t bounce back from.',
+      ],
+      light: [
+        'Medium to bright, indirect light is the sweet spot. The peace lily earns its reputation as a low-light plant because it survives a dim corner, but “survives” and “flowers” are different things: in low light it stays green and healthy but rarely produces the white blooms people buy it for.',
+        'Keep it out of direct sun, which scorches the broad leaves into brown patches. A few feet back from a bright window, or beside a north or east one, gives you the best shot at flowers without burning the foliage.',
+      ],
+      problems: [
+        'Drooping leaves are usually just thirst — water it and watch it recover. If it droops even when the soil is wet, that’s the opposite problem: overwatering and the start of root rot. Check the soil before you reach for the watering can, because the same wilt has two opposite causes.',
+        'Brown leaf tips point to dry air, or to fluoride and salts in tap water. Peace lilies are sensitive to both; switching to filtered or distilled water and nudging up the humidity usually settles it. Snip the brown off at an angle — it won’t turn green again.',
+        'No flowers is almost always a light problem. A peace lily in a dark corner stays leafy and never blooms. Move it somewhere brighter (still indirect) and the white spathes tend to follow.',
+      ],
+      sharedCare: [
+        'The peace lily is a gift in a shared home because it asks for help in a language everyone understands: when it needs water, it flops. Anyone walking past can see it and act, which is more than you can say for the plants that look fine right up until they’re dead.',
+        'The trap is the same droop working against you. If three people each see the wilt and each water it, the plant gets watered three times and rots. So the rule is one waterer, or a shared note of who did it last — let the plant’s honesty work for you instead of triggering a pile-on. (Family Greenhouse logs who watered and when, but a sticky note on the pot does the same job.)',
+      ],
+      honestBit: [
+        'My take: the name does this plant a disservice. People hear “lily,” assume it’s the cat-killer their vet warned them about, and either avoid it or panic. It isn’t a true lily at all — it won’t cause the kidney failure that real lilies (Lilium) do. It’s toxic in the ordinary mouth-irritation way, which is worth knowing but isn’t the emergency the name implies.',
+        'If you want to be sure about any plant before it comes home to a pet, run it through the free pet-safe checker at /pet-safe first — two seconds, no signup, and it spells out cats versus dogs rather than a vague “toxic.”',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a peace lily?',
+        a: 'About once a week, when the top inch of soil is dry — and it’ll wilt dramatically to tell you when it’s thirsty, recovering within hours of a drink. Less in winter and low light. Don’t let it sit in standing water, which causes root rot.',
+      },
+      {
+        q: 'Why is my peace lily drooping?',
+        a: 'Usually thirst — water it and it perks up within hours. But if it droops while the soil is still wet, that’s overwatering and early root rot. Always check the soil first, because the same droop has two opposite causes.',
+      },
+      {
+        q: 'Are peace lilies toxic to cats and dogs?',
+        a: 'Yes. Peace lilies contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth and throat irritation, drooling, and trouble swallowing. Despite the name it is NOT a true lily, so it won’t cause the kidney failure real lilies do — but keep it away from pets. You can confirm any plant at the free checker at /pet-safe.',
+      },
+      {
+        q: 'Why won’t my peace lily flower?',
+        a: 'Almost always not enough light. Peace lilies survive low light but only bloom in medium to bright, indirect light. Move it brighter (out of direct sun) and the white flowers usually follow.',
+      },
+    ],
+  },
+  {
+    slug: 'heartleaf-philodendron',
+    commonName: 'Heartleaf Philodendron',
+    scientificName: 'Philodendron hederaceum',
+    alsoKnownAs: ['Sweetheart Plant', 'Philodendron', 'Philodendron scandens'],
+    metaTitle: 'Heartleaf Philodendron Care: Watering, Light + Toxicity',
+    metaDescription:
+      'How often to water a heartleaf philodendron, the light it likes, why the leaves yellow or go leggy, and whether it’s safe around pets.',
+    reviewed: '2026-06-17',
+    summary:
+      'The heartleaf philodendron is the plant people confuse with pothos, and for good reason — same trailing habit, same near-indestructible temperament, same forgiving nature. It’s one of the genuinely easy ones, and a great vine for a beginner who wants something prettier than they had to work for.',
+    quickFacts: {
+      water: 'Every 7–10 days, when the top inch of soil is dry',
+      light: 'Bright, indirect light; tolerates lower light (grows slower)',
+      difficulty: 'Very easy',
+      toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals)',
+      humidity: 'Average household humidity is fine; enjoys a little more',
+    },
+    sections: {
+      watering: [
+        'Water a heartleaf philodendron every 7–10 days, when the top inch of soil has dried. Like pothos, it would rather be a touch dry than soggy, so the soil — not the calendar — makes the call: finger in, water thoroughly if the top inch is dry, wait if it’s still damp.',
+        'It drinks less in winter and in lower light; stretch toward every two weeks then. The one reliable way to kill it is a pot that never drains, so when you’re unsure, give it another day rather than another splash.',
+      ],
+      light: [
+        'Bright, indirect light keeps it full and fast-growing, with leaves close together along the vine. It tolerates lower light better than most plants — that’s why it ends up on shelves and in bathrooms — but it grows slower and leggier there.',
+        'Keep it out of harsh direct sun, which scorches the thin leaves. If the vine gets sparse with long gaps between leaves, that’s a light signal: move it brighter and the new growth tightens up.',
+      ],
+      problems: [
+        'Yellow leaves are usually overwatering, the same story as most trailing plants. Let the soil dry between waterings and confirm the pot drains. A single old leaf yellowing low on the vine is normal ageing, not a problem.',
+        'Brown, crispy tips point the other way — too dry, or very dry air. A miss here and there is fine; consistent crisping means it’s getting too thirsty or the room is parched.',
+        'Long, bare, leggy vines mean it’s reaching for light. Move it brighter, and pinch the growing tips to push it to branch and fill out rather than race for the window.',
+      ],
+      sharedCare: [
+        'The heartleaf philodendron has the same shared-home trap as pothos: it’s so easy that everyone assumes someone else is handling it, and it limps along on neglect until it doesn’t. The failure mode isn’t a difficult plant — it’s “I thought you watered it.”',
+        'The fix is unglamorous and reliable: one named owner, or an out-loud agreement about who waters on which day. The cuttings root in a glass of water in a week or two, so it’s also a great plant to split between housemates — everyone gets a start, everyone has a reason to keep theirs alive. (Family Greenhouse can track whose vine each cutting becomes, but a labelled jar works too.)',
+      ],
+      honestBit: [
+        'My take: if you already have a pothos and want a second easy vine that looks a bit more refined, this is the one to get — the heart-shaped leaves are softer and tidier, and it’s every bit as forgiving. Don’t agonise over telling them apart; care for them identically and both will thrive.',
+        'It is, however, toxic to cats and dogs if chewed — the whole philodendron genus carries calcium oxalate crystals. A trailing vine is exactly the kind of dangling temptation a cat bats at, so hang it high. If you’re weighing it against a pet-safe pick, the free checker at /pet-safe gives you the cats-versus-dogs answer in a couple of seconds.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a heartleaf philodendron?',
+        a: 'Every 7–10 days, when the top inch of soil is dry. Less in winter or lower light (toward every two weeks). It prefers slightly dry over soggy, so when in doubt, wait a day and make sure the pot drains.',
+      },
+      {
+        q: 'What’s the difference between a philodendron and a pothos?',
+        a: 'They look alike and are cared for identically. Heartleaf philodendron leaves are thinner, softer, and a deeper matte green with a more pointed heart shape; pothos leaves are thicker, glossier, and often variegated. For watering and light, treat them the same.',
+      },
+      {
+        q: 'Is a heartleaf philodendron toxic to cats and dogs?',
+        a: 'Yes. Philodendrons contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth irritation, drooling, and vomiting. It’s a trailing vine that pets bat at, so hang it out of reach. Check any plant at the free pet-safe tool at /pet-safe.',
+      },
+      {
+        q: 'Why is my philodendron getting leggy?',
+        a: 'Long, bare vines with big gaps between leaves mean it’s reaching for light. Move it somewhere brighter (still indirect) and pinch the growing tips to encourage it to branch and fill out.',
+      },
+    ],
+  },
+  {
+    slug: 'zz-plant',
+    commonName: 'ZZ Plant',
+    scientificName: 'Zamioculcas zamiifolia',
+    alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'ZZ'],
+    metaTitle: 'ZZ Plant Care: How Often to Water (Almost Never)',
+    metaDescription:
+      'How often to water a ZZ plant, the light it tolerates, why the stems go yellow or mushy, and whether it’s safe around cats and dogs.',
+    reviewed: '2026-06-17',
+    summary:
+      'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
+    quickFacts: {
+      water: 'Every 2–3 weeks; let the soil dry out completely first',
+      light: 'Low to bright, indirect light — tolerates almost anything',
+      difficulty: 'Very easy — famously hard to kill',
+      toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals)',
+      humidity: 'Dry household air is perfectly fine',
+    },
+    sections: {
+      watering: [
+        'Water a ZZ plant every 2–3 weeks, and only once the soil has dried out completely — all the way down, not just the surface. Those potato-like rhizomes under the soil are water tanks, so the plant runs happily on its reserves between drinks. Topping up a full tank is how you rot it.',
+        'In winter, drop to roughly once a month. The single most useful habit with a ZZ is doing nothing: if you’re not sure whether it needs water, it almost certainly doesn’t. When in genuine doubt, wait another week.',
+      ],
+      light: [
+        'ZZ plants tolerate a huge range of light, from a dim office corner to a bright indirect window. That adaptability is why they end up in lobbies and windowless bathrooms where nothing else survives. Brighter (indirect) light just makes them grow faster and fuller.',
+        'The one thing to avoid is harsh, direct, all-day sun through glass, which can scorch the glossy leaves. Other than that, put it where you want it and it’ll cope.',
+      ],
+      problems: [
+        'Yellowing stems and leaves, especially with a soft mushy base, mean overwatering and rhizome rot — the one genuine way to kill a ZZ. Stop watering, let it dry out hard, and check the rhizomes are firm rather than soft. Caught early, it often recovers.',
+        'Wrinkled stems or curling leaflets are the rare opposite: it’s actually thirsty, which takes real neglect to achieve. A proper soak fixes it within a day or two.',
+        'A few yellow lower leaves on an otherwise firm plant are usually just normal ageing. It’s the soft, mushy, spreading kind of yellowing you watch for, not the occasional dropped leaf.',
+      ],
+      sharedCare: [
+        'The ZZ’s superpower — needing almost nothing — is also its shared-home trap. Two people who each “just topped it up” twice a month have, between them, watered a drought plant four times, and a ZZ killed by enthusiasm is far more common than one killed by neglect.',
+        'So the rule here is the opposite of fussier plants: agree that one person waters it, and everyone else keeps their watering can away. Less coordination, not more — the coordination you want is simply “hands off, it’s fine.”',
+      ],
+      honestBit: [
+        'My take: the ZZ’s “toxic” reputation is overblown in one direction and underplayed in another. It won’t poison your pet from across the room — the danger is only if a pet actually chews it, and then it’s the ordinary mouth-irritation kind, not an emergency. But the sap can also irritate human skin, so wash your hands after pruning or repotting it.',
+        'If you’re choosing a near-indestructible plant for a home with curious pets, weigh it against something genuinely pet-safe rather than just hardy. The free checker at /pet-safe lays out the cats-versus-dogs verdict for the ZZ and its safer alternatives in a couple of seconds.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a ZZ plant?',
+        a: 'Every 2–3 weeks, and only once the soil is completely dry — drop to about once a month in winter. Its rhizomes store water, so it tolerates drought far better than overwatering. When unsure, wait; overwatering is the main way ZZ plants die.',
+      },
+      {
+        q: 'Why is my ZZ plant turning yellow?',
+        a: 'Soft, mushy yellowing at the base is overwatering and rhizome rot — the main ZZ killer. Stop watering, let it dry out fully, and check the rhizomes are firm. A few yellow lower leaves on an otherwise healthy plant are just normal ageing.',
+      },
+      {
+        q: 'Is a ZZ plant toxic to cats and dogs?',
+        a: 'Yes. ZZ plants contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth irritation, drooling, and vomiting. Its reputation overstates the danger — a nibble means an unhappy pet, not an emergency — but the sap can irritate skin too, so wash your hands after handling. Confirm any plant at the free tool at /pet-safe.',
+      },
+      {
+        q: 'Can a ZZ plant survive in low light?',
+        a: 'Yes — it’s one of the most light-tolerant houseplants there is, surviving dim offices and windowless rooms. It grows faster and fuller in bright, indirect light, but low light just slows it down rather than harming it.',
+      },
+    ],
+  },
+  {
+    slug: 'aloe-vera',
+    commonName: 'Aloe Vera',
+    scientificName: 'Aloe vera',
+    alsoKnownAs: ['Medicine Plant', 'Burn Plant', 'Aloe'],
+    metaTitle: 'Aloe Vera Care: How Often to Water + Is It Pet-Safe?',
+    metaDescription:
+      'How often to water an aloe vera, the light it needs, why it goes mushy or brown, and whether the plant is safe around cats and dogs.',
+    reviewed: '2026-06-17',
+    summary:
+      'Aloe vera is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
+    quickFacts: {
+      water: 'Every 2–3 weeks; soak fully, then let the soil dry out completely',
+      light: 'Bright light, including some direct sun',
+      difficulty: 'Easy, if you under-water it',
+      toxicity: 'Toxic to cats and dogs if eaten (the leaf, not the inner gel)',
+      humidity: 'Dry household air is ideal — it hates damp',
+    },
+    sections: {
+      watering: [
+        'Water an aloe every 2–3 weeks: soak the soil thoroughly so it runs out the bottom, then leave it completely alone until the soil is bone dry all the way down. This “drench and dry” rhythm mimics the desert downpours it evolved for, and it’s the whole secret to a happy aloe.',
+        'In winter, back right off — once a month or even less. Aloe stores water in those plump leaves, so a missed watering is a non-event; a too-frequent one is fatal. Plant it in gritty, fast-draining cactus mix, never ordinary potting soil that stays soggy.',
+      ],
+      light: [
+        'Aloe wants the brightest spot you’ve got — a sunny south or west window is ideal, and it’ll take a few hours of direct sun happily once it’s used to it. In a dim corner it stretches, pales, and flops, with leaves splaying outward instead of standing up.',
+        'If you move it from indoors into strong outdoor sun suddenly, it can sunburn (brown or reddish patches). Step it up gradually over a week or two. Indoors, a bright windowsill is hard to beat.',
+      ],
+      problems: [
+        'Mushy, translucent, or brown leaves at the base mean overwatering and rot — by far the most common way aloe dies. Stop watering, let it dry out hard, and repot into gritty mix if the soil stays wet. Soft leaves are almost never thirst.',
+        'Thin, curled, or puckered leaves are the genuine thirst signal, and it takes real neglect to get there. A proper soak plumps them back up within a few days.',
+        'Pale, stretched, flopping growth means not enough light. Aloe leaves should be firm and upright; when they splay out and lean, move it to your sunniest window.',
+      ],
+      sharedCare: [
+        'Aloe is a classic “killed by teamwork” plant in a shared home. Because it needs watering so rarely, two well-meaning people each giving it an occasional drink adds up to a soggy, rotting succulent. The plant that asks for almost nothing gets too much from too many hands.',
+        'The fix is to make “leave it alone” the explicit plan: one person waters it, on a long interval, and everyone else admires it from a distance with the watering can elsewhere. For a plant this drought-loving, good shared care mostly means agreeing not to help.',
+      ],
+      honestBit: [
+        'My take: keep one in the kitchen — snapping off a leaf for the cool gel inside really does take the sting out of a minor burn, and that’s a genuinely useful plant to have within reach. Just don’t over-love it; the number-one cause of a dead aloe is a watering schedule meant for a fern.',
+        'Worth being clear on the pet question, because the “medicine plant” reputation misleads people: the soothing gel is fine, but the leaf’s outer layer contains compounds that are toxic to cats and dogs if eaten, causing vomiting and lethargy. Keep the plant itself out of reach. The free pet-safe checker at /pet-safe spells out the cats-versus-dogs verdict if you want to double-check.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an aloe vera?',
+        a: 'Every 2–3 weeks: soak it thoroughly, then let the soil dry out completely before the next drink. Once a month or less in winter. Plant it in gritty, fast-draining cactus mix — overwatering is the main way aloe dies.',
+      },
+      {
+        q: 'Why is my aloe vera going mushy or brown?',
+        a: 'Mushy, translucent leaves mean overwatering and rot — the most common aloe problem. Stop watering, let it dry out fully, and repot into gritty mix if the soil stays soggy. Brown sunburn patches, by contrast, come from sudden strong direct sun.',
+      },
+      {
+        q: 'Is aloe vera toxic to cats and dogs?',
+        a: 'Yes — the plant is toxic to cats and dogs if eaten. The clear inner gel is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy, and diarrhoea. Keep the plant out of reach even though aloe gel is a human first-aid staple. Check any plant at the free tool at /pet-safe.',
+      },
+      {
+        q: 'Why is my aloe vera flopping over?',
+        a: 'Pale, stretched, splaying leaves mean too little light. Aloe wants a bright, sunny window; in a dim spot it stretches and flops. Move it to your sunniest spot and new growth comes in firm and upright.',
+      },
+    ],
+  },
+  {
+    slug: 'dieffenbachia',
+    commonName: 'Dieffenbachia',
+    scientificName: 'Dieffenbachia',
+    alsoKnownAs: ['Dumb Cane', 'Leopard Lily'],
+    metaTitle: 'Dieffenbachia (Dumb Cane) Care: Watering, Light + Toxicity',
+    metaDescription:
+      'How often to water a dieffenbachia, the light it likes, why the leaves yellow or brown, and why it’s one to keep away from pets and kids.',
+    reviewed: '2026-06-17',
+    summary:
+      'Dieffenbachia gives you big, splashy, tropical leaves for not much effort — a lot of visual payoff for an easy plant. The catch is in the old name, dumb cane: its sap is among the harsher of the common houseplants, so it’s a striking plant that comes with a real keep-out-of-reach asterisk.',
+    quickFacts: {
+      water: 'Every 7–10 days, when the top inch of soil is dry',
+      light: 'Bright, indirect light; tolerates medium light',
+      difficulty: 'Easy to moderate',
+      toxicity: 'Toxic to cats, dogs, and people if chewed (calcium oxalate crystals)',
+      humidity: 'Prefers higher humidity; browns at the edges in dry rooms',
+    },
+    sections: {
+      watering: [
+        'Water a dieffenbachia every 7–10 days, when the top inch of soil has dried. It likes its soil lightly and evenly moist — not bone-dry like a succulent, not waterlogged like a swamp. Water thoroughly until it drains, then let the top inch dry before the next round.',
+        'It drinks less in winter and in lower light, so let the soil guide you rather than the calendar. The usual killer is overwatering: soggy soil rots the thick stem from the base up, and a rotted dieffenbachia is hard to bring back.',
+      ],
+      light: [
+        'Bright, indirect light keeps the leaf markings bold and the plant compact. It tolerates medium light but grows leggier and paler there, leaning toward the window. Direct sun scorches the big soft leaves into bleached or brown patches, so keep it back from a hot windowsill.',
+        'If it’s stretching and the lower leaves are dropping, that’s usually a reach for light — move it brighter (still indirect) and rotate it now and then so it grows evenly rather than leaning.',
+      ],
+      problems: [
+        'Yellow lower leaves usually mean overwatering; let the soil dry more between drinks and confirm the pot drains. A soft, mushy, darkening stem base is stem rot — the serious version of the same problem, and a reason to cut back hard on water immediately.',
+        'Brown, crispy leaf edges point to dry air, underwatering, or cold drafts. Dieffenbachia likes a bit more humidity than the average room and dislikes sitting near a cold window or an air-conditioning vent.',
+        'Drooping that doesn’t recover after watering, especially with a soft base, is stem rot rather than thirst. Caught early, you can sometimes save the plant by cutting above the rot and re-rooting a healthy section of cane.',
+      ],
+      sharedCare: [
+        'In a shared home, dieffenbachia’s steady, even-moisture preference makes a shared schedule worthwhile — it doesn’t wilt theatrically like a peace lily, so it can quietly drift into too-dry or too-wet without anyone clocking it until the leaves complain. Agree who checks the soil and when, so it isn’t silently relying on four people who each assume someone else did it.',
+        'The bigger shared-home point with this one is placement, not watering. Its sap is genuinely irritating, so in a house with pets or small children the right move is to put it somewhere nobody chews or grabs it — high shelf, out of reach — and make that a deliberate, agreed decision rather than wherever it happened to land.',
+      ],
+      honestBit: [
+        'My take: this is a beautiful plant I’d happily recommend to a household with no pets and no toddlers, and one I’d steer clear of for anyone with either. The “dumb cane” name is a blunt warning — chewing the cane can numb and swell the mouth and throat badly enough to affect speech and, in bad cases, breathing. That’s a step beyond the mild mouth-irritation most houseplants cause.',
+        'If you’re not sure a plant is right for your home, that’s exactly what the free pet-safe checker at /pet-safe is for — it gives you a plain cats-versus-dogs verdict in a couple of seconds, and points you to genuinely safe alternatives if dieffenbachia is the wrong fit.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a dieffenbachia?',
+        a: 'Every 7–10 days, when the top inch of soil is dry. It likes lightly, evenly moist soil — not bone-dry, not soggy. Less in winter and lower light. Overwatering rots the stem base, so let the top inch dry between waterings and make sure the pot drains.',
+      },
+      {
+        q: 'Why are my dieffenbachia leaves turning yellow?',
+        a: 'Usually overwatering — yellow lower leaves with a soft, mushy stem base mean stem rot. Cut back on water and check drainage. Brown crispy edges, by contrast, point to dry air, underwatering, or cold drafts.',
+      },
+      {
+        q: 'Is dieffenbachia toxic to cats, dogs, and people?',
+        a: 'Yes — it’s toxic to cats, dogs, and humans if chewed. The calcium oxalate crystals are among the harsher of the common houseplants, causing intense mouth and throat pain, drooling, and sometimes enough swelling to affect breathing (hence the old name “dumb cane”). Keep it firmly out of reach of pets and children. Check any plant at the free tool at /pet-safe.',
+      },
+      {
+        q: 'Why is my dieffenbachia leggy and leaning?',
+        a: 'It’s reaching for light. Move it to a brighter (still indirect) spot and rotate the pot regularly so it grows evenly. Dropping lower leaves while stretching is the same light signal.',
+      },
+    ],
+  },
+  {
+    slug: 'calathea',
+    commonName: 'Calathea',
+    scientificName: 'Goeppertia (formerly Calathea)',
+    alsoKnownAs: ['Prayer Plant', 'Rattlesnake Plant', 'Peacock Plant', 'Goeppertia'],
+    metaTitle: 'Calathea Care: How Often to Water + Are They Pet-Safe?',
+    metaDescription:
+      'How often to water a calathea, the humidity and water quality it demands, why the leaves curl or crisp, and why it’s a pet-safe choice.',
+    reviewed: '2026-06-17',
+    summary:
+      'Calatheas have the most beautiful foliage of any common houseplant and the shortest temper. The trade-off is honest: stunning patterned leaves that fold up at night like praying hands, in exchange for fussiness about water, humidity, and what comes out of your tap. The pay-off, if you want it, is real.',
+    quickFacts: {
+      water: 'Keep lightly, evenly moist; water when the top half-inch is dry',
+      light: 'Medium, indirect light; never direct sun',
+      difficulty: 'Moderate to fussy',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'High humidity is essential; dry air crisps the edges fast',
+    },
+    sections: {
+      watering: [
+        'Calatheas want their soil kept lightly and evenly moist — not soggy, not dried out. Water when the top half-inch is dry, which usually lands somewhere around every 5–7 days, more often in summer and warmth. Unlike most plants on this site, you can’t just let it dry out hard between drinks; a full dry-out browns the edges and the leaves curl in protest.',
+        'The catch is water quality. Calatheas are notably sensitive to the fluoride, chlorine, and salts in tap water, which show up as brown leaf edges. Filtered, distilled, or rainwater makes a real difference — for this plant it’s not fussiness, it’s the single biggest fix for the most common complaint.',
+      ],
+      light: [
+        'Medium, indirect light is the sweet spot. Calatheas grow on the shaded forest floor, so direct sun is actively harmful — it bleaches the patterns and scorches the leaves, washing out the very colours you bought it for. An east window, or a few feet back from a brighter one, suits them.',
+        'Too little light, though, and the markings fade and the plant sulks. Bright but indirect, with no direct beam ever hitting the leaves, keeps the patterns vivid. The nightly leaf-folding (the “prayer plant” move) is normal and a good sign the plant is happy.',
+      ],
+      problems: [
+        'Brown, crispy leaf edges are the signature calathea complaint, and the usual culprits are dry air and tap water. Raise the humidity and switch to filtered or distilled water; existing brown edges won’t turn green again, so trim them and judge by the new growth.',
+        'Curling leaves that don’t unfurl by day mean it’s too dry — either thirsty soil or parched air. A good drink and more humidity usually relax them. (A gentle nightly curl that opens each morning, by contrast, is just the plant’s normal rhythm.)',
+        'Yellowing leaves point to overwatering or soggy soil — the line between “evenly moist” and “waterlogged” is narrow with calatheas. Make sure the pot drains and the soil isn’t staying wet for days.',
+      ],
+      sharedCare: [
+        'Calathea is the high-maintenance member of a shared collection, so it benefits most from one clear owner rather than a committee. Its needs are specific — filtered water, steady moisture, real humidity — and they’re easy to get wrong when several people each do their own version of “looking after it.”',
+        'If you do share it, the thing to write down isn’t just when it was watered but how: filtered water, not tap. A grouping with other plants, or a spot in a naturally humid room like a bright bathroom, does a lot of the humidity work for you and takes some pressure off the schedule. (Family Greenhouse can hold those care notes against the plant so they don’t live only in one person’s head.)',
+      ],
+      honestBit: [
+        'My take: the good news that makes calathea worth the trouble — it’s genuinely pet-safe. The ASPCA lists calatheas as non-toxic to both cats and dogs, which is rare for a plant this showy. If you’ve got a leaf-chewing cat and you’re tired of hanging everything out of reach, a calathea is one of the few statement plants you can put at floor level without worry.',
+        'So the honest pitch is this: calathea asks more of you than almost anything else here, but it pays you back with both the best foliage and a clean bill of health for your pets. If pet safety is the deciding factor, the free checker at /pet-safe confirms it — and lists other safe choices if you’d rather start with something more forgiving.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a calathea?',
+        a: 'Keep the soil lightly and evenly moist — water when the top half-inch is dry, usually every 5–7 days. Don’t let it dry out hard like a succulent, and don’t leave it soggy. Use filtered, distilled, or rainwater, since calatheas are sensitive to tap-water chemicals.',
+      },
+      {
+        q: 'Why are my calathea’s leaves turning brown and crispy at the edges?',
+        a: 'The two usual causes are dry air and minerals (fluoride, chlorine, salts) in tap water. Raise the humidity and switch to filtered or distilled water. Existing brown edges won’t recover — trim them and watch the new growth come in clean.',
+      },
+      {
+        q: 'Are calatheas toxic to cats and dogs?',
+        a: 'No — calatheas are non-toxic to both cats and dogs per the ASPCA, making them one of the few genuinely pet-safe statement plants. A big mouthful might cause a mild upset like any plant, but there’s nothing poisonous in it. You can confirm this and find other safe plants at the free tool at /pet-safe.',
+      },
+      {
+        q: 'Why are my calathea leaves curling?',
+        a: 'Curling that doesn’t open by day means it’s too dry — thirsty soil or parched air. Water it and raise the humidity. A gentle nightly curl that opens each morning is normal: it’s the “prayer plant” rhythm and a sign the plant is healthy.',
+      },
+    ],
+  },
 ];
 
 export function findCareGuide(slug: string): CareGuide | undefined {

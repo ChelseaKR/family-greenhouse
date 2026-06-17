@@ -21,10 +21,18 @@ vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
 }));
 vi.mock('@aws-sdk/client-s3', () => ({
-  PutObjectCommand: vi.fn((input) => ({ input })),
-  HeadObjectCommand: vi.fn((input) => ({ __type: 'Head', input })),
-  DeleteObjectCommand: vi.fn((input) => ({ __type: 'Delete', input })),
-  S3Client: vi.fn(() => ({})),
+  PutObjectCommand: vi.fn(function (input) {
+    return { input };
+  }),
+  HeadObjectCommand: vi.fn(function (input) {
+    return { __type: 'Head', input };
+  }),
+  DeleteObjectCommand: vi.fn(function (input) {
+    return { __type: 'Delete', input };
+  }),
+  S3Client: vi.fn(function () {
+    return {};
+  }),
 }));
 vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: vi.fn(async () => 'https://upload.example.test/signed'),

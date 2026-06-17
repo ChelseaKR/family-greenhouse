@@ -578,6 +578,14 @@ locals {
     "PUT /tasks/vacation"             = { group = "tasks", auth = "jwt" }
     "DELETE /tasks/vacation/{userId}" = { group = "tasks", auth = "jwt" }
 
+    # Plant-sitter PUBLIC endpoints (auth=none). A no-account sitter opens a
+    # time-boxed link; the 256-bit token in the path is the only credential.
+    # The handlers validate the token (existence + active + window) on every
+    # call, expose only a PII-free due-task projection, and are IP-rate-limited.
+    # Served by the tasks group (it owns task listing + completion).
+    "GET /sitter/{token}"                          = { group = "tasks", auth = "none" }
+    "POST /sitter/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+
     # --- households (invite preview is public) ---
     "POST /households"                                    = { group = "households", auth = "jwt" }
     "GET /households/{id}"                                = { group = "households", auth = "jwt" }
@@ -589,6 +597,11 @@ locals {
     "GET /households/{id}/year-in-review"                 = { group = "households", auth = "jwt" }
     "PUT /households/{householdId}/members/{userId}/role" = { group = "households", auth = "jwt" }
     "DELETE /households/{householdId}/members/{userId}"   = { group = "households", auth = "jwt" }
+    # Sitter-link management (authed, admin-gated). Create returns the token
+    # once; list/revoke never expose it. The public sitter routes are above.
+    "POST /households/{id}/sitter-links"            = { group = "households", auth = "jwt" }
+    "GET /households/{id}/sitter-links"             = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/sitter-links/{linkId}" = { group = "households", auth = "jwt" }
 
     # --- me ---
     "DELETE /me"           = { group = "me", auth = "jwt" }
@@ -619,7 +632,12 @@ locals {
 
     # --- species ---
     "GET /species/search" = { group = "species", auth = "jwt" }
-    "GET /species/{id}"   = { group = "species", auth = "jwt" }
+    # Public, no-auth pet-toxicity lookup behind the free "is this plant safe
+    # for pets?" page. Resolves a hand-curated static table (no Perenual call),
+    # serves no household data, and is cached publicly at the edge. Exact
+    # segment, so it wins over the {id} route below in HTTP API selection.
+    "GET /species/toxicity" = { group = "species", auth = "none" }
+    "GET /species/{id}"     = { group = "species", auth = "jwt" }
     # Thumbnail is fetched by <img> tags, which cannot attach an
     # Authorization header — behind the JWT authorizer every species image
     # 401s. Public by design: the handler only 302-redirects to an

@@ -2,9 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../../src/services/perenual.js');
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  GetCommand: vi.fn((input: unknown) => ({ input, kind: 'Get' })),
-  PutCommand: vi.fn((input: unknown) => ({ input, kind: 'Put' })),
-  UpdateCommand: vi.fn((input: unknown) => ({ input, kind: 'Update' })),
+  GetCommand: vi.fn(function (input: unknown) {
+    return { input, kind: 'Get' };
+  }),
+  PutCommand: vi.fn(function (input: unknown) {
+    return { input, kind: 'Put' };
+  }),
+  UpdateCommand: vi.fn(function (input: unknown) {
+    return { input, kind: 'Update' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },

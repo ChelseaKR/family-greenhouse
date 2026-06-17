@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Card } from '@/components/Card';
 import { climateService } from '@/services/climateService';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { EmptyClimate } from '@/components/illustrations/EmptyClimate';
 
 /**
@@ -22,14 +22,15 @@ import { EmptyClimate } from '@/components/illustrations/EmptyClimate';
  * their saved city isn't doing anything yet.
  */
 export function ClimateCard() {
-  const householdId = useActiveHouseholdId();
+  const { householdId, householdQuery } = useActiveHousehold();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['household', householdId, 'climate'],
-    queryFn: () => climateService.getClimate(householdId!),
-    enabled: !!householdId,
-    staleTime: 30 * 60 * 1000,
-  });
+  const { data, isLoading } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'climate'],
+      (hh) => climateService.getClimate(hh),
+      { staleTime: 30 * 60 * 1000 }
+    )
+  );
 
   if (!householdId || isLoading) return null;
   if (!data) return null;

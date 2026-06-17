@@ -7,9 +7,15 @@ import type { ToolDefinition } from '../../../src/services/chat/types.js';
 // re-read env at module load, which re-runs mock factories — a non-hoisted
 // vi.fn would give each re-import a fresh instance and lose mock.calls.
 const bedrockSend = vi.hoisted(() => vi.fn());
-const invokeModelCommandMock = vi.hoisted(() => vi.fn((input: unknown) => ({ input })));
+const invokeModelCommandMock = vi.hoisted(() =>
+  vi.fn(function (input: unknown) {
+    return { input };
+  })
+);
 vi.mock('@aws-sdk/client-bedrock-runtime', () => ({
-  BedrockRuntimeClient: vi.fn(() => ({ send: bedrockSend })),
+  BedrockRuntimeClient: vi.fn(function () {
+    return { send: bedrockSend };
+  }),
   InvokeModelCommand: invokeModelCommandMock,
 }));
 vi.mock('aws-xray-sdk-core', () => ({

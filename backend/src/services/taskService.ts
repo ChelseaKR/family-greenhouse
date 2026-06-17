@@ -220,6 +220,55 @@ export async function getTasks(
   return annotateTasksWithCoverage(tasks, await getActiveVacationMap(householdId));
 }
 
+/**
+ * The minimal, PII-free task shape a plant-sitter sees. Deliberately NOT the
+ * full Task: no assignee names/ids, no createdBy, no notes (notes can contain
+ * household-private context), no householdId. Just enough to do the job:
+ * which plant, what to do, when it's due.
+ */
+export interface SitterTask {
+  taskId: string;
+  plantName: string;
+  taskType: string;
+  dueDate: string;
+  /** True when dueDate is in the past — drives the "overdue" badge. */
+  overdue: boolean;
+}
+
+/**
+ * Due/overdue tasks for the plant-sitter view, projected to the PII-free
+ * SitterTask shape. "Due" means due within the next `dueWithinDays` days OR
+ * already overdue — the sitter should see everything that needs doing during
+ * their window, not just strictly-overdue items. Tasks for died/gave_away
+ * plants are filtered out (getTasks already does this). The returned objects
+ * expose ONLY plant common name, task type, due date, and id — see SitterTask.
+ */
+export async function getSitterTasks(
+  householdId: string,
+  now: Date = new Date(),
+  dueWithinDays = 7
+): Promise<SitterTask[]> {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + dueWithinDays);
+  const cutoffIso = cutoff.toISOString();
+  const nowIso = now.toISOString();
+
+  // getTasks already lifecycle-filters (active plants only) and returns the
+  // denormalized plantName + customType we need — reuse it rather than
+  // re-deriving the projection.
+  const tasks = await getTasks(householdId);
+  return tasks
+    .filter((t) => t.nextDue <= cutoffIso)
+    .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
+    .map((t) => ({
+      taskId: t.id,
+      plantName: t.plantName,
+      taskType: t.customType || t.type,
+      dueDate: t.nextDue,
+      overdue: t.nextDue < nowIso,
+    }));
+}
+
 export async function getUpcomingTasks(householdId: string): Promise<TaskWithCoverage[]> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + 7);

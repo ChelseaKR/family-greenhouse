@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SharedPlantPage } from '@/features/plants/SharedPlantPage';
 import { plantService } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
+import { getPendingShareCode } from '@/features/plants/pendingShareCode';
 
 vi.mock('@/services/plantService', () => ({
   plantService: {
@@ -25,6 +27,12 @@ const PREVIEW = {
   expiresAt: '2099-01-01T00:00:00.000Z',
 };
 
+// Surfaces the current pathname so we can assert post-CTA navigation.
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname + location.search}</div>;
+}
+
 function renderPage(code = 'abc123') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -32,8 +40,10 @@ function renderPage(code = 'abc123') {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/shared/${code}`]}>
+        <LocationProbe />
         <Routes>
           <Route path="/shared/:code" element={<SharedPlantPage />} />
+          <Route path="/register" element={<div>register page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -43,26 +53,50 @@ function renderPage(code = 'abc123') {
 describe('SharedPlantPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
+    useAuthStore.setState({ isAuthenticated: false, user: null } as never);
   });
 
-  it('shows the shared plant card with a sign-in CTA when logged out', async () => {
+  it('renders a share-worthy cutting card leading with the plant + provenance', async () => {
     vi.mocked(plantService.getSharedPlant).mockResolvedValueOnce(PREVIEW);
     renderPage();
 
-    expect(await screen.findByText('Mother Monstera')).toBeInTheDocument();
+    // The plant name leads, as the page heading.
+    expect(
+      await screen.findByRole('heading', { name: 'Mother Monstera', level: 1 })
+    ).toBeInTheDocument();
     expect(screen.getByText('Monstera deliciosa')).toBeInTheDocument();
+    // PII-safe provenance: the household DISPLAY name, never an email.
+    expect(screen.getByText('Grown by The Kelly House, passed on to you.')).toBeInTheDocument();
     expect(screen.getByText('East window, water weekly')).toBeInTheDocument();
     expect(screen.getByText('tropical')).toBeInTheDocument();
-    expect(screen.getByText('Shared by The Kelly House')).toBeInTheDocument();
+    // Never leaks anything email-shaped.
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument();
+  });
 
-    // Logged out (default test auth state): CTA to sign in / register, no
-    // accept button.
-    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
-      'href',
-      '/login?redirect=/shared/abc123'
-    );
-    expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add to my greenhouse' })).not.toBeInTheDocument();
+  it('sets dynamic OG meta tags for JS-capable scrapers, falling back to the branded image', async () => {
+    vi.mocked(plantService.getSharedPlant).mockResolvedValueOnce(PREVIEW);
+    renderPage();
+
+    await screen.findByRole('heading', { name: 'Mother Monstera', level: 1 });
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    expect(ogTitle?.getAttribute('content')).toContain('Mother Monstera');
+    // No public photo on this preview → branded static fallback.
+    expect(ogImage?.getAttribute('content')).toBe('/brand/og-image.png');
+  });
+
+  it('graft CTA stashes the share code and routes a logged-out visitor into signup', async () => {
+    vi.mocked(plantService.getSharedPlant).mockResolvedValueOnce(PREVIEW);
+    renderPage('graft-me');
+
+    const cta = await screen.findByRole('button', { name: /grow your own cutting/i });
+    await userEvent.click(cta);
+
+    // Share code is carried across the signup hops, and we land in register.
+    expect(getPendingShareCode()).toBe('graft-me');
+    expect(screen.getByTestId('location').textContent).toBe('/register?redirect=/shared/graft-me');
   });
 
   it('offers "Add to my greenhouse" when signed in with a household', async () => {
@@ -79,9 +113,13 @@ describe('SharedPlantPage', () => {
     });
     renderPage();
 
-    expect(await screen.findByText('Mother Monstera')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Mother Monstera', level: 1 })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add to my greenhouse' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /grow your own cutting/i })
+    ).not.toBeInTheDocument();
   });
 
   it('shows the invalid/expired state on a 404', async () => {

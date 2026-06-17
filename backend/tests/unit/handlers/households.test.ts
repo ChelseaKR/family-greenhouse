@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/householdService.js');
+vi.mock('../../../src/services/welcomeEmail.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/cognitoUsers.js');
@@ -121,6 +122,93 @@ describe('households handler', () => {
       'a@b.com'
     );
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-1', 'hh-new', 'admin');
+  });
+
+  it('createHousehold sends exactly one welcome email on the genuine first household', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const welcomeEmail = await import('../../../src/services/welcomeEmail.js');
+    const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+    vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+      id: 'hh-new',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'user-1',
+    });
+    vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+    vi.mocked(welcomeEmail.sendWelcomeEmail).mockResolvedValueOnce(true);
+    // No `custom:household_id` claim ⇒ this is the user's first household.
+    const event = buildEvent(
+      { sub: 'user-1', email: 'a@b.com' },
+      {
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Home' }),
+        headers: { 'content-type': 'application/json' },
+      }
+    );
+    const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(201);
+    expect(welcomeEmail.sendWelcomeEmail).toHaveBeenCalledTimes(1);
+    expect(welcomeEmail.sendWelcomeEmail).toHaveBeenCalledWith(
+      'user-1',
+      'a@b.com',
+      'Alice',
+      'https://test.familygreenhouse.net'
+    );
+  });
+
+  it('createHousehold does NOT welcome again when the user already has a household', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const welcomeEmail = await import('../../../src/services/welcomeEmail.js');
+    const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+    vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+      id: 'hh-second',
+      name: 'Vacation',
+      createdAt: '',
+      createdBy: 'user-1',
+    });
+    // adminClaims carries an existing household_id ⇒ "add another household".
+    const event = buildEvent(adminClaims, {
+      httpMethod: 'POST',
+      body: JSON.stringify({ name: 'Vacation' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(201);
+    expect(welcomeEmail.sendWelcomeEmail).not.toHaveBeenCalled();
+  });
+
+  it('createHousehold still succeeds (non-blocking) when the welcome email fails', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const welcomeEmail = await import('../../../src/services/welcomeEmail.js');
+    const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+    vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+      id: 'hh-new',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'user-1',
+    });
+    vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+    // Simulate the worst case: the welcome send rejects. Onboarding must not
+    // observe it — the handler fires it without awaiting and the service
+    // swallows its own errors, so the 201 still comes back.
+    vi.mocked(welcomeEmail.sendWelcomeEmail).mockRejectedValueOnce(new Error('SES down'));
+    const event = buildEvent(
+      { sub: 'user-1', email: 'a@b.com' },
+      {
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Home' }),
+        headers: { 'content-type': 'application/json' },
+      }
+    );
+    const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(201);
+    expect(welcomeEmail.sendWelcomeEmail).toHaveBeenCalledTimes(1);
   });
 
   it('getHousehold rejects cross-household access', async () => {

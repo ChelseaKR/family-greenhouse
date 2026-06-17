@@ -16,6 +16,7 @@ import { Input } from '@/components/Input';
 import { Card } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { getPendingShareCode, clearPendingShareCode } from '@/features/plants/pendingShareCode';
 
 type OnboardingStep = 'choice' | 'create' | 'join';
 
@@ -78,7 +79,16 @@ export function HouseholdOnboarding() {
             // fall through — the 401-refresh interceptor will catch up.
           }
         }
-        navigate('/');
+        // If this signup began on a shared cutting card, bring the new member
+        // back to it so they can graft it into the household they just made —
+        // the lineage continues across people. Otherwise land on home.
+        const pendingShareCode = getPendingShareCode();
+        if (pendingShareCode) {
+          clearPendingShareCode();
+          navigate(`/shared/${pendingShareCode}`);
+        } else {
+          navigate('/');
+        }
       }
     },
     onError: (err) => {

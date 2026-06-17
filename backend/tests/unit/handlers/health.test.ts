@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  GetCommand: vi.fn((input) => ({ input, kind: 'Get' })),
+  GetCommand: vi.fn(function (input) {
+    return { input, kind: 'Get' };
+  }),
 }));
 
 vi.mock('../../../src/utils/dynamodb.js', () => ({

@@ -36,6 +36,30 @@ export interface JoinHouseholdData {
   inviteCode: string;
 }
 
+/** The non-secret view of a sitter link (list/management). No token. */
+export interface SitterLinkSummary {
+  id: string;
+  householdId: string;
+  createdBy: string;
+  createdAt: string;
+  startsAt: string;
+  expiresAt: string;
+  status: 'active' | 'revoked';
+  label: string | null;
+}
+
+/** The create response — the ONLY time the token + URL are exposed. */
+export interface CreatedSitterLink extends SitterLinkSummary {
+  token: string;
+  url: string;
+}
+
+export interface CreateSitterLinkData {
+  expiresAt: string;
+  startsAt?: string;
+  label?: string;
+}
+
 export const householdService = {
   async getHousehold(id: string): Promise<HouseholdWithMembers> {
     const response = await api.get<HouseholdWithMembers>(`/households/${id}`);
@@ -84,6 +108,26 @@ export const householdService = {
       { role }
     );
     return response.data;
+  },
+
+  async createSitterLink(
+    householdId: string,
+    data: CreateSitterLinkData
+  ): Promise<CreatedSitterLink> {
+    const response = await api.post<CreatedSitterLink>(
+      `/households/${householdId}/sitter-links`,
+      data
+    );
+    return response.data;
+  },
+
+  async listSitterLinks(householdId: string): Promise<SitterLinkSummary[]> {
+    const response = await api.get<SitterLinkSummary[]>(`/households/${householdId}/sitter-links`);
+    return response.data;
+  },
+
+  async revokeSitterLink(householdId: string, linkId: string): Promise<void> {
+    await api.delete(`/households/${householdId}/sitter-links/${linkId}`);
   },
 
   async getActivity(householdId: string, limit = 50): Promise<ActivityEvent[]> {

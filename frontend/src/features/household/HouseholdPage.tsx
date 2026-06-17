@@ -15,16 +15,17 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
+import { SitterLinksCard } from './SitterLinksCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
   const user = useAuthStore((state) => state.user);
   // Operate on the ACTIVE household (multi-household users can switch);
   // user.householdId is only the Cognito-claim default.
-  const householdId = useActiveHouseholdId();
+  const { householdId, householdQuery } = useActiveHousehold();
   const queryClient = useQueryClient();
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -34,11 +35,12 @@ export function HouseholdPage() {
     data: household,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: ['household', householdId],
-    queryFn: () => householdService.getHousehold(householdId!),
-    enabled: !!householdId,
-  });
+  } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh],
+      (hh) => householdService.getHousehold(hh)
+    )
+  );
 
   const createInviteMutation = useMutation({
     mutationFn: () => householdService.createInvite(householdId!),
@@ -164,6 +166,10 @@ export function HouseholdPage() {
           )}
         </Card>
       )}
+
+      {/* Plant-sitter links — admin-only, like invites. A separate component
+          so the create/copy/revoke state stays self-contained. */}
+      {isAdmin && householdId && <SitterLinksCard householdId={householdId} />}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

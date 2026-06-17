@@ -2,10 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  PutCommand: vi.fn((input) => ({ input, kind: 'Put' })),
-  GetCommand: vi.fn((input) => ({ input, kind: 'Get' })),
-  DeleteCommand: vi.fn((input) => ({ input, kind: 'Delete' })),
-  QueryCommand: vi.fn((input) => ({ input, kind: 'Query' })),
+  PutCommand: vi.fn(function (input) {
+    return { input, kind: 'Put' };
+  }),
+  GetCommand: vi.fn(function (input) {
+    return { input, kind: 'Get' };
+  }),
+  DeleteCommand: vi.fn(function (input) {
+    return { input, kind: 'Delete' };
+  }),
+  QueryCommand: vi.fn(function (input) {
+    return { input, kind: 'Query' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },

@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const snsSendMock = vi.fn();
 vi.mock('@aws-sdk/client-sns', () => ({
-  SNSClient: vi.fn(() => ({ send: snsSendMock })),
-  PublishCommand: vi.fn((input) => ({ input, kind: 'Publish' })),
+  SNSClient: vi.fn(function () {
+    return { send: snsSendMock };
+  }),
+  PublishCommand: vi.fn(function (input) {
+    return { input, kind: 'Publish' };
+  }),
 }));
 
 const ORIGINAL = process.env;

@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@aws-sdk/client-cognito-identity-provider', () => ({
-  CognitoIdentityProviderClient: vi.fn(() => ({})),
-  AdminUpdateUserAttributesCommand: vi.fn((input) => ({ input, kind: 'Update' })),
-  AdminGetUserCommand: vi.fn((input) => ({ input, kind: 'Get' })),
+  CognitoIdentityProviderClient: vi.fn(function () {
+    return {};
+  }),
+  AdminUpdateUserAttributesCommand: vi.fn(function (input) {
+    return { input, kind: 'Update' };
+  }),
+  AdminGetUserCommand: vi.fn(function (input) {
+    return { input, kind: 'Get' };
+  }),
 }));
 
 vi.mock('../../../src/utils/cognito.js', () => ({

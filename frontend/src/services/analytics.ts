@@ -97,8 +97,10 @@ export type EventName =
   | 'leaf_health_checked' // Leaf-health photo submitted for a visual assessment.
   | 'plant_shared' // Cutting-share link minted for a plant card.
   | 'plant_share_accepted' // A shared cutting card was copied into a household.
+  | 'cutting_graft_started' // Visitor tapped the graft CTA on a public cutting card.
   | 'household_switched' // User changed active household via the switcher.
-  | 'climate_location_set';
+  | 'climate_location_set'
+  | 'experiment_viewed'; // A bucketed A/B variant was rendered to the visitor.
 
 export interface EventProps {
   /** Plan identifier when the event is plan-relevant. */
@@ -113,10 +115,34 @@ export interface EventProps {
   upgradeTo?: 'garden' | 'greenhouse';
   /** Free-form context only when it's an enum or a count, never a name. */
   context?: string;
+  /** For `experiment_viewed` — which experiment and assigned variant. */
+  experiment?: string;
+  variant?: 'A' | 'B';
 }
 
 /** Ambient distinct id — set by `identify`, cleared by `reset`. */
 let distinctId: string | null = null;
+
+/**
+ * Super-properties: a small bag of enum-like values merged onto every
+ * captured event, and `$set` onto the person on `identify`. Used to carry
+ * an A/B experiment assignment from the anonymous landing page through to
+ * the post-signup `signup_completed` event, so conversion can be sliced by
+ * variant. Keep this to discriminators only — never user-supplied strings.
+ *
+ * Removal: drop `registerSuperProperties` + the `...superProps` merges
+ * below and this whole block goes away cleanly.
+ */
+let superProps: Record<string, string> = {};
+
+/**
+ * Register persistent super-properties merged onto all subsequent events.
+ * Shallow-merges, so callers can register one experiment without clobbering
+ * another. Values must be enum-like discriminators.
+ */
+export function registerSuperProperties(props: Record<string, string>): void {
+  superProps = { ...superProps, ...props };
+}
 
 function isEnabled(): boolean {
   if (!KEY) return false;
@@ -125,9 +151,10 @@ function isEnabled(): boolean {
 }
 
 async function send(event: EventName, properties: Record<string, unknown>): Promise<void> {
+  const withSuper = { ...superProps, ...properties };
   // GTM dataLayer push runs whether or not PostHog is configured — they're
   // independent rails. The DNT check is inside pushToDataLayer.
-  pushToDataLayer(event, properties);
+  pushToDataLayer(event, withSuper);
   if (!isEnabled() || !distinctId) return;
   try {
     await fetch(`${HOST}/capture/`, {
@@ -138,7 +165,7 @@ async function send(event: EventName, properties: Record<string, unknown>): Prom
         event,
         distinct_id: distinctId,
         properties: {
-          ...properties,
+          ...withSuper,
           $lib: 'family-greenhouse-shim',
           $lib_version: '1.0.0',
         },
@@ -160,7 +187,7 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
   // Initialize GTM once we have a known user — keeps an anonymous landing-
   // page visitor from triggering the script load until they're logged in.
   ensureGtm();
-  pushToDataLayer('user_identified', { userId, ...(traits ?? {}) });
+  pushToDataLayer('user_identified', { userId, ...superProps, ...(traits ?? {}) });
   if (!isEnabled()) return;
   void fetch(`${HOST}/capture/`, {
     method: 'POST',
@@ -169,16 +196,21 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
       api_key: KEY,
       event: '$identify',
       distinct_id: userId,
-      properties: { $set: traits ?? {} },
+      // Persist the experiment assignment (and any other super-props) on the
+      // person so the eventual signup is attributable to the variant seen.
+      properties: { $set: { ...superProps, ...(traits ?? {}) } },
       timestamp: new Date().toISOString(),
     }),
     keepalive: true,
   }).catch(() => {});
 }
 
-/** Drop the distinct id on logout so subsequent events don't leak across users. */
+/** Drop the distinct id (and super-properties) on logout so subsequent
+ *  events don't leak across users. The landing page re-registers the
+ *  experiment assignment from localStorage on the next visit. */
 export function reset(): void {
   distinctId = null;
+  superProps = {};
 }
 
 export function track(event: EventName, props: EventProps = {}): void {

@@ -75,6 +75,8 @@ const BlogIndex = lazyNamed(() => import('@/features/blog/BlogIndex'), 'BlogInde
 const BlogPost = lazyNamed(() => import('@/features/blog/BlogPost'), 'BlogPost');
 const CareIndex = lazyNamed(() => import('@/features/care/CareIndex'), 'CareIndex');
 const CareGuidePage = lazyNamed(() => import('@/features/care/CareGuidePage'), 'CareGuidePage');
+const PetSafePage = lazyNamed(() => import('@/features/petsafe/PetSafePage'), 'PetSafePage');
+const SitPage = lazyNamed(() => import('@/features/sitter/SitPage'), 'SitPage');
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -150,6 +152,10 @@ function App() {
               <Route path="/blog" element={<BlogIndex />} />
               <Route path="/care" element={<CareIndex />} />
               <Route path="/care/:slug" element={<CareGuidePage />} />
+              <Route path="/pet-safe" element={<PetSafePage />} />
+              {/* Public, no-account plant-sitting page — works logged-out (the
+                  sitter endpoints have no auth; the token is the credential). */}
+              <Route path="/sit/:token" element={<SitPage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />

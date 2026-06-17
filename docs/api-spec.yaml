@@ -208,6 +208,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Task'
 
+  /sitter/{token}:
+    get:
+      summary: Public plant-sitter view — due/overdue tasks for a time-boxed link. No auth; token is the only credential. Returns ONLY plant common name, task type, due date, taskId (no PII).
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Due tasks for the sitter (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  label: { type: string, nullable: true }
+                  expiresAt: { type: string, format: date-time }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        plantName: { type: string }
+                        taskType: { type: string }
+                        dueDate: { type: string, format: date-time }
+                        overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sitter/{token}/tasks/{taskId}/complete:
+    post:
+      summary: Public plant-sitter task completion. Validates the token and that the task belongs to the token's household; attributed as "a plant sitter". No auth, no PII.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: taskId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Task completed (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  plantName: { type: string }
+                  taskType: { type: string }
+                  dueDate: { type: string, format: date-time }
+                  overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /households:
     post:
       summary: Create a new household
@@ -586,6 +638,60 @@ paths:
         '204': { description: Member removed }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /households/{id}/sitter-links:
+    post:
+      summary: Create a no-account, time-boxed plant-sitter link (admin only). Returns the token/URL exactly once.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expiresAt]
+              properties:
+                startsAt: { type: string, format: date-time }
+                expiresAt: { type: string, format: date-time }
+                label: { type: string, maxLength: 60 }
+      responses:
+        '201':
+          description: Sitter link created (token returned once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  token: { type: string }
+                  url: { type: string }
+                  startsAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  status: { type: string, enum: [active, revoked] }
+                  label: { type: string, nullable: true }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    get:
+      summary: List the household's plant-sitter links (admin only). Never returns tokens.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{id}/sitter-links/{linkId}:
+    delete:
+      summary: Revoke a plant-sitter link by its non-secret id (admin only). Idempotent.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: linkId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Sitter link revoked }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # --- Notifications ---
   /notifications/prefs:
     get:
@@ -716,6 +822,17 @@ paths:
   /species/search:
     get:
       summary: Species autocomplete (Perenual-backed; falls back to disabled when unconfigured)
+      tags: [Species]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /species/toxicity:
+    get:
+      summary: Public pet-toxicity lookup (cat/dog safety) for a plant name. No auth; curated static data, cached publicly.
       tags: [Species]
       parameters:
         - name: q

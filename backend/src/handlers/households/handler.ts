@@ -14,9 +14,13 @@ import {
   CreateHouseholdInput,
   updateMemberRoleSchema,
   UpdateMemberRoleInput,
+  createSitterLinkSchema,
+  CreateSitterLinkInput,
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
+import * as welcomeEmail from '../../services/welcomeEmail.js';
 import * as taskService from '../../services/taskService.js';
+import * as sitterService from '../../services/sitterService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
@@ -51,8 +55,26 @@ export const createHousehold = createHandler(
     // keeps the "first household stays default" property — switching to a
     // newer household requires the X-Household-Id header from the
     // frontend's HouseholdSwitcher.
+    //
+    // The absence of an existing household claim is also our fire-once signal
+    // for the welcome email: this is the user's genuine first household (a new
+    // account finishing setup), not an "add another household" from the
+    // switcher, so they get exactly one warm welcome. It's best-effort —
+    // sendWelcomeEmail swallows its own failures, but we also don't await it on
+    // the critical path: a slow or flaky SES send must never delay or break
+    // onboarding.
     if (!user.householdId) {
       await cognitoUsers.setHouseholdClaims(user.userId, household.id, 'admin');
+
+      const appUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+      if (appUrl) {
+        void welcomeEmail.sendWelcomeEmail(user.userId, user.email, userName, appUrl);
+      } else {
+        logger.warn(
+          { userId: user.userId, msg: 'welcome_email_skipped_no_base_url' },
+          'welcome_email_skipped_no_base_url'
+        );
+      }
     }
 
     audit('household.created', {
@@ -477,6 +499,124 @@ export const removeMember = createHandler(
   .use(requireHousehold())
   .use(requireAdmin());
 
+// ---------------------------------------------------------------------------
+// Plant-sitter links (authed management side)
+// ---------------------------------------------------------------------------
+//
+// A household member generates a no-account, time-boxed link before they
+// travel; a sitter opens it (the public /sitter/{token} routes live in the
+// tasks group) to see due tasks and check them off. These three routes are
+// the create / list / revoke surface, gated to household ADMINS — same posture
+// as invites, since both mint a credential that grants outside access.
+
+// POST /households/{id}/sitter-links
+//
+// Create a link and return its token/URL EXACTLY ONCE — subsequent list calls
+// never expose the token again (only the non-secret summary).
+export const createSitterLink = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<CreateSitterLinkInput>;
+    const householdId = event.pathParameters?.id;
+
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+
+    const baseUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+    if (!baseUrl) {
+      throw createHttpError(
+        500,
+        'FRONTEND_URL / ALLOWED_ORIGIN must be set to generate sitter link URLs',
+        { expose: true }
+      );
+    }
+
+    const link = await sitterService.createSitterLink({
+      householdId,
+      createdBy: user.userId,
+      startsAt: validatedBody.startsAt ?? new Date().toISOString(),
+      expiresAt: validatedBody.expiresAt,
+      label: validatedBody.label ?? null,
+    });
+
+    audit('household.member_added', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { stage: 'sitter_link_created', linkId: link.id, expiresAt: link.expiresAt },
+    });
+
+    // The token leaves the building exactly once, here.
+    return createdResponse({
+      ...sitterService.toSummary(link),
+      token: link.token,
+      url: `${baseUrl}/sit/${link.token}`,
+    });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(createSitterLinkSchema));
+
+// GET /households/{id}/sitter-links
+//
+// List the household's links for management. NEVER returns tokens — only the
+// non-secret summary (id, window, status, label) so the UI can show + revoke.
+export const listSitterLinks = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const links = await sitterService.listSitterLinks(householdId);
+    return successResponse(links.map(sitterService.toSummary));
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin());
+
+// DELETE /households/{id}/sitter-links/{linkId}
+//
+// Revoke a link by its non-secret id. Scoped to the household in the service,
+// so one household can never revoke another's link. Idempotent.
+export const revokeSitterLink = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const householdId = event.pathParameters?.id;
+    const linkId = event.pathParameters?.linkId;
+    if (!householdId || !linkId) {
+      throw createHttpError(400, 'Household ID and link ID are required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const revoked = await sitterService.revokeSitterLink(householdId, linkId);
+    if (!revoked) {
+      throw createHttpError(404, 'Sitter link not found');
+    }
+    audit('household.member_removed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { stage: 'sitter_link_revoked', linkId },
+    });
+    return noContentResponse();
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin());
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'POST /households': createHousehold,
@@ -489,4 +629,7 @@ export const handler = createRouter({
   'GET /households/{id}/year-in-review': getYearInReview,
   'PUT /households/{householdId}/members/{userId}/role': updateMemberRole,
   'DELETE /households/{householdId}/members/{userId}': removeMember,
+  'POST /households/{id}/sitter-links': createSitterLink,
+  'GET /households/{id}/sitter-links': listSitterLinks,
+  'DELETE /households/{id}/sitter-links/{linkId}': revokeSitterLink,
 });

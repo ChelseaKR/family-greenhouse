@@ -76,7 +76,7 @@ export async function identifyPlant(base64Image: string): Promise<IdentifyRespon
     });
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
-      throw new Error(`plant.id timed out after ${TIMEOUT_MS}ms`);
+      throw new Error(`plant.id timed out after ${TIMEOUT_MS}ms`, { cause: err });
     }
     throw err;
   } finally {
