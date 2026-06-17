@@ -18,6 +18,7 @@ import {
   CreateSitterLinkInput,
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
+import * as welcomeEmail from '../../services/welcomeEmail.js';
 import * as taskService from '../../services/taskService.js';
 import * as sitterService from '../../services/sitterService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
@@ -54,8 +55,26 @@ export const createHousehold = createHandler(
     // keeps the "first household stays default" property — switching to a
     // newer household requires the X-Household-Id header from the
     // frontend's HouseholdSwitcher.
+    //
+    // The absence of an existing household claim is also our fire-once signal
+    // for the welcome email: this is the user's genuine first household (a new
+    // account finishing setup), not an "add another household" from the
+    // switcher, so they get exactly one warm welcome. It's best-effort —
+    // sendWelcomeEmail swallows its own failures, but we also don't await it on
+    // the critical path: a slow or flaky SES send must never delay or break
+    // onboarding.
     if (!user.householdId) {
       await cognitoUsers.setHouseholdClaims(user.userId, household.id, 'admin');
+
+      const appUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+      if (appUrl) {
+        void welcomeEmail.sendWelcomeEmail(user.userId, user.email, userName, appUrl);
+      } else {
+        logger.warn(
+          { userId: user.userId, msg: 'welcome_email_skipped_no_base_url' },
+          'welcome_email_skipped_no_base_url'
+        );
+      }
     }
 
     audit('household.created', {

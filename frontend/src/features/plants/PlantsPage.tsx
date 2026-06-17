@@ -188,13 +188,16 @@ export function PlantsPage() {
         ) : (
           <EmptyState
             icon={<EmptyPlants className="mx-auto h-40 w-auto" />}
-            title="No plants yet"
-            description="Add your first plant to get started tracking care."
+            title="Let's add your first plant"
+            description="Name it, or start typing a species and we'll fill in the care details for you. Once it's in, we'll track watering and the rest for you."
             action={
               <Link to="/plants/new">
-                <Button>Add your first plant</Button>
+                <Button size="lg" leftIcon={<PlusIcon className="h-5 w-5" aria-hidden="true" />}>
+                  Add your first plant
+                </Button>
               </Link>
             }
+            hint="Takes less than a minute."
           />
         )
       ) : viewMode === 'grid' ? (
