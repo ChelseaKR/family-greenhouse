@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
 import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
 import { PruneIcon } from '@/components/icons/PruneIcon';

@@ -23,7 +23,7 @@
     "lighthouse:mobile": "lhci autorun --config=lighthouserc.mobile.cjs",
     "size": "size-limit"
   },
-  "_size-limit-note": "Budgets are REGRESSION GATES set ~8% above the current measured size (brotli), not aspirational targets — the old values (40/60/230/10) were below what the app has ever shipped, so the check was permanently red and gated nothing. Trimming the bundle further (the index chunk and Tailwind CSS are the candidates) is tracked as future work for when real-device Lighthouse data shows it matters. Keep these tight: lower them whenever a real reduction lands. Measured with @size-limit/file (brotli) only — the preset-app 'time' plugin ran headless Chrome to estimate JS execution time, gated nothing (no time budgets), and broke CI+local runs with puppeteer navigation timeouts.",
+  "_size-limit-note": "Budgets are REGRESSION GATES set ~8% above the current measured size (brotli), not aspirational targets — the old values (40/60/230/10) were below what the app has ever shipped, so the check was permanently red and gated nothing. Trimming the bundle further (the index chunk and Tailwind CSS are the candidates) is tracked as future work for when real-device Lighthouse data shows it matters. Keep these tight: lower them whenever a real reduction lands. Measured with @size-limit/file (brotli) only — the preset-app 'time' plugin ran headless Chrome to estimate JS execution time, gated nothing (no time budgets), and broke CI+local runs with puppeteer navigation timeouts. Vendor budget raised 51 → 64 kB for the React 18 → 19 upgrade: react-dom 19 is ~12 kB (brotli) larger than 18, putting the React runtime chunk at ~59.5 kB measured — a sanctioned, unavoidable dependency increase, not regression drift; 64 kB keeps the usual ~8% headroom.",
   "size-limit": [
     {
       "name": "Initial JS (brotli)",
@@ -34,7 +34,7 @@
     {
       "name": "Vendor chunk (brotli)",
       "path": "dist/assets/vendor-*.js",
-      "limit": "51 kB",
+      "limit": "64 kB",
       "brotli": true
     },
     {
@@ -61,8 +61,8 @@
     "clsx": "^2.1.0",
     "i18next": "^26.0.8",
     "i18next-browser-languagedetector": "^8.2.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "react-hook-form": "^7.51.2",
     "react-i18next": "^17.0.4",
     "react-router-dom": "^6.22.3",
@@ -78,12 +78,13 @@
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.43.0",
     "@size-limit/file": "^12.1.0",
+    "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.4.2",
-    "@testing-library/react": "^14.2.2",
+    "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.5.2",
     "@types/jest-axe": "^3.5.9",
-    "@types/react": "^18.2.74",
-    "@types/react-dom": "^18.2.24",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
     "@vitejs/plugin-react": "^4.7.0",

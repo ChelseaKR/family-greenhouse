@@ -86,10 +86,24 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          query: ['@tanstack/react-query'],
-          ui: ['@headlessui/react', '@heroicons/react'],
+        manualChunks(id) {
+          // Keep the React runtime in a single long-lived vendor chunk.
+          // A string-array manualChunks entry (['react', 'react-dom', ...])
+          // stopped capturing all of react-dom's submodules under React 19,
+          // which leaked the runtime into the entry chunk and ballooned it.
+          // Matching on the resolved node_modules path is version-robust.
+          if (
+            /node_modules\/(react|react-dom|scheduler|react-router|react-router-dom)\//.test(id)
+          ) {
+            return 'vendor';
+          }
+          if (/node_modules\/@tanstack\/react-query\//.test(id)) {
+            return 'query';
+          }
+          if (/node_modules\/(@headlessui\/react|@heroicons\/react)\//.test(id)) {
+            return 'ui';
+          }
+          return undefined;
         },
       },
     },
