@@ -31,25 +31,45 @@ export const api = axios.create({
   },
 });
 
+/** Minimal shape of the auth state the header builder reads. */
+type AuthHeaderState = {
+  idToken: string | null;
+  accessToken: string | null;
+  activeHouseholdId: string | null;
+};
+
+/**
+ * Build the shared auth headers — `Authorization: Bearer <idToken>` (falling
+ * back to the access token for pre-fix persisted sessions) plus the active
+ * household pin. Used by both the axios request interceptor and the chat
+ * stream's raw `fetch`, so the scheme can't drift between them.
+ */
+export function buildAuthHeaders(state: AuthHeaderState): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const authToken = state.idToken ?? state.accessToken;
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  if (state.activeHouseholdId) {
+    headers['X-Household-Id'] = state.activeHouseholdId;
+  }
+  return headers;
+}
+
 // Request interceptor to add auth token + active household pin.
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const state = useAuthStore.getState();
     // Authorization carries the ID token, which is the only one that carries
-    // the `custom:household_id` claim the backend's requireHousehold reads.
-    // Access tokens go in `X-Cognito-Access-Token` for Cognito-direct calls.
-    // Falling back to accessToken handles pre-fix persisted sessions.
-    const authToken = state.idToken ?? state.accessToken;
-    if (authToken && config.headers) {
-      config.headers.Authorization = `Bearer ${authToken}`;
-    }
-    // Multi-household: when the user has switched to a non-default
-    // household, every request carries `X-Household-Id` so the backend
-    // scopes correctly. The backend resource handlers refuse cross-
-    // household access, so a forged header still can't read another
-    // household's data.
-    if (state.activeHouseholdId && config.headers) {
-      config.headers['X-Household-Id'] = state.activeHouseholdId;
+    // the `custom:household_id` claim the backend's requireHousehold reads
+    // (access-token fallback handles pre-fix persisted sessions). The
+    // `X-Household-Id` pin lets a switched-household user scope requests; the
+    // backend resource handlers refuse cross-household access, so a forged
+    // header still can't read another household's data. See buildAuthHeaders.
+    if (config.headers) {
+      const headers = buildAuthHeaders(useAuthStore.getState());
+      for (const [k, v] of Object.entries(headers)) {
+        config.headers[k] = v;
+      }
     }
     return config;
   },

@@ -1,9 +1,14 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/store/authStore';
 import { LoadingSpinner } from './LoadingSpinner';
 
 export function ProtectedRoute() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  // Select only the two fields used (via useShallow) so a silent token
+  // refresh doesn't re-render this route guard and its whole subtree.
+  const { isAuthenticated, isLoading } = useAuthStore(
+    useShallow((s) => ({ isAuthenticated: s.isAuthenticated, isLoading: s.isLoading }))
+  );
   const location = useLocation();
 
   if (isLoading) {

@@ -54,7 +54,10 @@ function PlantIcon({ className }: { className?: string }) {
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, logout } = useAuthStore();
+  // Select only the fields used so a silent token refresh (which rewrites
+  // idToken/accessToken) doesn't re-render the whole layout subtree.
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -112,16 +115,20 @@ export function Layout() {
                   </div>
                 </Transition.Child>
 
-                <SidebarContent user={user} onLogout={handleLogout} />
+                <SidebarContent
+                  user={user}
+                  onLogout={handleLogout}
+                  onNavigate={() => setSidebarOpen(false)}
+                />
               </Dialog.Panel>
             </Transition.Child>
           </div>
         </Dialog>
       </Transition.Root>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — no drawer to close, so navigation is a no-op. */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
-        <SidebarContent user={user} onLogout={handleLogout} />
+        <SidebarContent user={user} onLogout={handleLogout} onNavigate={() => {}} />
       </div>
 
       {/* Main content */}
@@ -171,9 +178,12 @@ export function Layout() {
 interface SidebarContentProps {
   user: { name: string; email: string } | null;
   onLogout: () => void;
+  /** Called when a nav item is tapped. The mobile drawer instance closes
+   *  itself; the desktop instance passes a no-op. */
+  onNavigate: () => void;
 }
 
-function SidebarContent({ user, onLogout }: SidebarContentProps) {
+function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
   return (
     <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-800 px-6 pb-4">
       {/* Decorative botanical pattern texture in the sidebar margins.
@@ -196,6 +206,7 @@ function SidebarContent({ user, onLogout }: SidebarContentProps) {
                 <li key={item.name}>
                   <NavLink
                     to={item.href}
+                    onClick={onNavigate}
                     className={({ isActive }) =>
                       clsx(
                         'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 min-h-touch items-center transition-colors',

@@ -36,29 +36,8 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { formatDueDate, isOverdue } from '@/utils/date';
 import { toast } from '@/store/toastStore';
-
-function formatDueDate(dateString: string): string {
-  const date = new Date(dateString);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  today.setHours(0, 0, 0, 0);
-  tomorrow.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-
-  if (date.getTime() < today.getTime()) {
-    return 'Overdue';
-  }
-  if (date.getTime() === today.getTime()) {
-    return 'Today';
-  }
-  if (date.getTime() === tomorrow.getTime()) {
-    return 'Tomorrow';
-  }
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
 
 type ActivityFilter = 'all' | 'tasks' | 'plants' | 'people';
 
@@ -91,14 +70,6 @@ function filterActivity(
   });
 }
 
-function isOverdue(dateString: string): boolean {
-  const date = new Date(dateString);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime() < today.getTime();
-}
-
 export function DashboardPage() {
   useDocumentTitle('Dashboard');
   const user = useAuthStore((state) => state.user);
@@ -123,7 +94,7 @@ export function DashboardPage() {
     queryFn: () => plantService.getPlants(),
   });
 
-  useOverdueAlerts(upcomingTasks);
+  useOverdueAlerts(upcomingTasks, householdId);
 
   const { data: activity } = useQuery({
     queryKey: ['household', householdId, 'activity'],

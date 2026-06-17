@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -47,19 +47,23 @@ export function PlantsPage() {
     queryFn: () => plantService.getPlants(view),
   });
 
-  const filteredPlants = plants?.filter(
-    (plant) =>
-      plant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      plant.species?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      plant.location?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPlants = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return plants?.filter(
+      (plant) =>
+        plant.name.toLowerCase().includes(q) ||
+        plant.species?.toLowerCase().includes(q) ||
+        plant.location?.toLowerCase().includes(q)
+    );
+  }, [plants, searchQuery]);
 
   // Propagation cue: plants that have cuttings get a 🌱 mark on their card.
   // Derived from the already-fetched list (parentPlantId is on every plant),
   // so it costs no extra request. Note the current view only sees parents
   // whose cuttings are in the SAME view — good enough for a cue.
-  const plantsWithCuttings = new Set(
-    (plants ?? []).map((p) => p.parentPlantId).filter((id): id is string => !!id)
+  const plantsWithCuttings = useMemo(
+    () => new Set((plants ?? []).map((p) => p.parentPlantId).filter((id): id is string => !!id)),
+    [plants]
   );
 
   return (
