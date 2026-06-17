@@ -16,7 +16,9 @@ const { mockVerify } = vi.hoisted(() => ({ mockVerify: vi.fn() }));
 
 vi.mock('aws-jwt-verify', () => ({
   CognitoJwtVerifier: {
-    create: vi.fn(() => ({ verify: mockVerify })),
+    create: vi.fn(function () {
+      return { verify: mockVerify };
+    }),
   },
 }));
 vi.mock('../../../src/services/householdService.js');

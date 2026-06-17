@@ -1,10 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  PutCommand: vi.fn((i) => ({ input: i, kind: 'Put' })),
-  QueryCommand: vi.fn((i) => ({ input: i, kind: 'Query' })),
-  DeleteCommand: vi.fn((i) => ({ input: i, kind: 'Delete' })),
-  UpdateCommand: vi.fn((i) => ({ input: i, kind: 'Update' })),
+  PutCommand: vi.fn(function (i) {
+    return { input: i, kind: 'Put' };
+  }),
+  QueryCommand: vi.fn(function (i) {
+    return { input: i, kind: 'Query' };
+  }),
+  DeleteCommand: vi.fn(function (i) {
+    return { input: i, kind: 'Delete' };
+  }),
+  UpdateCommand: vi.fn(function (i) {
+    return { input: i, kind: 'Update' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },

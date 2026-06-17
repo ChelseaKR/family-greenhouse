@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sesSendMock = vi.fn();
 vi.mock('@aws-sdk/client-ses', () => ({
-  SESClient: vi.fn(() => ({ send: sesSendMock })),
-  SendEmailCommand: vi.fn((input) => ({ input, kind: 'SendEmail' })),
+  SESClient: vi.fn(function () {
+    return { send: sesSendMock };
+  }),
+  SendEmailCommand: vi.fn(function (input) {
+    return { input, kind: 'SendEmail' };
+  }),
 }));
 
 const ORIGINAL = process.env;

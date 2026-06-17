@@ -14,7 +14,9 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   TABLE_NAME: 'test-table',
 }));
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
-  GetCommand: vi.fn((input: unknown) => ({ input, kind: 'Get' })),
+  GetCommand: vi.fn(function (input: unknown) {
+    return { input, kind: 'Get' };
+  }),
 }));
 
 import * as apiKeysService from '../../../src/services/apiKeys.js';

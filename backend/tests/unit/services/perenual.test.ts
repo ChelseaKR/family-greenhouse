@@ -4,8 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // semantics (transient failure must NOT cache the 'unset' sentinel).
 const secretsSend = vi.hoisted(() => vi.fn());
 vi.mock('@aws-sdk/client-secrets-manager', () => ({
-  SecretsManagerClient: vi.fn(() => ({ send: secretsSend })),
-  GetSecretValueCommand: vi.fn((input: unknown) => input),
+  SecretsManagerClient: vi.fn(function () {
+    return { send: secretsSend };
+  }),
+  GetSecretValueCommand: vi.fn(function (input: unknown) {
+    return input;
+  }),
 }));
 vi.mock('aws-xray-sdk-core', () => ({
   default: { captureAWSv3Client: (client: unknown) => client },
