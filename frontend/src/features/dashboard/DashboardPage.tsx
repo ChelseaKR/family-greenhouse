@@ -260,13 +260,14 @@ export function DashboardPage() {
           <Alert variant="error">{getErrorMessage(plantsError)}</Alert>
         ) : !plants || plants.length === 0 ? (
           <EmptyState
-            title="No plants yet"
-            description="Add your first plant to get started."
+            title="Let's add your first plant"
+            description="Name it, or start from a species suggestion and we'll fill in the care details. We'll handle the watering reminders from there."
             action={
               <Link to="/plants/new">
-                <Button>Add plant</Button>
+                <Button size="lg">Add your first plant</Button>
               </Link>
             }
+            hint="Takes less than a minute."
           />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4">

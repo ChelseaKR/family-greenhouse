@@ -5,9 +5,13 @@ interface EmptyStateProps {
   title: string;
   description?: string;
   action?: ReactNode;
+  /** Optional reassuring line under the action (e.g. "Takes under a minute").
+   *  Kept visually quieter than the description so the primary CTA stays the
+   *  focal point. */
+  hint?: ReactNode;
 }
 
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, hint }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center text-center py-12 px-6">
       {/* The icon renders without a fixed-size wrapper because the
@@ -24,6 +28,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       <h3 className="font-serif text-xl text-ink">{title}</h3>
       {description && <p className="mt-1 text-sm text-gray-600 max-w-md">{description}</p>}
       {action && <div className="mt-6">{action}</div>}
+      {hint && <p className="mt-3 text-xs text-gray-500">{hint}</p>}
     </div>
   );
 }
