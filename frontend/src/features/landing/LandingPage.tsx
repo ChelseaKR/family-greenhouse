@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   // The marketing feature grid uses the custom botanical icons below.
@@ -34,7 +35,56 @@ import { CalendarLeafIcon } from '@/components/icons/CalendarLeafIcon';
 import { PhoneLeafIcon } from '@/components/icons/PhoneLeafIcon';
 import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
 import { RootLockIcon } from '@/components/icons/RootLockIcon';
+import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment';
+import { track, registerSuperProperties } from '@/services/analytics';
 import clsx from 'clsx';
+
+// Hero copy for the two framings under test. Variant A (control) is the
+// existing household / shared-care-journal hero. Variant B leads with
+// keeping your own plants alive and names the solo case first, mentioning
+// sharing second — same voice, same layout, same CTAs. The headline is
+// split into an optional pre-quote / emphasized / post-quote so A can keep
+// its italic "you" without giving B fake quotation marks.
+//
+// Removing the experiment: delete variant B below, inline variant A's copy
+// back into the hero, and drop the variant plumbing in LandingPage.
+const heroCopy: Record<
+  Variant,
+  {
+    eyebrow: string;
+    headlinePre: string;
+    headlineEmphasis: string;
+    headlinePost: string;
+    subhead: React.ReactNode;
+  }
+> = {
+  A: {
+    eyebrow: 'A garden journal for the whole house',
+    headlinePre: '“I thought ',
+    headlineEmphasis: 'you',
+    headlinePost: ' watered it.”',
+    subhead: (
+      <>
+        Family Greenhouse is a shared care journal for the plants in your house. Everyone sees
+        what&rsquo;s due and what&rsquo;s already done, so the fern doesn&rsquo;t get watered twice
+        on Tuesday and then forgotten for two weeks.
+      </>
+    ),
+  },
+  B: {
+    eyebrow: 'A care journal for your plants',
+    headlinePre: 'Keep ',
+    headlineEmphasis: 'every',
+    headlinePost: ' plant alive.',
+    subhead: (
+      <>
+        Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing
+        gets missed or drowned. It works just as well for one person and a windowsill as it does for
+        a whole household sharing the watering can.
+      </>
+    ),
+  },
+};
 
 const features = [
   {
@@ -508,6 +558,18 @@ function SidebarLeafIcon({ className }: { className?: string }) {
 }
 
 export function LandingPage() {
+  // A/B test of the hero framing (control vs solo-first). Bucketing is
+  // stable per browser; see lib/experiment.ts.
+  const variant = useHeroVariant();
+
+  useEffect(() => {
+    // Fire once per landing-page mount: records the impression and pins the
+    // assignment as a super-property so the later signup_completed event (on
+    // ConfirmEmailPage) is attributable to the variant this visitor saw.
+    registerSuperProperties({ [HERO_EXPERIMENT]: variant });
+    track('experiment_viewed', { experiment: HERO_EXPERIMENT, variant });
+  }, [variant]);
+
   return (
     <div className="bg-paper">
       {/* Navigation */}
@@ -570,20 +632,19 @@ export function LandingPage() {
             <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
               <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
                 <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
-                  A garden journal for the whole house
+                  {heroCopy[variant].eyebrow}
                 </p>
                 <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05]">
-                  &ldquo;I thought <span className="italic text-primary-700">you</span> watered
-                  it.&rdquo;
+                  {heroCopy[variant].headlinePre}
+                  <span className="italic text-primary-700">
+                    {heroCopy[variant].headlineEmphasis}
+                  </span>
+                  {heroCopy[variant].headlinePost}
                 </h1>
                 <div className="mt-4 flex justify-center lg:justify-start">
                   <TitleUnderline className="h-4 w-56 text-primary-600" />
                 </div>
-                <p className="mt-6 text-lg leading-8 text-gray-700">
-                  Family Greenhouse is a shared care journal for the plants in your house. Everyone
-                  sees what&rsquo;s due and what&rsquo;s already done, so the fern doesn&rsquo;t get
-                  watered twice on Tuesday and then forgotten for two weeks.
-                </p>
+                <p className="mt-6 text-lg leading-8 text-gray-700">{heroCopy[variant].subhead}</p>
                 <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
                   <Link to="/register">
                     <Button size="lg">Sign up free</Button>
