@@ -41,6 +41,22 @@ const VACATION_TTL_BUFFER_MS = 3 * 24 * 60 * 60 * 1000;
 const MAX_QUERY_PAGES = 10;
 
 /**
+ * Raised when a task create/update/import would assign the task to a userId
+ * that is not a current member of the household. Without this guard the task
+ * wrote with a dangling assignee — invisible in every member's "assigned to
+ * me" view and rolled into the unassigned bucket by reminders. Handlers map
+ * this to a 400 (call sites check `err.name === 'AssigneeNotMemberError'`, not
+ * instanceof, so test automocks stay compatible — same convention as
+ * PlanLimitError).
+ */
+export class AssigneeNotMemberError extends Error {
+  constructor(message = 'assignedTo must be a current household member') {
+    super(message);
+    this.name = 'AssigneeNotMemberError';
+  }
+}
+
+/**
  * Run a Query and follow LastEvaluatedKey up to MAX_QUERY_PAGES pages.
  * DynamoDB applies `Limit` per page *before* filtering, so any single-page
  * query with Limit set risks silent truncation — use this for anything that
@@ -84,7 +100,9 @@ export async function createTask(
   let assignedToName: string | null = null;
   if (input.assignedTo) {
     const member = await getMemberByUserId(householdId, input.assignedTo);
-    assignedToName = member?.name ?? null;
+    // Reject a dangling assignee rather than writing a task nobody can see (M4).
+    if (!member) throw new AssigneeNotMemberError();
+    assignedToName = member.name;
   }
 
   const task: Task = {
@@ -277,9 +295,11 @@ export async function updateTask(
 
     if (input.assignedTo) {
       // Re-resolve the denormalized assignee name — without this the task
-      // keeps displaying the previous assignee after reassignment.
+      // keeps displaying the previous assignee after reassignment. Reject a
+      // reassignment to a non-member rather than persist a dangling one (M4).
       const member = await getMemberByUserId(householdId, input.assignedTo);
-      expressionAttributeValues[':assignedToName'] = member?.name ?? null;
+      if (!member) throw new AssigneeNotMemberError();
+      expressionAttributeValues[':assignedToName'] = member.name;
 
       // GSI2 keys must follow the assignment (createTask sets them; updateTask
       // historically didn't, so "tasks assigned to me" kept returning stale
@@ -565,31 +585,51 @@ export async function getHouseholdActivity(
   householdId: string,
   limit = 50
 ): Promise<TaskCompletion[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}#ACTIVITY`,
-      },
-      ScanIndexForward: false,
-      Limit: Math.min(limit, MAX_QUERY_LIMIT),
-    })
-  );
-  return (result.Items || [])
-    .filter((item) => item.entityType === 'TaskCompletion')
-    .map((item) => ({
-      id: item.id as string,
-      householdId: item.householdId as string,
-      plantId: item.plantId as string,
-      taskId: item.taskId as string,
-      taskType: item.taskType as string,
-      completedBy: item.completedBy as string,
-      completedByName: item.completedByName as string,
-      completedAt: item.completedAt as string,
-      notes: item.notes as string | null,
-    }));
+  const want = Math.min(limit, MAX_QUERY_LIMIT);
+
+  // GSI1 HOUSEHOLD#{id}#ACTIVITY now holds both TaskCompletion AND ActivityEvent
+  // rows. DynamoDB applies `Limit` per page BEFORE our entityType filter, so a
+  // single Limit-bounded page that happens to be mostly ActivityEvents returns
+  // far fewer than `want` completions (M3). Page through newest-first,
+  // accumulating only completions, until we have enough or run out of pages
+  // (bounded by MAX_QUERY_PAGES — same ceiling as queryAllPages).
+  const completions: TaskCompletion[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  let pages = 0;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        ExpressionAttributeValues: {
+          ':pk': `HOUSEHOLD#${householdId}#ACTIVITY`,
+        },
+        ScanIndexForward: false,
+        Limit: MAX_QUERY_LIMIT,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    for (const item of result.Items ?? []) {
+      if (item.entityType !== 'TaskCompletion') continue;
+      completions.push({
+        id: item.id as string,
+        householdId: item.householdId as string,
+        plantId: item.plantId as string,
+        taskId: item.taskId as string,
+        taskType: item.taskType as string,
+        completedBy: item.completedBy as string,
+        completedByName: item.completedByName as string,
+        completedAt: item.completedAt as string,
+        notes: item.notes as string | null,
+      });
+      if (completions.length >= want) return completions;
+    }
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    pages += 1;
+  } while (exclusiveStartKey && pages < MAX_QUERY_PAGES);
+
+  return completions;
 }
 
 export interface YearInReview {

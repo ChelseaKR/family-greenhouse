@@ -7,6 +7,7 @@ import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit } from '../../middleware/rateLimit.js';
 import * as plantService from '../../services/plantService.js';
 import * as leafHealth from '../../services/leafHealth.js';
+import * as leafHealthBudget from '../../services/leafHealthBudget.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import { successResponse } from '../../utils/response.js';
@@ -27,10 +28,11 @@ type HealthCheckInput = z.infer<typeof healthCheckSchema>;
 // Metering decision: leaf-health checks are NOT counted against the identify
 // monthly bucket. Identify metering exists because every Plant.id call burns
 // a paid per-call credit; a leaf-health call is one Bedrock Haiku invocation
-// (fractions of a cent) already bounded by the 5/min per-user rate limit
-// below, and silently spending the user's identification allowance on a
-// different feature would be surprising. If Bedrock spend ever needs a
-// monthly cap, clone the identifyBudget partition shape with its own PK.
+// (fractions of a cent). It is, however, real Bedrock spend, and the 5/min
+// per-user rate limiter is in-memory per warm container (ceiling = N
+// containers × max), so we add a durable monthly per-household spend cap
+// (services/leafHealthBudget.ts, its own PK — cloned from the identifyBudget
+// shape) mirroring the chat token-budget gate. Over-cap → 429.
 export const checkPlantHealth = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -47,6 +49,15 @@ export const checkPlantHealth = createHandler(
     const plant = await plantService.getPlant(user.householdId!, plantId);
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
+    }
+
+    // Monthly Bedrock spend cap (M1). Gate BEFORE the model call — cheaper to
+    // bail than to invoke. Mirrors the chat budget's 429 contract.
+    if (await leafHealthBudget.isOverCap(user.householdId!)) {
+      throw createHttpError(
+        429,
+        "You've used this month's leaf-health check allowance. It resets on the 1st of next month."
+      );
     }
 
     let assessment: leafHealth.LeafHealthAssessment;
@@ -66,6 +77,13 @@ export const checkPlantHealth = createHandler(
       throw createHttpError(502, `Leaf health check failed: ${(err as Error).message}`, {
         expose: true,
       });
+    }
+
+    // Count real Bedrock invocations against the monthly cap. The demo
+    // fallback never reached Bedrock (no spend), so it isn't metered. Soft:
+    // a failed increment doesn't fail the request the user already got.
+    if (!assessment.demo) {
+      await leafHealthBudget.incrementUsage(user.householdId!);
     }
 
     // Best-effort activity row, only on success — same fire-and-forget

@@ -32,6 +32,30 @@ import {
   noContentResponse,
   cacheableResponse,
 } from '../../utils/response.js';
+import { logger } from '../../utils/logger.js';
+
+/**
+ * Resolve a member's display name from the denormalized household member row
+ * (single GetItem) — the same pattern as the plants handler's resolveActorName.
+ * Persisted as `completedByName` on completion records, which drive the
+ * activity feed, year-in-review byMember, and recap emails, so it must be the
+ * real name ("Jane Smith"), not the email local-part ("jsmith"). Best-effort:
+ * a lookup miss/failure falls back to the email local-part rather than failing
+ * the completion.
+ */
+async function resolveCompleterName(
+  householdId: string,
+  userId: string,
+  email: string
+): Promise<string> {
+  try {
+    const member = await householdService.getMemberByUserId(householdId, userId);
+    if (member?.name) return member.name;
+  } catch (err) {
+    logger.warn({ err }, 'completer_name_lookup_failed');
+  }
+  return email.split('@')[0];
+}
 
 // GET /tasks
 export const listTasks = createHandler(
@@ -93,12 +117,20 @@ export const createTask = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
-    const task = await taskService.createTask(
-      validatedBody,
-      user.householdId!,
-      user.userId,
-      plant.name
-    );
+    let task;
+    try {
+      task = await taskService.createTask(
+        validatedBody,
+        user.householdId!,
+        user.userId,
+        plant.name
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AssigneeNotMemberError') {
+        throw createHttpError(400, 'assignedTo must be a current household member');
+      }
+      throw err;
+    }
 
     return createdResponse(task);
   }
@@ -141,7 +173,15 @@ export const updateTask = createHandler(
       throw createHttpError(400, 'Task ID is required');
     }
 
-    const task = await taskService.updateTask(user.householdId!, taskId, validatedBody);
+    let task;
+    try {
+      task = await taskService.updateTask(user.householdId!, taskId, validatedBody);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AssigneeNotMemberError') {
+        throw createHttpError(400, 'assignedTo must be a current household member');
+      }
+      throw err;
+    }
 
     if (!task) {
       throw createHttpError(404, 'Task not found');
@@ -187,8 +227,7 @@ export const completeTask = createHandler(
       throw createHttpError(400, 'Task ID is required');
     }
 
-    // TODO: Get actual user name from Cognito
-    const userName = user.email.split('@')[0];
+    const userName = await resolveCompleterName(user.householdId!, user.userId, user.email);
 
     const task = await taskService.completeTask(
       user.householdId!,

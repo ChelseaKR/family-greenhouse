@@ -9,6 +9,8 @@
  *   - LeafSnap (mobile-only, not ideal for our flow)
  * The interface below is small enough that swapping is trivial.
  */
+import { logger } from '../utils/logger.js';
+
 export interface IdentificationSuggestion {
   scientificName: string;
   commonName: string | null;
@@ -82,8 +84,16 @@ export async function identifyPlant(base64Image: string): Promise<IdentifyRespon
   }
 
   if (!res.ok) {
+    // Log the upstream status + body server-side for debugging, but do NOT
+    // reflect Plant.id's error body to the client — it can carry upstream
+    // detail we don't want to surface (and the identify handler exposes 5xx
+    // messages to the frontend). Return a generic, stable message instead (L2).
     const text = await res.text();
-    throw new Error(`plant.id ${res.status}: ${text.slice(0, 200)}`);
+    logger.warn(
+      { status: res.status, body: text.slice(0, 500), msg: 'plant_id_upstream_error' },
+      'plant_id_upstream_error'
+    );
+    throw new Error('plant identification service is temporarily unavailable');
   }
 
   const data = (await res.json()) as PlantIdResponse;

@@ -13,14 +13,17 @@
  * Spam control: the scan is hourly and the due window is 24h, so the same due
  * task is eligible on every run. A per-user, per-day dedupe marker (conditional
  * Put on USER#{id} / REMINDED#{yyyy-mm-dd}) caps delivery at one reminder per
- * user per UTC day — email/SMS are billed per send, so this matters.
+ * user per UTC day — email/SMS are billed per send, so this matters. The marker
+ * is claimed AFTER a channel actually delivers (see claimDailyReminderSlot):
+ * claiming it up front silently dropped the day's reminder for DND users who
+ * rely on email/SMS, since DND suppresses those channels (H1).
  *
  * Query shape: ONE GSI1 due-window query per household (the same pattern as
  * getUpcomingTasks), grouped by assignee in memory. The old shape was one GSI2
  * query per member, which both multiplied reads and silently dropped
  * unassigned tasks (they're in nobody's GSI2 partition).
  */
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import type { Task } from '../models/types.js';
@@ -40,11 +43,33 @@ function dateKey(now: Date): string {
 }
 
 /**
+ * Has this user already been reminded today? A point read on the per-user,
+ * per-day marker, used to skip a member up front on subsequent hourly runs
+ * (before building/sending the roll-up). The authoritative dedupe is still
+ * the conditional Put in `claimDailyReminderSlot`; this is the cheap pre-check.
+ */
+async function alreadyRemindedToday(userId: string, now: Date): Promise<boolean> {
+  const result = await dynamodb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: `REMINDED#${dateKey(now)}` },
+    })
+  );
+  return Boolean(result.Item);
+}
+
+/**
  * Conditionally claim the user's "reminded today" slot. Returns true when the
  * marker was absent (we own today's send), false when a previous run already
- * sent today. Written BEFORE sending: if the send then fails the user misses
- * one day's reminder, which is the safer failure mode than double-billing
- * email/SMS on every hourly run.
+ * claimed it.
+ *
+ * Written AFTER a channel actually delivered (H1): the slot must reflect a
+ * real send, not merely an attempt. The old order claimed the slot BEFORE
+ * sending, which silently burned the day for DND users who rely on email/SMS —
+ * DND suppresses those channels (only browser push survives), so a push-less
+ * DND user got the marker written but no reminder, and every later hourly run
+ * skipped them. We now claim only once `notifier.sendToUser` reports a
+ * delivery, so a DND-suppressed user is retried on the next run instead.
  */
 async function claimDailyReminderSlot(userId: string, now: Date): Promise<boolean> {
   try {
@@ -136,8 +161,11 @@ export async function remindHousehold(
       const tasksForMember = [...mine, ...unassigned];
       if (tasksForMember.length === 0) continue;
 
-      // Per-user daily dedupe — see module docstring.
-      if (!(await claimDailyReminderSlot(member.userId, now))) continue;
+      // Per-user daily dedupe — see claimDailyReminderSlot. Cheap pre-check
+      // up front so an already-reminded member skips the roll-up build + send
+      // entirely on later hourly runs. The slot is only CLAIMED below, after a
+      // channel actually delivered (H1).
+      if (await alreadyRemindedToday(member.userId, now)) continue;
 
       const overdue = tasksForMember.filter((t) => t.nextDue < nowIso).length;
       let body = overdue
@@ -161,11 +189,25 @@ export async function remindHousehold(
         body += ` (covering for ${coveringNames.join(', ')})`;
       }
 
-      await notifier.sendToUser(
+      const result = await notifier.sendToUser(
         { userId: member.userId, email: member.email },
         { title: 'Plant care reminder', body, tag: 'reminder' }
       );
-      sent += 1;
+
+      if (result.delivered) {
+        // Burn the day only on a real delivery, so a transient race can't
+        // double-claim either. The conditional Put is still authoritative.
+        if (await claimDailyReminderSlot(member.userId, now)) {
+          sent += 1;
+        }
+      } else if (result.dndSuppressedOnly) {
+        // Reachable only via DND-suppressed email/SMS: don't claim the slot —
+        // the next hourly run retries once the DND window lifts (H1).
+        logger.info(
+          { householdId, userId: member.userId },
+          'reminders.dnd_suppressed_retry_next_run'
+        );
+      }
     }
   }
 

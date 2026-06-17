@@ -5,6 +5,7 @@ import {
   authMiddleware,
   requireAdmin,
   requireHousehold,
+  rejectApiKeyPrincipal,
   __resetMembershipCacheForTests,
 } from '../../../src/middleware/auth.js';
 import * as householdService from '../../../src/services/householdService.js';
@@ -299,5 +300,46 @@ describe('requireAdmin', () => {
     await expect(invoke(buildEvent({ sub: 'u', email: 'e' }))).rejects.toMatchObject({
       statusCode: 403,
     });
+  });
+});
+
+describe('rejectApiKeyPrincipal (M2)', () => {
+  // Middleware that stamps event.user, standing in for authMiddleware /
+  // apiKeyMiddleware so we can exercise the guard in isolation.
+  const stampUser = (user: Record<string, unknown>): middy.MiddlewareObj => ({
+    before: (request) => {
+      (request.event as unknown as { user: unknown }).user = user;
+    },
+  });
+
+  it('403s an API-key principal even though it carries householdRole member', async () => {
+    const { invoke } = makeHandler([
+      stampUser({
+        userId: 'apikey:k1',
+        email: '',
+        householdId: 'hh',
+        householdRole: 'member',
+        isApiKey: true,
+      }),
+      rejectApiKeyPrincipal(),
+    ]);
+    await expect(invoke(buildEvent({ sub: 'k', email: 'e' }))).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it('lets a human (non-key) principal through', async () => {
+    const { invoke, inner } = makeHandler([
+      stampUser({
+        userId: 'user-1',
+        email: 'a@b.com',
+        householdId: 'hh',
+        householdRole: 'admin',
+      }),
+      rejectApiKeyPrincipal(),
+    ]);
+    const res = await invoke(buildEvent({ sub: 'u', email: 'e' }));
+    expect(res.statusCode).toBe(200);
+    expect(inner).toHaveBeenCalledOnce();
   });
 });

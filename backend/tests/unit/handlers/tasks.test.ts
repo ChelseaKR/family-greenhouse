@@ -199,7 +199,9 @@ describe('tasks handler', () => {
     });
     const res = (await completeTask(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
-    expect(taskService.completeTask).toHaveBeenCalledWith('hh-1', 't1', 'user-1', 'a', 'done');
+    // completedByName resolves to the real member name from the household
+    // member row ('Tester'), NOT the email local-part 'a' (M5).
+    expect(taskService.completeTask).toHaveBeenCalledWith('hh-1', 't1', 'user-1', 'Tester', 'done');
   });
 
   it('completeTask returns 404 when task missing', async () => {

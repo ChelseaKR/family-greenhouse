@@ -53,15 +53,29 @@ describe('plantIdentification', () => {
     });
   });
 
-  it('throws on non-2xx upstream', async () => {
+  it('throws a generic error on non-2xx upstream (does NOT reflect the upstream body — L2)', async () => {
     process.env = { ...ORIGINAL, PLANT_ID_API_KEY: 'k' };
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 503,
-      text: async () => 'overloaded',
+      text: async () => 'overloaded: secret upstream detail',
     });
     const { identifyPlant } = await import('../../../src/services/plantIdentification.js');
-    await expect(identifyPlant('AAAA')).rejects.toThrow(/503/);
+    // The thrown message is generic — neither the status code nor the upstream
+    // body leaks to the client (the identify handler exposes 5xx messages).
+    await expect(identifyPlant('AAAA')).rejects.toThrow(
+      /plant identification service is temporarily unavailable/
+    );
+    await expect(
+      (async () => {
+        fetchMock.mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          text: async () => 'overloaded: secret upstream detail',
+        });
+        return identifyPlant('AAAA');
+      })()
+    ).rejects.not.toThrow(/secret upstream detail/);
   });
 
   it('passes an abort signal to fetch and aborts after the 5s timeout', async () => {

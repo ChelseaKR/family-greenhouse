@@ -110,7 +110,12 @@ export const importPlants = createHandler(
             );
           } catch (err) {
             logger.warn({ err, plantId: plant.id }, 'import_task_create_failed');
-            taskError = 'Plant created, but one or more tasks could not be created';
+            // Surface a dangling-assignee row error specifically (M4); other
+            // task failures keep the generic note.
+            taskError =
+              err instanceof Error && err.name === 'AssigneeNotMemberError'
+                ? 'Plant created, but a task assignee was not a current household member'
+                : 'Plant created, but one or more tasks could not be created';
           }
         }
 

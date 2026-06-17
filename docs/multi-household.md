@@ -18,9 +18,13 @@ The frontend's `HouseholdSwitcher` (`components/HouseholdSwitcher.tsx`) lists ev
 
 ## Authorization across households
 
-`authMiddleware` projects Cognito claims onto `event.user`, then applies the `X-Household-Id` override. Because the middleware can't do DDB calls (it runs on every request), it conservatively downgrades `householdRole` to `member` when the override is set. Admin-only routes call `requireAdmin` which then 403s on a switched household; clients are expected to refresh their role via `/me/households` if they need accurate role state on a non-default household.
+`authMiddleware` projects the Cognito JWT's identity (`sub`, `email`) onto `event.user`, then resolves the household context — whichever comes from the `X-Household-Id` override header or, absent that, the `custom:household_id` claim. **The membership row is authoritative for BOTH membership and role.** For the resolved household, the middleware reads the caller's `MEMBER#{userId}` row and sets `user.householdRole` to the role stored there — `admin` or `member`. It does **not** downgrade to `member`, and it never trusts the `custom:household_role` claim (that claim is defense-in-depth only and lags membership changes by up to the token lifetime).
 
-The local Express server is more accurate because it has direct access to the in-memory memberships array — it sets the right role straight from the membership entry.
+So an admin keeps admin on a switched household, and a member who was removed loses access — both correctly — within the cache TTL (below). `requireAdmin` therefore reflects the caller's real role on the addressed household with no client-side `/me/households` refresh needed.
+
+The lookup goes through a small per-warm-container cache (`utils/membershipCache.ts`, 60s TTL). Mutations that change membership (`setMemberRole`, `removeMember`) invalidate the cache synchronously in the container that processed them; other warm containers honor the change within ≤60s. A non-member who sets `X-Household-Id` to a household they don't belong to gets a 403 ("Not a member of the requested household").
+
+The local Express server mirrors this by reading the role straight from its in-memory memberships array.
 
 ### Cross-household reads
 
