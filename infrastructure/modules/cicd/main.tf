@@ -14,6 +14,11 @@
 # policy controls WHO can assume; the permission policy bounds the blast
 # radius if assumption is ever compromised.
 
+# Account id for pinning IAM resource ARNs to THIS account instead of `*`
+# (any-account). A wildcard account in an IAM resource ARN is broader than
+# the role ever needs — every project role/policy it manages lives here.
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -164,9 +169,39 @@ resource "aws_iam_policy" "deploy" {
           "iam:*",
         ]
         Resource = [
-          "arn:aws:iam::*:role/${var.project_name}-*",
-          "arn:aws:iam::*:policy/${var.project_name}-*",
-          "arn:aws:iam::*:oidc-provider/token.actions.githubusercontent.com",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com",
+        ]
+      },
+      {
+        # SELF-ESCALATION DEFENSE.
+        #
+        # The IamWriteProjectScoped grant above necessarily includes the
+        # deploy role's OWN ARN (it matches `${project_name}-*`), because the
+        # role legitimately manages the project's roles/policies — including
+        # itself. But that means an Allow of iam:AttachRolePolicy /
+        # iam:PutRolePolicy on `role/${project_name}-*` lets a compromised CI
+        # run attach AdministratorAccess (or an inline allow-*) to THIS role
+        # and bootstrap full admin from a scoped credential.
+        #
+        # An explicit Deny (which always wins over an Allow) on the
+        # permission-mutating actions, scoped to ONLY this role's exact ARN,
+        # closes that path. It deliberately does NOT name the other project
+        # roles (e.g. the lambda execution role), so the deploy role keeps its
+        # legitimate ability to attach/put/delete policies on those during a
+        # normal terraform apply. iam:PutRolePermissionsBoundary is included so
+        # the role can't widen its own boundary either.
+        Sid    = "DenySelfPrivilegeEscalation"
+        Effect = "Deny"
+        Action = [
+          "iam:AttachRolePolicy",
+          "iam:PutRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:PutRolePermissionsBoundary",
+        ]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-github-deploy",
         ]
       },
       {

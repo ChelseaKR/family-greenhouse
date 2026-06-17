@@ -21,3 +21,8 @@ github_repo = "family-greenhouse"
 # Cost guardrail. The running app is ~$2-3/mo; this catches a runaway. Cost
 # Anomaly Detection (monitoring module) handles spend *spikes* separately.
 monthly_budget_usd = "30"
+
+# Enforce the Plant.id identify monthly meter in production (block once a
+# household exceeds its cap) so the real per-call Plant.id credit can't be
+# cost-amplified by concurrency. Beta default is tracking-only ("").
+identify_metering_enabled = "1"

@@ -113,3 +113,12 @@ variable "bedrock_embed_model_id" {
   type        = string
   default     = ""
 }
+
+# Plant.id identify monthly meter. "1" ENFORCES the per-household monthly cap;
+# blank only tracks usage (beta default). Production sets "1" so the real
+# per-call Plant.id credit can't be cost-amplified by concurrency.
+variable "identify_metering_enabled" {
+  description = "Set to '1' to enforce the Plant.id identify monthly meter. Blank only tracks usage without blocking."
+  type        = string
+  default     = ""
+}

@@ -99,13 +99,62 @@ resource "aws_s3_bucket_public_access_block" "images" {
   restrict_public_buckets = true
 }
 
+# Versioning enabled in production to match the frontend bucket — gives a
+# recovery window for an accidentally overwritten/deleted plant photo. Paired
+# with the lifecycle rule below so noncurrent versions don't accumulate forever.
+resource "aws_s3_bucket_versioning" "images" {
+  bucket = aws_s3_bucket.images.id
+
+  versioning_configuration {
+    status = var.environment == "production" ? "Enabled" : "Suspended"
+  }
+}
+
+# Lifecycle for the images bucket (previously absent — deleted-plant photos and
+# abandoned presigned-PUT uploads would otherwise live forever: cost creep plus
+# a data-retention gap where user images persist after account deletion).
+#   - abort_incomplete_multipart_upload: reclaim never-finished presigned PUTs.
+#   - noncurrent_version_expiration: bound the versioning history added above.
+resource "aws_s3_bucket_lifecycle_configuration" "images" {
+  bucket = aws_s3_bucket.images.id
+
+  # Noncurrent-version rules only make sense once versioning is configured.
+  depends_on = [aws_s3_bucket_versioning.images]
+
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
 resource "aws_s3_bucket_cors_configuration" "images" {
   bucket = aws_s3_bucket.images.id
 
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["PUT", "GET"]
-    allowed_origins = ["*"]
+    # Presigned-PUT uploads come from the browser on the site origin only.
+    # Pin CORS to that origin instead of "*" (which let any site script the
+    # cross-origin upload). Falls back to "*" only in the no-domain dev
+    # environment, where there is no stable site origin to pin to.
+    allowed_origins = var.domain_name == "" ? ["*"] : ["https://${var.domain_name}", "https://www.${var.domain_name}"]
     max_age_seconds = 3600
   }
 }

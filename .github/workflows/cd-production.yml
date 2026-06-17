@@ -111,6 +111,11 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     needs: [validate, build]
+    # `terraform apply -auto-approve` runs FIRST and can replace Cognito / DDB
+    # / CloudFront / IAM. Gate it behind the same `production` environment as
+    # deploy-backend so the prod infra apply requires a reviewer approval too —
+    # otherwise any `v*` tag triggers an unreviewed infrastructure mutation.
+    environment: production
     defaults:
       run:
         working-directory: infrastructure
@@ -154,6 +159,10 @@ jobs:
     name: Deploy Frontend
     runs-on: ubuntu-latest
     needs: [validate, terraform]
+    # Same `production` approval gate as the terraform + deploy-backend jobs:
+    # an S3 sync + CloudFront invalidation to the live site is a prod mutation
+    # and must not run on an untagged/unreviewed path.
+    environment: production
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -341,6 +350,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate, deploy-backend, smoke-tests]
     if: failure() && needs.deploy-backend.result == 'success'
+    # SCOPE: this auto-rollback reverts Lambda *code* ONLY. The `terraform
+    # apply` that ran earlier in this deploy (Cognito/DDB/CloudFront/IAM/etc.)
+    # is NOT auto-rolled-back — if a bad infra change is what broke smoke,
+    # revert the tfvars/module change and run a corrective deploy by hand.
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -363,14 +376,27 @@ jobs:
             # Restore the previous version's code from the per-version zip the
             # deploy job archived to S3 (keyed by published version number).
             # `update-alias` would be cleaner once aliases exist; until then we
-            # re-publish the previous version's code to $LATEST. The fallback
-            # only fires for versions deployed before artifact archival existed.
-            aws lambda update-function-code \
+            # re-publish the previous version's code to $LATEST.
+            #
+            # A missing artifact means rollback CANNOT restore this function —
+            # fail loudly instead of swallowing it. Silently no-oping here
+            # leaves a broken deploy live while the workflow looks "rolled
+            # back". Track every failure and exit non-zero at the end so the
+            # operator is paged to finish the rollback by hand.
+            if ! aws lambda update-function-code \
               --function-name "$FUNCTION_NAME" \
               --s3-bucket "$ARTIFACT_BUCKET" \
               --s3-key "lambda-versions/${handler}-v${ver}.zip" \
-              --publish > /dev/null 2>&1 || echo "  ! ${FUNCTION_NAME}: no prior-version artifact found"
+              --publish > /dev/null 2>&1; then
+              echo "::error::${FUNCTION_NAME}: no prior-version artifact (lambda-versions/${handler}-v${ver}.zip) — NOT rolled back, manual intervention required"
+              rollback_failed=1
+            fi
           done < prev-versions.txt
+
+          if [ "${rollback_failed:-0}" = "1" ]; then
+            echo "::error::One or more functions could not be rolled back (missing artifact). Production may be running broken code — investigate immediately."
+            exit 1
+          fi
 
       - name: Notify (rollback)
         run: |
