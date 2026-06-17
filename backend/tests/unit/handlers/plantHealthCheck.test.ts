@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/leafHealth.js');
+vi.mock('../../../src/services/leafHealthBudget.js');
 vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/householdService.js');
 
 import * as leafHealth from '../../../src/services/leafHealth.js';
+import * as leafHealthBudget from '../../../src/services/leafHealthBudget.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as activity from '../../../src/services/activity.js';
 import * as householdService from '../../../src/services/householdService.js';
@@ -68,6 +70,9 @@ describe('plants health-check handler', () => {
 
     vi.mocked(plantService.getPlant).mockResolvedValue(PLANT);
     vi.mocked(leafHealth.assessLeafHealth).mockResolvedValue(ASSESSMENT);
+    // Spend cap (M1): under the cap by default; increment is a soft no-op.
+    vi.mocked(leafHealthBudget.isOverCap).mockResolvedValue(false);
+    vi.mocked(leafHealthBudget.incrementUsage).mockResolvedValue(1);
     vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
     vi.mocked(householdService.getMemberByUserId).mockResolvedValue({
       name: 'Chelsea',
@@ -91,6 +96,25 @@ describe('plants health-check handler', () => {
         payload: { plantId: 'plant-1', plantName: 'Fernie', overall: 'monitor' },
       })
     );
+    // A real (non-demo) assessment is counted against the monthly cap.
+    expect(leafHealthBudget.incrementUsage).toHaveBeenCalledWith('hh-1');
+  });
+
+  it('429s and never calls Bedrock when the household is over its monthly cap (M1)', async () => {
+    vi.mocked(leafHealthBudget.isOverCap).mockResolvedValue(true);
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(429);
+    expect(leafHealth.assessLeafHealth).not.toHaveBeenCalled();
+    expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
+  });
+
+  it('does NOT count the demo fallback against the cap (no Bedrock spend)', async () => {
+    vi.mocked(leafHealth.assessLeafHealth).mockResolvedValue({ ...ASSESSMENT, demo: true });
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
   });
 
   it("404s when the plant is not in the caller's household (ownership)", async () => {

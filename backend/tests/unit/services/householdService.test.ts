@@ -63,6 +63,14 @@ describe('householdService', () => {
   it('setMemberRole returns null when member missing', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { setMemberRole } = await import('../../../src/services/householdService.js');
+    // Demotion to 'member' runs the last-admin guard first — mock a members
+    // list where 'u' isn't the sole admin so the guard passes.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [
+        { householdId: 'hh', userId: 'u', role: 'member' },
+        { householdId: 'hh', userId: 'admin', role: 'admin' },
+      ],
+    });
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: undefined });
     expect(await setMemberRole('hh', 'u', 'member')).toBeNull();
   });
@@ -271,12 +279,23 @@ describe('householdService', () => {
     expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(2);
   });
 
+  // Members listing that passes the last-admin guard (the removed user 'u' is
+  // a plain member, and another admin remains). Prepended to removeMember /
+  // setMemberRole-demotion flows because the L1 guard reads members first.
+  const GUARD_OK_MEMBERS = {
+    Items: [
+      { householdId: 'hh', userId: 'u', role: 'member' },
+      { householdId: 'hh', userId: 'admin', role: 'admin' },
+    ],
+  };
+
   it('removeMember transacts the member delete with a floored memberCount decrement', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { removeMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(GUARD_OK_MEMBERS); // last-admin guard read
     vi.mocked(dynamodb.send).mockResolvedValueOnce({});
     await removeMember('hh', 'u');
-    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+    const cmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
       kind: string;
       input: {
         TransactItems: [
@@ -304,6 +323,7 @@ describe('householdService', () => {
   it('removeMember stays idempotent when the member row is already gone (no counter touch)', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { removeMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(GUARD_OK_MEMBERS); // last-admin guard read
     vi.mocked(dynamodb.send).mockRejectedValueOnce(
       Object.assign(new Error('cancelled'), {
         name: 'TransactionCanceledException',
@@ -311,8 +331,8 @@ describe('householdService', () => {
       })
     );
     await expect(removeMember('hh', 'u')).resolves.toBeUndefined();
-    // No fallback delete — the row was already gone.
-    expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(1);
+    // Guard read + TransactWrite only — no fallback delete (row already gone).
+    expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(2);
   });
 
   it('removeMember falls back to a plain delete when only the counter floor blocked the transaction', async () => {
@@ -320,6 +340,7 @@ describe('householdService', () => {
     const { removeMember } = await import('../../../src/services/householdService.js');
     // Counter already 0 (drift on a legacy row): the member row still exists
     // and must be removed even though the decrement can't go below 0.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(GUARD_OK_MEMBERS); // last-admin guard read
     vi.mocked(dynamodb.send).mockRejectedValueOnce(
       Object.assign(new Error('cancelled'), {
         name: 'TransactionCanceledException',
@@ -329,8 +350,8 @@ describe('householdService', () => {
     vi.mocked(dynamodb.send).mockResolvedValueOnce({});
     await removeMember('hh', 'u');
     const calls = vi.mocked(dynamodb.send).mock.calls;
-    expect(calls).toHaveLength(2);
-    const fallback = calls[1][0] as unknown as { kind: string; input: { Key: { SK: string } } };
+    expect(calls).toHaveLength(3);
+    const fallback = calls[2][0] as unknown as { kind: string; input: { Key: { SK: string } } };
     expect(fallback.kind).toBe('Delete');
     expect(fallback.input.Key.SK).toBe('MEMBER#u');
   });
@@ -340,5 +361,69 @@ describe('householdService', () => {
     const { getMemberByUserId } = await import('../../../src/services/householdService.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
     expect(await getMemberByUserId('hh', 'u')).toBeNull();
+  });
+
+  // --- Service-layer last-admin guard (L1) ---
+
+  it('removeMember throws LastAdminError when removing the lone admin of a multi-member household', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { removeMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [
+        { householdId: 'hh', userId: 'admin', role: 'admin' },
+        { householdId: 'hh', userId: 'other', role: 'member' },
+      ],
+    });
+    await expect(removeMember('hh', 'admin')).rejects.toMatchObject({ name: 'LastAdminError' });
+    // Guard fired BEFORE any destructive write — only the members read happened.
+    expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(1);
+  });
+
+  it('removeMember allows removing the sole member (single-member household is exempt)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { removeMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [{ householdId: 'hh', userId: 'admin', role: 'admin' }],
+    });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite
+    await expect(removeMember('hh', 'admin')).resolves.toBeUndefined();
+  });
+
+  it('setMemberRole throws LastAdminError when demoting the lone admin', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { setMemberRole } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [
+        { householdId: 'hh', userId: 'admin', role: 'admin' },
+        { householdId: 'hh', userId: 'other', role: 'member' },
+      ],
+    });
+    await expect(setMemberRole('hh', 'admin', 'member')).rejects.toMatchObject({
+      name: 'LastAdminError',
+    });
+    expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(1);
+  });
+
+  it('setMemberRole allows demotion when another admin remains', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { setMemberRole } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [
+        { householdId: 'hh', userId: 'admin', role: 'admin' },
+        { householdId: 'hh', userId: 'admin2', role: 'admin' },
+      ],
+    });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Attributes: {
+        householdId: 'hh',
+        userId: 'admin',
+        name: 'A',
+        email: 'a@b.com',
+        role: 'member',
+        joinedAt: '',
+      },
+    });
+    const result = await setMemberRole('hh', 'admin', 'member');
+    expect(result?.role).toBe('member');
   });
 });

@@ -182,3 +182,28 @@ export const requireAdmin = (): middy.MiddlewareObj<AuthenticatedEvent, APIGatew
 
   return { before };
 };
+
+/**
+ * Structurally reject machine (API-key) principals with a 403, regardless of
+ * scope or role. API keys carry `householdRole: 'member'` for read-path
+ * compatibility, so a role check can't tell them apart from a human — the
+ * authoritative signal is `user.isApiKey` (set by apiKeyMiddleware).
+ *
+ * Use this as defense-in-depth on internal/operational routes that should
+ * only ever be reached by a human admin or an internal IAM-signed invocation
+ * — the reminder/digest/recap cron triggers — so a leaked key can never fan
+ * out paid notification sends even if it somehow reached the route. This also
+ * gives the otherwise-unused `isApiKey` flag a real enforcement use.
+ */
+export const rejectApiKeyPrincipal = (): middy.MiddlewareObj<
+  AuthenticatedEvent,
+  APIGatewayProxyResult
+> => {
+  const before: middy.MiddlewareFn<AuthenticatedEvent, APIGatewayProxyResult> = (request) => {
+    if (request.event.user?.isApiKey) {
+      throw createHttpError(403, 'API keys cannot access this route');
+    }
+  };
+
+  return { before };
+};

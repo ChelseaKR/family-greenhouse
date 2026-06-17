@@ -3,7 +3,12 @@ import createHttpError from 'http-errors';
 import { z } from 'zod';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
-import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
+import {
+  authMiddleware,
+  AuthenticatedEvent,
+  requireHousehold,
+  rejectApiKeyPrincipal,
+} from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { authRateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
@@ -168,6 +173,9 @@ export const runReminders = createHandler(
 )
   .use(authMiddleware())
   .use(requireHousehold())
+  // Internal cron / break-glass route: never a machine key (defense-in-depth
+  // even though API keys don't reach this handler today). See M2.
+  .use(rejectApiKeyPrincipal())
   // Fans out push/email/SMS to the whole household — each call costs real
   // money on the paid notification channels. "Send reminders now" is a
   // break-glass button, not a polling target: 2/hour per admin.
@@ -195,6 +203,7 @@ export const runDigests = createHandler(
 )
   .use(authMiddleware())
   .use(requireHousehold())
+  .use(rejectApiKeyPrincipal())
   // Same budget rationale as run-reminders: email costs money per send.
   .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 2 }));
 
@@ -221,6 +230,7 @@ export const runYearRecap = createHandler(
 )
   .use(authMiddleware())
   .use(requireHousehold())
+  .use(rejectApiKeyPrincipal())
   .use(validateBody(recapSchema))
   .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 2 }));
 

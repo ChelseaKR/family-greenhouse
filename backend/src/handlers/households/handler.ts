@@ -363,7 +363,20 @@ export const updateMemberRole = createHandler(
       throw createHttpError(404, 'Member not found');
     }
 
-    const updated = await householdService.setMemberRole(householdId, userId, validatedBody.role);
+    let updated;
+    try {
+      updated = await householdService.setMemberRole(householdId, userId, validatedBody.role);
+    } catch (err) {
+      // Service-layer last-admin guard (L1). Maps to the same 400 the handler
+      // already returns for self-demotion.
+      if (err instanceof Error && err.name === 'LastAdminError') {
+        throw createHttpError(
+          400,
+          'Promote another member to admin before demoting the last admin'
+        );
+      }
+      throw err;
+    }
     if (!updated) {
       throw createHttpError(404, 'Member not found');
     }
@@ -420,7 +433,18 @@ export const removeMember = createHandler(
       throw createHttpError(404, 'Member not found');
     }
 
-    await householdService.removeMember(householdId, userId);
+    try {
+      await householdService.removeMember(householdId, userId);
+    } catch (err) {
+      // Service-layer last-admin guard (L1).
+      if (err instanceof Error && err.name === 'LastAdminError') {
+        throw createHttpError(
+          400,
+          'Promote another member to admin before removing the last admin'
+        );
+      }
+      throw err;
+    }
 
     // Claims hygiene. Removal from a SECONDARY household must not touch the
     // user's Cognito claims at all (the old unconditional clear logged users

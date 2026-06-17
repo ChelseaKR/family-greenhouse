@@ -46,12 +46,20 @@ export interface NotificationRecipient {
   email: string;
 }
 
-async function sendBrowserPush(userId: string, payload: NotificationPayload): Promise<void> {
+/**
+ * Returns whether at least one browser-push delivery was actually attempted —
+ * a configured send to an existing subscription, or (in dry-run) the logged
+ * stand-in for one. `sendToUser` uses this to decide whether the user was
+ * reachable on this channel. A user with no subscriptions returns false.
+ */
+async function sendBrowserPush(userId: string, payload: NotificationPayload): Promise<boolean> {
   const subs = await pushSubscriptions.getUserSubscriptions(userId);
-  if (subs.length === 0) return;
+  if (subs.length === 0) return false;
   if (!ensureWebPushConfigured()) {
     logger.info({ userId, count: subs.length, payload, msg: 'push_dry_run' }, 'push_dry_run');
-    return;
+    // Dry-run still counts as "reachable on browser push" — in a configured
+    // environment this would have delivered.
+    return true;
   }
   await Promise.all(
     subs.map(async (sub) => {
@@ -71,6 +79,25 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
       }
     })
   );
+  return true;
+}
+
+/**
+ * Outcome of a `sendToUser` fan-out. The reminder dedupe marker (see
+ * `services/reminders.ts`) keys off this so it only "burns the day" when the
+ * user was actually reachable:
+ *
+ *   - `delivered` — at least one channel attempted a real send (browser push
+ *     to an existing subscription, email, or SMS).
+ *   - `dndSuppressedOnly` — the user has email and/or SMS enabled but NOTHING
+ *     delivered, and the only reason the loud channels were skipped is the DND
+ *     window. This is the case H1 exists for: a DND user who relies on
+ *     email/SMS (no push) is reachable again once the window lifts, so the
+ *     caller must NOT claim the daily slot and should retry on the next run.
+ */
+export interface SendResult {
+  delivered: boolean;
+  dndSuppressedOnly: boolean;
 }
 
 /**
@@ -82,20 +109,29 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
  *   - Inside DND, email + SMS are suppressed (they wake people up loudly).
  *   - Browser push is NOT suppressed — the OS already manages quiet hours
  *     better than we can, and browser push respects the OS setting.
+ *
+ * Returns a `SendResult` describing whether anything was delivered and, if
+ * not, whether the only thing standing in the way was the DND window — see
+ * `SendResult`.
  */
 export async function sendToUser(
   recipient: NotificationRecipient,
   payload: NotificationPayload
-): Promise<void> {
+): Promise<SendResult> {
   const prefs = await notificationPrefs.getPreferences(recipient.userId);
   const inDnd = notificationPrefs.isInDndWindow(prefs);
 
+  // Browser push runs first and synchronously resolves whether the user has a
+  // subscription, so we can fold its reachability into `delivered`.
+  let delivered = false;
+  if (prefs.browser) {
+    delivered = (await sendBrowserPush(recipient.userId, payload)) || delivered;
+  }
+
   const work: Promise<void>[] = [];
 
-  if (prefs.browser) {
-    work.push(sendBrowserPush(recipient.userId, payload));
-  }
   if (prefs.email && !inDnd) {
+    delivered = true;
     work.push(
       emailNotifier
         .sendEmail({
@@ -118,6 +154,7 @@ export async function sendToUser(
         'sms_skipped_unverified'
       );
     } else {
+      delivered = true;
       work.push(
         smsNotifier
           .sendSms({ to: prefs.phone, text: `${payload.title}: ${payload.body}` })
@@ -132,4 +169,10 @@ export async function sendToUser(
   }
 
   await Promise.all(work);
+
+  // DND-suppressed-only: the user wants email/SMS, nothing actually went out,
+  // and DND is the cause. (`delivered` already covers browser push delivering
+  // during DND.)
+  const dndSuppressedOnly = !delivered && inDnd && (prefs.email || prefs.sms);
+  return { delivered, dndSuppressedOnly };
 }

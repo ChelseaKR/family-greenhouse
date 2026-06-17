@@ -115,6 +115,34 @@ describe('taskService', () => {
     expect(sentCommand.input.Item.GSI2PK).toBe('HOUSEHOLD#hh-1#ASSIGNEE#user-2');
   });
 
+  it('createTask rejects a non-member assignee with AssigneeNotMemberError and writes nothing (M4)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { createTask } = await import('../../../src/services/taskService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    await expect(
+      createTask(
+        { plantId: 'p1', type: 'water', frequency: 7, assignedTo: 'ghost' },
+        'hh-1',
+        'user-1',
+        'Pothos'
+      )
+    ).rejects.toMatchObject({ name: 'AssigneeNotMemberError' });
+    // No Put attempted — the dangling assignee is refused before any write.
+    expect(vi.mocked(dynamodb.send)).not.toHaveBeenCalled();
+  });
+
+  it('updateTask rejects a reassignment to a non-member with AssigneeNotMemberError (M4)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { updateTask } = await import('../../../src/services/taskService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    await expect(updateTask('hh-1', 't1', { assignedTo: 'ghost' })).rejects.toMatchObject({
+      name: 'AssigneeNotMemberError',
+    });
+    expect(vi.mocked(dynamodb.send)).not.toHaveBeenCalled();
+  });
+
   it('getTask returns null when missing', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { getTask } = await import('../../../src/services/taskService.js');

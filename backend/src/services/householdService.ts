@@ -37,6 +37,37 @@ export class PlanLimitError extends Error {
 }
 
 /**
+ * Raised when a role change or removal would leave a multi-member household
+ * with no admin (the lone admin demoting/removing themselves). The handlers
+ * already enforce this on the self-demotion / account-deletion paths, but
+ * keeping the invariant in the service layer too means a future handler that
+ * forgets the check can't lock a household out of admin. Call sites check
+ * `err.name === 'LastAdminError'` (not instanceof) — same convention as
+ * PlanLimitError.
+ */
+export class LastAdminError extends Error {
+  constructor(message = 'Cannot remove the last admin of a household with other members') {
+    super(message);
+    this.name = 'LastAdminError';
+  }
+}
+
+/**
+ * Guard: throw LastAdminError if removing `userId`'s admin rights (by demotion
+ * or removal) would leave a multi-member household with zero admins. A
+ * single-member household is exempt (a solo admin managing only themselves is
+ * fine — that's the account-deletion / leave path).
+ */
+async function assertNotLastAdmin(householdId: string, userId: string): Promise<void> {
+  const members = await getHouseholdMembers(householdId);
+  if (members.length <= 1) return;
+  const admins = members.filter((m) => m.role === 'admin');
+  if (admins.length === 1 && admins[0].userId === userId) {
+    throw new LastAdminError();
+  }
+}
+
+/**
  * Pull the per-item CancellationReasons off a TransactWriteCommand failure.
  * Returns [] for anything that isn't a TransactionCanceledException, so
  * callers can index into it safely.
@@ -107,6 +138,12 @@ export async function setMemberRole(
   userId: string,
   role: 'admin' | 'member'
 ): Promise<HouseholdMember | null> {
+  // Service-layer last-admin guard (L1): demoting the lone admin of a
+  // multi-member household would lock it out of admin entirely.
+  if (role === 'member') {
+    await assertNotLastAdmin(householdId, userId);
+  }
+
   const result = await dynamodb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
@@ -422,6 +459,11 @@ export async function addMember(
  *     is already at its floor).
  */
 export async function removeMember(householdId: string, userId: string): Promise<void> {
+  // Service-layer last-admin guard (L1): removing the lone admin of a
+  // multi-member household would lock it out of admin entirely. Solo-member
+  // households are exempt (the leave / account-deletion path).
+  await assertNotLastAdmin(householdId, userId);
+
   const memberKey = {
     PK: `HOUSEHOLD#${householdId}`,
     SK: `MEMBER#${userId}`,

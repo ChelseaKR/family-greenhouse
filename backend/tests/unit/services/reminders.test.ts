@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn((input) => ({ input, kind: 'Put' })),
+  GetCommand: vi.fn((input) => ({ input, kind: 'Get' })),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -28,7 +29,9 @@ vi.mock('../../../src/services/pestAlerts.js', () => ({
   markAlerted: vi.fn(),
 }));
 vi.mock('../../../src/services/notifier.js', () => ({
-  sendToUser: vi.fn(),
+  // Default: a real delivery. Tests that exercise the DND-suppressed-only
+  // path (H1) override this with mockResolvedValueOnce.
+  sendToUser: vi.fn(async () => ({ delivered: true, dndSuppressedOnly: false })),
 }));
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
@@ -71,8 +74,20 @@ async function mockConditionalMarkerStore() {
   const { dynamodb } = await import('../../../src/utils/dynamodb.js');
   const markers = new Set<string>();
   vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
-    const { input } = cmd as { input: { Item: { PK: string; SK: string } } };
-    const key = `${input.Item.PK}|${input.Item.SK}`;
+    const { input, kind } = cmd as {
+      kind?: 'Put' | 'Get';
+      input: { Item?: { PK: string; SK: string }; Key?: { PK: string; SK: string } };
+    };
+    // GetCommand → marker pre-check (alreadyRemindedToday). Return the marker
+    // row when present so the read-side dedupe sees it.
+    if (kind === 'Get' && input.Key) {
+      const key = `${input.Key.PK}|${input.Key.SK}`;
+      return (markers.has(key) ? { Item: { PK: input.Key.PK, SK: input.Key.SK } } : {}) as never;
+    }
+    // PutCommand → conditional claim. Second claim on the same key throws
+    // ConditionalCheckFailed, exactly the dedupe behavior across hourly runs.
+    const item = input.Item!;
+    const key = `${item.PK}|${item.SK}`;
     if (markers.has(key)) {
       const err = new Error('The conditional request failed');
       err.name = 'ConditionalCheckFailedException';
@@ -164,6 +179,37 @@ describe('reminders service', () => {
     // Next day: fresh marker key → reminder goes out again.
     const nextDay = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
     expect(await remindHousehold('hh', nextDay)).toBe(1);
+    expect(notifier.sendToUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT claim the daily slot when delivery was DND-suppressed-only, so the next run retries (H1)', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const markers = await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { nextDue: past, plantId: 'p1', assignedTo: 'u1' },
+    ] as never);
+
+    // Hour 1: the user is in their DND window and relies on email/SMS (no
+    // push), so nothing actually delivered. The slot must stay UNclaimed.
+    vi.mocked(notifier.sendToUser).mockResolvedValueOnce({
+      delivered: false,
+      dndSuppressedOnly: true,
+    });
+    expect(await remindHousehold('hh', NOW)).toBe(0);
+    expect(markers.has('USER#u1|REMINDED#2026-06-01')).toBe(false);
+
+    // Hour 2: DND has lifted, email delivers. Because the slot was never
+    // claimed, the user still gets today's reminder (the H1 bug regressed).
+    const hourLater = new Date(NOW.getTime() + 60 * 60 * 1000);
+    expect(await remindHousehold('hh', hourLater)).toBe(1);
+    expect(markers.has('USER#u1|REMINDED#2026-06-01')).toBe(true);
     expect(notifier.sendToUser).toHaveBeenCalledTimes(2);
   });
 
