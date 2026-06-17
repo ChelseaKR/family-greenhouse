@@ -14,6 +14,7 @@
 import express from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import {
   signupSchema,
@@ -36,6 +37,7 @@ import {
   setVacationSchema,
   applyTemplateSchema,
   applyTemplateBulkSchema,
+  createSitterLinkSchema,
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS } from './models/plans.js';
@@ -149,6 +151,20 @@ interface Task {
   notes: string | null;
   createdBy: string;
   createdAt: string;
+}
+
+/** Mirrors sitterService.SitterLink (SITTER#{token} row). The token is the
+ *  256-bit secret; id is the non-secret handle used by list/revoke. */
+interface SitterLink {
+  id: string;
+  token: string;
+  householdId: string;
+  createdBy: string;
+  createdAt: string;
+  startsAt: string;
+  expiresAt: string;
+  status: 'active' | 'revoked';
+  label: string | null;
 }
 
 interface PushSubscriptionRecord {
@@ -280,6 +296,7 @@ export const db = {
   phoneVerifications: new Map<string, PhoneVerificationRecord>(), // userId -> pending code
   recapSent: new Set<string>(), // `${householdId}|${year}` once-per-year markers
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
+  sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
 };
 
 export const seedHouseholdId = '550e8400-e29b-41d4-a716-446655440001';
@@ -304,6 +321,7 @@ export function resetDb(): void {
   db.phoneVerifications.clear();
   db.recapSent.clear();
   db.pendingConfirmations.clear();
+  db.sitterLinks.clear();
 
   const now = new Date().toISOString();
 
@@ -1056,6 +1074,106 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
 
   res.status(201).json(payload);
 });
+
+// --- Plant-sitter links (authed management) -------------------------------
+// Mirrors handlers/households/handler.ts: createSitterLink / listSitterLinks /
+// revokeSitterLink. Admin-gated, like invites.
+
+/** Non-secret view of a sitter link (no token). Mirrors toSummary. */
+function sitterSummary(link: SitterLink) {
+  const { token: _token, ...summary } = link;
+  void _token;
+  return summary;
+}
+
+// POST /households/:id/sitter-links
+app.post(
+  '/households/:id/sitter-links',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody(createSitterLinkSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const body = (req as any).validatedBody;
+    const now = new Date();
+    const token = randomBytes(32).toString('hex'); // 256-bit, like the service
+    const link: SitterLink = {
+      id: uuidv4(),
+      token,
+      householdId: req.params.id,
+      createdBy: user.userId,
+      createdAt: now.toISOString(),
+      startsAt: body.startsAt ?? now.toISOString(),
+      expiresAt: body.expiresAt,
+      status: 'active',
+      label: body.label ?? null,
+    };
+    db.sitterLinks.set(token, link);
+
+    const baseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+
+    res.status(201).json({ ...sitterSummary(link), token, url: `${baseUrl}/sit/${token}` });
+  }
+);
+
+// GET /households/:id/sitter-links
+app.get(
+  '/households/:id/sitter-links',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const links = [...db.sitterLinks.values()]
+      .filter((l) => l.householdId === req.params.id)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(sitterSummary);
+    res.json(links);
+  }
+);
+
+// DELETE /households/:id/sitter-links/:linkId
+app.delete(
+  '/households/:id/sitter-links/:linkId',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const target = [...db.sitterLinks.values()].find(
+      (l) => l.householdId === req.params.id && l.id === req.params.linkId
+    );
+    if (!target) {
+      return res.status(404).json({ message: 'Sitter link not found' });
+    }
+    target.status = 'revoked';
+    res.status(204).end();
+  }
+);
+
+/** Token → link only if active and within [startsAt, expiresAt]. Generic
+ *  null on any miss, mirroring sitterService.getActiveLink. */
+function getActiveSitterLink(token: string): SitterLink | null {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const link = db.sitterLinks.get(token);
+  if (!link || link.status !== 'active') return null;
+  const nowIso = new Date().toISOString();
+  if (nowIso < link.startsAt || nowIso > link.expiresAt) return null;
+  return link;
+}
 
 /** Expiry-checked invite lookup; mirrors householdService.getInvite. */
 function getValidInvite(code: string): Invite | null {
@@ -1836,6 +1954,99 @@ app.get('/plants/shared/:code', (req, res) => {
     plant: share.plantSnapshot,
     householdName: household?.name ?? 'A Family Greenhouse household',
     expiresAt: share.expiresAt,
+  });
+});
+
+// --- Plant-sitter PUBLIC endpoints (no auth) ------------------------------
+// Mirrors handlers/tasks/handler.ts: getSitterView / completeSitterTask. The
+// 256-bit token in the path is the only credential; we validate it on every
+// call and expose ONLY the PII-free due-task projection.
+
+/** PII-free due/overdue tasks for a household. Mirrors taskService.getSitterTasks:
+ *  due within 7 days OR overdue, active plants only, minimal fields. */
+function sitterTasksFor(householdId: string) {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + 7);
+  const cutoffIso = cutoff.toISOString();
+  const nowIso = now.toISOString();
+  return [...db.tasks.values()]
+    .filter((t) => t.householdId === householdId)
+    .filter((t) => (db.plants.get(t.plantId)?.status ?? 'active') === 'active')
+    .filter((t) => t.nextDue <= cutoffIso)
+    .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
+    .map((t) => ({
+      taskId: t.id,
+      plantName: t.plantName,
+      taskType: t.customType || t.type,
+      dueDate: t.nextDue,
+      overdue: t.nextDue < nowIso,
+    }));
+}
+
+// GET /sitter/:token
+app.get('/sitter/:token', (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  res.json({
+    label: link.label,
+    expiresAt: link.expiresAt,
+    tasks: sitterTasksFor(link.householdId),
+  });
+});
+
+// POST /sitter/:token/tasks/:taskId/complete
+app.post('/sitter/:token/tasks/:taskId/complete', (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  const task = db.tasks.get(req.params.taskId);
+  // Cross-household guard: the task must live in the token's household.
+  if (!task || task.householdId !== link.householdId) {
+    return res.status(404).json({ message: 'Task not found' });
+  }
+
+  const now = new Date();
+  const nextDue = new Date(now);
+  nextDue.setDate(nextDue.getDate() + task.frequency);
+  task.lastCompleted = now.toISOString();
+  task.nextDue = nextDue.toISOString();
+
+  const completionId = uuidv4();
+  db.completions.set(completionId, {
+    id: completionId,
+    householdId: task.householdId,
+    plantId: task.plantId,
+    taskId: task.id,
+    taskType: task.customType || task.type,
+    completedBy: `sitter:${link.id}`,
+    completedByName: 'a plant sitter',
+    completedAt: now.toISOString(),
+    notes: null,
+  });
+  recordActivity({
+    type: 'task.completed',
+    householdId: task.householdId,
+    actorId: `sitter:${link.id}`,
+    actorName: 'a plant sitter',
+    payload: {
+      taskId: task.id,
+      plantId: task.plantId,
+      plantName: task.plantName,
+      taskType: task.customType || task.type,
+      viaSitter: true,
+    },
+  });
+
+  res.json({
+    taskId: task.id,
+    plantName: task.plantName,
+    taskType: task.customType || task.type,
+    dueDate: task.nextDue,
+    overdue: false,
   });
 });
 

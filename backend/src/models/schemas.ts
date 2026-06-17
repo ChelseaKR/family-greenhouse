@@ -168,6 +168,36 @@ export const setVacationSchema = z
     }
   });
 
+// Sitter link (no-account, time-boxed plant-sitting access). The creator sets
+// an explicit [startsAt, expiresAt] coverage window; the link is rejected
+// outside it on every public call. Window is capped so a stray click can't
+// mint a year-long public link. `label` is an optional, non-PII friendly name
+// shown to the sitter (e.g. "The Smiths' plants") — never a member name/email.
+const MAX_SITTER_DAYS = 60;
+export const createSitterLinkSchema = z
+  .object({
+    startsAt: z.string().datetime().optional(),
+    expiresAt: z.string().datetime(),
+    label: z.string().trim().max(60).optional(),
+  })
+  .superRefine((val, ctx) => {
+    const start = val.startsAt ? Date.parse(val.startsAt) : Date.now();
+    const end = Date.parse(val.expiresAt);
+    if (end <= start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expiresAt'],
+        message: 'expiresAt must be in the future (after startsAt)',
+      });
+    } else if (end - start > MAX_SITTER_DAYS * 24 * 60 * 60 * 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expiresAt'],
+        message: `Sitter link cannot last longer than ${MAX_SITTER_DAYS} days`,
+      });
+    }
+  });
+
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1).max(80),
 });
@@ -245,4 +275,5 @@ export type CompleteTaskInput = z.infer<typeof completeTaskSchema>;
 export type SnoozeTaskInput = z.infer<typeof snoozeTaskSchema>;
 export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
 export type SetVacationInput = z.infer<typeof setVacationSchema>;
+export type CreateSitterLinkInput = z.infer<typeof createSitterLinkSchema>;
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
