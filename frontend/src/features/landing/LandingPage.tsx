@@ -734,19 +734,25 @@ export function LandingPage() {
             title="More than a reminder app"
             description="The shared schedule is where it starts. These are the parts you grow into."
           />
-          <dl className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-x-10 gap-y-8 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-3">
+          {/* A list of features, not term/definition pairs — so a plain
+              role="list" rather than a <dl> (which axe requires to contain
+              only <dt>/<dd> groups, not the icon span + wrapper here). */}
+          <ul
+            role="list"
+            className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-x-10 gap-y-8 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-3"
+          >
             {differentiators.map((item) => (
-              <div key={item.label} className="flex gap-4">
+              <li key={item.label} className="flex gap-4">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 ring-1 ring-primary-200/60">
                   <item.icon className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <dt className="font-semibold text-ink">{item.label}</dt>
-                  <dd className="mt-1 text-sm leading-6 text-gray-700">{item.body}</dd>
+                  <p className="font-semibold text-ink">{item.label}</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-700">{item.body}</p>
                 </div>
-              </div>
+              </li>
             ))}
-          </dl>
+          </ul>
         </div>
       </div>
 
