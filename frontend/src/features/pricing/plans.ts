@@ -22,7 +22,12 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Seedling',
     price: 'Free',
     description: 'Start on the windowsill',
-    features: ['Up to 10 plants', '1 household member', 'Care reminders', 'Works on your phone'],
+    features: [
+      'Up to 10 plants',
+      'Up to 6 household members',
+      'Care reminders',
+      'Works on your phone',
+    ],
     cta: 'Get started',
     highlighted: false,
   },

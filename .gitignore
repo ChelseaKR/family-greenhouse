@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Local research / scratch notes (not part of the published source)
+docs/research/
+
 # Build outputs
 frontend/vite.config.js
 frontend/vite.config.d.ts

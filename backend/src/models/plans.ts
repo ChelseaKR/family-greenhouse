@@ -24,7 +24,7 @@ export const PLANS: Record<PlanId, Plan> = {
     description: 'Free, perfect for getting started',
     monthlyPrice: 0,
     maxPlants: 10,
-    maxMembers: 1,
+    maxMembers: 6,
   },
   garden: {
     id: 'garden',

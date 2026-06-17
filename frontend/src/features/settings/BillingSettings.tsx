@@ -224,9 +224,7 @@ function PlanCard({ plan, current, isAdmin, beta, onSelect, isLoading }: PlanCar
         </li>
         <li className="flex gap-2">
           <CheckIcon className="h-5 w-5 text-primary-700" aria-hidden="true" />
-          {plan.maxMembers === 1
-            ? '1 household member'
-            : `Up to ${plan.maxMembers} household members`}
+          {`Up to ${plan.maxMembers} household members`}
         </li>
       </ul>
       <div className="mt-6">
