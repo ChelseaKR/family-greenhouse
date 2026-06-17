@@ -25,7 +25,7 @@ import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween } from '@/utils/date';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { toast } from '@/store/toastStore';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
@@ -69,7 +69,7 @@ function isToday(dateString: string): boolean {
 export function TasksPage() {
   useDocumentTitle('Tasks');
   const user = useAuthStore((state) => state.user);
-  const householdId = useActiveHouseholdId();
+  const { householdId, householdQuery } = useActiveHousehold();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterType>('all');
 
@@ -85,12 +85,13 @@ export function TasksPage() {
   // Existing household climate query (shared key with the dashboard's
   // ClimateCard, so this is usually a cache hit) — drives the one-tap
   // "skip this cycle" suggestions. No new endpoints.
-  const { data: climate } = useQuery({
-    queryKey: ['household', householdId, 'climate'],
-    queryFn: () => climateService.getClimate(householdId!),
-    enabled: !!householdId,
-    staleTime: 30 * 60 * 1000,
-  });
+  const { data: climate } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'climate'],
+      (hh) => climateService.getClimate(hh),
+      { staleTime: 30 * 60 * 1000 }
+    )
+  );
   const signals = deriveClimateSignals(climate);
 
   // Plant tags (for the outdoor-only frost variant) — standard plants query,

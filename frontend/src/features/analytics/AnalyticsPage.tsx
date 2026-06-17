@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { householdService } from '@/services/householdService';
 import { taskService } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
@@ -55,32 +55,36 @@ function daysOverdue(nextDue: string, now = new Date()): number {
 }
 export function AnalyticsPage() {
   useDocumentTitle('Analytics');
-  const householdId = useActiveHouseholdId();
+  const { householdId, householdQuery } = useActiveHousehold();
 
-  const { data: daily, isLoading: dailyLoading } = useQuery({
-    queryKey: ['household', householdId, 'analytics', 'daily', 30],
-    queryFn: () => householdService.getDailyAnalytics(householdId!, 30),
-    enabled: !!householdId,
-  });
+  const { data: daily, isLoading: dailyLoading } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'analytics', 'daily', 30],
+      (hh) => householdService.getDailyAnalytics(hh, 30)
+    )
+  );
 
   const yearNow = new Date().getFullYear();
-  const { data: review } = useQuery({
-    queryKey: ['household', householdId, 'year-in-review', yearNow],
-    queryFn: () => householdService.getYearInReview(householdId!, yearNow),
-    enabled: !!householdId,
-  });
+  const { data: review } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'year-in-review', yearNow],
+      (hh) => householdService.getYearInReview(hh, yearNow)
+    )
+  );
 
-  const { data: plants } = useQuery({
-    queryKey: ['plants', householdId],
-    queryFn: () => plantService.getPlants(),
-    enabled: !!householdId,
-  });
+  const { data: plants } = useQuery(
+    householdQuery(
+      (hh) => ['plants', hh],
+      () => plantService.getPlants()
+    )
+  );
 
-  const { data: tasks } = useQuery({
-    queryKey: ['tasks', householdId, 'all'],
-    queryFn: () => taskService.getTasks(),
-    enabled: !!householdId,
-  });
+  const { data: tasks } = useQuery(
+    householdQuery(
+      (hh) => ['tasks', hh, 'all'],
+      () => taskService.getTasks()
+    )
+  );
 
   if (!householdId) return null;
 
