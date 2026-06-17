@@ -23,7 +23,7 @@
     "lighthouse:mobile": "lhci autorun --config=lighthouserc.mobile.cjs",
     "size": "size-limit"
   },
-  "_size-limit-note": "Budgets are REGRESSION GATES set ~8% above the current measured size (brotli), not aspirational targets — the old values (40/60/230/10) were below what the app has ever shipped, so the check was permanently red and gated nothing. Trimming the bundle further (the index chunk and Tailwind CSS are the candidates) is tracked as future work for when real-device Lighthouse data shows it matters. Keep these tight: lower them whenever a real reduction lands. Measured with @size-limit/file (brotli) only — the preset-app 'time' plugin ran headless Chrome to estimate JS execution time, gated nothing (no time budgets), and broke CI+local runs with puppeteer navigation timeouts. Vendor budget raised 51 → 64 kB for the React 18 → 19 upgrade: react-dom 19 is ~12 kB (brotli) larger than 18, putting the React runtime chunk at ~59.5 kB measured — a sanctioned, unavoidable dependency increase, not regression drift; 64 kB keeps the usual ~8% headroom.",
+  "_size-limit-note": "Budgets are REGRESSION GATES set ~8% above the current measured size (brotli), not aspirational targets — the old values (40/60/230/10) were below what the app has ever shipped, so the check was permanently red and gated nothing. Trimming the bundle further (the index chunk and Tailwind CSS are the candidates) is tracked as future work for when real-device Lighthouse data shows it matters. Keep these tight: lower them whenever a real reduction lands. Measured with @size-limit/file (brotli) only — the preset-app 'time' plugin ran headless Chrome to estimate JS execution time, gated nothing (no time budgets), and broke CI+local runs with puppeteer navigation timeouts. Vendor budget raised 51 → 64 kB for the React 18 → 19 upgrade: react-dom 19 is ~12 kB (brotli) larger than 18, putting the React runtime chunk at ~59.5 kB measured — a sanctioned, unavoidable dependency increase, not regression drift; 64 kB keeps the usual ~8% headroom. All-JS-combined budget raised 312 → 320 kB when the care-guide content surface grew (six new species pages + two blog posts): the prose lands in the lazy careGuides/BlogPost chunks, so the Initial JS and Vendor budgets are untouched — only the combined aggregate moved, to ~312.4 kB measured. This is sanctioned content growth, not regression drift; 320 kB keeps a tight ~2.5% cushion.",
   "size-limit": [
     {
       "name": "Initial JS (brotli)",
@@ -40,7 +40,7 @@
     {
       "name": "All JS combined (brotli)",
       "path": "dist/assets/*.js",
-      "limit": "312 kB",
+      "limit": "320 kB",
       "brotli": true
     },
     {
