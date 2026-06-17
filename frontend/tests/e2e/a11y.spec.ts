@@ -83,4 +83,10 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
     await page.waitForLoadState('networkidle');
     await expectNoA11yViolations(page, 'forgot-password');
   });
+
+  test('pet-safe checker page', async ({ page }) => {
+    await page.goto('/pet-safe');
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'pet-safe');
+  });
 });

@@ -724,6 +724,17 @@ paths:
           schema: { type: string, minLength: 2 }
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /species/toxicity:
+    get:
+      summary: Public pet-toxicity lookup (cat/dog safety) for a plant name. No auth; curated static data, cached publicly.
+      tags: [Species]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
   /species/{id}:
     get:
       summary: Species detail

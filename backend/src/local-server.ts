@@ -39,6 +39,7 @@ import {
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS } from './models/plans.js';
+import { lookupToxicity } from './models/petToxicity.js';
 
 // Hard refusal to boot in production — this server has no real auth, no
 // persistence, and a well-known seed account. Mirrors the resolveCorsOrigin
@@ -2529,6 +2530,19 @@ app.get('/plants/:plantId/history', authMiddleware, requireHousehold, (req, res)
 // to its static catalog. This keeps local dev offline-friendly.
 app.get('/species/search', authMiddleware, (req, res) => {
   res.json({ source: 'disabled', results: [] });
+});
+
+// PUBLIC route (no auth) — the free "is this plant safe for pets?" lookup.
+// Mirrors handlers/species/handler.ts:toxicity exactly: resolves the typed
+// name against the same hand-curated static table (no Perenual, no DB), so
+// the mock returns real answers and the integration tests exercise the live
+// matcher. Registered BEFORE `/species/:id` so Express matches the exact
+// segment first (API Gateway does this automatically in production).
+app.get('/species/toxicity', (req, res) => {
+  const q = (typeof req.query.q === 'string' ? req.query.q : '').trim();
+  const results = q.length >= 2 ? lookupToxicity(q.slice(0, 80)) : [];
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json({ query: q, results });
 });
 
 app.get('/species/:id', authMiddleware, (req, res) => {

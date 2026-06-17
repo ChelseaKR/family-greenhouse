@@ -16,6 +16,7 @@ import { successResponse, cacheableResponse } from '../../utils/response.js';
 import * as enrichment from '../../services/enrichment.js';
 import { isConfigured } from '../../services/perenual.js';
 import { deriveCareSuggestion } from '../../services/careRecommendations.js';
+import { lookupToxicity } from '../../models/petToxicity.js';
 
 // GET /species/search?q=...
 // Public catalog: same query → same answer for every user. 5-minute
@@ -203,9 +204,46 @@ export const careSuggestions = createHandler(
   // AI/enrichment-backed; tighter cap than search/detail.
   .use(userRateLimit({ perWindowMs: 60_000, max: 10 }));
 
+// GET /species/toxicity?q=...
+//
+// PUBLIC ROUTE (auth=none at the gateway): powers the free, no-signup
+// "is this plant safe for pets?" checker page, which answers high-intent
+// "is X toxic to cats/dogs" searches for logged-out visitors. Like the
+// public thumbnail route, it must stay safe for anonymous callers and never
+// touch the metered Perenual API — it resolves against a hand-curated,
+// ASPCA-grounded static table (models/petToxicity.ts), so it does no I/O,
+// reads no household data, and echoes no PII.
+//
+// Read-only and deterministic (same query → same answer for everyone), so we
+// cache it publicly at the edge for an hour. IP-scoped rate limit since there
+// is no user to key on.
+export const toxicity = createHandler(
+  // Resolves a static in-memory table, so there's nothing to await — return
+  // the response wrapped in a Promise to satisfy the Handler signature.
+  (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const q = (event.queryStringParameters?.q ?? '').trim();
+    // Cap the query length so a giant string can't blow up the matcher; the
+    // table is tiny, so this is belt-and-braces.
+    const matches = q.length >= 2 ? lookupToxicity(q.slice(0, 80)) : [];
+    return Promise.resolve(
+      cacheableResponse(
+        { query: q, results: matches },
+        { maxAgeSeconds: 3600, visibility: 'public' }
+      )
+    );
+  }
+  // No authMiddleware: served to anonymous visitors on the marketing page.
+  // 60/min per IP comfortably covers search-as-you-type while blunting abuse.
+).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
+//
+// `GET /species/toxicity` is an exact-segment key, so API Gateway's HTTP API
+// route selection prefers it over the `GET /species/{id}` parameter route —
+// the two never collide.
 export const handler = createRouter({
   'GET /species/search': search,
+  'GET /species/toxicity': toxicity,
   'GET /species/{id}': detail,
   'GET /species/{id}/thumbnail': thumbnail,
   'GET /species/{id}/guide': guide,

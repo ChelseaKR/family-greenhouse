@@ -75,6 +75,7 @@ const BlogIndex = lazyNamed(() => import('@/features/blog/BlogIndex'), 'BlogInde
 const BlogPost = lazyNamed(() => import('@/features/blog/BlogPost'), 'BlogPost');
 const CareIndex = lazyNamed(() => import('@/features/care/CareIndex'), 'CareIndex');
 const CareGuidePage = lazyNamed(() => import('@/features/care/CareGuidePage'), 'CareGuidePage');
+const PetSafePage = lazyNamed(() => import('@/features/petsafe/PetSafePage'), 'PetSafePage');
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -150,6 +151,7 @@ function App() {
               <Route path="/blog" element={<BlogIndex />} />
               <Route path="/care" element={<CareIndex />} />
               <Route path="/care/:slug" element={<CareGuidePage />} />
+              <Route path="/pet-safe" element={<PetSafePage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />
