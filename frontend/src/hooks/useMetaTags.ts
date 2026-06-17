@@ -38,6 +38,10 @@ function setMeta(name: string, content: string, attr: 'name' | 'property' = 'nam
 }
 
 export function useMetaTags(meta: MetaTags): void {
+  // Callers construct `jsonLd` fresh each render, so a referential dep would
+  // rebuild every head tag on every render (title/JSON-LD flicker). Depend on
+  // a stable serialization instead.
+  const jsonLdKey = meta.jsonLd ? JSON.stringify(meta.jsonLd) : undefined;
   useEffect(() => {
     const cleanups: Array<() => void> = [];
     if (meta.title) {
@@ -57,7 +61,7 @@ export function useMetaTags(meta: MetaTags): void {
     if (meta.ogImage) {
       cleanups.push(setMeta('og:image', meta.ogImage, 'property'));
     }
-    if (meta.jsonLd) {
+    if (jsonLdKey) {
       // JSON-LD goes in a dedicated <script type="application/ld+json">.
       // We tag it with a data attribute we own so we can clean up on
       // unmount without disturbing any future structured-data scripts
@@ -65,12 +69,12 @@ export function useMetaTags(meta: MetaTags): void {
       const script = document.createElement('script');
       script.type = 'application/ld+json';
       script.dataset.useMetaTags = '1';
-      script.textContent = JSON.stringify(meta.jsonLd);
+      script.textContent = jsonLdKey;
       document.head.appendChild(script);
       cleanups.push(() => script.remove());
     }
     return () => {
       for (const cleanup of cleanups) cleanup();
     };
-  }, [meta.title, meta.description, meta.ogImage, meta.jsonLd]);
+  }, [meta.title, meta.description, meta.ogImage, jsonLdKey]);
 }

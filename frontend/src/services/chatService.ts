@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api, buildAuthHeaders } from './api';
 import { useAuthStore } from '@/store/authStore';
 
 /** One content block in a persisted chat message (mirrors the backend's
@@ -125,14 +125,12 @@ export const chatService = {
     const url = getChatStreamUrl();
     if (!url) throw new Error('Chat streaming is not configured');
 
-    // Same auth scheme as the axios instance (see services/api.ts): ID token
-    // (carries household claims) with access-token fallback, plus the active
-    // household pin.
-    const state = useAuthStore.getState();
-    const token = state.idToken ?? state.accessToken;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (state.activeHouseholdId) headers['X-Household-Id'] = state.activeHouseholdId;
+    // Same auth scheme as the axios instance — shared via buildAuthHeaders so
+    // the ID-token/access-token fallback and household pin can't drift.
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...buildAuthHeaders(useAuthStore.getState()),
+    };
 
     const response = await fetch(url, {
       method: 'POST',
@@ -151,7 +149,16 @@ export const chatService = {
     const handleFrame = (frame: string) => {
       for (const line of frame.split('\n')) {
         if (!line.startsWith('data:')) continue;
-        const event = JSON.parse(line.slice(5).trim()) as ChatStreamEvent;
+        let event: ChatStreamEvent;
+        try {
+          event = JSON.parse(line.slice(5).trim()) as ChatStreamEvent;
+        } catch {
+          // A single malformed frame (e.g. a partial line, keep-alive
+          // comment, or upstream hiccup) shouldn't abort the whole stream
+          // and force the sync-endpoint fallback. Skip it. Only a terminal
+          // `error` event or a stream that ends without `done` throws.
+          continue;
+        }
         if (event.type === 'error') {
           throw new Error(event.message || 'Chat stream failed');
         }

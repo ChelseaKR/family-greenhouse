@@ -69,13 +69,15 @@ export interface SetVacationData {
 
 export const taskService = {
   async getTasks(filters?: TaskFilters): Promise<TaskWithCoverage[]> {
-    const params = new URLSearchParams();
-    if (filters?.plantId) params.set('plantId', filters.plantId);
-    if (filters?.assignedTo) params.set('assignedTo', filters.assignedTo);
-    if (filters?.dueWithin) params.set('dueWithin', filters.dueWithin.toString());
-    if (filters?.overdue !== undefined) params.set('overdue', filters.overdue.toString());
+    // axios serializes `params` (skipping undefined), so we don't hand-build
+    // the query string.
+    const params: Record<string, string | number | boolean> = {};
+    if (filters?.plantId) params.plantId = filters.plantId;
+    if (filters?.assignedTo) params.assignedTo = filters.assignedTo;
+    if (filters?.dueWithin) params.dueWithin = filters.dueWithin;
+    if (filters?.overdue !== undefined) params.overdue = filters.overdue;
 
-    const response = await api.get<TaskWithCoverage[]>(`/tasks?${params.toString()}`);
+    const response = await api.get<TaskWithCoverage[]>('/tasks', { params });
     return response.data;
   },
 

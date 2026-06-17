@@ -52,6 +52,33 @@ export function isOverdue(dateString: string): boolean {
   return date.getTime() < today.getTime();
 }
 
+/**
+ * Short due-date label for task rows: "Overdue" / "Today" / "Tomorrow",
+ * else a weekday+date. Calendar-day comparison (local midnight) so it stays
+ * consistent with `isOverdue`/`isToday` above.
+ */
+export function formatDueDate(dateString: string): string {
+  const date = new Date(dateString);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  today.setHours(0, 0, 0, 0);
+  tomorrow.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+
+  if (date.getTime() < today.getTime()) {
+    return 'Overdue';
+  }
+  if (date.getTime() === today.getTime()) {
+    return 'Today';
+  }
+  if (date.getTime() === tomorrow.getTime()) {
+    return 'Tomorrow';
+  }
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 export function isToday(dateString: string): boolean {
   const date = new Date(dateString);
   const today = new Date();
