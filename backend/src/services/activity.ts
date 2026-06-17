@@ -124,7 +124,7 @@ export async function listActivity(householdId: string, limit = 50): Promise<Act
     // TaskCompletion legacy shape — fold into the envelope.
     return {
       id: item.id as string,
-      type: 'task.completed' as ActivityType,
+      type: 'task.completed',
       householdId: item.householdId as string,
       actorId: item.completedBy as string,
       actorName: (item.completedByName as string) ?? '',
