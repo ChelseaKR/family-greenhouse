@@ -19,6 +19,12 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
+    // TypeScript 6.0 deprecates `baseUrl` (TS5101) and errors on it unless
+    // silenced. We still use baseUrl for the `@/*` path alias below, so opt
+    // into the 6.0 deprecation grace period; the alias can move to a
+    // baseUrl-free form (paths resolve relative to this tsconfig) before TS 7.0
+    // removes the option entirely.
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
