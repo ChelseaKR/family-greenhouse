@@ -20,7 +20,7 @@ import {
   useUnclaimTaskMutation,
 } from '@/features/tasks/taskMutations';
 import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
 import { Card, CardHeader } from '@/components/Card';
@@ -73,7 +73,7 @@ function filterActivity(
 export function DashboardPage() {
   useDocumentTitle('Dashboard');
   const user = useAuthStore((state) => state.user);
-  const householdId = useActiveHouseholdId();
+  const { householdId, householdQuery } = useActiveHousehold();
   const queryClient = useQueryClient();
 
   const {
@@ -96,14 +96,15 @@ export function DashboardPage() {
 
   useOverdueAlerts(upcomingTasks, householdId);
 
-  const { data: activity } = useQuery({
-    queryKey: ['household', householdId, 'activity'],
-    // Pull a wider window so client-side filters have something to chew on;
-    // 50 keeps round-trip light while making the "Plants" or "People" pills
-    // feel non-empty even when watering dominates the feed.
-    queryFn: () => householdService.getActivity(householdId!, 50),
-    enabled: !!householdId,
-  });
+  const { data: activity } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'activity'],
+      // Pull a wider window so client-side filters have something to chew on;
+      // 50 keeps round-trip light while making the "Plants" or "People" pills
+      // feel non-empty even when watering dominates the feed.
+      (hh) => householdService.getActivity(hh, 50)
+    )
+  );
 
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const filteredActivity = useMemo(
@@ -130,12 +131,13 @@ export function DashboardPage() {
 
   // Same climate query the ClimateCard below issues (shared key → one
   // fetch); powers the "Rain expected — skip this cycle?" chips on rows.
-  const { data: climate } = useQuery({
-    queryKey: ['household', householdId, 'climate'],
-    queryFn: () => climateService.getClimate(householdId!),
-    enabled: !!householdId,
-    staleTime: 30 * 60 * 1000,
-  });
+  const { data: climate } = useQuery(
+    householdQuery(
+      (hh) => ['household', hh, 'climate'],
+      (hh) => climateService.getClimate(hh),
+      { staleTime: 30 * 60 * 1000 }
+    )
+  );
   const climateSignals = deriveClimateSignals(climate);
   const tagsByPlantId = useMemo(
     () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
