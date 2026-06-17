@@ -18,6 +18,7 @@ import { Card } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
+import { PetToxicityNote } from './PetToxicityNote';
 import { generatePlantName } from '@/utils/plantNameGenerator';
 import { downscaleImage } from '@/utils/image';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -391,6 +392,8 @@ export function AddPlantPage() {
             error={errors.species?.message}
             helperText="Type to search common names; pick a suggestion to autofill the scientific name."
           />
+
+          <PetToxicityNote perenualSpeciesId={perenualSpeciesId} />
 
           <SuggestedCareCard perenualSpeciesId={perenualSpeciesId} />
 
