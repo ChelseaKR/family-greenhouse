@@ -97,6 +97,7 @@ export type EventName =
   | 'leaf_health_checked' // Leaf-health photo submitted for a visual assessment.
   | 'plant_shared' // Cutting-share link minted for a plant card.
   | 'plant_share_accepted' // A shared cutting card was copied into a household.
+  | 'cutting_graft_started' // Visitor tapped the graft CTA on a public cutting card.
   | 'household_switched' // User changed active household via the switcher.
   | 'climate_location_set'
   | 'experiment_viewed'; // A bucketed A/B variant was rendered to the visitor.

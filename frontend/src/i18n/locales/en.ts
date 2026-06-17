@@ -115,17 +115,28 @@ export const en = {
     },
     shared: {
       title: 'A cutting for you',
+      eyebrow: 'A cutting from Family Greenhouse',
       fromHousehold: 'Shared by {{name}}',
+      // Provenance lead-in shown above the plant name on the public card.
+      cuttingOf: 'A cutting of',
+      provenance: 'Grown by {{name}}, passed on to you.',
       invalid: 'This share link is invalid or has expired.',
       askForNew: 'Ask the sender for a fresh link — they expire after 14 days.',
       notesLabel: 'Notes',
       addToGreenhouse: 'Add to my greenhouse',
       added: '{{name}} added to your greenhouse',
-      signInPrompt: 'Sign in or create an account to add this plant to your greenhouse.',
+      // Graft CTA — the viral loop. Frames signup as continuing the lineage.
+      graftHeading: 'Start its next chapter',
+      graftBody: 'Grow your own cutting from {{name}} and keep its story going in your greenhouse.',
+      graftCta: 'Grow your own cutting',
+      signInPrompt: 'Already have a greenhouse? Sign in to add this cutting.',
       signIn: 'Sign in',
       createAccount: 'Create account',
-      needHousehold: 'Create or join a household first to add plants.',
+      needHousehold: 'Create or join a household first to grow this cutting.',
       goToOnboarding: 'Set up my household',
+      metaTitle: '{{name}} — a cutting on Family Greenhouse',
+      metaDescription:
+        'A cutting of {{name}}, shared by {{household}}. Grow your own and keep its story going on Family Greenhouse.',
     },
   },
   importPlants: {
