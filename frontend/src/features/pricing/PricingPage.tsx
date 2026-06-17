@@ -54,8 +54,8 @@ export function PricingPage() {
                 Do I need a credit card to try the free plan?
               </dt>
               <dd className="mt-1 text-sm text-gray-600">
-                No. The Seedling plan is fully free, no card required. Add up to 10 plants and one
-                household member.
+                No. The Seedling plan is fully free, no card required. Add up to 10 plants and bring
+                in up to 6 household members.
               </dd>
             </div>
             <div>

@@ -7,7 +7,7 @@ describe('plan catalog', () => {
   });
 
   it('pins the per-tier caps the handlers enforce', () => {
-    expect(PLANS.seedling).toMatchObject({ monthlyPrice: 0, maxPlants: 10, maxMembers: 1 });
+    expect(PLANS.seedling).toMatchObject({ monthlyPrice: 0, maxPlants: 10, maxMembers: 6 });
     expect(PLANS.garden).toMatchObject({ monthlyPrice: 4.99, maxPlants: 500, maxMembers: 6 });
     expect(PLANS.greenhouse).toMatchObject({ monthlyPrice: 9.99, maxPlants: 5000, maxMembers: 50 });
   });

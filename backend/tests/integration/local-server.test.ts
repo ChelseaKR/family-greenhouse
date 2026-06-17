@@ -745,7 +745,8 @@ describe('invite + join flow', () => {
 
   it('POST /households/join/:inviteCode joins via a valid invite and returns the household', async () => {
     const adminToken = await loginAsSeed();
-    await upgradeSeedHousehold(adminToken); // seedling caps members at 1
+    // Seedling now welcomes the whole household (up to 6), so a join into a
+    // one-member household succeeds on the free plan — no upgrade required.
     const invite = await request(app)
       .post(`/households/${seedHouseholdId}/invites`)
       .set('Authorization', `Bearer ${adminToken}`);
@@ -789,20 +790,22 @@ describe('invite + join flow', () => {
   });
 
   it('402s a join that would exceed the plan member cap', async () => {
-    // Seed household stays on seedling (maxMembers: 1, already full).
+    // Seed household stays on seedling (maxMembers: 6). It starts with the
+    // seed admin; fill it to the cap so the next join trips the limit.
     const adminToken = await loginAsSeed();
-    await upgradeSeedHousehold(adminToken, 'garden');
-    // Downgrade back so the cap check trips with an existing valid invite.
     const invite = await request(app)
       .post(`/households/${seedHouseholdId}/invites`)
       .set('Authorization', `Bearer ${adminToken}`);
+    for (let i = 0; i < 5; i++) {
+      seedMember(`cap-fill-${i}`, `cap-fill-${i}@example.com`, 'member');
+    }
     db.households.get(seedHouseholdId)!.planId = 'seedling';
     const joinerToken = await createConfirmedUser('capped@example.com');
     const join = await request(app)
       .post(`/households/join/${invite.body.code}`)
       .set('Authorization', `Bearer ${joinerToken}`);
     expect(join.status).toBe(402);
-    expect(join.body.message).toMatch(/limited to 1 members/);
+    expect(join.body.message).toMatch(/limited to 6 members/);
   });
 
   it('400s a double-join into the same household', async () => {

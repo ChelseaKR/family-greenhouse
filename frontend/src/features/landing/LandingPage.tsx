@@ -860,9 +860,9 @@ export function LandingPage() {
 
       {/* Pricing Section — now on paper after the parchment "before you
           buy" band; the sprig marks the seam. The description frames the
-          tiers as a path (free → household → unlimited + API) so
-          collectors and power users see themselves, not just abstract
-          plan names. */}
+          tiers as a path (free household → unlimited plants → unlimited +
+          API) so collectors and power users see themselves, not just
+          abstract plan names. */}
       <div id="pricing" className="py-20 sm:py-28 bg-paper relative">
         <SprigDivider
           className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
@@ -872,7 +872,7 @@ export function LandingPage() {
           <SectionHeading
             eyebrow="Pricing"
             title="Plans for every greenhouse"
-            description="Start free with ten plants and one keeper. Add the household on Garden, then go unlimited and open up the API on Greenhouse."
+            description="Start free with ten plants and your whole household — up to six people. Go unlimited on Garden, then open up the API on Greenhouse."
           />
           <PricingGrid />
           <p className="mt-12 text-center text-sm text-gray-700">

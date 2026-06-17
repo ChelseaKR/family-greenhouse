@@ -142,9 +142,9 @@ describe('billing handler', () => {
     it('reports over-limit usage verbatim after a downgrade (caps come from the NEW plan)', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
-      // Household downgraded to seedling while holding 25 plants / 4 members.
+      // Household downgraded to seedling while holding 25 plants / 8 members.
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
-      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 25, memberCount: 4 });
+      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 25, memberCount: 8 });
 
       const res = (await getCurrentSubscription(
         buildEvent({ httpMethod: 'GET' }),
@@ -153,8 +153,9 @@ describe('billing handler', () => {
       )) as APIGatewayProxyResult;
 
       const usage = JSON.parse(res.body).usage;
-      expect(usage).toEqual({ plantCount: 25, maxPlants: 10, memberCount: 4, maxMembers: 1 });
+      expect(usage).toEqual({ plantCount: 25, maxPlants: 10, memberCount: 8, maxMembers: 6 });
       expect(usage.plantCount).toBeGreaterThan(usage.maxPlants);
+      expect(usage.memberCount).toBeGreaterThan(usage.maxMembers);
     });
 
     it('tolerates missing counters (legacy households) as zero usage', async () => {
