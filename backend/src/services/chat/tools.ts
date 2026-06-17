@@ -318,6 +318,9 @@ const proposeReminderTask: ToolDefinition<ProposeReminderInput> = {
 // to satisfy the heterogeneous array.
 export const TOOL_REGISTRY: ToolDefinition[] = [
   listHouseholdPlants,
+  // Kept for uniformity with the other casts above even though this tool's
+  // type already matches the registry's default generic.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   listUpcomingTasks as ToolDefinition,
   getHouseholdClimate,
   searchCareKnowledge as ToolDefinition,

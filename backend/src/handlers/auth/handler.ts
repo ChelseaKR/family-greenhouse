@@ -276,7 +276,7 @@ export const forgotPassword = createHandler(
       return successResponse({
         message: 'If an account exists, a reset code has been sent.',
       });
-    } catch (error) {
+    } catch {
       // Don't reveal if user exists
       return successResponse({
         message: 'If an account exists, a reset code has been sent.',

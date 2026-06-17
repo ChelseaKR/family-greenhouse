@@ -35,6 +35,10 @@ interface CorpusPayload {
   chunks: CorpusChunk[];
 }
 
+// Double-cast through `unknown` to reshape the imported JSON into the typed
+// corpus envelope; the `as unknown` step is what the rule flags but it is
+// required to bridge the inferred JSON type to CorpusPayload.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
 const CORPUS = corpusJson as unknown as CorpusPayload;
 
 /** Cosine similarity. Inputs are assumed normalized (Titan v2 normalized
