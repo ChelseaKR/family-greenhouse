@@ -7,20 +7,42 @@ import { useAuthStore } from '@/store/authStore';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { BrandMark } from '@/components/BrandMark';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useMetaTags } from '@/hooks/useMetaTags';
+import { track } from '@/services/analytics';
 import { toast } from '@/store/toastStore';
+import { setPendingShareCode } from './pendingShareCode';
 
 /**
  * PUBLIC landing page for a shared cutting link (/shared/:code).
  *
+ * This is the share-worthy face of the propagation loop: a logged-out visitor
+ * who's been passed a cutting sees a warm, brand-styled card that leads with
+ * the plant and its provenance ("a cutting of …, grown by …"), then a clear
+ * "grow your own cutting" call to action that pulls them into signup and back
+ * here to graft it into their own greenhouse — so the lineage continues across
+ * people.
+ *
  * Works logged-out: the preview endpoint requires no auth (mirroring invite
  * previews), so a recipient sees the plant card before having an account.
- *   - logged out         → card + sign in / create account CTAs
+ *   - logged out         → card + graft CTA into register (share code carried)
  *   - logged in, no household → card + onboarding CTA
  *   - logged in + household   → card + "Add to my greenhouse"
+ *
+ * PII safety: the public payload only ever exposes the plant snapshot
+ * (name/species/notes/imageUrl/tags) and the sharing household's DISPLAY name —
+ * no emails, member rosters, household ids, or location. We render exactly that
+ * and nothing more.
+ *
+ * SPA-SEO note: this is a client-rendered SPA, so the per-cutting og:image /
+ * og:title set below are only seen by scrapers that execute JS. Crawlers that
+ * read raw HTML (most link-unfurlers) fall back to the static branded card and
+ * copy baked into index.html — an honest, bounded default rather than a broken
+ * preview. Build-time/SSR per-cutting cards are tracked separately.
  */
 export function SharedPlantPage() {
   const { t } = useTranslation();
@@ -43,6 +65,23 @@ export function SharedPlantPage() {
     retry: false, // 404 (expired/unknown) shouldn't be retried
   });
 
+  // Dynamic OG/Twitter tags for clients that execute JS; the static branded
+  // card in index.html is the reliable fallback for raw-HTML scrapers.
+  useMetaTags(
+    preview
+      ? {
+          title: t('plants.shared.metaTitle', { name: preview.plant.name }),
+          description: t('plants.shared.metaDescription', {
+            name: preview.plant.name,
+            household: preview.householdName,
+          }),
+          // A public plant photo makes the best card; otherwise the branded
+          // default OG image baked into index.html keeps the unfurl on-brand.
+          ogImage: preview.plant.imageUrl ?? '/brand/og-image.png',
+        }
+      : {}
+  );
+
   const acceptMutation = useMutation({
     mutationFn: () => plantService.acceptSharedPlant(code!),
     onSuccess: (plant) => {
@@ -53,26 +92,31 @@ export function SharedPlantPage() {
     onError: (err) => setAcceptError(getErrorMessage(err)),
   });
 
+  // Logged-out visitor taps the graft CTA: stash the code so it survives the
+  // register → confirm-email → onboarding hops (which drop URL params), then
+  // send them into signup. After household setup we bring them back here.
+  const startGraft = () => {
+    if (code) setPendingShareCode(code);
+    track('cutting_graft_started');
+    navigate(`/register?redirect=/shared/${code}`);
+  };
+
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-paper">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  return (
-    <div className="flex min-h-screen flex-col justify-center bg-gray-50 py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h1 className="text-center text-3xl font-bold text-primary-700">Family Greenhouse</h1>
-        <h2 className="mt-6 text-center text-2xl font-semibold text-gray-900">
-          🌱 {t('plants.shared.title')}
-        </h2>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <Card>
-          {error || !preview ? (
+  if (error || !preview) {
+    return (
+      <div className="flex min-h-screen flex-col justify-center bg-paper px-4 py-12">
+        <div className="mx-auto w-full max-w-md">
+          <div className="mb-8 flex justify-center">
+            <BrandMark variant="wordmark" />
+          </div>
+          <Card variant="paper">
             <div className="space-y-4 text-center">
               <Alert variant="error">{t('plants.shared.invalid')}</Alert>
               <p className="text-sm text-gray-500">{t('plants.shared.askForNew')}</p>
@@ -82,89 +126,119 @@ export function SharedPlantPage() {
                 </Button>
               </Link>
             </div>
-          ) : (
-            <div className="space-y-5">
-              <p className="text-center text-sm text-gray-500">
-                {t('plants.shared.fromHousehold', { name: preview.householdName })}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  const { plant, householdName } = preview;
+
+  return (
+    <div className="flex min-h-screen flex-col justify-center bg-paper px-4 py-12">
+      <div className="mx-auto w-full max-w-md">
+        <div className="mb-8 flex justify-center">
+          <BrandMark variant="wordmark" />
+        </div>
+
+        <Card variant="paper" padding="none" className="overflow-hidden">
+          {/* Hero: the plant leads. A public photo fills the top; otherwise a
+              warm botanical placeholder keeps the card share-worthy. */}
+          <div className="relative aspect-[4/3] w-full bg-primary-100/60">
+            {plant.imageUrl ? (
+              <img
+                src={plant.imageUrl}
+                alt={plant.name}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center bg-gradient-to-b from-primary-100 to-primary-200/70 text-6xl"
+                aria-hidden="true"
+              >
+                🪴
+              </div>
+            )}
+            <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-paper/90 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary-800 shadow-sm backdrop-blur">
+              {t('plants.shared.eyebrow')}
+            </span>
+          </div>
+
+          <div className="space-y-5 p-6">
+            {/* Provenance lead-in — the lineage story, PII-safe (display name
+                only, never an email or household id). */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary-700">
+                {t('plants.shared.cuttingOf')}
+              </p>
+              <h1 className="mt-1 font-serif text-3xl leading-tight text-ink">{plant.name}</h1>
+              {plant.species && (
+                <p className="mt-0.5 text-sm italic text-gray-600">{plant.species}</p>
+              )}
+              <p className="mt-2 text-sm text-gray-600">
+                {t('plants.shared.provenance', { name: householdName })}
+              </p>
+            </div>
+
+            {plant.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {plant.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-800"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {plant.notes && (
+              <div className="rounded-lg border border-primary-100/70 bg-white/60 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  {t('plants.shared.notesLabel')}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{plant.notes}</p>
+              </div>
+            )}
+
+            {acceptError && <Alert variant="error">{acceptError}</Alert>}
+
+            {/* The graft CTA — the loop. */}
+            <div className="border-t border-primary-100/70 pt-5">
+              <h2 className="font-serif text-lg text-ink">{t('plants.shared.graftHeading')}</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {t('plants.shared.graftBody', { name: plant.name })}
               </p>
 
-              {/* The shared plant card (frozen snapshot) */}
-              <div className="flex items-start gap-4">
-                <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                  {preview.plant.imageUrl ? (
-                    <img
-                      src={preview.plant.imageUrl}
-                      alt={preview.plant.name}
-                      width={96}
-                      height={96}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-full w-full items-center justify-center text-3xl"
-                      aria-hidden="true"
-                    >
-                      🪴
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-lg font-semibold text-gray-900">{preview.plant.name}</p>
-                  {preview.plant.species && (
-                    <p className="text-sm italic text-gray-500">{preview.plant.species}</p>
-                  )}
-                  {preview.plant.tags.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {preview.plant.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-800"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {preview.plant.notes && (
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    {t('plants.shared.notesLabel')}
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">
-                    {preview.plant.notes}
-                  </p>
-                </div>
-              )}
-
-              {acceptError && <Alert variant="error">{acceptError}</Alert>}
-
               {!isAuthenticated ? (
-                <div className="space-y-3 text-center">
-                  <p className="text-sm text-gray-500">{t('plants.shared.signInPrompt')}</p>
-                  <div className="flex justify-center gap-3">
-                    <Link to={`/login?redirect=/shared/${code}`}>
-                      <Button>{t('plants.shared.signIn')}</Button>
+                <div className="mt-4 space-y-2">
+                  <Button className="w-full" onClick={startGraft}>
+                    🌱 {t('plants.shared.graftCta')}
+                  </Button>
+                  <p className="text-center text-xs text-gray-500">
+                    {t('plants.shared.signInPrompt')}{' '}
+                    <Link
+                      to={`/login?redirect=/shared/${code}`}
+                      className="font-medium text-primary-700 hover:text-primary-600"
+                    >
+                      {t('plants.shared.signIn')}
                     </Link>
-                    <Link to={`/register?redirect=/shared/${code}`}>
-                      <Button variant="secondary">{t('plants.shared.createAccount')}</Button>
-                    </Link>
-                  </div>
+                  </p>
                 </div>
               ) : !householdId ? (
-                <div className="space-y-3 text-center">
+                <div className="mt-4 space-y-2 text-center">
                   <p className="text-sm text-gray-500">{t('plants.shared.needHousehold')}</p>
                   <Link to="/onboarding">
-                    <Button>{t('plants.shared.goToOnboarding')}</Button>
+                    <Button className="w-full">{t('plants.shared.goToOnboarding')}</Button>
                   </Link>
                 </div>
               ) : (
-                <div className="flex justify-center">
+                <div className="mt-4">
                   <Button
+                    className="w-full"
                     onClick={() => {
                       setAcceptError(null);
                       acceptMutation.mutate();
@@ -176,7 +250,7 @@ export function SharedPlantPage() {
                 </div>
               )}
             </div>
-          )}
+          </div>
         </Card>
       </div>
     </div>
