@@ -92,27 +92,27 @@ export async function computePlantsAtRisk(
 }
 
 function overduePhrase(days: number): string {
-  if (days <= 0) return 'overdue today';
-  return days === 1 ? '1 day overdue' : `${days} days overdue`;
+  if (days <= 0) return 'ready for a little care today';
+  return days === 1 ? 'waiting a day for some care' : `waiting ${days} days for some care`;
 }
 
 /** Plain-text weekly digest email body + subject. */
 export function composeDigestEmail(atRisk: PlantAtRisk[]): { subject: string; text: string } {
   const subject =
     atRisk.length === 1
-      ? 'Weekly digest: 1 plant needs attention'
-      : `Weekly digest: ${atRisk.length} plants need attention`;
+      ? 'Weekly digest: 1 plant could use some care'
+      : `Weekly digest: ${atRisk.length} plants could use some care`;
   const lines = atRisk.map(
     (p, i) => `${i + 1}. ${p.plantName} — ${p.taskType} ${overduePhrase(p.daysOverdue)}`
   );
   const text = [
     'Your weekly Family Greenhouse check-in.',
     '',
-    'These plants are most at risk (most overdue first):',
+    'A few plants could use some catch-up care (the ones waiting longest first):',
     '',
     ...lines,
     '',
-    'A few minutes of catch-up care goes a long way. Your plants thank you!',
+    'A few minutes of care goes a long way. Your plants thank you!',
   ].join('\n');
   return { subject, text };
 }

@@ -104,8 +104,8 @@ export function HouseholdOnboarding() {
         </h2>
         {step === 'choice' && !isAddingAnother && (
           <p className="mt-2 max-w-sm text-center text-sm text-gray-600">
-            A household is a group that shares plant care. Create one to start fresh, or if someone
-            already invited you, paste their link instead.
+            A household keeps your plant care in one place — just you, or shared with others. Create
+            one to start fresh, or if someone already invited you, paste their link instead.
           </p>
         )}
       </div>
@@ -124,7 +124,7 @@ export function HouseholdOnboarding() {
                       Create a new household
                     </h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      Start fresh and invite your family members to join
+                      Start fresh on your own — invite family any time you like
                     </p>
                   </div>
                 </div>
@@ -157,6 +157,13 @@ export function HouseholdOnboarding() {
               <Alert variant="error" className="mb-6">
                 {error}
               </Alert>
+            )}
+
+            {!isAddingAnother && (
+              <p className="mb-6 text-sm text-gray-600">
+                Flying solo? Name it after yourself or your home — it's just for you, and you can
+                invite people whenever you're ready.
+              </p>
             )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>

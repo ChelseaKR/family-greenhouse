@@ -125,7 +125,9 @@ describe('reminders service', () => {
     expect(notifier.sendToUser).toHaveBeenCalledOnce();
     const [recipient, payload] = vi.mocked(notifier.sendToUser).mock.calls[0];
     expect(recipient).toEqual({ userId: 'u1', email: 'a@x.com' });
-    expect((payload as { body: string }).body).toBe('1 overdue, 1 due soon');
+    expect((payload as { body: string }).body).toBe(
+      '1 ready for some catch-up care, 1 coming up soon'
+    );
   });
 
   it('includes unassigned due tasks in every member roll-up', async () => {
@@ -149,7 +151,7 @@ describe('reminders service', () => {
     const recipients = vi.mocked(notifier.sendToUser).mock.calls.map((c) => c[0].userId);
     expect(recipients.sort()).toEqual(['u1', 'u2']);
     expect((vi.mocked(notifier.sendToUser).mock.calls[0][1] as { body: string }).body).toBe(
-      '2 tasks due in the next 24h'
+      '2 tasks coming up in the next 24h'
     );
   });
 
@@ -293,7 +295,9 @@ describe('reminders service', () => {
       // Delivered to the cover, not the away member…
       expect(recipient.userId).toBe('u2');
       // …with the handoff called out in the message.
-      expect((payload as { body: string }).body).toBe('1 overdue, 0 due soon (covering for A)');
+      expect((payload as { body: string }).body).toBe(
+        '1 ready for some catch-up care, 0 coming up soon (covering for A)'
+      );
     });
 
     it('after the window expires, reminders revert to the original assignee (auto-revert)', async () => {

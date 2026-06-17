@@ -98,8 +98,8 @@ export function useOverdueAlerts(
       if (announced.current.has(t.id)) continue;
       announced.current.add(t.id);
       changed = true;
-      notify(`${t.plantName} needs attention`, {
-        body: `${t.customType ?? t.type} is overdue.`,
+      notify(`${t.plantName} could use a little care`, {
+        body: `${t.customType ?? t.type} is ready whenever you are.`,
         tag: `task-${t.id}`,
       });
     }
