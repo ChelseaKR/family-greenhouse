@@ -169,8 +169,8 @@ export async function remindHousehold(
 
       const overdue = tasksForMember.filter((t) => t.nextDue < nowIso).length;
       let body = overdue
-        ? `${overdue} overdue, ${tasksForMember.length - overdue} due soon`
-        : `${tasksForMember.length} task${tasksForMember.length === 1 ? '' : 's'} due in the next 24h`;
+        ? `${overdue} ready for some catch-up care, ${tasksForMember.length - overdue} coming up soon`
+        : `${tasksForMember.length} task${tasksForMember.length === 1 ? '' : 's'} coming up in the next 24h`;
 
       // Tell the cover whose tasks they're picking up.
       const coveringNames = [

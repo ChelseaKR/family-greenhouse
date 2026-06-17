@@ -156,10 +156,10 @@ describe('digest service', () => {
         { plantId: 'p1', plantName: 'Monstera', taskType: 'water', daysOverdue: 1 },
         { plantId: 'p3', plantName: 'Cactus', taskType: 'repot', daysOverdue: 0 },
       ]);
-      expect(subject).toBe('Weekly digest: 3 plants need attention');
-      expect(text).toContain('1. Fern — mist 10 days overdue');
-      expect(text).toContain('2. Monstera — water 1 day overdue');
-      expect(text).toContain('3. Cactus — repot overdue today');
+      expect(subject).toBe('Weekly digest: 3 plants could use some care');
+      expect(text).toContain('1. Fern — mist waiting 10 days for some care');
+      expect(text).toContain('2. Monstera — water waiting a day for some care');
+      expect(text).toContain('3. Cactus — repot ready for a little care today');
     });
   });
 

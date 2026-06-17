@@ -28,12 +28,12 @@ const STEPS: Array<{
   {
     illustration: EmptyPlants,
     title: "You're in",
-    body: 'Your household is set up. Two things worth knowing before you add your first plant.',
+    body: "Your space is set up. Just you for now? That's perfectly fine — you can invite people any time. Two things worth knowing before you add your first plant.",
   },
   {
     illustration: EmptyMembers,
-    title: 'Plant care, shared',
-    body: "Add plants, schedule recurring tasks, and assign them. Whoever's around does the task and marks it done, and everyone in the household sees it. No more 'I thought you watered it' arguments.",
+    title: 'Plant care that fits you',
+    body: "Add plants, schedule recurring tasks, and keep everything in one calm place. Looking after your plants solo? It all just works. Sharing with others? Assign tasks — whoever's around does it and marks it done, and everyone sees it. No more 'I thought you watered it' arguments.",
   },
   {
     illustration: EmptyActivity,
