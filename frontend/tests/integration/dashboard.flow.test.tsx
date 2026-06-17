@@ -96,7 +96,19 @@ describe('Dashboard integration', () => {
         HttpResponse.json({ status: 'no_location' })
       ),
       http.get(`${API}/households/hh-1/year-in-review`, () =>
-        HttpResponse.json({ year: 2026, plantsAdded: 0, tasksCompleted: 0 })
+        // Match the YearInReview contract: with no completions the card
+        // hides itself (totalCompletions === 0). The previous mock shape
+        // ({ plantsAdded, tasksCompleted }) left totalCompletions undefined,
+        // slipping past the guard and crashing YearInReviewCard on
+        // byTaskType.map — a latent bug surfaced by stricter unhandled-error
+        // handling in vitest 3.
+        HttpResponse.json({
+          year: 2026,
+          totalCompletions: 0,
+          byMember: [],
+          byTaskType: [],
+          topPlants: [],
+        })
       )
     );
 
