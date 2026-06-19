@@ -61,7 +61,7 @@ jobs:
     needs: validate
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -124,7 +124,7 @@ jobs:
       cloudfront_id: ${{ steps.outputs.outputs.cloudfront_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -203,7 +203,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -302,7 +302,7 @@ jobs:
     needs: [deploy-frontend, deploy-backend]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
