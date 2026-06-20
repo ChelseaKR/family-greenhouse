@@ -11,7 +11,7 @@ export interface PricePoint {
   price: string;
   /** Cadence suffix, e.g. "/month" or "/year". */
   period: string;
-  /** Optional sub-line, e.g. "$3.33/mo · save 33%". Annual only. */
+  /** Optional sub-line, e.g. "$3.33/mo · save 33%". Annual/lifetime only. */
   note?: string;
 }
 
@@ -21,6 +21,10 @@ export interface PricingPlan {
   freeLabel?: string;
   monthly?: PricePoint;
   annual?: PricePoint;
+  /** One-time lifetime price. Only the Garden tier offers one; other tiers
+   *  leave it undefined and fall back to annual when the Lifetime cadence is
+   *  selected. */
+  lifetime?: PricePoint;
   description: string;
   features: string[];
   cta: string;
@@ -46,6 +50,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Garden',
     monthly: { price: '$4.99', period: '/month' },
     annual: { price: '$39.99', period: '/year', note: '$3.33/mo · save 33%' },
+    lifetime: { price: '$149', period: 'once', note: 'Pay once · keep Garden forever' },
     description: 'For growing families',
     features: [
       'Unlimited plants',

@@ -41,6 +41,7 @@ import {
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS } from './models/plans.js';
+import { planSummary } from './services/billing.js';
 import { lookupToxicity } from './models/petToxicity.js';
 
 // Hard refusal to boot in production — this server has no real auth, no
@@ -2781,17 +2782,10 @@ app.get('/species/:id/guide', authMiddleware, (req, res) => {
 
 app.get('/billing/plans', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=300');
-  // Same projection as billing.planSummary (never leak stripePriceEnv).
-  res.json(
-    Object.values(PLANS).map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      monthlyPrice: p.monthlyPrice,
-      maxPlants: p.maxPlants,
-      maxMembers: p.maxMembers,
-    }))
-  );
+  // Reuse the production projection so the dev server can't drift from the
+  // real /billing/plans contract (annualPrice, lifetimePrice, …) and never
+  // leaks stripePriceEnv.
+  res.json(Object.values(PLANS).map(planSummary));
 });
 
 app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {

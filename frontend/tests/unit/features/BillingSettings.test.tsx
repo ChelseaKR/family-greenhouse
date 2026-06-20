@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillingSettings } from '@/features/settings/BillingSettings';
@@ -36,6 +36,8 @@ const PLANS: Plan[] = [
     name: 'Seedling',
     description: 'Free',
     monthlyPrice: 0,
+    annualPrice: null,
+    lifetimePrice: null,
     maxPlants: 10,
     maxMembers: 1,
   },
@@ -44,6 +46,8 @@ const PLANS: Plan[] = [
     name: 'Garden',
     description: 'Families',
     monthlyPrice: 4.99,
+    annualPrice: 39.99,
+    lifetimePrice: 149,
     maxPlants: 500,
     maxMembers: 6,
   },
@@ -52,6 +56,8 @@ const PLANS: Plan[] = [
     name: 'Greenhouse',
     description: 'Serious',
     monthlyPrice: 9.99,
+    annualPrice: 79.99,
+    lifetimePrice: null,
     maxPlants: 5000,
     maxMembers: 50,
   },
@@ -148,5 +154,23 @@ describe('BillingSettings', () => {
     });
     expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
+  });
+
+  it('shows the Lifetime cadence as "$149 once" on Garden only, leaving Greenhouse on its annual price', async () => {
+    await renderBilling({ planId: 'seedling' });
+    // Default cadence is Annual — Garden shows its yearly headline, no lifetime.
+    expect(screen.queryByText('once')).not.toBeInTheDocument();
+
+    // Switch to the Lifetime cadence.
+    fireEvent.click(screen.getByRole('radio', { name: 'Lifetime' }));
+
+    // Garden (the only lifetime tier) now shows the one-time price.
+    expect(screen.getByText('$149')).toBeInTheDocument();
+    expect(screen.getByText('once')).toBeInTheDocument();
+    expect(screen.getByText(/keep Garden forever/)).toBeInTheDocument();
+    // Greenhouse has no lifetime — it falls back to its annual price, not "once".
+    expect(screen.getByText('$79.99')).toBeInTheDocument();
+    // The nudge reflects the Garden-only constraint.
+    expect(screen.getByText(/Garden only/)).toBeInTheDocument();
   });
 });

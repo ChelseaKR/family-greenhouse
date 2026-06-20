@@ -113,8 +113,9 @@ export interface EventProps {
   memberCount?: '1' | '2-5' | '6+';
   /** For `subscription_upgraded` — bucketed price. */
   upgradeTo?: 'garden' | 'greenhouse';
-  /** For `subscription_upgraded` — billing cadence the user chose at checkout. */
-  interval?: 'month' | 'year';
+  /** For `subscription_upgraded` — billing cadence the user chose at checkout.
+   *  `lifetime` is a one-time payment rather than a recurring cadence. */
+  interval?: 'month' | 'year' | 'lifetime';
   /** Free-form context only when it's an enum or a count, never a name. */
   context?: string;
   /** For `experiment_viewed` — which experiment and assigned variant. */

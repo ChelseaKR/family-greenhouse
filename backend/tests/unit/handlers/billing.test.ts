@@ -258,6 +258,47 @@ describe('billing handler', () => {
       );
     });
 
+    it('passes interval=lifetime through to the checkout session for Garden', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
+        url: 'https://checkout.stripe.test/lifetime',
+      });
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'garden', interval: 'lifetime' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(billing.createCheckoutSession).toHaveBeenCalledWith(
+        expect.objectContaining({ planId: 'garden', interval: 'lifetime' })
+      );
+    });
+
+    it('rejects interval=lifetime for a non-Garden tier (Greenhouse) with a 400', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'greenhouse', interval: 'lifetime' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(400);
+      // The lifetime refine must reject before any Stripe call is attempted.
+      expect(billing.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
     it('rejects an unknown billing interval at the validation layer', async () => {
       const { checkout } = await import('../../../src/handlers/billing/handler.js');
       const res = (await checkout(

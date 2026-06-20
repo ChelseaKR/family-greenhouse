@@ -5,10 +5,16 @@ import type Stripe from 'stripe';
 // createCheckoutSession can be exercised without a network/key. `sessionsCreate`
 // is hoisted (vi.mock factories run before module init) and shared so tests can
 // assert what was sent to Stripe.
-const { sessionsCreate } = vi.hoisted(() => ({ sessionsCreate: vi.fn() }));
+const { sessionsCreate, subscriptionsCancel } = vi.hoisted(() => ({
+  sessionsCreate: vi.fn(),
+  subscriptionsCancel: vi.fn(),
+}));
 vi.mock('stripe', () => ({
   default: vi.fn(function () {
-    return { checkout: { sessions: { create: sessionsCreate } } };
+    return {
+      checkout: { sessions: { create: sessionsCreate } },
+      subscriptions: { cancel: subscriptionsCancel },
+    };
   }),
 }));
 
@@ -60,6 +66,74 @@ describe('deltaForStripeEvent', () => {
     } as unknown as Stripe.Event;
     const delta = deltaForStripeEvent(event);
     expect(delta).toEqual({
+      householdId: 'hh-1',
+      fields: {
+        planId: 'garden',
+        stripeCustomerId: 'cus_123',
+        stripeSubscriptionId: 'sub_456',
+        status: 'active',
+      },
+    });
+  });
+
+  it('grants Garden permanently on a paid lifetime (mode=payment) checkout — no subscription id', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_123',
+        },
+      },
+    } as unknown as Stripe.Event;
+    const delta = deltaForStripeEvent(event);
+    expect(delta).toEqual({
+      householdId: 'hh-1',
+      fields: {
+        planId: 'garden',
+        stripeCustomerId: 'cus_123',
+        status: 'active',
+        // Explicitly cleared (REMOVE) so a prior subscriber's stale ids don't
+        // linger and a later subscription.deleted can't revoke the grant.
+        stripeSubscriptionId: null,
+        currentPeriodEnd: null,
+      },
+    });
+  });
+
+  it('does NOT grant entitlement on an unpaid lifetime (mode=payment) checkout', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'unpaid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_123',
+        },
+      },
+    } as unknown as Stripe.Event;
+    expect(deltaForStripeEvent(event)).toBeNull();
+  });
+
+  it('treats a checkout.session.completed with mode=subscription as before (subscription id retained)', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+          customer: 'cus_123',
+          subscription: 'sub_456',
+        },
+      },
+    } as unknown as Stripe.Event;
+    expect(deltaForStripeEvent(event)).toEqual({
       householdId: 'hh-1',
       fields: {
         planId: 'garden',
@@ -272,6 +346,92 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
     );
     expect(cmd.input.ExpressionAttributeValues[':lastStripeEventCreated']).toBe(1_700_000_123);
   });
+
+  it('REMOVEs an attribute when its field is null (lifetime clears stale subscription ids)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { updateHouseholdSubscription } = await import('../../../src/services/billing.js');
+    await updateHouseholdSubscription('hh-1', {
+      planId: 'garden',
+      status: 'active',
+      stripeSubscriptionId: null,
+      currentPeriodEnd: null,
+    });
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { UpdateExpression: string; ExpressionAttributeNames: Record<string, string> };
+    };
+    expect(cmd.input.UpdateExpression).toMatch(/^SET .*\bREMOVE\b/);
+    expect(cmd.input.UpdateExpression).toContain('REMOVE #stripeSubscriptionId');
+    expect(cmd.input.UpdateExpression).toContain('#subscriptionCurrentPeriodEnd');
+    // SET side keeps the non-null fields.
+    expect(cmd.input.UpdateExpression).toContain('#planId = :planId');
+  });
+
+  it('cancels the prior Stripe subscription when a lifetime payment grants Garden', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    // 1st send: pre-apply getHouseholdSubscription read → prior sub on file.
+    // 2nd send: the household Update. 3rd send: the dedupe ledger Put.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } })
+      .mockResolvedValue({});
+    subscriptionsCancel.mockResolvedValueOnce({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_lifetime',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
+  });
+
+  it('does NOT downgrade a lifetime household on a subscription.deleted for an unknown sub', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    // Pre-apply read: the lifetime grant cleared the sub id (none on file).
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { planId: 'garden' } });
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_del_orphan',
+      created: 1_700_000_000,
+      type: 'customer.subscription.deleted',
+      data: {
+        object: { id: 'sub_old', metadata: { householdId: 'hh-1', planId: 'garden' } },
+      },
+    } as unknown as Stripe.Event);
+    // Only the guard read ran — no Update (no downgrade), no ledger Put.
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+
+  it('still downgrades to seedling when subscription.deleted matches the stored sub id', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    // Pre-apply read: household still references this very subscription.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'garden', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_del_match',
+      created: 1_700_000_000,
+      type: 'customer.subscription.deleted',
+      data: {
+        object: { id: 'sub_live', metadata: { householdId: 'hh-1', planId: 'greenhouse' } },
+      },
+    } as unknown as Stripe.Event);
+    // Guard read + Update (downgrade) + ledger Put.
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(3);
+    const updateCmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExpressionAttributeValues: Record<string, unknown> };
+    };
+    expect(updateCmd.input.ExpressionAttributeValues[':planId']).toBe('seedling');
+  });
 });
 
 describe('planSummary', () => {
@@ -282,6 +442,14 @@ describe('planSummary', () => {
     expect(planSummary(PLANS.garden).annualPrice).toBe(39.99);
     expect(planSummary(PLANS.greenhouse).annualPrice).toBe(79.99);
   });
+
+  it('exposes lifetimePrice (149 for Garden, null for tiers without a lifetime option)', async () => {
+    const { planSummary } = await import('../../../src/services/billing.js');
+    const { PLANS } = await import('../../../src/models/plans.js');
+    expect(planSummary(PLANS.garden).lifetimePrice).toBe(149);
+    expect(planSummary(PLANS.seedling).lifetimePrice).toBeNull();
+    expect(planSummary(PLANS.greenhouse).lifetimePrice).toBeNull();
+  });
 });
 
 describe('createCheckoutSession — interval resolves the Stripe price', () => {
@@ -290,10 +458,11 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
+    process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
   });
 
-  async function runCheckout(interval?: 'month' | 'year') {
+  async function runCheckout(interval?: 'month' | 'year' | 'lifetime') {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     // getHouseholdSubscription → no existing customer.
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
@@ -333,6 +502,24 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
     await expect(runCheckout('year')).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN_ANNUAL');
     expect(sessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it('uses mode=payment + the lifetime price id and sends NO subscription_data when interval=lifetime', async () => {
+    await runCheckout('lifetime');
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+    const arg = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg.mode).toBe('payment');
+    expect(arg.line_items).toEqual([{ price: 'price_garden_lifetime', quantity: 1 }]);
+    expect(arg.metadata).toMatchObject({ planId: 'garden', interval: 'lifetime' });
+    // A one-time payment must NOT carry subscription_data / a trial.
+    expect(arg.subscription_data).toBeUndefined();
+  });
+
+  it('keeps mode=subscription (with subscription_data) for the monthly/annual cadences', async () => {
+    await runCheckout('month');
+    const arg = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg.mode).toBe('subscription');
+    expect(arg.subscription_data).toMatchObject({ trial_period_days: 14 });
   });
 });
 

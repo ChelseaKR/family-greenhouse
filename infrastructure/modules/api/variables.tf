@@ -91,6 +91,12 @@ variable "stripe_price_id_garden_annual" {
   default     = ""
 }
 
+variable "stripe_price_id_garden_lifetime" {
+  description = "Stripe price ID for the Garden tier LIFETIME one-time payment ($149). Required for /billing/checkout with interval=lifetime."
+  type        = string
+  default     = ""
+}
+
 variable "stripe_price_id_greenhouse" {
   description = "Stripe price ID for the Greenhouse tier MONTHLY ($9.99/mo). Required for /billing/checkout monthly."
   type        = string

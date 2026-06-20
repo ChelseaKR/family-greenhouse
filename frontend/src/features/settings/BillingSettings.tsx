@@ -138,29 +138,37 @@ export function BillingSettings() {
       <BillingIntervalToggle value={interval} onChange={setInterval} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            interval={interval}
-            current={plan.id === currentPlanId}
-            isAdmin={isAdmin}
-            beta={IS_BETA}
-            onSelect={(id) => {
-              if (id === 'seedling') return;
-              checkout.mutate({ planId: id, interval });
-            }}
-            isLoading={checkout.isPending && checkout.variables?.planId === plan.id}
-          />
-        ))}
+        {plans.map((plan) => {
+          // Lifetime is Garden-only. For every other tier, the Lifetime cadence
+          // falls back to Annual so the card stays priced and checkout never
+          // sends interval='lifetime' for a tier the backend would reject.
+          const effectiveInterval: BillingInterval =
+            interval === 'lifetime' && plan.lifetimePrice == null ? 'year' : interval;
+          return (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              interval={effectiveInterval}
+              current={plan.id === currentPlanId}
+              isAdmin={isAdmin}
+              beta={IS_BETA}
+              onSelect={(id) => {
+                if (id === 'seedling') return;
+                checkout.mutate({ planId: id, interval: effectiveInterval });
+              }}
+              isLoading={checkout.isPending && checkout.variables?.planId === plan.id}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
 /**
- * Monthly/Annual segmented toggle. Annual is the cadence we want chosen, so it
- * carries the "Save ~33%" nudge.
+ * Monthly/Annual/Lifetime segmented toggle. Annual is the cadence we want
+ * chosen, so it carries the "Save ~33%" nudge. Lifetime is a one-time payment
+ * offered on Garden only — picking it leaves non-Garden cards on Annual.
  */
 function BillingIntervalToggle({
   value,
@@ -172,6 +180,7 @@ function BillingIntervalToggle({
   const options: { id: BillingInterval; label: string }[] = [
     { id: 'month', label: 'Monthly' },
     { id: 'year', label: 'Annual' },
+    { id: 'lifetime', label: 'Lifetime' },
   ];
   return (
     <div className="flex items-center justify-center gap-3">
@@ -197,7 +206,7 @@ function BillingIntervalToggle({
         ))}
       </div>
       <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-        Save ~33% yearly
+        {value === 'lifetime' ? 'Garden only · pay once' : 'Save ~33% yearly'}
       </span>
     </div>
   );
@@ -261,6 +270,10 @@ interface PlanCardProps {
 function PlanCard({ plan, interval, current, isAdmin, beta, onSelect, isLoading }: PlanCardProps) {
   // Free tier: no price line variants. Annual tiers show the yearly headline
   // plus an effective "/mo billed yearly" and the savings vs 12× monthly.
+  // Lifetime is a one-time charge — "$149 once" — shown only on the tier that
+  // offers one (Garden). The parent already falls non-Garden cards back to
+  // 'year', so `lifetime` here implies a non-null lifetimePrice.
+  const lifetime = interval === 'lifetime' && plan.lifetimePrice != null;
   const annual = interval === 'year' && plan.annualPrice != null;
   const savingsPct =
     plan.annualPrice != null && plan.monthlyPrice > 0
@@ -274,6 +287,14 @@ function PlanCard({ plan, interval, current, isAdmin, beta, onSelect, isLoading 
       <p className="mt-1 text-sm text-gray-500">{plan.description}</p>
       {plan.monthlyPrice === 0 ? (
         <p className="mt-4 text-3xl font-bold">Free</p>
+      ) : lifetime ? (
+        <div className="mt-4">
+          <p className="text-3xl font-bold">
+            ${plan.lifetimePrice!.toFixed(0)}
+            <span className="text-base font-normal text-gray-500"> once</span>
+          </p>
+          <p className="mt-1 text-sm text-gray-500">One-time payment · keep Garden forever</p>
+        </div>
       ) : annual ? (
         <div className="mt-4">
           <p className="text-3xl font-bold">

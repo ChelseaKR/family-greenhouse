@@ -287,6 +287,7 @@ locals {
     STRIPE_WEBHOOK_SECRET             = var.stripe_webhook_secret
     STRIPE_PRICE_ID_GARDEN            = var.stripe_price_id_garden
     STRIPE_PRICE_ID_GARDEN_ANNUAL     = var.stripe_price_id_garden_annual
+    STRIPE_PRICE_ID_GARDEN_LIFETIME   = var.stripe_price_id_garden_lifetime
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
     SES_FROM_EMAIL                    = var.ses_from_email

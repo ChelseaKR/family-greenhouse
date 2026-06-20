@@ -3,8 +3,9 @@ import { track } from './analytics';
 
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
 
-/** Billing cadence sent to /billing/checkout. */
-export type BillingInterval = 'month' | 'year';
+/** Billing cadence sent to /billing/checkout. `lifetime` is a one-time payment
+ *  (Garden tier only). */
+export type BillingInterval = 'month' | 'year' | 'lifetime';
 
 export interface Plan {
   id: PlanId;
@@ -14,6 +15,9 @@ export interface Plan {
   /** Yearly price in dollars, or null when the tier has no annual option
    *  (free tier). */
   annualPrice: number | null;
+  /** One-time lifetime price in dollars, or null when the tier has no lifetime
+   *  option (only Garden offers one). */
+  lifetimePrice: number | null;
   maxPlants: number;
   maxMembers: number;
 }

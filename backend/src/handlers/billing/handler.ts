@@ -20,12 +20,18 @@ import { getPlan } from '../../models/plans.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
-const checkoutSchema = z.object({
-  planId: z.enum(['garden', 'greenhouse']),
-  // Billing cadence. Optional + defaulted so existing clients that send only
-  // `planId` keep getting a monthly subscription unchanged.
-  interval: z.enum(['month', 'year']).optional().default('month'),
-});
+const checkoutSchema = z
+  .object({
+    planId: z.enum(['garden', 'greenhouse']),
+    // Billing cadence. Optional + defaulted so existing clients that send only
+    // `planId` keep getting a monthly subscription unchanged. `lifetime` is a
+    // one-time payment offered on Garden only (enforced by the refine below).
+    interval: z.enum(['month', 'year', 'lifetime']).optional().default('month'),
+  })
+  .refine((v) => v.interval !== 'lifetime' || v.planId === 'garden', {
+    message: 'The lifetime plan is only available for the Garden tier.',
+    path: ['interval'],
+  });
 
 type CheckoutInput = z.infer<typeof checkoutSchema>;
 
