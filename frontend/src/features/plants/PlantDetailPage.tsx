@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { computeStreak, streakLabel } from '@/utils/streaks';
+import { findCareGuide } from '@/utils/careGuidance';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { AddTaskModal } from './AddTaskModal';
@@ -31,6 +32,7 @@ import { PlantImageUpload } from './PlantImageUpload';
 import { PhotoTimeline } from './PhotoTimeline';
 import { CareGuidanceCard } from './CareGuidanceCard';
 import { CareGuideCard } from './CareGuideCard';
+import { NoCareDataNotice } from './NoCareDataNotice';
 import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { RemovePlantDialog } from './RemovePlantDialog';
@@ -311,6 +313,11 @@ export function PlantDetailPage() {
 
       {/* Curated care guidance — only renders if plant.species matches a known entry */}
       <CareGuidanceCard species={plant.species} />
+
+      {/* When neither the curated guide nor a Perenual match exists, both the
+          care guide and suggested schedule are hidden. Say so honestly rather
+          than leaving an unexplained blank where care guidance would be. */}
+      {!plant.perenualSpeciesId && !findCareGuide(plant.species) && <NoCareDataNotice />}
 
       {/* Propagation lineage — parent link + cuttings (renders nothing when
           the plant has no lineage at all) */}
