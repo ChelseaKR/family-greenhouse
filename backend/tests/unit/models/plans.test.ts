@@ -27,6 +27,15 @@ describe('plan catalog', () => {
     expect(PLANS.greenhouse.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE_ANNUAL');
   });
 
+  it('Garden alone carries a lifetime price + lifetime Stripe price env; other tiers have neither', () => {
+    expect(PLANS.garden.lifetimePrice).toBe(149);
+    expect(PLANS.garden.lifetimeStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_LIFETIME');
+    expect(PLANS.seedling.lifetimePrice).toBeUndefined();
+    expect(PLANS.seedling.lifetimeStripePriceEnv).toBeUndefined();
+    expect(PLANS.greenhouse.lifetimePrice).toBeUndefined();
+    expect(PLANS.greenhouse.lifetimeStripePriceEnv).toBeUndefined();
+  });
+
   it('annual price is a genuine discount vs 12x the monthly price', () => {
     for (const id of ['garden', 'greenhouse'] as const) {
       const plan = PLANS[id];

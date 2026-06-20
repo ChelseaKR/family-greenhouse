@@ -24,6 +24,14 @@ export interface Plan {
   /** Env var name where the Stripe ANNUAL price ID lives. Paired with
    *  `annualPrice`; absent on the free tier. */
   annualStripePriceEnv?: string;
+  /** Lifetime price in dollars for a one-time payment that grants this tier's
+   *  entitlement permanently. Modeled as a one-time billing interval on the
+   *  existing tier (NOT a new planId), so entitlement resolution and the
+   *  3-plan catalog stay unchanged. Only the Garden tier offers one. */
+  lifetimePrice?: number;
+  /** Env var name where the Stripe LIFETIME (one-time) price ID lives. Paired
+   *  with `lifetimePrice`; absent on tiers without a lifetime option. */
+  lifetimeStripePriceEnv?: string;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -43,10 +51,14 @@ export const PLANS: Record<PlanId, Plan> = {
     // ~33% off 12× monthly ($59.88) — "$3.33/mo billed yearly". Sits in the
     // competitive annual band ($30–48) the market actually pays at.
     annualPrice: 39.99,
+    // One-time payment that grants Garden permanently. Stored as planId='garden'
+    // with no subscription — entitlement resolves off planId alone.
+    lifetimePrice: 149,
     maxPlants: 500,
     maxMembers: 6,
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
+    lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
   },
   greenhouse: {
     id: 'greenhouse',

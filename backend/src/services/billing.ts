@@ -64,13 +64,20 @@ export async function getHouseholdSubscription(
  *
  * Returns `true` when the write was applied, `false` when it was skipped as
  * out-of-order.
+ *
+ * A field set to `null` is REMOVEd from the row (vs `undefined`, which is
+ * simply not written). This is how a lifetime grant clears a household's
+ * stale `stripeSubscriptionId`/`currentPeriodEnd` — a one-time purchase has
+ * no subscription, so leaving the old id behind would make the row claim a
+ * phantom subscription.
  */
 export async function updateHouseholdSubscription(
   householdId: string,
-  fields: Partial<HouseholdSubscription>,
+  fields: Partial<Record<keyof HouseholdSubscription, unknown>>,
   stripeEventCreated?: number
 ): Promise<boolean> {
-  const expressions: string[] = [];
+  const setExpressions: string[] = [];
+  const removeExpressions: string[] = [];
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = {};
 
@@ -85,15 +92,20 @@ export async function updateHouseholdSubscription(
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue;
     const attr = map[key as keyof HouseholdSubscription];
-    expressions.push(`#${attr} = :${attr}`);
     names[`#${attr}`] = attr;
-    values[`:${attr}`] = value;
+    if (value === null) {
+      // Explicit clear → REMOVE the attribute entirely.
+      removeExpressions.push(`#${attr}`);
+    } else {
+      setExpressions.push(`#${attr} = :${attr}`);
+      values[`:${attr}`] = value;
+    }
   }
-  if (expressions.length === 0) return true;
+  if (setExpressions.length === 0 && removeExpressions.length === 0) return true;
 
   let conditionExpression: string | undefined;
   if (typeof stripeEventCreated === 'number') {
-    expressions.push('#lastStripeEventCreated = :lastStripeEventCreated');
+    setExpressions.push('#lastStripeEventCreated = :lastStripeEventCreated');
     names['#lastStripeEventCreated'] = 'lastStripeEventCreated';
     values[':lastStripeEventCreated'] = stripeEventCreated;
     // <= (not <) so two events minted in the same second still both apply;
@@ -102,14 +114,18 @@ export async function updateHouseholdSubscription(
       'attribute_not_exists(lastStripeEventCreated) OR lastStripeEventCreated <= :lastStripeEventCreated';
   }
 
+  const clauses: string[] = [];
+  if (setExpressions.length > 0) clauses.push(`SET ${setExpressions.join(', ')}`);
+  if (removeExpressions.length > 0) clauses.push(`REMOVE ${removeExpressions.join(', ')}`);
+
   try {
     await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
-        UpdateExpression: `SET ${expressions.join(', ')}`,
+        UpdateExpression: clauses.join(' '),
         ExpressionAttributeNames: names,
-        ExpressionAttributeValues: values,
+        ExpressionAttributeValues: Object.keys(values).length > 0 ? values : undefined,
         ConditionExpression: conditionExpression,
       })
     );
@@ -135,8 +151,12 @@ export interface CheckoutSessionResult {
  * is sold at either cadence — only the Stripe price and the headline number
  * differ — so the entire webhook/entitlement path stays cadence-agnostic and
  * resolves access off `planId` alone.
+ *
+ * `lifetime` is a one-time payment (Stripe `mode:'payment'`) rather than a
+ * recurring subscription — it grants the same `planId` permanently with no
+ * subscription to renew or cancel. Only the Garden tier offers it.
  */
-export type BillingInterval = 'month' | 'year';
+export type BillingInterval = 'month' | 'year' | 'lifetime';
 
 export async function createCheckoutSession(args: {
   householdId: string;
@@ -148,7 +168,12 @@ export async function createCheckoutSession(args: {
 }): Promise<CheckoutSessionResult> {
   const plan = getPlan(args.planId);
   const interval: BillingInterval = args.interval ?? 'month';
-  const priceEnv = interval === 'year' ? plan.annualStripePriceEnv : plan.stripePriceEnv;
+  const priceEnv =
+    interval === 'lifetime'
+      ? plan.lifetimeStripePriceEnv
+      : interval === 'year'
+        ? plan.annualStripePriceEnv
+        : plan.stripePriceEnv;
   if (!priceEnv) throw new Error(`Plan ${plan.id} is not billable ${interval}ly`);
   const priceId = process.env[priceEnv];
   if (!priceId) throw new Error(`Missing ${priceEnv} for plan ${plan.id}`);
@@ -158,8 +183,11 @@ export async function createCheckoutSession(args: {
   // `interval` is stamped onto metadata for analytics/debugging only —
   // entitlement is resolved from `planId`, never the cadence.
   const metadata = { householdId: args.householdId, planId: plan.id, interval };
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
+
+  // Lifetime is a one-time charge: Stripe `mode:'payment'` with NO
+  // subscription_data/trial. Month/year stay recurring subscriptions exactly
+  // as before. The webhook branches on `session.mode` to mirror this split.
+  const common = {
     customer: sub.stripeCustomerId,
     customer_email: sub.stripeCustomerId ? undefined : args.customerEmail,
     line_items: [{ price: priceId, quantity: 1 }],
@@ -167,11 +195,18 @@ export async function createCheckoutSession(args: {
     cancel_url: args.cancelUrl,
     client_reference_id: args.householdId,
     metadata,
-    subscription_data: {
-      metadata,
-      trial_period_days: 14,
-    },
-  });
+  };
+  const session =
+    interval === 'lifetime'
+      ? await stripe.checkout.sessions.create({ mode: 'payment', ...common })
+      : await stripe.checkout.sessions.create({
+          mode: 'subscription',
+          ...common,
+          subscription_data: {
+            metadata,
+            trial_period_days: 14,
+          },
+        });
   if (!session.url) throw new Error('Stripe did not return a checkout URL');
   return { url: session.url };
 }
@@ -199,7 +234,13 @@ export async function createPortalSession(
  */
 export interface SubscriptionDelta {
   householdId: string;
-  fields: Partial<HouseholdSubscription>;
+  // `null` on stripeSubscriptionId/currentPeriodEnd means "clear this attribute"
+  // (REMOVE) — used by a lifetime grant to wipe a prior subscription's stale
+  // ids. Other fields keep their normal types.
+  fields: Partial<Omit<HouseholdSubscription, 'stripeSubscriptionId' | 'currentPeriodEnd'>> & {
+    stripeSubscriptionId?: string | null;
+    currentPeriodEnd?: string | null;
+  };
 }
 
 /**
@@ -230,12 +271,40 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
       if (!householdId) return null;
       const planId = planIdFromMetadata(event, session.metadata);
       if (!planId) return null;
+      const stripeCustomerId =
+        typeof session.customer === 'string' ? session.customer : session.customer?.id;
+      // Be defensive reading `mode`/`payment_status` — cast the object.
+      const mode = (session as unknown as { mode?: string }).mode;
+      const paymentStatus = (session as unknown as { payment_status?: string }).payment_status;
+      if (mode === 'payment') {
+        // Lifetime one-time purchase. Only grant entitlement once Stripe says
+        // the charge is paid; deferred/async payment methods complete later.
+        // No subscription is created, so we CLEAR any stale stripeSubscriptionId
+        // and currentPeriodEnd (a prior subscriber upgrading to lifetime would
+        // otherwise leave a phantom subscription on the row — and a later
+        // subscription.deleted for that old sub would wrongly downgrade this
+        // now-permanent household). `applyStripeEvent` also cancels the old
+        // Stripe subscription so no such events ever fire. Entitlement is
+        // permanent and resolves off planId alone.
+        if (paymentStatus !== 'paid') return null;
+        return {
+          householdId,
+          fields: {
+            planId,
+            stripeCustomerId,
+            status: 'active',
+            stripeSubscriptionId: null,
+            currentPeriodEnd: null,
+          },
+        };
+      }
+      // mode==='subscription' (or undefined → treat as subscription for
+      // back-compat with the existing recurring checkout flow).
       return {
         householdId,
         fields: {
           planId,
-          stripeCustomerId:
-            typeof session.customer === 'string' ? session.customer : session.customer?.id,
+          stripeCustomerId,
           stripeSubscriptionId:
             typeof session.subscription === 'string'
               ? session.subscription
@@ -321,6 +390,45 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
 
+  // Guard a lifetime household against a stale `subscription.deleted` wiping
+  // its permanent grant. A lifetime purchase CLEARS the stored
+  // stripeSubscriptionId (and cancels the old sub below); if a deletion then
+  // arrives for a subscription this household no longer references — or for a
+  // household with no subscription on file at all — it must NOT downgrade to
+  // seedling. (created/updated are not guarded: they re-assert a subscription
+  // id, so they only ever move the row toward a consistent subscribed state,
+  // and the out-of-order `event.created` guard already protects them.)
+  if (event.type === 'customer.subscription.deleted') {
+    const deletedSubId = (event.data.object as unknown as { id?: string }).id;
+    const current = await getHouseholdSubscription(delta.householdId);
+    if (!current.stripeSubscriptionId || current.stripeSubscriptionId !== deletedSubId) {
+      logger.info(
+        {
+          stripeEventId: event.id,
+          type: event.type,
+          householdId: delta.householdId,
+          deletedSubscriptionId: deletedSubId ?? null,
+          householdSubscriptionId: current.stripeSubscriptionId ?? null,
+        },
+        'stripe_event_subscription_mismatch_skipped'
+      );
+      return;
+    }
+  }
+
+  // A paid lifetime checkout clears the stored subscription id (delta sets it
+  // to null). Capture the prior id BEFORE the apply wipes it, so we can cancel
+  // the now-orphaned Stripe subscription afterwards — otherwise it keeps
+  // billing and later emits deleted/updated events.
+  const isLifetimeGrant =
+    event.type === 'checkout.session.completed' &&
+    (event.data.object as unknown as { mode?: string }).mode === 'payment' &&
+    delta.fields.stripeSubscriptionId === null;
+  let priorSubscriptionId: string | undefined;
+  if (isLifetimeGrant) {
+    priorSubscriptionId = (await getHouseholdSubscription(delta.householdId)).stripeSubscriptionId;
+  }
+
   // Apply FIRST, record SECOND. If the apply throws, we return 5xx to Stripe
   // without having touched the ledger, so Stripe's retry gets a clean run.
   // (The old record-first order permanently skipped an event whose apply
@@ -333,6 +441,25 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       'stripe_event_out_of_order_skipped'
     );
     return;
+  }
+
+  if (priorSubscriptionId) {
+    // Best-effort: a failure here must not 5xx the webhook (the entitlement is
+    // already granted). Worst case the old sub keeps billing, but the mismatch
+    // guard above stops its events from revoking the lifetime grant.
+    try {
+      const stripe = await getStripe();
+      await stripe.subscriptions.cancel(priorSubscriptionId);
+      logger.info(
+        { householdId: delta.householdId, subscriptionId: priorSubscriptionId },
+        'lifetime_grant_canceled_prior_subscription'
+      );
+    } catch (err) {
+      logger.error(
+        { err, householdId: delta.householdId, subscriptionId: priorSubscriptionId },
+        'lifetime_grant_cancel_prior_subscription_failed'
+      );
+    }
   }
 
   const isNew = await recordStripeEventOnce(event.id);
@@ -356,6 +483,7 @@ export function planSummary(plan: Plan): {
   description: string;
   monthlyPrice: number;
   annualPrice: number | null;
+  lifetimePrice: number | null;
   maxPlants: number;
   maxMembers: number;
 } {
@@ -367,6 +495,8 @@ export function planSummary(plan: Plan): {
     // null (not undefined) so it survives JSON serialization as an explicit
     // "no annual option" signal the client can branch on.
     annualPrice: plan.annualPrice ?? null,
+    // Same null-not-undefined contract: null means "no lifetime option".
+    lifetimePrice: plan.lifetimePrice ?? null,
     maxPlants: plan.maxPlants,
     maxMembers: plan.maxMembers,
   };

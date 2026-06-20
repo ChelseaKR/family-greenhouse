@@ -6,7 +6,7 @@ import { Button } from '@/components/Button';
 import { PRICING_PLANS } from './plans';
 import { IS_BETA, BETA_NOTICE } from '@/lib/betaMode';
 
-type Interval = 'monthly' | 'annual';
+type Interval = 'monthly' | 'annual' | 'lifetime';
 
 /**
  * Three-card pricing grid, shared by the LandingPage anchor section and
@@ -35,7 +35,7 @@ export function PricingGrid() {
           aria-label="Billing interval"
           className="inline-flex rounded-full bg-gray-100 p-1"
         >
-          {(['monthly', 'annual'] as Interval[]).map((opt) => (
+          {(['monthly', 'annual', 'lifetime'] as Interval[]).map((opt) => (
             <button
               key={opt}
               type="button"
@@ -52,7 +52,7 @@ export function PricingGrid() {
           ))}
         </div>
         <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-          Save ~33% yearly
+          {interval === 'lifetime' ? 'Garden only · pay once' : 'Save ~33% yearly'}
         </span>
       </div>
       <div className="mx-auto mt-12 grid max-w-lg grid-cols-1 gap-8 md:max-w-none md:grid-cols-3 md:gap-6 lg:gap-8">
@@ -84,10 +84,20 @@ export function PricingGrid() {
             </p>
             {(() => {
               // Free tier shows a single label; paid tiers show the price for
-              // the selected cadence (falling back to monthly if a tier somehow
-              // lacks an annual point).
+              // the selected cadence. Lifetime is Garden-only, so other tiers
+              // fall back to annual; annual itself falls back to monthly if a
+              // tier somehow lacks an annual point.
               const point =
-                interval === 'annual' ? (plan.annual ?? plan.monthly) : plan.monthly;
+                interval === 'lifetime'
+                  ? (plan.lifetime ?? plan.annual ?? plan.monthly)
+                  : interval === 'annual'
+                    ? (plan.annual ?? plan.monthly)
+                    : plan.monthly;
+              // Lifetime is Garden-only. For a paid tier without a lifetime
+              // point we fall back to its annual price, but say so explicitly
+              // so the annual figure isn't mistaken for a lifetime deal.
+              const lifetimeUnavailable =
+                interval === 'lifetime' && !plan.lifetime && !plan.freeLabel;
               return (
                 <div className="mt-6">
                   <div className="flex items-baseline gap-1">
@@ -110,15 +120,26 @@ export function PricingGrid() {
                       </span>
                     )}
                   </div>
-                  {point?.note && (
+                  {lifetimeUnavailable ? (
                     <p
                       className={clsx(
                         'mt-1 text-xs',
-                        plan.highlighted ? 'text-primary-100' : 'text-primary-700'
+                        plan.highlighted ? 'text-primary-100' : 'text-gray-500'
                       )}
                     >
-                      {point.note}
+                      No lifetime option — annual price shown
                     </p>
+                  ) : (
+                    point?.note && (
+                      <p
+                        className={clsx(
+                          'mt-1 text-xs',
+                          plan.highlighted ? 'text-primary-100' : 'text-primary-700'
+                        )}
+                      >
+                        {point.note}
+                      </p>
+                    )
                   )}
                 </div>
               );
