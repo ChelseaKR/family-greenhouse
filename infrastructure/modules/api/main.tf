@@ -1,3 +1,6 @@
+# Account id for scoping IAM resource ARNs (e.g. the SES send fallback below).
+data "aws_caller_identity" "current" {}
+
 # API Gateway
 resource "aws_apigatewayv2_api" "main" {
   name          = "${var.project_name}-api-${var.environment}"
@@ -135,15 +138,17 @@ resource "aws_iam_role_policy" "lambda" {
       },
       {
         # Reminder email via SES. Scoped to the verified domain identity when
-        # one is provisioned (prod); identity-less environments (dev/staging
-        # without a domain) keep "*", where SES can't send anyway because no
-        # identity is verified.
+        # one is provisioned (prod). Identity-less environments (dev/staging
+        # without a domain) can't send at all — no identity is verified — but
+        # rather than fall back to "*", scope to THIS account's SES identities
+        # so the grant can never apply outside the account even if one is later
+        # verified.
         Effect = "Allow"
         Action = [
           "ses:SendEmail",
           "ses:SendRawEmail"
         ]
-        Resource = var.ses_identity_arn == "" ? "*" : var.ses_identity_arn
+        Resource = var.ses_identity_arn == "" ? "arn:aws:ses:*:${data.aws_caller_identity.current.account_id}:identity/*" : var.ses_identity_arn
       },
       {
         # Reminder SMS via SNS. Resource "*" is REQUIRED by AWS here:

@@ -56,8 +56,14 @@ resource "aws_dynamodb_table" "main" {
     enabled        = true
   }
 
+  # Point-in-time recovery in every environment. Continuous backups are a few
+  # cents/month for a table this size, and the protection (recover from a bad
+  # migration, an errant batch delete, or a bug that corrupts rows) is worth it
+  # in staging too — staging increasingly holds real-shaped data used to
+  # validate releases, and "it's only staging" is exactly when an unrecoverable
+  # mistake hurts.
   point_in_time_recovery {
-    enabled = var.environment == "production"
+    enabled = true
   }
 
   server_side_encryption {
