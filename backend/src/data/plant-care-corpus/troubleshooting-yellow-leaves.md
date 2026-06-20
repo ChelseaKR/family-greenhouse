@@ -1,6 +1,6 @@
 # Yellow leaves — what they mean
 
-Yellow leaves are the most ambiguous signal on a houseplant. They can mean five different things, and the only way to narrow it down is to look at _which_ leaves are yellow and _how_ they got that way.
+Yellow leaves are the most ambiguous signal on a houseplant. They can mean five different things, and the only way to narrow it down is to look at *which* leaves are yellow and *how* they got that way.
 
 ## Lower leaves only, gradual yellowing
 

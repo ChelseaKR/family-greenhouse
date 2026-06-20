@@ -4,7 +4,7 @@ Root rot is the silent killer of houseplants. By the time the symptoms are obvio
 
 ## What it is
 
-Root rot is a fungal infection (most commonly _Pythium_ or _Phytophthora_) that thrives in waterlogged soil with low oxygen. It eats the roots from the tips upward. Once it reaches the crown, the plant is unrecoverable.
+Root rot is a fungal infection (most commonly *Pythium* or *Phytophthora*) that thrives in waterlogged soil with low oxygen. It eats the roots from the tips upward. Once it reaches the crown, the plant is unrecoverable.
 
 The fungi are everywhere — in the air, the soil, on your fingers. They're harmless until conditions favor them: too much water, too little drainage, soil that stays soggy for days.
 

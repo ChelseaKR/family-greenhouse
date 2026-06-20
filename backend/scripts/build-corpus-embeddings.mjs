@@ -23,14 +23,12 @@ import { fileURLToPath } from 'url';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CORPUS_DIR = join(__dirname, '..', 'src', 'data', 'plant-care-corpus');
+export const CORPUS_DIR = join(__dirname, '..', 'src', 'data', 'plant-care-corpus');
 const OUTPUT_FILE = join(__dirname, '..', 'src', 'data', 'plant-care-corpus-embeddings.json');
 
 const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const EMBED_MODEL = process.env.BEDROCK_EMBED_MODEL_ID ?? 'amazon.titan-embed-text-v2:0';
-const DIMENSIONS = 1024;
-
-const client = new BedrockRuntimeClient({ region: REGION });
+export const EMBED_MODEL = process.env.BEDROCK_EMBED_MODEL_ID ?? 'amazon.titan-embed-text-v2:0';
+export const DIMENSIONS = 1024;
 
 /**
  * Split a markdown file into chunks. Strategy:
@@ -42,7 +40,7 @@ const client = new BedrockRuntimeClient({ region: REGION });
  * No fancy semantic chunking — these articles are already hand-written
  * to be section-coherent. Keeping it dumb keeps it predictable.
  */
-function chunkMarkdown(source, content) {
+export function chunkMarkdown(source, content) {
   const lines = content.split('\n');
   const h1 = lines.find((l) => l.startsWith('# ')) ?? '';
   const articleTitle = h1.replace(/^#\s+/, '').trim();
@@ -76,7 +74,7 @@ function chunkMarkdown(source, content) {
   return chunks;
 }
 
-async function embed(text) {
+async function embed(client, text) {
   const command = new InvokeModelCommand({
     modelId: EMBED_MODEL,
     contentType: 'application/json',
@@ -96,6 +94,7 @@ async function embed(text) {
 }
 
 async function main() {
+  const client = new BedrockRuntimeClient({ region: REGION });
   const files = readdirSync(CORPUS_DIR).filter((f) => f.endsWith('.md'));
   console.log(`Reading ${files.length} markdown files from ${CORPUS_DIR}`);
 
@@ -111,7 +110,7 @@ async function main() {
   for (let i = 0; i < allChunks.length; i++) {
     const chunk = allChunks[i];
     const embedInput = `${chunk.articleTitle}\n${chunk.sectionTitle}\n\n${chunk.text}`;
-    chunk.embedding = await embed(embedInput);
+    chunk.embedding = await embed(client, embedInput);
     process.stdout.write(`\r  embedded ${i + 1}/${allChunks.length}`);
   }
   console.log('');
@@ -127,7 +126,14 @@ async function main() {
   console.log(`Wrote ${OUTPUT_FILE} (${sizeKb} KB, ${allChunks.length} chunks)`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run the build when invoked directly (e.g. `node build-corpus-embeddings.mjs`),
+// not when imported — the drift-guard test imports `chunkMarkdown` and the
+// constants without wanting to construct a Bedrock client or hit the network.
+// Compare resolved filesystem paths (not raw URLs) so spaces/encoding in the
+// path don't break the equality check.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
