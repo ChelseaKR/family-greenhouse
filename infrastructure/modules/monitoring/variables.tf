@@ -53,3 +53,9 @@ variable "lambda_dlq_name" {
   type        = string
   default     = ""
 }
+
+variable "email_forwarder_dlq_name" {
+  description = "SQS queue name of the inbound-mail forwarder DLQ. Empty (no domain / email module not provisioned) disables the alarm."
+  type        = string
+  default     = ""
+}

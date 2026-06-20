@@ -51,6 +51,14 @@ interface StreamRequestEvent {
   body?: string | null;
   isBase64Encoded?: boolean;
   headers?: Record<string, string | undefined>;
+  /**
+   * Connection metadata stamped by the Lambda Function URL service. We read
+   * ONLY `requestContext.http.sourceIp` — that value is set by AWS and the
+   * caller cannot forge it. This is deliberately NOT
+   * `requestContext.authorizer`: on an auth-NONE Function URL that field IS
+   * caller-controlled and is never trusted here for identity (see module doc).
+   */
+  requestContext?: { http?: { sourceIp?: string } };
 }
 
 /** Writable side of awslambda's responseStream (Node Writable subset). */
@@ -90,6 +98,62 @@ class HttpishError extends Error {
 }
 
 /**
+ * Per-source-IP request rate limit for the streaming chat Function URL.
+ *
+ * The Function URL has no API Gateway in front of it (auth NONE — see the
+ * module header), so it also inherits none of API Gateway's stage throttling.
+ * The Bedrock turn behind it is the most expensive path in the app, and the
+ * function caps at 15 reserved concurrent executions; without a brake a single
+ * source can rapid-fire requests, monopolise those 15 slots, and force a JWT
+ * verification + DynamoDB membership read on every one. This in-memory token
+ * bucket is that brake, checked before any of that work.
+ *
+ * Same per-warm-container caveat as middleware/rateLimit.ts: the effective
+ * ceiling multiplies with Lambda concurrency, so treat it as a brake on a
+ * single hot source, not a hard global cap — the 15 reserved-concurrency
+ * ceiling is the hard global limit. The per-household monthly token budget
+ * (services/chat) bounds total spend; this bounds burst rate.
+ *
+ * 60/min/IP is generous for an interactive chat shared behind a household NAT
+ * (a message every second sustained) but turns a reconnect flood from
+ * unbounded into bounded.
+ */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_SWEEP_THRESHOLD = 5_000;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function enforceRateLimit(event: StreamRequestEvent): void {
+  // sourceIp is AWS-stamped connection metadata (unforgeable); fall back to a
+  // single shared bucket when absent (local/tests) rather than failing open
+  // per-request.
+  const key = event.requestContext?.http?.sourceIp ?? 'unknown';
+  const now = Date.now();
+  // Opportunistic sweep so the map can't grow unbounded over a warm
+  // container's life (one entry per distinct source IP).
+  if (rateBuckets.size > RATE_LIMIT_SWEEP_THRESHOLD) {
+    for (const [k, b] of rateBuckets) {
+      if (b.resetAt <= now) rateBuckets.delete(k);
+    }
+  }
+  const bucket = rateBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return;
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) {
+    throw new HttpishError(429, 'Too many requests. Please slow down and try again.');
+  }
+  bucket.count += 1;
+}
+
+/** Test hook — drops every in-memory rate-limit bucket so tests can run many
+ *  sequential requests from the same (absent) source IP without tripping. */
+export function __resetChatStreamRateLimitForTests(): void {
+  rateBuckets.clear();
+}
+
+/**
  * Authenticate + authorize the caller, mirroring middleware/auth.ts — except
  * the JWT is verified IN-HANDLER (signature, issuer, audience, expiry, and
  * token_use via aws-jwt-verify) because no API Gateway authorizer fronts the
@@ -104,6 +168,10 @@ class HttpishError extends Error {
 async function resolveUser(
   event: StreamRequestEvent
 ): Promise<{ userId: string; householdId: string }> {
+  // Rate-limit BEFORE any expensive work (JWT verify, membership read, Bedrock)
+  // so a flood is shed as cheaply as possible. Throws 429 when the per-IP
+  // bucket is exhausted.
+  enforceRateLimit(event);
   const authHeader = event.headers?.['authorization'] ?? event.headers?.['Authorization'];
   const token = typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '') : '';
   if (!token) {

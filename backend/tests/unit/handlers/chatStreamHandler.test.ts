@@ -24,7 +24,11 @@ vi.mock('aws-jwt-verify', () => ({
 vi.mock('../../../src/services/householdService.js');
 vi.mock('../../../src/services/chat/index.js');
 
-import { streamRequestToSse, handler } from '../../../src/handlers/chat/streamHandler.js';
+import {
+  streamRequestToSse,
+  handler,
+  __resetChatStreamRateLimitForTests,
+} from '../../../src/handlers/chat/streamHandler.js';
 import { getMemberByUserId } from '../../../src/services/householdService.js';
 import { streamChatTurn } from '../../../src/services/chat/index.js';
 
@@ -68,6 +72,9 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   metadataCalls.length = 0;
+  // Rate-limit buckets are module-level and per-warm-container; reset them so
+  // one test's requests don't count against the next.
+  __resetChatStreamRateLimitForTests();
 });
 
 const validClaims = {
@@ -187,6 +194,34 @@ describe('streamHandler auth (in-handler JWT verification)', () => {
     });
     expect(events.map((e) => e.type)).toEqual(['start', 'delta', 'done']);
     expect(stream.end).toHaveBeenCalled();
+  });
+
+  it('429s once the per-IP rate limit is exceeded, before verifying or streaming', async () => {
+    mockVerify.mockResolvedValue(validClaims);
+    vi.mocked(getMemberByUserId).mockResolvedValue({
+      userId: 'user-1',
+      role: 'member',
+    } as Awaited<ReturnType<typeof getMemberByUserId>>);
+    vi.mocked(streamChatTurn).mockImplementation(fakeTurn as unknown as typeof streamChatTurn);
+
+    const event = makeEvent({ requestContext: { http: { sourceIp: '203.0.113.7' } } });
+
+    // 60 requests/min/IP is the cap; the 61st from the same IP trips the limit.
+    for (let i = 0; i < 60; i++) {
+      const stream = makeStream();
+      await streamRequestToSse(event, stream);
+    }
+    const verifyCallsBefore = mockVerify.mock.calls.length;
+
+    const stream = makeStream();
+    await streamRequestToSse(event, stream);
+
+    expect(metadataCalls.at(-1)?.statusCode).toBe(429);
+    expect(JSON.parse(stream.chunks.join(''))).toEqual({
+      message: 'Too many requests. Please slow down and try again.',
+    });
+    // The rejected request short-circuits before JWT verification runs again.
+    expect(mockVerify.mock.calls.length).toBe(verifyCallsBefore);
   });
 
   it('buffered fallback handler also 401s with JSON {message} on a forged token', async () => {

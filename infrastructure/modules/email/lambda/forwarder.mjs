@@ -68,20 +68,50 @@ function rewrite(raw, originalRecipient) {
 export const handler = async (event) => {
   const record = event.Records?.[0]?.ses;
   if (!record) return { skipped: true };
-  const messageId = record.mail.messageId;
-  const recipient = record.receipt.recipients?.[0] ?? 'unknown@unknown';
+  const messageId = record.mail?.messageId;
+  const recipient = record.receipt?.recipients?.[0] ?? 'unknown@unknown';
 
-  const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${PREFIX}${messageId}` }));
-  const raw = await obj.Body.transformToString();
+  // SES stamps spam/virus scan verdicts on the receipt (the receipt rule sets
+  // scan_enabled = true). Refuse to relay anything that FAILED the virus or
+  // spam scan: this forwarder re-sends from our DKIM-aligned domain, so passing
+  // malware/phishing through would launder it under our domain's reputation
+  // straight into the maintainer's inbox. We gate ONLY on virus/spam — not
+  // DKIM/SPF/DMARC, which legitimately fail for plenty of forwarded list mail.
+  // A FAIL is an expected verdict, not a processing error, so we drop and
+  // return cleanly (no throw → no retry, no DLQ).
+  const spam = record.receipt?.spamVerdict?.status;
+  const virus = record.receipt?.virusVerdict?.status;
+  if (spam === 'FAIL' || virus === 'FAIL') {
+    console.log(
+      JSON.stringify({ msg: 'mail_dropped_scan_fail', messageId, recipient, spam, virus })
+    );
+    return { dropped: true, reason: 'scan_failed' };
+  }
 
-  await ses.send(
-    new SendRawEmailCommand({
-      Source: FROM_ADDRESS,
-      Destinations: [FORWARD_TO],
-      RawMessage: { Data: Buffer.from(rewrite(raw, recipient)) },
-    })
-  );
+  try {
+    const obj = await s3.send(
+      new GetObjectCommand({ Bucket: BUCKET, Key: `${PREFIX}${messageId}` })
+    );
+    const raw = await obj.Body.transformToString();
 
-  console.log(JSON.stringify({ msg: 'mail_forwarded', messageId, recipient, to: 'redacted' }));
-  return { forwarded: true, messageId };
+    await ses.send(
+      new SendRawEmailCommand({
+        Source: FROM_ADDRESS,
+        Destinations: [FORWARD_TO],
+        RawMessage: { Data: Buffer.from(rewrite(raw, recipient)) },
+      })
+    );
+
+    console.log(JSON.stringify({ msg: 'mail_forwarded', messageId, recipient, to: 'redacted' }));
+    return { forwarded: true, messageId };
+  } catch (err) {
+    // Log loudly AND rethrow. This Lambda is invoked asynchronously
+    // (invocation_type = Event), so a throw is what routes the message to the
+    // forwarder DLQ (and trips the depth alarm) for inspection + redrive.
+    // Swallowing the error here would silently lose security@/abuse@ mail.
+    console.error(
+      JSON.stringify({ msg: 'mail_forward_failed', messageId, recipient, error: err?.message })
+    );
+    throw err;
+  }
 };

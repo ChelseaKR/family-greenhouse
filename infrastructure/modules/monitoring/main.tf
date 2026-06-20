@@ -485,6 +485,36 @@ resource "aws_cloudwatch_metric_alarm" "lambda_dlq_depth" {
   }
 }
 
+# Inbound-mail forwarder DLQ depth. Any message here = a forward (security@ /
+# abuse@ / support@ mail) failed past its async retries and was dead-lettered —
+# silent loss of mail we explicitly want to see. Separate from lambda_dlq_depth
+# (the reminders DLQ) because the email module owns its own queue and is only
+# created when a domain is configured. treat_missing_data = notBreaching so a
+# normally-empty queue doesn't false-alarm.
+resource "aws_cloudwatch_metric_alarm" "email_forwarder_dlq_depth" {
+  count = var.email_forwarder_dlq_name == "" ? 0 : 1
+
+  alarm_name          = "${var.project_name}-mail-forwarder-dlq-not-empty-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  alarm_description   = "Messages in the inbound-mail forwarder DLQ — a forward (security@/abuse@/support@) failed and was dead-lettered. Inspect + redrive."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = var.email_forwarder_dlq_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-mail-forwarder-dlq-alarm-${var.environment}"
+  }
+}
+
 # Audit alarm: failed-login spike (possible credential stuffing / brute force).
 # A metric filter turns the structured audit log line (pino JSON,
 # `event: "auth.login.failure"`) on the auth Lambda's log group into a metric;
