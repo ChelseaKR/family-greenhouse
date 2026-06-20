@@ -92,6 +92,12 @@ describe('billing handler', () => {
         'greenhouse',
         'seedling',
       ]);
+      // Annual prices are exposed so the pricing UI can render the yearly
+      // cadence; the free tier reports null (no annual option).
+      const byId = Object.fromEntries(
+        body.map((p: { id: string; annualPrice: number | null }) => [p.id, p.annualPrice])
+      );
+      expect(byId).toEqual({ seedling: null, garden: 39.99, greenhouse: 79.99 });
     });
   });
 
@@ -221,10 +227,49 @@ describe('billing handler', () => {
           householdId: 'hh-1',
           customerEmail: 'test@example.com',
           planId: 'garden',
+          // Omitting `interval` defaults to a monthly subscription.
+          interval: 'month',
           successUrl: expect.stringContaining('/settings/billing?status=success'),
           cancelUrl: expect.stringContaining('/settings/billing?status=cancel'),
         })
       );
+    });
+
+    it('passes interval=year through to the checkout session', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
+        url: 'https://checkout.stripe.test/annual',
+      });
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'greenhouse', interval: 'year' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(billing.createCheckoutSession).toHaveBeenCalledWith(
+        expect.objectContaining({ planId: 'greenhouse', interval: 'year' })
+      );
+    });
+
+    it('rejects an unknown billing interval at the validation layer', async () => {
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'garden', interval: 'weekly' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(400);
     });
 
     it('returns 403 when the caller is a non-admin household member', async () => {

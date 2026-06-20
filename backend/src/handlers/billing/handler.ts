@@ -22,6 +22,9 @@ import { logger } from '../../utils/logger.js';
 
 const checkoutSchema = z.object({
   planId: z.enum(['garden', 'greenhouse']),
+  // Billing cadence. Optional + defaulted so existing clients that send only
+  // `planId` keep getting a monthly subscription unchanged.
+  interval: z.enum(['month', 'year']).optional().default('month'),
 });
 
 type CheckoutInput = z.infer<typeof checkoutSchema>;
@@ -77,6 +80,7 @@ export const checkout = createHandler(
         householdId: user.householdId!,
         customerEmail: user.email,
         planId: validatedBody.planId,
+        interval: validatedBody.interval,
         successUrl: `${baseUrl}/settings/billing?status=success`,
         cancelUrl: `${baseUrl}/settings/billing?status=cancel`,
       });

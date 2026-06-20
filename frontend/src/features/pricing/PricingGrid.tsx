@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { Button } from '@/components/Button';
 import { PRICING_PLANS } from './plans';
 import { IS_BETA, BETA_NOTICE } from '@/lib/betaMode';
+
+type Interval = 'monthly' | 'annual';
 
 /**
  * Three-card pricing grid, shared by the LandingPage anchor section and
@@ -13,6 +16,9 @@ import { IS_BETA, BETA_NOTICE } from '@/lib/betaMode';
  * CTA renders white-on-white).
  */
 export function PricingGrid() {
+  // Annual is the default cadence — better value for the buyer, better
+  // retention for us.
+  const [interval, setInterval] = useState<Interval>('annual');
   return (
     <>
       {IS_BETA && (
@@ -23,6 +29,32 @@ export function PricingGrid() {
           <span className="font-semibold">Beta:</span> {BETA_NOTICE}
         </div>
       )}
+      <div className="mt-10 flex items-center justify-center gap-3">
+        <div
+          role="radiogroup"
+          aria-label="Billing interval"
+          className="inline-flex rounded-full bg-gray-100 p-1"
+        >
+          {(['monthly', 'annual'] as Interval[]).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              role="radio"
+              aria-checked={interval === opt}
+              onClick={() => setInterval(opt)}
+              className={clsx(
+                'rounded-full px-5 py-1.5 text-sm font-medium capitalize transition-colors',
+                interval === opt ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+          Save ~33% yearly
+        </span>
+      </div>
       <div className="mx-auto mt-12 grid max-w-lg grid-cols-1 gap-8 md:max-w-none md:grid-cols-3 md:gap-6 lg:gap-8">
         {PRICING_PLANS.map((plan) => (
           <div
@@ -50,26 +82,47 @@ export function PricingGrid() {
             >
               {plan.description}
             </p>
-            <div className="mt-6 flex items-baseline gap-1">
-              <span
-                className={clsx(
-                  'text-4xl font-bold',
-                  plan.highlighted ? 'text-white' : 'text-gray-900'
-                )}
-              >
-                {plan.price}
-              </span>
-              {plan.period && (
-                <span
-                  className={clsx(
-                    'text-sm',
-                    plan.highlighted ? 'text-primary-100' : 'text-gray-500'
+            {(() => {
+              // Free tier shows a single label; paid tiers show the price for
+              // the selected cadence (falling back to monthly if a tier somehow
+              // lacks an annual point).
+              const point =
+                interval === 'annual' ? (plan.annual ?? plan.monthly) : plan.monthly;
+              return (
+                <div className="mt-6">
+                  <div className="flex items-baseline gap-1">
+                    <span
+                      className={clsx(
+                        'text-4xl font-bold',
+                        plan.highlighted ? 'text-white' : 'text-gray-900'
+                      )}
+                    >
+                      {plan.freeLabel ?? point?.price}
+                    </span>
+                    {point?.period && (
+                      <span
+                        className={clsx(
+                          'text-sm',
+                          plan.highlighted ? 'text-primary-100' : 'text-gray-500'
+                        )}
+                      >
+                        {point.period}
+                      </span>
+                    )}
+                  </div>
+                  {point?.note && (
+                    <p
+                      className={clsx(
+                        'mt-1 text-xs',
+                        plan.highlighted ? 'text-primary-100' : 'text-primary-700'
+                      )}
+                    >
+                      {point.note}
+                    </p>
                   )}
-                >
-                  {plan.period}
-                </span>
-              )}
-            </div>
+                </div>
+              );
+            })()}
             <ul className="mt-8 space-y-3 flex-1">
               {plan.features.map((feature) => (
                 <li key={feature} className="flex items-center gap-3">

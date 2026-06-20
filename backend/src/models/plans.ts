@@ -13,8 +13,17 @@ export interface Plan {
   monthlyPrice: number; // dollars
   maxPlants: number;
   maxMembers: number;
-  /** Env var name where the Stripe price ID lives. Read lazily so tests don't need to set it. */
+  /** Env var name where the Stripe MONTHLY price ID lives. Read at runtime so
+   *  staging/prod keys stay separate. Free tier has none. */
   stripePriceEnv?: string;
+  /** Annual price in dollars/year (a discount vs 12× monthly). Undefined on the
+   *  free tier. The category monetizes primarily on annual plans, and annual
+   *  subscriptions retain markedly better than monthly — so every paid tier
+   *  offers one. */
+  annualPrice?: number;
+  /** Env var name where the Stripe ANNUAL price ID lives. Paired with
+   *  `annualPrice`; absent on the free tier. */
+  annualStripePriceEnv?: string;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -31,18 +40,25 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Garden',
     description: 'For growing families',
     monthlyPrice: 4.99,
+    // ~33% off 12× monthly ($59.88) — "$3.33/mo billed yearly". Sits in the
+    // competitive annual band ($30–48) the market actually pays at.
+    annualPrice: 39.99,
     maxPlants: 500,
     maxMembers: 6,
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
+    annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
   },
   greenhouse: {
     id: 'greenhouse',
     name: 'Greenhouse',
     description: 'For serious plant parents',
     monthlyPrice: 9.99,
+    // ~33% off 12× monthly ($119.88) — "$6.67/mo billed yearly".
+    annualPrice: 79.99,
     maxPlants: 5000,
     maxMembers: 50,
     stripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE',
+    annualStripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE_ANNUAL',
   },
 };
 
