@@ -136,6 +136,10 @@ module "monitoring" {
   api_endpoint          = module.api.api_gateway_endpoint
   monthly_budget_usd    = var.monthly_budget_usd
   lambda_dlq_name       = module.api.lambda_dlq_name
+  # Wired only when the email module is provisioned (domain set). No cycle:
+  # monitoring already depends on api (which depends on email), and email
+  # depends on nothing here.
+  email_forwarder_dlq_name = var.domain_name == "" ? "" : module.email[0].forwarder_dlq_name
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its

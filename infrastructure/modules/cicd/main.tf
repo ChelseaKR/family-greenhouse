@@ -206,14 +206,28 @@ resource "aws_iam_policy" "deploy" {
       },
       {
         # Lambdas fetch secrets at runtime; the deploy role itself only ever
-        # needs to read them (e.g. data sources / debugging), never write.
+        # needs to READ the project's own secrets (terraform data sources /
+        # debugging), never write and never read another project's secrets.
+        # Get/Describe support resource-level scoping, so pin them to the
+        # `family-greenhouse/*` prefix — without this the CI role could read
+        # every secret in the account.
         Sid    = "SecretsRead"
         Effect = "Allow"
         Action = [
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret",
-          "secretsmanager:ListSecrets",
         ]
+        Resource = [
+          "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*",
+        ]
+      },
+      {
+        # ListSecrets enumerates metadata only (no values) and does NOT support
+        # resource-level permissions — it can only be granted on "*". Split out
+        # so the value-reading actions above stay prefix-scoped.
+        Sid      = "SecretsList"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:ListSecrets"]
         Resource = "*"
       },
     ]

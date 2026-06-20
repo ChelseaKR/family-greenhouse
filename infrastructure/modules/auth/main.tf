@@ -19,11 +19,25 @@ resource "aws_cognito_user_pool" "main" {
   }
 
   password_policy {
-    minimum_length    = 8
+    # 12-char floor: with Threat Protection's compromised-credential checks
+    # already on, length is the cheapest remaining win against offline/guessing
+    # attacks. Still no required symbols — NIST 800-63B guidance favours length
+    # over composition rules, and the leaked-password check covers the weak ones.
+    minimum_length    = 12
     require_lowercase = true
     require_numbers   = true
     require_symbols   = false
     require_uppercase = true
+  }
+
+  # Optional TOTP (authenticator-app) MFA. OPTIONAL means users may enrol a
+  # software token but aren't forced to — non-breaking for existing accounts,
+  # while letting security-conscious household owners (who control the
+  # authorization attributes) harden their own login. SMS MFA is deliberately
+  # left off: it's the weaker factor and carries per-message cost.
+  mfa_configuration = "OPTIONAL"
+  software_token_mfa_configuration {
+    enabled = true
   }
 
   account_recovery_setting {

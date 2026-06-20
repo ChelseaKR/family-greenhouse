@@ -96,6 +96,23 @@ resource "aws_s3_bucket_policy" "inbound_mail" {
 
 # --- Forwarder Lambda -------------------------------------------------------
 
+# Dead-letter queue for the async (Event-invoked) forwarder. Without it, a
+# forward that throws past Lambda's two automatic retries is dropped silently —
+# unacceptable for a path that carries security@ / abuse@ mail. Failed
+# invocations land here for inspection + redrive, and the depth alarm (in the
+# monitoring module, fed via the forwarder_dlq_name output) pages on any
+# message.
+resource "aws_sqs_queue" "forwarder_dlq" {
+  name = "${var.project_name}-mail-forwarder-dlq-${var.environment}"
+  # Max retention so a failure over a weekend is still redrivable on Monday.
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
+  tags = {
+    Name = "${var.project_name}-mail-forwarder-dlq-${var.environment}"
+  }
+}
+
 data "archive_file" "forwarder" {
   type        = "zip"
   source_file = "${path.module}/lambda/forwarder.mjs"
@@ -131,6 +148,14 @@ resource "aws_iam_role_policy" "forwarder" {
         Resource = "${aws_s3_bucket.inbound_mail.arn}/*"
       },
       {
+        # Async DLQ delivery: Lambda uses the FUNCTION's execution role to send
+        # a failed invocation to the dead_letter_config target, so the role
+        # needs sqs:SendMessage on the forwarder DLQ.
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.forwarder_dlq.arn
+      },
+      {
         # identity/* (account-scoped), not just the domain identity: while the
         # account is in the SES sandbox, sends are ALSO authorized against the
         # recipient's verified-identity ARN (the forward destination is a
@@ -153,6 +178,13 @@ resource "aws_lambda_function" "forwarder" {
   memory_size      = 256
   filename         = data.archive_file.forwarder.output_path
   source_code_hash = data.archive_file.forwarder.output_base64sha256
+
+  # Route invocations that exhaust Lambda's async retries to the DLQ instead of
+  # dropping them. The handler rethrows on any forward failure precisely so the
+  # message reaches this queue.
+  dead_letter_config {
+    target_arn = aws_sqs_queue.forwarder_dlq.arn
+  }
 
   environment {
     variables = {
