@@ -8,7 +8,13 @@ import { useAuthStore } from '@/store/authStore';
 import * as householdService from '@/services/householdService';
 import type { Membership } from '@/services/householdService';
 
-vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
+vi.mock('@/services/analytics', () => ({
+  track: vi.fn(),
+  // authStore.setActiveHouseholdId now pins the analytics household group.
+  setActiveHousehold: vi.fn(),
+  identify: vi.fn(),
+  reset: vi.fn(),
+}));
 
 const navigateSpy = vi.fn();
 vi.mock('react-router-dom', async () => {

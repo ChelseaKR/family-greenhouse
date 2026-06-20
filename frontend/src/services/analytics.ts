@@ -17,6 +17,15 @@
  * Privacy:
  *  - We send the user's Cognito sub as the `distinct_id`. We do not send
  *    email, name, plant names, or any household-identifying free text.
+ *  - We attach a `household` GROUP key (`$groups.household`) to every event
+ *    when a household is active — an opaque UUID, exactly analogous to the
+ *    Cognito-sub distinct_id. "No household-identifying free text" means no
+ *    names/addresses; a UUID grouping key can't be reversed to a person,
+ *    home, or address, so it carries the same (negligible) privacy weight
+ *    as the distinct_id and is fine to send. It's what makes the
+ *    collaboration funnel (does a household get a 2nd active member?)
+ *    measurable across different users — see `setActiveHousehold` and
+ *    docs/analytics.md.
  *  - Event properties are limited to enum-like discriminators (e.g. plan
  *    id, member count buckets) — never user-supplied strings.
  *  - The shim respects browser Do-Not-Track when `navigator.doNotTrack`
@@ -147,6 +156,55 @@ export function registerSuperProperties(props: Record<string, string>): void {
   superProps = { ...superProps, ...props };
 }
 
+/**
+ * Active household — the PostHog group key (`$groups.household`) attached to
+ * every event. Set by `setActiveHousehold`, cleared by `reset` (logout). An
+ * opaque UUID, never free text (see the Privacy block above). This is the
+ * shared key that lets PostHog pair events across DIFFERENT users in the same
+ * household — `invite_sent` (admin) → `invite_accepted` (invitee), or "count
+ * distinct active members" — which the per-user `distinct_id` alone cannot do.
+ */
+let activeHouseholdId: string | null = null;
+
+/** Households we've already `$groupidentify`-ed this session, so we only emit
+ *  the group-identify event once per household rather than on every switch. */
+const groupIdentified = new Set<string>();
+
+/**
+ * Pin subsequent events to a household group. Call on login/session restore
+ * and whenever the active household changes (the household switcher). Pass
+ * `null` to detach (e.g. a user with no household yet). The id is the opaque
+ * household UUID — never a name or address.
+ *
+ * On the first time we see a given household this session we emit a PostHog
+ * `$groupidentify` so the group exists in the UI; subsequent calls just swap
+ * the ambient key.
+ */
+export function setActiveHousehold(householdId: string | null): void {
+  activeHouseholdId = householdId;
+  if (!householdId) return;
+  if (!isEnabled() || groupIdentified.has(householdId)) return;
+  groupIdentified.add(householdId);
+  void fetch(`${HOST}/capture/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: KEY,
+      event: '$groupidentify',
+      // `$groupidentify` is keyed by the group itself; PostHog ignores the
+      // distinct_id here but the field is required, so reuse the household id.
+      distinct_id: householdId,
+      properties: {
+        $group_type: 'household',
+        $group_key: householdId,
+        $group_set: {},
+      },
+      timestamp: new Date().toISOString(),
+    }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 function isEnabled(): boolean {
   if (!KEY) return false;
   if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return false;
@@ -155,9 +213,15 @@ function isEnabled(): boolean {
 
 async function send(event: EventName, properties: Record<string, unknown>): Promise<void> {
   const withSuper = { ...superProps, ...properties };
+  // The household group key rides on both rails: `$groups.household` for
+  // PostHog group analytics, and a plain `household` field on the GTM
+  // dataLayer payload (GTM has no notion of PostHog groups).
+  const dataLayerProps = activeHouseholdId
+    ? { ...withSuper, household: activeHouseholdId }
+    : withSuper;
   // GTM dataLayer push runs whether or not PostHog is configured — they're
   // independent rails. The DNT check is inside pushToDataLayer.
-  pushToDataLayer(event, withSuper);
+  pushToDataLayer(event, dataLayerProps);
   if (!isEnabled() || !distinctId) return;
   try {
     await fetch(`${HOST}/capture/`, {
@@ -167,6 +231,10 @@ async function send(event: EventName, properties: Record<string, unknown>): Prom
         api_key: KEY,
         event,
         distinct_id: distinctId,
+        // Attach the household group so this event is countable per-household
+        // across users (collaboration funnel). Omitted entirely when no
+        // household is active so we never send a stray `{ household: null }`.
+        ...(activeHouseholdId ? { $groups: { household: activeHouseholdId } } : {}),
         properties: {
           ...withSuper,
           $lib: 'family-greenhouse-shim',
@@ -190,7 +258,12 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
   // Initialize GTM once we have a known user — keeps an anonymous landing-
   // page visitor from triggering the script load until they're logged in.
   ensureGtm();
-  pushToDataLayer('user_identified', { userId, ...superProps, ...(traits ?? {}) });
+  pushToDataLayer('user_identified', {
+    userId,
+    ...superProps,
+    ...(traits ?? {}),
+    ...(activeHouseholdId ? { household: activeHouseholdId } : {}),
+  });
   if (!isEnabled()) return;
   void fetch(`${HOST}/capture/`, {
     method: 'POST',
@@ -199,6 +272,9 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
       api_key: KEY,
       event: '$identify',
       distinct_id: userId,
+      // Tie the person to their household group as well, so the $identify
+      // itself is attributable per-household.
+      ...(activeHouseholdId ? { $groups: { household: activeHouseholdId } } : {}),
       // Persist the experiment assignment (and any other super-props) on the
       // person so the eventual signup is attributable to the variant seen.
       properties: { $set: { ...superProps, ...(traits ?? {}) } },
@@ -214,6 +290,9 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
 export function reset(): void {
   distinctId = null;
   superProps = {};
+  activeHouseholdId = null;
+  // Allow a re-login to re-`$groupidentify`; cheap and keeps logout total.
+  groupIdentified.clear();
 }
 
 export function track(event: EventName, props: EventProps = {}): void {

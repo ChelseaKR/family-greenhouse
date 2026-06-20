@@ -19,7 +19,7 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
-import { identify, reset as resetAnalytics } from '@/services/analytics';
+import { identify, reset as resetAnalytics, setActiveHousehold } from '@/services/analytics';
 
 export interface User {
   id: string;
@@ -142,13 +142,21 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       activeHouseholdId: null,
 
-      setActiveHouseholdId: (activeHouseholdId) => set({ activeHouseholdId }),
+      setActiveHouseholdId: (activeHouseholdId) => {
+        set({ activeHouseholdId });
+        // Keep the analytics group key in lockstep with the effective active
+        // household so every captured event is attributed to the household the
+        // requests are actually scoped to (see useActiveHouseholdId).
+        setActiveHousehold(activeHouseholdId ?? get().user?.householdId ?? null);
+      },
 
       setUser: (user) => {
         if (user) {
           // Pin analytics to the Cognito sub. Safe to call on every set;
           // the underlying shim is idempotent and does nothing without
-          // VITE_POSTHOG_KEY configured.
+          // VITE_POSTHOG_KEY configured. Set the household group BEFORE
+          // identify so the $identify event carries `$groups.household`.
+          setActiveHousehold(get().activeHouseholdId ?? user.householdId ?? null);
           identify(user.id);
         } else {
           resetAnalytics();
@@ -167,10 +175,14 @@ export const useAuthStore = create<AuthState>()(
           refreshToken,
         }),
 
-      setHousehold: (householdId, role) =>
+      setHousehold: (householdId, role) => {
         set((state) => ({
           user: state.user ? { ...state.user, householdId, householdRole: role } : null,
-        })),
+        }));
+        // A user who just got their first household (onboarding) has no
+        // explicit active id yet — fall back to the new claim household.
+        setActiveHousehold(get().activeHouseholdId ?? householdId);
+      },
 
       logout: () => {
         resetAnalytics();
@@ -242,6 +254,10 @@ export const useAuthStore = create<AuthState>()(
           } else {
             // Token is valid, update user data
             const userData = await response.json();
+            // Session restore: re-establish the analytics household group from
+            // the persisted active id (or the user's claim household) so events
+            // captured before the user touches the switcher are still grouped.
+            setActiveHousehold(get().activeHouseholdId ?? userData?.householdId ?? null);
             set({
               user: userData,
               isAuthenticated: true,
