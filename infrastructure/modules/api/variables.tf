@@ -226,3 +226,20 @@ variable "chat_budget_output_tokens" {
   type        = string
   default     = ""
 }
+
+# --- PostHog (server-side product analytics) ---
+# Server PostHog key powers confirmed conversion events emitted from the Stripe
+# webhook (e.g. subscription_activated). Empty = the server analytics emitter
+# no-ops, so nothing leaks from non-configured environments.
+variable "posthog_key" {
+  description = "PostHog project API key for server-side analytics. Empty disables the server emitter (no-op)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "posthog_host" {
+  description = "PostHog ingestion host for server-side analytics. Empty lets the code default (https://us.i.posthog.com) apply."
+  type        = string
+  default     = ""
+}

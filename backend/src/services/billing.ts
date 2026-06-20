@@ -8,6 +8,7 @@ import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import { Plan, PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
+import { capture } from '../utils/serverAnalytics.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -263,6 +264,19 @@ function planIdFromMetadata(
   return null;
 }
 
+/**
+ * Pull the billing cadence we stamp onto checkout-session and subscription
+ * metadata at creation time (see createCheckoutSession). Enum-only — returns
+ * undefined when absent or not one of our known values, so analytics never
+ * carries free text. Lifetime (`mode: 'payment'`) checkouts carry no interval.
+ */
+function intervalFromEvent(event: Stripe.Event): 'month' | 'year' | undefined {
+  const metadata = (event.data.object as unknown as { metadata?: Record<string, string> | null })
+    .metadata;
+  const raw = metadata?.interval;
+  return raw === 'month' || raw === 'year' ? raw : undefined;
+}
+
 export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | null {
   switch (event.type) {
     case 'checkout.session.completed': {
@@ -475,6 +489,42 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     householdId: delta.householdId,
     metadata: { stripeEventType: event.type, fields: delta.fields },
   });
+
+  // CONFIRMED conversion signal. The client fires `subscription_upgraded` at
+  // checkout START (intent); this is its server-confirmed counterpart, emitted
+  // once a household actually transitions to an ACTIVE paid plan (planId !=
+  // seedling + status active). The Stripe webhook is the source of truth for
+  // revenue.
+  //
+  // We restrict the emit to the ONE-TIME activation events — checkout
+  // completion and subscription creation — and deliberately exclude
+  // `customer.subscription.updated`. `updated` fires on every renewal, plan
+  // change, and metadata edit while a subscription stays `active`; emitting on
+  // it would re-fire `subscription_activated` repeatedly and inflate the
+  // conversion count. (Edge: a checkout that starts in a trial fires
+  // `subscription.created` with status `trialing`, so this won't double-count
+  // with `checkout.session.completed`, which we stamp `active`.)
+  //
+  // Best-effort + fire-and-forget: `capture` never throws and we `void` its
+  // promise, so an analytics outage can NEVER 5xx the webhook (which would make
+  // Stripe retry an already-applied delivery).
+  // NOTE: docs/analytics.md should be updated to list `subscription_activated`
+  // (server, confirmed) alongside `subscription_upgraded` (client, intent).
+  const isActivationEvent =
+    event.type === 'checkout.session.completed' ||
+    event.type === 'customer.subscription.created';
+  const activatedPlan = delta.fields.planId;
+  if (
+    isActivationEvent &&
+    activatedPlan &&
+    activatedPlan !== 'seedling' &&
+    delta.fields.status === 'active'
+  ) {
+    void capture(delta.householdId, 'subscription_activated', {
+      plan: activatedPlan,
+      interval: intervalFromEvent(event),
+    });
+  }
 }
 
 export function planSummary(plan: Plan): {

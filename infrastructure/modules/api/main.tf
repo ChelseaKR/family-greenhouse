@@ -318,6 +318,11 @@ locals {
     GIT_SHA                   = var.git_sha
     CHAT_BUDGET_INPUT_TOKENS  = var.chat_budget_input_tokens
     CHAT_BUDGET_OUTPUT_TOKENS = var.chat_budget_output_tokens
+    # PostHog server-side analytics. Powers confirmed conversion events from
+    # the Stripe webhook (subscription_activated). Empty key = emitter no-ops,
+    # so nothing leaks from environments without a configured project key.
+    POSTHOG_KEY  = var.posthog_key
+    POSTHOG_HOST = var.posthog_host
   }
 }
 
