@@ -130,20 +130,34 @@ export interface CheckoutSessionResult {
   url: string;
 }
 
+/**
+ * Billing cadence. The same `planId` (and therefore the same caps/entitlements)
+ * is sold at either cadence — only the Stripe price and the headline number
+ * differ — so the entire webhook/entitlement path stays cadence-agnostic and
+ * resolves access off `planId` alone.
+ */
+export type BillingInterval = 'month' | 'year';
+
 export async function createCheckoutSession(args: {
   householdId: string;
   customerEmail: string;
   planId: PlanId;
+  interval?: BillingInterval;
   successUrl: string;
   cancelUrl: string;
 }): Promise<CheckoutSessionResult> {
   const plan = getPlan(args.planId);
-  if (!plan.stripePriceEnv) throw new Error(`Plan ${plan.id} is not billable`);
-  const priceId = process.env[plan.stripePriceEnv];
-  if (!priceId) throw new Error(`Missing ${plan.stripePriceEnv} for plan ${plan.id}`);
+  const interval: BillingInterval = args.interval ?? 'month';
+  const priceEnv = interval === 'year' ? plan.annualStripePriceEnv : plan.stripePriceEnv;
+  if (!priceEnv) throw new Error(`Plan ${plan.id} is not billable ${interval}ly`);
+  const priceId = process.env[priceEnv];
+  if (!priceId) throw new Error(`Missing ${priceEnv} for plan ${plan.id}`);
 
   const sub = await getHouseholdSubscription(args.householdId);
   const stripe = await getStripe();
+  // `interval` is stamped onto metadata for analytics/debugging only —
+  // entitlement is resolved from `planId`, never the cadence.
+  const metadata = { householdId: args.householdId, planId: plan.id, interval };
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: sub.stripeCustomerId,
@@ -152,9 +166,9 @@ export async function createCheckoutSession(args: {
     success_url: args.successUrl,
     cancel_url: args.cancelUrl,
     client_reference_id: args.householdId,
-    metadata: { householdId: args.householdId, planId: plan.id },
+    metadata,
     subscription_data: {
-      metadata: { householdId: args.householdId, planId: plan.id },
+      metadata,
       trial_period_days: 14,
     },
   });
@@ -341,6 +355,7 @@ export function planSummary(plan: Plan): {
   name: string;
   description: string;
   monthlyPrice: number;
+  annualPrice: number | null;
   maxPlants: number;
   maxMembers: number;
 } {
@@ -349,6 +364,9 @@ export function planSummary(plan: Plan): {
     name: plan.name,
     description: plan.description,
     monthlyPrice: plan.monthlyPrice,
+    // null (not undefined) so it survives JSON serialization as an explicit
+    // "no annual option" signal the client can branch on.
+    annualPrice: plan.annualPrice ?? null,
     maxPlants: plan.maxPlants,
     maxMembers: plan.maxMembers,
   };

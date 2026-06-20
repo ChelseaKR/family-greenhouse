@@ -1,6 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
 
+// Mock the Stripe SDK that billing.getStripe() dynamically imports, so
+// createCheckoutSession can be exercised without a network/key. `sessionsCreate`
+// is hoisted (vi.mock factories run before module init) and shared so tests can
+// assert what was sent to Stripe.
+const { sessionsCreate } = vi.hoisted(() => ({ sessionsCreate: vi.fn() }));
+vi.mock('stripe', () => ({
+  default: vi.fn(function () {
+    return { checkout: { sessions: { create: sessionsCreate } } };
+  }),
+}));
+
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
     return { input, kind: 'Put' };
@@ -260,6 +271,68 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       '#lastStripeEventCreated = :lastStripeEventCreated'
     );
     expect(cmd.input.ExpressionAttributeValues[':lastStripeEventCreated']).toBe(1_700_000_123);
+  });
+});
+
+describe('planSummary', () => {
+  it('exposes annualPrice (null for the free tier, the dollar figure for paid tiers)', async () => {
+    const { planSummary } = await import('../../../src/services/billing.js');
+    const { PLANS } = await import('../../../src/models/plans.js');
+    expect(planSummary(PLANS.seedling).annualPrice).toBeNull();
+    expect(planSummary(PLANS.garden).annualPrice).toBe(39.99);
+    expect(planSummary(PLANS.greenhouse).annualPrice).toBe(79.99);
+  });
+});
+
+describe('createCheckoutSession — interval resolves the Stripe price', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
+    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+  });
+
+  async function runCheckout(interval?: 'month' | 'year') {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    // getHouseholdSubscription → no existing customer.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    return createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      interval,
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+  }
+
+  it('uses the MONTHLY price id by default and stamps interval=month on metadata', async () => {
+    const result = await runCheckout(undefined);
+    expect(result.url).toBe('https://checkout.stripe.test/cs');
+    expect(sessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ price: 'price_garden_monthly', quantity: 1 }],
+        metadata: expect.objectContaining({ planId: 'garden', interval: 'month' }),
+      })
+    );
+  });
+
+  it('uses the ANNUAL price id when interval=year', async () => {
+    await runCheckout('year');
+    expect(sessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ price: 'price_garden_annual', quantity: 1 }],
+        metadata: expect.objectContaining({ interval: 'year' }),
+      })
+    );
+  });
+
+  it('throws a clear error when the requested cadence has no configured price env', async () => {
+    delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
+    await expect(runCheckout('year')).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN_ANNUAL');
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 });
 

@@ -18,6 +18,23 @@ describe('plan catalog', () => {
     expect(PLANS.greenhouse.stripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE');
   });
 
+  it('paid tiers carry an annual price + annual Stripe price env; free tier has neither', () => {
+    expect(PLANS.seedling.annualPrice).toBeUndefined();
+    expect(PLANS.seedling.annualStripePriceEnv).toBeUndefined();
+    expect(PLANS.garden.annualPrice).toBe(39.99);
+    expect(PLANS.garden.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_ANNUAL');
+    expect(PLANS.greenhouse.annualPrice).toBe(79.99);
+    expect(PLANS.greenhouse.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE_ANNUAL');
+  });
+
+  it('annual price is a genuine discount vs 12x the monthly price', () => {
+    for (const id of ['garden', 'greenhouse'] as const) {
+      const plan = PLANS[id];
+      expect(plan.annualPrice).toBeDefined();
+      expect(plan.annualPrice!).toBeLessThan(plan.monthlyPrice * 12);
+    }
+  });
+
   it('every plan id field matches its catalog key', () => {
     for (const [key, plan] of Object.entries(PLANS)) {
       expect(plan.id).toBe(key);

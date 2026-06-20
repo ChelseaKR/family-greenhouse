@@ -80,13 +80,25 @@ variable "stripe_webhook_secret" {
 }
 
 variable "stripe_price_id_garden" {
-  description = "Stripe price ID for the Garden tier ($4.99/mo). Required for /billing/checkout."
+  description = "Stripe price ID for the Garden tier MONTHLY ($4.99/mo). Required for /billing/checkout monthly."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_annual" {
+  description = "Stripe price ID for the Garden tier ANNUAL ($39.99/yr). Required for /billing/checkout with interval=year."
   type        = string
   default     = ""
 }
 
 variable "stripe_price_id_greenhouse" {
-  description = "Stripe price ID for the Greenhouse tier ($9.99/mo). Required for /billing/checkout."
+  description = "Stripe price ID for the Greenhouse tier MONTHLY ($9.99/mo). Required for /billing/checkout monthly."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_greenhouse_annual" {
+  description = "Stripe price ID for the Greenhouse tier ANNUAL ($79.99/yr). Required for /billing/checkout with interval=year."
   type        = string
   default     = ""
 }

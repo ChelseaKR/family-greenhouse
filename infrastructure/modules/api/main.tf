@@ -283,16 +283,18 @@ locals {
     # env reaches the Lambda. Empty strings let the code fall through to
     # its baked-in default or fail-fast behavior. Migrate to Secrets
     # Manager when first real credentials land.
-    STRIPE_SECRET_KEY          = var.stripe_secret_key
-    STRIPE_WEBHOOK_SECRET      = var.stripe_webhook_secret
-    STRIPE_PRICE_ID_GARDEN     = var.stripe_price_id_garden
-    STRIPE_PRICE_ID_GREENHOUSE = var.stripe_price_id_greenhouse
-    SES_FROM_EMAIL             = var.ses_from_email
-    WEB_PUSH_VAPID_PUBLIC_KEY  = var.web_push_vapid_public_key
-    WEB_PUSH_VAPID_PRIVATE_KEY = var.web_push_vapid_private_key
-    WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
-    SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
-    PLANT_ID_API_KEY           = var.plant_id_api_key
+    STRIPE_SECRET_KEY                 = var.stripe_secret_key
+    STRIPE_WEBHOOK_SECRET             = var.stripe_webhook_secret
+    STRIPE_PRICE_ID_GARDEN            = var.stripe_price_id_garden
+    STRIPE_PRICE_ID_GARDEN_ANNUAL     = var.stripe_price_id_garden_annual
+    STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
+    STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
+    SES_FROM_EMAIL                    = var.ses_from_email
+    WEB_PUSH_VAPID_PUBLIC_KEY         = var.web_push_vapid_public_key
+    WEB_PUSH_VAPID_PRIVATE_KEY        = var.web_push_vapid_private_key
+    WEB_PUSH_VAPID_SUBJECT            = var.web_push_vapid_subject
+    SMS_NOTIFICATIONS_ENABLED         = var.sms_notifications_enabled
+    PLANT_ID_API_KEY                  = var.plant_id_api_key
     # Plant.id identify monthly meter. "1" enforces the per-household monthly
     # cap (blocks once exceeded); unset/"" only tracks usage (beta default).
     # Set to "1" in production so the real per-call Plant.id credit can't be

@@ -3,11 +3,17 @@ import { track } from './analytics';
 
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
 
+/** Billing cadence sent to /billing/checkout. */
+export type BillingInterval = 'month' | 'year';
+
 export interface Plan {
   id: PlanId;
   name: string;
   description: string;
   monthlyPrice: number;
+  /** Yearly price in dollars, or null when the tier has no annual option
+   *  (free tier). */
+  annualPrice: number | null;
   maxPlants: number;
   maxMembers: number;
 }
@@ -51,13 +57,16 @@ export const billingService = {
     return response.data;
   },
 
-  async startCheckout(planId: Exclude<PlanId, 'seedling'>): Promise<{ url: string }> {
-    const response = await api.post<{ url: string }>('/billing/checkout', { planId });
+  async startCheckout(
+    planId: Exclude<PlanId, 'seedling'>,
+    interval: BillingInterval = 'month'
+  ): Promise<{ url: string }> {
+    const response = await api.post<{ url: string }>('/billing/checkout', { planId, interval });
     // Mark intent at checkout-start; the actual successful upgrade is
     // confirmed by the Stripe webhook server-side. We track intent here
     // as a leading indicator and rely on a separate `subscription_active`
     // signal (post-webhook) for billing source-of-truth.
-    track('subscription_upgraded', { upgradeTo: planId });
+    track('subscription_upgraded', { upgradeTo: planId, interval });
     return response.data;
   },
 

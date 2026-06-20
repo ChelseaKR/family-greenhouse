@@ -5,11 +5,22 @@
  * still live server-side (`backend/src/services/billing.ts`); this file
  * is the marketing copy + display name + tagline only.
  */
+/** A price shown at a given billing cadence. */
+export interface PricePoint {
+  /** Headline figure, e.g. "$4.99" or "$39.99". */
+  price: string;
+  /** Cadence suffix, e.g. "/month" or "/year". */
+  period: string;
+  /** Optional sub-line, e.g. "$3.33/mo · save 33%". Annual only. */
+  note?: string;
+}
+
 export interface PricingPlan {
   name: string;
-  price: string;
-  /** "/month" or undefined for free. */
-  period?: string;
+  /** Free tier sets this; paid tiers leave it undefined and use monthly/annual. */
+  freeLabel?: string;
+  monthly?: PricePoint;
+  annual?: PricePoint;
   description: string;
   features: string[];
   cta: string;
@@ -20,7 +31,7 @@ export interface PricingPlan {
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Seedling',
-    price: 'Free',
+    freeLabel: 'Free',
     description: 'Start on the windowsill',
     features: [
       'Up to 10 plants',
@@ -33,8 +44,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     name: 'Garden',
-    price: '$4.99',
-    period: '/month',
+    monthly: { price: '$4.99', period: '/month' },
+    annual: { price: '$39.99', period: '/year', note: '$3.33/mo · save 33%' },
     description: 'For growing families',
     features: [
       'Unlimited plants',
@@ -49,8 +60,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     name: 'Greenhouse',
-    price: '$9.99',
-    period: '/month',
+    monthly: { price: '$9.99', period: '/month' },
+    annual: { price: '$79.99', period: '/year', note: '$6.67/mo · save 33%' },
     description: 'For serious plant parents',
     features: [
       'Everything in Garden',

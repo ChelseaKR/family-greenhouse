@@ -6,6 +6,7 @@ import { CheckIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import {
   billingService,
   isOverPlanLimit,
+  BillingInterval,
   Plan,
   PlanId,
   PlanUsage,
@@ -26,6 +27,9 @@ export function BillingSettings() {
   const isAdmin = user?.householdRole === 'admin';
   const [searchParams] = useSearchParams();
   const [notice, setNotice] = useState<string | null>(null);
+  // Default to annual: it's the better value for the user and retains far
+  // better for us, so it's the cadence we want to lead with.
+  const [interval, setInterval] = useState<BillingInterval>('year');
 
   useEffect(() => {
     const status = searchParams.get('status');
@@ -44,7 +48,8 @@ export function BillingSettings() {
   });
 
   const checkout = useMutation({
-    mutationFn: (planId: Exclude<PlanId, 'seedling'>) => billingService.startCheckout(planId),
+    mutationFn: (vars: { planId: Exclude<PlanId, 'seedling'>; interval: BillingInterval }) =>
+      billingService.startCheckout(vars.planId, vars.interval),
     onSuccess: (result) => {
       window.location.href = result.url;
     },
@@ -130,22 +135,70 @@ export function BillingSettings() {
         )}
       </Card>
 
+      <BillingIntervalToggle value={interval} onChange={setInterval} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
         {plans.map((plan) => (
           <PlanCard
             key={plan.id}
             plan={plan}
+            interval={interval}
             current={plan.id === currentPlanId}
             isAdmin={isAdmin}
             beta={IS_BETA}
             onSelect={(id) => {
               if (id === 'seedling') return;
-              checkout.mutate(id);
+              checkout.mutate({ planId: id, interval });
             }}
-            isLoading={checkout.isPending && checkout.variables === plan.id}
+            isLoading={checkout.isPending && checkout.variables?.planId === plan.id}
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Monthly/Annual segmented toggle. Annual is the cadence we want chosen, so it
+ * carries the "Save ~33%" nudge.
+ */
+function BillingIntervalToggle({
+  value,
+  onChange,
+}: {
+  value: BillingInterval;
+  onChange: (v: BillingInterval) => void;
+}) {
+  const options: { id: BillingInterval; label: string }[] = [
+    { id: 'month', label: 'Monthly' },
+    { id: 'year', label: 'Annual' },
+  ];
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <div
+        role="radiogroup"
+        aria-label="Billing interval"
+        className="inline-flex rounded-full bg-gray-100 p-1"
+      >
+        {options.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={value === opt.id}
+            onClick={() => onChange(opt.id)}
+            className={clsx(
+              'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+              value === opt.id ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+        Save ~33% yearly
+      </span>
     </div>
   );
 }
@@ -197,6 +250,7 @@ function UsageMeters({ usage }: { usage: PlanUsage }) {
 
 interface PlanCardProps {
   plan: Plan;
+  interval: BillingInterval;
   current: boolean;
   isAdmin: boolean;
   beta: boolean;
@@ -204,19 +258,41 @@ interface PlanCardProps {
   isLoading: boolean;
 }
 
-function PlanCard({ plan, current, isAdmin, beta, onSelect, isLoading }: PlanCardProps) {
+function PlanCard({ plan, interval, current, isAdmin, beta, onSelect, isLoading }: PlanCardProps) {
+  // Free tier: no price line variants. Annual tiers show the yearly headline
+  // plus an effective "/mo billed yearly" and the savings vs 12× monthly.
+  const annual = interval === 'year' && plan.annualPrice != null;
+  const savingsPct =
+    plan.annualPrice != null && plan.monthlyPrice > 0
+      ? Math.round((1 - plan.annualPrice / (plan.monthlyPrice * 12)) * 100)
+      : 0;
   return (
     <Card
       className={clsx('flex flex-col', current && 'border-primary-500 ring-1 ring-primary-500')}
     >
       <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
       <p className="mt-1 text-sm text-gray-500">{plan.description}</p>
-      <p className="mt-4 text-3xl font-bold">
-        {plan.monthlyPrice === 0 ? 'Free' : `$${plan.monthlyPrice.toFixed(2)}`}
-        {plan.monthlyPrice > 0 && (
+      {plan.monthlyPrice === 0 ? (
+        <p className="mt-4 text-3xl font-bold">Free</p>
+      ) : annual ? (
+        <div className="mt-4">
+          <p className="text-3xl font-bold">
+            ${plan.annualPrice!.toFixed(2)}
+            <span className="text-base font-normal text-gray-500"> / year</span>
+          </p>
+          <p className="mt-1 text-sm text-gray-500">
+            ${(plan.annualPrice! / 12).toFixed(2)}/mo billed yearly
+            {savingsPct > 0 && (
+              <span className="ml-1 font-medium text-primary-700">· save {savingsPct}%</span>
+            )}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-4 text-3xl font-bold">
+          ${plan.monthlyPrice.toFixed(2)}
           <span className="text-base font-normal text-gray-500"> / month</span>
-        )}
-      </p>
+        </p>
+      )}
       <ul className="mt-4 flex-1 space-y-2 text-sm text-gray-600">
         <li className="flex gap-2">
           <CheckIcon className="h-5 w-5 text-primary-700" aria-hidden="true" />
