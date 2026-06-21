@@ -61,3 +61,7 @@ samconfig.toml
 # Misc
 *.tsbuildinfo
 .cache/
+
+# Visual-capture dumps (visual.spec.ts) — regenerated design-review artifacts,
+# not baselines. The spec mkdir's this dir on run; nothing should track them.
+frontend/tests/e2e/screenshots/
