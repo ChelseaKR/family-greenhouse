@@ -2878,6 +2878,8 @@ app.post('/billing/webhook', (req, res) => {
 const sendMessageSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().uuid().optional(),
+  // Idempotency key (#3). The mock has no Bedrock/budget so it just accepts it.
+  turnId: z.string().uuid().optional(),
 });
 
 const CHAT_BUDGET = {

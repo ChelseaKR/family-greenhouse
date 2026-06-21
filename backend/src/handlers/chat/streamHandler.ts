@@ -39,6 +39,9 @@ import { runChatTurn, streamChatTurn } from '../../services/chat/index.js';
 const sendMessageSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().uuid().optional(),
+  // Idempotency key (#3) — shared with the sync endpoint so a stream that
+  // completes server-side isn't re-run when the client falls back.
+  turnId: z.string().uuid().optional(),
 });
 
 /**
@@ -203,7 +206,11 @@ async function resolveUser(
   return { userId: claims.sub, householdId };
 }
 
-function parseBody(event: StreamRequestEvent): { message: string; conversationId?: string } {
+function parseBody(event: StreamRequestEvent): {
+  message: string;
+  conversationId?: string;
+  turnId?: string;
+} {
   const raw = event.isBase64Encoded
     ? Buffer.from(event.body ?? '', 'base64').toString('utf8')
     : (event.body ?? '');
@@ -245,7 +252,7 @@ export async function streamRequestToSse(
 ): Promise<void> {
   const httpResponseStream = (globalThis as StreamifyCapableGlobal).awslambda?.HttpResponseStream;
   let user: { userId: string; householdId: string };
-  let body: { message: string; conversationId?: string };
+  let body: { message: string; conversationId?: string; turnId?: string };
   try {
     user = await resolveUser(event);
     body = parseBody(event);
@@ -278,6 +285,7 @@ export async function streamRequestToSse(
       householdId: user.householdId,
       conversationId: body.conversationId,
       message: body.message,
+      turnId: body.turnId,
     });
     for (;;) {
       const next = await gen.next();
@@ -313,8 +321,8 @@ async function bufferedHandler(
 ): Promise<{ statusCode: number; headers: Record<string, string>; body: string }> {
   try {
     const { userId, householdId } = await resolveUser(event);
-    const { message, conversationId } = parseBody(event);
-    const result = await runChatTurn({ userId, householdId, conversationId, message });
+    const { message, conversationId, turnId } = parseBody(event);
+    const result = await runChatTurn({ userId, householdId, conversationId, message, turnId });
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },

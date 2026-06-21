@@ -108,6 +108,11 @@ export function ChatPage() {
     setStreamingText('');
     const controller = new AbortController();
     abortRef.current = controller;
+    // One idempotency key for this send, shared by the stream attempt AND its
+    // sync fallback. If the stream completes server-side but we fall back, the
+    // backend recognizes the turnId and replays the stored result instead of
+    // running a second (double-charging, duplicate-message) turn.
+    const turnId = crypto.randomUUID();
     try {
       if (streamUrl) {
         try {
@@ -120,7 +125,8 @@ export function ChatPage() {
                 setStreamingText(streamTextRef.current);
               }
             },
-            controller.signal
+            controller.signal,
+            turnId
           );
           // Prefer the streamed transcript (it may include tool-turn
           // preamble text); the result is authoritative for proposals/ids.
@@ -134,12 +140,14 @@ export function ChatPage() {
           // whole second turn — double-charging and duplicating the message.
           if (controller.signal.aborted) return;
           // Any genuine stream failure (network, auth, malformed SSE, error
-          // event): discard partial output and retry once via the sync endpoint.
+          // event): discard partial output and retry once via the sync endpoint
+          // — reusing turnId so a stream that DID finish server-side replays
+          // rather than re-runs.
           streamTextRef.current = '';
           setStreamingText('');
         }
       }
-      const data = await chatService.sendMessage(message, conversationId);
+      const data = await chatService.sendMessage(message, conversationId, turnId);
       appendAssistant(data, data.assistantText);
       budgetQuery.refetch();
     } catch (err) {

@@ -16,14 +16,21 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     appendMessage: vi.fn(async () => undefined),
     appendMessagePair: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
-    getBudget: vi.fn(async () => ({
-      householdId: 'hh-1',
-      yearMonth: '2026-05',
-      inputTokens: 0,
-      outputTokens: 0,
-      costUsd: 0,
-    })),
+    // The atomic gate: returns the POST-reservation committed totals. Default to
+    // a fresh budget (committed 0 → post-reserve == the reservation).
+    reserveBudget: vi.fn(
+      async (_hh: string, reserve: { inputTokens: number; outputTokens: number }) => ({
+        householdId: 'hh-1',
+        yearMonth: '2026-05',
+        inputTokens: reserve.inputTokens,
+        outputTokens: reserve.outputTokens,
+        costUsd: 0,
+      })
+    ),
     incrementBudget: vi.fn(async () => undefined),
+    claimTurn: vi.fn(async () => ({ status: 'claimed' as const })),
+    finalizeTurn: vi.fn(async () => undefined),
+    releaseTurn: vi.fn(async () => undefined),
   };
 });
 vi.mock('../../../src/services/plantService.js');
@@ -31,14 +38,24 @@ vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/climate.js');
 vi.mock('../../../src/services/householdService.js');
 
-import { runChatTurn, trimHistory, BUDGET_CONFIG } from '../../../src/services/chat/index.js';
+import {
+  runChatTurn,
+  trimHistory,
+  BUDGET_CONFIG,
+  RESERVE_INPUT_TOKENS,
+  RESERVE_OUTPUT_TOKENS,
+} from '../../../src/services/chat/index.js';
 import { invokeChatModel, type BedrockMessage } from '../../../src/services/chat/bedrock.js';
 import {
   appendMessage,
   appendMessagePair,
-  getBudget,
+  claimTurn,
+  finalizeTurn,
   getConversation,
   incrementBudget,
+  releaseTurn,
+  reserveBudget,
+  ChatBudgetExceededError,
 } from '../../../src/services/chat/persistence.js';
 import type {
   ChatMessageRecord,
@@ -108,10 +125,11 @@ describe('runChatTurn', () => {
     const calls = vi.mocked(appendMessage).mock.calls;
     expect(calls[0][1].role).toBe('user');
     expect(calls[1][1].role).toBe('assistant');
-    // Budget incremented once with the full turn's usage.
+    // Budget reconciled once: the up-front reservation is replaced by actual
+    // usage, so the committed delta is (actual - reserved).
     expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
-      inputTokens: 100,
-      outputTokens: 20,
+      inputTokens: 100 - RESERVE_INPUT_TOKENS,
+      outputTokens: 20 - RESERVE_OUTPUT_TOKENS,
       costUsd: 0.0006,
     });
   });
@@ -166,27 +184,23 @@ describe('runChatTurn', () => {
     expect(vi.mocked(plantService.getPlants)).toHaveBeenCalledWith('hh-1');
     // Bedrock called twice (tool_use turn + final turn).
     expect(vi.mocked(invokeChatModel)).toHaveBeenCalledTimes(2);
-    // Combined budget update.
+    // Combined budget reconcile across both Bedrock calls (actual - reserved).
     expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
-      inputTokens: 450,
-      outputTokens: 70,
+      inputTokens: 450 - RESERVE_INPUT_TOKENS,
+      outputTokens: 70 - RESERVE_OUTPUT_TOKENS,
       costUsd: 0.0025,
     });
   });
 
-  it('refuses to invoke Bedrock when the household is over budget', async () => {
-    vi.mocked(getBudget).mockResolvedValueOnce({
-      householdId: 'hh-1',
-      yearMonth: '2026-05',
-      inputTokens: BUDGET_CONFIG.maxInputTokensPerMonth,
-      outputTokens: 0,
-      costUsd: 1,
-    });
+  it('refuses to invoke Bedrock when the budget reservation is rejected (over cap)', async () => {
+    // The atomic gate (reserveBudget) throws when the reservation can't fit.
+    vi.mocked(reserveBudget).mockRejectedValueOnce(new ChatBudgetExceededError());
 
     await expect(
       runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
     ).rejects.toMatchObject({ statusCode: 429 });
     expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
+    // The reservation never landed, so nothing to reconcile.
     expect(vi.mocked(incrementBudget)).not.toHaveBeenCalled();
   });
 
@@ -365,22 +379,89 @@ describe('runChatTurn', () => {
       runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'list my plants' })
     ).rejects.toThrow('bedrock throttled');
 
-    // The first call's tokens are billed even though the turn threw — otherwise
-    // a failed turn is free and the monthly budget never converges.
+    // The first call's tokens are billed even though the turn threw (reconcile
+    // = actual - reserved) — otherwise a failed turn is free and the budget
+    // never converges. The unused part of the reservation is released.
     expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
-      inputTokens: 100,
-      outputTokens: 10,
+      inputTokens: 100 - RESERVE_INPUT_TOKENS,
+      outputTokens: 10 - RESERVE_OUTPUT_TOKENS,
       costUsd: 0.0003,
     });
   });
 
-  it('does not write the budget when the turn fails before any Bedrock call', async () => {
+  it('releases the whole reservation when the turn fails before consuming tokens', async () => {
     vi.mocked(invokeChatModel).mockRejectedValueOnce(new Error('bedrock down'));
     await expect(runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hi' })).rejects.toThrow(
       'bedrock down'
     );
-    // No tokens consumed → no zero-write.
+    // Reservation landed at the gate, then the first call threw → reconcile
+    // gives back the full reservation (0 - reserved), netting zero committed.
+    expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
+      inputTokens: -RESERVE_INPUT_TOKENS,
+      outputTokens: -RESERVE_OUTPUT_TOKENS,
+      costUsd: 0,
+    });
+  });
+
+  // --- Turn idempotency (#3) ---
+
+  it('replays a completed turn (idempotency hit) without running or charging again', async () => {
+    const stored = {
+      conversationId: 'conv-prior',
+      assistantText: 'Already answered.',
+      proposals: [],
+      budgetRemaining: { inputTokens: 123, outputTokens: 45 },
+    };
+    vi.mocked(claimTurn).mockResolvedValueOnce({ status: 'done', result: stored });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'hi',
+      turnId: 'turn-1',
+    });
+
+    expect(result).toEqual(stored);
+    // Nothing ran: no Bedrock, no reservation, no persistence, no budget write.
+    expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
+    expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
+    expect(vi.mocked(appendMessage)).not.toHaveBeenCalled();
     expect(vi.mocked(incrementBudget)).not.toHaveBeenCalled();
+  });
+
+  it('rejects with 409 when a prior attempt for the same turnId is still running', async () => {
+    vi.mocked(claimTurn).mockResolvedValueOnce({ status: 'in_progress' });
+    await expect(
+      runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hi', turnId: 'turn-2' })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
+    expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
+  });
+
+  it('finalizes the turn record on success (so a retry replays it)', async () => {
+    vi.mocked(invokeChatModel).mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'ok' }],
+      stopReason: 'end_turn',
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.0001,
+    });
+    await runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hi', turnId: 'turn-3' });
+    expect(vi.mocked(finalizeTurn)).toHaveBeenCalledWith(
+      'hh-1',
+      'turn-3',
+      expect.objectContaining({ assistantText: 'ok' })
+    );
+    expect(vi.mocked(releaseTurn)).not.toHaveBeenCalled();
+  });
+
+  it('releases the turn claim when the turn fails (so the fallback can retry)', async () => {
+    vi.mocked(invokeChatModel).mockRejectedValueOnce(new Error('boom'));
+    await expect(
+      runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hi', turnId: 'turn-4' })
+    ).rejects.toThrow('boom');
+    expect(vi.mocked(releaseTurn)).toHaveBeenCalledWith('hh-1', 'turn-4');
+    expect(vi.mocked(finalizeTurn)).not.toHaveBeenCalled();
   });
 
   it('exposes propose_reminder_task with the confirm-card contract in the system prompt, and collects validated proposals', async () => {

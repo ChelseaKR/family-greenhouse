@@ -41,7 +41,11 @@ import { dynamodb } from '../../../src/utils/dynamodb.js';
 import {
   appendMessage,
   appendMessagePair,
+  claimTurn,
+  finalizeTurn,
   getConversation,
+  reserveBudget,
+  ChatBudgetExceededError,
 } from '../../../src/services/chat/persistence.js';
 import type { ChatMessageRecord } from '../../../src/services/chat/types.js';
 
@@ -108,6 +112,68 @@ describe('chat message persistence', () => {
     expect(items.map((i) => i.role)).toEqual(['assistant', 'user']);
     // The seq tie-breaker keeps the assistant tool_use ahead of its result.
     expect(items[0].SK < items[1].SK).toBe(true);
+  });
+
+  it('reserveBudget gates via a conditional ADD at (cap - reserve), mapping a failed condition to ChatBudgetExceededError', async () => {
+    const config = { maxInputTokensPerMonth: 250000, maxOutputTokensPerMonth: 50000 };
+    // Success: returns the post-reservation committed totals.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Attributes: { inputTokens: 8000, outputTokens: 2048 },
+    } as never);
+    const state = await reserveBudget('hh-1', { inputTokens: 8000, outputTokens: 2048 }, config);
+    expect(state.inputTokens).toBe(8000);
+
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: { ConditionExpression: string; ExpressionAttributeValues: Record<string, number> };
+    };
+    expect(cmd.kind).toBe('Update');
+    // The condition leaves room for the reservation: committed <= cap - reserve.
+    expect(cmd.input.ExpressionAttributeValues[':inThreshold']).toBe(250000 - 8000);
+    expect(cmd.input.ExpressionAttributeValues[':outThreshold']).toBe(50000 - 2048);
+    expect(cmd.input.ConditionExpression).toContain('inputTokens <= :inThreshold');
+
+    // Over cap → the conditional write fails → ChatBudgetExceededError.
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cond'), { name: 'ConditionalCheckFailedException' })
+    );
+    await expect(
+      reserveBudget('hh-1', { inputTokens: 8000, outputTokens: 2048 }, config)
+    ).rejects.toBeInstanceOf(ChatBudgetExceededError);
+  });
+
+  it('claimTurn wins with a conditional Put, then replays a prior done result on a lost claim', async () => {
+    // Win: the attribute_not_exists Put succeeds.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    expect(await claimTurn('hh-1', 't1')).toEqual({ status: 'claimed' });
+    const put = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: { ConditionExpression: string };
+    };
+    expect(put.kind).toBe('Put');
+    expect(put.input.ConditionExpression).toBe('attribute_not_exists(PK)');
+
+    // Lost claim → read the existing 'done' row → return its stored result.
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cond'), { name: 'ConditionalCheckFailedException' })
+    );
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { status: 'done', result: { assistantText: 'cached' } },
+    } as never);
+    const claim = await claimTurn('hh-1', 't1');
+    expect(claim.status).toBe('done');
+    expect(claim.result).toEqual({ assistantText: 'cached' });
+  });
+
+  it('finalizeTurn records the completed result keyed by turnId', async () => {
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    await finalizeTurn('hh-1', 't9', { assistantText: 'done' });
+    const put = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { Item: { SK: string; status: string; result: Record<string, unknown> } };
+    };
+    expect(put.input.Item.SK).toBe('CHATTURN#t9');
+    expect(put.input.Item.status).toBe('done');
+    expect(put.input.Item.result).toEqual({ assistantText: 'done' });
   });
 
   it('writes same-millisecond messages under distinct SKs that preserve write order', async () => {

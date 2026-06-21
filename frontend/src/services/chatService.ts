@@ -102,10 +102,15 @@ export function parseProposalBlock(block: ChatContentBlock): ProposedReminderTas
 }
 
 export const chatService = {
-  async sendMessage(message: string, conversationId?: string): Promise<SendMessageResponse> {
+  async sendMessage(
+    message: string,
+    conversationId?: string,
+    turnId?: string
+  ): Promise<SendMessageResponse> {
     const response = await api.post<SendMessageResponse>('/chat/messages', {
       message,
       conversationId,
+      turnId,
     });
     return response.data;
   },
@@ -121,7 +126,8 @@ export const chatService = {
     message: string,
     conversationId: string | undefined,
     onEvent?: (event: ChatStreamEvent) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    turnId?: string
   ): Promise<SendMessageResponse> {
     const url = getChatStreamUrl();
     if (!url) throw new Error('Chat streaming is not configured');
@@ -140,7 +146,7 @@ export const chatService = {
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message, conversationId }),
+      body: JSON.stringify({ message, conversationId, turnId }),
       signal,
     });
     if (!response.ok || !response.body) {

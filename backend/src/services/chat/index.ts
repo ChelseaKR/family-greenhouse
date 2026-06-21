@@ -27,14 +27,17 @@ import {
 import {
   appendMessage,
   appendMessagePair,
-  getBudget,
+  claimTurn,
+  finalizeTurn,
   getConversation,
   incrementBudget,
-  isOverBudget,
   newConversationId,
+  releaseTurn,
+  reserveBudget,
 } from './persistence.js';
 import type {
   BudgetConfig,
+  BudgetState,
   ChatMessageRecord,
   ContentBlock,
   TextBlock,
@@ -44,6 +47,15 @@ import type {
 const MAX_TOOL_CALLS_PER_TURN = 5;
 const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
 const MAX_HISTORY_MESSAGES = 24;
+
+// Tokens reserved up front by the atomic budget gate (reserveBudget), then
+// reconciled to actual usage when the turn finishes. A modest representative
+// turn — enough that two concurrent turns can't both slip past the cap, not so
+// large it 429s users who still have real budget. NOT the absolute worst case
+// (6 Bedrock calls): a rare big turn may still overshoot slightly, bounded and
+// self-correcting on the next turn.
+export const RESERVE_INPUT_TOKENS = 8000;
+export const RESERVE_OUTPUT_TOKENS = 2048;
 
 // `||` (not `??`) — the Terraform variable defaults to "" to signal "use code
 // default", and `??` only treats null/undefined as missing. With `??`, an
@@ -94,6 +106,14 @@ export interface RunChatTurnInput {
   conversationId?: string;
   /** User-supplied text for this turn. */
   message: string;
+  /**
+   * Client-generated idempotency key, stable across a stream attempt AND its
+   * sync fallback for the SAME user message. Lets the backend replay a
+   * completed turn's result instead of running (and charging) it twice when a
+   * stream finishes server-side but the client falls back. Optional — turns
+   * without one just aren't deduped.
+   */
+  turnId?: string;
 }
 
 /**
@@ -213,16 +233,57 @@ async function* turnEvents(
   input: RunChatTurnInput,
   opts: { streaming: boolean }
 ): AsyncGenerator<ChatStreamEvent, RunChatTurnResult> {
-  const { userId, householdId, message } = input;
+  const { userId, householdId, message, turnId } = input;
   const conversationId = input.conversationId ?? newConversationId();
 
-  // Budget gate FIRST — cheaper to bail before any Bedrock call.
-  const budgetBefore = await getBudget(householdId);
-  if (isOverBudget(budgetBefore, BUDGET_CONFIG)) {
-    throw createHttpError(
-      429,
-      "You've used this month's chat allowance. The budget resets on the 1st of next month."
+  // Idempotency (#3): replay an already-completed turn instead of running it
+  // again. Closes the stream→sync fallback double-charge — a stream that
+  // finishes server-side but whose client falls back to the sync endpoint with
+  // the SAME turnId gets the stored result, not a second Bedrock turn.
+  if (turnId) {
+    const claim = await claimTurn(householdId, turnId);
+    if (claim.status === 'done' && claim.result) {
+      const stored = claim.result as unknown as RunChatTurnResult;
+      yield { type: 'start', conversationId: stored.conversationId };
+      yield { type: 'done', result: stored };
+      return stored;
+    }
+    if (claim.status === 'in_progress') {
+      // A prior attempt with this turnId is still running — don't run a second.
+      throw createHttpError(409, 'This message is already being processed — hang tight.');
+    }
+    // 'claimed' → we own this turn; run it (and finalize/release below).
+  }
+
+  // Atomic budget gate (#4): reserve a representative turn up front. The
+  // conditional reservation serializes concurrent turns so two can't both slip
+  // past the cap (the old read-then-check-then-increment left that window
+  // open); it's reconciled to ACTUAL usage in the finally below.
+  let budgetBefore: BudgetState;
+  try {
+    const reserved = await reserveBudget(
+      householdId,
+      { inputTokens: RESERVE_INPUT_TOKENS, outputTokens: RESERVE_OUTPUT_TOKENS },
+      BUDGET_CONFIG
     );
+    // Committed-before = post-reservation totals minus our own reservation.
+    budgetBefore = {
+      householdId,
+      yearMonth: reserved.yearMonth,
+      inputTokens: reserved.inputTokens - RESERVE_INPUT_TOKENS,
+      outputTokens: reserved.outputTokens - RESERVE_OUTPUT_TOKENS,
+      costUsd: reserved.costUsd,
+    };
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ChatBudgetExceededError') {
+      // Release the idempotency claim so a retry (e.g. next month) can re-run.
+      if (turnId) await releaseTurn(householdId, turnId);
+      throw createHttpError(
+        429,
+        "You've used this month's chat allowance. The budget resets on the 1st of next month."
+      );
+    }
+    throw err;
   }
 
   yield { type: 'start', conversationId };
@@ -249,6 +310,9 @@ async function* turnEvents(
   // propose_reminder_task calls (e.g. "set up watering + fertilizing").
   const proposals: ProposedReminderTask[] = [];
 
+  // Distinguishes a clean loop exit from a thrown one inside the finally, which
+  // owns both the budget reconcile and the turn-claim resolution.
+  let failed = true;
   try {
     for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
       const modelArgs = {
@@ -407,18 +471,27 @@ async function* turnEvents(
         { role: 'user', content: resultsContent },
       ];
     }
+    failed = false;
   } finally {
-    // Commit token usage even if a mid-turn Bedrock call threw: partial usage
-    // (e.g. a 2nd tool-loop call that fails after the 1st already cost tokens)
-    // must still be billed, or the failed turn is effectively free and the
-    // monthly budget never converges. Skip a zero write — the over-budget gate
-    // can throw before any Bedrock call, and a turn can fail on its first call.
-    if (totalInputTokens > 0 || totalOutputTokens > 0) {
-      await incrementBudget(householdId, {
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        costUsd: totalCost,
-      });
+    // Reconcile the up-front reservation to ACTUAL usage. We already reserved
+    // RESERVE_* at the gate, so adding (actual - reserve) lands the committed
+    // total on the true usage — even if a mid-turn Bedrock call threw (the
+    // deltas can be negative; DynamoDB's ADD handles that). This always runs,
+    // so a failed turn still bills what it spent and frees the rest.
+    await incrementBudget(householdId, {
+      inputTokens: totalInputTokens - RESERVE_INPUT_TOKENS,
+      outputTokens: totalOutputTokens - RESERVE_OUTPUT_TOKENS,
+      costUsd: totalCost,
+    });
+    // A claimed turn that FAILED must release its idempotency slot so a
+    // legitimate retry (the client's sync fallback) can run fresh. Success is
+    // finalized below, after the result is built.
+    if (turnId && failed) {
+      try {
+        await releaseTurn(householdId, turnId);
+      } catch (err) {
+        logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_release_failed');
+      }
     }
   }
 
@@ -451,6 +524,17 @@ async function* turnEvents(
       ),
     },
   };
+
+  // Record the completed result so a same-turnId retry replays it instead of
+  // re-running. Best-effort: if this write fails the worst case is a retry
+  // re-runs the turn (the pre-idempotency behavior), so never fail the turn.
+  if (turnId) {
+    try {
+      await finalizeTurn(householdId, turnId, result as unknown as Record<string, unknown>);
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_finalize_failed');
+    }
+  }
 
   yield { type: 'done', result };
   return result;
