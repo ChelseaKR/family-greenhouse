@@ -12,7 +12,13 @@
  * unbounded).
  */
 import { v4 as uuid } from 'uuid';
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
 import type { BudgetConfig, BudgetState, ChatMessageRecord } from './types.js';
 
@@ -64,25 +70,55 @@ async function nextConversationSeq(householdId: string, conversationId: string):
   return (res.Attributes?.seq as number | undefined) ?? 0;
 }
 
+/** DynamoDB item for a chat message at sequence `seq`. */
+function messageItem(householdId: string, message: ChatMessageRecord, seq: number) {
+  // 12 digits orders correctly past any realistic per-conversation message
+  // count. The `#SEQ` counter row's SK never matches the `#MSG#` prefix, so
+  // getConversation's begins_with query excludes it.
+  const sk = `CHAT#${message.conversationId}#MSG#${message.timestamp}#${String(seq).padStart(12, '0')}`;
+  return {
+    PK: `HOUSEHOLD#${householdId}`,
+    SK: sk,
+    entityType: 'ChatMessage',
+    ...message,
+    ttl: Math.floor(Date.now() / 1000) + CONVERSATION_TTL_SECONDS,
+  };
+}
+
 export async function appendMessage(
   householdId: string,
   message: ChatMessageRecord
 ): Promise<void> {
   const seq = await nextConversationSeq(householdId, message.conversationId);
-  // 12 digits orders correctly past any realistic per-conversation message
-  // count. The `#SEQ` counter row's SK never matches the `#MSG#` prefix, so
-  // getConversation's begins_with query excludes it.
-  const sk = `CHAT#${message.conversationId}#MSG#${message.timestamp}#${String(seq).padStart(12, '0')}`;
   await dynamodb.send(
-    new PutCommand({
-      TableName: TABLE_NAME,
-      Item: {
-        PK: `HOUSEHOLD#${householdId}`,
-        SK: sk,
-        entityType: 'ChatMessage',
-        ...message,
-        ttl: Math.floor(Date.now() / 1000) + CONVERSATION_TTL_SECONDS,
-      },
+    new PutCommand({ TableName: TABLE_NAME, Item: messageItem(householdId, message, seq) })
+  );
+}
+
+/**
+ * Append two messages ATOMICALLY (one TransactWrite).
+ *
+ * Used for an assistant tool_use turn + its answering tool_result turn: the
+ * two must land together or not at all. If they were written as two separate
+ * Puts and the second failed (process death, throttling), the conversation
+ * would hold an assistant tool_use with no matching tool_result — which
+ * Bedrock rejects with a ValidationException on EVERY subsequent replay,
+ * permanently breaking the conversation. The transaction makes that orphan
+ * impossible: a failure leaves neither row, and the user simply resends.
+ */
+export async function appendMessagePair(
+  householdId: string,
+  first: ChatMessageRecord,
+  second: ChatMessageRecord
+): Promise<void> {
+  const seq1 = await nextConversationSeq(householdId, first.conversationId);
+  const seq2 = await nextConversationSeq(householdId, second.conversationId);
+  await dynamodb.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        { Put: { TableName: TABLE_NAME, Item: messageItem(householdId, first, seq1) } },
+        { Put: { TableName: TABLE_NAME, Item: messageItem(householdId, second, seq2) } },
+      ],
     })
   );
 }

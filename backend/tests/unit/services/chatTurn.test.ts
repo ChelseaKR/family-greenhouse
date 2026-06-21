@@ -14,6 +14,7 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     ...actual,
     newConversationId: vi.fn(() => 'conv-1'),
     appendMessage: vi.fn(async () => undefined),
+    appendMessagePair: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
     getBudget: vi.fn(async () => ({
       householdId: 'hh-1',
@@ -34,6 +35,7 @@ import { runChatTurn, trimHistory, BUDGET_CONFIG } from '../../../src/services/c
 import { invokeChatModel, type BedrockMessage } from '../../../src/services/chat/bedrock.js';
 import {
   appendMessage,
+  appendMessagePair,
   getBudget,
   getConversation,
   incrementBudget,
@@ -320,28 +322,65 @@ describe('runChatTurn', () => {
 
     await runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'list my plants' });
 
-    // user text, assistant tool_use, user tool_result, assistant final.
-    expect(vi.mocked(appendMessage)).toHaveBeenCalledTimes(4);
-    const records = vi.mocked(appendMessage).mock.calls.map((c) => c[1]);
-    expect(records.map((r) => r.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+    // The user text and the final assistant answer persist singly; the
+    // assistant tool_use turn and its tool_result turn land ATOMICALLY via
+    // appendMessagePair, so a half-write can't orphan a tool_use.
+    expect(vi.mocked(appendMessage)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(appendMessage).mock.calls.map((c) => c[1].role)).toEqual([
+      'user',
+      'assistant',
+    ]);
 
-    const toolResultRecord = records[2];
+    expect(vi.mocked(appendMessagePair)).toHaveBeenCalledTimes(1);
+    const [, assistantToolUse, toolResultRecord] = vi.mocked(appendMessagePair).mock.calls[0];
+    expect(assistantToolUse.role).toBe('assistant');
+    expect(assistantToolUse.content[0]).toMatchObject({ type: 'tool_use', id: 'tu-1' });
+    expect(toolResultRecord.role).toBe('user');
     expect(toolResultRecord.conversationId).toBe('conv-1');
     expect(toolResultRecord.content).toHaveLength(1);
-    expect(toolResultRecord.content[0]).toMatchObject({
-      type: 'tool_result',
-      tool_use_id: 'tu-1',
-    });
-
-    // Timestamps must be non-decreasing so SK sort order replays correctly.
-    for (let i = 1; i < records.length; i++) {
-      expect(records[i].timestamp >= records[i - 1].timestamp).toBe(true);
-    }
+    expect(toolResultRecord.content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 'tu-1' });
+    // The pair preserves write order (assistant before its tool_result).
+    expect(toolResultRecord.timestamp >= assistantToolUse.timestamp).toBe(true);
 
     // What we persisted is exactly what the model saw on the follow-up call.
     const secondCallMessages = vi.mocked(invokeChatModel).mock.calls[1][0].messages;
     expect(secondCallMessages.at(-1)?.content).toEqual(toolResultRecord.content);
     expectValidToolPairing(secondCallMessages);
+  });
+
+  it('commits partial token usage when a mid-turn Bedrock call fails', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([]);
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [{ type: 'tool_use', id: 'tu-1', name: 'list_household_plants', input: {} }],
+        stopReason: 'tool_use',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+      // The follow-up call (after the tool ran + cost tokens) throws.
+      .mockRejectedValueOnce(new Error('bedrock throttled'));
+
+    await expect(
+      runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'list my plants' })
+    ).rejects.toThrow('bedrock throttled');
+
+    // The first call's tokens are billed even though the turn threw — otherwise
+    // a failed turn is free and the monthly budget never converges.
+    expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
+      inputTokens: 100,
+      outputTokens: 10,
+      costUsd: 0.0003,
+    });
+  });
+
+  it('does not write the budget when the turn fails before any Bedrock call', async () => {
+    vi.mocked(invokeChatModel).mockRejectedValueOnce(new Error('bedrock down'));
+    await expect(runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hi' })).rejects.toThrow(
+      'bedrock down'
+    );
+    // No tokens consumed → no zero-write.
+    expect(vi.mocked(incrementBudget)).not.toHaveBeenCalled();
   });
 
   it('exposes propose_reminder_task with the confirm-card contract in the system prompt, and collects validated proposals', async () => {
@@ -414,9 +453,11 @@ describe('runChatTurn', () => {
     expect(typeof result.proposals[0].proposalId).toBe('string');
 
     // The persisted tool_result block carries the proposed payload, so a
-    // conversation reload can re-render the card from history.
-    const records = vi.mocked(appendMessage).mock.calls.map((c) => c[1]);
-    const toolResultBlock = records[2].content[0];
+    // conversation reload can re-render the card from history. It lands via the
+    // atomic appendMessagePair (assistant tool_use + tool_result), not a lone
+    // appendMessage.
+    const toolResultRecord = vi.mocked(appendMessagePair).mock.calls[0][2];
+    const toolResultBlock = toolResultRecord.content[0];
     expect(toolResultBlock.type).toBe('tool_result');
     if (toolResultBlock.type === 'tool_result') {
       const parsed = JSON.parse(toolResultBlock.content) as {

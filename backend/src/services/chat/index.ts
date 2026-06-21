@@ -26,6 +26,7 @@ import {
 } from './tools.js';
 import {
   appendMessage,
+  appendMessagePair,
   getBudget,
   getConversation,
   incrementBudget,
@@ -248,165 +249,178 @@ async function* turnEvents(
   // propose_reminder_task calls (e.g. "set up watering + fertilizing").
   const proposals: ProposedReminderTask[] = [];
 
-  for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
-    const modelArgs = {
-      system: SYSTEM_PROMPT,
-      messages: messagesForModel,
-      tools: TOOL_REGISTRY,
-      maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
-    };
+  try {
+    for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
+      const modelArgs = {
+        system: SYSTEM_PROMPT,
+        messages: messagesForModel,
+        tools: TOOL_REGISTRY,
+        maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
+      };
 
-    let response: BedrockChatResponse;
-    if (opts.streaming) {
-      // Manual iteration: `for await` would discard the generator's return
-      // value (the assembled response). Forward each text delta as it lands.
-      const stream = invokeChatModelStream(modelArgs);
-      let sawText = false;
-      for (;;) {
-        const next = await stream.next();
-        if (next.done) {
-          response = next.value;
-          break;
-        }
-        sawText = true;
-        yield { type: 'delta', text: next.value.text };
-      }
-      // A tool-use turn often opens with text ("Let me check your
-      // plants…"). Separate it from the next iteration's text so the
-      // streamed transcript stays readable. Transport-only.
-      if (sawText && response.stopReason === 'tool_use') {
-        yield { type: 'delta', text: '\n\n' };
-      }
-    } else {
-      response = await invokeChatModel(modelArgs);
-    }
-
-    totalInputTokens += response.inputTokens;
-    totalOutputTokens += response.outputTokens;
-    totalCost += response.costUsd;
-
-    // Persist this assistant turn (which may include tool_use blocks).
-    const assistantRecord: ChatMessageRecord = {
-      conversationId,
-      timestamp: new Date().toISOString(),
-      role: 'assistant',
-      content: response.content,
-      inputTokens: response.inputTokens,
-      outputTokens: response.outputTokens,
-      costUsd: response.costUsd,
-    };
-    await appendMessage(householdId, assistantRecord);
-
-    if (response.stopReason !== 'tool_use') {
-      finalAssistantBlocks = response.content;
-      break;
-    }
-
-    // Run every tool_use block in this turn, gather results, append a
-    // single user-role tool_result turn.
-    const toolUses = response.content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
-    const resultsContent: ContentBlock[] = [];
-    for (const use of toolUses) {
-      toolCallCount += 1;
-      if (toolCallCount > MAX_TOOL_CALLS_PER_TURN) {
-        resultsContent.push({
-          type: 'tool_result',
-          tool_use_id: use.id,
-          content: 'Tool call cap exceeded for this turn. Answer with what you have so far.',
-          is_error: true,
-        });
-        continue;
-      }
-      const tool = findTool(use.name);
-      if (!tool) {
-        resultsContent.push({
-          type: 'tool_result',
-          tool_use_id: use.id,
-          content: `Unknown tool: ${use.name}`,
-          is_error: true,
-        });
-        continue;
-      }
-      yield { type: 'tool_start', name: use.name };
-      try {
-        // Deliberate `as never` dispatch cast — Claude's JSON-schema validation
-        // is the source of truth for each tool's input shape (see tools.ts).
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-        const out = await tool.execute(use.input as never, {
-          userId,
-          householdId,
-          toolCallNumber: toolCallCount,
-          // Lets propose_reminder_task enforce its own per-turn cap.
-          proposalsThisTurn: proposals.length,
-        });
-        // For propose_reminder_task: the executor returns
-        // { status: 'proposed', proposal: {...} } when the proposal passed
-        // validation. Pull the proposal out of the loop and into the API
-        // response so the UI can render a confirm card. Note we use the
-        // validated server-side proposal (with plantName/assigneeName
-        // looked up and a server-assigned proposalId), not the raw tool
-        // input, so a hallucinated plantId/assignee is rejected here.
-        if (use.name === 'propose_reminder_task') {
-          const result = out as ProposeReminderResult;
-          if (result.status === 'proposed' && result.proposal) {
-            proposals.push(result.proposal);
-            yield { type: 'proposal', proposal: result.proposal };
+      let response: BedrockChatResponse;
+      if (opts.streaming) {
+        // Manual iteration: `for await` would discard the generator's return
+        // value (the assembled response). Forward each text delta as it lands.
+        const stream = invokeChatModelStream(modelArgs);
+        let sawText = false;
+        for (;;) {
+          const next = await stream.next();
+          if (next.done) {
+            response = next.value;
+            break;
           }
+          sawText = true;
+          yield { type: 'delta', text: next.value.text };
         }
-        resultsContent.push({
-          type: 'tool_result',
-          tool_use_id: use.id,
-          content: JSON.stringify(out),
-        });
-      } catch (err) {
-        logger.warn({ err, toolName: use.name }, 'chat_tool_error');
-        resultsContent.push({
-          type: 'tool_result',
-          tool_use_id: use.id,
-          content: `Tool ${use.name} failed: ${(err as Error).message}`,
-          is_error: true,
-        });
+        // A tool-use turn often opens with text ("Let me check your
+        // plants…"). Separate it from the next iteration's text so the
+        // streamed transcript stays readable. Transport-only.
+        if (sawText && response.stopReason === 'tool_use') {
+          yield { type: 'delta', text: '\n\n' };
+        }
+      } else {
+        response = await invokeChatModel(modelArgs);
       }
-    }
-    audit('chat.tools_called', {
-      actorId: userId,
-      householdId,
-      metadata: {
-        tools: toolUses.map((u) => u.name),
+
+      totalInputTokens += response.inputTokens;
+      totalOutputTokens += response.outputTokens;
+      totalCost += response.costUsd;
+
+      // Build this assistant turn (which may include tool_use blocks). A
+      // tool_use turn is persisted TOGETHER with its tool_result turn below
+      // (appendMessagePair) so the two can never be half-written; a final turn
+      // has no partner and is persisted on its own.
+      const assistantRecord: ChatMessageRecord = {
         conversationId,
-      },
-    });
+        timestamp: new Date().toISOString(),
+        role: 'assistant',
+        content: response.content,
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        costUsd: response.costUsd,
+      };
 
-    // Persist the tool_result turn alongside the assistant tool_use turn.
-    // The next user turn rebuilds history from DDB; replaying an assistant
-    // tool_use with no matching tool_result is a Bedrock ValidationException,
-    // which would hard-fail every conversation right after a tool turn.
-    // Content blocks are stored as-is (DocumentClient marshals the nested
-    // maps/lists), so getConversation round-trips them verbatim.
-    const toolResultRecord: ChatMessageRecord = {
-      conversationId,
-      timestamp: new Date().toISOString(),
-      role: 'user',
-      content: resultsContent,
-    };
-    await appendMessage(householdId, toolResultRecord);
+      if (response.stopReason !== 'tool_use') {
+        await appendMessage(householdId, assistantRecord);
+        finalAssistantBlocks = response.content;
+        break;
+      }
 
-    // Append the assistant turn + tool_result turn to the next iteration's
-    // message list. Don't re-fetch DDB; we already have authoritative state
-    // in memory.
-    messagesForModel = [
-      ...messagesForModel,
-      { role: 'assistant', content: response.content },
-      { role: 'user', content: resultsContent },
-    ];
+      // Run every tool_use block in this turn, gather results, append a
+      // single user-role tool_result turn.
+      const toolUses = response.content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
+      const resultsContent: ContentBlock[] = [];
+      for (const use of toolUses) {
+        toolCallCount += 1;
+        if (toolCallCount > MAX_TOOL_CALLS_PER_TURN) {
+          resultsContent.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: 'Tool call cap exceeded for this turn. Answer with what you have so far.',
+            is_error: true,
+          });
+          continue;
+        }
+        const tool = findTool(use.name);
+        if (!tool) {
+          resultsContent.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: `Unknown tool: ${use.name}`,
+            is_error: true,
+          });
+          continue;
+        }
+        yield { type: 'tool_start', name: use.name };
+        try {
+          // Deliberate `as never` dispatch cast — Claude's JSON-schema validation
+          // is the source of truth for each tool's input shape (see tools.ts).
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+          const out = await tool.execute(use.input as never, {
+            userId,
+            householdId,
+            toolCallNumber: toolCallCount,
+            // Lets propose_reminder_task enforce its own per-turn cap.
+            proposalsThisTurn: proposals.length,
+          });
+          // For propose_reminder_task: the executor returns
+          // { status: 'proposed', proposal: {...} } when the proposal passed
+          // validation. Pull the proposal out of the loop and into the API
+          // response so the UI can render a confirm card. Note we use the
+          // validated server-side proposal (with plantName/assigneeName
+          // looked up and a server-assigned proposalId), not the raw tool
+          // input, so a hallucinated plantId/assignee is rejected here.
+          if (use.name === 'propose_reminder_task') {
+            const result = out as ProposeReminderResult;
+            if (result.status === 'proposed' && result.proposal) {
+              proposals.push(result.proposal);
+              yield { type: 'proposal', proposal: result.proposal };
+            }
+          }
+          resultsContent.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: JSON.stringify(out),
+          });
+        } catch (err) {
+          logger.warn({ err, toolName: use.name }, 'chat_tool_error');
+          resultsContent.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: `Tool ${use.name} failed: ${(err as Error).message}`,
+            is_error: true,
+          });
+        }
+      }
+      audit('chat.tools_called', {
+        actorId: userId,
+        householdId,
+        metadata: {
+          tools: toolUses.map((u) => u.name),
+          conversationId,
+        },
+      });
+
+      // Persist the assistant tool_use turn and its tool_result turn ATOMICALLY.
+      // The next user turn rebuilds history from DDB; replaying an assistant
+      // tool_use with no matching tool_result is a Bedrock ValidationException,
+      // which would hard-fail every conversation right after a tool turn. Writing
+      // both in one transaction means a partial failure leaves neither (the turn
+      // is simply retried) instead of a permanently-broken orphan. Content blocks
+      // are stored as-is (DocumentClient marshals the nested maps/lists), so
+      // getConversation round-trips them verbatim.
+      const toolResultRecord: ChatMessageRecord = {
+        conversationId,
+        timestamp: new Date().toISOString(),
+        role: 'user',
+        content: resultsContent,
+      };
+      await appendMessagePair(householdId, assistantRecord, toolResultRecord);
+
+      // Append the assistant turn + tool_result turn to the next iteration's
+      // message list. Don't re-fetch DDB; we already have authoritative state
+      // in memory.
+      messagesForModel = [
+        ...messagesForModel,
+        { role: 'assistant', content: response.content },
+        { role: 'user', content: resultsContent },
+      ];
+    }
+  } finally {
+    // Commit token usage even if a mid-turn Bedrock call threw: partial usage
+    // (e.g. a 2nd tool-loop call that fails after the 1st already cost tokens)
+    // must still be billed, or the failed turn is effectively free and the
+    // monthly budget never converges. Skip a zero write — the over-budget gate
+    // can throw before any Bedrock call, and a turn can fail on its first call.
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      await incrementBudget(householdId, {
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        costUsd: totalCost,
+      });
+    }
   }
-
-  // Update budget atomically once per turn.
-  await incrementBudget(householdId, {
-    inputTokens: totalInputTokens,
-    outputTokens: totalOutputTokens,
-    costUsd: totalCost,
-  });
 
   audit('chat.message_sent', {
     actorId: userId,

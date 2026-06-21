@@ -25,6 +25,9 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   UpdateCommand: vi.fn(function (input) {
     return { input, kind: 'Update' };
   }),
+  TransactWriteCommand: vi.fn(function (input) {
+    return { input, kind: 'TransactWrite' };
+  }),
 }));
 
 vi.mock('../../../src/utils/dynamodb.js', () => ({
@@ -35,7 +38,11 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 }));
 
 import { dynamodb } from '../../../src/utils/dynamodb.js';
-import { appendMessage, getConversation } from '../../../src/services/chat/persistence.js';
+import {
+  appendMessage,
+  appendMessagePair,
+  getConversation,
+} from '../../../src/services/chat/persistence.js';
 import type { ChatMessageRecord } from '../../../src/services/chat/types.js';
 
 type CapturedCmd = { kind: string; input: { Item: Record<string, unknown> & { SK: string } } };
@@ -68,6 +75,41 @@ beforeEach(() => {
 });
 
 describe('chat message persistence', () => {
+  it('appendMessagePair writes both turns in ONE TransactWrite with ordered seqs', async () => {
+    const ts = '2026-06-11T12:00:00.000Z';
+    await appendMessagePair(
+      'hh-1',
+      {
+        conversationId: 'c1',
+        timestamp: ts,
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tu-1', name: 'list_household_plants', input: {} }],
+      },
+      {
+        conversationId: 'c1',
+        timestamp: ts,
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: '[]' }],
+      }
+    );
+
+    const tx = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) => c[0] as unknown as { kind: string; input: { TransactItems: unknown[] } }
+      )
+      .find((c) => c.kind === 'TransactWrite');
+    expect(tx).toBeDefined();
+    const items = (tx!.input.TransactItems as Array<{ Put: { Item: Record<string, string> } }>).map(
+      (t) => t.Put.Item
+    );
+    // Both writes ride the single transaction → no half-written orphan possible.
+    expect(items).toHaveLength(2);
+    expect(items.map((i) => i.role)).toEqual(['assistant', 'user']);
+    // The seq tie-breaker keeps the assistant tool_use ahead of its result.
+    expect(items[0].SK < items[1].SK).toBe(true);
+  });
+
   it('writes same-millisecond messages under distinct SKs that preserve write order', async () => {
     // beforeEach feeds the conversation-seq UpdateCommand a monotonic value.
     const ts = '2026-06-11T12:00:00.000Z';

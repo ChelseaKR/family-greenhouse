@@ -36,6 +36,10 @@ export function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const streamTextRef = useRef('');
+  // Aborts the in-flight stream when the user navigates away mid-turn, so the
+  // abandoned request stops and we don't fall back to a second (sync) turn.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const householdId = useActiveHouseholdId();
@@ -102,23 +106,35 @@ export function ChatPage() {
     setError(null);
     streamTextRef.current = '';
     setStreamingText('');
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       if (streamUrl) {
         try {
-          const result = await chatService.streamMessage(message, conversationId, (event) => {
-            if (event.type === 'delta') {
-              streamTextRef.current += event.text;
-              setStreamingText(streamTextRef.current);
-            }
-          });
+          const result = await chatService.streamMessage(
+            message,
+            conversationId,
+            (event) => {
+              if (event.type === 'delta') {
+                streamTextRef.current += event.text;
+                setStreamingText(streamTextRef.current);
+              }
+            },
+            controller.signal
+          );
           // Prefer the streamed transcript (it may include tool-turn
           // preamble text); the result is authoritative for proposals/ids.
           appendAssistant(result, streamTextRef.current.trim() || result.assistantText);
           budgetQuery.refetch();
           return;
         } catch {
-          // Any stream failure (network, auth, malformed SSE, error event):
-          // discard partial output and retry once via the sync endpoint.
+          // A DELIBERATE abort (the user navigated away) must NOT fall back to
+          // the sync endpoint: the stream may already be completing server-side
+          // (messages persisted, budget charged), so a sync retry would run a
+          // whole second turn — double-charging and duplicating the message.
+          if (controller.signal.aborted) return;
+          // Any genuine stream failure (network, auth, malformed SSE, error
+          // event): discard partial output and retry once via the sync endpoint.
           streamTextRef.current = '';
           setStreamingText('');
         }
@@ -127,11 +143,15 @@ export function ChatPage() {
       appendAssistant(data, data.assistantText);
       budgetQuery.refetch();
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(getErrorMessage(err));
     } finally {
-      setIsSending(false);
-      streamTextRef.current = '';
-      setStreamingText('');
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setIsSending(false);
+        streamTextRef.current = '';
+        setStreamingText('');
+      }
     }
   }
 
