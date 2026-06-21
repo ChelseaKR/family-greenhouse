@@ -399,9 +399,93 @@ resource "aws_lambda_permission" "api_gateway" {
 # Bundle: backend `dist/chat-stream.js` (src/handlers/chat/streamHandler.ts,
 # an explicit esbuild entry). CD zips it as `handler.mjs` exactly like the
 # other bundles, hence the same "handler.handler" handler string.
+# Dedicated, least-privilege execution role for the PUBLIC streaming-chat
+# Function URL (authorization_type = NONE). The sync fleet's shared role grants
+# the union of every backend privilege — secretsmanager:GetSecretValue,
+# cognito-idp:AdminUpdateUserAttributes, SES, SNS, S3 — none of which the chat
+# path uses (it touches only DynamoDB + Bedrock; climate caches in DDB and
+# calls OpenWeather over HTTPS). Putting the most internet-exposed component on
+# that shared role meant a flaw in its hand-rolled JWT/SSE path (before the
+# in-handler 401) could exfiltrate secrets or escalate household roles. This
+# role carries ONLY what chat actually needs, so that blast radius is gone.
+resource "aws_iam_role" "chat_stream" {
+  name = "${var.project_name}-chat-stream-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "lambda.amazonaws.com" }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "chat_stream" {
+  name = "${var.project_name}-chat-stream-policy-${var.environment}"
+  role = aws_iam_role.chat_stream.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        # Conversation persistence + the read/write tools (plants, tasks,
+        # household, climate cache). Same table+indexes scope as the fleet.
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          var.dynamodb_table_arn,
+          "${var.dynamodb_table_arn}/index/*"
+        ]
+      },
+      {
+        # Bedrock for the model turn + RAG corpus embedding. Same dual
+        # foundation-model + inference-profile ARN shape as the fleet policy.
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-*",
+          "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-*",
+          "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-*",
+          "arn:aws:bedrock:*:*:inference-profile/global.anthropic.claude-*",
+        ]
+      },
+      {
+        # dead_letter_config target for failed async invocations.
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.lambda_dlq.arn
+      }
+    ]
+  })
+}
+
+# Active tracing needs the same X-Ray write grant as the fleet role.
+resource "aws_iam_role_policy_attachment" "chat_stream_xray" {
+  role       = aws_iam_role.chat_stream.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 resource "aws_lambda_function" "chat_stream" {
   function_name = "${var.project_name}-chat-stream-${var.environment}"
-  role          = aws_iam_role.lambda.arn
+  role          = aws_iam_role.chat_stream.arn
   handler       = "handler.handler"
   runtime       = "nodejs20.x"
   # Same sizing rationale as the sync `chat` member of the fleet above: up to
