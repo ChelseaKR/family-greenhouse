@@ -438,4 +438,67 @@ describe('householdService', () => {
     const result = await setMemberRole('hh', 'admin', 'member');
     expect(result?.role).toBe('member');
   });
+
+  // --- Atomic last-admin guard: closes the TOCTOU between the read and write ---
+
+  const TWO_ADMINS = {
+    Items: [
+      { householdId: 'hh', userId: 'admin', role: 'admin' },
+      { householdId: 'hh', userId: 'admin2', role: 'admin' },
+    ],
+  };
+
+  it('setMemberRole demotion pins a surviving admin via a TransactWrite ConditionCheck', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { setMemberRole } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(TWO_ADMINS); // guard read
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite ok
+    await setMemberRole('hh', 'admin', 'member');
+    const cmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      kind: string;
+      input: {
+        TransactItems: Array<{
+          ConditionCheck?: { Key: { SK: string }; ConditionExpression: string };
+        }>;
+      };
+    };
+    expect(cmd.kind).toBe('TransactWrite');
+    const check = cmd.input.TransactItems[1].ConditionCheck;
+    expect(check?.Key.SK).toBe('MEMBER#admin2'); // the OTHER admin is pinned as still-admin
+    expect(check?.ConditionExpression).toBe('#role = :admin');
+  });
+
+  it('setMemberRole demotion throws LastAdminError when the surviving-admin pin fails (concurrent demote)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { setMemberRole } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(TWO_ADMINS);
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), {
+        name: 'TransactionCanceledException',
+        // [demote Update (None), surviving-admin ConditionCheck (failed)]
+        CancellationReasons: [{ Code: 'None' }, { Code: 'ConditionalCheckFailed' }],
+      })
+    );
+    await expect(setMemberRole('hh', 'admin', 'member')).rejects.toMatchObject({
+      name: 'LastAdminError',
+    });
+  });
+
+  it('removeMember of an admin pins a surviving admin and maps its pin failure to LastAdminError', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { removeMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(TWO_ADMINS);
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), {
+        name: 'TransactionCanceledException',
+        // [Delete (None), memberCount Update (None), surviving-admin ConditionCheck (failed)]
+        CancellationReasons: [
+          { Code: 'None' },
+          { Code: 'None' },
+          { Code: 'ConditionalCheckFailed' },
+        ],
+      })
+    );
+    await expect(removeMember('hh', 'admin')).rejects.toMatchObject({ name: 'LastAdminError' });
+  });
 });
