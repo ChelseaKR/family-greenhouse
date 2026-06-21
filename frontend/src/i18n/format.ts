@@ -7,6 +7,7 @@
 // accept a `locale` override so tests can pin a specific locale.
 
 import i18n from './index';
+import { calendarDaysBetween } from '@/utils/date';
 
 function activeLocale(override?: string): string {
   return override || i18n.language || 'en';
@@ -45,11 +46,9 @@ export function formatCurrency(amountInDollars: number, currency = 'USD', locale
 
 export function formatRelativeDay(date: string | Date, locale?: string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(d);
-  target.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  // DST-safe day delta (raw local-midnight subtraction drifts across a DST
+  // transition); positive = future ("in N days"), negative = past.
+  const diffDays = calendarDaysBetween(new Date(), d);
   const rtf = new Intl.RelativeTimeFormat(activeLocale(locale), { numeric: 'auto' });
   return rtf.format(diffDays, 'day');
 }
