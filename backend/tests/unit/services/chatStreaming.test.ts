@@ -17,14 +17,19 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     appendMessage: vi.fn(async () => undefined),
     appendMessagePair: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
-    getBudget: vi.fn(async () => ({
-      householdId: 'hh-1',
-      yearMonth: '2026-06',
-      inputTokens: 0,
-      outputTokens: 0,
-      costUsd: 0,
-    })),
+    reserveBudget: vi.fn(
+      async (_hh: string, reserve: { inputTokens: number; outputTokens: number }) => ({
+        householdId: 'hh-1',
+        yearMonth: '2026-06',
+        inputTokens: reserve.inputTokens,
+        outputTokens: reserve.outputTokens,
+        costUsd: 0,
+      })
+    ),
     incrementBudget: vi.fn(async () => undefined),
+    claimTurn: vi.fn(async () => ({ status: 'claimed' as const })),
+    finalizeTurn: vi.fn(async () => undefined),
+    releaseTurn: vi.fn(async () => undefined),
   };
 });
 vi.mock('../../../src/services/plantService.js');
@@ -32,7 +37,12 @@ vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/climate.js');
 vi.mock('../../../src/services/householdService.js');
 
-import { streamChatTurn, type ChatStreamEvent } from '../../../src/services/chat/index.js';
+import {
+  streamChatTurn,
+  type ChatStreamEvent,
+  RESERVE_INPUT_TOKENS,
+  RESERVE_OUTPUT_TOKENS,
+} from '../../../src/services/chat/index.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -112,9 +122,10 @@ describe('streamChatTurn', () => {
       content: [{ type: 'text', text: 'You have no plants yet.' }],
     });
     expect(vi.mocked(incrementBudget)).toHaveBeenCalledTimes(1);
+    // Reconcile = actual - reserved (same atomic-reservation accounting as sync).
     expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
-      inputTokens: 100,
-      outputTokens: 20,
+      inputTokens: 100 - RESERVE_INPUT_TOKENS,
+      outputTokens: 20 - RESERVE_OUTPUT_TOKENS,
       costUsd: 0.0006,
     });
     // The streaming path never touches the sync Bedrock operation.
@@ -215,20 +226,18 @@ describe('streamChatTurn', () => {
     expect(pairRoles).toEqual(['assistant', 'user']);
     const [budgetHousehold, budgetDelta] = vi.mocked(incrementBudget).mock.calls[0];
     expect(budgetHousehold).toBe('hh-1');
-    expect(budgetDelta.inputTokens).toBe(330);
-    expect(budgetDelta.outputTokens).toBe(70);
+    // Reconcile = actual - reserved across both stream calls.
+    expect(budgetDelta.inputTokens).toBe(330 - RESERVE_INPUT_TOKENS);
+    expect(budgetDelta.outputTokens).toBe(70 - RESERVE_OUTPUT_TOKENS);
     expect(budgetDelta.costUsd).toBeCloseTo(0.0021, 10);
   });
 
   it('still gates on the budget before any Bedrock call', async () => {
     const persistence = await import('../../../src/services/chat/persistence.js');
-    vi.mocked(persistence.getBudget).mockResolvedValueOnce({
-      householdId: 'hh-1',
-      yearMonth: '2026-06',
-      inputTokens: Number.MAX_SAFE_INTEGER,
-      outputTokens: 0,
-      costUsd: 99,
-    });
+    // The atomic gate rejects the reservation when over cap.
+    vi.mocked(persistence.reserveBudget).mockRejectedValueOnce(
+      new persistence.ChatBudgetExceededError()
+    );
 
     await expect(
       collect({ userId: 'u1', householdId: 'hh-1', message: 'hello' })

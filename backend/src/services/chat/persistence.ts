@@ -13,6 +13,7 @@
  */
 import { v4 as uuid } from 'uuid';
 import {
+  DeleteCommand,
   GetCommand,
   PutCommand,
   QueryCommand,
@@ -24,6 +25,21 @@ import type { BudgetConfig, BudgetState, ChatMessageRecord } from './types.js';
 
 const CONVERSATION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const BUDGET_TTL_SECONDS = 95 * 24 * 60 * 60;
+// A turn idempotency record outlives any realistic stream→sync fallback retry
+// window, then DynamoDB TTL sweeps it.
+const TURN_TTL_SECONDS = 10 * 60;
+
+/**
+ * Thrown by reserveBudget when the household is at/over its monthly cap. Call
+ * sites map it to the 429 response (checked by `err.name`, like the other
+ * service errors, so test automocks stay compatible).
+ */
+export class ChatBudgetExceededError extends Error {
+  constructor() {
+    super("You've used this month's chat allowance.");
+    this.name = 'ChatBudgetExceededError';
+  }
+}
 
 export function newConversationId(): string {
   return uuid();
@@ -209,5 +225,141 @@ export function isOverBudget(state: BudgetState, config: BudgetConfig): boolean 
   return (
     state.inputTokens >= config.maxInputTokensPerMonth ||
     state.outputTokens >= config.maxOutputTokensPerMonth
+  );
+}
+
+/**
+ * ATOMICALLY reserve `reserve` tokens against the monthly cap — the budget
+ * gate. Unlike a read-then-check-then-increment (which lets two concurrent
+ * turns both pass when near the cap), this is a single conditional UPDATE:
+ * DynamoDB serializes it, so the second concurrent turn's condition fails and
+ * it's rejected instead of overshooting. Returns the post-reservation committed
+ * totals (UPDATED_NEW) so the caller can derive remaining; the reservation is
+ * reconciled to ACTUAL usage by incrementBudget once the turn finishes.
+ *
+ * The reserve is a modest representative-turn estimate (not worst case), so the
+ * gate stays atomic for the common case without 429-ing users who still have
+ * budget. A turn that hard-crashes (Lambda kill) before reconciling leaks its
+ * reservation until the month resets — bounded and rare; this is a soft
+ * cost-control limit, not a hard billing stop.
+ *
+ * Throws ChatBudgetExceededError when the reservation can't fit under the cap.
+ */
+export async function reserveBudget(
+  householdId: string,
+  reserve: { inputTokens: number; outputTokens: number },
+  config: BudgetConfig
+): Promise<BudgetState> {
+  const ym = yearMonth();
+  try {
+    const res = await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: `CHATBUDGET#${ym}` },
+        UpdateExpression:
+          'ADD inputTokens :rin, outputTokens :rout SET #t = if_not_exists(#t, :ttl), entityType = if_not_exists(entityType, :etype)',
+        // Allow the reservation only if BOTH counters still leave room for it
+        // (committed <= cap - reserve). Absent counters start at 0 → allowed.
+        ConditionExpression:
+          '(attribute_not_exists(inputTokens) OR inputTokens <= :inThreshold) AND (attribute_not_exists(outputTokens) OR outputTokens <= :outThreshold)',
+        ExpressionAttributeNames: { '#t': 'ttl' },
+        ExpressionAttributeValues: {
+          ':rin': reserve.inputTokens,
+          ':rout': reserve.outputTokens,
+          ':inThreshold': config.maxInputTokensPerMonth - reserve.inputTokens,
+          ':outThreshold': config.maxOutputTokensPerMonth - reserve.outputTokens,
+          ':ttl': Math.floor(Date.now() / 1000) + BUDGET_TTL_SECONDS,
+          ':etype': 'ChatBudget',
+        },
+        ReturnValues: 'UPDATED_NEW',
+      })
+    );
+    return {
+      householdId,
+      yearMonth: ym,
+      inputTokens: res.Attributes?.inputTokens as number,
+      outputTokens: res.Attributes?.outputTokens as number,
+      costUsd: (res.Attributes?.costUsd as number) ?? 0,
+    };
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      throw new ChatBudgetExceededError();
+    }
+    throw err;
+  }
+}
+
+/**
+ * Result of claiming a turn's idempotency slot.
+ *   - 'claimed'     → we won; run the turn.
+ *   - 'done'        → a prior attempt finished; `result` is its stored output.
+ *   - 'in_progress' → a prior attempt is still running (rare race).
+ */
+export interface TurnClaim {
+  status: 'claimed' | 'done' | 'in_progress';
+  result?: Record<string, unknown>;
+}
+
+/**
+ * Claim a per-turn idempotency slot keyed by a client-supplied turnId. The
+ * conditional Put makes the first caller the owner; a later caller with the
+ * SAME turnId (e.g. a stream that completed server-side but whose client fell
+ * back to the sync endpoint) gets the stored result back instead of running —
+ * and charging — a duplicate turn.
+ */
+export async function claimTurn(householdId: string, turnId: string): Promise<TurnClaim> {
+  const key = { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` };
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          ...key,
+          entityType: 'ChatTurn',
+          status: 'in_progress',
+          ttl: Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS,
+        },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      })
+    );
+    return { status: 'claimed' };
+  } catch (err) {
+    if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') throw err;
+    const existing = await dynamodb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
+    if (existing.Item?.status === 'done') {
+      return { status: 'done', result: existing.Item.result as Record<string, unknown> };
+    }
+    return { status: 'in_progress' };
+  }
+}
+
+/** Record a completed turn's result so a same-turnId retry replays it. */
+export async function finalizeTurn(
+  householdId: string,
+  turnId: string,
+  result: Record<string, unknown>
+): Promise<void> {
+  await dynamodb.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: `HOUSEHOLD#${householdId}`,
+        SK: `CHATTURN#${turnId}`,
+        entityType: 'ChatTurn',
+        status: 'done',
+        result,
+        ttl: Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS,
+      },
+    })
+  );
+}
+
+/** Release a claimed-but-failed turn so a legitimate retry can run it fresh. */
+export async function releaseTurn(householdId: string, turnId: string): Promise<void> {
+  await dynamodb.send(
+    new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` },
+    })
   );
 }

@@ -25,6 +25,9 @@ import { getBudget } from '../../services/chat/persistence.js';
 const sendMessageSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().uuid().optional(),
+  // Idempotency key (#3): stable across a stream attempt and its sync fallback
+  // so the same user message can't be charged/persisted twice.
+  turnId: z.string().uuid().optional(),
 });
 type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
@@ -40,6 +43,7 @@ export const sendMessage = createHandler(
       householdId: user.householdId,
       conversationId: validatedBody.conversationId,
       message: validatedBody.message,
+      turnId: validatedBody.turnId,
     });
 
     return successResponse(result);
