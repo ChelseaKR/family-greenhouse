@@ -105,6 +105,18 @@ resource "aws_cognito_user_pool" "main" {
   tags = {
     Name = "${var.project_name}-user-pool-${var.environment}"
   }
+
+  lifecycle {
+    # DEVELOPER email mode (triggered by providing an SES identity) REQUIRES a
+    # from_email_address, but the two are wired from independent variables — so
+    # setting a domain without a from-address yields from_email_address = null
+    # and Cognito rejects the apply with an opaque InvalidParameter. Catch it at
+    # plan time with an actionable message instead.
+    precondition {
+      condition     = var.email_identity_arn == "" || var.email_from_address != ""
+      error_message = "email_from_address is required when an SES identity (email_identity_arn / domain_name) is set: DEVELOPER email mode has no usable sender without it."
+    }
+  }
 }
 
 resource "aws_cognito_user_pool_client" "main" {

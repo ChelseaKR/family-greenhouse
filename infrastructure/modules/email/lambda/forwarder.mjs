@@ -24,12 +24,28 @@ const FROM_ADDRESS = process.env.FROM_ADDRESS;
 
 const STRIP = /^(return-path|sender|dkim-signature|message-id):/i;
 
-function rewrite(raw, originalRecipient) {
-  const sep = raw.indexOf('\r\n\r\n') !== -1 ? '\r\n\r\n' : '\n\n';
-  const splitAt = raw.indexOf(sep);
-  const headerBlock = splitAt === -1 ? raw : raw.slice(0, splitAt);
-  const body = splitAt === -1 ? '' : raw.slice(splitAt);
-  const eol = sep === '\r\n\r\n' ? '\r\n' : '\n';
+export function rewrite(rawBytes, originalRecipient) {
+  // Split header/body on the RAW BYTES and leave the body untouched. Reading
+  // the whole message as a UTF-8 string and re-encoding it (the old approach)
+  // corrupted any non-UTF-8 octets — 8-bit MIME, Content-Transfer-Encoding:
+  // binary, legacy-charset bodies, binary attachment parts — turning them into
+  // U+FFFD before SendRawEmail. Only the (ASCII, RFC 5322) header block is
+  // decoded and rewritten; the body bytes forward verbatim.
+  const crlf = Buffer.from('\r\n\r\n');
+  let splitAt = rawBytes.indexOf(crlf);
+  let sepLen = 4;
+  if (splitAt === -1) {
+    splitAt = rawBytes.indexOf(Buffer.from('\n\n'));
+    sepLen = 2;
+  }
+  const headerBytes = splitAt === -1 ? rawBytes : rawBytes.subarray(0, splitAt);
+  const bodyBytes = splitAt === -1 ? Buffer.alloc(0) : rawBytes.subarray(splitAt + sepLen);
+  const eol = sepLen === 4 ? '\r\n' : '\n';
+  const sep = sepLen === 4 ? '\r\n\r\n' : '\n\n';
+
+  // latin1 is a lossless 1:1 byte<->char mapping, and headers are ASCII, so
+  // decoding/encoding the header block this way never alters a byte.
+  const headerBlock = headerBytes.toString('latin1');
 
   // Unfold continuation lines so each logical header is one element.
   const lines = headerBlock.split(eol);
@@ -62,7 +78,7 @@ function rewrite(raw, originalRecipient) {
   if (from) kept.push(`Reply-To: ${from}`);
   kept.push(`X-Forwarded-For-Mailbox: ${originalRecipient}`);
 
-  return kept.join(eol) + body;
+  return Buffer.concat([Buffer.from(kept.join(eol) + sep, 'latin1'), bodyBytes]);
 }
 
 export const handler = async (event) => {
@@ -92,13 +108,14 @@ export const handler = async (event) => {
     const obj = await s3.send(
       new GetObjectCommand({ Bucket: BUCKET, Key: `${PREFIX}${messageId}` })
     );
-    const raw = await obj.Body.transformToString();
+    // Read the raw MIME as BYTES, not a UTF-8 string — see rewrite().
+    const rawBytes = Buffer.from(await obj.Body.transformToByteArray());
 
     await ses.send(
       new SendRawEmailCommand({
         Source: FROM_ADDRESS,
         Destinations: [FORWARD_TO],
-        RawMessage: { Data: Buffer.from(rewrite(raw, recipient)) },
+        RawMessage: { Data: rewrite(rawBytes, recipient) },
       })
     );
 
