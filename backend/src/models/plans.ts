@@ -86,3 +86,34 @@ export function getPlan(id: string | undefined | null): Plan {
 export function isPlanId(id: unknown): id is PlanId {
   return typeof id === 'string' && Object.hasOwn(PLANS, id);
 }
+
+/**
+ * Public, client-facing projection of a plan. Lives here (not in
+ * services/billing.ts) so the dev mock server and other pure consumers can
+ * price plan cards without importing the billing service — which eagerly
+ * connects to DynamoDB and requires TABLE_NAME at module load.
+ */
+export function planSummary(plan: Plan): {
+  id: PlanId;
+  name: string;
+  description: string;
+  monthlyPrice: number;
+  annualPrice: number | null;
+  lifetimePrice: number | null;
+  maxPlants: number;
+  maxMembers: number;
+} {
+  return {
+    id: plan.id,
+    name: plan.name,
+    description: plan.description,
+    monthlyPrice: plan.monthlyPrice,
+    // null (not undefined) so it survives JSON serialization as an explicit
+    // "no annual option" signal the client can branch on.
+    annualPrice: plan.annualPrice ?? null,
+    // Same null-not-undefined contract: null means "no lifetime option".
+    lifetimePrice: plan.lifetimePrice ?? null,
+    maxPlants: plan.maxPlants,
+    maxMembers: plan.maxMembers,
+  };
+}

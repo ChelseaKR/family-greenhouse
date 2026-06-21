@@ -44,7 +44,7 @@ export function PricingGrid() {
               onClick={() => setInterval(opt)}
               className={clsx(
                 'rounded-full px-5 py-1.5 text-sm font-medium capitalize transition-colors',
-                interval === opt ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+                interval === opt ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600'
               )}
             >
               {opt}
