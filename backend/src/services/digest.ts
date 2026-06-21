@@ -21,7 +21,7 @@
  * yearly summary shouldn't be silently rerouted to SMS or suppressed by a DND
  * window aimed at real-time pings.
  */
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import * as householdService from './householdService.js';
@@ -129,10 +129,28 @@ export function isoWeekKey(d: Date): string {
 }
 
 /**
+ * Cheap pre-check (read) of this user's weekly digest marker — mirrors
+ * reminders' `alreadyRemindedToday`. Lets an already-digested member be
+ * skipped (no re-send) BEFORE we attempt a send, so a retry inside the same
+ * ISO week never re-emails. The conditional claim below is still the
+ * authoritative guard against a same-week race.
+ */
+async function alreadyDigestedThisWeek(userId: string, now: Date): Promise<boolean> {
+  const res = await dynamodb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: `DIGEST#${isoWeekKey(now)}` },
+    })
+  );
+  return !!res.Item;
+}
+
+/**
  * Conditionally claim this user's digest slot for the current ISO week.
- * Same pattern (and same failure-mode tradeoff) as the reminders daily
- * marker: claimed BEFORE sending, so a failed send costs one week's digest
- * instead of risking double-billing email on retries.
+ * Claimed AFTER a real send (with `alreadyDigestedThisWeek` as the cheap
+ * pre-check that prevents a same-week retry re-emailing): a failed send / a
+ * dry-run no longer burns the week's slot, and the conditional Put still
+ * de-dupes concurrent runs.
  */
 async function claimWeeklyDigestSlot(userId: string, now: Date): Promise<boolean> {
   try {
@@ -177,9 +195,29 @@ export async function digestHousehold(
   for (const member of members) {
     const prefs = await notificationPrefs.getPreferences(member.userId);
     if (!prefs.email || !prefs.weeklyDigest) continue;
-    if (!(await claimWeeklyDigestSlot(member.userId, now))) continue;
-    await emailNotifier.sendEmail({ to: member.email, subject, text });
-    sent += 1;
+    // Cheap pre-check skips an already-digested member so a same-week retry
+    // never re-emails.
+    if (await alreadyDigestedThisWeek(member.userId, now)) continue;
+    // Send FIRST, then claim the once-a-week slot only on a REAL delivery, and
+    // isolate per-member failures. The old order claimed the slot before
+    // sending, so a transient SES error (or a dry-run on unconfigured SES)
+    // burned the member's weekly slot with no email sent — and the unguarded
+    // throw aborted every remaining member in the household. sendEmail returns
+    // false on a dry-run, so an unconfigured channel never claims the slot and
+    // the next weekly run retries.
+    let delivered: boolean;
+    try {
+      delivered = await emailNotifier.sendEmail({ to: member.email, subject, text });
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, householdId, userId: member.userId },
+        'digest.send_failed'
+      );
+      continue;
+    }
+    if (delivered && (await claimWeeklyDigestSlot(member.userId, now))) {
+      sent += 1;
+    }
   }
   return sent;
 }
@@ -311,8 +349,8 @@ export async function recapHousehold(
     const prefs = await notificationPrefs.getPreferences(member.userId);
     if (!prefs.email) continue;
     try {
-      await emailNotifier.sendEmail({ to: member.email, subject, text });
-      sent += 1;
+      // Count only real deliveries; a dry-run (unconfigured SES) returns false.
+      if (await emailNotifier.sendEmail({ to: member.email, subject, text })) sent += 1;
     } catch (err) {
       // The household marker is already claimed; a partial failure shouldn't
       // abort the remaining members' recaps.

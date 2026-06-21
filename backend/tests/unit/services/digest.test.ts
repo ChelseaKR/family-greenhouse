@@ -4,6 +4,9 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
     return { input, kind: 'Put' };
   }),
+  GetCommand: vi.fn(function (input) {
+    return { input, kind: 'Get' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -24,7 +27,8 @@ vi.mock('../../../src/services/notificationPrefs.js', () => ({
   getPreferences: vi.fn(),
 }));
 vi.mock('../../../src/services/emailNotifier.js', () => ({
-  sendEmail: vi.fn().mockResolvedValue(undefined),
+  // Resolves true = a real delivery (sendEmail returns false only on a dry-run).
+  sendEmail: vi.fn().mockResolvedValue(true),
 }));
 
 const NOW = new Date('2026-06-11T12:00:00.000Z'); // Thursday, ISO week 2026-W24
@@ -66,8 +70,19 @@ async function mockConditionalMarkerStore() {
   const { dynamodb } = await import('../../../src/utils/dynamodb.js');
   const markers = new Set<string>();
   vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
-    const { input } = cmd as { input: { Item: { PK: string; SK: string } } };
-    const key = `${input.Item.PK}|${input.Item.SK}`;
+    const { input } = cmd as {
+      input: { Item?: { PK: string; SK: string }; Key?: { PK: string; SK: string } };
+    };
+    // GetCommand: the cheap "already digested this week?" pre-check read.
+    if (input.Key) {
+      const key = `${input.Key.PK}|${input.Key.SK}`;
+      return {
+        Item: markers.has(key) ? { PK: input.Key.PK, SK: input.Key.SK } : undefined,
+      } as never;
+    }
+    // PutCommand: the conditional slot claim — a second Put on the same PK|SK
+    // throws ConditionalCheckFailed (what the dedupe relies on).
+    const key = `${input.Item!.PK}|${input.Item!.SK}`;
     if (markers.has(key)) {
       const err = new Error('The conditional request failed');
       err.name = 'ConditionalCheckFailedException';
