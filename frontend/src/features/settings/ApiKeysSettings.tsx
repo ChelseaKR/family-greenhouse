@@ -16,8 +16,8 @@ import {
   SCOPE_LABELS,
   type ApiScope,
 } from '@/services/apiKeyService';
-import { useAuthStore } from '@/store/authStore';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { getErrorMessage } from '@/services/api';
 
 /**
@@ -31,7 +31,8 @@ import { getErrorMessage } from '@/services/api';
  */
 export function ApiKeysSettings() {
   const { t } = useTranslation();
-  const isAdmin = useAuthStore((s) => s.user?.householdRole === 'admin');
+  // Active household's role, not the stale Cognito-claim default role.
+  const isAdmin = useIsHouseholdAdmin();
   const householdId = useActiveHouseholdId();
   const queryClient = useQueryClient();
   const [label, setLabel] = useState('');

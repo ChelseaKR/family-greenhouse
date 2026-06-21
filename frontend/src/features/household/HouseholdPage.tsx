@@ -16,6 +16,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
+import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
 import { SitterLinksCard } from './SitterLinksCard';
@@ -83,7 +84,9 @@ export function HouseholdPage() {
     }
   };
 
-  const isAdmin = user?.householdRole === 'admin';
+  // Role of the ACTIVE household (not the stale Cognito-claim default role),
+  // so a multi-household user sees the correct admin controls after a switch.
+  const isAdmin = useIsHouseholdAdmin();
 
   // Vacation windows (care handoff) — one query for all member rows.
   const { data: vacationWindows } = useVacationWindows(householdId);
