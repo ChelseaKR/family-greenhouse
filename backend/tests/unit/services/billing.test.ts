@@ -210,6 +210,50 @@ describe('deltaForStripeEvent', () => {
     } as unknown as Stripe.Event;
     expect(deltaForStripeEvent(event)).toBeNull();
   });
+
+  it('resolves planId from the LIVE subscription price (portal plan change), not stale metadata', async () => {
+    // A plan switch in the Stripe billing portal swaps the price but never
+    // re-stamps our metadata. Entitlement must follow the price the
+    // subscription now carries, or the household keeps the old tier's caps.
+    process.env.STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = 'price_gh_annual';
+    try {
+      const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+      const delta = deltaForStripeEvent({
+        id: 'evt_portal_change',
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_1',
+            status: 'active',
+            metadata: { householdId: 'hh-1', planId: 'garden' }, // stale (original checkout)
+            items: {
+              data: [{ price: { id: 'price_gh_annual' }, current_period_end: 1_700_000_000 }],
+            },
+          },
+        },
+      } as unknown as Stripe.Event);
+      expect(delta?.fields.planId).toBe('greenhouse');
+    } finally {
+      delete process.env.STRIPE_PRICE_ID_GREENHOUSE_ANNUAL;
+    }
+  });
+
+  it('falls back to metadata planId when the subscription price is not one we sell (envs unset)', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const delta = deltaForStripeEvent({
+      id: 'evt_unknown_price',
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'active',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+          items: { data: [{ price: { id: 'price_we_dont_recognize' } }] },
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(delta?.fields.planId).toBe('garden');
+  });
 });
 
 describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
@@ -530,7 +574,54 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
     });
   });
 
-  it('omits interval when the Stripe metadata carries none (e.g. lifetime)', async () => {
+  it('records interval=lifetime for a one-time (mode=payment) Garden purchase', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_lifetime',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_activated', {
+      plan: 'garden',
+      interval: 'lifetime',
+    });
+  });
+
+  it('does NOT re-emit subscription_activated on a webhook REDELIVERY (already-recorded event)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const conditionErr = Object.assign(new Error('exists'), {
+      name: 'ConditionalCheckFailedException',
+    });
+    // Apply re-runs (idempotent), but the ledger Put reports the event id was
+    // already recorded → isNew=false → the conversion is NOT counted again.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}).mockRejectedValueOnce(conditionErr);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_redelivered',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'year' },
+          customer: 'cus_1',
+          subscription: 'sub_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('omits interval when the Stripe metadata carries none', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValue({});
     const { applyStripeEvent } = await import('../../../src/services/billing.js');
