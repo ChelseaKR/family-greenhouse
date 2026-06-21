@@ -120,7 +120,8 @@ export const chatService = {
   async streamMessage(
     message: string,
     conversationId: string | undefined,
-    onEvent?: (event: ChatStreamEvent) => void
+    onEvent?: (event: ChatStreamEvent) => void,
+    signal?: AbortSignal
   ): Promise<SendMessageResponse> {
     const url = getChatStreamUrl();
     if (!url) throw new Error('Chat streaming is not configured');
@@ -132,10 +133,15 @@ export const chatService = {
       ...buildAuthHeaders(useAuthStore.getState()),
     };
 
+    // `signal` aborts the in-flight POST when the caller unmounts, so an
+    // abandoned turn stops reading instead of running to completion. The reader
+    // loop below rejects with an AbortError, which the caller treats as a
+    // cancellation (no sync fallback) rather than a stream failure.
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({ message, conversationId }),
+      signal,
     });
     if (!response.ok || !response.body) {
       throw new Error(`Chat stream failed (${response.status})`);

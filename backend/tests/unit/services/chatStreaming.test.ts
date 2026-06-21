@@ -15,6 +15,7 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     ...actual,
     newConversationId: vi.fn(() => 'conv-stream-1'),
     appendMessage: vi.fn(async () => undefined),
+    appendMessagePair: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
     getBudget: vi.fn(async () => ({
       householdId: 'hh-1',
@@ -38,7 +39,11 @@ import {
   type BedrockChatResponse,
   type BedrockStreamDelta,
 } from '../../../src/services/chat/bedrock.js';
-import { appendMessage, incrementBudget } from '../../../src/services/chat/persistence.js';
+import {
+  appendMessage,
+  appendMessagePair,
+  incrementBudget,
+} from '../../../src/services/chat/persistence.js';
 import * as plantService from '../../../src/services/plantService.js';
 
 beforeEach(() => {
@@ -198,10 +203,16 @@ describe('streamChatTurn', () => {
       expect(done.result.assistantText).toBe('Confirm the card to create it.');
     }
 
-    // user, assistant tool_use, user tool_result, assistant final — exactly
-    // the sync path's persistence, with budget rolled up once.
+    // Exactly the sync path's persistence: user text + final assistant via
+    // appendMessage, and the assistant tool_use + tool_result pair landed
+    // atomically via appendMessagePair, with budget rolled up once.
     const roles = vi.mocked(appendMessage).mock.calls.map((c) => c[1].role);
-    expect(roles).toEqual(['user', 'assistant', 'user', 'assistant']);
+    expect(roles).toEqual(['user', 'assistant']);
+    const pairRoles = vi
+      .mocked(appendMessagePair)
+      .mock.calls[0].slice(1)
+      .map((r) => r.role);
+    expect(pairRoles).toEqual(['assistant', 'user']);
     const [budgetHousehold, budgetDelta] = vi.mocked(incrementBudget).mock.calls[0];
     expect(budgetHousehold).toBe('hh-1');
     expect(budgetDelta.inputTokens).toBe(330);
