@@ -508,8 +508,6 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // Best-effort + fire-and-forget: `capture` never throws and we `void` its
   // promise, so an analytics outage can NEVER 5xx the webhook (which would make
   // Stripe retry an already-applied delivery).
-  // NOTE: docs/analytics.md should be updated to list `subscription_activated`
-  // (server, confirmed) alongside `subscription_upgraded` (client, intent).
   const isActivationEvent =
     event.type === 'checkout.session.completed' || event.type === 'customer.subscription.created';
   const activatedPlan = delta.fields.planId;
