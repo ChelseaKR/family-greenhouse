@@ -198,7 +198,7 @@ function BillingIntervalToggle({
             onClick={() => onChange(opt.id)}
             className={clsx(
               'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-              value === opt.id ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+              value === opt.id ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600'
             )}
           >
             {opt.label}

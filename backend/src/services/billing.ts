@@ -6,7 +6,7 @@ import type Stripe from 'stripe';
 import { UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
-import { Plan, PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
+import { PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
 
@@ -511,8 +511,7 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // NOTE: docs/analytics.md should be updated to list `subscription_activated`
   // (server, confirmed) alongside `subscription_upgraded` (client, intent).
   const isActivationEvent =
-    event.type === 'checkout.session.completed' ||
-    event.type === 'customer.subscription.created';
+    event.type === 'checkout.session.completed' || event.type === 'customer.subscription.created';
   const activatedPlan = delta.fields.planId;
   if (
     isActivationEvent &&
@@ -527,29 +526,9 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   }
 }
 
-export function planSummary(plan: Plan): {
-  id: PlanId;
-  name: string;
-  description: string;
-  monthlyPrice: number;
-  annualPrice: number | null;
-  lifetimePrice: number | null;
-  maxPlants: number;
-  maxMembers: number;
-} {
-  return {
-    id: plan.id,
-    name: plan.name,
-    description: plan.description,
-    monthlyPrice: plan.monthlyPrice,
-    // null (not undefined) so it survives JSON serialization as an explicit
-    // "no annual option" signal the client can branch on.
-    annualPrice: plan.annualPrice ?? null,
-    // Same null-not-undefined contract: null means "no lifetime option".
-    lifetimePrice: plan.lifetimePrice ?? null,
-    maxPlants: plan.maxPlants,
-    maxMembers: plan.maxMembers,
-  };
-}
+// planSummary moved to models/plans.ts so pure consumers (the dev mock
+// server) can import it without dragging in this module's DynamoDB client,
+// which requires TABLE_NAME at load. Re-exported to keep callers unchanged.
+export { planSummary } from '../models/plans.js';
 
 export const ALL_PLANS = Object.values(PLANS);

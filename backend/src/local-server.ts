@@ -40,8 +40,7 @@ import {
   createSitterLinkSchema,
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
-import { PLANS } from './models/plans.js';
-import { planSummary } from './services/billing.js';
+import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
 
 // Hard refusal to boot in production — this server has no real auth, no
