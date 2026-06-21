@@ -37,7 +37,10 @@
     "typescript-eslint": "^8.61.1"
   },
   "lint-staged": {
-    "{backend,frontend}/src/**/*.{ts,tsx}": [
+    "backend/src/**/*.ts": [
+      "eslint --fix"
+    ],
+    "frontend/src/**/*.{ts,tsx}": [
       "eslint --fix"
     ],
     "*.{ts,tsx,json,md,yml,yaml}": [
