@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { plantService } from '@/services/plantService';
 import { getErrorMessage } from '@/services/api';
@@ -19,9 +19,18 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
   const householdId = useActiveHouseholdId();
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  // Cancels an in-flight upload when the component unmounts (navigating away
+  // mid-upload) so the PUT is aborted and the confirm step never fires for an
+  // abandoned upload.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
+      abortRef.current?.abort(); // cancel any prior in-flight upload
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const { signal } = controller;
       // Downscale client-side (max 1600px long edge, WebP ~0.8 with JPEG
       // fallback). If the canvas pipeline fails we degrade gracefully and
       // upload the original — the 5 MiB guard below applies to whichever
@@ -36,7 +45,9 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
       // must use the exact same Content-Type header (backend contract).
       const contentType = blob.type || file.type;
       const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(plantId, contentType);
-      await plantService.uploadImage(uploadUrl, blob, contentType, setProgress);
+      await plantService.uploadImage(uploadUrl, blob, contentType, setProgress, signal);
+      // Don't confirm an upload the user already navigated away from.
+      if (signal.aborted) throw new DOMException('Upload aborted', 'AbortError');
       await plantService.confirmImageUpload(plantId, imageUrl);
       return imageUrl;
     },
@@ -46,6 +57,9 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
       setProgress(0);
     },
     onError: (err) => {
+      // A cancelled upload (unmount, or a newer upload superseding this one)
+      // isn't a failure to surface.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(getErrorMessage(err));
       setProgress(0);
     },

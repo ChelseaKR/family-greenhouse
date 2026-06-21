@@ -69,6 +69,10 @@ export function MemberVacation({
       invalidate();
       setFormOpen(false);
     },
+    // Without this a rejected setVacation (e.g. endDate before startDate, or a
+    // non-admin setting cover for someone else → 403) failed silently: the form
+    // just stayed open with no feedback. Mirror cancelMutation's toast.
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const cancelMutation = useMutation({
