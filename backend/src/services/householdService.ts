@@ -53,18 +53,47 @@ export class LastAdminError extends Error {
 }
 
 /**
- * Guard: throw LastAdminError if removing `userId`'s admin rights (by demotion
- * or removal) would leave a multi-member household with zero admins. A
- * single-member household is exempt (a solo admin managing only themselves is
- * fine — that's the account-deletion / leave path).
+ * Resolve the last-admin guard for demoting/removing `userId`.
+ *
+ * Throws LastAdminError if `userId` is the sole admin of a multi-member
+ * household (a single-member household is exempt — that's the account-deletion
+ * / leave path). Otherwise returns the userId of ANOTHER admin to PIN via a
+ * transaction ConditionCheck (`guardAdminId`), or null when no guard is needed
+ * (solo household, or the target isn't an admin so the operation can't reduce
+ * the admin count).
+ *
+ * The read-only check alone is a TOCTOU: two admins demoting/removing each
+ * other concurrently both pass the read, then both writes land and the
+ * household drops to zero admins. Pinning a surviving admin's role='admin'
+ * inside the write transaction closes that — the second to commit is cancelled
+ * (→ LastAdminError) instead of leaving the household admin-less. For 3+ admins
+ * a concurrent multi-demote can spuriously fail the pin; that is the safe
+ * direction (a retry re-reads and picks another surviving admin).
  */
-async function assertNotLastAdmin(householdId: string, userId: string): Promise<void> {
+async function resolveLastAdminGuard(
+  householdId: string,
+  userId: string
+): Promise<{ members: HouseholdMember[]; guardAdminId: string | null }> {
   const members = await getHouseholdMembers(householdId);
-  if (members.length <= 1) return;
+  if (members.length <= 1) return { members, guardAdminId: null };
   const admins = members.filter((m) => m.role === 'admin');
-  if (admins.length === 1 && admins[0].userId === userId) {
-    throw new LastAdminError();
-  }
+  if (!admins.some((m) => m.userId === userId)) return { members, guardAdminId: null };
+  const otherAdmins = admins.filter((m) => m.userId !== userId);
+  if (otherAdmins.length === 0) throw new LastAdminError();
+  return { members, guardAdminId: otherAdmins[0].userId };
+}
+
+/** Transaction item that asserts `guardAdminId` is still an admin at commit. */
+function survivingAdminConditionCheck(householdId: string, guardAdminId: string) {
+  return {
+    ConditionCheck: {
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: `MEMBER#${guardAdminId}` },
+      ConditionExpression: '#role = :admin',
+      ExpressionAttributeNames: { '#role': 'role' },
+      ExpressionAttributeValues: { ':admin': 'admin' },
+    },
+  };
 }
 
 /**
@@ -139,24 +168,45 @@ export async function setMemberRole(
   role: 'admin' | 'member'
 ): Promise<HouseholdMember | null> {
   // Service-layer last-admin guard (L1): demoting the lone admin of a
-  // multi-member household would lock it out of admin entirely.
-  if (role === 'member') {
-    await assertNotLastAdmin(householdId, userId);
+  // multi-member household would lock it out of admin entirely. Only a
+  // demotion can reduce the admin count.
+  const guard = role === 'member' ? await resolveLastAdminGuard(householdId, userId) : null;
+
+  const updateTarget = {
+    TableName: TABLE_NAME,
+    Key: { PK: `HOUSEHOLD#${householdId}`, SK: `MEMBER#${userId}` },
+    UpdateExpression: 'SET #role = :role',
+    ExpressionAttributeNames: { '#role': 'role' },
+    ExpressionAttributeValues: { ':role': role },
+    ConditionExpression: 'attribute_exists(PK)',
+  };
+
+  if (guard?.guardAdminId) {
+    // Atomic demote: pin a surviving admin so a concurrent demote of THAT
+    // admin can't slip the household to zero admins (TransactWrite has no
+    // ReturnValues, so the updated member is rebuilt from the pre-read).
+    try {
+      await dynamodb.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            { Update: updateTarget },
+            survivingAdminConditionCheck(householdId, guard.guardAdminId),
+          ],
+        })
+      );
+    } catch (err) {
+      if (transactCancellationReasons(err).some((r) => r?.Code === 'ConditionalCheckFailed')) {
+        throw new LastAdminError();
+      }
+      throw err;
+    }
+    invalidateMembership(userId, householdId);
+    const target = guard.members.find((m) => m.userId === userId);
+    return target ? { ...target, role } : null;
   }
 
   const result = await dynamodb.send(
-    new UpdateCommand({
-      TableName: TABLE_NAME,
-      Key: {
-        PK: `HOUSEHOLD#${householdId}`,
-        SK: `MEMBER#${userId}`,
-      },
-      UpdateExpression: 'SET #role = :role',
-      ExpressionAttributeNames: { '#role': 'role' },
-      ExpressionAttributeValues: { ':role': role },
-      ReturnValues: 'ALL_NEW',
-      ConditionExpression: 'attribute_exists(PK)',
-    })
+    new UpdateCommand({ ...updateTarget, ReturnValues: 'ALL_NEW' })
   );
 
   if (!result.Attributes) return null;
@@ -462,40 +512,47 @@ export async function removeMember(householdId: string, userId: string): Promise
   // Service-layer last-admin guard (L1): removing the lone admin of a
   // multi-member household would lock it out of admin entirely. Solo-member
   // households are exempt (the leave / account-deletion path).
-  await assertNotLastAdmin(householdId, userId);
+  const guard = await resolveLastAdminGuard(householdId, userId);
 
   const memberKey = {
     PK: `HOUSEHOLD#${householdId}`,
     SK: `MEMBER#${userId}`,
   };
+  const transactItems: object[] = [
+    {
+      Delete: {
+        TableName: TABLE_NAME,
+        Key: memberKey,
+        ConditionExpression: 'attribute_exists(PK)',
+      },
+    },
+    {
+      Update: {
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :one) - :one',
+        ConditionExpression:
+          'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount > :zero)',
+        ExpressionAttributeValues: { ':one': 1, ':zero': 0 },
+      },
+    },
+  ];
+  // Removing an admin: pin a surviving admin (last item) so a concurrent
+  // demote of THAT admin can't drop the household to zero admins.
+  const guardIndex = guard.guardAdminId ? transactItems.length : -1;
+  if (guard.guardAdminId) {
+    transactItems.push(survivingAdminConditionCheck(householdId, guard.guardAdminId));
+  }
   try {
-    await dynamodb.send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Delete: {
-              TableName: TABLE_NAME,
-              Key: memberKey,
-              ConditionExpression: 'attribute_exists(PK)',
-            },
-          },
-          {
-            Update: {
-              TableName: TABLE_NAME,
-              Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
-              UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :one) - :one',
-              ConditionExpression:
-                'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount > :zero)',
-              ExpressionAttributeValues: { ':one': 1, ':zero': 0 },
-            },
-          },
-        ],
-      })
-    );
+    await dynamodb.send(new TransactWriteCommand({ TransactItems: transactItems }));
   } catch (err) {
     const reasons = transactCancellationReasons(err);
     if (reasons.length === 0) {
       throw err; // not a cancellation — propagate
+    }
+    // The surviving-admin pin failed → removing this admin would leave zero.
+    if (guardIndex >= 0 && reasons[guardIndex]?.Code === 'ConditionalCheckFailed') {
+      throw new LastAdminError();
     }
     if (reasons[0]?.Code !== 'ConditionalCheckFailed') {
       // Only the counter floor blocked the transaction; the member row still
