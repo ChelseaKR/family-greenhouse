@@ -17,6 +17,10 @@ export interface MetaTags {
   description?: string;
   /** Path under /og-cards/ for a per-post OG image, if shipped. */
   ogImage?: string;
+  /** Absolute canonical URL for this route. Sets <link rel="canonical"> + og:url
+   *  so Google (which renders the SPA) attributes the page to the right URL
+   *  instead of guessing — important for the indexable marketing routes. */
+  canonical?: string;
   /** Optional JSON-LD payload (Article, FAQ, etc.). The shape isn't
    *  validated here — caller is responsible for emitting valid schema.org. */
   jsonLd?: Record<string, unknown>;
@@ -33,6 +37,25 @@ function setMeta(name: string, content: string, attr: 'name' | 'property' = 'nam
   const tag = document.createElement('meta');
   tag.setAttribute(attr, name);
   tag.setAttribute('content', content);
+  document.head.appendChild(tag);
+  return () => tag.remove();
+}
+
+/** Set (or create) a <link rel="canonical">, restoring the prior href on
+ *  cleanup so leaving the route doesn't leak its canonical onto the next. */
+function setCanonical(href: string): () => void {
+  const existing = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  if (existing) {
+    const previous = existing.getAttribute('href');
+    existing.setAttribute('href', href);
+    return () => {
+      if (previous === null) existing.removeAttribute('href');
+      else existing.setAttribute('href', previous);
+    };
+  }
+  const tag = document.createElement('link');
+  tag.setAttribute('rel', 'canonical');
+  tag.setAttribute('href', href);
   document.head.appendChild(tag);
   return () => tag.remove();
 }
@@ -61,6 +84,10 @@ export function useMetaTags(meta: MetaTags): void {
     if (meta.ogImage) {
       cleanups.push(setMeta('og:image', meta.ogImage, 'property'));
     }
+    if (meta.canonical) {
+      cleanups.push(setCanonical(meta.canonical));
+      cleanups.push(setMeta('og:url', meta.canonical, 'property'));
+    }
     if (jsonLdKey) {
       // JSON-LD goes in a dedicated <script type="application/ld+json">.
       // We tag it with a data attribute we own so we can clean up on
@@ -76,5 +103,5 @@ export function useMetaTags(meta: MetaTags): void {
     return () => {
       for (const cleanup of cleanups) cleanup();
     };
-  }, [meta.title, meta.description, meta.ogImage, jsonLdKey]);
+  }, [meta.title, meta.description, meta.ogImage, meta.canonical, jsonLdKey]);
 }

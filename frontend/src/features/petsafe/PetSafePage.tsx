@@ -5,6 +5,7 @@ import { Footer } from '@/components/Footer';
 import { Alert } from '@/components/Alert';
 import { Input } from '@/components/Input';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { siteUrl } from '@/config/site';
 import { useDebounce } from '@/hooks/useDebounce';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
 
@@ -23,6 +24,7 @@ export function PetSafePage() {
     title: 'Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker',
     description:
       'Free, no-signup checker: type a houseplant name and see whether it’s toxic to cats and dogs, in plain language. Based on the ASPCA’s plant safety data.',
+    canonical: siteUrl('/pet-safe'),
   });
 
   const [query, setQuery] = useState('');

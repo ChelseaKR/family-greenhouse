@@ -2,6 +2,7 @@
   "name": "frontend",
   "private": true,
   "version": "0.1.0",
+  "description": "Family Greenhouse web app — React + TypeScript + Vite PWA for collaborative household plant care.",
   "license": "Elastic-2.0",
   "type": "module",
   "scripts": {

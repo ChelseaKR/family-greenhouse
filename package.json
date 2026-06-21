@@ -3,7 +3,33 @@
   "version": "0.1.0",
   "license": "Elastic-2.0",
   "private": true,
-  "description": "A collaborative plant care management application for families",
+  "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person across browser/email/SMS, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
+  "keywords": [
+    "plant-care",
+    "houseplants",
+    "gardening",
+    "plant-tracker",
+    "plant-reminder",
+    "watering-reminder",
+    "household",
+    "family",
+    "pwa",
+    "react",
+    "typescript",
+    "serverless",
+    "aws-lambda",
+    "dynamodb",
+    "terraform"
+  ],
+  "homepage": "https://familygreenhouse.net",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChelseaKR/family-greenhouse.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ChelseaKR/family-greenhouse/issues"
+  },
+  "author": "Chelsea Kelly-Reif",
   "workspaces": [
     "frontend",
     "backend"

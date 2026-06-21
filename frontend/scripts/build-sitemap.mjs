@@ -25,7 +25,11 @@ const POSTS = join(ROOT, 'src', 'features', 'blog', 'posts', 'index.ts');
 const CARE = join(ROOT, 'src', 'features', 'care', 'careGuides.ts');
 const OUT = join(ROOT, 'public', 'sitemap.xml');
 
-const SITE = process.env.SITE_URL || 'https://app.familygreenhouse.com';
+// Canonical production origin. MUST match src/config/site.ts (SITE_URL) — this
+// is a vanilla Node script so it can't import the TS const. The prior default
+// (app.familygreenhouse.com) doesn't resolve, so every generated <loc> pointed
+// search engines at a dead domain.
+const SITE = process.env.SITE_URL || 'https://familygreenhouse.net';
 
 const STATIC_ROUTES = [
   { path: '/', priority: 1.0, changefreq: 'weekly' },

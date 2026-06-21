@@ -1,8 +1,18 @@
 # Family Greenhouse
 
-A collaborative plant-care app for households. People share a household, add plants, schedule recurring tasks (water, fertilize, prune…), and get reminders across browser, email, and SMS so nobody has to ask "did you water the Monstera?" ever again.
+[![CI](https://github.com/ChelseaKR/family-greenhouse/actions/workflows/ci.yml/badge.svg)](https://github.com/ChelseaKR/family-greenhouse/actions/workflows/ci.yml)
+[![Live](https://img.shields.io/badge/live-familygreenhouse.net-639922)](https://familygreenhouse.net)
+[![License: Elastic-2.0](https://img.shields.io/badge/license-Elastic--2.0-2f6f4e)](LICENSE)
+[![PWA](https://img.shields.io/badge/PWA-installable-639922)](https://familygreenhouse.net)
+![React](https://img.shields.io/badge/React-19-61dafb)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+![AWS](https://img.shields.io/badge/AWS-Lambda%20%2B%20DynamoDB%20%2B%20Cognito-ff9900)
 
-Built with React + TypeScript on the frontend and AWS Lambda + DynamoDB + Cognito on the backend, plus a local Express dev server that mirrors the API surface so you can develop entirely offline.
+**A shared plant-care journal for the whole household** — a collaborative houseplant tracker with per-plant watering schedules, recurring care tasks (water, fertilize, prune…), and reminders that find the right person across browser, email, and SMS, so nobody has to ask "did you water the Monstera?" ever again.
+
+🌿 **Live demo:** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
+
+Built with React + TypeScript on the frontend and AWS Lambda + DynamoDB (single-table) + Cognito on the backend, plus a local Express dev server that mirrors the API surface so you can develop entirely offline — no AWS account or third-party keys required to run it locally.
 
 > _In loving memory of my mom, Joyce - who taught us to keep growing. 🌱_
 

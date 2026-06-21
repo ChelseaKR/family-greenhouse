@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { BrandMark } from '@/components/BrandMark';
 import { Footer } from '@/components/Footer';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { siteUrl } from '@/config/site';
 import { PricingGrid } from './PricingGrid';
 
 /**
@@ -16,6 +17,7 @@ export function PricingPage() {
     title: 'Pricing — Family Greenhouse',
     description:
       'Family Greenhouse pricing: free for up to 10 plants, paid plans for larger households and households that want care analytics, API access, and unlimited plants.',
+    canonical: siteUrl('/pricing'),
   });
 
   return (

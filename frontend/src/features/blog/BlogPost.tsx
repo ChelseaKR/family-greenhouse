@@ -5,6 +5,7 @@ import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { findPost, POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { SITE_URL } from '@/config/site';
 
 /**
  * Single-post page. The post itself is a self-contained TSX component;
@@ -20,6 +21,7 @@ export function BlogPost() {
       ? {
           title: `${post.title} — Family Greenhouse`,
           description: post.description,
+          canonical: `${SITE_URL}/blog/${post.slug}`,
           // Article schema makes the post eligible for Google's article
           // rich-results treatment. We don't have author photos or a
           // publisher logo URL set up yet — those are nice-to-haves that
@@ -37,12 +39,12 @@ export function BlogPost() {
               name: 'Family Greenhouse',
               logo: {
                 '@type': 'ImageObject',
-                url: 'https://app.familygreenhouse.com/brand/icon-512.png',
+                url: `${SITE_URL}/brand/icon-512.png`,
               },
             },
             mainEntityOfPage: {
               '@type': 'WebPage',
-              '@id': `https://app.familygreenhouse.com/blog/${post.slug}`,
+              '@id': `${SITE_URL}/blog/${post.slug}`,
             },
           },
         }

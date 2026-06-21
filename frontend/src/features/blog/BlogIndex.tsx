@@ -3,6 +3,7 @@ import { BrandMark } from '@/components/BrandMark';
 import { Footer } from '@/components/Footer';
 import { POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { siteUrl } from '@/config/site';
 
 const PAGE_TITLE = 'Blog — Family Greenhouse';
 const PAGE_DESCRIPTION =
@@ -17,6 +18,7 @@ export function BlogIndex() {
   useMetaTags({
     title: PAGE_TITLE,
     description: PAGE_DESCRIPTION,
+    canonical: siteUrl('/blog'),
   });
 
   return (

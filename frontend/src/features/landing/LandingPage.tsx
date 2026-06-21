@@ -326,7 +326,7 @@ function AppMockup({ className }: { className?: string }) {
               <div className="w-3 h-3 rounded-full bg-primary-400/80" />
             </div>
             <div className="flex-1 text-center text-sm text-primary-900/70">
-              app.familygreenhouse.com
+              familygreenhouse.net
             </div>
           </div>
 
