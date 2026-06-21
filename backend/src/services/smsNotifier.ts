@@ -27,8 +27,12 @@ export interface SmsMessage {
  * explicit flag rather than inferring from credentials because SNS direct-
  * to-phone is not free and we don't want a misconfigured staging stack to
  * burn through real money on test runs.
+ *
+ * Returns `true` only when a real send was attempted; a dry-run returns
+ * `false` so the reminder fan-out doesn't treat an unconfigured channel as a
+ * delivery and burn the day's slot.
  */
-export async function sendSms(msg: SmsMessage): Promise<void> {
+export async function sendSms(msg: SmsMessage): Promise<boolean> {
   if (!E164.test(msg.to)) {
     throw new Error(`Phone number must be E.164 format, got: ${msg.to}`);
   }
@@ -37,7 +41,7 @@ export async function sendSms(msg: SmsMessage): Promise<void> {
 
   if (process.env.SMS_NOTIFICATIONS_ENABLED !== '1') {
     logger.info({ msg: 'sms_dry_run', to: msg.to, body: text }, 'sms_dry_run');
-    return;
+    return false;
   }
 
   await sns().send(
@@ -54,4 +58,5 @@ export async function sendSms(msg: SmsMessage): Promise<void> {
       },
     })
   );
+  return true;
 }
