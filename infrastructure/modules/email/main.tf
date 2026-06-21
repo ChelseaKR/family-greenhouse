@@ -51,15 +51,24 @@ resource "aws_route53_record" "dkim" {
   records = ["${aws_ses_domain_dkim.main.dkim_tokens[count.index]}.dkim.amazonses.com"]
 }
 
-# SPF. Without a custom MAIL FROM domain the Return-Path aligns with
-# amazonses.com (so SPF won't DMARC-align), but the record still helps
-# receivers verify outbound mail belongs to SES.
+# Apex TXT record. Holds TWO things because both live at the zone apex as TXT
+# and must therefore share one record set:
+#   1. The SES SPF policy. Without a custom MAIL FROM domain the Return-Path
+#      aligns with amazonses.com (so SPF won't DMARC-align), but the record
+#      still helps receivers verify outbound mail belongs to SES.
+#   2. The Google Search Console domain-verification token. Managed here (not
+#      just via a one-off CLI change) so a terraform apply can't silently drop
+#      it and un-verify Search Console. Site-verification tokens are public, so
+#      it's fine in source.
 resource "aws_route53_record" "spf" {
   zone_id = data.aws_route53_zone.primary.zone_id
   name    = var.domain_name
   type    = "TXT"
   ttl     = 600
-  records = ["v=spf1 include:amazonses.com ~all"]
+  records = [
+    "v=spf1 include:amazonses.com ~all",
+    "google-site-verification=cE-VHXfwES1qyQGDQ4S6gLFE4mxlCPo4IYVA1NZW8c0",
+  ]
 }
 
 # DMARC. Start at `p=quarantine` so misaligned mail goes to spam rather than
