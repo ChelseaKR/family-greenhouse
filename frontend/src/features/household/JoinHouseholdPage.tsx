@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { householdService } from '@/services/householdService';
+import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -30,10 +31,27 @@ export function JoinHouseholdPage() {
 
   const joinMutation = useMutation({
     mutationFn: () => householdService.joinWithInvite(inviteCode!),
-    onSuccess: (household) => {
+    onSuccess: async (household) => {
       track('household_joined');
       track('invite_accepted');
       setHousehold(household.id, 'member');
+      // joinHousehold just wrote our `custom:household_id` claim to Cognito,
+      // but the current token predates it — and requireHousehold returns a 403
+      // (not a 401), so the auth interceptor's refresh-on-401 never kicks in.
+      // Without refreshing here, the very next request (e.g. adding a plant)
+      // reaches the backend with no household context and fails with
+      // "User must belong to a household". Mirror HouseholdOnboarding's
+      // first-household flow and refresh now so the token carries the claim.
+      // Best-effort: if it fails, the interceptor still recovers on a 401.
+      const { refreshToken, setTokens } = useAuthStore.getState();
+      if (refreshToken) {
+        try {
+          const tokens = await authService.refreshToken(refreshToken);
+          setTokens(tokens.idToken, tokens.accessToken, tokens.refreshToken);
+        } catch {
+          // fall through — the interceptor's on-demand refresh catches up.
+        }
+      }
       navigate('/');
     },
     onError: (err) => {
