@@ -17,3 +17,9 @@ frontend/vite.config.d.ts
 # (*x* → _x_) would silently desync the committed embeddings and trip the
 # corpus drift guard. Treat them as data, not formatted source.
 backend/src/data/plant-care-corpus
+
+# Vendored portfolio-standards — upstream content synced verbatim from
+# ChelseaKR/portfolio-standards by Renovate (see renovate.json + the pinned
+# docs/standards/.standards-version). Not authored here; reformatting it would
+# diverge from upstream and churn the version-sync diff. Treat as vendored.
+docs/standards
