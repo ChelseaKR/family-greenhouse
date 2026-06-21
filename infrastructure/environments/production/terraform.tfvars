@@ -34,12 +34,13 @@ identify_metering_enabled = "1"
 # SECRET key + webhook secret are NOT here — they come from the STRIPE_SECRET_KEY
 # / STRIPE_WEBHOOK_SECRET GitHub Actions secrets via TF_VAR (see cd-production.yml).
 #
-# ⚠️ These are TEST-MODE ids (sk_test world) for verifying the flow end-to-end.
-# Before charging real money, recreate the products in Stripe LIVE mode and
-# swap in the live `price_…` ids here AND the live sk_live_/whsec_ in the
-# GitHub secrets.
-stripe_price_id_garden            = "price_1Tkur4AhnUt8CMG0b07WYF1t" # Garden monthly ($4.99/mo) — TEST
-stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL" # Garden annual ($39.99/yr) — TEST
-stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO" # Garden lifetime ($149 one-time) — TEST
+# ⚠️ Price ids are identical-looking in test and live mode (both `price_…`), so
+# the mode here MUST match the secret key's mode: live prices need an sk_live_
+# key, test prices need sk_test_. Mixing them fails at checkout. Live prices +
+# live keys charge real cards (the 4242 test card is rejected); test prices +
+# sk_test_ let you verify with 4242. These are LIVE-mode prices.
+stripe_price_id_garden            = "price_1Tkur4AhnUt8CMG0b07WYF1t" # Garden monthly ($4.99/mo)
+stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL" # Garden annual ($39.99/yr)
+stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO" # Garden lifetime ($149 one-time)
 stripe_price_id_greenhouse        = ""                               # Greenhouse monthly ($9.99/mo)
 stripe_price_id_greenhouse_annual = ""                               # Greenhouse annual ($79.99/yr)
