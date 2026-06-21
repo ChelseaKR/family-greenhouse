@@ -220,12 +220,17 @@ export const plantService = {
     uploadUrl: string,
     blob: Blob,
     contentType: string,
-    onProgress?: (fraction: number) => void
+    onProgress?: (fraction: number) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     // We use XMLHttpRequest rather than fetch because fetch lacks built-in
     // upload-progress events; if the user is uploading a multi-megabyte image
     // over a slow connection we want to show a progress bar.
     await new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException('Upload aborted', 'AbortError'));
+        return;
+      }
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', uploadUrl);
       // Must match the contentType the presign request was made with.
@@ -240,6 +245,10 @@ export const plantService = {
         else reject(new Error(`Upload failed with status ${xhr.status}`));
       };
       xhr.onerror = () => reject(new Error('Network error during upload'));
+      // Abort the in-flight PUT when the caller cancels (e.g. unmount) so an
+      // abandoned upload doesn't run to completion and confirm server-side.
+      xhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'));
+      signal?.addEventListener('abort', () => xhr.abort(), { once: true });
       xhr.send(blob);
     });
   },

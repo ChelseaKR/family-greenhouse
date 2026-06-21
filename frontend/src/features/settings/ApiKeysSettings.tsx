@@ -75,6 +75,10 @@ export function ApiKeysSettings() {
       queryClient.invalidateQueries({ queryKey: ['api-keys', householdId] });
       setRevokeId(null);
     },
+    // Without this a failed revoke (500/network) left the dialog open with only
+    // a cleared spinner and no message — the key stayed listed and the user
+    // assumed it worked. Close the dialog and surface the error below.
+    onError: () => setRevokeId(null),
   });
 
   const handleCopy = async () => {
@@ -187,6 +191,11 @@ export function ApiKeysSettings() {
             description="Revoking is immediate — clients using the key will start getting 401 on the next request."
           />
         </div>
+        {revokeMutation.isError && (
+          <Alert variant="error" className="mx-6 mt-4">
+            {getErrorMessage(revokeMutation.error)}
+          </Alert>
+        )}
         {!keysQuery.data || keysQuery.data.length === 0 ? (
           <p className="p-6 text-sm text-gray-600">No keys yet.</p>
         ) : (

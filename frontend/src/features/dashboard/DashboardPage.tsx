@@ -116,6 +116,10 @@ export function DashboardPage() {
     mutationFn: (taskId: string) => taskService.completeTask(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      // Completing a task advances the plant's care state; refresh plants too
+      // (TasksPage already invalidates both) so the dashboard plant grid and
+      // each plant card's derived care status don't go stale.
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       toast.success('Task completed');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
