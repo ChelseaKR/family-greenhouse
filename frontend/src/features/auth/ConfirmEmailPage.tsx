@@ -3,7 +3,6 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/authService';
 import { track } from '@/services/analytics';
 import { getErrorMessage } from '@/services/api';
@@ -23,13 +22,12 @@ export function ConfirmEmailPage() {
   useDocumentTitle('Confirm email');
   const navigate = useNavigate();
   const location = useLocation();
-  const { setUser, setTokens } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  const email = (location.state as { email?: string })?.email;
+  const { email, redirect } = (location.state as { email?: string; redirect?: string }) ?? {};
 
   const {
     register,
@@ -64,14 +62,19 @@ export function ConfirmEmailPage() {
     setIsLoading(true);
 
     try {
-      const response = await authService.confirmEmail({
-        email,
-        code: data.code,
-      });
-      setTokens(response.idToken, response.accessToken, response.refreshToken);
-      setUser(response.user);
+      // Cognito's confirmSignUp returns no tokens — the user must sign in
+      // afterward. (The old code read undefined tokens off this response and
+      // wrote a half-authenticated session, then bounced off /onboarding's
+      // ProtectedRoute back to /login anyway.) Send them to /login with their
+      // email prefilled, carrying any post-auth redirect (e.g. /join/CODE) so
+      // an invite-accept flow resumes after they sign in.
+      await authService.confirmEmail({ email, code: data.code });
       track('signup_completed');
-      navigate('/onboarding');
+      const safeRedirect =
+        redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : null;
+      navigate(safeRedirect ? `/login?redirect=${encodeURIComponent(safeRedirect)}` : '/login', {
+        state: { email, justConfirmed: true },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

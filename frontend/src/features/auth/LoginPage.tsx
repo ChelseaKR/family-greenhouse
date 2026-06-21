@@ -47,12 +47,18 @@ export function LoginPage() {
     '/dashboard';
   const loginSchema = useMemo(() => makeLoginSchema(t), [t]);
 
+  // After email confirmation the confirm page sends the user here with their
+  // email + a justConfirmed flag (Cognito confirmSignUp issues no tokens, so a
+  // sign-in is required). Prefill the email and show a success notice.
+  const confirmState = location.state as { email?: string; justConfirmed?: boolean } | null;
+
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: { email: confirmState?.email ?? '' },
   });
 
   const onSubmit = async (data: LoginFormData) => {
@@ -87,6 +93,11 @@ export function LoginPage() {
       {error && (
         <Alert variant="error" className="mb-6">
           {error}
+        </Alert>
+      )}
+      {confirmState?.justConfirmed && !error && (
+        <Alert variant="success" className="mb-6">
+          Email confirmed — sign in to finish setting up your greenhouse.
         </Alert>
       )}
 

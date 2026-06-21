@@ -11,7 +11,7 @@ import { test, expect } from '@playwright/test';
  * re-runs against a sticky local server.
  */
 test.describe('Register flow', () => {
-  test('register → confirm with correct code → land on onboarding/dashboard', async ({ page }) => {
+  test('register → confirm → sign in → land on onboarding', async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
     page.on('console', (msg) => {
@@ -40,7 +40,17 @@ test.describe('Register flow', () => {
     await page.getByLabel(/confirmation code/i).fill('123456');
     await page.getByRole('button', { name: /confirm email/i }).click();
 
-    // New users without a household are kicked into the onboarding wizard.
+    // Cognito's confirmSignUp mints NO tokens, so confirmation routes to the
+    // sign-in page — email prefilled, with a "confirmed" notice — rather than
+    // writing a half-authenticated session and bouncing off a guarded route.
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByText(/email confirmed/i)).toBeVisible();
+    await expect(page.getByLabel(/email address/i)).toHaveValue(email);
+
+    // Sign in to finish: a household-less new user is then routed into the
+    // onboarding wizard (App.tsx redirects when hasHousehold is false).
+    await page.getByLabel(/password/i).fill('Password123');
+    await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/onboarding/);
     expect(consoleErrors).toEqual([]);
   });
