@@ -8,6 +8,7 @@ import { Card, CardHeader } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { calendarDaysBetween } from '@/utils/date';
 import clsx from 'clsx';
 
 /**
@@ -47,11 +48,10 @@ function isOverdue(nextDue: string, now = new Date()): boolean {
 }
 
 function daysOverdue(nextDue: string, now = new Date()): number {
-  const due = new Date(nextDue);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return Math.floor((today.getTime() - due.getTime()) / (24 * 60 * 60 * 1000));
+  // Calendar days between the due date and today, DST-safe (raw local-midnight
+  // subtraction loses a day across a spring-forward boundary). Callers only
+  // pass overdue tasks, so this is >= 1; clamp defensively anyway.
+  return Math.max(0, calendarDaysBetween(new Date(nextDue), now));
 }
 export function AnalyticsPage() {
   useDocumentTitle('Analytics');

@@ -164,6 +164,27 @@ export function AddPlantPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: AddPlantFormData) => {
+      // Discriminate the first-plant activation event from subsequent adds
+      // using the AUTHORITATIVE pre-create list, not just whatever happens to
+      // be in cache. A deep-link or "Propagate cutting" entry to /plants/new
+      // never loaded the Plants list, so reading getQueryData alone would
+      // mislabel an existing user's Nth plant as their first and inflate the
+      // funnel. Use the cache when warm; only the cold paths fetch. Best-effort
+      // — analytics must never block plant creation.
+      let wasFirstPlant = false;
+      try {
+        const priorPlants =
+          queryClient.getQueryData<unknown[]>(['plants', householdId]) ??
+          ((await queryClient.ensureQueryData({
+            queryKey: ['plants', householdId],
+            queryFn: () => plantService.getPlants('active'),
+          })) as unknown[]);
+        wasFirstPlant = priorPlants.length === 0;
+      } catch {
+        // Unknown (list fetch failed) → keep the safe default (false) rather
+        // than risk over-counting 'first'. Analytics never blocks creation.
+      }
+
       const tags = (data.tags ?? '')
         .split(',')
         .map((t) => t.trim())
@@ -211,15 +232,10 @@ export function AddPlantPage() {
           // Silent failure is intentional — plant is already saved.
         }
       }
-      return plant;
+      return { plant, wasFirstPlant };
     },
-    onSuccess: (plant) => {
-      // Read pre-create plants from cache to discriminate the first-plant
-      // event (a critical funnel step) from subsequent ones.
-      const existing = queryClient.getQueryData(['plants', householdId]) as unknown[] | undefined;
-      track('plant_added', {
-        ordinal: existing && existing.length > 0 ? 'subsequent' : 'first',
-      });
+    onSuccess: ({ plant, wasFirstPlant }) => {
+      track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       toast.success(`${plant.name} added`);
       navigate(`/plants/${plant.id}`);
