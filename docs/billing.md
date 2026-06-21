@@ -90,17 +90,37 @@ For this to work in API Gateway:
 
 ## Setup checklist
 
-Before you can take payments:
+The **frontend needs no Stripe config** — checkout is a server-driven redirect
+(no publishable key, no Stripe.js). Everything is the seven backend env vars,
+which reach every billing Lambda through Terraform (`modules/api` wires them
+into the Lambda environment):
 
-1. Create a Stripe account, switch to test mode, then live mode
-2. Create the **products** (Seedling/Garden/Greenhouse) in Stripe — Seedling is metadata-only since it's free; the other two get monthly prices
-3. Copy the **price IDs** for Garden and Greenhouse → set `STRIPE_PRICE_ID_GARDEN` and `STRIPE_PRICE_ID_GREENHOUSE` on the backend Lambdas
-4. Set `STRIPE_SECRET_KEY` on the backend
-5. Create a Stripe webhook endpoint pointing at `https://api.family-greenhouse.example.com/billing/webhook`, subscribe it to the four events above
-6. Copy the webhook signing secret → set `STRIPE_WEBHOOK_SECRET` on the webhook handler Lambda specifically (not on the others)
-7. In Stripe → Settings → Customer Portal, configure what users can do (cancel, update payment method, view invoices). We allow all three.
+| Var(s)                                                           | How it's set                                                   |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | `environments/<env>/terraform.tfvars` — NOT secret, committed  |
+| `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                    |
+| `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml) |
+| `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`         |
 
-For staging, do the same with the test-mode Stripe account. Use Stripe's test card `4242 4242 4242 4242` for paid flows.
+Empty values keep Stripe inert (the pre-billing behavior), so a half-finished
+setup never breaks the app. An empty MONTHLY id makes a plan unbuyable; an empty
+annual/lifetime id just hides that cadence.
+
+1. Create a Stripe account; do the whole flow in **test mode** first, then repeat in live mode.
+2. Create two **products** — Garden and Greenhouse (Seedling is free → no Stripe object). Add prices:
+   - **Garden**: monthly $4.99, annual $39.99, one-time **lifetime** $149
+   - **Greenhouse**: monthly $9.99, annual $79.99 (no lifetime)
+3. Paste the five `price_…` ids into `infrastructure/environments/production/terraform.tfvars`.
+4. Add `STRIPE_SECRET_KEY` (the `sk_…` key) as a GitHub Actions **repo secret**.
+5. Create a Stripe **webhook endpoint** at `<API_URL>/billing/webhook` and subscribe it to the four events above. Production URL:
+   ```
+   https://ux8jg1lns0.execute-api.us-east-1.amazonaws.com/production/billing/webhook
+   ```
+6. Add the endpoint's signing secret (`whsec_…`) as the `STRIPE_WEBHOOK_SECRET` GitHub Actions repo secret.
+7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices.
+8. **Deploy** (tag a release `v*`). Terraform pushes all seven vars onto the Lambdas; until then the upgrade button returns the "billing not configured" path.
+
+For staging, repeat with the **test-mode** Stripe account + the staging tfvars/secrets. Use Stripe's test card `4242 4242 4242 4242` for paid flows.
 
 ## Local development
 
