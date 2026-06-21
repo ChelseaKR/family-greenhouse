@@ -23,8 +23,10 @@ env:
   AWS_REGION: us-east-1
   ENVIRONMENT: staging
 
+# Least-privilege default: read-only token. Jobs that assume an AWS role via
+# OIDC (aws-actions/configure-aws-credentials) grant `id-token: write` at the
+# job level below; every other job runs with the read-only default.
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -33,10 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -58,13 +60,13 @@ jobs:
         run: npm run build
 
       - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-dist
           path: frontend/dist
 
       - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-dist
           path: backend/dist
@@ -73,6 +75,10 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     needs: build
+    # OIDC: assumes AWS_DEPLOY_ROLE_ARN via configure-aws-credentials.
+    permissions:
+      id-token: write
+      contents: read
     defaults:
       run:
         working-directory: infrastructure
@@ -81,16 +87,16 @@ jobs:
       cloudfront_id: ${{ steps.outputs.outputs.cloudfront_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.5.7
           terraform_wrapper: false
@@ -115,15 +121,19 @@ jobs:
     name: Deploy Frontend
     runs-on: ubuntu-latest
     needs: terraform
+    # OIDC: assumes AWS_DEPLOY_ROLE_ARN via configure-aws-credentials.
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: frontend-dist
           path: dist
@@ -149,18 +159,22 @@ jobs:
     name: Deploy Backend
     runs-on: ubuntu-latest
     needs: terraform
+    # OIDC: assumes AWS_DEPLOY_ROLE_ARN via configure-aws-credentials.
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Download backend artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: backend-dist
           path: dist
@@ -199,10 +213,10 @@ jobs:
     needs: [deploy-frontend, deploy-backend]
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -222,7 +236,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: playwright-report
