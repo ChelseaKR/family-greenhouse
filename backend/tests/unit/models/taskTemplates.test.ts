@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TEMPLATES, suggestTemplate } from '../../../src/models/taskTemplates.js';
-import { taskTypeEnum } from '../../../src/models/schemas.js';
+import { taskTypeEnum, createTaskSchema } from '../../../src/models/schemas.js';
 
 describe('task template catalog', () => {
   it('every template has a stable, unique, url-safe id', () => {
@@ -73,6 +73,49 @@ describe('task template catalog', () => {
         expect(kw.trim().length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('has no duplicate suitsKeywords within a template', () => {
+    // Dupes are harmless to matching but inflate a keyword's score and signal
+    // a copy-paste slip when contributing.
+    for (const tpl of TEMPLATES) {
+      const seen = new Set(tpl.suitsKeywords);
+      expect(seen.size, `${tpl.id}: duplicate suitsKeywords`).toBe(tpl.suitsKeywords.length);
+    }
+  });
+
+  it('every built-in (non-custom) task validates against createTaskSchema bounds', () => {
+    // Cross-check each template task against the real request schema so the
+    // catalog can never drift from the contract the API enforces. We map
+    // `frequencyDays` → the schema's `frequency` field and supply the
+    // schema-required plantId. Custom tasks and the deliberate orchid repot
+    // (730d, see the frequency test below) are exercised separately.
+    const PLACEHOLDER_PLANT_ID = '00000000-0000-4000-8000-000000000000';
+    for (const tpl of TEMPLATES) {
+      for (const task of tpl.tasks) {
+        if (task.type === 'custom' || task.frequencyDays > 365) continue;
+        const parsed = createTaskSchema.safeParse({
+          plantId: PLACEHOLDER_PLANT_ID,
+          type: task.type,
+          frequency: task.frequencyDays,
+          notes: task.notes,
+        });
+        expect(parsed.success, `${tpl.id}/${task.type}: fails createTaskSchema`).toBe(true);
+      }
+    }
+  });
+
+  it('the only frequency that exceeds the 365-day createTaskSchema cap is the orchid repot', () => {
+    // The template-apply path intentionally bypasses createTaskSchema, so the
+    // orchid "repot every 2 years" (730d) is allowed. This test pins that down:
+    // if a NEW over-cap frequency sneaks in, it must be a conscious decision,
+    // not an accident. Tighten or update this guard when that happens.
+    const overCap = TEMPLATES.flatMap((tpl) =>
+      tpl.tasks
+        .filter((task) => task.frequencyDays > 365)
+        .map((task) => `${tpl.id}/${task.type}@${task.frequencyDays}`)
+    );
+    expect(overCap).toEqual(['orchid/repot@730']);
   });
 });
 
