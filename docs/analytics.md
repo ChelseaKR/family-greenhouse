@@ -14,24 +14,38 @@ We do **not** install `posthog-js`. The shim posts directly to PostHog's `/captu
 
 The full set is the `EventName` union in `analytics.ts`. Each is a deliberate funnel step or product interaction; we do not capture page views or DOM clicks.
 
-| Event                   | Trigger                                      | Notes                                                                                     |
-| ----------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `signup_completed`      | Email confirmation succeeded                 | Fires once per user, immediately after the JWT lands.                                     |
-| `household_created`     | `POST /households` returned 201              | `ordinal: 'first' \| 'subsequent'` distinguishes onboarding vs. multi-household creation. |
-| `household_joined`      | `POST /households/join/:invite` returned 200 | Pairs with `invite_accepted`.                                                             |
-| `invite_sent`           | Admin generated an invite link               | Health metric: how many households actually try to add a co-member.                       |
-| `invite_accepted`       | A user joined via an invite link             | The conversion from `invite_sent`. Pair them in PostHog.                                  |
-| `plant_added`           | Plant successfully created                   | `ordinal: 'first' \| 'subsequent'` is the activation signal.                              |
-| `task_created`          | Task POST returned 200                       | `taskType` for breakdowns.                                                                |
-| `task_completed`        | Task complete POST returned 200              | The retention-defining event.                                                             |
-| `task_snoozed`          | Snooze POST returned 200                     | High snooze rate is a signal that schedules are too aggressive.                           |
-| `photo_uploaded`        | Image-confirm POST returned 200              | Engagement deepener.                                                                      |
-| `subscription_upgraded` | Stripe checkout started                      | Intent, not confirmation. The webhook is source of truth for revenue.                     |
-| `subscription_canceled` | User opened the Stripe portal                | Intent leading indicator only.                                                            |
-| `data_exported`         | CSV download started                         | Engaged-power-user signal.                                                                |
-| `plant_identified`      | AI identification suggestion accepted        | Validates the Plant.id integration's value.                                               |
-| `household_switched`    | Switcher activated a different household     | Multi-household engagement.                                                               |
-| `climate_location_set`  | Household location saved                     | Validates the OpenWeatherMap integration's reach.                                         |
+| Event                   | Trigger                                      | Notes                                                                                                                                                    |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signup_completed`      | Email confirmation succeeded                 | Fires once per user, immediately after the JWT lands.                                                                                                    |
+| `household_created`     | `POST /households` returned 201              | `ordinal: 'first' \| 'subsequent'` distinguishes onboarding vs. multi-household creation.                                                                |
+| `household_joined`      | `POST /households/join/:invite` returned 200 | Pairs with `invite_accepted`.                                                                                                                            |
+| `invite_sent`           | Admin generated an invite link               | Health metric: how many households actually try to add a co-member.                                                                                      |
+| `invite_accepted`       | A user joined via an invite link             | The conversion from `invite_sent`. Pair them in PostHog.                                                                                                 |
+| `plant_added`           | Plant successfully created                   | `ordinal: 'first' \| 'subsequent'` is the activation signal.                                                                                             |
+| `task_created`          | Task POST returned 200                       | `taskType` for breakdowns.                                                                                                                               |
+| `task_completed`        | Task complete POST returned 200              | The retention-defining event.                                                                                                                            |
+| `task_snoozed`          | Snooze POST returned 200                     | High snooze rate is a signal that schedules are too aggressive.                                                                                          |
+| `photo_uploaded`        | Image-confirm POST returned 200              | Engagement deepener.                                                                                                                                     |
+| `subscription_upgraded` | Stripe checkout started                      | Client-side **intent** (checkout START), not confirmation. Its server-confirmed counterpart is `subscription_activated` — see "Server-confirmed events". |
+| `subscription_canceled` | User opened the Stripe portal                | Intent leading indicator only.                                                                                                                           |
+| `data_exported`         | CSV download started                         | Engaged-power-user signal.                                                                                                                               |
+| `plant_identified`      | AI identification suggestion accepted        | Validates the Plant.id integration's value.                                                                                                              |
+| `household_switched`    | Switcher activated a different household     | Multi-household engagement.                                                                                                                              |
+| `climate_location_set`  | Household location saved                     | Validates the OpenWeatherMap integration's reach.                                                                                                        |
+
+## Server-confirmed events
+
+Every event above fires from the browser shim and records _intent_. Revenue, though, has to be **confirmed** from the trusted backend — a client `subscription_upgraded` only means the user reached Stripe checkout, not that money moved. So the Stripe webhook emits a confirmed counterpart through a separate server shim (`backend/src/utils/serverAnalytics.ts`, the `ServerEventName` union), gated on `POSTHOG_KEY` — a server/project key, **not** the `VITE_`-prefixed browser key.
+
+| Event                    | Trigger                                                                                                                             | Notes                                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subscription_activated` | Stripe webhook (`checkout.session.completed` / `customer.subscription.created`) confirms a household is on an **active paid** plan. | The confirmed counterpart to `subscription_upgraded`. Properties: `plan: 'garden' \| 'greenhouse'`, `interval: 'month' \| 'year'`. Fires once per activation. |
+
+Where the server event differs from the browser ones:
+
+- **Distinct id** is `household:<householdId>` (the webhook has no user session), carried with the same `$groups: { household }` key — so it lines up with the per-household funnels above.
+- **Fires once.** Only the one-time activation events (`checkout.session.completed`, `customer.subscription.created`) emit it. `customer.subscription.updated` — which also fires on every renewal, plan change, and metadata edit — is deliberately excluded, so renewals don't inflate the conversion count. (A checkout that opens in a trial arrives as `subscription.created` with status `trialing` and is skipped until it flips to `active`.)
+- **Best-effort.** `capture()` never throws and the webhook `void`s its promise, so a PostHog outage can never 5xx the webhook (which would make Stripe retry an already-applied delivery).
 
 ## Privacy & data
 
@@ -67,6 +81,7 @@ Once events flow, build these funnels in the PostHog UI:
 2. **Collaboration funnel**: `household_created` → `invite_sent` → `invite_accepted`, set to aggregate by the `household` group (see "Household group analytics") so the admin's `invite_sent` and the invitee's `invite_accepted` pair across users. Below 50% of households reaching `invite_sent` means the collaborative pitch isn't landing.
 3. **Climate adoption**: `household_created` → `climate_location_set`. If <10%, the dashboard nudge needs work.
 4. **Upgrade intent**: `subscription_upgraded` from each tier. Pair with cohorts (>10 plants, >2 members) to test the pricing-tier hypotheses in `docs/strategy-review.md`.
+5. **True conversion**: `subscription_upgraded` → `subscription_activated` (intent → confirmed), aggregated by the `household` group. The drop-off is checkout abandonment; the confirmed step is the only revenue-true number.
 
 ## Why no admin dashboard
 
