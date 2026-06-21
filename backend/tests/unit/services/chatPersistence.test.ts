@@ -38,21 +38,38 @@ import { dynamodb } from '../../../src/utils/dynamodb.js';
 import { appendMessage, getConversation } from '../../../src/services/chat/persistence.js';
 import type { ChatMessageRecord } from '../../../src/services/chat/types.js';
 
-type CapturedPut = { input: { Item: Record<string, unknown> & { SK: string } } };
+type CapturedCmd = { kind: string; input: { Item: Record<string, unknown> & { SK: string } } };
 
-function sentItems(): CapturedPut['input']['Item'][] {
+// appendMessage now issues an atomic-counter UpdateCommand before the message
+// PutCommand, so filter to the Put (message) writes.
+function sentItems(): CapturedCmd['input']['Item'][] {
   return vi
     .mocked(dynamodb.send)
-    .mock.calls.map((c) => (c[0] as unknown as CapturedPut).input.Item);
+    .mock.calls.map((c) => c[0] as unknown as CapturedCmd)
+    .filter((cmd) => cmd.kind === 'Put')
+    .map((cmd) => cmd.input.Item);
+}
+
+// Default send mock: the conversation-seq UpdateCommand returns a monotonically
+// increasing seq; message PutCommands resolve empty.
+function mockSendWithSeq(): void {
+  let seq = 0;
+  vi.mocked(dynamodb.send).mockImplementation(
+    (cmd) =>
+      Promise.resolve(
+        (cmd as unknown as CapturedCmd).kind === 'Update' ? { Attributes: { seq: ++seq } } : {}
+      ) as never
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSendWithSeq();
 });
 
 describe('chat message persistence', () => {
   it('writes same-millisecond messages under distinct SKs that preserve write order', async () => {
-    vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+    // beforeEach feeds the conversation-seq UpdateCommand a monotonic value.
     const ts = '2026-06-11T12:00:00.000Z';
     const mk = (
       role: ChatMessageRecord['role'],
@@ -79,6 +96,39 @@ describe('chat message persistence', () => {
     for (const sk of sks) {
       expect(sk.startsWith(`CHAT#c1#MSG#${ts}#`)).toBe(true);
     }
+  });
+
+  it('draws the SK tie-breaker from an atomic per-conversation counter (cross-container safe)', async () => {
+    // The sequence comes from DynamoDB (ADD on CHAT#<conv>#SEQ), not a
+    // per-process counter, so concurrent turns from different Lambda containers
+    // on the same conversation share one globally-ordered sequence.
+    await appendMessage('hh-1', {
+      conversationId: 'c9',
+      timestamp: '2026-06-11T12:00:00.000Z',
+      role: 'user',
+      content: [{ type: 'text', text: 'hi' }],
+    });
+
+    const update = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) =>
+          c[0] as unknown as {
+            kind: string;
+            input: {
+              Key: { SK: string };
+              UpdateExpression: string;
+              ReturnValues: string;
+            };
+          }
+      )
+      .find((c) => c.kind === 'Update');
+    expect(update).toBeDefined();
+    expect(update!.input.Key.SK).toBe('CHAT#c9#SEQ');
+    expect(update!.input.UpdateExpression).toContain('ADD #seq :one');
+    expect(update!.input.ReturnValues).toBe('UPDATED_NEW');
+    // The message SK embeds the returned seq (1), zero-padded to 12 digits.
+    expect(sentItems()[0].SK).toBe('CHAT#c9#MSG#2026-06-11T12:00:00.000Z#000000000001');
   });
 
   it('round-trips tool_result content blocks through appendMessage → getConversation', async () => {

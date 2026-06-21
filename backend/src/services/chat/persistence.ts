@@ -30,30 +30,55 @@ function yearMonth(d: Date = new Date()): string {
 }
 
 // Tool turns write several messages back-to-back, often within the same
-// millisecond — a bare-timestamp SK silently overwrites the earlier write.
-// Suffix the SK with a per-process monotonic counter (zero-padded so
-// lexicographic SK order matches write order within an instance) plus a uuid
-// fragment for uniqueness across Lambda instances. The timestamp still leads,
-// so cross-turn ordering is unchanged and `begins_with` prefix queries still
-// match.
-let messageSeq = 0;
-
-function messageSortKey(message: ChatMessageRecord): string {
-  messageSeq = (messageSeq + 1) % 1_000_000;
-  const seq = String(messageSeq).padStart(6, '0');
-  return `CHAT#${message.conversationId}#MSG#${message.timestamp}#${seq}${uuid().slice(0, 8)}`;
+// millisecond, so the SK needs a tie-breaker that preserves write order.
+//
+// A per-PROCESS counter (the previous approach) could not: two concurrent
+// turns on the SAME conversation, served by different Lambda containers in the
+// same millisecond, each counted from their own independent base, so the
+// merged SK order was effectively random at the tie-break level — which could
+// interleave a tool_use and its tool_result and make the replayed history
+// invalid (Bedrock rejects a tool_use not immediately followed by its result).
+//
+// Instead, draw a CONVERSATION-scoped monotonic sequence from a DynamoDB
+// atomic counter: every message gets a globally ordered position within its
+// conversation regardless of which container wrote it. The timestamp still
+// leads the SK for readability and the `begins_with` prefix query; the
+// zero-padded sequence is the authoritative tie-breaker.
+async function nextConversationSeq(householdId: string, conversationId: string): Promise<number> {
+  const res = await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: `CHAT#${conversationId}#SEQ` },
+      // SET-then-ADD is one valid UpdateExpression; ADD on a missing attribute
+      // starts from 0, so the first message gets seq 1.
+      UpdateExpression: 'SET entityType = :et, #ttl = :ttl ADD #seq :one',
+      ExpressionAttributeNames: { '#seq': 'seq', '#ttl': 'ttl' },
+      ExpressionAttributeValues: {
+        ':one': 1,
+        ':et': 'ChatSeq',
+        ':ttl': Math.floor(Date.now() / 1000) + CONVERSATION_TTL_SECONDS,
+      },
+      ReturnValues: 'UPDATED_NEW',
+    })
+  );
+  return (res.Attributes?.seq as number | undefined) ?? 0;
 }
 
 export async function appendMessage(
   householdId: string,
   message: ChatMessageRecord
 ): Promise<void> {
+  const seq = await nextConversationSeq(householdId, message.conversationId);
+  // 12 digits orders correctly past any realistic per-conversation message
+  // count. The `#SEQ` counter row's SK never matches the `#MSG#` prefix, so
+  // getConversation's begins_with query excludes it.
+  const sk = `CHAT#${message.conversationId}#MSG#${message.timestamp}#${String(seq).padStart(12, '0')}`;
   await dynamodb.send(
     new PutCommand({
       TableName: TABLE_NAME,
       Item: {
         PK: `HOUSEHOLD#${householdId}`,
-        SK: messageSortKey(message),
+        SK: sk,
         entityType: 'ChatMessage',
         ...message,
         ttl: Math.floor(Date.now() / 1000) + CONVERSATION_TTL_SECONDS,
