@@ -12,8 +12,8 @@ import {
   PlanUsage,
 } from '@/services/billingService';
 import { getErrorMessage } from '@/services/api';
-import { useAuthStore } from '@/store/authStore';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
@@ -23,8 +23,8 @@ import clsx from 'clsx';
 
 export function BillingSettings() {
   const { t } = useTranslation();
-  const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.householdRole === 'admin';
+  // Active household's role, not the stale Cognito-claim default role.
+  const isAdmin = useIsHouseholdAdmin();
   const [searchParams] = useSearchParams();
   const [notice, setNotice] = useState<string | null>(null);
   // Default to annual: it's the better value for the user and retains far
