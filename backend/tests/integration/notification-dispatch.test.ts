@@ -418,15 +418,18 @@ describe('notification dispatch (end-to-end) — failure injection / chaos', () 
     // Must not throw despite the injected SES failure.
     const sent = await reminders.remindHousehold(householdId, new Date('2026-04-25T14:00:00Z'));
 
-    // SES was attempted for all three email-enabled members (one threw, two ok).
+    // SES was attempted for all three email-enabled members (Alpha threw, the
+    // other two succeeded).
     expect(sesSendMock).toHaveBeenCalledTimes(3);
     // Charlie's OTHER channels are unaffected by his failed email leg.
     expect(smsRecipients()).toEqual(['+15550000004']);
     expect(pushRecipientEndpoints()).toEqual(['https://push.example/charlie']);
-    // All three members are still counted as delivered: notifier.sendToUser
-    // marks `delivered` when it *attempts* a send (the catch only logs), so a
-    // throttled email does not roll the recipient back to undelivered.
-    expect(sent).toBe(3);
+    // Alpha's only channel (email) actually THREW, so he is NOT counted as
+    // delivered — his slot stays open and the next run retries him. (This is
+    // the corrected accounting: `delivered` tracks real sends, not attempts.)
+    // Bravo (email ok) and Charlie (email ok + sms + push) both delivered, and
+    // crucially one failure did not abort the batch for the others.
+    expect(sent).toBe(2);
   });
 
   it('isolates a thrown SMS send so the email of the same batch still goes out', async () => {

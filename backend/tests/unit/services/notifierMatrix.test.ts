@@ -294,3 +294,50 @@ describe('notifier.sendToUser — channel × DND × timezone matrix', () => {
     });
   }
 });
+
+describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel enablement', () => {
+  // Guards the bug where an enabled-but-unconfigured channel (SES/VAPID/SNS
+  // not provisioned → dry-run) reported delivered=true, which burned the
+  // user's daily reminder slot even though nothing was sent.
+  beforeEach(() => vi.setSystemTime(new Date('2026-04-25T14:00:00Z')));
+
+  it('email enabled but dry-run (sendEmail → false) → not delivered, not DND-suppressed', async () => {
+    const { sendToUser, emailMock } = await loadSendToUser({ email: true });
+    emailMock.mockResolvedValue(false); // SES unconfigured: logged, not sent
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    expect(emailMock).toHaveBeenCalledTimes(1);
+    expect(result.delivered).toBe(false);
+    expect(result.dndSuppressedOnly).toBe(false);
+  });
+
+  it('email enabled and actually sent (sendEmail → true) → delivered', async () => {
+    const { sendToUser, emailMock } = await loadSendToUser({ email: true });
+    emailMock.mockResolvedValue(true);
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    expect(result.delivered).toBe(true);
+  });
+
+  it('verified SMS that dry-runs (sendSms → false) → not delivered', async () => {
+    const { sendToUser, smsMock } = await loadSendToUser({
+      email: false,
+      sms: true,
+      phone: '+15551234567',
+      phoneVerified: true,
+    });
+    smsMock.mockResolvedValue(false);
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    expect(smsMock).toHaveBeenCalledTimes(1);
+    expect(result.delivered).toBe(false);
+  });
+
+  it('email-only user inside DND → dndSuppressedOnly (retry next run), not delivered', async () => {
+    const { sendToUser } = await loadSendToUser({
+      email: true,
+      dndStart: '13:00',
+      dndEnd: '15:00',
+    });
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    expect(result.delivered).toBe(false);
+    expect(result.dndSuppressedOnly).toBe(true);
+  });
+});
