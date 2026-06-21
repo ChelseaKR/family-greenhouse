@@ -733,7 +733,7 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
   /billing/checkout:
     post:
-      summary: Start a Stripe checkout session for a plan upgrade (body: planId, optional interval month|year — defaults to month)
+      summary: 'Start a Stripe checkout session for a plan upgrade (body: planId, optional interval month|year|lifetime — defaults to month)'
       tags: [Billing]
       responses:
         '200': { $ref: '#/components/responses/Ok' }

@@ -11,3 +11,9 @@ coverage
 # Compiled config artifacts (emitted from *.config.ts — never hand-edited)
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+# RAG corpus sources — hand-authored prose embedded verbatim into
+# plant-care-corpus-embeddings.json. Prettier's markdown emphasis rewrite
+# (*x* → _x_) would silently desync the committed embeddings and trip the
+# corpus drift guard. Treat them as data, not formatted source.
+backend/src/data/plant-care-corpus
