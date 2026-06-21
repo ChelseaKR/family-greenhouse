@@ -49,8 +49,11 @@ export const authService = {
     return response.data;
   },
 
-  async confirmEmail(data: ConfirmEmailData): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/confirm', data);
+  // Cognito's confirmSignUp mints no tokens — POST /auth/confirm returns only a
+  // message. The user signs in afterward (the old AuthResponse typing led the
+  // confirm page to read undefined tokens and log itself out).
+  async confirmEmail(data: ConfirmEmailData): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/confirm', data);
     return response.data;
   },
 

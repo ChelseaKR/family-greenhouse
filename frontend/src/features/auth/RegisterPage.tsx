@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -33,6 +33,10 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 export function RegisterPage() {
   useDocumentTitle('Sign up');
   const navigate = useNavigate();
+  // Preserve a post-auth redirect (e.g. /join/CODE from a shared invite) across
+  // register → confirm → login so an invite-accept flow resumes after signup.
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -54,7 +58,7 @@ export function RegisterPage() {
         email: data.email,
         password: data.password,
       });
-      navigate('/confirm-email', { state: { email: data.email } });
+      navigate('/confirm-email', { state: { email: data.email, redirect } });
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
