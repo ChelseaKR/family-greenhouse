@@ -34,8 +34,9 @@ export type ServerEventName = 'subscription_activated'; // Stripe webhook confir
 export interface ServerEventProps {
   /** Plan the household activated. */
   plan?: 'garden' | 'greenhouse';
-  /** Billing cadence stamped on the Stripe metadata at checkout. */
-  interval?: 'month' | 'year';
+  /** Billing cadence stamped on the Stripe metadata at checkout. `lifetime`
+   *  is the one-time Garden purchase. */
+  interval?: 'month' | 'year' | 'lifetime';
 }
 
 /**

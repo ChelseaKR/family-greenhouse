@@ -268,13 +268,38 @@ function planIdFromMetadata(
  * Pull the billing cadence we stamp onto checkout-session and subscription
  * metadata at creation time (see createCheckoutSession). Enum-only — returns
  * undefined when absent or not one of our known values, so analytics never
- * carries free text. Lifetime (`mode: 'payment'`) checkouts carry no interval.
+ * carries free text. `lifetime` (`mode: 'payment'`) is a real cadence here:
+ * createCheckoutSession stamps it like the recurring ones, so the confirmed
+ * conversion event records one-time purchases with their true cadence.
  */
-function intervalFromEvent(event: Stripe.Event): 'month' | 'year' | undefined {
+function intervalFromEvent(event: Stripe.Event): 'month' | 'year' | 'lifetime' | undefined {
   const metadata = (event.data.object as unknown as { metadata?: Record<string, string> | null })
     .metadata;
   const raw = metadata?.interval;
-  return raw === 'month' || raw === 'year' ? raw : undefined;
+  return raw === 'month' || raw === 'year' || raw === 'lifetime' ? raw : undefined;
+}
+
+/**
+ * Reverse-map a live Stripe price id back to our planId via the per-tier price
+ * env vars. A plan change made in the Stripe billing portal swaps the
+ * subscription's price but never re-stamps OUR metadata, so resolving plan
+ * from the metadata alone would keep entitlement on the old tier. Deriving it
+ * from the price the subscription actually carries fixes that. Returns null
+ * when the price isn't one of ours (env unset — e.g. local/test — or a price
+ * we don't sell), so callers fall back to metadata.
+ */
+function planIdFromPriceId(priceId: string | null | undefined): PlanId | null {
+  if (!priceId) return null;
+  for (const plan of Object.values(PLANS)) {
+    for (const env of [
+      plan.stripePriceEnv,
+      plan.annualStripePriceEnv,
+      plan.lifetimeStripePriceEnv,
+    ]) {
+      if (env && process.env[env] === priceId) return plan.id;
+    }
+  }
+  return null;
 }
 
 export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | null {
@@ -332,7 +357,14 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
       const sub = event.data.object;
       const householdId = (sub.metadata?.householdId as string | undefined) ?? '';
       if (!householdId) return null;
-      const planId = planIdFromMetadata(event, sub.metadata);
+      // Prefer the plan the subscription's LIVE price maps to over our
+      // one-time-stamped metadata: a portal-initiated plan switch changes the
+      // price but not the metadata, so trusting metadata would freeze the
+      // household on the old tier's caps. Fall back to metadata when the price
+      // isn't recognized (price envs unset, e.g. local/test).
+      const item = sub.items?.data?.[0];
+      const priceId = typeof item?.price === 'string' ? item.price : item?.price?.id;
+      const planId = planIdFromPriceId(priceId) ?? planIdFromMetadata(event, sub.metadata);
       if (!planId) return null;
       // current_period_end moved off the top-level Subscription object in
       // newer Stripe API versions and now lives on the subscription item.
@@ -505,6 +537,13 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // `subscription.created` with status `trialing`, so this won't double-count
   // with `checkout.session.completed`, which we stamp `active`.)
   //
+  // Gated on `isNew`: a Stripe webhook REDELIVERY (at-least-once delivery /
+  // retries) re-runs this whole function, but the event ledger has already
+  // recorded this event id, so we skip the emit and never double-count the
+  // same conversion. (updateHouseholdSubscription's `<=` ordering guard lets
+  // an identical redelivery re-apply the idempotent write, so the ledger is
+  // what protects the analytics count here.)
+  //
   // Best-effort + fire-and-forget: `capture` never throws and we `void` its
   // promise, so an analytics outage can NEVER 5xx the webhook (which would make
   // Stripe retry an already-applied delivery).
@@ -512,6 +551,7 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     event.type === 'checkout.session.completed' || event.type === 'customer.subscription.created';
   const activatedPlan = delta.fields.planId;
   if (
+    isNew &&
     isActivationEvent &&
     activatedPlan &&
     activatedPlan !== 'seedling' &&
