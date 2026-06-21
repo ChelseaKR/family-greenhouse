@@ -47,6 +47,14 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   TABLE_NAME: 'test-table',
 }));
 
+// Mock the server analytics emitter so we can assert the confirmed-conversion
+// event without hitting PostHog, and simulate it rejecting to prove the webhook
+// apply path swallows analytics failures.
+const { captureMock } = vi.hoisted(() => ({ captureMock: vi.fn() }));
+vi.mock('../../../src/utils/serverAnalytics.js', () => ({
+  capture: captureMock,
+}));
+
 describe('deltaForStripeEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -431,6 +439,141 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       input: { ExpressionAttributeValues: Record<string, unknown> };
     };
     expect(updateCmd.input.ExpressionAttributeValues[':planId']).toBe('seedling');
+  });
+});
+
+describe('applyStripeEvent — confirmed-conversion analytics', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    captureMock.mockResolvedValue(undefined);
+  });
+
+  it('emits subscription_activated when a household transitions to an active paid plan', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_activate',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'year' },
+          customer: 'cus_1',
+          subscription: 'sub_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_activated', {
+      plan: 'garden',
+      interval: 'year',
+    });
+  });
+
+  it('does NOT emit on a cancellation/downgrade to seedling', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    // Guard read (subscription matches) + Update + ledger Put.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'garden', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_cancel',
+      created: 1_700_000_000,
+      type: 'customer.subscription.deleted',
+      data: {
+        object: { id: 'sub_live', metadata: { householdId: 'hh-1', planId: 'garden' } },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT re-emit on customer.subscription.updated (renewal/plan-change) to avoid inflating conversions', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_renewal',
+      created: 1_700_000_000,
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'active',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('emits on customer.subscription.created when it becomes active', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_created',
+      created: 1_700_000_000,
+      type: 'customer.subscription.created',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'active',
+          metadata: { householdId: 'hh-1', planId: 'greenhouse', interval: 'month' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_activated', {
+      plan: 'greenhouse',
+      interval: 'month',
+    });
+  });
+
+  it('omits interval when the Stripe metadata carries none (e.g. lifetime)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_no_interval',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          metadata: { householdId: 'hh-1', planId: 'greenhouse' },
+          customer: 'cus_1',
+          subscription: 'sub_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_activated', {
+      plan: 'greenhouse',
+      interval: undefined,
+    });
+  });
+
+  it('does NOT throw when the analytics emitter rejects (webhook must never 5xx on analytics)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    // The emitter is best-effort + fire-and-forget; a rejected promise from it
+    // must not surface to the webhook (which would make Stripe retry).
+    captureMock.mockRejectedValue(new Error('posthog down'));
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(
+      applyStripeEvent({
+        id: 'evt_analytics_fail',
+        created: 1_700_000_000,
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+            customer: 'cus_1',
+            subscription: 'sub_1',
+          },
+        },
+      } as unknown as Stripe.Event)
+    ).resolves.toBeUndefined();
+    expect(captureMock).toHaveBeenCalledTimes(1);
   });
 });
 
