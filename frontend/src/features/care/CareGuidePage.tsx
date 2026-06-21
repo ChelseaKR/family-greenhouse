@@ -4,9 +4,10 @@ import { BrandMark } from '@/components/BrandMark';
 import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { SITE_URL } from '@/config/site';
 import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
 
-const SITE = 'https://app.familygreenhouse.com';
+const SITE = SITE_URL;
 
 function Paragraphs({ items }: { items: string[] }) {
   return (
@@ -35,6 +36,7 @@ export function CareGuidePage() {
       ? {
           title: guide.metaTitle,
           description: guide.metaDescription,
+          canonical: `${SITE}/care/${guide.slug}`,
           jsonLd: {
             '@context': 'https://schema.org',
             '@graph': [

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { BrandMark } from '@/components/BrandMark';
 import { Footer } from '@/components/Footer';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { siteUrl } from '@/config/site';
 import { CARE_GUIDES } from './careGuides';
 
 /**
@@ -14,6 +15,7 @@ export function CareIndex() {
     title: 'Plant Care Guides — How Often to Water Common Houseplants',
     description:
       'Straight, no-nonsense care guides for common houseplants: how often to water, how much light, and why yours might be dying.',
+    canonical: siteUrl('/care'),
   });
 
   return (

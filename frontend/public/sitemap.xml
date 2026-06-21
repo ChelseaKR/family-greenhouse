@@ -1,142 +1,142 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://app.familygreenhouse.com/</loc>
+    <loc>https://familygreenhouse.net/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/pricing</loc>
+    <loc>https://familygreenhouse.net/pricing</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog</loc>
+    <loc>https://familygreenhouse.net/blog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care</loc>
+    <loc>https://familygreenhouse.net/care</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/pet-safe</loc>
+    <loc>https://familygreenhouse.net/pet-safe</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/changelog</loc>
+    <loc>https://familygreenhouse.net/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/status</loc>
+    <loc>https://familygreenhouse.net/status</loc>
     <changefreq>daily</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/legal/privacy</loc>
+    <loc>https://familygreenhouse.net/legal/privacy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/legal/terms</loc>
+    <loc>https://familygreenhouse.net/legal/terms</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog/how-to-remember-to-water-plants</loc>
+    <loc>https://familygreenhouse.net/blog/how-to-remember-to-water-plants</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-05-05</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog/sharing-plant-care-without-becoming-the-nag</loc>
+    <loc>https://familygreenhouse.net/blog/sharing-plant-care-without-becoming-the-nag</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-05-13</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog/low-maintenance-houseplants-for-forgetful-people</loc>
+    <loc>https://familygreenhouse.net/blog/low-maintenance-houseplants-for-forgetful-people</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-05-21</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog/how-to-move-plants-without-killing-them</loc>
+    <loc>https://familygreenhouse.net/blog/how-to-move-plants-without-killing-them</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-05-28</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog/pet-safe-houseplants-that-are-hard-to-kill</loc>
+    <loc>https://familygreenhouse.net/blog/pet-safe-houseplants-that-are-hard-to-kill</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-15</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/blog/most-common-toxic-houseplants-and-safer-swaps</loc>
+    <loc>https://familygreenhouse.net/blog/most-common-toxic-houseplants-and-safer-swaps</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-16</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/pothos</loc>
+    <loc>https://familygreenhouse.net/care/pothos</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-08</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/snake-plant</loc>
+    <loc>https://familygreenhouse.net/care/snake-plant</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-08</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/monstera</loc>
+    <loc>https://familygreenhouse.net/care/monstera</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-08</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/spider-plant</loc>
+    <loc>https://familygreenhouse.net/care/spider-plant</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-12</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/peace-lily</loc>
+    <loc>https://familygreenhouse.net/care/peace-lily</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/heartleaf-philodendron</loc>
+    <loc>https://familygreenhouse.net/care/heartleaf-philodendron</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/zz-plant</loc>
+    <loc>https://familygreenhouse.net/care/zz-plant</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/aloe-vera</loc>
+    <loc>https://familygreenhouse.net/care/aloe-vera</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/dieffenbachia</loc>
+    <loc>https://familygreenhouse.net/care/dieffenbachia</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>
   </url>
   <url>
-    <loc>https://app.familygreenhouse.com/care/calathea</loc>
+    <loc>https://familygreenhouse.net/care/calathea</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>

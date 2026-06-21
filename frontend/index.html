@@ -14,19 +14,45 @@
       content="A collaborative plant care app for households. Add plants, schedule recurring care, share tasks, and grow together."
     />
 
+    <!-- NOTE: no static <link rel="canonical"> or og:url here. This single
+         index.html serves every SPA route, so a hardcoded homepage canonical
+         would wrongly canonicalize /pricing, /care, /blog, … to "/" and drop
+         them from the index. Canonical + og:url are set PER ROUTE via
+         useMetaTags; routes that don't set one fall back to URL-as-canonical
+         (the safe default). -->
+
     <!-- Open Graph + Twitter Card. v2 brand kit ships purpose-built PNGs
-         (1200×630 OG, 1600×800 Twitter) in /brand/. -->
+         (1200×630 OG, 1600×800 Twitter) in /brand/. Image URLs are ABSOLUTE —
+         social scrapers (Facebook/LinkedIn/Slack) reject a relative og:image.
+         These are HOMEPAGE defaults; per-route pages override title/description
+         via useMetaTags. -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Family Greenhouse" />
+    <meta property="og:site_name" content="Family Greenhouse" />
+    <meta
+      property="og:title"
+      content="Family Greenhouse — collaborative plant care for households"
+    />
     <meta
       property="og:description"
-      content="Collaborative plant care for households — share tasks, get reminders, grow together."
+      content="Collaborative plant care for households — share tasks, get reminders, and keep a care log everyone can see, so nobody asks 'did you water the Monstera?' again."
     />
-    <meta property="og:image" content="/brand/og-image.png" />
+    <meta property="og:image" content="https://familygreenhouse.net/brand/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Family Greenhouse — a shared plant-care journal for the whole household"
+    />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/brand/twitter-card.png" />
+    <meta
+      name="twitter:title"
+      content="Family Greenhouse — collaborative plant care for households"
+    />
+    <meta
+      name="twitter:description"
+      content="Share tasks, get reminders, and keep a care log everyone can see — so nobody asks 'did you water the Monstera?' again."
+    />
+    <meta name="twitter:image" content="https://familygreenhouse.net/brand/twitter-card.png" />
 
     <!-- Icons. v2 brand kit covers favicon (.ico + 32px PNG), apple-touch
          (180×180), and the PWA manifest icons (192/512). All ship from
