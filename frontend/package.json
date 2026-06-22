@@ -75,7 +75,7 @@
     "@aws-sdk/client-dynamodb": "^3.1063.0",
     "@axe-core/playwright": "^4.11.2",
     "@axe-core/react": "^4.8.5",
-    "@hookform/resolvers": "^3.3.4",
+    "@hookform/resolvers": "^5.4.0",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.43.0",
     "@size-limit/file": "^12.1.0",
