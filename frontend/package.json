@@ -102,7 +102,7 @@
     "msw": "^2.2.13",
     "postcss": "^8.4.38",
     "size-limit": "^12.1.0",
-    "tailwindcss": "^3.4.3",
+    "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
     "vite": "^7.3.5",
