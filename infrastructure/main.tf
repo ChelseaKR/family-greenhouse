@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.51"
     }
     # Zips the inbound-mail forwarder Lambda (modules/email/inbound.tf).
     archive = {
