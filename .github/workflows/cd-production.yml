@@ -135,7 +135,7 @@ jobs:
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -175,7 +175,7 @@ jobs:
     environment: production
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -222,7 +222,7 @@ jobs:
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -338,7 +338,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Configure AWS credentials (Cognito admin for test-user create+delete)
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -378,7 +378,7 @@ jobs:
     # revert the tfvars/module change and run a corrective deploy by hand.
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
