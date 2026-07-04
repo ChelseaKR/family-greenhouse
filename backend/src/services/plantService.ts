@@ -262,7 +262,8 @@ export async function getPlants(
 export async function updatePlant(
   householdId: string,
   plantId: string,
-  input: UpdatePlantInput
+  input: UpdatePlantInput,
+  maxPlants: number
 ): Promise<Plant | null> {
   const updateExpressions: string[] = [];
   const expressionAttributeNames: Record<string, string> = {};
@@ -373,10 +374,13 @@ export async function updatePlant(
 
   // Status transitions move the active-plant counter on the household
   // METADATA row (the plan cap counts ACTIVE plants — see createPlant):
-  // leaving 'active' decrements, returning to 'active' increments. Note the
-  // semantics are deliberately identical to the pre-counter cap check:
-  // re-activating a plant is NOT cap-checked (it never was), it just makes
-  // the counter reflect reality for the next create.
+  // leaving 'active' decrements, returning to 'active' increments.
+  // Reactivation (delta===1) is cap-checked exactly like createPlant: die a
+  // plant, create a replacement under the freed cap, then reactivate the
+  // died one nets +1 active plant above the cap if left unchecked — a real
+  // bypass introduced by the atomic counter (the old count-then-write check
+  // recomputed the active count from scratch on every create, so nothing
+  // could be "banked" this way).
   //
   // The plant write and the counter move ride one TransactWriteCommand,
   // conditioned on the status we just read, so a concurrent transition can't
@@ -432,17 +436,28 @@ export async function updatePlant(
                   delta === 1
                     ? 'SET plantCount = if_not_exists(plantCount, :zero) + :one'
                     : 'SET plantCount = if_not_exists(plantCount, :one) - :one',
-                ConditionExpression: 'attribute_exists(PK)',
-                ExpressionAttributeValues: delta === 1 ? { ':zero': 0, ':one': 1 } : { ':one': 1 },
+                // Reactivation (delta===1) is cap-checked, same as createPlant;
+                // the decrement (delta===-1) is never capped — leaving 'active'
+                // can only reduce the count.
+                ConditionExpression:
+                  delta === 1
+                    ? 'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
+                    : 'attribute_exists(PK)',
+                ExpressionAttributeValues:
+                  delta === 1 ? { ':zero': 0, ':one': 1, ':max': maxPlants } : { ':one': 1 },
               },
             },
           ],
         })
       );
     } catch (err) {
-      if (transactCancellationReasons(err)[0]?.Code === 'ConditionalCheckFailed') {
+      const reasons = transactCancellationReasons(err);
+      if (reasons[0]?.Code === 'ConditionalCheckFailed') {
         // Concurrent status change beat us — re-read and retry once.
         continue;
+      }
+      if (delta === 1 && reasons[1]?.Code === 'ConditionalCheckFailed') {
+        throw new PlanLimitError(`Plant limit of ${maxPlants} reached`);
       }
       throw err;
     }

@@ -202,7 +202,29 @@ export const updatePlant = createHandler(
       }
     }
 
-    const plant = await plantService.updatePlant(user.householdId!, plantId, validatedBody);
+    // Reactivating a plant (died/gave_away -> active) is cap-checked exactly
+    // like createPlant — see plantService.updatePlant for why this can't be
+    // left uncapped now that the active-plant count is an atomic counter.
+    const sub = await billing.getHouseholdSubscription(user.householdId!);
+    const plan = getPlan(sub.planId);
+
+    let plant: Awaited<ReturnType<typeof plantService.updatePlant>>;
+    try {
+      plant = await plantService.updatePlant(
+        user.householdId!,
+        plantId,
+        validatedBody,
+        plan.maxPlants
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === 'PlanLimitError') {
+        throw createHttpError(
+          402,
+          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`
+        );
+      }
+      throw err;
+    }
 
     if (!plant) {
       throw createHttpError(404, 'Plant not found');

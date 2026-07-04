@@ -533,7 +533,7 @@ describe('plantService', () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb');
       const { updatePlant } = await import('../../../src/services/plantService');
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: plantRow('active').Item });
-      const result = await updatePlant('hh', 'p1', { name: 'Renamed' });
+      const result = await updatePlant('hh', 'p1', { name: 'Renamed' }, 10);
       expect(result?.id).toBe('p1');
       const calls = vi.mocked(dynamodb.send).mock.calls;
       expect(calls).toHaveLength(1);
@@ -547,7 +547,7 @@ describe('plantService', () => {
       vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // TransactWrite
       vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died')); // re-read
 
-      const result = await updatePlant('hh', 'p1', { status: 'died' });
+      const result = await updatePlant('hh', 'p1', { status: 'died' }, 10);
       expect(result?.status).toBe('died');
 
       const transact = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as TransitionTransact;
@@ -573,7 +573,7 @@ describe('plantService', () => {
       vi.mocked(dynamodb.send).mockResolvedValueOnce({});
       vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('active'));
 
-      const result = await updatePlant('hh', 'p1', { status: 'active' });
+      const result = await updatePlant('hh', 'p1', { status: 'active' }, 10);
       expect(result?.status).toBe('active');
 
       const transact = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as TransitionTransact;
@@ -585,6 +585,31 @@ describe('plantService', () => {
       expect(counterUpdate.Update.UpdateExpression).toBe(
         'SET plantCount = if_not_exists(plantCount, :zero) + :one'
       );
+      // Reactivation is cap-checked exactly like createPlant.
+      expect(counterUpdate.Update.ConditionExpression).toBe(
+        'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
+      );
+      expect(counterUpdate.Update.ExpressionAttributeValues[':max']).toBe(10);
+    });
+
+    it('rejects reactivation with PlanLimitError when the household is already at its plant cap', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant, PlanLimitError } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died')); // read current
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(
+        Object.assign(new Error('cancelled'), {
+          name: 'TransactionCanceledException',
+          // reasons[0] (plant status write) succeeds; reasons[1] (the
+          // METADATA counter's cap condition) is the one that fails.
+          CancellationReasons: [{ Code: 'None' }, { Code: 'ConditionalCheckFailed' }],
+        })
+      );
+
+      await expect(updatePlant('hh', 'p1', { status: 'active' }, 10)).rejects.toThrow(
+        PlanLimitError
+      );
+      // Must NOT retry a genuine cap failure the way it retries a status race.
+      expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(2);
     });
 
     it('died → gave_away does not move the counter (never left the non-active population)', async () => {
@@ -593,7 +618,7 @@ describe('plantService', () => {
       vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died')); // read current
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: plantRow('gave_away').Item });
 
-      const result = await updatePlant('hh', 'p1', { status: 'gave_away' });
+      const result = await updatePlant('hh', 'p1', { status: 'gave_away' }, 10);
       expect(result?.status).toBe('gave_away');
       const calls = vi.mocked(dynamodb.send).mock.calls;
       expect(calls).toHaveLength(2);
@@ -617,7 +642,7 @@ describe('plantService', () => {
       vi.mocked(dynamodb.send).mockResolvedValueOnce(plantRow('died'));
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: plantRow('died').Item });
 
-      const result = await updatePlant('hh', 'p1', { status: 'died' });
+      const result = await updatePlant('hh', 'p1', { status: 'died' }, 10);
       expect(result?.status).toBe('died');
       expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(4);
     });
@@ -626,7 +651,7 @@ describe('plantService', () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb');
       const { updatePlant } = await import('../../../src/services/plantService');
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
-      expect(await updatePlant('hh', 'gone', { status: 'died' })).toBeNull();
+      expect(await updatePlant('hh', 'gone', { status: 'died' }, 10)).toBeNull();
     });
   });
 
