@@ -106,6 +106,28 @@ module "api" {
   openweather_daily_budget   = var.openweather_daily_budget
   bedrock_embed_model_id     = var.bedrock_embed_model_id
   identify_metering_enabled  = var.identify_metering_enabled
+
+  # Stripe. See variables.tf — these must be declared at THIS level too, or
+  # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
+  # is only a warning) and every Lambda sees "" regardless of what's set.
+  stripe_secret_key                 = var.stripe_secret_key
+  stripe_webhook_secret             = var.stripe_webhook_secret
+  stripe_price_id_garden            = var.stripe_price_id_garden
+  stripe_price_id_garden_annual     = var.stripe_price_id_garden_annual
+  stripe_price_id_garden_lifetime   = var.stripe_price_id_garden_lifetime
+  stripe_price_id_greenhouse        = var.stripe_price_id_greenhouse
+  stripe_price_id_greenhouse_annual = var.stripe_price_id_greenhouse_annual
+}
+
+# Price ids are visually identical in test and live Stripe mode, so this is
+# the only guard available short of calling the Stripe API during plan: warn
+# loudly if a live-looking secret key is paired with a still-unconfirmed
+# stripe_price_ids_are_live flag.
+check "stripe_price_mode_confirmed" {
+  assert {
+    condition     = !startswith(var.stripe_secret_key, "sk_live_") || var.stripe_price_ids_are_live
+    error_message = "STRIPE_SECRET_KEY looks like a live key (sk_live_...) but stripe_price_ids_are_live is still false. Stripe price ids don't encode test/live mode, so Terraform can't detect a mismatch on its own — manually confirm every stripe_price_id_* was created in Stripe LIVE mode, then set stripe_price_ids_are_live = true."
+  }
 }
 
 # Frontend module (S3 + CloudFront)
