@@ -68,16 +68,21 @@ describe('real-handler: auth / household-membership boundary', () => {
     expect(ok.statusCode).toBe(200);
     expect(Array.isArray(ok.body)).toBe(true);
 
-    // A non-member presenting the SAME household claim. The clone trusts the
-    // claim; the real authMiddleware re-validates it against the membership
-    // table and rejects with 403 — the bug class the clone can't catch.
+    // A non-member presenting the SAME household as their CLAIM default (no
+    // explicit X-Household-Id header). The clone trusts the claim; the real
+    // authMiddleware re-validates it against the membership table — but
+    // since this is a claim hint, not an explicit override, it degrades to
+    // householdId=null rather than 403ing at authMiddleware itself (a stale
+    // claim must not lock the caller out of every route, incl. GET
+    // /me/households). requireHousehold is what denies this resource route,
+    // with its own generic message — the access is still blocked either way.
     const denied = await invokeHandler(tasksHandler.listTasks, {
       method: 'GET',
       routeKey: 'GET /tasks',
       identity: { ...OUTSIDER, householdId },
     });
     expect(denied.statusCode).toBe(403);
-    expect(denied.body).toMatchObject({ message: 'Not a member of the requested household' });
+    expect(denied.body).toMatchObject({ message: 'User must belong to a household' });
   });
 
   it('401s a request with no Cognito claims at all', async () => {
