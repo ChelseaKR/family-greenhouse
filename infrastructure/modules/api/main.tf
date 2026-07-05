@@ -333,6 +333,11 @@ resource "aws_lambda_function" "handlers" {
   role          = aws_iam_role.lambda.arn
   handler       = "handler.handler"
   runtime       = "nodejs20.x"
+  # arm64 (Graviton2) is ~20% cheaper per GB-second than x86 at equal or better
+  # latency. Safe here because esbuild emits pure JS with no native/prebuilt
+  # binaries (no sharp/bcrypt in the dependency tree), so the bundle is
+  # architecture-independent.
+  architectures = ["arm64"]
   # `chat` runs Bedrock InvokeModel up to 5 times per turn (Sonnet 4.6 latency
   # ~2-6s per call), and the tool-use loop can occasionally push past 30s.
   # 90s leaves margin without unbounded; memory bump shortens cold starts.
@@ -488,6 +493,9 @@ resource "aws_lambda_function" "chat_stream" {
   role          = aws_iam_role.chat_stream.arn
   handler       = "handler.handler"
   runtime       = "nodejs20.x"
+  # arm64 (Graviton2): ~20% cheaper at equal latency; pure-JS esbuild bundle is
+  # architecture-independent. Same rationale as the `handlers` fleet above.
+  architectures = ["arm64"]
   # Same sizing rationale as the sync `chat` member of the fleet above: up to
   # 5 Bedrock calls per turn at ~2-6s each.
   timeout     = 90

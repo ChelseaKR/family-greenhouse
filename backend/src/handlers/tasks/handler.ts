@@ -371,13 +371,17 @@ export const snoozeTask = createHandler(
       throw createHttpError(404, 'Task not found');
     }
 
+    // Resolve the member's display name so the activity feed reads "Jane Smith
+    // snoozed…", matching the completion path, not the raw email local-part.
+    const actorName = await resolveCompleterName(user.householdId!, user.userId, user.email);
+
     // Activity feed entry, with the optional reason ("snoozed (rain
     // expected)"). Best-effort — recordActivity logs-and-continues.
     await recordActivity({
       type: 'task.snoozed',
       householdId: user.householdId!,
       actorId: user.userId,
-      actorName: user.email.split('@')[0],
+      actorName,
       payload: {
         taskId,
         plantId: task.plantId,
