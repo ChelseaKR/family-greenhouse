@@ -42,7 +42,7 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
         }
       />
 
-      {data.poisonousToPets && (
+      {data.poisonousToPets === true && (
         <div
           role="note"
           className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"

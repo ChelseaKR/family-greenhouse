@@ -12,9 +12,13 @@
  *    until the next UTC day. The ceiling is generous; the goal is to stop
  *    runaway usage, not to ration aggressively.
  *
- * If Perenual is unconfigured (no API key) every method returns null so
- * callers transparently fall back to whatever degraded behavior they
- * implement (usually the static species catalog).
+ * Every method returns null for three DIFFERENT reasons: Perenual is
+ * unconfigured (no API key), the daily budget is exhausted, or the upstream
+ * call itself failed (network/non-2xx/timeout). Callers that need to tell
+ * these apart (anything user-facing, or anything deciding whether to retry)
+ * must not assume null always means "the integration is off" — check
+ * `perenual.isConfigured()` separately, and watch the `perenual.*` warn logs
+ * this module emits on every null-causing branch.
  */
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
@@ -31,6 +35,15 @@ import type {
 const SPECIES_TTL_DAYS = 90;
 const SEARCH_TTL_SECONDS = 5 * 60;
 const DEFAULT_DAILY_BUDGET = 80; // free tier is 100; leave headroom for retries
+// Smears a bulk cache-warm's expiry across up to 6h instead of one instant —
+// without jitter, everything written on the same day expires on the same
+// day 90 days later, and the resulting burst of cache misses can exceed the
+// daily budget and trip the circuit breaker for every caller at once.
+const TTL_JITTER_SECONDS = 6 * 60 * 60;
+
+function jitteredTtlSeconds(baseSeconds: number): number {
+  return baseSeconds + Math.floor(Math.random() * TTL_JITTER_SECONDS);
+}
 
 function dailyBudget(): number {
   const raw = optionalEnv('PERENUAL_DAILY_BUDGET');
@@ -154,10 +167,14 @@ export async function getSpeciesCached(id: number): Promise<PerenualSpeciesDetai
   if (cached) return cached;
 
   const budget = await checkAndIncrementBudget();
-  if (budget.blocked) return null;
+  if (budget.blocked) {
+    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
+    return null;
+  }
 
   const fresh = await perenual.getSpecies(id);
-  if (fresh) await writeCache('PERENUAL#CACHE', sk, fresh, SPECIES_TTL_DAYS * 86400);
+  if (fresh)
+    await writeCache('PERENUAL#CACHE', sk, fresh, jitteredTtlSeconds(SPECIES_TTL_DAYS * 86400));
   return fresh;
 }
 
@@ -169,27 +186,46 @@ export async function getCareGuideCached(speciesId: number): Promise<PerenualCar
   if (cached) return cached;
 
   const budget = await checkAndIncrementBudget();
-  if (budget.blocked) return null;
+  if (budget.blocked) {
+    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
+    return null;
+  }
 
   const fresh = await perenual.getCareGuide(speciesId);
-  if (fresh) await writeCache('PERENUAL#CACHE', sk, fresh, SPECIES_TTL_DAYS * 86400);
+  if (fresh)
+    await writeCache('PERENUAL#CACHE', sk, fresh, jitteredTtlSeconds(SPECIES_TTL_DAYS * 86400));
   return fresh;
 }
 
-export async function listPestsForSpeciesCached(
-  scientificName: string
-): Promise<PerenualPestSummary[] | null> {
-  if (!(await perenual.isConfigured())) return null;
-  const sk = `PESTS#${scientificName.toLowerCase()}`;
+/**
+ * Unlike the other cached lookups (which only need to answer "what's the
+ * data, or null"), pest-alert evaluation needs to tell "confirmed no pests"
+ * apart from "we don't actually know" — a caller that silently treats budget
+ * exhaustion or an upstream error as "no pests" ends up permanently skipping
+ * alerts for that plant with no trace of why (see `pestAlerts.ts`). Hence the
+ * discriminated result instead of a bare nullable array.
+ */
+export type PestLookupResult =
+  | { ok: true; pests: PerenualPestSummary[] }
+  | { ok: false; reason: 'unconfigured' | 'budget_exhausted' | 'upstream_error' };
+
+export async function listPestsForSpeciesCached(scientificName: string): Promise<PestLookupResult> {
+  if (!(await perenual.isConfigured())) return { ok: false, reason: 'unconfigured' };
+  const trimmed = scientificName.trim().toLowerCase();
+  const sk = `PESTS#${trimmed}`;
   const cached = await readCache<PerenualPestSummary[]>('PERENUAL#CACHE', sk);
-  if (cached) return cached;
+  if (cached) return { ok: true, pests: cached };
 
   const budget = await checkAndIncrementBudget();
-  if (budget.blocked) return null;
+  if (budget.blocked) {
+    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
+    return { ok: false, reason: 'budget_exhausted' };
+  }
 
-  const fresh = await perenual.listPestsForSpecies(scientificName);
-  if (fresh) await writeCache('PERENUAL#CACHE', sk, fresh, SPECIES_TTL_DAYS * 86400);
-  return fresh;
+  const fresh = await perenual.listPestsForSpecies(trimmed);
+  if (fresh === null) return { ok: false, reason: 'upstream_error' };
+  await writeCache('PERENUAL#CACHE', sk, fresh, jitteredTtlSeconds(SPECIES_TTL_DAYS * 86400));
+  return { ok: true, pests: fresh };
 }
 
 export const __testing = { checkAndIncrementBudget, readCache, writeCache };

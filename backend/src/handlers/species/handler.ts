@@ -17,13 +17,28 @@ import * as enrichment from '../../services/enrichment.js';
 import { isConfigured } from '../../services/perenual.js';
 import { deriveCareSuggestion } from '../../services/careRecommendations.js';
 import { lookupToxicity } from '../../models/petToxicity.js';
+import createHttpError from 'http-errors';
+
+// `Number.parseInt` truncates trailing garbage ("7abc" → 7, "7e2" → 7), so a
+// malformed id would silently resolve to a real species instead of being
+// rejected. Require the whole path segment to be digits.
+function parseSpeciesId(idStr: string): number | null {
+  if (!/^[0-9]+$/.test(idStr)) return null;
+  const id = Number.parseInt(idStr, 10);
+  return id > 0 ? id : null;
+}
+
+// Max length for a free-text search query, mirroring the cap already applied
+// to /species/toxicity — bounds the string forwarded to Perenual and used as
+// a DynamoDB cache sort key (which has its own ~1KB limit).
+const MAX_QUERY_LENGTH = 80;
 
 // GET /species/search?q=...
 // Public catalog: same query → same answer for every user. 5-minute
 // CloudFront cache mirrors the server-side TTL on `SEARCH#…` rows.
 export const search = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const q = (event.queryStringParameters?.q ?? '').trim();
+    const q = (event.queryStringParameters?.q ?? '').trim().slice(0, MAX_QUERY_LENGTH);
     if (!q || q.length < 2) {
       return successResponse({
         source: (await isConfigured()) ? 'perenual' : 'disabled',
@@ -31,11 +46,12 @@ export const search = createHandler(
       });
     }
     const hits = await enrichment.searchSpeciesCached(q);
+    // `source: 'disabled'` should mean exactly that — not "budget exhausted"
+    // or "Perenual errored," which look identical to a real outage if this
+    // says "disabled." isConfigured() only reports the no-API-key case.
+    const source = hits !== null ? 'perenual' : (await isConfigured()) ? 'unavailable' : 'disabled';
     return cacheableResponse(
-      {
-        source: hits === null ? 'disabled' : 'perenual',
-        results: hits ?? [],
-      },
+      { source, results: hits ?? [] },
       { maxAgeSeconds: 300, visibility: 'public' }
     );
   }
@@ -49,11 +65,12 @@ export const search = createHandler(
 // Botanical detail rarely changes; cache for an hour at the edge.
 export const detail = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const idStr = event.pathParameters?.id ?? '';
-    const id = Number.parseInt(idStr, 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      return successResponse({ result: null });
-    }
+    const id = parseSpeciesId(event.pathParameters?.id ?? '');
+    // A malformed id and "no data for this (valid) id" must not look the
+    // same: the former is a client bug, the latter is a normal, cacheable
+    // 200. Collapsing them into the same response (as this used to do) makes
+    // a real Perenual outage indistinguishable from a typo'd URL.
+    if (id === null) throw createHttpError(400, 'Invalid species id');
     const detail = await enrichment.getSpeciesCached(id);
     // Surface `thumbnailUrl` directly (allowlist-sanitized, same policy as
     // the /thumbnail redirect) so clients can render the image without the
@@ -83,9 +100,8 @@ export const detail = createHandler(
 // on.
 export const thumbnail = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const idStr = event.pathParameters?.id ?? '';
-    const id = Number.parseInt(idStr, 10);
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = parseSpeciesId(event.pathParameters?.id ?? '');
+    if (id === null) {
       return { statusCode: 404, body: '' };
     }
     const detail = await enrichment.getSpeciesCached(id);
@@ -153,11 +169,8 @@ function pickAllowedThumbnailUrl(...candidates: Array<string | null>): string | 
 // just see localized strings.
 export const guide = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const idStr = event.pathParameters?.id ?? '';
-    const id = Number.parseInt(idStr, 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      return successResponse({ result: null });
-    }
+    const id = parseSpeciesId(event.pathParameters?.id ?? '');
+    if (id === null) throw createHttpError(400, 'Invalid species id');
     const locale = (event.queryStringParameters?.locale ?? 'en').toLowerCase();
     const [detail, careGuide] = await Promise.all([
       enrichment.getSpeciesCached(id),
@@ -190,11 +203,8 @@ export const guide = createHandler(
 // the frontend doesn't have to know about Perenual's enum vocabulary.
 export const careSuggestions = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const idStr = event.pathParameters?.id ?? '';
-    const id = Number.parseInt(idStr, 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      return successResponse({ result: null });
-    }
+    const id = parseSpeciesId(event.pathParameters?.id ?? '');
+    if (id === null) throw createHttpError(400, 'Invalid species id');
     const detail = await enrichment.getSpeciesCached(id);
     if (!detail) return successResponse({ result: null });
     return successResponse({ result: deriveCareSuggestion(detail) });

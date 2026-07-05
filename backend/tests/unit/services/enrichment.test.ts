@@ -83,7 +83,10 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
     expect(await searchSpeciesCached('monstera')).toBeNull();
     expect(await getSpeciesCached(7)).toBeNull();
     expect(await getCareGuideCached(7)).toBeNull();
-    expect(await listPestsForSpeciesCached('Monstera deliciosa')).toBeNull();
+    expect(await listPestsForSpeciesCached('Monstera deliciosa')).toEqual({
+      ok: false,
+      reason: 'unconfigured',
+    });
     expect(dynamodb.send).not.toHaveBeenCalled();
   });
 
@@ -204,12 +207,49 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
     });
   });
 
-  it('pest lookups key the cache on the lowercased scientific name', async () => {
+  it('pest lookups key the cache on the trimmed, lowercased scientific name', async () => {
     stubDynamo({ cacheItem: { payload: [] } });
-    expect(await listPestsForSpeciesCached('Monstera Deliciosa')).toEqual([]);
+    expect(await listPestsForSpeciesCached('  Monstera Deliciosa  ')).toEqual({
+      ok: true,
+      pests: [],
+    });
     expect(sentCommands()[0].input.Key).toEqual({
       PK: 'PERENUAL#CACHE',
       SK: 'PESTS#monstera deliciosa',
+    });
+  });
+
+  describe('listPestsForSpeciesCached (distinguishes "no data" from "confirmed no pests")', () => {
+    it('reports budget_exhausted distinctly from a genuinely empty pest list', async () => {
+      process.env.PERENUAL_DAILY_BUDGET = '10';
+      stubDynamo({ cacheItem: null, budgetUsed: 11 });
+
+      expect(await listPestsForSpeciesCached('Monstera deliciosa')).toEqual({
+        ok: false,
+        reason: 'budget_exhausted',
+      });
+    });
+
+    it('reports upstream_error when the Perenual call itself fails', async () => {
+      stubDynamo({ cacheItem: null, budgetUsed: 1 });
+      vi.mocked(perenual.listPestsForSpecies).mockResolvedValue(null as never);
+
+      expect(await listPestsForSpeciesCached('Monstera deliciosa')).toEqual({
+        ok: false,
+        reason: 'upstream_error',
+      });
+    });
+
+    it('caches and returns a genuinely empty pest list as ok:true', async () => {
+      stubDynamo({ cacheItem: null, budgetUsed: 1 });
+      vi.mocked(perenual.listPestsForSpecies).mockResolvedValue([] as never);
+
+      expect(await listPestsForSpeciesCached('Monstera deliciosa')).toEqual({
+        ok: true,
+        pests: [],
+      });
+      const kinds = sentCommands().map((c) => c.kind);
+      expect(kinds).toEqual(['Get', 'Update', 'Put']); // the empty result IS cached
     });
   });
 });

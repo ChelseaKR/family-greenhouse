@@ -16,6 +16,7 @@
  */
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { logger } from '../utils/logger.js';
 import { getPlants } from './plantService.js';
 import { listPestsForSpeciesCached } from './enrichment.js';
 import type { PerenualPestSummary } from './perenual.js';
@@ -53,22 +54,29 @@ function capitalize(m: string): string {
   return m[0].toUpperCase() + m.slice(1);
 }
 
-// Case-SENSITIVE, word-boundary match on capitalized month names. The old
-// lowercase `includes()` check treated the verb "may" ("aphids may appear")
-// as the month May — virtually every pest description contains "may", so
-// every pest looked May-only. Heuristic trade-off, documented: a lowercased
-// month mid-sentence is missed (falls through to "no month mentioned →
-// always relevant" more often), and a sentence-initial "May ..." verb still
-// false-positives; both are far rarer than the old failure mode.
-const ANY_MONTH_RE = new RegExp(`\\b(${MONTHS.map(capitalize).join('|')})\\b`);
+// Word-boundary match on month names. Every month except May is matched
+// case-INSENSITIVELY, so "JUNE"/"june"/"June" all count. "May" is kept its
+// own, case-SENSITIVE regex on purpose: the old lowercase `includes()` check
+// treated the verb "may" ("aphids may appear") as the month May — virtually
+// every pest description contains "may", so every pest looked May-only.
+// Requiring a capital M avoids that specific false positive; a case-
+// insensitive flag on this alternative alone would silently reintroduce it.
+const MAY_RE = /\bMay\b/;
+const OTHER_MONTHS_RE = new RegExp(
+  `\\b(${MONTHS.filter((m) => m !== 'may')
+    .map(capitalize)
+    .join('|')})\\b`,
+  'i'
+);
 
 export function pestActiveThisMonth(pest: PerenualPestSummary, monthName: string): boolean {
   const text = pest.description ?? '';
   // If no description mentions any month at all, treat the pest as
   // "always relevant" — better to notify than to silently skip species
   // with thin upstream data.
-  if (!ANY_MONTH_RE.test(text)) return true;
-  return new RegExp(`\\b${capitalize(monthName)}\\b`).test(text);
+  if (!MAY_RE.test(text) && !OTHER_MONTHS_RE.test(text)) return true;
+  if (monthName === 'may') return MAY_RE.test(text);
+  return new RegExp(`\\b${capitalize(monthName)}\\b`, 'i').test(text);
 }
 
 async function lastAlertedAt(plantId: string, pestId: number): Promise<string | null> {
@@ -110,18 +118,44 @@ function withinQuarter(iso: string | null, now = Date.now()): boolean {
   return now - new Date(iso).getTime() < ms;
 }
 
+export interface PestAlertsResult {
+  alerts: PestAlert[];
+  /**
+   * True when at least one eligible plant's pest data couldn't be fetched
+   * for a reason that might resolve later THIS day (budget exhausted or a
+   * transient upstream error) — NOT when Perenual is simply unconfigured,
+   * which is permanent and not worth flagging for retry. The caller
+   * (`reminders.ts`) uses this to decide whether it's safe to mark the
+   * household "checked" for today, so a transient outage doesn't silently
+   * suppress alerts until tomorrow.
+   */
+  dataUnavailable: boolean;
+}
+
 export async function evaluatePestAlerts(
   householdId: string,
   now = new Date()
-): Promise<PestAlert[]> {
+): Promise<PestAlertsResult> {
   const plants = await getPlants(householdId);
   const month = currentMonthName(now);
   const alerts: PestAlert[] = [];
+  let dataUnavailable = false;
 
   for (const plant of plants) {
     if (!plant.perenualSpeciesId || !plant.species) continue;
-    const pests = await listPestsForSpeciesCached(plant.species);
-    if (!pests || pests.length === 0) continue;
+    const lookup = await listPestsForSpeciesCached(plant.species);
+    if (!lookup.ok) {
+      if (lookup.reason !== 'unconfigured') {
+        dataUnavailable = true;
+        logger.warn(
+          { householdId, plantId: plant.id, reason: lookup.reason },
+          'pestAlerts.pest_data_unavailable'
+        );
+      }
+      continue;
+    }
+    const pests = lookup.pests;
+    if (pests.length === 0) continue;
 
     // Pick the first seasonally-active pest we haven't alerted on
     // recently. One alert per plant per cycle keeps the volume sane.
@@ -143,5 +177,5 @@ export async function evaluatePestAlerts(
     }
   }
 
-  return alerts;
+  return { alerts, dataUnavailable };
 }

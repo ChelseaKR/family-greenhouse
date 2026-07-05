@@ -232,6 +232,144 @@ describe('species handler', () => {
     });
   });
 
+  describe('search', () => {
+    it('reports source "disabled" only when Perenual is unconfigured', async () => {
+      const perenual = await import('../../../src/services/perenual.js');
+      vi.mocked(perenual.isConfigured).mockResolvedValueOnce(false);
+      const enrichment = await import('../../../src/services/enrichment.js');
+      // Matches enrichment.searchSpeciesCached's own behavior when
+      // unconfigured (it short-circuits to null before ever touching the
+      // budget/cache) — an auto-mocked `undefined` would take the wrong
+      // branch below (`undefined !== null` is true).
+      vi.mocked(enrichment.searchSpeciesCached).mockResolvedValueOnce(null);
+      const { search } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await search(
+        buildEvent({ path: '/species/search', queryStringParameters: { q: 'monstera' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body).source).toBe('disabled');
+    });
+
+    it('reports source "unavailable" (not "disabled") when configured but the request got no data', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      vi.mocked(enrichment.searchSpeciesCached).mockResolvedValueOnce(null);
+      const { search } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await search(
+        buildEvent({ path: '/species/search', queryStringParameters: { q: 'monstera' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      // A real outage or exhausted daily budget must not look identical to
+      // the integration being intentionally turned off.
+      expect(JSON.parse(res.body).source).toBe('unavailable');
+    });
+
+    it('reports source "perenual" and the results when the search succeeds', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      vi.mocked(enrichment.searchSpeciesCached).mockResolvedValueOnce([
+        { id: 1, commonName: 'Monstera', scientificName: 'Monstera deliciosa', thumbnailUrl: null },
+      ]);
+      const { search } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await search(
+        buildEvent({ path: '/species/search', queryStringParameters: { q: 'monstera' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      const body = JSON.parse(res.body);
+      expect(body.source).toBe('perenual');
+      expect(body.results).toHaveLength(1);
+    });
+
+    it('caps an oversized query instead of forwarding it verbatim', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      vi.mocked(enrichment.searchSpeciesCached).mockResolvedValueOnce([]);
+      const { search } = await import('../../../src/handlers/species/handler.js');
+
+      const huge = 'a'.repeat(5000);
+      await search(
+        buildEvent({ path: '/species/search', queryStringParameters: { q: huge } }),
+        ctx,
+        () => {}
+      );
+      expect(vi.mocked(enrichment.searchSpeciesCached)).toHaveBeenCalledWith('a'.repeat(80));
+    });
+  });
+
+  describe('invalid species id (must be rejected, not silently truncated or treated as "no data")', () => {
+    it.each(['7abc', '7e2', '-1', '0', 'NaN', ''])(
+      'detail rejects id=%s with 400, without calling the enrichment cache',
+      async (badId) => {
+        const enrichment = await import('../../../src/services/enrichment.js');
+        const { detail } = await import('../../../src/handlers/species/handler.js');
+
+        const res = (await detail(
+          buildEvent({ path: `/species/${badId}`, pathParameters: { id: badId } }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        expect(enrichment.getSpeciesCached).not.toHaveBeenCalled();
+      }
+    );
+
+    it('guide rejects a garbage-suffixed id ("7abc") with 400 rather than silently serving species 7', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { guide } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await guide(
+        buildEvent({ path: '/species/7abc/guide', pathParameters: { id: '7abc' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(enrichment.getSpeciesCached).not.toHaveBeenCalled();
+    });
+
+    it('careSuggestions rejects a garbage-suffixed id ("7abc") with 400', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { careSuggestions } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await careSuggestions(
+        buildEvent({ path: '/species/7abc/care-suggestions', pathParameters: { id: '7abc' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(enrichment.getSpeciesCached).not.toHaveBeenCalled();
+    });
+
+    it('thumbnail still 404s (not 400) on a garbage-suffixed id — it is a public, unauthenticated redirect route', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { thumbnail } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await thumbnail(
+        buildAnonymousEvent({ pathParameters: { id: '7abc' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(404);
+      expect(enrichment.getSpeciesCached).not.toHaveBeenCalled();
+    });
+
+    it('detail still returns 200 {result: null} for a valid but unknown/no-data id (distinct from a malformed one)', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      vi.mocked(enrichment.getSpeciesCached).mockResolvedValueOnce(null);
+      const { detail } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await detail(
+        buildEvent({ path: '/species/999999', pathParameters: { id: '999999' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).result).toBeNull();
+    });
+  });
+
   describe('toxicity (public pet-safety lookup)', () => {
     it('answers an anonymous query with cat/dog verdicts and a public cache header', async () => {
       const { toxicity } = await import('../../../src/handlers/species/handler.js');

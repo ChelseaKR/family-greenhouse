@@ -19,6 +19,18 @@ interface SpeciesComboboxProps {
   placeholder?: string;
 }
 
+/** Finds the Perenual result (if any) matching `val` by scientific or common
+ *  name, shared by the input's synchronous onChange check and the effect
+ *  that re-checks once debounced results land. */
+function matchPerenual(results: PerenualSpeciesSummary[] | undefined, val: string): number | null {
+  const hit = (results ?? []).find(
+    (r) =>
+      r.scientificName.toLowerCase() === val.toLowerCase() ||
+      r.commonName.toLowerCase() === val.toLowerCase()
+  );
+  return hit ? hit.id : null;
+}
+
 /**
  * Free-text species input backed by the native <datalist> element. Browsers
  * render their own dropdown UI and handle keyboard nav + a11y.
@@ -63,6 +75,22 @@ export function SpeciesCombobox({
     staleTime: 5 * 60 * 1000,
   });
 
+  // The debounced network results only reflect the exact keystroke that was
+  // typed when onChange fired — 300ms later, once Perenual actually answers,
+  // nothing re-checks it against what's currently typed. Re-run the same
+  // match here whenever fresh results arrive.
+  //
+  // Gate on `perenual` actually being loaded (not just changed): firing this
+  // while a query is merely in flight would report a false `null` for a
+  // value that already has a confirmed match (e.g. a plant's previously-
+  // linked species, shown on mount before the first search round-trip
+  // completes) — the onChange handler already covers the "unconfirmed yet"
+  // case for live edits.
+  useEffect(() => {
+    if (!onPerenualPick || perenual === undefined) return;
+    onPerenualPick(matchPerenual(perenual.results, value));
+  }, [perenual, value, onPerenualPick]);
+
   // Local catalog suggestions are instant; Perenual layers on top, deduped by
   // scientific name to avoid showing the same plant twice.
   //
@@ -74,10 +102,17 @@ export function SpeciesCombobox({
     if (trimmed.length === 0) return speciesCatalog;
 
     const local = searchSpecies(value, 12);
-    const remote: SpeciesEntry[] = (perenual?.results ?? []).map((r: PerenualSpeciesSummary) => ({
-      common: r.commonName,
-      scientific: r.scientificName,
-    }));
+    // `perenual` reflects debouncedQuery, which lags the live input by
+    // 300ms — while a request for the current text is in flight (or hasn't
+    // started), remote still holds the PREVIOUS query's results. Only mix
+    // them in once the query that produced them matches what's now typed.
+    const queryIsCurrent = debouncedQuery.trim().toLowerCase() === value.trim().toLowerCase();
+    const remote: SpeciesEntry[] = queryIsCurrent
+      ? (perenual?.results ?? []).map((r: PerenualSpeciesSummary) => ({
+          common: r.commonName,
+          scientific: r.scientificName,
+        }))
+      : [];
     const seen = new Set<string>();
     const out: SpeciesEntry[] = [];
     for (const entry of [...local, ...remote]) {
@@ -88,7 +123,7 @@ export function SpeciesCombobox({
       if (out.length >= 24) break;
     }
     return out;
-  }, [value, perenual]);
+  }, [value, perenual, debouncedQuery]);
 
   return (
     <div>
@@ -116,14 +151,11 @@ export function SpeciesCombobox({
             if (exact) onPick(exact);
           }
           if (onPerenualPick) {
-            const remoteHit = (perenual?.results ?? []).find(
-              (r) =>
-                r.scientificName.toLowerCase() === next.toLowerCase() ||
-                r.commonName.toLowerCase() === next.toLowerCase()
-            );
             // Pass the id when we recognize the value, otherwise null so a
             // user backspacing away from a known species clears the link.
-            onPerenualPick(remoteHit ? remoteHit.id : null);
+            // `perenual` here is almost always stale (debounced 300ms behind
+            // `next`) — the effect above re-checks once fresh results land.
+            onPerenualPick(matchPerenual(perenual?.results, next));
           }
         }}
         aria-invalid={!!error}

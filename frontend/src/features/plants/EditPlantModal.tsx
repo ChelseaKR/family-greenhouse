@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm } from 'react-hook-form';
@@ -11,6 +11,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
+import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 
 const plantSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -35,6 +36,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<PlantFormData>({
     resolver: zodResolver(plantSchema),
@@ -46,6 +49,11 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
     },
   });
 
+  const [perenualSpeciesId, setPerenualSpeciesId] = useState<number | null>(
+    plant.perenualSpeciesId ?? null
+  );
+  const speciesValue = watch('species') ?? '';
+
   useEffect(() => {
     if (isOpen) {
       reset({
@@ -54,6 +62,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         location: plant.location || '',
         notes: plant.notes || '',
       });
+      setPerenualSpeciesId(plant.perenualSpeciesId ?? null);
     }
   }, [isOpen, plant, reset]);
 
@@ -64,6 +73,10 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         species: data.species || undefined,
         location: data.location || undefined,
         notes: data.notes || undefined,
+        // Always explicit, including null — omitting it would leave the
+        // backend's existing link untouched and reintroduce stale care/
+        // toxicity data after the species text is edited away from it.
+        perenualSpeciesId,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
@@ -140,7 +153,12 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                     {...register('name')}
                   />
 
-                  <Input label="Species" error={errors.species?.message} {...register('species')} />
+                  <SpeciesCombobox
+                    value={speciesValue}
+                    onChange={(v) => setValue('species', v, { shouldValidate: true })}
+                    onPerenualPick={setPerenualSpeciesId}
+                    error={errors.species?.message}
+                  />
 
                   <Input
                     label="Location"

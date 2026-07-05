@@ -7,6 +7,9 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: vi.fn(function (input) {
     return { input, kind: 'Get' };
   }),
+  DeleteCommand: vi.fn(function (input) {
+    return { input, kind: 'Delete' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -79,7 +82,7 @@ async function mockConditionalMarkerStore() {
   const markers = new Set<string>();
   vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
     const { input, kind } = cmd as {
-      kind?: 'Put' | 'Get';
+      kind?: 'Put' | 'Get' | 'Delete';
       input: { Item?: { PK: string; SK: string }; Key?: { PK: string; SK: string } };
     };
     // GetCommand → marker pre-check (alreadyRemindedToday). Return the marker
@@ -87,6 +90,13 @@ async function mockConditionalMarkerStore() {
     if (kind === 'Get' && input.Key) {
       const key = `${input.Key.PK}|${input.Key.SK}`;
       return (markers.has(key) ? { Item: { PK: input.Key.PK, SK: input.Key.SK } } : {}) as never;
+    }
+    // DeleteCommand → the pest-check marker cleanup when data was
+    // unavailable, so a later hourly run can retry.
+    if (kind === 'Delete' && input.Key) {
+      const key = `${input.Key.PK}|${input.Key.SK}`;
+      markers.delete(key);
+      return {} as never;
     }
     // PutCommand → conditional claim. Second claim on the same key throws
     // ConditionalCheckFailed, exactly the dedupe behavior across hourly runs.
@@ -395,15 +405,18 @@ describe('reminders service', () => {
       vi.mocked(prefs.getPreferences).mockImplementation(async (userId: string) => {
         return { pestAlerts: userId === 'u1' } as never;
       });
-      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue([
-        {
-          plantId: 'p1',
-          plantName: 'Monstera',
-          pestId: 42,
-          pestName: 'Spider mites',
-          message: 'Your Monstera may be entering Spider mites season — give it a quick check.',
-        },
-      ]);
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue({
+        alerts: [
+          {
+            plantId: 'p1',
+            plantName: 'Monstera',
+            pestId: 42,
+            pestName: 'Spider mites',
+            message: 'Your Monstera may be entering Spider mites season — give it a quick check.',
+          },
+        ],
+        dataUnavailable: false,
+      });
       vi.mocked(notifier.sendToUser).mockResolvedValue(undefined as never);
 
       await remindHousehold('hh', NOW);
@@ -430,9 +443,12 @@ describe('reminders service', () => {
       vi.mocked(tasks.getTasksDueBy).mockResolvedValue([] as never);
       vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
       vi.mocked(prefs.getPreferences).mockResolvedValue({ pestAlerts: true } as never);
-      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue([
-        { plantId: 'p1', plantName: 'M', pestId: 42, pestName: 'Mites', message: 'check' },
-      ]);
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue({
+        alerts: [
+          { plantId: 'p1', plantName: 'M', pestId: 42, pestName: 'Mites', message: 'check' },
+        ],
+        dataUnavailable: false,
+      });
       vi.mocked(notifier.sendToUser).mockRejectedValue(new Error('SES down'));
 
       await remindHousehold('hh', NOW);
@@ -450,7 +466,61 @@ describe('reminders service', () => {
       vi.mocked(tasks.getTasksDueBy).mockResolvedValue([] as never);
       vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
       vi.mocked(prefs.getPreferences).mockResolvedValue({ pestAlerts: true } as never);
-      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue([]);
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue({
+        alerts: [],
+        dataUnavailable: false,
+      });
+
+      await remindHousehold('hh', NOW);
+      await remindHousehold('hh', new Date(NOW.getTime() + 60 * 60 * 1000));
+      expect(pestAlerts.evaluatePestAlerts).toHaveBeenCalledOnce();
+    });
+
+    it('retries later the same day when Perenual data was unavailable, instead of silently losing the day', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const prefs = await import('../../../src/services/notificationPrefs.js');
+      const pestAlerts = await import('../../../src/services/pestAlerts.js');
+      const { remindHousehold } = await import('../../../src/services/reminders.js');
+      await mockConditionalMarkerStore();
+
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue([] as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      vi.mocked(prefs.getPreferences).mockResolvedValue({ pestAlerts: true } as never);
+      // First hour: Perenual's budget is exhausted for this plant.
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValueOnce({
+        alerts: [],
+        dataUnavailable: true,
+      });
+
+      await remindHousehold('hh', NOW);
+      expect(pestAlerts.evaluatePestAlerts).toHaveBeenCalledOnce();
+
+      // A later hour, same UTC day: must NOT be treated as "already checked"
+      // — the marker should have been cleared after the unavailable result.
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValueOnce({
+        alerts: [],
+        dataUnavailable: false,
+      });
+      await remindHousehold('hh', new Date(NOW.getTime() + 60 * 60 * 1000));
+      expect(pestAlerts.evaluatePestAlerts).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT retry when everything was fully evaluated (no data-unavailable flag)', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const prefs = await import('../../../src/services/notificationPrefs.js');
+      const pestAlerts = await import('../../../src/services/pestAlerts.js');
+      const { remindHousehold } = await import('../../../src/services/reminders.js');
+      await mockConditionalMarkerStore();
+
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue([] as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      vi.mocked(prefs.getPreferences).mockResolvedValue({ pestAlerts: true } as never);
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValue({
+        alerts: [],
+        dataUnavailable: false,
+      });
 
       await remindHousehold('hh', NOW);
       await remindHousehold('hh', new Date(NOW.getTime() + 60 * 60 * 1000));

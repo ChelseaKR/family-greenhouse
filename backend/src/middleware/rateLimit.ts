@@ -94,7 +94,28 @@ function sourceIp(event: APIGatewayProxyEvent): string {
   return rc?.http?.sourceIp ?? rc?.identity?.sourceIp ?? 'unknown';
 }
 
+interface MaybeRoutedEvent {
+  routeKey?: string;
+  resource?: string;
+  httpMethod?: string;
+}
+
+// Bucket on the route TEMPLATE API Gateway resolved (e.g.
+// "GET /species/{id}/guide"), not the literal request path — otherwise every
+// distinct numeric id on an `{id}`-shaped route gets its own bucket, and
+// varying the id trivially defeats a documented "N per minute" cap. Mirrors
+// the same resolution `router.ts`'s `routeKeyFor` uses for dispatch.
+//
+// Falls back to the literal path when neither `routeKey` (HTTP API v2) nor a
+// real `resource` (REST API v1) is present — routes with no `{param}` segment
+// (e.g. /auth/login vs /auth/refresh) are already distinct paths with nothing
+// to conflate, so the fallback stays correct for them.
 function routePath(event: APIGatewayProxyEvent): string {
+  const routed = event as MaybeRoutedEvent;
+  if (typeof routed.routeKey === 'string') return routed.routeKey;
+  if (typeof routed.resource === 'string' && routed.resource !== '/') {
+    return `${routed.httpMethod ?? 'GET'} ${routed.resource}`;
+  }
   return (event as MaybeV2Event).rawPath ?? event.path ?? '/';
 }
 

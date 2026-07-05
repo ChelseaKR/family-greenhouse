@@ -9,7 +9,9 @@
  *  - JSON, the app's own export:    { format: 'family-greenhouse-export',
  *                                     households: [{ plants, tasks }] }
  *    (plants from every household are flattened; tasks re-attached by
- *     plantId; export `createdAt` becomes `acquiredAt`)
+ *     plantId; export `createdAt` becomes `acquiredAt`; a present, valid
+ *     `perenualSpeciesId` is preserved so the care-guide/toxicity link
+ *     survives the round-trip)
  *  - CSV with a header row. The app's own plant-export headers
  *    (id,name,species,location,notes,tags,createdAt,updatedAt) are
  *    recognized; extra columns are ignored and only `name` is required.
@@ -30,6 +32,8 @@ export interface ImportTaskDraft {
 export interface ImportPlantDraft {
   name: string;
   species?: string;
+  /** Links to Perenual care-guide/toxicity data; see asPerenualSpeciesId. */
+  perenualSpeciesId?: number | null;
   location?: string;
   notes?: string;
   tags?: string[];
@@ -50,6 +54,10 @@ const importTaskDraftSchema = z.object({
 export const importPlantDraftSchema = z.object({
   name: z.string().min(1).max(100),
   species: z.string().max(100).optional(),
+  // No .nullable(): normalizeCandidate already drops anything that isn't a
+  // positive integer (including an explicit null), matching the backend's
+  // createPlantSchema which has no null case for a brand-new plant.
+  perenualSpeciesId: z.number().int().positive().optional(),
   location: z.string().max(100).optional(),
   notes: z.string().max(1000).optional(),
   tags: z.array(z.string().min(1).max(40)).max(10).optional(),
@@ -92,6 +100,15 @@ function asTags(value: unknown): string[] | undefined {
   return undefined;
 }
 
+/**
+ * Only a positive integer id is trusted (matches the backend's
+ * createPlantSchema); a string, 0, a negative/decimal number, null, or
+ * anything else from an untrusted upload is dropped rather than forwarded.
+ */
+function asPerenualSpeciesId(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function asFrequency(value: unknown): number | unknown {
   if (typeof value === 'number') return value;
   if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
@@ -114,6 +131,10 @@ export function normalizeCandidate(raw: Record<string, unknown>): Record<string,
   };
   const species = asOptionalString(raw.species);
   if (species !== undefined) out.species = species;
+  // Only the JSON-export shape realistically carries this; CSV rows simply
+  // won't have the key, so this is a no-op for them rather than a clobber.
+  const perenualSpeciesId = asPerenualSpeciesId(raw.perenualSpeciesId);
+  if (perenualSpeciesId !== undefined) out.perenualSpeciesId = perenualSpeciesId;
   const location = asOptionalString(raw.location);
   if (location !== undefined) out.location = location;
   const notes = asOptionalString(raw.notes);
