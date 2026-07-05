@@ -175,7 +175,7 @@ describe('reminders service', () => {
 
     // Hour 1: reminder goes out and the marker is written.
     expect(await remindHousehold('hh', NOW)).toBe(1);
-    expect(markers.has('USER#u1|REMINDED#2026-06-01')).toBe(true);
+    expect(markers.has('USER#u1|REMINDED#hh#2026-06-01')).toBe(true);
 
     // Hour 2 (same task still due): marker present → no second send.
     const hourLater = new Date(NOW.getTime() + 60 * 60 * 1000);
@@ -209,13 +209,13 @@ describe('reminders service', () => {
       dndSuppressedOnly: true,
     });
     expect(await remindHousehold('hh', NOW)).toBe(0);
-    expect(markers.has('USER#u1|REMINDED#2026-06-01')).toBe(false);
+    expect(markers.has('USER#u1|REMINDED#hh#2026-06-01')).toBe(false);
 
     // Hour 2: DND has lifted, email delivers. Because the slot was never
     // claimed, the user still gets today's reminder (the H1 bug regressed).
     const hourLater = new Date(NOW.getTime() + 60 * 60 * 1000);
     expect(await remindHousehold('hh', hourLater)).toBe(1);
-    expect(markers.has('USER#u1|REMINDED#2026-06-01')).toBe(true);
+    expect(markers.has('USER#u1|REMINDED#hh#2026-06-01')).toBe(true);
     expect(notifier.sendToUser).toHaveBeenCalledTimes(2);
   });
 

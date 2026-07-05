@@ -43,25 +43,38 @@ function dateKey(now: Date): string {
 }
 
 /**
- * Has this user already been reminded today? A point read on the per-user,
- * per-day marker, used to skip a member up front on subsequent hourly runs
- * (before building/sending the roll-up). The authoritative dedupe is still
- * the conditional Put in `claimDailyReminderSlot`; this is the cheap pre-check.
+ * Has this user already been reminded today FOR THIS HOUSEHOLD? A point read
+ * on the per-user, per-household, per-day marker, used to skip a member up
+ * front on subsequent hourly runs (before building/sending the roll-up). The
+ * authoritative dedupe is still the conditional Put in
+ * `claimDailyReminderSlot`; this is the cheap pre-check.
+ *
+ * The marker is scoped to the household, not just the user: a member of two
+ * households must be reminded about each independently. A user-only key
+ * (no household component) let the FIRST household processed in a run claim
+ * the user's entire day, silently skipping every other household's
+ * reminder — the multi-household reminders/digest is a real, marketed
+ * scenario (see docs/multi-household.md), not an edge case.
  */
-async function alreadyRemindedToday(userId: string, now: Date): Promise<boolean> {
+async function alreadyRemindedToday(
+  userId: string,
+  householdId: string,
+  now: Date
+): Promise<boolean> {
   const result = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `USER#${userId}`, SK: `REMINDED#${dateKey(now)}` },
+      Key: { PK: `USER#${userId}`, SK: `REMINDED#${householdId}#${dateKey(now)}` },
     })
   );
   return Boolean(result.Item);
 }
 
 /**
- * Conditionally claim the user's "reminded today" slot. Returns true when the
- * marker was absent (we own today's send), false when a previous run already
- * claimed it.
+ * Conditionally claim the user's "reminded today" slot FOR THIS HOUSEHOLD.
+ * Returns true when the marker was absent (we own today's send), false when
+ * a previous run already claimed it. See `alreadyRemindedToday` for why the
+ * key includes householdId.
  *
  * Written AFTER a channel actually delivered (H1): the slot must reflect a
  * real send, not merely an attempt. The old order claimed the slot BEFORE
@@ -71,14 +84,18 @@ async function alreadyRemindedToday(userId: string, now: Date): Promise<boolean>
  * skipped them. We now claim only once `notifier.sendToUser` reports a
  * delivery, so a DND-suppressed user is retried on the next run instead.
  */
-async function claimDailyReminderSlot(userId: string, now: Date): Promise<boolean> {
+async function claimDailyReminderSlot(
+  userId: string,
+  householdId: string,
+  now: Date
+): Promise<boolean> {
   try {
     await dynamodb.send(
       new PutCommand({
         TableName: TABLE_NAME,
         Item: {
           PK: `USER#${userId}`,
-          SK: `REMINDED#${dateKey(now)}`,
+          SK: `REMINDED#${householdId}#${dateKey(now)}`,
           entityType: 'ReminderMarker',
           sentAt: now.toISOString(),
           ttl: Math.floor(now.getTime() / 1000) + MARKER_TTL_SECONDS,
@@ -165,7 +182,7 @@ export async function remindHousehold(
       // up front so an already-reminded member skips the roll-up build + send
       // entirely on later hourly runs. The slot is only CLAIMED below, after a
       // channel actually delivered (H1).
-      if (await alreadyRemindedToday(member.userId, now)) continue;
+      if (await alreadyRemindedToday(member.userId, householdId, now)) continue;
 
       const overdue = tasksForMember.filter((t) => t.nextDue < nowIso).length;
       let body = overdue
@@ -197,7 +214,7 @@ export async function remindHousehold(
       if (result.delivered) {
         // Burn the day only on a real delivery, so a transient race can't
         // double-claim either. The conditional Put is still authoritative.
-        if (await claimDailyReminderSlot(member.userId, now)) {
+        if (await claimDailyReminderSlot(member.userId, householdId, now)) {
           sent += 1;
         }
       } else if (result.dndSuppressedOnly) {
