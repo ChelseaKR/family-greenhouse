@@ -120,26 +120,41 @@ export const authMiddleware = (): middy.MiddlewareObj<
     // household to resolve — the membership row decides membership AND
     // role. A user who was removed from their household gets a 403 within
     // the 60s cache TTL instead of keeping access until token expiry.
+    //
+    // That 403 must only fire for an EXPLICIT header override — a caller
+    // that deliberately asked for a specific household and isn't a member of
+    // it. A stale/wrong CLAIM default (e.g. the user was just removed from
+    // their default household but still belongs to another one, or belongs
+    // to none) must degrade to householdId=null instead of hard-403ing,
+    // because that 403 previously fired on EVERY authenticated route —
+    // including GET /me/households and GET /auth/me — leaving the caller no
+    // way to even discover their other households or reach the onboarding
+    // flow without a full logout/login.
     const headerOverride = event.headers?.['x-household-id'] ?? event.headers?.['X-Household-Id'];
+    const isExplicitOverride = typeof headerOverride === 'string' && headerOverride.length > 0;
     const claimHouseholdId = claims['custom:household_id'] || null;
-    const requestedHouseholdId =
-      typeof headerOverride === 'string' && headerOverride.length > 0
-        ? headerOverride
-        : claimHouseholdId;
+    const requestedHouseholdId = isExplicitOverride ? headerOverride : claimHouseholdId;
 
     if (requestedHouseholdId) {
       let role = getCachedMembership(claims.sub, requestedHouseholdId);
       if (!role) {
         const member = await getMemberByUserId(requestedHouseholdId, claims.sub);
         if (!member) {
-          throw createHttpError(403, 'Not a member of the requested household');
+          if (isExplicitOverride) {
+            throw createHttpError(403, 'Not a member of the requested household');
+          }
+          // Stale claim hint, no explicit override — fall through with no
+          // active household rather than locking the caller out entirely.
+        } else {
+          role = member.role;
+          setCachedMembership(claims.sub, requestedHouseholdId, role);
         }
-        role = member.role;
-        setCachedMembership(claims.sub, requestedHouseholdId, role);
       }
-      user.householdId = requestedHouseholdId;
-      // Membership row is authoritative — never the claim's role.
-      user.householdRole = role;
+      if (role) {
+        user.householdId = requestedHouseholdId;
+        // Membership row is authoritative — never the claim's role.
+        user.householdRole = role;
+      }
     }
 
     (event as AuthenticatedEvent).user = user;

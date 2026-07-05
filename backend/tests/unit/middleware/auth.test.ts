@@ -91,16 +91,46 @@ describe('authMiddleware', () => {
     expect(householdService.getMemberByUserId).toHaveBeenCalledWith('hh-1', 'user-1');
   });
 
-  it('403s the default claim path when the user is no longer a member (removed member)', async () => {
+  it('degrades to householdId=null (not a 403) when the claim default is stale (removed member, no explicit override)', async () => {
+    // Regression: this used to hard-403 here, at authMiddleware itself, for
+    // EVERY authenticated route including GET /me/households and GET
+    // /auth/me — leaving a just-removed user with no way to even discover
+    // their other households without a full logout/login. The claim is only
+    // a hint; a stale hint should fall through to "no active household",
+    // not lock the caller out entirely. requireHousehold() is what should
+    // 403 resource routes that actually need a household (see below).
     vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
-    const { invoke } = makeHandler([authMiddleware()]);
+    const { invoke, inner } = makeHandler([authMiddleware()]);
     const event = buildEvent({
       sub: 'user-1',
       email: 'a@b.com',
       'custom:household_id': 'hh-1',
       'custom:household_role': 'admin',
     });
-    await expect(invoke(event)).rejects.toMatchObject({ statusCode: 403 });
+    const res = await invoke(event);
+    expect(res.statusCode).toBe(200);
+    const calledEvent = inner.mock.calls[0][0] as { user: Record<string, unknown> };
+    expect(calledEvent.user).toEqual({
+      userId: 'user-1',
+      email: 'a@b.com',
+      householdId: null,
+      householdRole: null,
+    });
+  });
+
+  it('requireHousehold still 403s a stale-claim caller on a route that needs a household', async () => {
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    const { invoke } = makeHandler([authMiddleware(), requireHousehold()]);
+    const event = buildEvent({
+      sub: 'user-1',
+      email: 'a@b.com',
+      'custom:household_id': 'hh-1',
+      'custom:household_role': 'admin',
+    });
+    await expect(invoke(event)).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'User must belong to a household',
+    });
   });
 
   it('takes the role from the membership row, not the claim', async () => {
