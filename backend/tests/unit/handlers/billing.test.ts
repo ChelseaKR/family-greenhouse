@@ -379,6 +379,28 @@ describe('billing handler', () => {
       expect(body.message).toMatch(/stripe checkout failed/i);
       expect(res.body).not.toContain('sk_live_secret');
     });
+
+    it('maps the already-subscribed guard to a clear 409 pointing at the portal, not the generic 502', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(
+        new Error('ALREADY_SUBSCRIBED: This household already has an active subscription.')
+      );
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'greenhouse' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body);
+      expect(body.message).toMatch(/manage subscription/i);
+    });
   });
 
   describe('portal', () => {

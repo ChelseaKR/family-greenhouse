@@ -92,6 +92,15 @@ export const checkout = createHandler(
       });
       return successResponse(session);
     } catch (err) {
+      // Client-correctable: already has a live subscription. Map to a clear
+      // 409 pointing at the portal, rather than the generic Stripe-failure
+      // 502 below (see createCheckoutSession's ALREADY_SUBSCRIBED guard).
+      if ((err as Error).message?.startsWith('ALREADY_SUBSCRIBED')) {
+        throw createHttpError(
+          409,
+          'Your household already has an active subscription. Use "Manage subscription" to change plans.'
+        );
+      }
       // Don't echo the raw Stripe SDK error to clients — log it, return a
       // safe upstream-failure message. `expose: true` marks this 502 as
       // intentional so the JSON error handler keeps the message.

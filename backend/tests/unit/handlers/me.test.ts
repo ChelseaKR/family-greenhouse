@@ -347,6 +347,71 @@ describe('me handler', () => {
       });
     });
 
+    it('includes died/gave-away plants in the export (explicit filter: "all")', async () => {
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const plantService = await import('../../../src/services/plantService.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const notificationPrefs = await import('../../../src/services/notificationPrefs.js');
+      const { exportMe } = await import('../../../src/handlers/me/handler.js');
+
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Test User');
+      vi.mocked(notificationPrefs.getPreferences).mockResolvedValueOnce({
+        userId: 'user-1',
+        browser: false,
+        email: true,
+        sms: false,
+        phone: '',
+        dndStart: '',
+        dndEnd: '',
+        timezone: 'UTC',
+        pestAlerts: false,
+        updatedAt: '',
+      });
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '2025-01-01' },
+      ]);
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-1',
+        name: 'Home',
+        location: null,
+        createdAt: '',
+        createdBy: 'user-1',
+      });
+      // getPlants defaults to filter:'active' when called with no filter —
+      // the bug was exportMe relying on that default and silently dropping
+      // this plant.
+      vi.mocked(plantService.getPlants).mockResolvedValueOnce([
+        {
+          id: 'p-died',
+          householdId: 'hh-1',
+          name: 'Fiddle Leaf Fig',
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          status: 'died',
+          statusChangedAt: '2026-01-01',
+          tags: [],
+          perenualSpeciesId: null,
+          parentPlantId: null,
+          createdAt: '',
+          createdBy: 'user-1',
+          updatedAt: '',
+        },
+      ]);
+      vi.mocked(taskService.getTasks).mockResolvedValueOnce([]);
+
+      const res = (await exportMe(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(plantService.getPlants).toHaveBeenCalledWith('hh-1', 'all');
+      const body = JSON.parse(res.body);
+      expect(body.households[0].plants).toContainEqual(
+        expect.objectContaining({ id: 'p-died', status: 'died' })
+      );
+    });
+
     it('returns an empty households array when the user has no memberships', async () => {
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
       const householdService = await import('../../../src/services/householdService.js');

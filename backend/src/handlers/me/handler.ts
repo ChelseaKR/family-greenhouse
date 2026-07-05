@@ -146,7 +146,9 @@ export const exportMe = createHandler(
       memberships.map(async (m) => {
         const [household, plants, tasks] = await Promise.all([
           householdService.getHousehold(m.householdId),
-          plantService.getPlants(m.householdId),
+          // 'all' — the export promises every plant; getPlants defaults to
+          // 'active' only, which would silently drop died/gave-away plants.
+          plantService.getPlants(m.householdId, 'all'),
           taskService.getTasks(m.householdId),
         ]);
         return {

@@ -11,6 +11,8 @@
 import createHttpError from 'http-errors';
 import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
+import * as billing from '../billing.js';
+import { getPlan } from '../../models/plans.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -235,6 +237,20 @@ async function* turnEvents(
 ): AsyncGenerator<ChatStreamEvent, RunChatTurnResult> {
   const { userId, householdId, message, turnId } = input;
   const conversationId = input.conversationId ?? newConversationId();
+
+  // "Garden plan and up" — the care assistant is a paid feature (marketed as
+  // such on the landing page), but nothing previously enforced that: the free
+  // Seedling tier had full, unmetered access. Gated here, the one choke point
+  // both the sync (runChatTurn) and streaming (streamChatTurn) entry points
+  // share, before any idempotency/budget/Bedrock work — no future caller of
+  // either entry point can accidentally skip it.
+  const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+  if (plan.id === 'seedling') {
+    throw createHttpError(
+      402,
+      'The care assistant is included with the Garden plan and up. Upgrade to start chatting.'
+    );
+  }
 
   // Idempotency (#3): replay an already-completed turn instead of running it
   // again. Closes the stream→sync fallback double-charge — a stream that

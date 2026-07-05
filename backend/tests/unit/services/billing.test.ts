@@ -757,6 +757,58 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
   });
 });
 
+describe('createCheckoutSession — refuses a second checkout for a household with a live subscription', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
+    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+  });
+
+  async function runWithExistingSub(status: string, interval?: 'month' | 'lifetime') {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_existing',
+        subscriptionStatus: status,
+      },
+    });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    return createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      interval,
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+  }
+
+  it.each(['active', 'trialing', 'past_due', 'unpaid', 'paused'])(
+    'rejects a new recurring checkout when status is %s, without ever calling Stripe (prevents a second, concurrent subscription)',
+    async (status) => {
+      await expect(runWithExistingSub(status, 'month')).rejects.toThrow('ALREADY_SUBSCRIBED');
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still allows checkout when the prior subscription is canceled (re-subscribing is fine)', async () => {
+    const result = await runWithExistingSub('canceled', 'month');
+    expect(result.url).toBe('https://checkout.stripe.test/cs');
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('exempts the lifetime cadence — its webhook already cancels any prior recurring subscription', async () => {
+    const result = await runWithExistingSub('active', 'lifetime');
+    expect(result.url).toBe('https://checkout.stripe.test/cs');
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+    expect((sessionsCreate.mock.calls[0][0] as Record<string, unknown>).mode).toBe('payment');
+  });
+});
+
 describe('getHouseholdSubscription', () => {
   beforeEach(() => {
     vi.clearAllMocks();

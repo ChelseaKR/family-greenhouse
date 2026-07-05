@@ -1100,6 +1100,10 @@ export function annotateTasksWithCoverage(
   return tasks.map((t) => {
     const w = t.assignedTo ? vacations.get(t.assignedTo) : undefined;
     if (!w || w.coveredBy === t.assignedTo) return t;
+    // The cover may themselves be away (covered by someone else) — don't
+    // point at someone unreachable; leave no clear cover, same as if there
+    // were no active vacation. Mirrors reminders.ts's `deliverable` check.
+    if (vacations.has(w.coveredBy)) return t;
     return {
       ...t,
       effectiveAssignee: w.coveredBy,

@@ -1,9 +1,10 @@
 import type { TaskCompletion, Task } from '@/services/plantService';
 
 /**
- * "Streak" = consecutive cycles a task has been completed on time, where
- * "on time" means the completion landed before that cycle's nextDue. We
- * compute it from the recent completion log and the task's frequency.
+ * "Streak" = consecutive completions whose gap to the next-older completion
+ * stays within ~1.5x the task's frequency — a regularity measure, not
+ * due-date punctuality. It never looks at `nextDue`, so a task completed
+ * late every cycle (but at a consistent interval) still keeps its streak.
  *
  * Returns the streak counter (≥0). Caller decides how to render — usually
  * "Karen the Kraken: 4-week watering streak" when streak ≥ 2.

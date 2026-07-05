@@ -222,10 +222,43 @@ describe('households handler', () => {
     const householdService = await import('../../../src/services/householdService.js');
     const { getHousehold } = await import('../../../src/handlers/households/handler.js');
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce(null);
-    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([]);
+    vi.mocked(householdService.getHouseholdMembersPublic).mockResolvedValueOnce([]);
     const event = buildEvent(adminClaims, { pathParameters: { id: 'hh-1' } });
     const res = (await getHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(404);
+  });
+
+  it('getHousehold never includes member email, even for a non-admin caller', async () => {
+    // The bug: requireHousehold() has no admin check on this route, so a
+    // plain member reaches the handler — and the roster used to come back
+    // with everyone's email regardless of role.
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { getHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-1',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'user-1',
+    });
+    vi.mocked(householdService.getHouseholdMembersPublic).mockResolvedValueOnce([
+      { householdId: 'hh-1', userId: 'user-1', name: 'Alice', role: 'member', joinedAt: '' },
+      { householdId: 'hh-1', userId: 'user-2', name: 'Bob', role: 'admin', joinedAt: '' },
+    ]);
+    const event = buildEvent(memberClaims, { pathParameters: { id: 'hh-1' } });
+    const res = (await getHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    // The safe, email-stripping function is what the handler must call —
+    // never the shared getHouseholdMembers (which keeps email for the
+    // legitimate internal callers, e.g. reminders/digest outbound mail).
+    expect(householdService.getHouseholdMembersPublic).toHaveBeenCalledWith('hh-1');
+    expect(householdService.getHouseholdMembers).not.toHaveBeenCalled();
+    const body = JSON.parse(res.body);
+    for (const member of body.members) {
+      expect(member).not.toHaveProperty('email');
+    }
+    expect(JSON.stringify(body)).not.toMatch(/email/i);
   });
 
   it('createInvite requires admin role', async () => {

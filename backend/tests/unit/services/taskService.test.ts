@@ -813,6 +813,50 @@ describe('taskService', () => {
       expect(c.effectiveAssignee).toBeUndefined();
     });
 
+    it('annotateTasksWithCoverage does not claim a cover who is themselves away', async () => {
+      const { annotateTasksWithCoverage } = await import('../../../src/services/taskService.js');
+      const task = {
+        ...baseTask,
+        id: 't-a',
+        assignedTo: 'user-a',
+        assignedToName: 'Alice',
+      };
+      // A → covered by B, but B → covered by C (B is also on vacation).
+      const map = new Map([
+        [
+          'user-a',
+          {
+            householdId: 'hh-1',
+            userId: 'user-a',
+            coveredBy: 'user-b',
+            coveredByName: 'Bob',
+            startDate: '',
+            endDate: '',
+            createdBy: '',
+            createdAt: '',
+          },
+        ],
+        [
+          'user-b',
+          {
+            householdId: 'hh-1',
+            userId: 'user-b',
+            coveredBy: 'user-c',
+            coveredByName: 'Cara',
+            startDate: '',
+            endDate: '',
+            createdBy: '',
+            createdAt: '',
+          },
+        ],
+      ]);
+      const [a] = annotateTasksWithCoverage([task], map);
+      expect(a.effectiveAssignee).toBeUndefined();
+      expect(a.effectiveAssigneeName).toBeUndefined();
+      expect(a.coveringFor).toBeUndefined();
+      expect(a.assignedTo).toBe('user-a'); // still not rewritten
+    });
+
     it('getTasks annotates tasks whose assignee has an active window', async () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb.js');
       const { getTasks } = await import('../../../src/services/taskService.js');

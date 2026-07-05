@@ -159,6 +159,12 @@ export interface CheckoutSessionResult {
  */
 export type BillingInterval = 'month' | 'year' | 'lifetime';
 
+// Stripe subscription statuses that represent a live, billing subscription —
+// as opposed to 'canceled'/'incomplete_expired', which are terminal. Used to
+// decide whether a NEW checkout would create a second, concurrent
+// subscription alongside one that's already charging the customer.
+const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
+
 export async function createCheckoutSession(args: {
   householdId: string;
   customerEmail: string;
@@ -180,6 +186,24 @@ export async function createCheckoutSession(args: {
   if (!priceId) throw new Error(`Missing ${priceEnv} for plan ${plan.id}`);
 
   const sub = await getHouseholdSubscription(args.householdId);
+  // A household with a live recurring subscription must change plans through
+  // the Stripe billing portal (createPortalSession below), not by checking
+  // out again: Stripe customers can hold multiple concurrent subscriptions,
+  // and nothing here would replace or cancel the existing one — a second
+  // checkout would silently start a SECOND subscription billing alongside
+  // the first, indefinitely, until someone notices the extra charge. The
+  // lifetime path is exempt: a lifetime purchase's webhook handler already
+  // cancels any prior recurring subscription (see applyStripeEvent).
+  if (
+    interval !== 'lifetime' &&
+    sub.stripeSubscriptionId &&
+    sub.status &&
+    LIVE_SUBSCRIPTION_STATUSES.has(sub.status)
+  ) {
+    throw new Error(
+      'ALREADY_SUBSCRIBED: This household already has an active subscription. Use the billing portal to change plans.'
+    );
+  }
   const stripe = await getStripe();
   // `interval` is stamped onto metadata for analytics/debugging only —
   // entitlement is resolved from `planId`, never the cadence.

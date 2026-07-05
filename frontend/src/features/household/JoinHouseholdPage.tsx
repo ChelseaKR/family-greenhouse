@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
-import { householdService } from '@/services/householdService';
+import { householdService, listMyHouseholds } from '@/services/householdService';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { BrandMark } from '@/components/BrandMark';
@@ -17,7 +17,7 @@ export function JoinHouseholdPage() {
   useDocumentTitle('Join household');
   const { inviteCode } = useParams<{ inviteCode: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, setHousehold, user } = useAuthStore();
+  const { isAuthenticated, setHousehold } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -29,6 +29,21 @@ export function JoinHouseholdPage() {
     queryFn: () => householdService.validateInvite(inviteCode!),
     enabled: !!inviteCode,
   });
+
+  // Belonging to SOME household (the common case — a Cognito claim every
+  // onboarded user has) used to redirect away from this page unconditionally,
+  // which made it impossible for anyone but a brand-new user to ever accept a
+  // second household's invite. Only the household THIS invite targets matters.
+  const { data: memberships, isLoading: membershipsLoading } = useQuery({
+    queryKey: ['me', 'households'],
+    queryFn: listMyHouseholds,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+  const isAlreadyMember =
+    isAuthenticated &&
+    !!inviteData?.household &&
+    (memberships?.some((m) => m.householdId === inviteData.household.id) ?? false);
 
   const joinMutation = useMutation({
     mutationFn: () => householdService.joinWithInvite(inviteCode!),
@@ -60,14 +75,7 @@ export function JoinHouseholdPage() {
     },
   });
 
-  // If already in a household, redirect
-  useEffect(() => {
-    if (user?.householdId) {
-      navigate('/');
-    }
-  }, [user?.householdId, navigate]);
-
-  if (isLoading) {
+  if (isLoading || (isAuthenticated && membershipsLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-paper">
         <LoadingSpinner size="lg" />
@@ -103,6 +111,15 @@ export function JoinHouseholdPage() {
                   <Button variant="secondary">Sign in</Button>
                 </Link>
               )}
+            </div>
+          ) : isAlreadyMember ? (
+            <div className="text-center space-y-4">
+              <Alert variant="info">
+                You&rsquo;re already a member of <strong>{inviteData?.household.name}</strong>.
+              </Alert>
+              <Link to="/">
+                <Button variant="secondary">Go to your household</Button>
+              </Link>
             </div>
           ) : !isAuthenticated ? (
             <div className="text-center space-y-4">

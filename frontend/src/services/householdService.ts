@@ -10,10 +10,12 @@ export interface Household {
   createdBy: string;
 }
 
+// Note: the household detail endpoint (GET /households/:id) never includes
+// email on member rows — other household members "cannot see your email"
+// per the Privacy Policy, with no admin exception.
 export interface HouseholdMember {
   userId: string;
   name: string;
-  email: string;
   role: 'admin' | 'member';
   joinedAt: string;
 }

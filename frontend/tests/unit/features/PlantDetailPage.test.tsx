@@ -92,6 +92,52 @@ describe('PlantDetailPage', () => {
     expect(await screen.findAllByText(/water/i)).not.toHaveLength(0);
   });
 
+  it('does not mark a task due today at a non-midnight time as overdue', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    // Due earlier today (not midnight) — a raw instant comparison would
+    // call this "overdue" once the day has moved past that hour, but it's
+    // still within today's calendar day.
+    const dueEarlierToday = new Date();
+    dueEarlierToday.setHours(0, 1, 0, 0);
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json({
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Pothos',
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+          upcomingTasks: [
+            {
+              id: 't1',
+              plantId: 'p1',
+              plantName: 'Pothos',
+              type: 'water',
+              customType: null,
+              frequency: 7,
+              lastCompleted: null,
+              nextDue: dueEarlierToday.toISOString(),
+              assignedTo: null,
+              assignedToName: null,
+              notes: null,
+              createdBy: '',
+              createdAt: '',
+            },
+          ],
+          recentCompletions: [],
+        })
+      )
+    );
+    renderDetail('p1');
+    const dueText = await screen.findByText(/Due:/);
+    expect(dueText.className).not.toMatch(/text-accent-700/);
+  });
+
   it('renders an error alert when the request fails', async () => {
     useAuthStore.setState({ accessToken: 'access-1' });
     server.use(

@@ -396,9 +396,11 @@ export const confirmImageUpload = createHandler(
     // attach it. The presigned PUT can't bound size, so this is where an
     // oversized upload gets rejected (and best-effort removed).
     let contentLength: number | undefined;
+    let contentType: string | undefined;
     try {
       const head = await s3.send(new HeadObjectCommand({ Bucket: IMAGES_BUCKET, Key: key }));
       contentLength = head.ContentLength;
+      contentType = head.ContentType;
     } catch {
       throw createHttpError(400, 'Uploaded image not found; upload it before confirming');
     }
@@ -407,6 +409,18 @@ export const confirmImageUpload = createHandler(
         logger.warn({ err, key }, 'oversized_image_delete_failed');
       });
       throw createHttpError(400, 'Image exceeds the 5 MiB limit');
+    }
+    // The presigned PUT's Content-Type is client-claimed and NOT covered by
+    // the S3 signature (Content-Type isn't a signable header), so the actual
+    // upload can arrive with a different Content-Type than what was presigned
+    // for. Re-check the object's real Content-Type against the same allowlist
+    // used at presign time — otherwise a non-image object (e.g. text/html)
+    // could be confirmed and later served same-origin as the plant's image.
+    if (!contentType || !(contentType in IMAGE_CONTENT_TYPES)) {
+      s3.send(new DeleteObjectCommand({ Bucket: IMAGES_BUCKET, Key: key })).catch((err) => {
+        logger.warn({ err, key }, 'invalid_content_type_delete_failed');
+      });
+      throw createHttpError(400, 'Uploaded file is not a valid image');
     }
     // Append to the photo timeline (which atomically also updates plant.imageUrl
     // to the latest). The previous behavior of bare updatePlantImage is now

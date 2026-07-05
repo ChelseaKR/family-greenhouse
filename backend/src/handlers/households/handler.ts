@@ -105,9 +105,12 @@ export const getHousehold = createHandler(
       throw createHttpError(403, 'Access denied');
     }
 
+    // getHouseholdMembersPublic (NOT getHouseholdMembers) — the roster
+    // response must never carry member emails, admin or not (Privacy Policy:
+    // other members "cannot see your email").
     const [household, members] = await Promise.all([
       householdService.getHousehold(householdId),
-      householdService.getHouseholdMembers(householdId),
+      householdService.getHouseholdMembersPublic(householdId),
     ]);
 
     if (!household) {

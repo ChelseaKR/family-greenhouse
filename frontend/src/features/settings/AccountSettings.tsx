@@ -65,7 +65,12 @@ export function AccountSettings() {
   const exportData = useMutation({
     mutationFn: async () => {
       track('data_exported', { context: 'csv' });
-      const [plants, tasks] = await Promise.all([plantService.getPlants(), taskService.getTasks()]);
+      // 'all' — the CSV export promises every plant; getPlants defaults to
+      // 'active' only, which would silently drop died/gave-away plants.
+      const [plants, tasks] = await Promise.all([
+        plantService.getPlants('all'),
+        taskService.getTasks(),
+      ]);
       const stamp = new Date().toISOString().slice(0, 10);
       downloadCsv(
         `family-greenhouse-plants-${stamp}.csv`,

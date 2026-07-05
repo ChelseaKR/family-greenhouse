@@ -260,7 +260,6 @@ export function HouseholdPage() {
                       <span className="ml-2 text-gray-500">(you)</span>
                     )}
                   </p>
-                  <p className="text-sm text-gray-500">{member.email}</p>
                   {householdId && (
                     <MemberVacation
                       householdId={householdId}
