@@ -129,6 +129,8 @@ export interface ImportPlantData {
   location?: string;
   notes?: string;
   tags?: string[];
+  /** From an export round-trip; the backend persists it when present. */
+  perenualSpeciesId?: number | null;
   /** Accepted for export round-trips; not persisted server-side (yet). */
   acquiredAt?: string;
   tasks?: ImportTaskData[];

@@ -166,4 +166,104 @@ describe('perenual client', () => {
       defaultImageUrl: 'https://img/full.jpg',
     });
   });
+
+  it('trims whitespace before matching the watering enum', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 1,
+        common_name: 'Test',
+        scientific_name: 'Testus testus',
+        watering: '  Average  ',
+        poisonous_to_pets: null,
+      }),
+    });
+    const perenual = await import('../../../src/services/perenual.js');
+    const detail = await perenual.getSpecies(1);
+    expect(detail?.watering).toBe('average');
+  });
+
+  it('distinguishes confirmed non-toxic (false/0) from unknown (null/undefined) pet toxicity', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    const perenual = await import('../../../src/services/perenual.js');
+
+    const responseWith = (poisonous_to_pets: unknown) => ({
+      ok: true,
+      json: async () => ({
+        id: 1,
+        common_name: 'Test',
+        scientific_name: 'Testus testus',
+        poisonous_to_pets,
+      }),
+    });
+
+    fetchMock.mockResolvedValueOnce(responseWith(false));
+    expect((await perenual.getSpecies(1))?.poisonousToPets).toBe(false);
+
+    fetchMock.mockResolvedValueOnce(responseWith(0));
+    expect((await perenual.getSpecies(1))?.poisonousToPets).toBe(false);
+
+    fetchMock.mockResolvedValueOnce(responseWith(1));
+    expect((await perenual.getSpecies(1))?.poisonousToPets).toBe(true);
+
+    // The Cinnamomum-cassia-shaped case: Perenual simply has no data. Must
+    // NOT collapse to `false` ("confirmed non-toxic") — that would be a
+    // guess dressed up as a fact, exactly like the already-fixed watering bug.
+    fetchMock.mockResolvedValueOnce(responseWith(null));
+    expect((await perenual.getSpecies(1))?.poisonousToPets).toBeNull();
+
+    fetchMock.mockResolvedValueOnce(responseWith(undefined));
+    expect((await perenual.getSpecies(1))?.poisonousToPets).toBeNull();
+  });
+
+  it('falls back to the scientific name when Perenual omits common_name', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: 3,
+            common_name: null,
+            scientific_name: ['Cinnamomum cassia'],
+          },
+        ],
+      }),
+    });
+    const perenual = await import('../../../src/services/perenual.js');
+    const out = await perenual.searchSpecies('cassia');
+    // Must be a usable string, never null — a null commonName crashes any
+    // caller that calls .toLowerCase() on it (e.g. the species combobox).
+    expect(out?.[0].commonName).toBe('Cinnamomum cassia');
+  });
+
+  it('returns an empty care guide instead of throwing when Perenual omits section data', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [{ id: 1, species_id: 5 }], // no `section` field at all
+      }),
+    });
+    const perenual = await import('../../../src/services/perenual.js');
+    // The module's own contract is "never throws" — a malformed upstream
+    // response must degrade to an empty guide, not a 500.
+    await expect(perenual.getCareGuide(5)).resolves.toEqual({ speciesId: 5, sections: [] });
+  });
+
+  it('distinguishes a genuinely empty care guide (cacheable) from a failed request (not cacheable)', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    const perenual = await import('../../../src/services/perenual.js');
+
+    // Perenual answered successfully, but has no guide at all for this
+    // species — a real, cacheable answer (mirrors searchSpecies's `[]`).
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+    await expect(perenual.getCareGuide(5)).resolves.toEqual({ speciesId: 5, sections: [] });
+
+    // The request itself failed — must stay null so the caller doesn't
+    // cache a transient failure as if it were a confirmed empty guide.
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    await expect(perenual.getCareGuide(5)).resolves.toBeNull();
+  });
 });

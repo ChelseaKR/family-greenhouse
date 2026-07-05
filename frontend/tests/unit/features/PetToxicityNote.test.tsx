@@ -64,6 +64,23 @@ describe('PetToxicityNote', () => {
     expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
   });
 
+  it('renders nothing when Perenual has no toxicity data (never claims "safe")', async () => {
+    detail.mockResolvedValue(makeDetail({ id: 9, poisonousToPets: null }));
+    renderNote(9);
+
+    await waitFor(() => expect(detail).toHaveBeenCalledWith(9));
+    expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.?t check/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an honest "couldn\'t check" notice on a fetch failure, instead of looking like confirmed-safe', async () => {
+    detail.mockRejectedValue(new Error('network error'));
+    renderNote(11);
+
+    expect(await screen.findByText(/couldn.?t check pet toxicity/i)).toBeInTheDocument();
+    expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
+  });
+
   it('does not fetch or render when no species is picked', () => {
     renderNote(null);
 

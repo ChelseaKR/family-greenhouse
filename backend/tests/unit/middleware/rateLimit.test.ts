@@ -101,6 +101,17 @@ describe('rateLimit (per-IP)', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('keys on the resolved route template, not the literal path, so varying an {id} cannot bypass the cap', async () => {
+    const { invoke } = makeHandler(rateLimit({ perWindowMs: 60_000, max: 1 }));
+    const eventForId = (id: string) => ({
+      ...v2Event({ ip: '7.7.7.8', path: `/species/${id}/thumbnail` }),
+      routeKey: 'GET /species/{id}/thumbnail',
+    });
+    await invoke(eventForId('1'));
+    // A different numeric id on the SAME route must share the bucket.
+    await expect(invoke(eventForId('2'))).rejects.toMatchObject({ statusCode: 429 });
+  });
+
   it('resets the bucket after the window elapses', async () => {
     vi.useFakeTimers();
     const { invoke } = makeHandler(rateLimit({ perWindowMs: 60_000, max: 1 }));
@@ -180,5 +191,18 @@ describe('userRateLimit', () => {
       expect(res.statusCode).toBe(200);
     }
     expect(__rateLimitBucketCountsForTests().user).toBe(0);
+  });
+
+  it('keys on the resolved route template, not the literal path, so varying an {id} cannot bypass the cap', async () => {
+    const { invoke } = makeHandler(userRateLimit({ perWindowMs: 60_000, max: 1 }));
+    const eventForId = (id: string) => ({
+      ...v2Event({ ip: '1.1.1.1', path: `/species/${id}/guide`, user: { userId: 'user-1' } }),
+      routeKey: 'GET /species/{id}/guide',
+    });
+    await invoke(eventForId('1'));
+    // Same user, same route template, different numeric id — must NOT get a
+    // fresh bucket (that would let one user read every species' guide by
+    // simply incrementing the id, defeating the documented 10/min cap).
+    await expect(invoke(eventForId('2'))).rejects.toMatchObject({ statusCode: 429 });
   });
 });

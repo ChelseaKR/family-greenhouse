@@ -23,7 +23,7 @@
  * query per member, which both multiplied reads and silently dropped
  * unassigned tasks (they're in nobody's GSI2 partition).
  */
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import type { Task } from '../models/types.js';
@@ -234,6 +234,14 @@ export async function remindHousehold(
  * The 90-day per-plant/pest suppression marker is written only AFTER at least
  * one successful delivery, so a failed send doesn't mute the alert for a
  * quarter.
+ *
+ * The per-day marker itself is written BEFORE evaluation (needed as a
+ * test-and-set guard so two hourly runs for the same household don't
+ * double-process), but if evaluation reports Perenual was unreachable for
+ * any plant this hour, the marker is deleted again afterward — otherwise a
+ * transient outage or an exhausted daily budget would look exactly like
+ * "checked, nothing to report" and silently lose the whole day's pest
+ * alerts with no way to retry until tomorrow.
  */
 async function runPestAlerts(householdId: string, now: Date): Promise<void> {
   try {
@@ -257,33 +265,53 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
     throw err;
   }
 
-  const members = await householdService.getHouseholdMembers(householdId);
-  const optedIn = [];
-  for (const member of members) {
-    const prefs = await notificationPrefs.getPreferences(member.userId);
-    if (prefs.pestAlerts) optedIn.push(member);
-  }
-  if (optedIn.length === 0) return;
+  let dataUnavailable = false;
+  try {
+    const members = await householdService.getHouseholdMembers(householdId);
+    const optedIn = [];
+    for (const member of members) {
+      const prefs = await notificationPrefs.getPreferences(member.userId);
+      if (prefs.pestAlerts) optedIn.push(member);
+    }
+    if (optedIn.length === 0) return;
 
-  const alerts = await pestAlerts.evaluatePestAlerts(householdId, now);
-  for (const alert of alerts) {
-    let delivered = false;
-    for (const member of optedIn) {
-      try {
-        await notifier.sendToUser(
-          { userId: member.userId, email: member.email },
-          { title: 'Pest season heads-up', body: alert.message, tag: 'pest-alert' }
-        );
-        delivered = true;
-      } catch (err) {
-        logger.warn(
-          { err: (err as Error).message, householdId, userId: member.userId },
-          'reminders.pest_alert_send_failed'
-        );
+    const result = await pestAlerts.evaluatePestAlerts(householdId, now);
+    dataUnavailable = result.dataUnavailable;
+    for (const alert of result.alerts) {
+      let delivered = false;
+      for (const member of optedIn) {
+        try {
+          await notifier.sendToUser(
+            { userId: member.userId, email: member.email },
+            { title: 'Pest season heads-up', body: alert.message, tag: 'pest-alert' }
+          );
+          delivered = true;
+        } catch (err) {
+          logger.warn(
+            { err: (err as Error).message, householdId, userId: member.userId },
+            'reminders.pest_alert_send_failed'
+          );
+        }
+      }
+      if (delivered) {
+        await pestAlerts.markAlerted(alert.plantId, alert.pestId);
       }
     }
-    if (delivered) {
-      await pestAlerts.markAlerted(alert.plantId, alert.pestId);
+  } finally {
+    if (dataUnavailable) {
+      await dynamodb
+        .send(
+          new DeleteCommand({
+            TableName: TABLE_NAME,
+            Key: { PK: `HOUSEHOLD#${householdId}`, SK: `PEST_CHECK#${dateKey(now)}` },
+          })
+        )
+        .catch((err) => {
+          logger.warn(
+            { err: (err as Error).message, householdId },
+            'reminders.pest_check_marker_cleanup_failed'
+          );
+        });
     }
   }
 }

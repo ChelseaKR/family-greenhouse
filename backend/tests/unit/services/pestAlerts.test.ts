@@ -109,13 +109,17 @@ describe('evaluatePestAlerts', () => {
     const { evaluatePestAlerts } = await import('../../../src/services/pestAlerts.js');
 
     vi.mocked(plants.getPlants).mockResolvedValue([plant] as never);
-    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue([pest(null)] as never);
+    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue({
+      ok: true,
+      pests: [pest(null)],
+    } as never);
     // lastAlertedAt read → no previous alert.
     vi.mocked(dynamodb.send).mockResolvedValue({ Item: undefined } as never);
 
-    const alerts = await evaluatePestAlerts('hh', new Date('2026-06-01T00:00:00Z'));
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({ plantId: 'p1', pestId: 42, pestName: 'Spider mites' });
+    const result = await evaluatePestAlerts('hh', new Date('2026-06-01T00:00:00Z'));
+    expect(result.alerts).toHaveLength(1);
+    expect(result.alerts[0]).toMatchObject({ plantId: 'p1', pestId: 42, pestName: 'Spider mites' });
+    expect(result.dataUnavailable).toBe(false);
 
     // Only Get commands — the 90-day marker write moved to the caller
     // (after successful delivery) via markAlerted().
@@ -132,11 +136,48 @@ describe('evaluatePestAlerts', () => {
     const now = new Date('2026-06-01T00:00:00Z');
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
     vi.mocked(plants.getPlants).mockResolvedValue([plant] as never);
-    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue([pest(null)] as never);
+    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue({
+      ok: true,
+      pests: [pest(null)],
+    } as never);
     vi.mocked(dynamodb.send).mockResolvedValue({ Item: { alertedAt: tenDaysAgo } } as never);
 
-    const alerts = await evaluatePestAlerts('hh', now);
-    expect(alerts).toHaveLength(0);
+    const result = await evaluatePestAlerts('hh', now);
+    expect(result.alerts).toHaveLength(0);
+  });
+
+  it('does NOT treat "no pest data available" the same as "confirmed no pests" (the Cinnamomum-cassia-shaped bug)', async () => {
+    const plants = await import('../../../src/services/plantService.js');
+    const enrichment = await import('../../../src/services/enrichment.js');
+    const { evaluatePestAlerts } = await import('../../../src/services/pestAlerts.js');
+
+    vi.mocked(plants.getPlants).mockResolvedValue([plant] as never);
+    // Perenual's daily budget is exhausted — this is NOT the same as "we
+    // checked and there are no pests," and must be flagged so the caller
+    // knows not to treat today as fully evaluated.
+    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue({
+      ok: false,
+      reason: 'budget_exhausted',
+    } as never);
+
+    const result = await evaluatePestAlerts('hh', new Date('2026-06-01T00:00:00Z'));
+    expect(result.alerts).toHaveLength(0);
+    expect(result.dataUnavailable).toBe(true);
+  });
+
+  it('does NOT flag dataUnavailable when Perenual is simply unconfigured (permanent, not worth a same-day retry)', async () => {
+    const plants = await import('../../../src/services/plantService.js');
+    const enrichment = await import('../../../src/services/enrichment.js');
+    const { evaluatePestAlerts } = await import('../../../src/services/pestAlerts.js');
+
+    vi.mocked(plants.getPlants).mockResolvedValue([plant] as never);
+    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue({
+      ok: false,
+      reason: 'unconfigured',
+    } as never);
+
+    const result = await evaluatePestAlerts('hh', new Date('2026-06-01T00:00:00Z'));
+    expect(result.dataUnavailable).toBe(false);
   });
 
   it('markAlerted writes a TTL-swept marker row', async () => {

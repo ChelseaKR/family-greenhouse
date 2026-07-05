@@ -54,6 +54,7 @@ describe('parseImportFile — JSON shapes', () => {
               notes: null,
               status: 'active',
               tags: ['easy'],
+              perenualSpeciesId: 42,
               createdAt: '2025-01-01T00:00:00.000Z',
               createdBy: 'u1',
               updatedAt: '2025-01-01T00:00:00.000Z',
@@ -83,9 +84,32 @@ describe('parseImportFile — JSON shapes', () => {
       species: 'Epipremnum',
       location: 'Kitchen',
       tags: ['easy'],
+      perenualSpeciesId: 42,
       acquiredAt: '2025-01-01T00:00:00.000Z',
       tasks: [{ type: 'water', frequency: 7, notes: 'from the top' }],
     });
+  });
+
+  it('drops an absent or malformed perenualSpeciesId instead of forwarding garbage', () => {
+    const rows = parseImportFile(
+      'json',
+      JSON.stringify([
+        { name: 'No link' },
+        { name: 'Null link', perenualSpeciesId: null },
+        { name: 'String id', perenualSpeciesId: '42' },
+        { name: 'Negative id', perenualSpeciesId: -5 },
+        { name: 'Decimal id', perenualSpeciesId: 1.5 },
+        { name: 'Zero id', perenualSpeciesId: 0 },
+        { name: 'Valid id', perenualSpeciesId: 7 },
+      ])
+    );
+    expect(rows[0].data).toEqual({ name: 'No link' });
+    expect(rows[1].data).toEqual({ name: 'Null link' });
+    expect(rows[2].data).toEqual({ name: 'String id' });
+    expect(rows[3].data).toEqual({ name: 'Negative id' });
+    expect(rows[4].data).toEqual({ name: 'Decimal id' });
+    expect(rows[5].data).toEqual({ name: 'Zero id' });
+    expect(rows[6].data).toEqual({ name: 'Valid id', perenualSpeciesId: 7 });
   });
 
   it('throws a typed error for unparseable JSON', () => {

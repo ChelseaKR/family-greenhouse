@@ -15,12 +15,18 @@ export interface PerenualSpeciesDetail extends PerenualSpeciesSummary {
   hardinessZone: string | null;
   indoor: boolean;
   edible: boolean;
-  poisonousToPets: boolean;
+  // `null` means Perenual has no toxicity data for this species — distinct
+  // from a confirmed `false`. Never render an absence of data as "confirmed
+  // safe."
+  poisonousToPets: boolean | null;
   defaultImageUrl: string | null;
 }
 
 export type SpeciesSearchResponse = {
-  source: 'perenual' | 'disabled';
+  // 'disabled' = no Perenual API key configured. 'unavailable' = configured
+  // but this request got no data (budget exhausted or a transient upstream
+  // error) — a real, possibly-transient outage, not the same as "off".
+  source: 'perenual' | 'disabled' | 'unavailable';
   results: PerenualSpeciesSummary[];
 };
 
@@ -42,7 +48,7 @@ export interface CareGuideResponse {
   cycle: string | null;
   hardinessZone: string | null;
   indoor: boolean;
-  poisonousToPets: boolean;
+  poisonousToPets: boolean | null;
   sunlight: string[];
   sections: CareGuideSection[];
 }

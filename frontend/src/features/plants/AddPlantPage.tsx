@@ -87,6 +87,7 @@ export function AddPlantPage() {
     handleSubmit,
     setValue,
     watch,
+    getValues,
     formState: { errors },
   } = useForm<AddPlantFormData>({
     resolver: zodResolver(addPlantSchema),
@@ -157,7 +158,13 @@ export function AddPlantPage() {
       const exact = result.results.find(
         (r) => r.scientificName.toLowerCase() === s.scientificName.toLowerCase()
       );
-      setPerenualSpeciesId(exact?.id ?? null);
+      // Guard against out-of-order resolution: if the species field has
+      // moved on since this search started (a later "Use" click, or a
+      // manual edit), this result is stale — applying it would silently
+      // overwrite a newer pick with a mismatched id.
+      if (getValues('species') === s.scientificName) {
+        setPerenualSpeciesId(exact?.id ?? null);
+      }
     } catch {
       // Search failures shouldn't block the user from saving the plant.
     }

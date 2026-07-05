@@ -38,7 +38,10 @@ export interface PerenualSpeciesDetail extends PerenualSpeciesSummary {
   hardinessZone: string | null;
   indoor: boolean;
   edible: boolean;
-  poisonousToPets: boolean;
+  // `null` means Perenual has no data for this species — distinct from a
+  // confirmed `false`. Collapsing "unknown" into "not toxic" would make the
+  // app assert plants are pet-safe when it actually never checked.
+  poisonousToPets: boolean | null;
   defaultImageUrl: string | null;
 }
 
@@ -189,7 +192,10 @@ function summarize(item: RawSpeciesListItem): PerenualSpeciesSummary {
     : item.scientific_name;
   return {
     id: item.id,
-    commonName: item.common_name,
+    // Thin-data species can have a null common_name despite the raw type
+    // asserting `string` (untrusted upstream JSON — see fetchJson). Fall back
+    // to the scientific name so callers never see/crash on a null.
+    commonName: item.common_name ?? scientific ?? '',
     scientificName: scientific ?? '',
     thumbnailUrl: item.default_image?.thumbnail ?? null,
   };
@@ -197,8 +203,17 @@ function summarize(item: RawSpeciesListItem): PerenualSpeciesSummary {
 
 function watering(raw: string | null): PerenualSpeciesDetail['watering'] {
   if (!raw) return null;
-  const v = raw.toLowerCase();
+  const v = raw.trim().toLowerCase();
   if (v === 'frequent' || v === 'average' || v === 'minimum' || v === 'none') return v;
+  return null;
+}
+
+// Distinguishes "confirmed toxic" / "confirmed not toxic" from "Perenual has
+// no data" (null/undefined/any shape we don't recognize) — see the doc
+// comment on `PerenualSpeciesDetail.poisonousToPets`.
+function poisonousToPets(raw: boolean | number | null | undefined): boolean | null {
+  if (raw === true || raw === 1) return true;
+  if (raw === false || raw === 0) return false;
   return null;
 }
 
@@ -226,7 +241,7 @@ export async function getSpecies(id: number): Promise<PerenualSpeciesDetail | nu
         : null,
     indoor: raw.indoor === true,
     edible: raw.edible_fruit === true,
-    poisonousToPets: raw.poisonous_to_pets === true || raw.poisonous_to_pets === 1,
+    poisonousToPets: poisonousToPets(raw.poisonous_to_pets),
     defaultImageUrl: raw.default_image?.original_url ?? null,
   };
 }
@@ -235,8 +250,20 @@ export async function getCareGuide(speciesId: number): Promise<PerenualCareGuide
   const raw = await fetchJson<RawCareGuide>('/species-care-guide-list', {
     species_id: String(speciesId),
   });
-  const guide = raw?.data?.[0];
-  if (!guide) return null;
+  // `null` here means the request itself failed (network/non-2xx/timeout) —
+  // not cacheable, the caller should retry. Distinct from the request
+  // succeeding with genuinely no guide for this species (below), which IS a
+  // real, cacheable answer — same distinction `searchSpecies` already makes
+  // for an empty result set. Conflating the two meant a species with no
+  // guide was never cached and re-spent budget on every single request.
+  if (!raw) return null;
+  const guide = raw.data?.[0];
+  if (!guide) return { speciesId, sections: [] };
+  // `section` is typed as a required array, but that's a compile-time
+  // assertion, not a runtime guarantee (see fetchJson) — a thin-data guide
+  // entry can genuinely omit it. The module promises "never throws"; honor
+  // that here instead of letting a malformed response 500 the endpoint.
+  if (!Array.isArray(guide.section)) return { speciesId: guide.species_id, sections: [] };
   const sections: PerenualCareGuideSection[] = guide.section
     .filter((s) => s.type === 'watering' || s.type === 'sunlight' || s.type === 'pruning')
     .map((s) => ({ type: s.type as PerenualCareGuideSection['type'], description: s.description }));
