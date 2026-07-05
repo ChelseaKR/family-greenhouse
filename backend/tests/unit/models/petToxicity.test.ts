@@ -152,6 +152,36 @@ describe('lookupToxicity', () => {
       expect(m.note.length).toBeGreaterThan(0);
     }
   });
+
+  it('flags asparagus fern as toxic, not the unrelated non-toxic Boston fern', () => {
+    // Regression: "asparagus fern" used to word-overlap-match Boston fern's
+    // bare "fern" alias and return a confident (wrong) non-toxic verdict for
+    // a genuinely toxic plant.
+    const slugs = lookupToxicity('asparagus fern', 5).map((m) => m.slug);
+    expect(slugs).toContain('asparagus-fern');
+    expect(slugs).not.toContain('boston-fern');
+    const [hit] = lookupToxicity('asparagus fern');
+    expect(hit?.cats).toBe('toxic');
+    expect(hit?.dogs).toBe('toxic');
+  });
+
+  it('emerald fern and foxtail fern (asparagus fern aliases) also resolve to the toxic entry', () => {
+    expect(lookupToxicity('emerald fern')[0]?.slug).toBe('asparagus-fern');
+    expect(lookupToxicity('foxtail fern')[0]?.slug).toBe('asparagus-fern');
+  });
+
+  it('a bare single-word query still matches via the loose word-overlap tier', () => {
+    // The tightened word tier requires ALL query words to match — for a
+    // single-word query that's unchanged behavior (every === some here).
+    const slugs = lookupToxicity('fern', 5).map((m) => m.slug);
+    expect(slugs).toContain('boston-fern');
+  });
+
+  it('the word-overlap tier requires every query word to appear, not just one', () => {
+    // A query combining a real word from one entry with a nonsense word
+    // should NOT match on the strength of the one real word alone.
+    expect(lookupToxicity('zzznotaword fern').map((m) => m.slug)).not.toContain('boston-fern');
+  });
 });
 
 // Type-only guard: keeps the exported entry type exercised by the suite.

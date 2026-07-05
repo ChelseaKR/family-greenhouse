@@ -160,6 +160,20 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     note: 'Non-toxic to cats and dogs per the ASPCA — true ferns are a reliably safe group. Pets sometimes bat at the fronds; no harm done beyond a bit of mess.',
   },
   {
+    slug: 'asparagus-fern',
+    commonName: 'Asparagus fern',
+    scientificName: 'Asparagus densiflorus',
+    // Despite the name, this is NOT a true fern (it's in the asparagus/lily
+    // family) — critically, it does NOT belong in the "true ferns are safe"
+    // group above. Deliberately no bare "fern" alias: that would collide
+    // with boston-fern's "fern" alias in the word-overlap matching tier and
+    // reintroduce the exact false-negative this entry exists to close.
+    aliases: ['sprenger fern', 'emerald fern', 'foxtail fern', 'asparagus densiflorus'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA — the berries carry sapogenins that cause vomiting, diarrhea and abdominal pain, and repeated skin contact with the sap can cause allergic dermatitis. Keep it well out of reach.',
+  },
+  {
     slug: 'african-violet',
     commonName: 'African violet',
     scientificName: 'Saintpaulia',
@@ -253,7 +267,11 @@ function toMatch(entry: PetToxicityEntry): PetToxicityMatch {
  *   1. exact name/alias hit
  *   2. query is a prefix of a name/alias (typeahead)
  *   3. any name/alias contains the query (substring)
- *   4. any query word appears in a name/alias (loose word overlap)
+ *   4. every query word (individually) appears in some name/alias (loose
+ *      word overlap) — deliberately requires ALL words, not just one: a
+ *      single generic alias word (e.g. Boston fern's bare "fern" alias)
+ *      must not alone satisfy a multi-word query like "asparagus fern" and
+ *      hand back an unrelated species' (possibly wrong) toxicity verdict.
  */
 export function lookupToxicity(query: string, limit = 5): PetToxicityMatch[] {
   const q = normalizeName(query);
@@ -277,7 +295,7 @@ export function lookupToxicity(query: string, limit = 5): PetToxicityMatch[] {
       prefix.push(entry);
     } else if (names.some((n) => n.includes(q))) {
       substring.push(entry);
-    } else if (qWords.length > 0 && names.some((n) => qWords.some((w) => n.includes(w)))) {
+    } else if (qWords.length > 0 && qWords.every((w) => names.some((n) => n.includes(w)))) {
       word.push(entry);
     }
   }
