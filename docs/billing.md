@@ -8,9 +8,18 @@ Source of truth: `backend/src/models/plans.ts`.
 
 | Plan       | Monthly | Plants cap | Members cap | Notes                           |
 | ---------- | ------- | ---------- | ----------- | ------------------------------- |
-| Seedling   | Free    | 10         | 1           | Default for every new household |
+| Seedling   | Free    | 10         | 6           | Default for every new household |
 | Garden     | $4.99   | 500        | 6           | 14-day free trial via Stripe    |
 | Greenhouse | $9.99   | 5000       | 50          | 14-day free trial               |
+
+Seedling's member cap is deliberately the same as Garden's, not 1 — household
+sharing is a free, unrestricted capability by design (competitors like
+Planta paywall it entirely; matching that would give up the product's main
+differentiator). Only plant count and paid-feature depth are monetization
+levers. This table previously listed 1 for Seedling, which was stale
+relative to `plans.ts` and the marketing pricing page (both already say 6) —
+if you're about to "fix" `plans.ts` to match a "1" you saw somewhere, don't;
+check here and the marketing copy first.
 
 Caps are enforced in:
 

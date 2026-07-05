@@ -247,9 +247,12 @@ describe('plants handler — propagation + shares', () => {
       const res = (await updatePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(200);
       expect(plantService.getPlant).not.toHaveBeenCalled();
-      expect(plantService.updatePlant).toHaveBeenCalledWith('hh-1', CHILD_ID, {
-        parentPlantId: null,
-      });
+      expect(plantService.updatePlant).toHaveBeenCalledWith(
+        'hh-1',
+        CHILD_ID,
+        { parentPlantId: null },
+        500 // garden plan's maxPlants, per the billing.js mock above
+      );
     });
   });
 
