@@ -79,6 +79,91 @@ interface RawGeocode {
   country?: string;
 }
 
+// US state postal codes. OpenWeatherMap's geocoding `q` format is strictly
+// `{city},{state},{country}` — state is only meaningful in that 3-part form.
+// A bare 2-part `{city},{state}` reads the second segment as an ISO country
+// code instead, so "Davis,CA" tries to match Canada (ISO "CA"), not
+// California. Recognizing the code lets us retry with the country made
+// explicit: "Davis,CA,US".
+const US_STATE_CODES = new Set([
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+  'DC',
+]);
+
+/**
+ * OpenWeatherMap only recognizes a comma-separated query — but the natural
+ * way to add a disambiguating country/state (the way our own error message's
+ * example, "Austin, US", implies, and the way most people actually type it)
+ * is a trailing code separated by a SPACE. "davis us" and "davis ca," typed
+ * exactly as prompted, matched nothing upstream because OWM read the whole
+ * string as one unmatched place name. Insert the comma OWM needs whenever
+ * the query isn't already comma-structured; leave an already-structured
+ * query (the user typed their own comma) untouched.
+ */
+function normalizeGeocodeQuery(query: string): string {
+  const trimmed = query.trim();
+  if (trimmed.includes(',')) return trimmed;
+  const parts = trimmed.split(/\s+/);
+  if (parts.length < 2) return trimmed;
+  const code = parts[parts.length - 1];
+  if (!/^[a-zA-Z]{2}$/.test(code)) return trimmed;
+  const city = parts.slice(0, -1).join(' ');
+  return `${city}, ${code.toUpperCase()}`;
+}
+
+function toResult(best: RawGeocode): GeocodeResult {
+  return { city: best.name, lat: best.lat, lon: best.lon, country: best.country ?? null };
+}
+
 interface RawOneCall {
   current?: {
     dt: number;
@@ -99,18 +184,24 @@ interface RawOneCall {
  * responsible for prompting the user to refine.
  */
 export async function geocode(query: string): Promise<GeocodeResult | null> {
-  const raw = await fetchJson<RawGeocode[]>('/geo/1.0/direct', {
-    q: query.trim(),
-    limit: '1',
-  });
-  if (!raw || raw.length === 0) return null;
-  const best = raw[0];
-  return {
-    city: best.name,
-    lat: best.lat,
-    lon: best.lon,
-    country: best.country ?? null,
-  };
+  const normalized = normalizeGeocodeQuery(query);
+  const raw = await fetchJson<RawGeocode[]>('/geo/1.0/direct', { q: normalized, limit: '1' });
+  if (raw && raw.length > 0) return toResult(raw[0]);
+
+  // The trailing code (if any) didn't resolve as an ISO country. Retry
+  // assuming it's a US state abbreviation instead — see US_STATE_CODES.
+  const match = /^(.*),\s*([a-zA-Z]{2})$/.exec(normalized);
+  if (match) {
+    const [, city, code] = match;
+    if (US_STATE_CODES.has(code.toUpperCase())) {
+      const retry = await fetchJson<RawGeocode[]>('/geo/1.0/direct', {
+        q: `${city}, ${code.toUpperCase()}, US`,
+        limit: '1',
+      });
+      if (retry && retry.length > 0) return toResult(retry[0]);
+    }
+  }
+  return null;
 }
 
 export async function getWeather(lat: number, lon: number): Promise<WeatherSnapshot | null> {
