@@ -122,3 +122,64 @@ variable "identify_metering_enabled" {
   type        = string
   default     = ""
 }
+
+# --- Stripe ---
+# Mirrors modules/api/variables.tf. These MUST be declared here too: Terraform
+# only warns (and silently drops the value) on an undeclared variable passed
+# via -var-file or TF_VAR_*, so without these, prod's price ids and the
+# CI-injected secret key/webhook secret never reach the Lambdas even though
+# terraform.tfvars and cd-production.yml both set them.
+variable "stripe_secret_key" {
+  description = "Stripe API secret key (sk_test_... or sk_live_...). Required for billing checkout. Prefer SSM/secret-ref over plaintext tfvar."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "stripe_webhook_secret" {
+  description = "Stripe webhook signing secret. Required for /billing/webhook to verify signatures."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "stripe_price_id_garden" {
+  description = "Stripe price ID for the Garden tier MONTHLY ($4.99/mo). Required for /billing/checkout monthly."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_annual" {
+  description = "Stripe price ID for the Garden tier ANNUAL ($39.99/yr). Required for /billing/checkout with interval=year."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_lifetime" {
+  description = "Stripe price ID for the Garden tier LIFETIME one-time payment ($149). Required for /billing/checkout with interval=lifetime."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_greenhouse" {
+  description = "Stripe price ID for the Greenhouse tier MONTHLY ($9.99/mo). Required for /billing/checkout monthly."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_greenhouse_annual" {
+  description = "Stripe price ID for the Greenhouse tier ANNUAL ($79.99/yr). Required for /billing/checkout with interval=year."
+  type        = string
+  default     = ""
+}
+
+# Manual confirmation gate: Stripe price ids look identical in test and live
+# mode, so Terraform can't verify stripe_price_id_* actually match the mode of
+# stripe_secret_key. This must be deliberately flipped to true (see the check
+# block in main.tf, which warns on plan/apply if a live-looking secret key is
+# paired with this still false).
+variable "stripe_price_ids_are_live" {
+  description = "Set true only after manually confirming every stripe_price_id_* was created in the SAME Stripe mode (test/live) as stripe_secret_key."
+  type        = bool
+  default     = false
+}

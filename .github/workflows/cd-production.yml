@@ -150,6 +150,15 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
+        # Stripe secrets are injected as TF_VARs from GitHub Actions secrets so
+        # the sensitive values never land in the committed tfvars. Unset secrets
+        # resolve to "" → Stripe stays inert (the pre-billing behavior), so this
+        # is safe before the secrets are populated. The non-secret price IDs
+        # live in environments/production/terraform.tfvars. The plan bakes these
+        # into tfplan, so only this step needs them (apply consumes tfplan).
+        env:
+          TF_VAR_stripe_secret_key: ${{ secrets.STRIPE_SECRET_KEY }}
+          TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: terraform plan -var-file=environments/production/terraform.tfvars -out=tfplan
 
       - name: Terraform Apply
