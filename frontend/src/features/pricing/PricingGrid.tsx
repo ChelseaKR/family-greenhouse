@@ -33,7 +33,7 @@ export function PricingGrid() {
         <div
           role="radiogroup"
           aria-label="Billing interval"
-          className="inline-flex rounded-full bg-gray-100 p-1"
+          className="inline-flex rounded-full bg-parchment ring-1 ring-primary-200/60 p-1"
         >
           {(['monthly', 'annual', 'lifetime'] as Interval[]).map((opt) => (
             <button
@@ -63,21 +63,18 @@ export function PricingGrid() {
               'flex flex-col rounded-2xl p-8',
               plan.highlighted
                 ? 'bg-primary-700 text-white ring-2 ring-primary-700 lg:scale-105 shadow-xl'
-                : 'bg-white ring-1 ring-gray-200'
+                : 'bg-white ring-1 ring-primary-200/60 shadow-journal'
             )}
           >
             <h3
-              className={clsx(
-                'text-lg font-semibold',
-                plan.highlighted ? 'text-white' : 'text-gray-900'
-              )}
+              className={clsx('font-serif text-xl', plan.highlighted ? 'text-white' : 'text-ink')}
             >
               {plan.name}
             </h3>
             <p
               className={clsx(
                 'mt-2 text-sm',
-                plan.highlighted ? 'text-primary-100' : 'text-gray-500'
+                plan.highlighted ? 'text-primary-100' : 'text-gray-600'
               )}
             >
               {plan.description}
@@ -103,8 +100,8 @@ export function PricingGrid() {
                   <div className="flex items-baseline gap-1">
                     <span
                       className={clsx(
-                        'text-4xl font-bold',
-                        plan.highlighted ? 'text-white' : 'text-gray-900'
+                        'font-serif text-4xl tabular-nums',
+                        plan.highlighted ? 'text-white' : 'text-ink'
                       )}
                     >
                       {plan.freeLabel ?? point?.price}
@@ -113,7 +110,7 @@ export function PricingGrid() {
                       <span
                         className={clsx(
                           'text-sm',
-                          plan.highlighted ? 'text-primary-100' : 'text-gray-500'
+                          plan.highlighted ? 'text-primary-100' : 'text-gray-600'
                         )}
                       >
                         {point.period}
@@ -124,7 +121,7 @@ export function PricingGrid() {
                     <p
                       className={clsx(
                         'mt-1 text-xs',
-                        plan.highlighted ? 'text-primary-100' : 'text-gray-500'
+                        plan.highlighted ? 'text-primary-100' : 'text-gray-600'
                       )}
                     >
                       No lifetime option — annual price shown

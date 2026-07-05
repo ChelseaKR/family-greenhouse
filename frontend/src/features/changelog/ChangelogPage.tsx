@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BrandMark } from '@/components/BrandMark';
-import { Footer } from '@/components/Footer';
+import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 
 /**
@@ -22,15 +21,30 @@ interface Entry {
   body: React.ReactNode;
 }
 
+// Category tags stay inside the garden palette (greens, terracotta,
+// amber, warm stone) — stock blue/purple read as another product's UI.
 const CATEGORY_STYLES: Record<Category, string> = {
   Feature: 'bg-primary-100 text-primary-900',
-  Improvement: 'bg-blue-100 text-blue-900',
+  Improvement: 'bg-accent-100 text-accent-900',
   Reliability: 'bg-amber-100 text-amber-900',
-  Design: 'bg-purple-100 text-purple-900',
-  Fix: 'bg-gray-100 text-gray-700',
+  Design: 'bg-secondary-100 text-secondary-800',
+  Fix: 'bg-stone-100 text-stone-700',
 };
 
 const ENTRIES: Entry[] = [
+  {
+    date: '2026-07-04',
+    category: 'Design',
+    title: 'The reading room joins the greenhouse',
+    body: (
+      <>
+        The care guides, blog, pricing, changelog, legal pages, and this status page&rsquo;s
+        siblings now share the same paper-and-ink look as the rest of the site — one header, one
+        footer, and a seed-packet facts card on every care guide. Inside the app, dialogs, chat, and
+        analytics picked up the same palette, and a batch of low-contrast small text got darker.
+      </>
+    ),
+  },
   {
     date: '2026-06-12',
     category: 'Design',
@@ -51,8 +65,8 @@ const ENTRIES: Entry[] = [
     title: 'Spider plant care guide',
     body: (
       <>
-        Fourth entry in the <Link to="/care">care guides</Link>: the spider plant — why brown tips
-        are usually your tap water, and what to do with all those plantlets.
+        New in the <Link to="/care">care guides</Link>: the spider plant — why brown tips are
+        usually your tap water, and what to do with all those plantlets.
       </>
     ),
   },
@@ -186,7 +200,9 @@ const ENTRIES: Entry[] = [
     body: (
       <>
         Press{' '}
-        <kbd className="rounded border border-gray-200 bg-gray-50 px-1 font-sans text-xs">⌘K</kbd>{' '}
+        <kbd className="rounded border border-primary-200/70 bg-parchment px-1 font-sans text-xs">
+          ⌘K
+        </kbd>{' '}
         anywhere to search across plants and tasks. Results split by type; press Enter to jump.
       </>
     ),
@@ -216,59 +232,41 @@ export function ChangelogPage() {
   const grouped = groupByMonth(ENTRIES);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <header className="border-b border-gray-200">
-        <nav className="mx-auto max-w-3xl flex items-center justify-between p-6">
-          <Link to="/" aria-label="Family Greenhouse home">
-            <BrandMark variant="wordmark" size="sm" />
-          </Link>
-          <Link to="/" className="text-sm font-medium text-primary-700 hover:underline">
-            Try the app →
-          </Link>
-        </nav>
-      </header>
+    <PublicShell>
+      <PageIntro
+        eyebrow="Changelog"
+        title={'What’s new'}
+        lede={'Things we’ve shipped, in plain language. Most recent first.'}
+      />
 
-      <main className="flex-1 mx-auto max-w-3xl w-full px-6 py-16">
-        <h1 className="font-serif text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-          What&rsquo;s new
-        </h1>
-        <p className="mt-3 text-lg text-gray-600">
-          Things we&rsquo;ve shipped, in plain language. Most recent first.
-        </p>
-
-        <div className="mt-12 space-y-12">
-          {[...grouped.entries()].map(([month, entries]) => (
-            <section key={month}>
-              <h2 className="font-serif text-2xl font-semibold tracking-tight text-gray-900 border-b border-gray-200 pb-2">
-                {month}
-              </h2>
-              <ul className="mt-6 space-y-8">
-                {entries.map((e, i) => (
-                  <li key={`${e.date}-${i}`}>
-                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em]">
-                      <span className={`rounded-full px-2 py-0.5 ${CATEGORY_STYLES[e.category]}`}>
-                        {e.category}
-                      </span>
-                      <span className="text-gray-500 normal-case tracking-normal">
-                        {new Date(e.date).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                    <h3 className="mt-2 font-serif text-xl font-semibold tracking-tight text-gray-900">
-                      {e.title}
-                    </h3>
-                    <p className="mt-2 text-base text-gray-700 leading-relaxed">{e.body}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      </main>
-
-      <Footer />
-    </div>
+      <div className="mt-12 space-y-12">
+        {[...grouped.entries()].map(([month, entries]) => (
+          <section key={month}>
+            <h2 className="font-serif text-2xl tracking-tight text-ink border-b border-primary-100/80 pb-2">
+              {month}
+            </h2>
+            <ul className="mt-6 space-y-8">
+              {entries.map((e, i) => (
+                <li key={`${e.date}-${i}`}>
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em]">
+                    <span className={`rounded-full px-2 py-0.5 ${CATEGORY_STYLES[e.category]}`}>
+                      {e.category}
+                    </span>
+                    <span className="text-gray-600 normal-case tracking-normal">
+                      {new Date(e.date).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                  <h3 className="mt-2 font-serif text-xl tracking-tight text-ink">{e.title}</h3>
+                  <p className="mt-2 text-base text-gray-700 leading-relaxed">{e.body}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </PublicShell>
   );
 }

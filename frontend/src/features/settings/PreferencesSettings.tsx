@@ -56,7 +56,7 @@ export function PreferencesSettings() {
                   'rounded-md border px-4 py-2 text-sm font-medium min-h-touch',
                   density === value
                     ? 'border-primary-700 bg-primary-50 text-primary-800'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    : 'border-primary-200/70 bg-paper text-gray-700 hover:bg-primary-50'
                 )}
               >
                 {t(`settings.preferences.density${value[0].toUpperCase() + value.slice(1)}`)}

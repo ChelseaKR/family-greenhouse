@@ -29,7 +29,7 @@ const PADDING_CLASSES = {
 };
 
 const VARIANT_CLASSES: Record<NonNullable<CardProps['variant']>, string> = {
-  solid: 'bg-white rounded-lg shadow-card border border-gray-200',
+  solid: 'bg-white rounded-lg shadow-card border border-primary-100/70',
   paper:
     'bg-paper rounded-xl shadow-journal hover:shadow-journal-hover transition-shadow duration-200 border border-primary-100/60',
   journal: 'bg-paper border-b border-primary-100/80 last:border-b-0 rounded-none',
@@ -62,8 +62,8 @@ export function CardHeader({ title, description, action }: CardHeaderProps) {
   return (
     <div className="flex items-start justify-between mb-4">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-        {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+        <h2 className="font-serif text-lg text-ink">{title}</h2>
+        {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
       </div>
       {action && <div>{action}</div>}
     </div>

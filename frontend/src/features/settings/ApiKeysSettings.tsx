@@ -164,7 +164,7 @@ export function ApiKeysSettings() {
                   <label key={scope} className="flex items-center gap-2 text-sm text-gray-700">
                     <input
                       type="checkbox"
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="rounded border-gray-300 accent-primary-700 text-primary-600 focus:ring-primary-500"
                       checked={scopes.includes(scope)}
                       onChange={() => toggleScope(scope)}
                     />
@@ -218,7 +218,7 @@ export function ApiKeysSettings() {
                     {(key.scopes ?? []).map((scope) => (
                       <span
                         key={scope}
-                        className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600"
+                        className="inline-flex rounded bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-800"
                       >
                         {SCOPE_LABELS[scope] ?? scope}
                       </span>

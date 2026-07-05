@@ -31,7 +31,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
 
   return (
     <section aria-label="Photo timeline">
-      <h2 className="text-sm font-semibold text-gray-900 mb-2">Photo timeline</h2>
+      <h2 className="text-sm font-semibold text-ink mb-2">Photo timeline</h2>
       <ul className="flex gap-3 overflow-x-auto pb-2">
         {photos.map((photo) => (
           <li key={photo.id} className="flex-shrink-0">
@@ -45,7 +45,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
                 height={128}
                 loading="lazy"
                 decoding="async"
-                className="h-32 w-32 rounded-md object-cover bg-gray-100"
+                className="h-32 w-32 rounded-md object-cover bg-parchment"
               />
               <figcaption className="mt-1 text-xs text-gray-600">
                 {new Date(photo.uploadedAt).toLocaleDateString()}

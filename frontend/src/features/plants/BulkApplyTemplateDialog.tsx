@@ -79,7 +79,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-gray-500/75" />
+          <div className="fixed inset-0 bg-primary-950/70 transition-opacity" />
         </Transition.Child>
 
         <div className="fixed inset-0 z-10 overflow-y-auto">
@@ -93,12 +93,12 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
                 <div className="absolute right-0 top-0 pr-4 pt-4">
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="rounded-md bg-white text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="rounded-md bg-paper text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     <span className="sr-only">Close</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
@@ -107,7 +107,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
 
                 <Dialog.Title
                   as="h3"
-                  className="font-serif text-2xl font-semibold tracking-tight text-gray-900 mb-4"
+                  className="font-serif text-2xl font-semibold tracking-tight text-ink mb-4"
                 >
                   Apply care template
                 </Dialog.Title>
@@ -150,10 +150,10 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
                     ) : plants.length === 0 ? (
                       <p className="text-sm text-gray-600">No plants yet.</p>
                     ) : (
-                      <ul className="max-h-64 overflow-y-auto rounded-md border border-gray-200 divide-y divide-gray-200">
+                      <ul className="max-h-64 overflow-y-auto rounded-md border border-primary-100/70 divide-y divide-primary-100/60">
                         {plants.map((p) => (
                           <li key={p.id}>
-                            <label className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                            <label className="flex items-center gap-3 px-3 py-2 hover:bg-parchment/60 cursor-pointer">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4"

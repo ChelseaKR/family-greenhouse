@@ -140,7 +140,7 @@ export function PlantsPage() {
               'relative inline-flex items-center rounded-l-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
               viewMode === 'grid'
                 ? 'bg-primary-50 text-primary-700 border-primary-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
             )}
             onClick={() => setViewMode('grid')}
             aria-pressed={viewMode === 'grid'}
@@ -154,7 +154,7 @@ export function PlantsPage() {
               'relative -ml-px inline-flex items-center rounded-r-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
               viewMode === 'list'
                 ? 'bg-primary-50 text-primary-700 border-primary-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
             )}
             onClick={() => setViewMode('list')}
             aria-pressed={viewMode === 'list'}

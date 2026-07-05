@@ -234,16 +234,16 @@ export function HouseholdPage() {
 
       {/* Members list */}
       <Card padding="none">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b border-primary-100/70">
+          <h2 className="font-serif text-lg text-ink">
             Members
-            <span className="ml-2 text-sm font-normal text-gray-500">
+            <span className="ml-2 text-sm font-normal text-gray-600">
               ({household.members.length})
             </span>
           </h2>
         </div>
 
-        <ul className="divide-y divide-gray-200">
+        <ul className="divide-y divide-primary-100/60">
           {household.members.map((member) => (
             <li key={member.userId} className="flex items-center justify-between gap-4 px-6 py-4">
               <div className="flex items-center gap-4">
@@ -279,7 +279,7 @@ export function HouseholdPage() {
                     'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
                     member.role === 'admin'
                       ? 'bg-primary-100 text-primary-900'
-                      : 'bg-gray-100 text-gray-900'
+                      : 'bg-parchment text-gray-700 ring-1 ring-primary-200/50'
                   )}
                 >
                   {member.role === 'admin' ? 'Admin' : 'Member'}

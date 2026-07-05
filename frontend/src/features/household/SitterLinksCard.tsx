@@ -144,14 +144,14 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
       {activeLinks.length > 0 && (
         <div className="mt-6">
           <h3 className="text-sm font-medium text-gray-900">Active links</h3>
-          <ul className="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200">
+          <ul className="mt-2 divide-y divide-primary-100/60 rounded-lg border border-primary-100/70">
             {activeLinks.map((link) => (
               <li key={link.id} className="flex items-center justify-between gap-4 px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-gray-900">
                     {link.label || 'Sitter link'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-600">
                     Expires {new Date(link.expiresAt).toLocaleDateString()}
                   </p>
                 </div>

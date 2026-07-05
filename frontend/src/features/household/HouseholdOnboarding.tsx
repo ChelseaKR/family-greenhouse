@@ -105,7 +105,7 @@ export function HouseholdOnboarding() {
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gradient-to-b from-primary-50 to-white">
       <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
         <BrandMark variant="wordmark" />
-        <h2 className="mt-8 text-center font-serif text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="mt-8 text-center font-serif text-3xl font-semibold tracking-tight text-ink">
           {step === 'choice' &&
             (isAddingAnother ? 'Add another household' : 'Set up your household')}
           {step === 'create' &&
@@ -130,9 +130,7 @@ export function HouseholdOnboarding() {
                     <HomeIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
-                    <h3 className="text-base font-semibold text-gray-900">
-                      Create a new household
-                    </h3>
+                    <h3 className="text-base font-semibold text-ink">Create a new household</h3>
                     <p className="mt-1 text-sm text-gray-500">
                       Start fresh on your own — invite family any time you like
                     </p>
@@ -144,13 +142,11 @@ export function HouseholdOnboarding() {
             <button type="button" onClick={() => setStep('join')} className="w-full">
               <Card className="hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
                 <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 rounded-lg bg-secondary-100 p-3">
-                    <UserGroupIcon className="h-6 w-6 text-secondary-600" aria-hidden="true" />
+                  <div className="flex-shrink-0 rounded-lg bg-accent-100 p-3">
+                    <UserGroupIcon className="h-6 w-6 text-accent-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
-                    <h3 className="text-base font-semibold text-gray-900">
-                      Join an existing household
-                    </h3>
+                    <h3 className="text-base font-semibold text-ink">Join an existing household</h3>
                     <p className="mt-1 text-sm text-gray-500">
                       Use an invite link from a family member
                     </p>

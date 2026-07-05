@@ -38,7 +38,7 @@ export function YearInReviewCard() {
 
   return (
     <Card padding="none">
-      <div className="px-6 py-4 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-primary-100/70">
         <CardHeader
           title={`Your ${year}`}
           description="Care work this household has done so far this year."
@@ -93,7 +93,7 @@ function Stat({ label, value, sub }: StatProps) {
   return (
     <div>
       <p className="text-sm text-gray-600">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+      <p className="mt-1 font-serif text-2xl text-ink tabular-nums">{value}</p>
       {sub && <p className="text-xs text-gray-600">{sub}</p>}
     </div>
   );

@@ -40,6 +40,7 @@ import { PlantLineageCard } from './PlantLineageCard';
 import { ShareCuttingDialog } from './ShareCuttingDialog';
 import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
+import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { toast } from '@/store/toastStore';
 
@@ -166,7 +167,7 @@ export function PlantDetailPage() {
       {/* Plant header */}
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="w-full sm:w-48 flex-shrink-0 space-y-3">
-          <div className="h-48 rounded-lg bg-gray-100 overflow-hidden">
+          <div className="h-48 rounded-lg bg-parchment overflow-hidden">
             {plant.imageUrl ? (
               <img
                 src={plant.imageUrl}
@@ -181,7 +182,7 @@ export function PlantDetailPage() {
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <svg
-                  className="h-20 w-20 text-gray-300"
+                  className="h-20 w-20 text-primary-300"
                   fill="none"
                   viewBox="0 0 24 24"
                   strokeWidth={1}
@@ -214,7 +215,9 @@ export function PlantDetailPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900">{plant.name}</h1>
+                <h1 className="font-serif text-3xl text-ink leading-tight tracking-tight">
+                  {plant.name}
+                </h1>
                 {plant.status === 'died' && (
                   <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-700">
                     Died
@@ -226,6 +229,7 @@ export function PlantDetailPage() {
                   </span>
                 )}
               </div>
+              <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
               {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
             </div>
             <div className="flex flex-wrap justify-end gap-2">
@@ -346,7 +350,7 @@ export function PlantDetailPage() {
             action={<Button onClick={() => setShowAddTask(true)}>Add first task</Button>}
           />
         ) : (
-          <ul className="divide-y divide-gray-200 -mx-6 -mb-6">
+          <ul className="divide-y divide-primary-100/60 -mx-6 -mb-6">
             {plant.upcomingTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -474,21 +478,26 @@ function TaskRow({
   const isOverdue = new Date(task.nextDue) < new Date();
   const streak = computeStreak(task, completions);
   const streakText = streakLabel(task, streak);
+  const style = taskTypeStyle(task.type);
+  const { Icon } = style;
 
   return (
-    <li className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-gray-50">
+    <li className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-parchment/60">
       <div className="flex items-center gap-4 min-w-0">
         <span
           className={clsx(
-            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-            taskTypeStyle(task.type).chip
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1',
+            style.chip
           )}
         >
+          <Icon className={clsx('h-4 w-4', style.iconColor)} aria-hidden="true" />
           {task.customType || taskTypeLabels[task.type]}
         </span>
         <div>
           <p className="text-sm text-gray-900">Every {task.frequency} days</p>
-          <p className={clsx('text-xs', isOverdue ? 'text-red-600 font-medium' : 'text-gray-600')}>
+          <p
+            className={clsx('text-xs', isOverdue ? 'text-accent-700 font-medium' : 'text-gray-600')}
+          >
             Due: {formatDate(task.nextDue)}
             {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
           </p>
@@ -543,7 +552,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
       <summary
         className={clsx(
           'list-none inline-flex items-center justify-center gap-1 px-3 py-2 text-sm font-medium rounded-md min-h-touch min-w-touch cursor-pointer',
-          'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
+          'bg-paper text-gray-700 border border-primary-200/70 hover:bg-primary-50',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
           isSnoozing && 'opacity-50 cursor-wait'
         )}
@@ -552,12 +561,12 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
         <ClockIcon className="h-4 w-4" aria-hidden="true" />
         Snooze
       </summary>
-      <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-white shadow-lg ring-1 ring-black/5 py-1">
+      <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-paper shadow-lg ring-1 ring-primary-100/80 py-1">
         {SNOOZE_OPTIONS.map((opt) => (
           <li key={opt.label}>
             <button
               type="button"
-              className="flex min-h-touch w-full items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
+              className="flex min-h-touch w-full items-center px-3 py-2 text-sm text-gray-700 hover:bg-parchment/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
               onClick={(e) => {
                 onPick(opt.days);
                 // Close the details popover after clicking.

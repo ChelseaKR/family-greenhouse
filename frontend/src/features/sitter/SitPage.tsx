@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { BrandMark } from '@/components/BrandMark';
-import { Footer } from '@/components/Footer';
+import { PublicShell } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -111,105 +110,92 @@ export function SitPage() {
   const allDone = status === 'ready' && remaining.length === 0;
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <header className="border-b border-gray-200">
-        <nav className="mx-auto max-w-2xl flex items-center justify-between p-6">
-          <Link to="/" aria-label="Family Greenhouse home">
-            <BrandMark variant="wordmark" size="sm" />
-          </Link>
-        </nav>
-      </header>
+    <PublicShell width="article" plainHeader>
+      {status === 'loading' && (
+        <div className="flex min-h-[40vh] items-center justify-center" role="status">
+          <LoadingSpinner size="lg" />
+          <span className="sr-only">Loading plant-sitting tasks…</span>
+        </div>
+      )}
 
-      <main className="flex-1 mx-auto max-w-2xl w-full px-6 py-12">
-        {status === 'loading' && (
-          <div className="flex min-h-[40vh] items-center justify-center" role="status">
-            <LoadingSpinner size="lg" />
-            <span className="sr-only">Loading plant-sitting tasks…</span>
-          </div>
-        )}
+      {status === 'inactive' && (
+        <div className="mt-8">
+          <Alert variant="info" title="This plant-sitting link is no longer active">
+            The link may have expired or been turned off by the person who shared it. If you’re
+            still helping out, ask them for a fresh link.
+          </Alert>
+        </div>
+      )}
 
-        {status === 'inactive' && (
-          <div className="mt-8">
-            <Alert variant="info" title="This plant-sitting link is no longer active">
-              The link may have expired or been turned off by the person who shared it. If you’re
-              still helping out, ask them for a fresh link.
-            </Alert>
-          </div>
-        )}
+      {status === 'error' && (
+        <div className="mt-8">
+          <Alert variant="error" title="Something went wrong">
+            We couldn’t load the plant-sitting list just now. Please refresh and try again in a
+            moment.
+          </Alert>
+        </div>
+      )}
 
-        {status === 'error' && (
-          <div className="mt-8">
-            <Alert variant="error" title="Something went wrong">
-              We couldn’t load the plant-sitting list just now. Please refresh and try again in a
-              moment.
-            </Alert>
-          </div>
-        )}
+      {status === 'ready' && (
+        <>
+          <h1 className="font-serif text-3xl tracking-tight text-ink sm:text-4xl">
+            {label ? `${label}: what needs doing` : 'Thanks for plant-sitting!'}
+          </h1>
+          <p className="mt-3 text-base text-gray-600">
+            Here’s what needs a little care while they’re away. Tap <strong>Done</strong> once
+            you’ve looked after each one — no account needed.
+          </p>
 
-        {status === 'ready' && (
-          <>
-            <h1 className="font-serif text-3xl font-semibold tracking-tight text-gray-900 sm:text-4xl">
-              {label ? `${label}: what needs doing` : 'Thanks for plant-sitting!'}
-            </h1>
-            <p className="mt-3 text-base text-gray-600">
-              Here’s what needs a little care while they’re away. Tap <strong>Done</strong> once
-              you’ve looked after each one — no account needed.
-            </p>
-
-            {/* Live region announces completions to screen readers. */}
-            <div className="mt-10 space-y-3" aria-live="polite">
-              {allDone ? (
-                <Alert variant="success" title="All caught up — you’re a star 🌿">
-                  Every plant has been looked after. Thank you so much for helping out!
-                </Alert>
-              ) : (
-                <ul className="space-y-3">
-                  {remaining.map((task) => {
-                    const isPending = pending.has(task.taskId);
-                    return (
-                      <li
-                        key={task.taskId}
-                        className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-900">{instructionFor(task)}</p>
-                          <p
-                            className={
-                              'mt-0.5 text-sm ' +
-                              (task.overdue ? 'text-amber-700' : 'text-gray-500')
-                            }
-                          >
-                            {dueLabel(task, now)}
-                          </p>
-                        </div>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          isLoading={isPending}
-                          onClick={() => handleComplete(task.taskId)}
-                          aria-label={`Mark "${instructionFor(task)}" as done`}
+          {/* Live region announces completions to screen readers. */}
+          <div className="mt-10 space-y-3" aria-live="polite">
+            {allDone ? (
+              <Alert variant="success" title="All caught up — you’re a star 🌿">
+                Every plant has been looked after. Thank you so much for helping out!
+              </Alert>
+            ) : (
+              <ul className="space-y-3">
+                {remaining.map((task) => {
+                  const isPending = pending.has(task.taskId);
+                  return (
+                    <li
+                      key={task.taskId}
+                      className="flex items-center justify-between gap-4 rounded-xl border border-primary-100/80 bg-white p-4 shadow-journal"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900">{instructionFor(task)}</p>
+                        <p
+                          className={
+                            'mt-0.5 text-sm ' + (task.overdue ? 'text-amber-700' : 'text-gray-600')
+                          }
                         >
-                          Done
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                          {dueLabel(task, now)}
+                        </p>
+                      </div>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        isLoading={isPending}
+                        onClick={() => handleComplete(task.taskId)}
+                        aria-label={`Mark "${instructionFor(task)}" as done`}
+                      >
+                        Done
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
 
-            <p className="mt-10 text-sm text-gray-500">
-              Looking after plants regularly?{' '}
-              <Link to="/" className="text-primary-700 underline hover:text-primary-800">
-                Family Greenhouse
-              </Link>{' '}
-              keeps a whole household’s plant care in one shared place.
-            </p>
-          </>
-        )}
-      </main>
-
-      <Footer />
-    </div>
+          <p className="mt-10 text-sm text-gray-600">
+            Looking after plants regularly?{' '}
+            <Link to="/" className="text-primary-700 underline hover:text-primary-800">
+              Family Greenhouse
+            </Link>{' '}
+            keeps a whole household’s plant care in one shared place.
+          </p>
+        </>
+      )}
+    </PublicShell>
   );
 }

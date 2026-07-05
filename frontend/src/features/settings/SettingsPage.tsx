@@ -36,7 +36,7 @@ export function SettingsPage() {
         description={t('settings.description')}
       />
 
-      <div className="border-b border-gray-200">
+      <div className="border-b border-primary-100/80">
         <nav className="-mb-px flex gap-3 sm:gap-6 overflow-x-auto" aria-label="Settings sections">
           {TABS.map((id) => (
             <button
@@ -47,7 +47,7 @@ export function SettingsPage() {
                 'border-b-2 px-1 py-4 text-sm font-medium',
                 tab === id
                   ? 'border-primary-500 text-primary-700'
-                  : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800'
+                  : 'border-transparent text-gray-600 hover:border-primary-200 hover:text-ink'
               )}
               aria-current={tab === id ? 'page' : undefined}
             >

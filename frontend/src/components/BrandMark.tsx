@@ -73,7 +73,10 @@ export function BrandMark({
   }
 
   const s = SIZE_CLASSES[size];
-  const titleColor = tone === 'light' ? 'text-white' : 'text-gray-900';
+  // Dark tone renders the name in brand ink, not stock near-black — the
+  // lockup appears in every public header, so this is where the brand
+  // color is either everywhere or nowhere.
+  const titleColor = tone === 'light' ? 'text-white' : 'text-ink';
   const taglineColor = tone === 'light' ? 'text-primary-200' : 'text-primary-700';
 
   return (

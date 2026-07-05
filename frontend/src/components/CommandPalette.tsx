@@ -107,7 +107,7 @@ export function CommandPalette() {
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-gray-500/75" />
+          <div className="fixed inset-0 bg-primary-950/70" />
         </Transition.Child>
 
         <div className="fixed inset-0 z-10 overflow-y-auto p-4 sm:p-6 md:p-20">
@@ -120,7 +120,7 @@ export function CommandPalette() {
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className="mx-auto max-w-xl transform overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all">
+            <Dialog.Panel className="mx-auto max-w-xl transform overflow-hidden rounded-xl bg-paper shadow-2xl ring-1 ring-primary-100/80 transition-all">
               <Combobox onChange={onSelect}>
                 <div className="relative">
                   <MagnifyingGlassIcon
@@ -138,11 +138,11 @@ export function CommandPalette() {
                 {results.length > 0 && (
                   <Combobox.Options
                     static
-                    className="max-h-80 scroll-py-2 divide-y divide-gray-100 overflow-y-auto"
+                    className="max-h-80 scroll-py-2 divide-y divide-primary-100/60 overflow-y-auto"
                   >
                     {results.some((r) => r.kind === 'plant') && (
                       <li>
-                        <h2 className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-700">
+                        <h2 className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700">
                           Plants
                         </h2>
                         <ul className="text-sm text-gray-700">
@@ -154,7 +154,7 @@ export function CommandPalette() {
                                 value={r}
                                 className={({ active }) =>
                                   `flex items-center gap-3 cursor-pointer select-none px-4 py-2 ${
-                                    active ? 'bg-primary-600 text-white' : ''
+                                    active ? 'bg-primary-700 text-white' : ''
                                   }`
                                 }
                               >
@@ -172,7 +172,7 @@ export function CommandPalette() {
                     )}
                     {results.some((r) => r.kind === 'task') && (
                       <li>
-                        <h2 className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-700">
+                        <h2 className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700">
                           Tasks
                         </h2>
                         <ul className="text-sm text-gray-700">
@@ -184,7 +184,7 @@ export function CommandPalette() {
                                 value={r}
                                 className={({ active }) =>
                                   `flex items-center gap-3 cursor-pointer select-none px-4 py-2 ${
-                                    active ? 'bg-primary-600 text-white' : ''
+                                    active ? 'bg-primary-700 text-white' : ''
                                   }`
                                 }
                               >
@@ -214,7 +214,7 @@ export function CommandPalette() {
                 {query === '' && (
                   <p className="px-6 py-8 text-center text-sm text-gray-500">
                     Type to search plants and tasks. Press{' '}
-                    <kbd className="rounded border border-gray-200 bg-gray-50 px-1 font-sans text-xs">
+                    <kbd className="rounded border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs">
                       Esc
                     </kbd>{' '}
                     to close.
