@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import middy from '@middy/core';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { bodySizeGuard } from '../../../src/middleware/bodySize.js';
+import { bodySizeGuard, IMAGE_BODY_MAX_BYTES } from '../../../src/middleware/bodySize.js';
 
 function buildEvent(body: string | null, isBase64Encoded = false): APIGatewayProxyEvent {
   return {
@@ -48,5 +48,14 @@ describe('bodySizeGuard', () => {
     await expect((handler as never)(buildEvent(base64Body, true))).rejects.toMatchObject({
       statusCode: 413,
     });
+  });
+
+  it("IMAGE_BODY_MAX_BYTES comfortably fits the image-upload schemas' own 350,000-char cap plus JSON envelope overhead", () => {
+    // Guards against the exact bug this override fixes: identify.ts/health.ts
+    // allow imageBase64 up to 350,000 characters, wrapped in a small JSON
+    // envelope — this override must stay bigger than that combined size, or
+    // in-spec uploads get a 413 before their own schema ever runs.
+    const wrappedBodyBytes = JSON.stringify({ imageBase64: 'A'.repeat(350_000) }).length;
+    expect(IMAGE_BODY_MAX_BYTES).toBeGreaterThan(wrappedBodyBytes);
   });
 });

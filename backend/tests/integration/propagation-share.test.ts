@@ -134,6 +134,53 @@ describe('propagation lineage', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/own parent/);
   });
+
+  it("rejects a 2-hop cycle (A -> B, then B set as A's parent)", async () => {
+    const token = await loginAsSeed();
+    const b = await request(app)
+      .post('/plants')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Cutting B', parentPlantId: seedPlantId });
+    expect(b.status).toBe(201);
+
+    // seedPlantId (A) is already B's ancestor; making B the parent of A
+    // would close a 2-node cycle.
+    const res = await request(app)
+      .put(`/plants/${seedPlantId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentPlantId: b.body.id });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/circular/);
+
+    // The cycle must not have been written.
+    const unchanged = await request(app)
+      .get(`/plants/${seedPlantId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(unchanged.body.parentPlantId).toBeNull();
+  });
+
+  it("rejects a 3-hop cycle (A -> B -> C, then C set as A's parent)", async () => {
+    const token = await loginAsSeed();
+    const b = await request(app)
+      .post('/plants')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Cutting B', parentPlantId: seedPlantId });
+    expect(b.status).toBe(201);
+    const c = await request(app)
+      .post('/plants')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Cutting C', parentPlantId: b.body.id });
+    expect(c.status).toBe(201);
+
+    // A -> B -> C already; C is A's descendant, so C can't become A's parent
+    // without the ancestor walk (a 1-hop check alone would miss this).
+    const res = await request(app)
+      .put(`/plants/${seedPlantId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentPlantId: c.body.id });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/circular/);
+  });
 });
 
 describe('cutting shares', () => {

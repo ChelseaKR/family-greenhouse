@@ -182,6 +182,8 @@ export const es: Translation = {
       created_one: '1 planta creada',
       skipped: '{{count}} filas omitidas',
       skipped_one: '1 fila omitida',
+      skippedRowsTitle: 'Filas omitidas',
+      skippedRowLabel: 'Fila {{row}} — {{name}}',
       planLimit:
         'Alcanzaste el límite de plantas de tu plan, así que las filas restantes se omitieron. Mejora tu plan para importar el resto.',
       upgradeCta: 'Ver opciones de mejora',

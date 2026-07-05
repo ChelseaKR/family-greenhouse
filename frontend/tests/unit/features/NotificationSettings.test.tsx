@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationSettings } from '@/features/settings/NotificationSettings';
@@ -152,5 +152,35 @@ describe('NotificationSettings', () => {
     const smsToggle = screen.getByRole('checkbox', { name: 'SMS notifications' });
     expect(smsToggle).toBeChecked();
     expect(smsToggle).toBeEnabled(); // can always turn OFF
+  });
+
+  it('does not submit an unsaved quiet-hours draft when an unrelated toggle is flipped', async () => {
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(
+      prefs({ dndStart: '22:00', dndEnd: '07:00', timezone: 'America/New_York' })
+    );
+    vi.mocked(notificationService.updatePreferences).mockResolvedValue(
+      prefs({
+        dndStart: '22:00',
+        dndEnd: '07:00',
+        timezone: 'America/New_York',
+        pestAlerts: true,
+      })
+    );
+
+    // Start editing the quiet-hours Start field but never click "Save quiet hours".
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '23:15' } });
+    expect(screen.getByLabelText('Start')).toHaveValue('23:15');
+
+    // Toggle an unrelated setting instead.
+    await user.click(screen.getByRole('checkbox', { name: 'Pest alerts' }));
+
+    await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+    expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
+      dndStart: '22:00',
+      dndEnd: '07:00',
+      timezone: 'America/New_York',
+      pestAlerts: true,
+    });
   });
 });

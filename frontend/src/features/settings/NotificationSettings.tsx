@@ -92,10 +92,13 @@ export function NotificationSettings() {
   });
 
   /**
-   * Helper that always sends the full prefs payload built from current draft
-   * state + an `overrides` patch. Lets each toggle/input fire one mutation
-   * call without having to re-list every field — and keeps DND, timezone,
-   * etc. correctly preserved when other fields change.
+   * Helper that always sends the full prefs payload built from the last
+   * PERSISTED preferences + an `overrides` patch. Lets each toggle/input
+   * fire one mutation call without having to re-list every field. DND/tz
+   * default to the saved values (not the in-progress draft state) so that
+   * an unrelated toggle never silently commits a half-edited quiet-hours
+   * draft — only the explicit "Save quiet hours" action should do that,
+   * via an explicit override.
    */
   function save(
     overrides: Partial<{
@@ -117,9 +120,9 @@ export function NotificationSettings() {
       email: current.email,
       sms: current.sms,
       phone: current.phone,
-      dndStart: dndStartDraft,
-      dndEnd: dndEndDraft,
-      timezone: tzDraft,
+      dndStart: current.dndStart,
+      dndEnd: current.dndEnd,
+      timezone: current.timezone,
       pestAlerts: current.pestAlerts ?? false,
       weeklyDigest: current.weeklyDigest ?? true,
       ...overrides,
@@ -462,7 +465,9 @@ export function NotificationSettings() {
               Clear
             </Button>
             <Button
-              onClick={() => save({})}
+              onClick={() =>
+                save({ dndStart: dndStartDraft, dndEnd: dndEndDraft, timezone: tzDraft })
+              }
               isLoading={saveMutation.isPending}
               disabled={(!!dndStartDraft || !!dndEndDraft) && (!dndStartDraft || !dndEndDraft)}
             >

@@ -5,6 +5,7 @@ import { createHandler } from '../../middleware/handler.js';
 import { authMiddleware, AuthenticatedEvent } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit } from '../../middleware/rateLimit.js';
+import { IMAGE_BODY_MAX_BYTES } from '../../middleware/bodySize.js';
 import * as plantIdentification from '../../services/plantIdentification.js';
 import * as identifyBudget from '../../services/identifyBudget.js';
 import * as billing from '../../services/billing.js';
@@ -77,7 +78,8 @@ export const identify = createHandler(
       ...result,
       usage: { used: finalUsed, allowance, meteringEnabled },
     });
-  }
+  },
+  { maxBodyBytes: IMAGE_BODY_MAX_BYTES }
 )
   .use(authMiddleware())
   // Each call costs a metered Plant.id identification; 10/min per user is

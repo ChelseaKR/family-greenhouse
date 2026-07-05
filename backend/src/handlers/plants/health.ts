@@ -5,6 +5,7 @@ import { createHandler } from '../../middleware/handler.js';
 import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit } from '../../middleware/rateLimit.js';
+import { IMAGE_BODY_MAX_BYTES } from '../../middleware/bodySize.js';
 import * as plantService from '../../services/plantService.js';
 import * as leafHealth from '../../services/leafHealth.js';
 import * as leafHealthBudget from '../../services/leafHealthBudget.js';
@@ -109,7 +110,8 @@ export const checkPlantHealth = createHandler(
       });
 
     return successResponse(assessment);
-  }
+  },
+  { maxBodyBytes: IMAGE_BODY_MAX_BYTES }
 )
   .use(authMiddleware())
   .use(requireHousehold())

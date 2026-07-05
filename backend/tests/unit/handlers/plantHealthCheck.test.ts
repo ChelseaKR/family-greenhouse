@@ -100,6 +100,23 @@ describe('plants health-check handler', () => {
     expect(leafHealthBudget.incrementUsage).toHaveBeenCalledWith('hh-1');
   });
 
+  it('accepts a schema-in-spec image close to the 350,000-char cap (regression: bodySizeGuard used to reject these with a 413 before the schema ever ran)', async () => {
+    const checkPlantHealth = await subject();
+    // 340,000 chars is within the schema's own 350,000-char allowance — the
+    // frontend's client-side pre-check and the Zod schema both treat this as
+    // fine. The old global 256 KiB (262,144-byte) bodySizeGuard default
+    // rejected the wrapping JSON body for any image above ~262,000 chars,
+    // well inside this "should be fine" range — exactly what real iPhone
+    // leaf close-ups were hitting.
+    const res = (await checkPlantHealth(
+      buildEvent({ body: JSON.stringify({ imageBase64: 'A'.repeat(340_000) }) }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+  });
+
   it('429s and never calls Bedrock when the household is over its monthly cap (M1)', async () => {
     vi.mocked(leafHealthBudget.isOverCap).mockResolvedValue(true);
     const checkPlantHealth = await subject();

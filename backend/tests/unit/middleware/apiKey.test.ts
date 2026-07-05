@@ -9,9 +9,16 @@ vi.mock('../../../src/services/apiKeys.js', () => ({
   lookupApiKey: vi.fn(),
 }));
 
+// Same reasoning: avoid pulling in the real billing service (DDB + lazy
+// Stripe import). Only `getHouseholdSubscription` is consumed here.
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(),
+}));
+
 import { apiKeyMiddleware, requireApiScope } from '../../../src/middleware/apiKey.js';
 import type { ApiKeyEvent } from '../../../src/middleware/apiKey.js';
 import * as apiKeys from '../../../src/services/apiKeys.js';
+import * as billing from '../../../src/services/billing.js';
 import type { AuthenticatedEvent } from '../../../src/middleware/auth.js';
 
 const ALL_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as const;
@@ -55,6 +62,7 @@ describe('apiKeyMiddleware', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiKeys.lookupApiKey).mockResolvedValue(keyRecord);
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
   });
 
   it('accepts the key via Authorization: Bearer and attaches an isApiKey principal', async () => {
@@ -117,6 +125,37 @@ describe('apiKeyMiddleware', () => {
       message: 'Invalid API key',
     });
     expect((event as Partial<AuthenticatedEvent>).user).toBeUndefined();
+  });
+
+  it.each(['garden', 'seedling'] as const)(
+    "throws 403 when the key's household has downgraded to %s",
+    async (planId) => {
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId });
+      const event = buildEvent({ authorization: 'Bearer fg_secret123' });
+      await expect(runBefore(event)).rejects.toMatchObject({
+        statusCode: 403,
+        message:
+          'API access requires the Greenhouse plan. This household has downgraded — upgrade to keep using this key.',
+      });
+      expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+      expect((event as Partial<AuthenticatedEvent>).user).toBeUndefined();
+    }
+  );
+
+  it('passes through and attaches the principal when the household is still on greenhouse', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
+    const event = buildEvent({ authorization: 'Bearer fg_secret123' });
+    await runBefore(event);
+
+    expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+    const user = (event as AuthenticatedEvent).user;
+    expect(user).toEqual({
+      userId: 'apikey:key-1',
+      email: '',
+      householdId: 'hh-1',
+      householdRole: 'member',
+      isApiKey: true,
+    });
   });
 });
 

@@ -4,6 +4,9 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 vi.mock('../../../src/services/apiKeys.js', () => ({
   lookupApiKey: vi.fn(),
 }));
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(),
+}));
 vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js', () => ({
@@ -20,6 +23,7 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
 }));
 
 import * as apiKeysService from '../../../src/services/apiKeys.js';
+import * as billing from '../../../src/services/billing.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as taskService from '../../../src/services/taskService.js';
 import { recordActivity } from '../../../src/services/activity.js';
@@ -75,6 +79,7 @@ describe('public API v1 handler', () => {
     vi.clearAllMocks();
     __resetRateLimitForTests();
     vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue({ ...keyRecord });
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
   });
 
   describe('GET /api/v1/me', () => {
@@ -105,6 +110,14 @@ describe('public API v1 handler', () => {
       const res = await invoke(me, buildEvent({ headers: {} }));
       expect(res.statusCode).toBe(401);
       expect(JSON.parse(res.body)).toEqual({ message: 'API key required' });
+    });
+
+    it("403s when the key's household has downgraded off Greenhouse", async () => {
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+      const { me } = await import('../../../src/handlers/api/handler.js');
+      const res = await invoke(me, buildEvent());
+      expect(res.statusCode).toBe(403);
+      expect(JSON.parse(res.body).message).toContain('Greenhouse plan');
     });
 
     it('401s for an unknown/revoked key', async () => {

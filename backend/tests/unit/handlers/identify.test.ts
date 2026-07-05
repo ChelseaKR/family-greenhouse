@@ -66,6 +66,21 @@ describe('plants identify handler', () => {
     expect(JSON.parse(res.body).suggestions).toHaveLength(1);
   });
 
+  it('accepts a schema-in-spec image close to the 350,000-char cap (regression: bodySizeGuard used to reject these with a 413 before the schema ever ran)', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+      configured: true,
+      suggestions: [],
+    });
+    const res = (await identify(
+      buildEvent({ body: JSON.stringify({ image: 'A'.repeat(340_000) }) }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+  });
+
   it('always returns usage info ({used, allowance, meteringEnabled}) and meters successful calls', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');

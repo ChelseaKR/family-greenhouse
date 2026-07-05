@@ -1588,8 +1588,9 @@ app.put(
       plant.perenualSpeciesId = body.perenualSpeciesId;
     }
     if (body.parentPlantId !== undefined) {
-      // Mirrors the production handler: reject self-parenting and parents
-      // outside this household; null detaches.
+      // Mirrors the production handler: reject self-parenting, parents
+      // outside this household, and parents that would close a cycle; null
+      // detaches.
       if (body.parentPlantId !== null) {
         if (body.parentPlantId === plant.id) {
           return res.status(400).json({ message: 'A plant cannot be its own parent' });
@@ -1597,6 +1598,26 @@ app.put(
         const parent = db.plants.get(body.parentPlantId);
         if (!parent || parent.householdId !== user.householdId) {
           return res.status(400).json({ message: 'Parent plant not found in this household' });
+        }
+        if (plant.parentPlantId !== body.parentPlantId) {
+          // Cycle guard: walk the proposed parent's ancestors looking for
+          // this plant. Capped at 50 hops — real chains never get that deep,
+          // so hitting the cap means reject rather than loop forever.
+          let ancestorId: string | null = parent.parentPlantId;
+          let hops = 0;
+          while (ancestorId) {
+            if (ancestorId === plant.id) {
+              return res.status(400).json({
+                message:
+                  'That plant is already a descendant of this one; setting it as parent would create a circular lineage',
+              });
+            }
+            if (++hops >= 50) {
+              return res.status(400).json({ message: 'Propagation chain is too long to validate' });
+            }
+            const ancestor: typeof parent | undefined = db.plants.get(ancestorId);
+            ancestorId = ancestor?.parentPlantId ?? null;
+          }
         }
       }
       plant.parentPlantId = body.parentPlantId;
