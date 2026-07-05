@@ -29,6 +29,13 @@ import { toast } from '@/store/toastStore';
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+// The identify endpoint shares leaf-health's 256 KiB body cap. Downscaling to
+// 1024px before encoding lands comfortably under that; MAX_BASE64_CHARS
+// mirrors the backend schema's limit so an oversized photo fails fast with a
+// clear message instead of a raw "payload too large" from the server.
+const IDENTIFY_PHOTO_MAX_EDGE = 1024;
+const MAX_BASE64_CHARS = 350_000;
+
 // Rebuilt per-render from the active locale so validation messages translate.
 const makeAddPlantSchema = (t: TFunction) =>
   z.object({
@@ -52,7 +59,7 @@ interface PropagationState {
   species?: string | null;
 }
 
-async function fileToBase64(file: File): Promise<string> {
+async function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -124,7 +131,16 @@ export function AddPlantPage() {
     setError(null);
     setIdentifyNotice(null);
     try {
-      const dataUrl = await fileToBase64(pickedFile);
+      // Downscale BEFORE encoding — a raw iPhone photo (multi-MB HEIC/JPEG)
+      // blows past the endpoint's body cap and the server rejects it outright.
+      const downscaled = await downscaleImage(pickedFile, IDENTIFY_PHOTO_MAX_EDGE);
+      const blob: Blob =
+        downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : pickedFile;
+      const dataUrl = await fileToBase64(blob);
+      if (dataUrl.length > MAX_BASE64_CHARS) {
+        setError('Image is too large to identify — try a smaller or less detailed photo.');
+        return;
+      }
       const result = await plantService.identifyPlant(dataUrl);
       if (!result.suggestions || result.suggestions.length === 0) {
         setIdentifyNotice('No suggestions came back — fill in the species manually.');

@@ -21,6 +21,13 @@ vi.mock('@/services/speciesService', () => ({
   },
 }));
 
+// jsdom has no real image decoder, so the canvas pipeline never resolves —
+// mock the module to behave like the "pipeline unavailable" fallback path
+// (null), which is what downscaleImage itself returns in that case.
+vi.mock('@/utils/image', () => ({
+  downscaleImage: vi.fn().mockResolvedValue(null),
+}));
+
 /** A promise this test can resolve on demand, to control resolution order. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
