@@ -1067,7 +1067,7 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
 
   console.log('\n========================================');
   console.log('HOUSEHOLD INVITE CREATED');
-  console.log(`Household: ${req.params.id}`);
+  console.log(`Household: ${String(req.params.id)}`);
   console.log(`Invite Code: ${code}`);
   console.log(`URL: ${payload.url}`);
   console.log('========================================\n');
@@ -1816,7 +1816,7 @@ app.post(
     const body = (req as any).validatedBody;
     const contentType = body?.contentType ?? 'image/jpeg';
     const ext = IMAGE_CONTENT_TYPES[contentType];
-    const key = `plants/${user.householdId}/${req.params.id}/${uuidv4()}.${ext}`;
+    const key = `plants/${user.householdId}/${String(req.params.id)}/${uuidv4()}.${ext}`;
     res.json({
       uploadUrl: `http://127.0.0.1:${PORT}/mock-upload`,
       imageUrl: `${imageBaseUrl()}/${key}`,
@@ -1832,7 +1832,7 @@ app.post(
   (req, res) => {
     const user = (req as any).user;
     const { imageUrl } = (req as any).validatedBody;
-    const keyPrefix = `plants/${user.householdId}/${req.params.id}/`;
+    const keyPrefix = `plants/${user.householdId}/${String(req.params.id)}/`;
     // Accept whichever URL forms production can mint; both map to one S3 key.
     const assetsBase = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
     const expectedPrefixes = [`https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`];
@@ -2325,7 +2325,7 @@ app.put(
 // DELETE /tasks/vacation/:userId — cancel (self or admin).
 app.delete('/tasks/vacation/:userId', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
-  const targetUserId = req.params.userId;
+  const targetUserId = String(req.params.userId);
   if (targetUserId !== user.userId && user.householdRole !== 'admin') {
     return res
       .status(403)
