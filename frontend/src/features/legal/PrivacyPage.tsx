@@ -5,8 +5,8 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * Privacy policy. Honest, plain-language version — not the
  * boilerplate-from-a-template variety. Tracks our actual data practices:
  * what we collect, why, who we share with, and the user's rights. Updates
- * here should bump the effective date and surface a banner on first
- * login (TODO: not built yet).
+ * here should bump the effective date. A first-login banner announcing
+ * policy changes is a known gap, tracked in docs/roadmap.md, not yet built.
  *
  * App-store reviewers (Apple/Google) expect a public privacy URL; this
  * is it. Keep the language readable enough that a non-lawyer can

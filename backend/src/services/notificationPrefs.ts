@@ -227,7 +227,7 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
 }
 
 // ---------------------------------------------------------------------------
-// Phone verification (closes the long-standing docs/notifications.md TODO:
+// Phone verification (closes the long-standing docs/notifications.md gap:
 // previously any number could be entered and SMS enabled unverified).
 // ---------------------------------------------------------------------------
 

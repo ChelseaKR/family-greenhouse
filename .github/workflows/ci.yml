@@ -41,6 +41,19 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: No bare TODO/FIXME/HACK markers
+        # Enforces docs/standards/CODE-QUALITY-STANDARD.md §6: every TODO/FIXME/
+        # HACK must carry an issue reference — a (#NNN) or a full issue URL — on
+        # the same line. Bare markers fail the build. Scoped to source only.
+        run: |
+          if grep -rEn '(TODO|FIXME|HACK)' \
+               --include='*.ts' --include='*.tsx' \
+               backend/src frontend/src \
+             | grep -Ev '\(#[0-9]+\)|https?://[^ ]+/issues/[0-9]+'; then
+            echo "::error::Bare TODO/FIXME/HACK found. Add an issue reference, e.g. TODO(#142): ..."
+            exit 1
+          fi
+
       - name: Check formatting
         run: npm run format:check
 
