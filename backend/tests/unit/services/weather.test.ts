@@ -59,6 +59,74 @@ describe('weather client (OpenWeatherMap)', () => {
       fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
       expect(await geocode('xyzzy nowhere')).toBeNull();
     });
+
+    describe('space-separated country/state qualifiers (the "davis us" / "davis ca" bug)', () => {
+      it('inserts the comma OWM requires for a space-separated "city country" query', async () => {
+        fetchMock.mockResolvedValueOnce({
+          ok: true,
+          json: async () => [{ name: 'Davis', lat: 38.5449, lon: -121.7405, country: 'US' }],
+        });
+
+        const out = await geocode('davis us');
+        expect(out).toEqual({ city: 'Davis', lat: 38.5449, lon: -121.7405, country: 'US' });
+
+        const url = new URL(fetchMock.mock.calls[0][0] as string);
+        expect(url.searchParams.get('q')).toBe('davis, US');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      it('retries as a US state when the 2-letter code fails as a country ("davis ca" → Davis, CA, US)', async () => {
+        // First attempt: "davis, CA" — OWM reads CA as Canada; no Davis there.
+        fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
+        // Retry: "davis, CA, US" — resolves correctly to Davis, California.
+        fetchMock.mockResolvedValueOnce({
+          ok: true,
+          json: async () => [{ name: 'Davis', lat: 38.5449, lon: -121.7405, country: 'US' }],
+        });
+
+        const out = await geocode('davis ca');
+        expect(out).toEqual({ city: 'Davis', lat: 38.5449, lon: -121.7405, country: 'US' });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(new URL(fetchMock.mock.calls[0][0] as string).searchParams.get('q')).toBe(
+          'davis, CA'
+        );
+        expect(new URL(fetchMock.mock.calls[1][0] as string).searchParams.get('q')).toBe(
+          'davis, CA, US'
+        );
+      });
+
+      it('does not retry when the trailing code is not a recognized US state', async () => {
+        fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
+        expect(await geocode('tokyo xx')).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      it('leaves an already comma-structured query untouched (no double-normalizing)', async () => {
+        fetchMock.mockResolvedValueOnce({
+          ok: true,
+          json: async () => [{ name: 'Davis', lat: 38.5449, lon: -121.7405, country: 'US' }],
+        });
+        await geocode('davis, ca');
+        // The user's own comma structure is trusted as-is — no state retry
+        // logic kicks in even though "ca" alone would otherwise qualify,
+        // because the first (only) call already succeeded.
+        expect(new URL(fetchMock.mock.calls[0][0] as string).searchParams.get('q')).toBe(
+          'davis, ca'
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      it('leaves a single-word query (no code to normalize) untouched', async () => {
+        fetchMock.mockResolvedValueOnce({
+          ok: true,
+          json: async () => [{ name: 'Davis', lat: 38.5449, lon: -121.7405, country: 'US' }],
+        });
+        await geocode('davis');
+        expect(new URL(fetchMock.mock.calls[0][0] as string).searchParams.get('q')).toBe('davis');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe('getWeather', () => {
