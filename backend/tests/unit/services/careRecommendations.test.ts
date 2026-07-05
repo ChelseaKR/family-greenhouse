@@ -27,6 +27,19 @@ describe('deriveCareSuggestion', () => {
     expect(deriveCareSuggestion({ ...base, watering: null }).wateringDays).toBeNull();
   });
 
+  it('distinguishes an explicit "no watering needed" from missing watering data', () => {
+    // Perenual explicitly says this species needs no regular watering.
+    const explicitNone = deriveCareSuggestion({ ...base, watering: 'none' });
+    expect(explicitNone.summary).toMatch(/no regular watering needed/i);
+
+    // Perenual has no watering data at all (e.g. a less-mainstream species
+    // like Cinnamomum cassia) — must not claim "no watering needed"; that's
+    // a guess, not a fact from the data source.
+    const unknown = deriveCareSuggestion({ ...base, watering: null });
+    expect(unknown.summary).not.toMatch(/no regular watering needed/i);
+    expect(unknown.summary).toMatch(/watering data isn't available/i);
+  });
+
   it('summarizes light requirements when present', () => {
     const out = deriveCareSuggestion({ ...base, sunlight: ['full sun', 'part shade'] });
     expect(out.summary).toContain('full sun');
