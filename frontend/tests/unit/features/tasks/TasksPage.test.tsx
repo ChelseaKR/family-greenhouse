@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
 import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
 import { PruneIcon } from '@/components/icons/PruneIcon';
 import { RepotIcon } from '@/components/icons/RepotIcon';
 import { CustomTaskIcon } from '@/components/icons/CustomTaskIcon';
+import { TasksPage } from '@/features/tasks/TasksPage';
+import { useAuthStore, User } from '@/store/authStore';
+import { server } from '../../../msw/server';
+
+const API = 'http://localhost:4000';
 
 /**
  * The `taskTypeStyles` chip-mapping that TasksPage uses is a module-local
@@ -60,5 +68,76 @@ describe('TasksPage task-type icons', () => {
       expect(svg?.getAttribute('stroke')).toBe('currentColor');
       unmount();
     }
+  });
+});
+
+function renderTasksPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/tasks']}>
+        <TasksPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+describe("TasksPage 'My tasks' filter", () => {
+  it('includes a task covered via vacation hand-off (effectiveAssignee), not just assignedTo', async () => {
+    useAuthStore.setState({
+      accessToken: 'access-1',
+      user: { id: 'u1', email: 'me@example.com', name: 'Me', householdId: 'hh-1' } as User,
+    });
+    server.use(
+      http.get(`${API}/tasks`, () =>
+        HttpResponse.json([
+          {
+            id: 't-covered',
+            plantId: 'p1',
+            plantName: 'Pothos',
+            type: 'water',
+            customType: null,
+            frequency: 7,
+            lastCompleted: null,
+            nextDue: '2099-01-01T00:00:00.000Z',
+            assignedTo: 'user-away',
+            assignedToName: 'Away Person',
+            notes: null,
+            createdBy: 'u1',
+            createdAt: '',
+            effectiveAssignee: 'u1',
+            effectiveAssigneeName: 'Me',
+            coveringFor: 'Away Person',
+          },
+          {
+            id: 't-not-mine',
+            plantId: 'p2',
+            plantName: 'Fern',
+            type: 'water',
+            customType: null,
+            frequency: 7,
+            lastCompleted: null,
+            nextDue: '2099-01-01T00:00:00.000Z',
+            assignedTo: 'user-other',
+            assignedToName: 'Someone Else',
+            notes: null,
+            createdBy: 'u1',
+            createdAt: '',
+          },
+        ])
+      ),
+      http.get(`${API}/households/hh-1/climate`, () =>
+        HttpResponse.json({ configured: false, weather: null, tips: [] })
+      ),
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
+    renderTasksPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'My tasks' }));
+
+    expect(await screen.findByText('Pothos')).toBeInTheDocument();
+    expect(screen.queryByText('Fern')).not.toBeInTheDocument();
   });
 });

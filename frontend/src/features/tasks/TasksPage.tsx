@@ -134,7 +134,10 @@ export function TasksPage() {
   const filteredTasks = tasks?.filter((task) => {
     switch (filter) {
       case 'mine':
-        return task.assignedTo === user?.id;
+        // Covers vacation hand-off: a task whose assignee is away still
+        // belongs to the cover's "My Tasks" (see effectiveAssignee in
+        // taskService.annotateTasksWithCoverage).
+        return task.assignedTo === user?.id || task.effectiveAssignee === user?.id;
       case 'overdue':
         return isOverdue(task.nextDue);
       case 'today':

@@ -36,6 +36,11 @@ vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/climate.js');
 vi.mock('../../../src/services/householdService.js');
+// Default to a paid household so the plan gate doesn't interfere with tests
+// that aren't about it; see the dedicated test below for the gate itself.
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
+}));
 
 import {
   streamChatTurn,
@@ -43,6 +48,7 @@ import {
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
 } from '../../../src/services/chat/index.js';
+import * as billing from '../../../src/services/billing.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -244,5 +250,16 @@ describe('streamChatTurn', () => {
     ).rejects.toMatchObject({ statusCode: 429 });
     expect(vi.mocked(invokeChatModelStream)).not.toHaveBeenCalled();
     expect(vi.mocked(appendMessage)).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Seedling household with 402 before any budget reservation or Bedrock call — the streaming path shares the same plan gate as the sync path', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+    const persistence = await import('../../../src/services/chat/persistence.js');
+
+    await expect(
+      collect({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+    ).rejects.toMatchObject({ statusCode: 402 });
+    expect(vi.mocked(persistence.reserveBudget)).not.toHaveBeenCalled();
+    expect(vi.mocked(invokeChatModelStream)).not.toHaveBeenCalled();
   });
 });

@@ -35,6 +35,15 @@ export interface HouseholdMember {
   joinedAt: string;
 }
 
+/**
+ * Household-roster shape for the household detail endpoint (GET
+ * /households/:id). Omits email — the Privacy Policy states other members
+ * "cannot see your email," with no admin carve-out. Callers that
+ * legitimately need email (outbound reminders/digest/recap mail) use the
+ * full HouseholdMember via getHouseholdMembers instead.
+ */
+export type PublicHouseholdMember = Omit<HouseholdMember, 'email'>;
+
 export interface HouseholdInvite {
   code: string;
   householdId: string;

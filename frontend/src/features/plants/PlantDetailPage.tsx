@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { computeStreak, streakLabel } from '@/utils/streaks';
+import { isOverdue } from '@/utils/date';
 import { findCareGuide } from '@/utils/careGuidance';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -475,7 +476,6 @@ function TaskRow({
   isCompleting,
   isSnoozing,
 }: TaskRowProps) {
-  const isOverdue = new Date(task.nextDue) < new Date();
   const streak = computeStreak(task, completions);
   const streakText = streakLabel(task, streak);
   const style = taskTypeStyle(task.type);
@@ -496,7 +496,10 @@ function TaskRow({
         <div>
           <p className="text-sm text-gray-900">Every {task.frequency} days</p>
           <p
-            className={clsx('text-xs', isOverdue ? 'text-accent-700 font-medium' : 'text-gray-600')}
+            className={clsx(
+              'text-xs',
+              isOverdue(task.nextDue) ? 'text-accent-700 font-medium' : 'text-gray-600'
+            )}
           >
             Due: {formatDate(task.nextDue)}
             {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}

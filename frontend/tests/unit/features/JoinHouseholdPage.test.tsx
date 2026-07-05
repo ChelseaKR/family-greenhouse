@@ -91,4 +91,68 @@ describe('JoinHouseholdPage', () => {
     // interceptor recovers on the next 401.
     await waitFor(() => expect(useAuthStore.getState().user?.householdId).toBe('hh-7'));
   });
+
+  describe('a user who already belongs to a household opens an invite to a DIFFERENT one', () => {
+    beforeEach(() => {
+      // The common case this page used to get wrong: almost every onboarded
+      // user has a default household via the Cognito claim.
+      useAuthStore.setState({
+        isAuthenticated: true,
+        idToken: 'id-token',
+        refreshToken: 'refresh-1',
+        user: {
+          id: 'u-briki',
+          email: 'briki@example.com',
+          householdId: 'hh-existing',
+          householdRole: 'member',
+        },
+      } as never);
+    });
+
+    it('shows the Join screen (not a redirect) and can accept a second household', async () => {
+      server.use(
+        http.get(`${API}/households/invites/code-3`, () =>
+          HttpResponse.json({ valid: true, household: { id: 'hh-new', name: 'Second House' } })
+        ),
+        // The invited household ("hh-new") is NOT among this user's existing
+        // memberships ("hh-existing") — must NOT be treated as already-joined.
+        http.get(`${API}/me/households`, () =>
+          HttpResponse.json([
+            { householdId: 'hh-existing', name: 'First House', role: 'member', joinedAt: '' },
+          ])
+        ),
+        http.post(`${API}/households/join/code-3`, () =>
+          HttpResponse.json({ id: 'hh-new', name: 'Second House' })
+        )
+      );
+
+      renderJoin('code-3');
+
+      // Regression guard: the old blanket "user?.householdId is set → redirect"
+      // check would have bounced to Home before this ever rendered.
+      expect(await screen.findByText('Second House')).toBeInTheDocument();
+      const joinButton = screen.getByRole('button', { name: /join household/i });
+
+      await userEvent.click(joinButton);
+      await waitFor(() => expect(useAuthStore.getState().user?.householdId).toBe('hh-new'));
+    });
+
+    it('shows an "already a member" message instead of the Join button when the invite targets a household they\'re already in', async () => {
+      server.use(
+        http.get(`${API}/households/invites/code-4`, () =>
+          HttpResponse.json({ valid: true, household: { id: 'hh-existing', name: 'First House' } })
+        ),
+        http.get(`${API}/me/households`, () =>
+          HttpResponse.json([
+            { householdId: 'hh-existing', name: 'First House', role: 'member', joinedAt: '' },
+          ])
+        )
+      );
+
+      renderJoin('code-4');
+
+      expect(await screen.findByText(/already a member/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /join household/i })).not.toBeInTheDocument();
+    });
+  });
 });

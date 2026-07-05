@@ -20,7 +20,13 @@ import {
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { invalidateMembership } from '../utils/membershipCache.js';
-import { Household, HouseholdMember, HouseholdInvite, DynamoDBItem } from '../models/types.js';
+import {
+  Household,
+  HouseholdMember,
+  PublicHouseholdMember,
+  HouseholdInvite,
+  DynamoDBItem,
+} from '../models/types.js';
 import { CreateHouseholdInput } from '../models/schemas.js';
 
 /**
@@ -326,6 +332,27 @@ export async function getHouseholdMembers(householdId: string): Promise<Househol
     email: item.email as string,
     role: item.role as 'admin' | 'member',
     joinedAt: item.joinedAt as string,
+  }));
+}
+
+/**
+ * Household-roster view for GET /households/:id. Strips email from every
+ * member row — the Privacy Policy promises other members "cannot see your
+ * email," and that holds for admins too, so this is the ONLY function the
+ * handler should call for the member-list response. Internal callers that
+ * legitimately need email (reminders.ts, digest.ts — outbound mail) must
+ * keep using getHouseholdMembers directly.
+ */
+export async function getHouseholdMembersPublic(
+  householdId: string
+): Promise<PublicHouseholdMember[]> {
+  const members = await getHouseholdMembers(householdId);
+  return members.map((m) => ({
+    householdId: m.householdId,
+    userId: m.userId,
+    name: m.name,
+    role: m.role,
+    joinedAt: m.joinedAt,
   }));
 }
 

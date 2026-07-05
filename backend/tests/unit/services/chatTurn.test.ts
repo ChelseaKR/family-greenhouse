@@ -37,6 +37,12 @@ vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/climate.js');
 vi.mock('../../../src/services/householdService.js');
+// Default every test to a paid household so the plan gate doesn't interfere
+// with tests that aren't about it; the gate itself gets its own describe
+// block below with per-test overrides.
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
+}));
 
 import {
   runChatTurn,
@@ -45,6 +51,7 @@ import {
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
 } from '../../../src/services/chat/index.js';
+import * as billing from '../../../src/services/billing.js';
 import { invokeChatModel, type BedrockMessage } from '../../../src/services/chat/bedrock.js';
 import {
   appendMessage,
@@ -203,6 +210,35 @@ describe('runChatTurn', () => {
     // The reservation never landed, so nothing to reconcile.
     expect(vi.mocked(incrementBudget)).not.toHaveBeenCalled();
   });
+
+  it('rejects with 402 for a free (Seedling) household, before any budget reservation or Bedrock call', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+
+    await expect(
+      runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+    ).rejects.toMatchObject({ statusCode: 402 });
+    expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
+    expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
+  });
+
+  it.each(['garden', 'greenhouse'])(
+    'allows the turn to proceed for a %s household',
+    async (planId) => {
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: planId as 'garden' | 'greenhouse',
+      });
+      vi.mocked(invokeChatModel).mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'hi' }],
+        stopReason: 'end_turn',
+        usage: { inputTokens: 10, outputTokens: 5 },
+      });
+
+      await expect(
+        runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+      ).resolves.toBeDefined();
+      expect(vi.mocked(invokeChatModel)).toHaveBeenCalledTimes(1);
+    }
+  );
 
   it('returns an error tool_result when the model calls an unknown tool', async () => {
     vi.mocked(invokeChatModel)
