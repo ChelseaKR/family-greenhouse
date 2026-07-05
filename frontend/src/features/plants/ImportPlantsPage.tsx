@@ -170,10 +170,10 @@ export function ImportPlantsPage() {
           onDragLeave={() => setIsDragOver(false)}
           onDrop={onDrop}
           className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-            isDragOver ? 'border-primary-500 bg-primary-50' : 'border-gray-300'
+            isDragOver ? 'border-primary-500 bg-primary-50' : 'border-primary-200'
           }`}
         >
-          <DocumentArrowUpIcon className="h-10 w-10 text-gray-400" aria-hidden="true" />
+          <DocumentArrowUpIcon className="h-10 w-10 text-primary-300" aria-hidden="true" />
           <p className="text-sm text-gray-600">{t('importPlants.dropHint')}</p>
           <Button
             variant="secondary"
@@ -213,7 +213,7 @@ export function ImportPlantsPage() {
             </Alert>
           )}
           <div className="max-h-96 overflow-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <table className="min-w-full divide-y divide-primary-100/60 text-sm">
               <thead>
                 <tr className="text-left text-xs font-medium uppercase tracking-wide text-gray-600">
                   <th className="px-3 py-2">{t('importPlants.preview.colRow')}</th>
@@ -225,13 +225,13 @@ export function ImportPlantsPage() {
                   <th className="px-3 py-2">{t('importPlants.preview.colTasks')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-primary-100/50">
                 {rows.map((row) => (
                   <tr key={row.index} className={row.data ? '' : 'bg-red-50'}>
                     <td className="px-3 py-2 text-gray-500">{row.index + 1}</td>
                     <td className="px-3 py-2">
                       {row.data ? (
-                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                        <span className="inline-flex rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-800">
                           {t('importPlants.preview.ready')}
                         </span>
                       ) : (

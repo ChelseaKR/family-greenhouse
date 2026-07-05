@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { householdService } from '@/services/householdService';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
+import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -68,7 +69,7 @@ export function JoinHouseholdPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-paper">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -77,10 +78,12 @@ export function JoinHouseholdPage() {
   const isInvalid = validateError || !inviteData?.valid;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-50">
+    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-paper">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h1 className="text-center text-3xl font-bold text-primary-700">Family Greenhouse</h1>
-        <h2 className="mt-6 text-center text-2xl font-semibold text-gray-900">Join Household</h2>
+        <div className="flex justify-center">
+          <BrandMark variant="wordmark" />
+        </div>
+        <h2 className="mt-6 text-center font-serif text-2xl text-ink">Join Household</h2>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

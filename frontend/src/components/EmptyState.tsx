@@ -28,7 +28,7 @@ export function EmptyState({ icon, title, description, action, hint }: EmptyStat
       <h3 className="font-serif text-xl text-ink">{title}</h3>
       {description && <p className="mt-1 text-sm text-gray-600 max-w-md">{description}</p>}
       {action && <div className="mt-6">{action}</div>}
-      {hint && <p className="mt-3 text-xs text-gray-500">{hint}</p>}
+      {hint && <p className="mt-3 text-xs text-gray-600">{hint}</p>}
     </div>
   );
 }

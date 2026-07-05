@@ -236,10 +236,10 @@ export function NotificationSettings() {
         {info && <Alert variant="success">{info}</Alert>}
 
         {/* Browser */}
-        <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
             <p className="text-sm font-medium text-gray-900">Browser</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-600">
               {browserActive
                 ? 'Pop-ups appear while a tab is open or the app is installed.'
                 : permission === 'denied'
@@ -267,10 +267,10 @@ export function NotificationSettings() {
         </div>
 
         {/* Email */}
-        <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
             <p className="text-sm font-medium text-gray-900">Email</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-600">
               Daily roll-up to your account email when tasks are due in the next 24 hours.
             </p>
           </div>
@@ -278,7 +278,7 @@ export function NotificationSettings() {
             <span className="sr-only">Email notifications</span>
             <input
               type="checkbox"
-              className="h-5 w-5"
+              className="h-5 w-5 accent-primary-700"
               checked={prefs.email}
               onChange={(e) => save({ email: e.target.checked })}
             />
@@ -286,12 +286,12 @@ export function NotificationSettings() {
         </div>
 
         {/* Weekly digest */}
-        <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
             <p className="text-sm font-medium text-gray-900">
               {t('notifications.weeklyDigestTitle')}
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-600">
               {prefs.email
                 ? t('notifications.weeklyDigestDescription')
                 : t('notifications.weeklyDigestRequiresEmail')}
@@ -301,7 +301,7 @@ export function NotificationSettings() {
             <span className="sr-only">{t('notifications.weeklyDigestTitle')}</span>
             <input
               type="checkbox"
-              className="h-5 w-5"
+              className="h-5 w-5 accent-primary-700"
               checked={(prefs.weeklyDigest ?? true) && prefs.email}
               disabled={!prefs.email}
               onChange={(e) => save({ weeklyDigest: e.target.checked })}
@@ -314,7 +314,7 @@ export function NotificationSettings() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-900">Text message</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-600">
                 {phoneIsVerified || prefs.sms
                   ? 'Short SMS reminders when tasks slip past due. Standard message rates may apply.'
                   : t('notifications.phoneUnverifiedHint')}
@@ -324,7 +324,7 @@ export function NotificationSettings() {
               <span className="sr-only">SMS notifications</span>
               <input
                 type="checkbox"
-                className="h-5 w-5"
+                className="h-5 w-5 accent-primary-700"
                 checked={prefs.sms}
                 // Allow turning OFF anytime; turning ON requires a verified number.
                 disabled={prefs.sms ? false : !phoneIsVerified}
@@ -395,7 +395,7 @@ export function NotificationSettings() {
         <div className="flex items-center justify-between gap-4 pt-2">
           <div>
             <p className="text-sm font-medium text-gray-900">Seasonal pest heads-ups</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-600">
               When a plant in your household enters a typical pest season (spider mites, aphids,
               etc.) we&rsquo;ll send one nudge per quarter to check it. Only fires for plants with a
               recognized species.
@@ -405,7 +405,7 @@ export function NotificationSettings() {
             <span className="sr-only">Pest alerts</span>
             <input
               type="checkbox"
-              className="h-5 w-5"
+              className="h-5 w-5 accent-primary-700"
               checked={prefs.pestAlerts ?? false}
               onChange={(e) => save({ pestAlerts: e.target.checked })}
             />
@@ -416,7 +416,7 @@ export function NotificationSettings() {
         <div className="space-y-3 pt-2">
           <div>
             <p className="text-sm font-medium text-gray-900">Quiet hours</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-600">
               Email + SMS reminders pause during this window. Browser pop-ups follow your OS Do Not
               Disturb settings instead.
             </p>

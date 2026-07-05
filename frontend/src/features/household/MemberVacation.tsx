@@ -88,7 +88,7 @@ export function MemberVacation({
     const startLabel = new Date(vacationWindow.startDate).toLocaleDateString();
     return (
       <div className="mt-1 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-300/70">
+        <span className="inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent-800 ring-1 ring-accent-300/70">
           {upcoming
             ? t('household.vacation.startsOn', { date: startLabel })
             : t('household.vacation.onVacationUntil', { date: endLabel })}

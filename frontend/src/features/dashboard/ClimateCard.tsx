@@ -94,7 +94,7 @@ export function ClimateCard() {
               className={
                 tip.level === 'warning'
                   ? 'flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900'
-                  : 'flex items-start gap-2 rounded-md border border-gray-200 bg-gray-50 p-2 text-sm text-gray-700'
+                  : 'flex items-start gap-2 rounded-md border border-primary-100/70 bg-primary-50/60 p-2 text-sm text-gray-700'
               }
             >
               {tip.level === 'warning' ? (

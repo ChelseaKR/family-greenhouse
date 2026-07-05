@@ -81,7 +81,7 @@ export function ProposalCard({ proposal }: ProposalCardProps) {
             type="button"
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending}
-            className="rounded bg-primary-600 text-white px-3 py-1 text-xs font-medium hover:bg-primary-700 disabled:bg-gray-300 flex items-center gap-1"
+            className="rounded bg-primary-700 text-white px-3 py-1 text-xs font-medium hover:bg-primary-800 disabled:bg-primary-200 flex items-center gap-1"
           >
             <CheckCircleIcon className="h-4 w-4" />
             {t('chat.proposal.createTask')}

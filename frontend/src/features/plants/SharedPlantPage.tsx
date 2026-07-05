@@ -197,7 +197,7 @@ export function SharedPlantPage() {
 
             {plant.notes && (
               <div className="rounded-lg border border-primary-100/70 bg-white/60 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-600">
                   {t('plants.shared.notesLabel')}
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{plant.notes}</p>
@@ -218,7 +218,7 @@ export function SharedPlantPage() {
                   <Button className="w-full" onClick={startGraft}>
                     🌱 {t('plants.shared.graftCta')}
                   </Button>
-                  <p className="text-center text-xs text-gray-500">
+                  <p className="text-center text-xs text-gray-600">
                     {t('plants.shared.signInPrompt')}{' '}
                     <Link
                       to={`/login?redirect=/shared/${code}`}

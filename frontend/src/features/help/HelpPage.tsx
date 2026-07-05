@@ -486,7 +486,7 @@ export function HelpPage() {
         filtered.map((section) => (
           <Card key={section.id} padding="none">
             <CardHeader title={section.title} description={section.description} />
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-primary-100/60">
               {section.articles.map((article) => {
                 const id = `${section.id}::${article.q}`;
                 const isOpen = open === id;
@@ -494,7 +494,7 @@ export function HelpPage() {
                   <li key={article.q}>
                     <button
                       type="button"
-                      className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                      className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left hover:bg-parchment/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                       aria-expanded={isOpen}
                       aria-controls={`faq-${id}`}
                       onClick={() => setOpen(isOpen ? null : id)}

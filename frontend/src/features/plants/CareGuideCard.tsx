@@ -80,7 +80,7 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium text-gray-500">{label}</dt>
+      <dt className="text-xs font-medium text-gray-600">{label}</dt>
       <dd className="mt-1 text-sm font-medium text-gray-900">{value}</dd>
     </div>
   );

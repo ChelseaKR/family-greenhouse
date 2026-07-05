@@ -50,7 +50,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
             By task
           </h4>
-          <ul className="divide-y divide-gray-200 text-sm">
+          <ul className="divide-y divide-primary-100/60 text-sm">
             {plant.upcomingTasks.map((t) => (
               <TaskRow key={t.id} task={t} completions={completions} />
             ))}

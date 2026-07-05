@@ -15,7 +15,7 @@ export function CareGuidanceCard({ species }: CareGuidanceCardProps) {
   if (!guide) return null;
   return (
     <Card padding="none">
-      <div className="px-6 py-4 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-primary-100/70">
         <CardHeader
           title={`Caring for ${guide.common}`}
           description={`Curated tips for ${guide.scientific}.`}

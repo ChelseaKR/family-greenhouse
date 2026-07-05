@@ -16,6 +16,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Card } from '@/components/Card';
 import { Alert } from '@/components/Alert';
+import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
 import { PetToxicityNote } from './PetToxicityNote';
@@ -261,8 +262,11 @@ export function AddPlantPage() {
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Add a new plant</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="font-serif text-3xl text-ink leading-tight tracking-tight">
+          Add a new plant
+        </h1>
+        <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
+        <p className="mt-1 text-sm text-gray-600">
           Enter the details of your plant to start tracking its care.
         </p>
       </div>
@@ -293,7 +297,7 @@ export function AddPlantPage() {
           <div className="space-y-3">
             <span className="label">Photo (optional)</span>
             <div className="flex items-start gap-4">
-              <div className="h-32 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+              <div className="h-32 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-parchment">
                 {pickedPreview ? (
                   <img
                     src={pickedPreview}
@@ -304,7 +308,7 @@ export function AddPlantPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-gray-300">
+                  <div className="flex h-full w-full items-center justify-center text-primary-300">
                     <CameraIcon className="h-10 w-10" aria-hidden="true" />
                   </div>
                 )}
@@ -351,7 +355,7 @@ export function AddPlantPage() {
               </div>
             </div>
             {suggestions && suggestions.length > 0 && (
-              <ul className="rounded-md border border-gray-200 divide-y divide-gray-200">
+              <ul className="rounded-md border border-primary-100/70 divide-y divide-primary-100/60">
                 {suggestions.map((s) => (
                   <li
                     key={s.scientificName}

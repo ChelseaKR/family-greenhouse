@@ -31,12 +31,13 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   custom: 'Custom',
 };
 
+// Bar hues mirror taskTypeConfig chips so charts match task chips app-wide.
 const TASK_TYPE_COLORS: Record<string, string> = {
-  water: 'bg-blue-500',
-  fertilize: 'bg-green-500',
-  prune: 'bg-orange-500',
-  repot: 'bg-purple-500',
-  custom: 'bg-gray-500',
+  water: 'bg-sky-500',
+  fertilize: 'bg-primary-500',
+  prune: 'bg-accent-500',
+  repot: 'bg-amber-500',
+  custom: 'bg-stone-400',
 };
 
 function isOverdue(nextDue: string, now = new Date()): boolean {
@@ -127,7 +128,7 @@ export function AnalyticsPage() {
 
       {/* 30-day trend */}
       <Card padding="none">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-primary-100/70">
           <CardHeader title="Last 30 days" description="Completed tasks per day." />
         </div>
         <div className="p-6">
@@ -144,13 +145,13 @@ export function AnalyticsPage() {
       {/* By task type */}
       {review && review.byTaskType.length > 0 && (
         <Card padding="none">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
               title={`By task type in ${yearNow}`}
               description="What kind of care your household has put in this year."
             />
           </div>
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-primary-100/60">
             {(() => {
               const total = review.byTaskType.reduce((s, b) => s + b.count, 0) || 1;
               return [...review.byTaskType]
@@ -165,7 +166,7 @@ export function AnalyticsPage() {
                       <span
                         className={clsx(
                           'h-3 rounded-full',
-                          TASK_TYPE_COLORS[b.type] ?? 'bg-gray-400'
+                          TASK_TYPE_COLORS[b.type] ?? 'bg-stone-400'
                         )}
                         style={{ width: `${pct}%`, minWidth: '4px' }}
                         aria-hidden="true"
@@ -184,18 +185,18 @@ export function AnalyticsPage() {
       {/* Plants at risk */}
       {atRisk.length > 0 && (
         <Card padding="none">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
               title="Plants at risk"
               description="Tasks overdue — the most-overdue plant first."
             />
           </div>
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-primary-100/60">
             {atRisk.map(({ plant, overdueCount, worst }) => (
               <li key={plant.id} className="px-6 py-3 text-sm">
                 <Link
                   to={`/plants/${plant.id}`}
-                  className="flex items-center gap-3 hover:bg-gray-50 -mx-6 px-6 py-1 -my-1"
+                  className="flex items-center gap-3 hover:bg-parchment/60 -mx-6 px-6 py-1 -my-1"
                 >
                   <span className="flex-1 truncate font-medium text-gray-900">{plant.name}</span>
                   <span className="text-amber-700 tabular-nums">{overdueCount} overdue</span>
@@ -210,13 +211,13 @@ export function AnalyticsPage() {
       {/* Per-member */}
       {review && review.byMember.length > 0 && (
         <Card padding="none">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
               title={`Top contributors in ${yearNow}`}
               description="Tasks each member has completed this year."
             />
           </div>
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-primary-100/60">
             {review.byMember.map((m) => {
               const max = review.byMember[0].count || 1;
               const pct = (m.count / max) * 100;
@@ -239,10 +240,10 @@ export function AnalyticsPage() {
       {/* Per-plant */}
       {plants && tasks && (
         <Card padding="none">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader title="Per plant" description="Recent task activity by plant." />
           </div>
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-primary-100/60">
             {plants
               .map((plant) => ({
                 plant,
@@ -348,15 +349,15 @@ function KpiTile({ label, value, tone }: { label: string; value: number; tone?: 
   return (
     <div
       className={clsx(
-        'rounded-lg border p-4',
-        tone === 'warning' ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'
+        'rounded-lg border p-4 shadow-journal',
+        tone === 'warning' ? 'border-amber-300 bg-amber-50' : 'border-primary-100/70 bg-paper'
       )}
     >
-      <p className="text-xs font-medium text-gray-600">{label}</p>
+      <p className="text-xs uppercase tracking-[0.14em] text-gray-600">{label}</p>
       <p
         className={clsx(
-          'mt-1 text-2xl font-semibold tabular-nums',
-          tone === 'warning' ? 'text-amber-900' : 'text-gray-900'
+          'mt-1 font-serif text-2xl tabular-nums',
+          tone === 'warning' ? 'text-amber-900' : 'text-ink'
         )}
       >
         {value}

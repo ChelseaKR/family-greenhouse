@@ -187,7 +187,7 @@ function BillingIntervalToggle({
       <div
         role="radiogroup"
         aria-label="Billing interval"
-        className="inline-flex rounded-full bg-gray-100 p-1"
+        className="inline-flex rounded-full bg-parchment p-1"
       >
         {options.map((opt) => (
           <button
@@ -242,7 +242,7 @@ function UsageMeters({ usage }: { usage: PlanUsage }) {
               {m.label}
             </p>
             <div
-              className="mt-1 h-1.5 w-full max-w-xs rounded-full bg-gray-100"
+              className="mt-1 h-1.5 w-full max-w-xs rounded-full bg-primary-100/60"
               role="presentation"
             >
               <div

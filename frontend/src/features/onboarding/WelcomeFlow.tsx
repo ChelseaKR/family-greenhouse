@@ -70,7 +70,7 @@ export function WelcomeFlow() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-primary-50 to-white p-6"
+      className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-primary-50 to-paper p-6"
       role="dialog"
       aria-labelledby="welcome-title"
     >
@@ -81,7 +81,7 @@ export function WelcomeFlow() {
           <Illustration className="mx-auto h-32 w-auto" />
           <h1
             id="welcome-title"
-            className="mt-4 font-serif text-3xl font-semibold tracking-tight text-gray-900"
+            className="mt-4 font-serif text-3xl font-semibold tracking-tight text-ink"
           >
             {isFirst && firstName ? `Welcome, ${firstName}` : current.title}
           </h1>
@@ -101,7 +101,7 @@ export function WelcomeFlow() {
               aria-current={i === step ? 'step' : undefined}
               className={clsx(
                 'h-1.5 w-8 rounded-full transition-colors',
-                i === step ? 'bg-primary-700' : 'bg-gray-300 hover:bg-gray-400'
+                i === step ? 'bg-primary-700' : 'bg-primary-200 hover:bg-primary-300'
               )}
             />
           ))}
