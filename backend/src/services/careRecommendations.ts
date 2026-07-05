@@ -28,12 +28,21 @@ export function deriveCareSuggestion(detail: PerenualSpeciesDetail): CareSuggest
   const sunlight = detail.sunlight.slice(0, 3);
 
   const parts: string[] = [];
-  if (wateringDays === null) {
+  if (detail.watering === 'none') {
+    // Perenual explicitly flags this species as not needing regular
+    // watering (e.g. some epiphytes). Distinct from the case below, where
+    // Perenual simply has no watering data for the species at all — that's
+    // the common case for less-mainstream entries, and asserting "no
+    // watering needed" there would be a guess dressed up as a fact.
     parts.push('No regular watering needed.');
-  } else if (wateringDays <= 4) {
-    parts.push(`Water roughly every ${wateringDays} days.`);
+  } else if (wateringDays !== null) {
+    if (wateringDays <= 4) {
+      parts.push(`Water roughly every ${wateringDays} days.`);
+    } else {
+      parts.push(`Water about every ${wateringDays} days.`);
+    }
   } else {
-    parts.push(`Water about every ${wateringDays} days.`);
+    parts.push("Watering data isn't available for this species.");
   }
   if (sunlight.length > 0) {
     parts.push(`Light: ${sunlight.join(', ')}.`);
