@@ -20,12 +20,21 @@ import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
 
-/** YYYY-MM-DD (date input) → ISO datetime; start-of-day / end-of-day UTC. */
+/**
+ * YYYY-MM-DD (date input) → ISO datetime; start-of-day / end-of-day in the
+ * browser's LOCAL timezone. The local `Date` constructor interprets
+ * year/month/day as wall-clock time here, so `.toISOString()` correctly
+ * converts the user's actual local midnight to a UTC instant — a hardcoded
+ * `Z` suffix would instead mean UTC midnight, several hours off for anyone
+ * outside that zone.
+ */
 function toStartIso(date: string): string {
-  return `${date}T00:00:00.000Z`;
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
 }
 function toEndIso(date: string): string {
-  return `${date}T23:59:59.000Z`;
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
 }
 
 interface MemberVacationProps {

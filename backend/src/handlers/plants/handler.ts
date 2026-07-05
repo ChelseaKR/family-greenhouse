@@ -45,6 +45,9 @@ async function resolveActorName(householdId: string, userId: string): Promise<st
   }
 }
 
+// Hop cap on the ancestor-chain walk in updatePlant's cycle guard — see there.
+const MAX_LINEAGE_DEPTH = 50;
+
 // GET /plants?filter=active|past|all  (default: active)
 export const listPlants = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -190,8 +193,9 @@ export const updatePlant = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
 
-    // Lineage edits: reject self-parenting and parents that don't exist in
-    // this household. (null detaches and needs no validation.)
+    // Lineage edits: reject self-parenting, parents that don't exist in this
+    // household, and parents that would close a cycle. (null detaches and
+    // needs no validation.)
     if (validatedBody.parentPlantId) {
       if (validatedBody.parentPlantId === plantId) {
         throw createHttpError(400, 'A plant cannot be its own parent');
@@ -199,6 +203,32 @@ export const updatePlant = createHandler(
       const parent = await plantService.getPlant(user.householdId!, validatedBody.parentPlantId);
       if (!parent) {
         throw createHttpError(400, 'Parent plant not found in this household');
+      }
+
+      const current = await plantService.getPlant(user.householdId!, plantId);
+      if (current?.parentPlantId !== validatedBody.parentPlantId) {
+        // Cycle guard: walk the proposed parent's ancestors. If the walk
+        // reaches back to `plantId`, the proposed parent is already a
+        // descendant of this plant, so adopting it would close a cycle (the
+        // literal self-parent check above only catches the 1-hop case).
+        // Capped — real propagation chains never get remotely this deep, so
+        // hitting the cap means a bug or a pathological chain; reject rather
+        // than loop forever.
+        let ancestorId = parent.parentPlantId;
+        let hops = 0;
+        while (ancestorId) {
+          if (ancestorId === plantId) {
+            throw createHttpError(
+              400,
+              'That plant is already a descendant of this one; setting it as parent would create a circular lineage'
+            );
+          }
+          if (++hops >= MAX_LINEAGE_DEPTH) {
+            throw createHttpError(400, 'Propagation chain is too long to validate');
+          }
+          const ancestor = await plantService.getPlant(user.householdId!, ancestorId);
+          ancestorId = ancestor?.parentPlantId ?? null;
+        }
       }
     }
 

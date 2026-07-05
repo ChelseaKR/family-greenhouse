@@ -180,6 +180,8 @@ export const en = {
       created_one: '1 plant created',
       skipped: '{{count}} rows skipped',
       skipped_one: '1 row skipped',
+      skippedRowsTitle: 'Skipped rows',
+      skippedRowLabel: 'Row {{row}} — {{name}}',
       planLimit:
         'You reached your plan’s plant limit, so the remaining rows were skipped. Upgrade your plan to import the rest.',
       upgradeCta: 'See upgrade options',

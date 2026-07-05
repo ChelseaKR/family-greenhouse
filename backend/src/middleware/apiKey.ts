@@ -17,6 +17,8 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
 import * as apiKeys from '../services/apiKeys.js';
 import type { ApiScope } from '../services/apiKeys.js';
+import * as billing from '../services/billing.js';
+import { getPlan } from '../models/plans.js';
 import type { AuthenticatedEvent } from './auth.js';
 
 /** Event shape after `apiKeyMiddleware` runs — carries the key's scopes. */
@@ -54,6 +56,18 @@ export const apiKeyMiddleware = (): middy.MiddlewareObj<
     const record = await apiKeys.lookupApiKey(plaintext);
     if (!record) {
       throw createHttpError(401, 'Invalid API key');
+    }
+
+    // API access is a Greenhouse-plan feature, but the key row itself has no
+    // notion of the household's CURRENT plan — only that it was valid to
+    // mint. Re-check on every use so a downgrade revokes access immediately
+    // instead of leaving already-issued keys live forever.
+    const sub = await billing.getHouseholdSubscription(record.householdId);
+    if (getPlan(sub.planId).id !== 'greenhouse') {
+      throw createHttpError(
+        403,
+        'API access requires the Greenhouse plan. This household has downgraded — upgrade to keep using this key.'
+      );
     }
 
     // Attach a minimal user shape. We deliberately don't synthesize an email

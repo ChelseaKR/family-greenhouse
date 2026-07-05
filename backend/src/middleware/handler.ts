@@ -78,13 +78,16 @@ function resolveCorsOrigin(): string {
   return 'http://localhost:3000';
 }
 
-export function createHandler<TEvent, TResult>(handler: Handler<TEvent, TResult>) {
+export function createHandler<TEvent, TResult>(
+  handler: Handler<TEvent, TResult>,
+  opts?: { maxBodyBytes?: number }
+) {
   return (
     middy(handler)
       // First in the chain so its after/onError run last and stamp the final
       // response (see securityHeaders.ts).
       .use(securityHeaders())
-      .use(bodySizeGuard())
+      .use(bodySizeGuard(opts?.maxBodyBytes))
       .use(httpJsonBodyParser({ disableContentTypeError: true }))
       .use(
         httpCors({

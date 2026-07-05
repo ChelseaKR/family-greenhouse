@@ -123,6 +123,35 @@ export function ImportPlantsPage() {
                 <> · {t('importPlants.results.skipped', { count: summary.skipped })}</>
               )}
             </Alert>
+            {summary.skipped > 0 && (
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {t('importPlants.results.skippedRowsTitle')}
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {summary.results
+                    .filter((result) => result.status === 'skipped')
+                    .map((result) => {
+                      // result.index is the row's position in the SUBMITTED
+                      // (valid-only) batch, not in the raw `rows` array —
+                      // client-invalid rows are filtered out before the
+                      // request is sent, so validRows is the correct lookup.
+                      const row = validRows[result.index];
+                      return (
+                        <li key={result.index} className="rounded-md bg-red-50 px-3 py-2 text-sm">
+                          <p className="font-medium text-gray-900">
+                            {t('importPlants.results.skippedRowLabel', {
+                              row: result.index + 1,
+                              name: row?.displayName ?? `#${result.index + 1}`,
+                            })}
+                          </p>
+                          {result.error && <p className="text-red-700">{result.error}</p>}
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            )}
             {summary.planLimitHit && (
               <Alert variant="warning">
                 <span>{t('importPlants.results.planLimit')}</span>{' '}
