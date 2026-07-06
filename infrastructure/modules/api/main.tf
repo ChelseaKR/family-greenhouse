@@ -332,7 +332,13 @@ resource "aws_lambda_function" "handlers" {
   function_name = "${var.project_name}-${each.key}-${var.environment}"
   role          = aws_iam_role.lambda.arn
   handler       = "handler.handler"
-  runtime       = "nodejs20.x"
+  # Bumped from nodejs20.x (CQ-03 — Node 22 is current LTS; CI/.nvmrc/engines
+  # moved together, see CHANGELOG.md). This is a real infrastructure change —
+  # applying it redeploys every Lambda function on the new runtime. Reviewed
+  # here as a file edit only; `terraform apply` against real AWS is a
+  # deliberate action for the maintainer to run, not something done as part
+  # of this conformance-remediation pass.
+  runtime = "nodejs22.x"
   # arm64 (Graviton2) is ~20% cheaper per GB-second than x86 at equal or better
   # latency. Safe here because esbuild emits pure JS with no native/prebuilt
   # binaries (no sharp/bcrypt in the dependency tree), so the bundle is
@@ -492,7 +498,7 @@ resource "aws_lambda_function" "chat_stream" {
   function_name = "${var.project_name}-chat-stream-${var.environment}"
   role          = aws_iam_role.chat_stream.arn
   handler       = "handler.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   # arm64 (Graviton2): ~20% cheaper at equal latency; pure-JS esbuild bundle is
   # architecture-independent. Same rationale as the `handlers` fleet above.
   architectures = ["arm64"]

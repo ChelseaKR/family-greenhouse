@@ -1,5 +1,7 @@
 # Quality audit — Family Greenhouse
 
+> Last verified: 2026-07-05 · Recheck: quarterly, or per RTF-08 audit-as-artifact cadence
+
 A frank, theme-organized assessment of where the system sits across the standard quality attributes ("-ilities"). Grouped by concern because most of the ~150 attributes in the audit checklist (accessibility, accountability, accuracy, … vulnerability) overlap heavily — `flexibility` ≈ `adaptability` ≈ `modifiability`; `reliability` ≈ `dependability` ≈ `fault-tolerance` ≈ `recoverability`. Auditing each as a standalone bullet would produce noise without insight.
 
 Findings are graded:

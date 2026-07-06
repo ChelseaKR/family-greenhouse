@@ -32,11 +32,18 @@ export default defineConfig({
         '**/*.config.*',
         '**/index.ts',
       ],
+      // Ratchet (CQ-16, P1-5): measured 2026-07-05 was lines 82.84 / statements
+      // 82.05 / branches 73.77 / functions 82.27 — these floors are set ~2pp
+      // below that measurement (not the standard's 80x4-perFile target,
+      // reached honestly rather than jump-cut, which just breeds exclusions).
+      // Raise ~5pp per release with a tracked issue; see README "Standards
+      // conformance" (CODE-QUALITY row) and add `perFile: true` once within
+      // 10pp of 80 on every dimension.
       thresholds: {
-        lines: 65,
-        statements: 65,
-        branches: 65,
-        functions: 55,
+        lines: 80,
+        statements: 80,
+        branches: 71,
+        functions: 80,
       },
     },
   },

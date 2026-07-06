@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   lint:
@@ -42,17 +42,15 @@ jobs:
         run: npm run lint
 
       - name: No bare TODO/FIXME/HACK markers
-        # Enforces docs/standards/CODE-QUALITY-STANDARD.md §6: every TODO/FIXME/
-        # HACK must carry an issue reference — a (#NNN) or a full issue URL — on
-        # the same line. Bare markers fail the build. Scoped to source only.
-        run: |
-          if grep -rEn '(TODO|FIXME|HACK)' \
-               --include='*.ts' --include='*.tsx' \
-               backend/src frontend/src \
-             | grep -Ev '\(#[0-9]+\)|https?://[^ ]+/issues/[0-9]+'; then
-            echo "::error::Bare TODO/FIXME/HACK found. Add an issue reference, e.g. TODO(#142): ..."
-            exit 1
-          fi
+        # Shared with `npm run verify` (scripts/check-no-bare-markers.mjs) so
+        # local pre-push and CI run the identical check — see CICD-27.
+        run: node scripts/check-no-bare-markers.mjs
+
+      - name: No silenced test/security/lint gates in workflows (P0-3)
+        # Regression gate for the exact bypasses this remediation pass closed
+        # (cd-staging.yml's continue-on-error on e2e; the skip-lighthouse
+        # label). See scripts/check-no-silenced-gates.mjs.
+        run: node scripts/check-no-silenced-gates.mjs
 
       - name: Check formatting
         run: npm run format:check
@@ -175,7 +173,7 @@ jobs:
         # run it directly and let a non-zero exit (leaks found) gate the
         # build. `--redact` keeps any match out of the public log.
         env:
-          GITLEAKS_VERSION: 8.21.2
+          GITLEAKS_VERSION: 8.30.1
         run: |
           set -euo pipefail
           curl -sSfL \
@@ -186,11 +184,14 @@ jobs:
   sast:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
-    # Semgrep OSS is free and tokenless (CodeQL would need GitHub Advanced
-    # Security, which isn't available on this private repo's plan). Runs the
-    # community rulesets relevant to our stack and gates on ERROR-severity
-    # findings only — high-confidence issues, low false-positive noise. Tune
-    # the rulesets / severity as the codebase grows.
+    # Semgrep OSS is free and tokenless — kept as a fast, always-on first pass.
+    # (This comment previously claimed "CodeQL would need GitHub Advanced
+    # Security, which isn't available on this private repo's plan" — that was
+    # wrong: this repo is public, and CodeQL is free for public repos. Fixed
+    # 2026-07-05; CodeQL now runs separately in codeql.yml, see SEC-08.)
+    # Runs the community rulesets relevant to our stack and gates on
+    # ERROR-severity findings only — high-confidence issues, low
+    # false-positive noise. Tune the rulesets / severity as the codebase grows.
     container:
       image: semgrep/semgrep
     steps:
@@ -275,9 +276,6 @@ jobs:
     name: Lighthouse (mobile + desktop)
     runs-on: ubuntu-latest
     needs: [build]
-    # Lighthouse takes ~2 min and is not gating for hotfix PRs; skip on
-    # documentation-only changes by labeling the PR with "skip-lighthouse".
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-lighthouse') }}
     strategy:
       fail-fast: false
       matrix:
@@ -285,21 +283,51 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          # Need the merge-base/previous commit to diff against — see the
+          # "Determine whether frontend changed" step below.
+          fetch-depth: 0
+
+      - name: Determine whether frontend changed
+        # P0-3 fix: this job used to be skippable on any PR via a human-applied
+        # "skip-lighthouse" label — an undocumented, unaudited bypass of the
+        # only perf+a11y gate (OBS-23/24/25, A11Y-02). Replaced with an
+        # automatic, un-label-able path check: the job always runs when the
+        # diff touches frontend/** (or this workflow file), and no label can
+        # override that. When the diff genuinely doesn't touch the frontend
+        # (docs-only, backend-only, infra-only PRs), the run steps below no-op
+        # instead — same speed benefit, no manual escape hatch.
+        id: diff
+        run: |
+          BEFORE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            # No usable base to diff against (e.g. a new branch's first push) —
+            # fail open (run Lighthouse) rather than silently skip it.
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -qE '^(frontend/|\.github/workflows/ci\.yml)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node.js
+        if: steps.diff.outputs.changed == 'true'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.diff.outputs.changed == 'true'
         run: npm ci
 
       - name: Build frontend
+        if: steps.diff.outputs.changed == 'true'
         working-directory: frontend
         run: npm run build
 
       - name: Run Lighthouse (${{ matrix.profile }})
+        if: steps.diff.outputs.changed == 'true'
         working-directory: frontend
         run: npm run lighthouse:${{ matrix.profile }}
 

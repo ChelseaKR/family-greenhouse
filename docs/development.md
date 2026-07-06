@@ -4,7 +4,7 @@ A two-terminal setup gets you running with no external dependencies. Every exter
 
 ## Prerequisites
 
-- Node 20.x or later
+- Node 22.x or later (see `.nvmrc`)
 - npm 10.x or later
 
 That's it for the inner loop. AWS CLI and Terraform are only needed if you're deploying.

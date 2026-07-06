@@ -1,6 +1,6 @@
 {
   "name": "family-greenhouse",
-  "version": "0.1.0",
+  "version": "0.13.1",
   "license": "Elastic-2.0",
   "private": true,
   "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person across browser/email/SMS, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
@@ -42,7 +42,9 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "eval": "npm run eval --workspace backend",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.2.1",
@@ -90,7 +92,7 @@
     }
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "npm": ">=10.0.0"
   }
 }

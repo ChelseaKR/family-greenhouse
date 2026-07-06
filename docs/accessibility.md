@@ -1,5 +1,7 @@
 # Accessibility (WCAG 2.2 AA, AAA where feasible)
 
+> Last verified: 2026-07-05 · Recheck: every release
+
 We commit to WCAG 2.2 **AA** as the conformance bar, and push to **AAA on the
 criteria that are codeable and machine-checkable** — notably 1.4.6 Contrast
 (Enhanced, 7:1), 2.5.5 Target Size (Enhanced, 44px), and 2.3.3 Animation from
@@ -14,13 +16,13 @@ document maps criteria to where they're enforced or to a deliberate choice.
 Four layers, all gating:
 
 1. **Lighthouse CI** runs the `accessibility` category against `/` and `/login` on every PR — both desktop and mobile. The mobile config is the tighter target. Threshold: 0.95 minimum (currently 1.00 on every page tested).
-2. **Playwright + `@axe-core/playwright`** scans every public + authenticated route. Enforced tags now include the **AAA** slice axe can evaluate (`wcag2aaa`/`wcag21aaa`) — chiefly `color-contrast-enhanced` (1.4.6, 7:1) — on top of A/AA. Zero violations required. (`tests/e2e/a11y.spec.ts`, `a11y-authenticated.spec.ts`)
+2. **Playwright + `@axe-core/playwright`** scans every public + authenticated route. `ENFORCED_TAGS` is `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`/`wcag22aa` — **AA only** (both spec files removed the `wcag2aaa`/`wcag21aaa` tags; see the constant at the top of each). Zero violations required at that level. (`tests/e2e/a11y.spec.ts`, `a11y-authenticated.spec.ts`). The AAA criteria below (contrast-enhanced, target size) are real but are **not** axe-gated — they're maintained by convention + manual review, per criterion below.
 3. **`eslint-plugin-jsx-a11y` at `strict`** (not just `recommended`) — static analysis at lint time catches missing alt text, invalid ARIA, unlabeled controls, etc., and fails the build.
 4. **`jest-axe`** structural checks on shared primitives in the unit suite (`tests/unit/a11y/components.a11y.test.tsx`) — fast feedback in jsdom (contrast, which needs layout, is left to layer 2).
 
 **Target size (2.5.5 AAA):** the shared `Button` enforces a 44×44 CSS-px floor (`min-h-touch`/`min-w-touch`, the `touch` = 44px token in `tailwind.config`); raw interactive controls (view toggles, snooze menu items, the household-switcher add button) carry the same floor. axe does not mechanically check target size, so this is maintained by convention + review.
 
-**Contrast (1.4.6 AAA):** body/helper text uses `gray-600`+ (≥7:1 on white), status/type badges use `text-*-900` on `*-100` tints (≥7:1), placeholders are `gray-500` (AA — placeholders are never the only label, so AAA is not required of them). The AAA axe gate (layer 2) flags any regression on real pages.
+**Contrast (1.4.6 AAA):** body/helper text uses `gray-600`+ (≥7:1 on white), status/type badges use `text-*-900` on `*-100` tints (≥7:1), placeholders are `gray-500` (AA — placeholders are never the only label, so AAA is not required of them). This is a design-token discipline, not an automated gate — the axe suite enforces AA (`color-contrast`) only; a regression to a lower-contrast AAA token would not fail CI today. Tracked as a gap in the conformance table (README).
 
 Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` logs in via the local-server seed account (`test@example.com`) before scanning `/dashboard`, `/plants`, `/plants/:id`, `/tasks`, `/household`, `/settings`, `/analytics`, and `/help`. This suite runs against the local-server (Cognito mock); production a11y is verified on every deploy by Lighthouse + manual axe DevTools spot-checks.
 

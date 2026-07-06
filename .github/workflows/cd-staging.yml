@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   AWS_REGION: us-east-1
   ENVIRONMENT: staging
 
@@ -233,7 +233,9 @@ jobs:
         env:
           BASE_URL: ${{ vars.STAGING_URL }}
         run: npm run test:e2e
-        continue-on-error: true
+        # `continue-on-error: true` removed (P0-3): staging exists to fail
+        # loudly. A silenced staging e2e failure was decorative — it let a
+        # broken staging deploy report green. See CHANGELOG.md.
 
       - name: Upload test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -250,9 +252,9 @@ jobs:
     steps:
       - name: Deployment notification
         run: |
-          if [ "${{ needs.deploy-frontend.result }}" == "success" ] && [ "${{ needs.deploy-backend.result }}" == "success" ]; then
+          if [ "${{ needs.deploy-frontend.result }}" == "success" ] && [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.e2e-tests.result }}" == "success" ]; then
             echo "Staging deployment successful!"
           else
-            echo "Staging deployment failed!"
+            echo "Staging deployment failed! (frontend=${{ needs.deploy-frontend.result }} backend=${{ needs.deploy-backend.result }} e2e=${{ needs.e2e-tests.result }})"
             exit 1
           fi
