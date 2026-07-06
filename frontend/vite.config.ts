@@ -84,6 +84,13 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    // CQ-19: explicit chunk-size warning (500 KB) as a build-time signal
+    // separate from the hard size-limit CI gate (`npm run size`), and pin the
+    // build target to Baseline "Widely available" (evergreen browsers with
+    // broad real-world support) instead of trusting Vite's implicit default —
+    // an explicit, reviewable choice rather than an unstated one.
+    chunkSizeWarningLimit: 500,
+    target: 'baseline-widely-available',
     rollupOptions: {
       output: {
         manualChunks(id) {

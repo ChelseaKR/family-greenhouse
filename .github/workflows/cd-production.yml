@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   AWS_REGION: us-east-1
   ENVIRONMENT: production
   # Bucket holding per-version Lambda zips that auto-rollback restores from.
@@ -55,6 +55,62 @@ jobs:
           if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid version format: $VERSION"
             exit 1
+          fi
+
+      - name: Checkout tagged ref
+        # Needed for the version/CHANGELOG/signature checks below — they read
+        # package.json and CHANGELOG.md AS OF the tag being deployed, not the
+        # workflow-triggering ref.
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ steps.version.outputs.version }}
+          fetch-depth: 0
+
+      - name: Tag <-> package.json version consistency (REL-02/REL-03)
+        # Closes the exact gap the 2026-07-05 audit flagged: tags advanced to
+        # v0.13.1 while every package.json stayed frozen at 0.1.0. Blocking —
+        # a mismatch here means the release-version bump was forgotten.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected="${VERSION#v}"
+          for f in package.json frontend/package.json backend/package.json; do
+            actual=$(node -p "require('./${f}').version")
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${f} version ($actual) does not match tag ${VERSION} (expected $expected)"
+              exit 1
+            fi
+          done
+          echo "package.json versions match tag ${VERSION} across root/frontend/backend."
+
+      - name: CHANGELOG has an entry for this release (REL-10)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected="${VERSION#v}"
+          if ! grep -qF "## [${expected}]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${expected}]' entry for tag ${VERSION}. Add one in the release PR before tagging."
+            exit 1
+          fi
+          echo "CHANGELOG.md has an entry for ${expected}."
+
+      - name: Tag signature (REL-08, advisory for now)
+        # NOT yet hard-blocking: `git config tag.gpgSign true` was set locally
+        # as of this remediation pass (2026-07-05), but no release has been
+        # signed under it yet, and the maintainer's GPG/gitsign identity may
+        # not be provisioned in this CI runner. Hard-failing here would block
+        # the very next release on a signing setup that hasn't happened yet —
+        # the safer default is to warn loudly until at least one signed tag
+        # exists, then flip this to `exit 1` on failure.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git verify-tag "$VERSION" 2>&1; then
+            echo "Tag $VERSION is signed and verified."
+          else
+            echo "::warning::Tag ${VERSION} is not signed (or has no verifiable signature). REL-08 wants signed release tags — see docs/RESPONSIBLE-TECH-AUDITS.md. This is advisory only until the signing setup is confirmed working; make it blocking once the first signed tag lands."
           fi
 
   build:
@@ -334,10 +390,17 @@ jobs:
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Setup Node.js
+        # No `cache: 'npm'` here (CICD-24): this job holds `id-token: write`
+        # (needed for the Cognito test-user create+delete step below), and
+        # actions/setup-node's cache writes to the GitHub Actions cache
+        # service using the job's token — combining a broad OIDC grant with
+        # cache read/write on the same job is exactly the pattern CICD-24
+        # forbids. The other `id-token: write` jobs in this workflow
+        # (terraform, deploy-frontend, deploy-backend) are already cache-free;
+        # this was the one holdout.
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci

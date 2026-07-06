@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: 'If you reference this project, please cite it as below.'
+title: 'Family Greenhouse'
+abstract: 'A collaborative plant-care app for households — per-plant watering schedules, recurring care tasks, and reminders that find the right person across browser, email, and SMS.'
+authors:
+  - family-names: 'Kelly-Reif'
+    given-names: 'Chelsea'
+repository-code: 'https://github.com/ChelseaKR/family-greenhouse'
+url: 'https://familygreenhouse.net'
+license: 'Elastic-2.0'
+version: 0.13.1
+date-released: '2026-07-05'

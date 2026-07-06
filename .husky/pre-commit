@@ -1,3 +1,13 @@
 # Pre-commit: cheap, mechanical checks that finish in seconds. Anything slow
 # (full test suite, typecheck across both workspaces) belongs in pre-push.
 npx lint-staged
+
+# Secret-scan Gate 1 (SEC-17): catch a secret before it's committed, not only
+# before it's pushed (CI's gitleaks job in ci.yml is Gate 2). Soft-fails to a
+# warning when the binary isn't installed locally so it doesn't block a fresh
+# clone's first commit — CI still gates on it either way.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --no-banner
+else
+  echo "warning: gitleaks not found on PATH — skipping pre-commit secret scan (install: https://github.com/gitleaks/gitleaks#installing). CI still gates on this."
+fi

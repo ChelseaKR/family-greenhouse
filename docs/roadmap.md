@@ -163,6 +163,30 @@ Far enough out that quarter-level commitments are imaginary. The themes:
 - **Costs grow with users, not with quarters.** Every new external dependency (a new API, a new SaaS) needs an answer to "what does this cost at 1,000 households?"
 - **Document why, not just what.** A roadmap that says "build streaks" is useless; "build streaks because retention drops 40% after week 2 and gentle nudges in similar apps lifted it 15%" is workable.
 
+## Metrics ledger (standards conformance — CICD-29, AIEV-01)
+
+Per `STANDARDS/CI-CD-STANDARD.md` CICD-29, this ledger declares the optional CI pipeline stages and any AI-evaluation state — added 2026-07-05 as part of the conformance-audit remediation (the pipeline itself predates this declaration; see `README.md` "Standards conformance" for the full per-standard table).
+
+**Pipeline stage declarations** (`ci.yml`'s 10 jobs, stages 6–8 are the "optional, declare or N/A" tier):
+
+| Stage                                            | Applicable?                      | Status                                                                                                                                                                                  |
+| ------------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1–5: lint, typecheck, test×2, security-scan/SAST | Applies (core)                   | Green, required                                                                                                                                                                         |
+| 6: build                                         | Applies (core)                   | Green, required                                                                                                                                                                         |
+| 7: Lighthouse (perf + a11y)                      | Applies                          | Green, required — now runs automatically whenever `frontend/**` changes (the `skip-lighthouse` label bypass was closed 2026-07-05; see CHANGELOG)                                       |
+| 8: bundle-size, e2e+a11y (Playwright)            | Applies                          | Green, required                                                                                                                                                                         |
+| zizmor (workflow SAST)                           | Applies, **not yet implemented** | Gap tracked                                                                                                                                                                             |
+| CodeQL                                           | Applies, **not yet implemented** | Gap tracked — repo is public, so the "GHAS unavailable on private plan" in-line comment in `ci.yml` needs either CodeQL added or a dated waiver (see `docs/RESPONSIBLE-TECH-AUDITS.md`) |
+| OpenSSF Scorecard                                | Applies, **not yet implemented** | Gap tracked                                                                                                                                                                             |
+
+```
+AI-Evaluation-Standard: APPLIES (tiers: tool-use + RAG, citation/grounding guard, model-card)
+```
+
+See `docs/RESPONSIBLE-TECH-AUDITS.md` for the full dated waiver (expires 2026-10-05) covering what's built (starter benchmark, citation/grounding guard, model card) vs. tracked (full RAGAS-class metric suite, red-team scan, judge calibration).
+
+**Measured values (starter eval, 2026-07-05):** see `evals/eval-baseline.json` — recall@3 = 1.0, own-chunk top-1 rate = 1.0 on a 22-question benchmark (target per the standard: 100–500 questions with live faithfulness/hallucination/refusal scoring). Silent deviation from the standard's numeric targets is itself a defect — this line is the required, explicit record of the deviation and its rationale (Node/TS stack vs. the standard's Python-oriented reference tooling; see `evals/README.md`).
+
 ## Relationship to the production checklist
 
 The [`production-checklist.md`](production-checklist.md) is a per-launch gating list. The roadmap is what we build _with_ the launched system. They overlap where roadmap items pull in new infrastructure (e.g. Y1Q2 monitoring dashboards are also a checklist item).

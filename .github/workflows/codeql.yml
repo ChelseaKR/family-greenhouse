@@ -1,0 +1,46 @@
+name: CodeQL
+
+# Added 2026-07-05 (P1-2 / SEC-08 / CICD-20): the ci.yml `sast` job's in-line
+# comment claimed "CodeQL would need GitHub Advanced Security, which isn't
+# available on this private repo's plan" — but the repo is actually PUBLIC
+# (confirmed via `gh api repos/ChelseaKR/family-greenhouse` -> private:false),
+# and CodeQL is free for public repos. That comment was simply wrong, not a
+# dated waiver, so this closes the gap directly instead of waiving it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, independent of push/PR activity — catches newly-published CodeQL
+    # query-pack findings against unchanged code, not just new commits.
+    - cron: '17 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL analysis (javascript-typescript, actions)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Initialize CodeQL
+        # javascript-typescript and actions are both interpreted languages
+        # (no compile step) — build-mode: none covers both in one run.
+        uses: github/codeql-action/init@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 # v3.36.3
+        with:
+          languages: javascript-typescript, actions
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 # v3.36.3

@@ -32,11 +32,16 @@ export default defineConfig({
         '**/sw.ts',
         'dist/**',
       ],
+      // Ratchet (CQ-16, P1-5): measured 2026-07-05 was lines 67.34 /
+      // statements 66.75 / branches 61.46 / functions 59.04 — floors set ~2pp
+      // below that (not jump-cut to the standard's 80x4-perFile target, which
+      // just breeds exclusions). Raise ~5pp per release with a tracked issue;
+      // see README "Standards conformance" (CODE-QUALITY row).
       thresholds: {
-        lines: 24,
-        statements: 24,
-        branches: 60,
-        functions: 30,
+        lines: 65,
+        statements: 64,
+        branches: 59,
+        functions: 57,
       },
     },
   },

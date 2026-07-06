@@ -1,5 +1,7 @@
 # Compliance & trust
 
+> Last verified: 2026-07-05 · Recheck: quarterly, or on any new PII-processing feature
+
 Ready-to-publish legal/trust statements and the requirements that gate two
 deferred features (SMS, Sentry). Pair with [`security.md`](security.md),
 [`accessibility.md`](accessibility.md), and the in-app `PrivacyPage`/`TermsPage`.
