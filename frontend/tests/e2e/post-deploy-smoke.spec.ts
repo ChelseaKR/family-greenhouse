@@ -23,6 +23,7 @@
  * `family-greenhouse` profile via AWS_PROFILE; in CI it's the OIDC role
  * configured in the workflow.
  */
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import {
   CognitoIdentityProviderClient,
@@ -47,7 +48,10 @@ function uniqueEmail(): string {
   // Use the +tag convention so smoke-test users are visible but easy to
   // bulk-delete if cleanup ever lags. The plus-addressed local part is
   // also valid on Cognito (it stores `local+tag` verbatim).
-  const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // CSPRNG stamp (this becomes a real Cognito account name in production, so a
+  // predictable Math.random() value was guessable/squattable mid-run). node:crypto
+  // is available because the spec runs under Node via Playwright.
+  const stamp = randomUUID().replace(/-/g, '').slice(0, 12);
   return `e2e-smoke+${stamp}@familygreenhouse.net`;
 }
 

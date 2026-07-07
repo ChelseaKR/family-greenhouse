@@ -1,7 +1,7 @@
 /**
  * Per-household API keys for the public API (read scopes plus the opt-in
  * `write:tasks` scope). Each key is plan-gated (Greenhouse only), revocable,
- * and stored as a SHA-256 hash so the plaintext never lives at rest.
+ * and stored as a scrypt hash so the plaintext never lives at rest.
  *
  * Key format: `fg_<24-byte hex>`. The `fg_` prefix is stable for log
  * grepping and so users can spot a key in a screenshot. The 24-byte body is
@@ -11,7 +11,7 @@
  * Storage:
  *   PK: HOUSEHOLD#{id}
  *   SK: APIKEY#{keyId}
- *   GSI3PK: APIKEY_HASH#{sha256(plaintext)}   <- index for lookup-by-key
+ *   GSI3PK: APIKEY_HASH#{scrypt(plaintext)}   <- index for lookup-by-key
  *   GSI3SK: HOUSEHOLD#{id}
  *
  * The GSI3 lookup means we can verify a key on incoming requests with a
@@ -22,7 +22,7 @@
  * row. Keys created before scopes existed have no attribute; we read those as
  * "all read scopes" so the change is backward-compatible.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { scryptSync, randomBytes } from 'node:crypto';
 import { PutCommand, QueryCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
@@ -97,8 +97,21 @@ export interface ApiKeyCreateResult {
   plaintext: string;
 }
 
+/**
+ * Hash a plaintext key for the GSI3PK lookup index. This MUST stay
+ * deterministic: `lookupApiKey` resolves an incoming key with a single point
+ * read on `APIKEY_HASH#{hashKey(plaintext)}`, so a per-hash random salt
+ * (bcrypt/argon2) would make lookup impossible. scryptSync with a fixed
+ * application salt is deterministic and memory-hard, which satisfies the
+ * `js/insufficient-password-hash` policy that unsalted SHA-256 fails.
+ *
+ * A static salt is acceptable here precisely because the input is a 192-bit
+ * CSPRNG value (see generatePlaintext), not a human-chosen password, so a
+ * per-input salt would add nothing against precomputation. Default scrypt cost
+ * (N=16384) adds ~10-50ms per public-API auth, which is fine at this scale.
+ */
 function hashKey(plaintext: string): string {
-  return createHash('sha256').update(plaintext).digest('hex');
+  return scryptSync(plaintext, 'family-greenhouse-apikey-v2', 32).toString('hex');
 }
 
 function generatePlaintext(): string {
