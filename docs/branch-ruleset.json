@@ -1,0 +1,60 @@
+{
+  "_meta": {
+    "purpose": "Committed evidence for CICD-12/CICD-13/CQ-37..43 (required reviewers, required status checks, branch protection) — converts several UNVERIFIED audit rows into checkable ones per STANDARDS/CI-CD-STANDARD.md. Regenerate via: gh api repos/ChelseaKR/family-greenhouse/rulesets/17592136",
+    "fetchedAt": "2026-07-05",
+    "fetchedVia": "gh api repos/ChelseaKR/family-greenhouse/rulesets/17592136 (read-only)"
+  },
+  "ruleset": {
+    "id": 17592136,
+    "name": "main: PRs + green gates",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "ChelseaKR/family-greenhouse",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": ["~DEFAULT_BRANCH"]
+      }
+    },
+    "rules": [
+      { "type": "deletion" },
+      { "type": "non_fast_forward" },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "required_approving_review_count": 0,
+          "dismiss_stale_reviews_on_push": false,
+          "required_reviewers": [],
+          "require_code_owner_review": false,
+          "require_last_push_approval": false,
+          "required_review_thread_resolution": false,
+          "allowed_merge_methods": ["squash"]
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": false,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            { "context": "Lint" },
+            { "context": "Type Check" },
+            { "context": "Test Frontend" },
+            { "context": "Test Backend" },
+            { "context": "Security Scan" },
+            { "context": "SAST (Semgrep)" },
+            { "context": "Terraform Validate" },
+            { "context": "Build" },
+            { "context": "Bundle size" },
+            { "context": "E2E + accessibility (Playwright)" }
+          ]
+        }
+      }
+    ],
+    "bypass_actors": [{ "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" }],
+    "current_user_can_bypass": "always",
+    "created_at": "2026-06-11T22:31:56.552-07:00",
+    "updated_at": "2026-06-11T22:31:56.618-07:00"
+  }
+}

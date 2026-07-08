@@ -1,5 +1,7 @@
 # Security
 
+> Last verified: 2026-07-05 · Recheck: every release (see "Re-running the audit")
+
 This is a working audit against the OWASP Top 10 (2021 edition). Each category lists what's mitigated in code today, what's deferred to infrastructure (with a pointer to `production-checklist.md`), and what's an open gap. Re-run the audit before every release.
 
 ## A01:2021 — Broken Access Control
@@ -73,7 +75,7 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 - Lockfiles (`package-lock.json`) committed and verified by `npm ci` in CI to prevent dependency confusion.
 - Pre-push hook runs the full test + typecheck suite, so dependency bumps that break the build never reach `origin`.
 
-**Open**: Dependabot or Renovate scheduling. The CI gate catches new CVEs reactively; we'd prefer proactive upgrade PRs. Recommended next step.
+**Resolved**: Renovate (`renovate.json`, 72h `minimumReleaseAge`) and Dependabot (`.github/dependabot.yml`, npm ×3 + actions + terraform) are both configured — proactive upgrade PRs land alongside the reactive CI gate.
 
 ## A07:2021 — Identification and Authentication Failures
 

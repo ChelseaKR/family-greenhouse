@@ -26,8 +26,13 @@ X-Api-Key: fg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Keys look like `fg_` + 48 hex chars. They're shown **once** at creation —
-copy it then; we store only a SHA-256 hash and the last 4 chars, so a lost key
+copy it then; we store only a scrypt hash and the last 4 chars, so a lost key
 must be revoked and re-issued. A key is scoped to exactly one household.
+
+> **Re-create keys issued before the scrypt migration.** The key-lookup hash
+> moved from SHA-256 to scrypt. Because the plaintext is never stored, the old
+> hashes cannot be recomputed, so any key created before this change stops
+> authenticating and must be re-created under **Settings → API keys**.
 
 - Missing/invalid/revoked key → `401`.
 - Valid key without the scope a route needs → `403` (see [Scopes](#scopes)).
