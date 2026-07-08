@@ -47,7 +47,7 @@
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.2.1",
+    "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^19.1.0",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",
