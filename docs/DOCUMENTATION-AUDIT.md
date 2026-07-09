@@ -181,7 +181,8 @@ Grouped content counts:
 
 Audit scope notes:
 
-- Grouped content directories are counted so they stay visible without making the audit readable without hiding them.
+- Grouped content directories are counted as groups so they stay visible in the inventory without drowning it in per-file rows.
+- Test-file counts by method: 158 files match `*.test.*`/`*.spec.*`; `docs/PROJECT-SCOPE.md`'s larger figure additionally counts fixtures, helpers, and READMEs under the test trees.
 
 ## Validation Notes
 

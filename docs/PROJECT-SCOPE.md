@@ -66,7 +66,7 @@ GitHub workflow files checked:
 
 ## Docs And Evidence Checked
 
-This pass checked 67 hand-authored doc or metadata files, 208 test files, and 4 workflow files on `main`. The count excludes vendored provider licenses, dependency folders, generated cache files, and large generated artifact history.
+This pass checked 67 hand-authored doc or metadata files, 208 files under the test trees (158 of them `*.test.*`/`*.spec.*` files — the rest are fixtures, helpers, and READMEs), and 4 workflow files on `main`. The count excludes vendored provider licenses, dependency folders, generated cache files, and large generated artifact history.
 
 Large content groups were counted rather than listed file by file:
 

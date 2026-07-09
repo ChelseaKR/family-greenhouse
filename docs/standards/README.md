@@ -29,8 +29,8 @@ Every control in every standard is exactly one of two kinds. There is no third "
 
 ## Living deliverables
 
-- [`AUDIT-2026-06-21.md`](https://github.com/ChelseaKR/portfolio-standards/blob/main/AUDIT-2026-06-21.md) — the current conformance snapshot of all 18 repos against these standards: portfolio-wide gaps, cross-repo inconsistencies, and per-repo findings.
-- [`IMPROVEMENTS-BACKLOG.md`](https://github.com/ChelseaKR/portfolio-standards/blob/main/IMPROVEMENTS-BACKLOG.md) — the prioritized "what to fix next," with quick wins called out. Re-run the audit and refresh both after each uplift PR.
+- `AUDIT-2026-06-21.md` — the current conformance snapshot of all 18 repos against these standards: portfolio-wide gaps, cross-repo inconsistencies, and per-repo findings. Lives in the maintainer's **private** `portfolio-standards` repository (the source these vendored standards are distributed from), so it is intentionally not linked here — a link would 404 for anyone but the maintainer.
+- `IMPROVEMENTS-BACKLOG.md` — the prioritized "what to fix next," with quick wins called out. Re-run the audit and refresh both after each uplift PR. Same location as above.
 
 ## How a repo declares conformance
 
