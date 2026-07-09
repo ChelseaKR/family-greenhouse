@@ -98,7 +98,6 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
     "jest-axe": "^10.0.0",
-    "jsdom": "^29.1.1",
     "msw": "^2.15.0",
     "postcss": "^8.4.38",
     "size-limit": "^12.1.0",

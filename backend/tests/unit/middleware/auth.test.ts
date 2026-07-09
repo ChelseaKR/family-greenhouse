@@ -49,12 +49,10 @@ function makeHandler(stack: middy.MiddlewareObj[]): {
   invoke: (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>;
   inner: ReturnType<typeof vi.fn>;
 } {
-  const inner = vi.fn(
-    async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => ({
-      statusCode: 200,
-      body: JSON.stringify({ user: (event as unknown as { user?: unknown }).user ?? null }),
-    })
-  );
+  const inner = vi.fn(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => ({
+    statusCode: 200,
+    body: JSON.stringify({ user: (event as unknown as { user?: unknown }).user ?? null }),
+  }));
   const composed = middy(inner);
   for (const m of stack) composed.use(m);
   return { invoke: composed as never, inner };

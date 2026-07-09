@@ -179,8 +179,7 @@ export interface ReminderProposal {
 }
 
 export type ProposeReminderResult =
-  | { status: 'proposed'; proposal: ReminderProposal }
-  | { status: 'invalid'; reason: string };
+  { status: 'proposed'; proposal: ReminderProposal } | { status: 'invalid'; reason: string };
 
 function invalid(reason: string): ProposeReminderResult {
   return { status: 'invalid', reason };
