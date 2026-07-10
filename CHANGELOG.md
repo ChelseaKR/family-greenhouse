@@ -17,12 +17,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-10
+
 ### Fixed
 
+- Completing a task now updates the UI immediately and can no longer be visually undone by an eventually consistent list refresh.
 - Downscale photos client-side before the "Identify from photo" upload, closing the iPhone leaf-health upload size-mismatch class of bugs.
 
 ### Added
 
+- New plants can automatically receive a visible, editable care-task bundle based on their species, with an opt-out before saving.
 - README `## Standards conformance` table declaring applicability/state for all 11 vendored standards (DOC-11/12/13).
 - `docs/RESPONSIBLE-TECH-AUDITS.md`: ASVS level, RTF §A–F applicability, SEC-40 §F declarations, and the dated AI-EVALUATION-STANDARD waiver (AIEV-01).
 - `evals/` — starter AI-evaluation harness for the Bedrock plant-care chat: a corpus-grounded benchmark set, a citation/grounding guard with unit tests, and a committed `eval-baseline.json` wired into a new CI job (AIEV-02, AIEV-12, AIEV-26).
