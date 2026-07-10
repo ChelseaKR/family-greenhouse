@@ -237,6 +237,8 @@ export const es: Translation = {
       notifications: 'Notificaciones',
       preferences: 'Preferencias',
       billing: 'Facturación',
+      apiKeys: 'Claves API',
+      account: 'Cuenta',
       help: 'Ayuda',
     },
     preferences: {

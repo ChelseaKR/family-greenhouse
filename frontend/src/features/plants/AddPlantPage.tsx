@@ -446,7 +446,7 @@ export function AddPlantPage() {
             />
             <button
               type="button"
-              className="text-xs text-primary-700 hover:text-primary-600"
+              className="inline-flex min-h-touch items-center text-xs text-primary-700 hover:text-primary-600"
               onClick={() => setValue('name', generatePlantName(), { shouldValidate: true })}
             >
               ✨ Generate a fun name

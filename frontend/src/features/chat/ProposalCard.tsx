@@ -81,7 +81,7 @@ export function ProposalCard({ proposal }: ProposalCardProps) {
             type="button"
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending}
-            className="rounded bg-primary-700 text-white px-3 py-1 text-xs font-medium hover:bg-primary-800 disabled:bg-primary-200 flex items-center gap-1"
+            className="flex min-h-touch items-center gap-1 rounded bg-primary-700 px-3 py-1 text-xs font-medium text-white hover:bg-primary-800 disabled:bg-primary-200"
           >
             <CheckCircleIcon className="h-4 w-4" />
             {t('chat.proposal.createTask')}
@@ -89,7 +89,7 @@ export function ProposalCard({ proposal }: ProposalCardProps) {
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            className="rounded text-gray-600 px-2 py-1 text-xs hover:bg-gray-100 flex items-center gap-1"
+            className="flex min-h-touch items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
           >
             <XMarkIcon className="h-4 w-4" />
             {t('chat.proposal.dismiss')}

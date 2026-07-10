@@ -106,7 +106,7 @@ export function BillingSettings() {
             {isAdmin && subQuery.data?.stripeCustomerId && (
               <button
                 type="button"
-                className="mt-2 font-medium underline"
+                className="mt-2 inline-flex min-h-touch items-center font-medium underline"
                 onClick={() => portal.mutate()}
               >
                 {t('settings.billing.manageSubscription')}
@@ -183,7 +183,7 @@ function BillingIntervalToggle({
     { id: 'lifetime', label: 'Lifetime' },
   ];
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-3">
       <div
         role="radiogroup"
         aria-label="Billing interval"
@@ -197,7 +197,7 @@ function BillingIntervalToggle({
             aria-checked={value === opt.id}
             onClick={() => onChange(opt.id)}
             className={clsx(
-              'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+              'min-h-touch rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
               value === opt.id ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600'
             )}
           >

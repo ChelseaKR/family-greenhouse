@@ -334,7 +334,7 @@ export function DashboardPage() {
                   onClick={() => setActivityFilter(f)}
                   aria-pressed={activityFilter === f}
                   className={clsx(
-                    'rounded-full px-3 py-1 text-xs font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                    'min-h-touch rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
                     activityFilter === f
                       ? 'bg-primary-100 text-primary-800 border-primary-400'
                       : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -529,7 +529,7 @@ function TaskItem({
   const { Icon } = style;
 
   return (
-    <li className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-parchment/60">
+    <li className="flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-parchment/60 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div className="flex items-center gap-4 min-w-0">
         <span
           className={clsx(
@@ -570,7 +570,7 @@ function TaskItem({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
         <ClaimControls
           task={task}
           onClaim={onClaim}

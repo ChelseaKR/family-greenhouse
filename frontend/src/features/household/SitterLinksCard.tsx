@@ -19,6 +19,7 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
   const queryClient = useQueryClient();
   const [created, setCreated] = useState<CreatedSitterLink | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   // Default the window to two weeks out — a typical trip length.
   const [days, setDays] = useState('14');
   const [label, setLabel] = useState('');
@@ -40,6 +41,7 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
     onSuccess: (link) => {
       setCreated(link);
       setCopied(false);
+      setCopyError(false);
       setLabel('');
       queryClient.invalidateQueries({ queryKey: ['sitter-links', householdId] });
     },
@@ -54,9 +56,14 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
 
   const handleCopy = async () => {
     if (created) {
-      await navigator.clipboard.writeText(created.url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyError(false);
+      try {
+        await navigator.clipboard.writeText(created.url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        setCopyError(true);
+      }
     }
   };
 
@@ -75,7 +82,7 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
             Copy it now — for security, we won’t show the full link again. You can always create a
             new one.
           </Alert>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="text"
               readOnly
@@ -91,10 +98,22 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
               {copied ? 'Copied!' : 'Copy'}
             </Button>
           </div>
+          {copyError && (
+            <p className="text-sm text-red-700" role="alert">
+              Could not copy automatically. Select the link and copy it manually.
+            </p>
+          )}
           <p className="text-xs text-gray-600">
             Expires {new Date(created.expiresAt).toLocaleDateString()}.
           </p>
-          <Button variant="secondary" size="sm" onClick={() => setCreated(null)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setCreated(null);
+              setCopyError(false);
+            }}
+          >
             Done
           </Button>
         </div>
