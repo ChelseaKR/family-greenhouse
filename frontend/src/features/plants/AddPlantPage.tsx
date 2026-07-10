@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/outline';
 import { plantService, IdentificationSuggestion } from '@/services/plantService';
-import { taskService } from '@/services/taskService';
+import { suggestTaskTemplate, taskService } from '@/services/taskService';
 import { speciesService } from '@/services/speciesService';
 import { track } from '@/services/analytics';
 import { getErrorMessage } from '@/services/api';
@@ -25,6 +25,7 @@ import { downscaleImage } from '@/utils/image';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
+import { taskTypeLabels } from '@/utils/taskTypeConfig';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -88,6 +89,7 @@ export function AddPlantPage() {
   const [suggestions, setSuggestions] = useState<IdentificationSuggestion[] | null>(null);
   const [identifyNotice, setIdentifyNotice] = useState<string | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
+  const [autoAddCareTasks, setAutoAddCareTasks] = useState(true);
 
   const {
     register,
@@ -106,6 +108,15 @@ export function AddPlantPage() {
   const speciesValue = watch('species') ?? '';
   const nameValue = watch('name') ?? '';
   const [perenualSpeciesId, setPerenualSpeciesId] = useState<number | null>(null);
+  const { data: taskTemplates = [] } = useQuery({
+    queryKey: ['task-templates'],
+    queryFn: taskService.listTemplates,
+    staleTime: 60 * 60 * 1000,
+  });
+  const suggestedTaskTemplate = useMemo(
+    () => suggestTaskTemplate(taskTemplates, speciesValue),
+    [speciesValue, taskTemplates]
+  );
 
   const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -239,10 +250,20 @@ export function AddPlantPage() {
         await plantService.uploadImage(uploadUrl, blob, contentType, setUploadProgress);
         await plantService.confirmImageUpload(plant.id, imageUrl);
       }
-      // Best-effort: if Perenual gave us a watering cadence, seed a task. We
-      // don't block plant creation on this — the user can always add tasks
-      // manually if the suggestion fetch fails.
-      if (perenualSpeciesId) {
+      // Best-effort: seed the visible, user-approved species care plan. A
+      // curated bundle wins because it covers the whole routine; Perenual's
+      // water-only cadence remains the fallback for recognized species that
+      // do not match a curated bundle.
+      let tasksAdded = 0;
+      let taskSetupFailed = false;
+      if (autoAddCareTasks && suggestedTaskTemplate) {
+        try {
+          const result = await taskService.applyTemplate(plant.id, suggestedTaskTemplate.id);
+          tasksAdded = result.created.length;
+        } catch {
+          taskSetupFailed = true;
+        }
+      } else if (autoAddCareTasks && perenualSpeciesId) {
         try {
           const suggestion = await speciesService.careSuggestions(perenualSpeciesId);
           if (suggestion?.wateringDays && suggestion.wateringDays > 0) {
@@ -251,17 +272,26 @@ export function AddPlantPage() {
               type: 'water',
               frequency: suggestion.wateringDays,
             });
+            tasksAdded = 1;
           }
         } catch {
-          // Silent failure is intentional — plant is already saved.
+          taskSetupFailed = true;
         }
       }
-      return { plant, wasFirstPlant };
+      return { plant, wasFirstPlant, tasksAdded, taskSetupFailed };
     },
-    onSuccess: ({ plant, wasFirstPlant }) => {
+    onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed }) => {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
-      toast.success(`${plant.name} added`);
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      toast.success(
+        tasksAdded > 0
+          ? `${plant.name} added with ${tasksAdded} care task${tasksAdded === 1 ? '' : 's'}`
+          : `${plant.name} added`
+      );
+      if (taskSetupFailed) {
+        toast.info('The plant was saved, but its recommended tasks could not be added.');
+      }
       navigate(`/plants/${plant.id}`);
     },
     onError: (err) => {
@@ -438,7 +468,49 @@ export function AddPlantPage() {
 
           <PetToxicityNote perenualSpeciesId={perenualSpeciesId} />
 
-          <SuggestedCareCard perenualSpeciesId={perenualSpeciesId} />
+          <SuggestedCareCard
+            perenualSpeciesId={perenualSpeciesId}
+            showWateringTaskNotice={autoAddCareTasks && !suggestedTaskTemplate}
+          />
+
+          {suggestedTaskTemplate && (
+            <div
+              className="rounded-lg border border-primary-200 bg-primary-50 p-4"
+              aria-label="Recommended care tasks"
+            >
+              <label
+                htmlFor="auto-add-care-tasks"
+                className="flex cursor-pointer items-start gap-3"
+              >
+                <span className="sr-only">Automatically add recommended care tasks</span>
+                <input
+                  id="auto-add-care-tasks"
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-primary-300 text-primary-700 focus:ring-primary-500"
+                  checked={autoAddCareTasks}
+                  onChange={(event) => setAutoAddCareTasks(event.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-primary-900">
+                    Automatically add {suggestedTaskTemplate.name.toLowerCase()} care tasks
+                  </span>
+                  <span className="mt-1 block text-xs text-primary-800">
+                    Based on “{speciesValue}”. You can edit or remove these tasks any time.
+                  </span>
+                </span>
+              </label>
+              <ul className="mt-3 grid gap-2 pl-7 text-xs text-primary-900 sm:grid-cols-2">
+                {suggestedTaskTemplate.tasks.map((task) => (
+                  <li key={`${task.type}-${task.customType ?? ''}`}>
+                    <span className="font-medium">
+                      {task.customType || taskTypeLabels[task.type]}
+                    </span>{' '}
+                    every {task.frequencyDays} day{task.frequencyDays === 1 ? '' : 's'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <Input
             label="Location"
