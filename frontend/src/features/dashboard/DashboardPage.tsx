@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
@@ -16,6 +16,7 @@ import {
 } from '@/features/tasks/taskRowExtras';
 import {
   useClaimTaskMutation,
+  useCompleteTaskMutation,
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from '@/features/tasks/taskMutations';
@@ -37,7 +38,6 @@ import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { formatDueDate, isOverdue } from '@/utils/date';
-import { toast } from '@/store/toastStore';
 
 type ActivityFilter = 'all' | 'tasks' | 'plants' | 'people';
 
@@ -74,7 +74,6 @@ export function DashboardPage() {
   useDocumentTitle('Dashboard');
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
-  const queryClient = useQueryClient();
 
   const {
     data: upcomingTasks,
@@ -112,18 +111,7 @@ export function DashboardPage() {
     [activity, activityFilter]
   );
 
-  const completeTaskMutation = useMutation({
-    mutationFn: (taskId: string) => taskService.completeTask(taskId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
-      // Completing a task advances the plant's care state; refresh plants too
-      // (TasksPage already invalidates both) so the dashboard plant grid and
-      // each plant card's derived care status don't go stale.
-      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
-      toast.success('Task completed');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
+  const completeTaskMutation = useCompleteTaskMutation(householdId);
 
   const handleCompleteTask = async (taskId: string) => {
     try {
@@ -230,7 +218,9 @@ export function DashboardPage() {
                 key={task.id}
                 task={task}
                 onComplete={handleCompleteTask}
-                isCompleting={completeTaskMutation.isPending}
+                isCompleting={
+                  completeTaskMutation.isPending && completeTaskMutation.variables === task.id
+                }
                 skipReason={climateSkipSuggestion(
                   task,
                   tagsByPlantId.get(task.plantId),
