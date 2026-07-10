@@ -23,6 +23,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- `.github/workflows/e2e-crossbrowser.yml` — weekly (plus on-demand `workflow_dispatch`) run of the full Playwright e2e + a11y suite on firefox and webkit, closing the QM-03 compatibility gap (the per-PR gate stays chromium-only).
 - README `## Standards conformance` table declaring applicability/state for all 11 vendored standards (DOC-11/12/13).
 - `docs/RESPONSIBLE-TECH-AUDITS.md`: ASVS level, RTF §A–F applicability, SEC-40 §F declarations, and the dated AI-EVALUATION-STANDARD waiver (AIEV-01).
 - `evals/` — starter AI-evaluation harness for the Bedrock plant-care chat: a corpus-grounded benchmark set, a citation/grounding guard with unit tests, and a committed `eval-baseline.json` wired into a new CI job (AIEV-02, AIEV-12, AIEV-26).
