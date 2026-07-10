@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "i18n:check": "node scripts/check-i18n-catalogs.mjs && node scripts/check-hardcoded-strings.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "lighthouse": "lhci autorun --config=lighthouserc.cjs",

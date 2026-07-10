@@ -14,13 +14,14 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 
 ## Index
 
-| #                                                    | Title                                     | Status   |
-| ---------------------------------------------------- | ----------------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md)        | Record architecture decisions             | Accepted |
-| [0002](0002-serverless-on-aws.md)                    | Serverless on AWS, single region          | Accepted |
-| [0003](0003-single-table-dynamodb.md)                | Single-table DynamoDB                     | Accepted |
-| [0004](0004-no-waf-on-http-api.md)                   | No WAF on the HTTP API (it's unsupported) | Accepted |
-| [0005](0005-npm-workspaces-monorepo.md)              | npm-workspaces monorepo layout            | Accepted |
-| [0006](0006-standards-applicability-declarations.md) | Standards applicability declarations      | Accepted |
+| #                                                    | Title                                      | Status   |
+| ---------------------------------------------------- | ------------------------------------------ | -------- |
+| [0001](0001-record-architecture-decisions.md)        | Record architecture decisions              | Accepted |
+| [0002](0002-serverless-on-aws.md)                    | Serverless on AWS, single region           | Accepted |
+| [0003](0003-single-table-dynamodb.md)                | Single-table DynamoDB                      | Accepted |
+| [0004](0004-no-waf-on-http-api.md)                   | No WAF on the HTTP API (it's unsupported)  | Accepted |
+| [0005](0005-npm-workspaces-monorepo.md)              | npm-workspaces monorepo layout             | Accepted |
+| [0006](0006-standards-applicability-declarations.md) | Standards applicability declarations       | Accepted |
+| [0007](0007-i18n-json-catalogs-native-format.md)     | i18n: JSON catalogs, i18next-native format | Accepted |
 
 > Several earlier decisions (Cognito for auth, React+Vite+TanStack Query, gated external integrations) are documented inline in `docs/architecture.md` / `docs/strategy-review.md` and could be backfilled as ADRs when next touched.
