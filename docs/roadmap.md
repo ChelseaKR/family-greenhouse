@@ -169,15 +169,15 @@ Per `STANDARDS/CI-CD-STANDARD.md` CICD-29, this ledger declares the optional CI 
 
 **Pipeline stage declarations** (`ci.yml`'s 10 jobs, stages 6–8 are the "optional, declare or N/A" tier):
 
-| Stage                                            | Applicable?                      | Status                                                                                                                                                                                  |
-| ------------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1–5: lint, typecheck, test×2, security-scan/SAST | Applies (core)                   | Green, required                                                                                                                                                                         |
-| 6: build                                         | Applies (core)                   | Green, required                                                                                                                                                                         |
-| 7: Lighthouse (perf + a11y)                      | Applies                          | Green, required — now runs automatically whenever `frontend/**` changes (the `skip-lighthouse` label bypass was closed 2026-07-05; see CHANGELOG)                                       |
-| 8: bundle-size, e2e+a11y (Playwright)            | Applies                          | Green, required                                                                                                                                                                         |
-| zizmor (workflow SAST)                           | Applies, **not yet implemented** | Gap tracked                                                                                                                                                                             |
-| CodeQL                                           | Applies, **not yet implemented** | Gap tracked — repo is public, so the "GHAS unavailable on private plan" in-line comment in `ci.yml` needs either CodeQL added or a dated waiver (see `docs/RESPONSIBLE-TECH-AUDITS.md`) |
-| OpenSSF Scorecard                                | Applies, **not yet implemented** | Gap tracked                                                                                                                                                                             |
+| Stage                                            | Applicable?    | Status                                                                                                                                            |
+| ------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1–5: lint, typecheck, test×2, security-scan/SAST | Applies (core) | Green, required                                                                                                                                   |
+| 6: build                                         | Applies (core) | Green, required                                                                                                                                   |
+| 7: Lighthouse (perf + a11y)                      | Applies        | Green, required — now runs automatically whenever `frontend/**` changes (the `skip-lighthouse` label bypass was closed 2026-07-05; see CHANGELOG) |
+| 8: bundle-size, e2e+a11y (Playwright)            | Applies        | Green, required                                                                                                                                   |
+| zizmor (workflow SAST)                           | Applies        | Shipped — `.github/workflows/zizmor.yml`, results upload to code scanning                                                                         |
+| CodeQL                                           | Applies        | Shipped (2026-07-05, PR #177) — `.github/workflows/codeql.yml`; repo is public so this is free                                                    |
+| OpenSSF Scorecard                                | Applies        | Shipped — `.github/workflows/scorecard.yml`, publishes to the public Scorecard API + code scanning                                                |
 
 ```
 AI-Evaluation-Standard: APPLIES (tiers: tool-use + RAG, citation/grounding guard, model-card)
