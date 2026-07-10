@@ -35,7 +35,10 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className={clsx('mb-8', className)}>
-      <div className="flex items-start justify-between gap-6">
+      {/* flex-wrap lets the action block drop to its own row when the
+          viewport can't fit title + actions side by side (320px reflow,
+          WCAG 1.4.10 — pinned by reflow.spec.ts). */}
+      <div className="flex flex-wrap items-start justify-between gap-6">
         <div className="flex-1 min-w-0">
           {/* Eyebrow uses full-strength primary-700 — an /opacity modifier
               blends it into the paper background and drops small-text
