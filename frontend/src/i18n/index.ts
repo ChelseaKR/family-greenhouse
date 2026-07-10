@@ -3,7 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 // Per-locale JSON catalogs (i18next standard `<lng>/<namespace>.json` layout)
 // are the single source of truth for UI strings — see docs/i18n.md and
-// docs/adr/0007-i18n-json-catalogs-and-gates.md. Key/placeholder/plural parity
+// docs/adr/0007-i18n-json-catalogs-native-format.md. Key/placeholder/plural parity
 // across locales is enforced by `npm run i18n:check`
 // (frontend/scripts/check-i18n-catalogs.mjs), which CI runs on every PR.
 import en from './locales/en/translation.json';
