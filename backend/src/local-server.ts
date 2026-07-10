@@ -403,7 +403,11 @@ function findUserByEmail(email: string): User | undefined {
  */
 function validateBody(schema: z.ZodTypeAny) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const result = schema.safeParse(req.body);
+    // Express 5's bundled body-parser leaves req.body as `undefined` (rather
+    // than `{}`) when a request has no matching Content-Type, e.g. a POST
+    // with no body at all. Normalize to `null` so schemas written as
+    // `.nullable()` for "no body" clients keep validating as before.
+    const result = schema.safeParse(req.body ?? null);
     if (!result.success) {
       const details = result.error.errors.reduce(
         (acc, err) => {

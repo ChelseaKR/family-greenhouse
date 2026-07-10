@@ -56,10 +56,11 @@ function toExpressKey(routeKey: string): string {
 /** Every "METHOD /path" the mock Express app has registered. */
 function mockRegisteredRoutes(): Set<string> {
   const out = new Set<string>();
-  // Express 4: route layers live on app._router.stack with .route populated.
+  // Express 5: route layers live on app.router.stack with .route populated
+  // (Express 4 exposed the same shape via app._router.stack).
   const stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }> = (
-    app as unknown as { _router: { stack: never[] } }
-  )._router.stack;
+    app as unknown as { router: { stack: never[] } }
+  ).router.stack;
   for (const layer of stack) {
     if (!layer.route) continue;
     for (const [method, enabled] of Object.entries(layer.route.methods)) {
