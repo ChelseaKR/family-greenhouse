@@ -69,7 +69,7 @@ export function Toaster() {
               onClick={() => dismiss(t.id)}
               aria-label="Dismiss notification"
               className={clsx(
-                'flex-shrink-0 rounded p-0.5 opacity-70 transition-opacity hover:opacity-100',
+                'inline-flex min-h-touch min-w-touch flex-shrink-0 items-center justify-center rounded opacity-70 transition-opacity hover:opacity-100',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
                 c.text
               )}

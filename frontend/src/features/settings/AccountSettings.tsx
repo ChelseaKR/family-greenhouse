@@ -324,16 +324,22 @@ function CalendarFeedRow() {
   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const url = `${apiBase}/me/calendar.ics`;
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopyError(false);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError(true);
+    }
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="text"
           readOnly
@@ -346,6 +352,11 @@ function CalendarFeedRow() {
           {copied ? 'Copied!' : 'Copy'}
         </Button>
       </div>
+      {copyError && (
+        <p className="text-sm text-red-700" role="alert">
+          Could not copy automatically. Select the URL and copy it manually.
+        </p>
+      )}
       <p className="text-xs text-gray-600">
         Paste this URL into your calendar app&rsquo;s &ldquo;subscribe to calendar&rdquo; option.
         The feed shows tasks for your active household; switching households updates what you see

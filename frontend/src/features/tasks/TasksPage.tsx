@@ -175,7 +175,7 @@ export function TasksPage() {
             type="button"
             onClick={() => setFilter(f.id as FilterType)}
             className={clsx(
-              'inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+              'inline-flex min-h-touch items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
               filter === f.id
                 ? 'bg-primary-100 text-primary-800 border-primary-400'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -319,7 +319,7 @@ function TaskSection({
           return (
             <li
               key={task.id}
-              className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-parchment/60"
+              className="flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-parchment/60 sm:flex-row sm:items-center sm:justify-between sm:px-6"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <span
@@ -365,7 +365,7 @@ function TaskSection({
                   )}
                 </div>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
                 <ClaimControls
                   task={task}
                   onClaim={extras.onClaim}

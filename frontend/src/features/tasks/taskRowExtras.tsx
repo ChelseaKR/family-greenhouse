@@ -87,7 +87,7 @@ export function ClimateSkipChip({ reason, onSkip, isPending }: ClimateSkipChipPr
       type="button"
       onClick={onSkip}
       disabled={isPending}
-      className="inline-flex items-center gap-1 rounded-full border border-sky-300/80 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 transition-colors hover:bg-sky-100 disabled:opacity-50"
+      className="inline-flex min-h-touch items-center gap-1 rounded-full border border-sky-300/80 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 transition-colors hover:bg-sky-100 disabled:opacity-50"
     >
       <CloudIcon className="h-3.5 w-3.5" aria-hidden="true" />
       {reason === 'rain' ? t('tasks.skipRain') : t('tasks.skipFrost')}

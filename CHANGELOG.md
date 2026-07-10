@@ -17,6 +17,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-07-10
+
+### Fixed
+
+- Completed tasks now remain visibly completed while server state converges, with the action protected against duplicate submissions.
+- Settings deep links now open the requested section, including `/settings/billing`, and tab navigation works with arrow, Home, and End keys.
+- Failed plant-photo uploads can retry the same file, and clipboard actions now report failures instead of silently claiming success.
+- Removed mobile overflow and cramped controls across task, plant, household, settings, chat, dialog, and toast interfaces, including the 320 px viewport.
+
+### Changed
+
+- Reworked frontend layouts mobile-first with consistent full-width actions, safe-area handling, minimum touch targets, responsive dialogs, and accessible status and error announcements.
+- Expanded browser coverage across Chromium, Firefox, and WebKit, responsive viewport states, authenticated routes, dialogs, keyboard interactions, and WCAG scans.
+
 ## [0.14.0] - 2026-07-10
 
 ### Fixed

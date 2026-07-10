@@ -61,10 +61,10 @@ test.describe('In-app billing interval toggle', () => {
     // uiLogin lands on /dashboard, so the auth store is hydrated before we
     // navigate to the (authenticated) settings route — no zustand-persist race.
     await uiLogin(page, account.email, account.password);
-    await page.goto('/settings');
-    // SettingsPage tabs are local state, not URL-synced, so open Billing by
-    // clicking the tab rather than relying on the /settings/billing path.
-    await page.getByRole('button', { name: 'Billing', exact: true }).click();
+    // Billing is URL-addressable so upgrade/import links and browser history
+    // land on the requested section instead of silently opening Preferences.
+    await page.goto('/settings/billing');
+    await expect(page).toHaveURL(/\/settings\/billing$/);
     await expect(page.getByRole('radiogroup', { name: /billing interval/i })).toBeVisible({
       timeout: 15000,
     });

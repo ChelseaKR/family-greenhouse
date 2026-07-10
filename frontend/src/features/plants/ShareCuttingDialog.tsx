@@ -81,7 +81,7 @@ export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDia
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+              <Dialog.Panel className="relative w-full transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:max-w-lg sm:p-6">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 sm:mx-0 sm:h-10 sm:w-10">
                     <ShareIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
@@ -108,13 +108,13 @@ export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDia
                       )}
                       {share && (
                         <div className="space-y-2">
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row">
                             <input
                               type="text"
                               readOnly
                               value={share.url}
                               aria-label={t('plants.share.title')}
-                              className="input flex-1 text-sm"
+                              className="input min-w-0 flex-1 text-sm"
                               onFocus={(e) => e.currentTarget.select()}
                             />
                             <Button
