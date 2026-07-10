@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { plantService, Task } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
+import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -111,15 +112,7 @@ export function PlantDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const completeTaskMutation = useMutation({
-    mutationFn: (taskId: string) => taskService.completeTask(taskId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
-      toast.success('Task completed');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
+  const completeTaskMutation = useCompleteTaskMutation(householdId);
 
   const snoozeTaskMutation = useMutation({
     mutationFn: ({ taskId, days }: { taskId: string; days: number }) =>
@@ -360,7 +353,9 @@ export function PlantDetailPage() {
                 onComplete={() => completeTaskMutation.mutate(task.id)}
                 onSnooze={(days) => snoozeTaskMutation.mutate({ taskId: task.id, days })}
                 onEdit={() => setEditingTask(task)}
-                isCompleting={completeTaskMutation.isPending}
+                isCompleting={
+                  completeTaskMutation.isPending && completeTaskMutation.variables === task.id
+                }
                 isSnoozing={snoozeTaskMutation.isPending}
               />
             ))}
