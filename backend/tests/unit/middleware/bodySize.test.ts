@@ -20,9 +20,10 @@ function buildEvent(body: string | null, isBase64Encoded = false): APIGatewayPro
   };
 }
 
-const handler = middy(
-  async (): Promise<APIGatewayProxyResult> => ({ statusCode: 200, body: 'ok' })
-).use(bodySizeGuard(64));
+const handler = middy(async (): Promise<APIGatewayProxyResult> => ({
+  statusCode: 200,
+  body: 'ok',
+})).use(bodySizeGuard(64));
 
 describe('bodySizeGuard', () => {
   it('passes a body under the limit', async () => {

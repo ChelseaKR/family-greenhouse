@@ -44,8 +44,7 @@ function jsonErrorHandler(): middy.MiddlewareObj<unknown, unknown> {
     // by middy) to expose the optional http-errors fields we read below;
     // dropping it loses those properties and trips no-unsafe-member-access.
     const err = request.error as
-      | (Error & { statusCode?: unknown; expose?: unknown; details?: unknown })
-      | null;
+      (Error & { statusCode?: unknown; expose?: unknown; details?: unknown }) | null;
 
     const rawStatus = typeof err?.statusCode === 'number' ? err.statusCode : 500;
     const statusCode = rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;

@@ -89,8 +89,7 @@ export const authMiddleware = (): middy.MiddlewareObj<
     // v2 JWT authorizer → `authorizer.jwt.claims`. Read whichever is present
     // so the same handler works behind either.
     const authorizer = event.requestContext?.authorizer as
-      | { claims?: CognitoClaims; jwt?: { claims?: CognitoClaims } }
-      | undefined;
+      { claims?: CognitoClaims; jwt?: { claims?: CognitoClaims } } | undefined;
     const claims = authorizer?.jwt?.claims ?? authorizer?.claims;
 
     if (!claims) {
