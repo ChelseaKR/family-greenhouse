@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const snsSendMock = vi.fn();
+const loggerInfoMock = vi.fn();
 vi.mock('@aws-sdk/client-sns', () => ({
   SNSClient: vi.fn(function () {
     return { send: snsSendMock };
@@ -8,6 +9,9 @@ vi.mock('@aws-sdk/client-sns', () => ({
   PublishCommand: vi.fn(function (input) {
     return { input, kind: 'Publish' };
   }),
+}));
+vi.mock('../../../src/utils/logger.js', () => ({
+  logger: { info: loggerInfoMock },
 }));
 
 const ORIGINAL = process.env;
@@ -32,8 +36,11 @@ describe('smsNotifier', () => {
     process.env = { ...ORIGINAL };
     delete process.env.SMS_NOTIFICATIONS_ENABLED;
     const { sendSms } = await import('../../../src/services/smsNotifier.js');
-    await sendSms({ to: '+15551234567', text: 'hello' });
+    const sent = await sendSms({ to: '+15551234567', text: 'secret verification 123456' });
+    expect(sent).toBe(false);
     expect(snsSendMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('+15551234567');
+    expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('123456');
   });
 
   it('publishes to SNS when enabled, with Transactional attribute', async () => {
