@@ -20,8 +20,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 ### Fixed
 
 - Downscale photos client-side before the "Identify from photo" upload, closing the iPhone leaf-health upload size-mismatch class of bugs.
+- Two 320px-viewport reflow bugs (WCAG 1.4.10) surfaced by the new reflow spec: the pricing billing-interval toggle overflowed the landing page horizontally, and the page-header action row (e.g. Plants page "Apply template" / "Add plant") could not wrap.
 
 ### Added
+
+- Playwright a11y specs closing the A11Y-07/08/09 audit gaps: keyboard-only path (login → skip link → complete a due task, with a visible-focus-ring assertion), `prefers-reduced-motion` behavior (both the `motion-safe:` variant and the global freeze rule), and 320×256 reflow across public + authenticated routes.
 
 - README `## Standards conformance` table declaring applicability/state for all 11 vendored standards (DOC-11/12/13).
 - `docs/RESPONSIBLE-TECH-AUDITS.md`: ASVS level, RTF §A–F applicability, SEC-40 §F declarations, and the dated AI-EVALUATION-STANDARD waiver (AIEV-01).
