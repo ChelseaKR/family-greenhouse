@@ -114,6 +114,12 @@ test.describe('Visual capture — authenticated pages', () => {
           }
           await page.getByRole('link', { name: new RegExp(`^${route.name}$`, 'i') }).click();
           await expect(page).toHaveURL(new RegExp(`${route.path}$`));
+          if (vp === 'mobile') {
+            // Wait for the drawer's self-close (NavLink onNavigate) to
+            // finish so the capture shows the page, not a mid-fade
+            // overlay.
+            await page.getByRole('button', { name: /close sidebar/i }).waitFor({ state: 'hidden' });
+          }
         }
         // Wait for the new page's PageHeader to render before screenshot.
         await page.locator('main h1, main h2').first().waitFor({ state: 'visible' });
@@ -137,9 +143,14 @@ test.describe('Visual capture — authenticated pages', () => {
       await page.getByRole('link', { name: /^plants$/i }).click();
       await expect(page).toHaveURL(/\/plants$/);
       if (vp === 'mobile') {
-        // Mobile dialog doesn't auto-close on internal nav; dismiss it
-        // so the plant cards beneath are clickable.
-        await page.getByRole('button', { name: /close sidebar/i }).click();
+        // The drawer closes itself on nav (each NavLink's onNavigate sets
+        // sidebarOpen false). Under react-router 7 navigation commits
+        // inside React.startTransition, so the close runs to completion
+        // and the "Close sidebar" button detaches mid-click if we try to
+        // dismiss it manually (the pre-v7 behavior left the drawer stuck
+        // open because the sync lazy-route suspend interrupted the leave
+        // transition). Wait for the dialog to finish leaving so the plant
+        // cards beneath are clickable.
         await page.getByRole('button', { name: /close sidebar/i }).waitFor({ state: 'hidden' });
       }
       // Plant cards are anchor wrappers around the image + name. The

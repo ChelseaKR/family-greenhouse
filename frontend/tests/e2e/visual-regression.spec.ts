@@ -155,9 +155,11 @@ test.describe('Visual regression — authenticated pages', () => {
         await page.getByRole('button', { name: /open sidebar/i }).click();
         await page.getByRole('link', { name: new RegExp(`^${name}$`, 'i') }).click();
         await expect(page).toHaveURL(new RegExp(`${path}$`));
-        // The mobile sidebar Dialog doesn't auto-close on internal nav;
-        // dismiss so it isn't on top of the captured page.
-        await page.getByRole('button', { name: /close sidebar/i }).click();
+        // The drawer closes itself on nav (NavLink onNavigate). Under
+        // react-router 7 the navigation commits inside
+        // React.startTransition, so the close completes and a manual
+        // dismiss click races the unmount; just wait for the dialog to
+        // finish leaving so it isn't on top of the captured page.
         await page.getByRole('button', { name: /close sidebar/i }).waitFor({ state: 'hidden' });
       }
       await settle(page);
