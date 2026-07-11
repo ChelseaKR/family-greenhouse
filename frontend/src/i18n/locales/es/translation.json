@@ -52,6 +52,24 @@
     "backToPlants": "Volver a plantas",
     "deleteConfirm": "¿Seguro que quieres eliminar \"{{name}}\"?",
     "generateName": "✨ Genera un nombre divertido",
+    "nameNursery": {
+      "open": "Ponle nombre a esta planta",
+      "regionLabel": "Vivero de nombres para plantas",
+      "title": "El vivero de nombres",
+      "description": "Elige el estilo. Nosotros hacemos el papeleo.",
+      "close": "Cerrar",
+      "personalityLabel": "Personalidad del nombre",
+      "ready": "Lista para adoptar",
+      "another": "Otro nombre",
+      "useName": "Usar este nombre",
+      "vibes": {
+        "surprise": "Sorpréndeme",
+        "punny": "Con juego de palabras",
+        "distinguished": "Distinguido",
+        "chaotic": "Caótico",
+        "sweet": "Dulce"
+      }
+    },
     "identifyFromPhoto": "Identificar desde foto",
     "status": {
       "active": "Activa",

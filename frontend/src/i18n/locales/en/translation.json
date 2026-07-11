@@ -51,6 +51,24 @@
     "backToPlants": "Back to plants",
     "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
     "generateName": "✨ Generate a fun name",
+    "nameNursery": {
+      "open": "Name this plant for me",
+      "regionLabel": "Plant name nursery",
+      "title": "The name nursery",
+      "description": "Choose the vibe. We’ll handle the paperwork.",
+      "close": "Close",
+      "personalityLabel": "Name personality",
+      "ready": "Ready for adoption",
+      "another": "Another one",
+      "useName": "Use this name",
+      "vibes": {
+        "surprise": "Surprise me",
+        "punny": "Punny",
+        "distinguished": "Distinguished",
+        "chaotic": "Chaotic",
+        "sweet": "Sweet"
+      }
+    },
     "identifyFromPhoto": "Identify from photo",
     "status": {
       "active": "Active",
