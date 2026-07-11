@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "0.13.1",
+  "version": "0.14.2",
   "description": "Family Greenhouse API — AWS Lambda + DynamoDB single-table + Cognito, with a local Express mock that mirrors the handlers.",
   "license": "Elastic-2.0",
   "private": true,
@@ -46,19 +46,19 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/http-errors": "^2.0.4",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.1",
     "@types/supertest": "^7.2.0",
     "@types/uuid": "^9.0.8",
     "@eslint/js": "^10.0.1",
-    "@vitest/coverage-v8": "^4.0.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "cors": "^2.8.5",
     "esbuild": "^0.28.1",
-    "eslint": "^10.5.0",
+    "eslint": "^10.6.0",
     "express": "^5.2.1",
     "supertest": "^7.2.2",
-    "tsx": "^4.7.1",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1",
+    "typescript-eslint": "^8.63.0",
     "vitest": "^4.0.0"
   }
 }

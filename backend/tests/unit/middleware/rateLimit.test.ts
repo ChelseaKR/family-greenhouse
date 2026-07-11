@@ -38,9 +38,10 @@ function v2Event(opts: {
 }
 
 function makeHandler(mw: middy.MiddlewareObj<APIGatewayProxyEvent, APIGatewayProxyResult>) {
-  const inner = vi.fn(
-    async (): Promise<APIGatewayProxyResult> => ({ statusCode: 200, body: '{}' })
-  );
+  const inner = vi.fn(async (): Promise<APIGatewayProxyResult> => ({
+    statusCode: 200,
+    body: '{}',
+  }));
   return {
     invoke: middy(inner).use(mw) as never as (
       event: APIGatewayProxyEvent,

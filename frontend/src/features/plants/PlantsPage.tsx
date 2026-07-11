@@ -73,7 +73,7 @@ export function PlantsPage() {
         title="Plants"
         description="Manage your household plants."
         action={
-          <div className="flex gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <Button
               variant="secondary"
               onClick={() => setBulkOpen(true)}
@@ -81,8 +81,11 @@ export function PlantsPage() {
             >
               Apply template
             </Button>
-            <Link to="/plants/new">
-              <Button leftIcon={<PlusIcon className="h-5 w-5" aria-hidden="true" />}>
+            <Link to="/plants/new" className="block">
+              <Button
+                className="w-full sm:w-auto"
+                leftIcon={<PlusIcon className="h-5 w-5" aria-hidden="true" />}
+              >
                 Add plant
               </Button>
             </Link>
@@ -206,7 +209,7 @@ export function PlantsPage() {
             <Link
               key={plant.id}
               to={`/plants/${plant.id}`}
-              className="group block rounded-xl border border-primary-100/70 bg-paper overflow-hidden shadow-journal hover:border-primary-400 hover:shadow-journal-hover transition-all motion-safe:animate-fade-in"
+              className="group block rounded-xl border border-primary-100/70 bg-paper overflow-hidden shadow-journal hover:border-primary-400 hover:shadow-journal-hover transition-all"
             >
               <div className="aspect-square bg-parchment overflow-hidden">
                 <PlantImage

@@ -119,7 +119,9 @@ export async function uiLogin(page: Page, email = 'test@example.com', password =
 
 /**
  * Click a sidebar nav link, opening/closing the mobile drawer when the
- * viewport requires it, and wait for the URL to change.
+ * viewport requires it, and wait for the URL to change. Mobile navigation
+ * closes the drawer through `Layout`'s link handler; waiting for that exit
+ * avoids racing the closing transition and clicking a now-offscreen control.
  */
 export async function navigateTo(page: Page, linkName: RegExp, urlPattern: RegExp) {
   const hamburger = page.getByRole('button', { name: /open sidebar/i });

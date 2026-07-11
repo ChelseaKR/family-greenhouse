@@ -185,7 +185,7 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+              <Dialog.Panel className="relative w-full transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:max-w-lg sm:p-6">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 sm:mx-0 sm:h-10 sm:w-10">
                     <SparklesIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
@@ -254,7 +254,7 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
                   </div>
                 </div>
                 <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                  <Button variant="secondary" onClick={handleClose}>
+                  <Button variant="secondary" className="w-full sm:w-auto" onClick={handleClose}>
                     {t('common.close')}
                   </Button>
                 </div>

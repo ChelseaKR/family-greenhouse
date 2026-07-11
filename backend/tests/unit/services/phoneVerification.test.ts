@@ -28,7 +28,7 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 }));
 
 vi.mock('../../../src/services/smsNotifier.js', () => ({
-  sendSms: vi.fn().mockResolvedValue(undefined),
+  sendSms: vi.fn().mockResolvedValue(true),
 }));
 
 const NOW = new Date('2026-06-11T12:00:00.000Z');
@@ -113,6 +113,31 @@ describe('phone verification', () => {
     });
     expect(rows.size).toBe(0);
     expect(smsNotifier.sendSms).not.toHaveBeenCalled();
+  });
+
+  it('fails with 503 and removes the pending code when SMS is disabled', async () => {
+    const rows = await mockTable();
+    const smsNotifier = await import('../../../src/services/smsNotifier.js');
+    vi.mocked(smsNotifier.sendSms).mockResolvedValueOnce(false);
+    const { startPhoneVerification } = await import('../../../src/services/notificationPrefs.js');
+
+    await expect(startPhoneVerification('u1', PHONE, NOW)).rejects.toMatchObject({
+      statusCode: 503,
+      message: 'SMS verification is temporarily unavailable. Try again later.',
+    });
+    expect(rows.has('USER#u1|PHONE_VERIFY')).toBe(false);
+  });
+
+  it('fails with 503 and removes the pending code when SNS rejects delivery', async () => {
+    const rows = await mockTable();
+    const smsNotifier = await import('../../../src/services/smsNotifier.js');
+    vi.mocked(smsNotifier.sendSms).mockRejectedValueOnce(new Error('SNS sandbox'));
+    const { startPhoneVerification } = await import('../../../src/services/notificationPrefs.js');
+
+    await expect(startPhoneVerification('u1', PHONE, NOW)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(rows.has('USER#u1|PHONE_VERIFY')).toBe(false);
   });
 
   it('happy path: correct code stamps phoneVerified + number and deletes the row', async () => {

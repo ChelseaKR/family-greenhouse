@@ -29,12 +29,10 @@ const bodySchema = z.object({
 
 describe('validateBody', () => {
   it('parses a string body and stores validatedBody', async () => {
-    const inner = vi.fn(
-      async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => ({
-        statusCode: 200,
-        body: JSON.stringify((event as ValidatedEvent<unknown>).validatedBody),
-      })
-    );
+    const inner = vi.fn(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => ({
+      statusCode: 200,
+      body: JSON.stringify((event as ValidatedEvent<unknown>).validatedBody),
+    }));
     const handler = middy(inner).use(validateBody(bodySchema));
     const res = await (handler as never)(
       buildEvent({ body: JSON.stringify({ email: 'a@b.com', age: 30 }) })

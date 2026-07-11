@@ -17,12 +17,38 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-07-10
+
 ### Fixed
 
+- SMS verification now returns a clear service-unavailable response when delivery is disabled or rejected instead of falsely reporting that a code was sent.
+- Failed verification deliveries remove their unusable pending code, and SMS dry-run logs no longer expose phone numbers or one-time codes.
+- Wired the root Terraform SMS gate through to the API module so production configuration can enable delivery after AWS approves SMS production access and origination registration.
+
+## [0.14.1] - 2026-07-10
+
+### Fixed
+
+- Completed tasks now remain visibly completed while server state converges, with the action protected against duplicate submissions.
+- Settings deep links now open the requested section, including `/settings/billing`, and tab navigation works with arrow, Home, and End keys.
+- Failed plant-photo uploads can retry the same file, and clipboard actions now report failures instead of silently claiming success.
+- Removed mobile overflow and cramped controls across task, plant, household, settings, chat, dialog, and toast interfaces, including the 320 px viewport.
+
+### Changed
+
+- Reworked frontend layouts mobile-first with consistent full-width actions, safe-area handling, minimum touch targets, responsive dialogs, and accessible status and error announcements.
+- Expanded browser coverage across Chromium, Firefox, and WebKit, responsive viewport states, authenticated routes, dialogs, keyboard interactions, and WCAG scans.
+
+## [0.14.0] - 2026-07-10
+
+### Fixed
+
+- Completing a task now updates the UI immediately and can no longer be visually undone by an eventually consistent list refresh.
 - Downscale photos client-side before the "Identify from photo" upload, closing the iPhone leaf-health upload size-mismatch class of bugs.
 
 ### Added
 
+- New plants can automatically receive a visible, editable care-task bundle based on their species, with an opt-out before saving.
 - README `## Standards conformance` table declaring applicability/state for all 11 vendored standards (DOC-11/12/13).
 - `docs/RESPONSIBLE-TECH-AUDITS.md`: ASVS level, RTF §A–F applicability, SEC-40 §F declarations, and the dated AI-EVALUATION-STANDARD waiver (AIEV-01).
 - `evals/` — starter AI-evaluation harness for the Bedrock plant-care chat: a corpus-grounded benchmark set, a citation/grounding guard with unit tests, and a committed `eval-baseline.json` wired into a new CI job (AIEV-02, AIEV-12, AIEV-26).

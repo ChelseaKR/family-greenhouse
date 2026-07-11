@@ -37,16 +37,7 @@ const VARIANT_CLASSES: Record<NonNullable<CardProps['variant']>, string> = {
 
 export function Card({ children, className, padding = 'md', variant = 'solid' }: CardProps) {
   return (
-    <div
-      className={clsx(
-        // `motion-safe:` keeps the entrance animation polite to users with
-        // reduced-motion preferences.
-        'motion-safe:animate-fade-in',
-        VARIANT_CLASSES[variant],
-        PADDING_CLASSES[padding],
-        className
-      )}
-    >
+    <div className={clsx(VARIANT_CLASSES[variant], PADDING_CLASSES[padding], className)}>
       {children}
     </div>
   );
@@ -60,12 +51,12 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, description, action }: CardHeaderProps) {
   return (
-    <div className="flex items-start justify-between mb-4">
-      <div>
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="min-w-0">
         <h2 className="font-serif text-lg text-ink">{title}</h2>
         {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }

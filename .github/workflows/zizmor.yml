@@ -1,0 +1,40 @@
+name: zizmor
+
+# Closes the "zizmor (workflow SAST)" gap declared in docs/roadmap.md's
+# metrics ledger (CICD-29): static analysis of our own GitHub Actions
+# workflows for injection risks, unpinned actions, overbroad permissions,
+# etc. Results upload to the repo's code-scanning tab (free for public
+# repos, same posture as codeql.yml) rather than failing the build outright
+# — see CICD-29 note there on why this is "declare or N/A", not "must gate".
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, independent of push/PR activity — catches newly-published
+    # zizmor audit rules against unchanged workflow files.
+    - cron: '23 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  zizmor:
+    name: zizmor workflow audit
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7

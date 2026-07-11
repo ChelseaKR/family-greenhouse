@@ -1,0 +1,43 @@
+name: OpenSSF Scorecard
+
+# Closes the "OpenSSF Scorecard" gap declared in docs/roadmap.md's metrics
+# ledger (CICD-29): supply-chain posture score (branch protection, pinned
+# actions, dependency update tooling, etc.) published to the public
+# Scorecard API and uploaded to this repo's code-scanning tab. Public repo,
+# so no PAT is needed — `publish_results: true` authenticates via OIDC
+# (`id-token: write`) and the default `GITHUB_TOKEN` covers repo reads.
+on:
+  branch_protection_rule:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly — Scorecard results drift with unrelated repo/org config
+    # changes (branch protection, token permissions), not just commits.
+    - cron: '30 6 * * 1'
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload SARIF results to code scanning
+        uses: github/codeql-action/upload-sarif@411c4c9a36b3fca4d674f06b6396b2c6d23522c6 # v3.36.3
+        with:
+          sarif_file: results.sarif
