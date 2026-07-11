@@ -128,6 +128,26 @@ describe('deltaForStripeEvent', () => {
     expect(deltaForStripeEvent(event)).toBeNull();
   });
 
+  it('grants entitlement when a delayed lifetime payment later succeeds', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      type: 'checkout.session.async_payment_succeeded',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_123',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    expect(deltaForStripeEvent(event)).toMatchObject({
+      householdId: 'hh-1',
+      fields: { planId: 'garden', status: 'active', stripeSubscriptionId: null },
+    });
+  });
+
   it('treats a checkout.session.completed with mode=subscription as before (subscription id retained)', async () => {
     const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
     const event = {
@@ -445,6 +465,37 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
     expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
   });
 
+  it('retries the webhook when canceling a prior subscription fails', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    // Read prior subscription, then apply the lifetime entitlement. The
+    // dedupe Put must not run after cancellation fails so Stripe can retry.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } })
+      .mockResolvedValueOnce({});
+    subscriptionsCancel.mockRejectedValueOnce(new Error('stripe unavailable'));
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+
+    await expect(
+      applyStripeEvent({
+        id: 'evt_lifetime_retry',
+        created: 1_700_000_000,
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            mode: 'payment',
+            payment_status: 'paid',
+            metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+            customer: 'cus_1',
+          },
+        },
+      } as unknown as Stripe.Event)
+    ).rejects.toThrow('stripe unavailable');
+
+    expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+  });
+
   it('does NOT downgrade a lifetime household on a subscription.deleted for an unknown sub', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     // Pre-apply read: the lifetime grant cleared the sub id (none on file).
@@ -720,6 +771,36 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
         metadata: expect.objectContaining({ planId: 'garden', interval: 'month' }),
       })
     );
+  });
+
+  it('forwards a checkout-attempt idempotency key to Stripe', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    await createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      successUrl: 's',
+      cancelUrl: 'c',
+      idempotencyKey: 'checkout:hh-1:attempt-1',
+    });
+
+    expect(sessionsCreate).toHaveBeenCalledWith(expect.any(Object), {
+      idempotencyKey: 'checkout:hh-1:attempt-1',
+    });
+  });
+
+  it('enables automatic tax only when configured', async () => {
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    try {
+      await runCheckout('month');
+      expect(sessionsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ automatic_tax: { enabled: true } })
+      );
+    } finally {
+      delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+    }
   });
 
   it('uses the ANNUAL price id when interval=year', async () => {

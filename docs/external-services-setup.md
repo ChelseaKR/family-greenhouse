@@ -70,7 +70,7 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
 4. **Create a webhook**:
    - Developers → Webhooks → Add endpoint
    - URL: `https://<api-id>.execute-api.us-east-1.amazonaws.com/production/billing/webhook`
-   - Events to send: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+   - Events to send: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
    - After creation, reveal + copy the **Signing secret** (`whsec_…`).
 5. **API key**: Developers → API keys → copy the **Secret key** (`sk_test_…` for test mode).
 6. tfvars:
@@ -80,6 +80,8 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
    stripe_webhook_secret      = "whsec_..."
    stripe_price_id_garden     = "price_..."
    stripe_price_id_greenhouse = "price_..."
+   # Leave off until Stripe Tax registrations + product tax codes are configured.
+   stripe_automatic_tax_enabled = ""
    ```
 
 7. `terraform apply`. The billing Lambda env updates in place.
@@ -92,7 +94,14 @@ When you're ready to actually charge:
 1. Repeat steps 3–5 in Stripe **live mode** (different products + webhook URL + secrets).
 2. Swap the tfvars to the live keys.
 3. Flip `VITE_BETA_MODE=false` in the production frontend build env. The pricing UI un-hides.
-4. **Tax**: enable Stripe Tax in your dashboard; the Checkout session is already configured to support it.
+4. **Tax**: configure registrations in Stripe Tax, assign the appropriate SaaS tax code to each product, then set `stripe_automatic_tax_enabled = "1"`. Checkout will collect the minimum billing-address fields required and save refreshed addresses for returning customers. Do not flip this flag before the Stripe-side tax setup is complete.
+
+### Checkout reliability and webhook checks
+
+- The frontend sends a UUID for each checkout attempt. The API scopes it to the household and forwards it as Stripe's idempotency key, so transport retries return the original Checkout Session instead of creating another one.
+- Keep the webhook event list above narrow. The async-payment event is required for a lifetime purchase that completes after `checkout.session.completed` initially reports `unpaid`.
+- Stripe can deliver an event more than once and does not guarantee ordering. The app records processed event IDs and conditions household updates on Stripe's event timestamp; do not remove either guard.
+- Before going live, complete one monthly, annual, and lifetime test checkout; replay a webhook from Stripe Workbench; and verify the household plan, customer ID, subscription ID, and period end in DynamoDB.
 
 ---
 

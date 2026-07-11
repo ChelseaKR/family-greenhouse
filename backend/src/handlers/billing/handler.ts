@@ -27,6 +27,9 @@ const checkoutSchema = z
     // `planId` keep getting a monthly subscription unchanged. `lifetime` is a
     // one-time payment offered on Garden only (enforced by the refine below).
     interval: z.enum(['month', 'year', 'lifetime']).optional().default('month'),
+    // Generated once per checkout click and forwarded to Stripe. Optional for
+    // backwards compatibility with older clients.
+    checkoutAttemptId: z.string().uuid().optional(),
   })
   .refine((v) => v.interval !== 'lifetime' || v.planId === 'garden', {
     message: 'The lifetime plan is only available for the Garden tier.',
@@ -89,6 +92,9 @@ export const checkout = createHandler(
         interval: validatedBody.interval,
         successUrl: `${baseUrl}/settings/billing?status=success`,
         cancelUrl: `${baseUrl}/settings/billing?status=cancel`,
+        idempotencyKey: validatedBody.checkoutAttemptId
+          ? `checkout:${user.householdId}:${validatedBody.checkoutAttemptId}`
+          : undefined,
       });
       return successResponse(session);
     } catch (err) {

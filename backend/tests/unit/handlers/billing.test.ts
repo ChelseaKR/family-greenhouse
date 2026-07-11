@@ -258,6 +258,29 @@ describe('billing handler', () => {
       );
     });
 
+    it('scopes the client checkout attempt id to the household', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+      const checkoutAttemptId = '123e4567-e89b-42d3-a456-426614174000';
+      vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
+        url: 'https://checkout.stripe.test/idempotent',
+      });
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'garden', checkoutAttemptId }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(billing.createCheckoutSession).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: `checkout:hh-1:${checkoutAttemptId}` })
+      );
+    });
+
     it('passes interval=lifetime through to the checkout session for Garden', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');

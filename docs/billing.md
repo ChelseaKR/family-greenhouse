@@ -77,7 +77,7 @@ applyStripeEvent(event): Promise                          // calls deltaForStrip
 
 Webhook events we handle:
 
-- `checkout.session.completed` → record customer + subscription IDs, set status to active, set planId from the session metadata
+- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs, set status to active, set planId from the session metadata. The async event completes delayed one-time payment methods.
 - `customer.subscription.created` / `customer.subscription.updated` → record latest status + period-end + planId
 - `customer.subscription.deleted` → reset to seedling, status canceled
 

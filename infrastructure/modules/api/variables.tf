@@ -109,6 +109,12 @@ variable "stripe_price_id_greenhouse_annual" {
   default     = ""
 }
 
+variable "stripe_automatic_tax_enabled" {
+  description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured. Enables automatic tax in Checkout."
+  type        = string
+  default     = ""
+}
+
 # --- Notification delivery ---
 variable "ses_identity_arn" {
   description = "ARN of the verified SES identity (domain) reminder emails are sent from. Used to scope the Lambda role's ses:SendEmail/SendRawEmail grant. Empty (no domain provisioned) falls back to Resource \"*\"."

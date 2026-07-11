@@ -172,6 +172,9 @@ export async function createCheckoutSession(args: {
   interval?: BillingInterval;
   successUrl: string;
   cancelUrl: string;
+  /** Stable per user checkout attempt. Stripe uses this to return the same
+   * Session if an HTTP request is safely retried. */
+  idempotencyKey?: string;
 }): Promise<CheckoutSessionResult> {
   const plan = getPlan(args.planId);
   const interval: BillingInterval = args.interval ?? 'month';
@@ -220,11 +223,24 @@ export async function createCheckoutSession(args: {
     cancel_url: args.cancelUrl,
     client_reference_id: args.householdId,
     metadata,
+    // Stripe Tax is opt-in because the Stripe account must first have its
+    // registrations and product tax code configured. Once enabled, Checkout
+    // collects the minimum address fields needed for the calculation.
+    automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX_ENABLED === '1' },
+    // Existing customers need this explicit opt-in for Checkout to save the
+    // fresh billing address it uses for future automatic-tax calculations.
+    customer_update: sub.stripeCustomerId
+      ? ({ address: 'auto', name: 'auto' } as const)
+      : undefined,
   };
+  const createSession = (params: Stripe.Checkout.SessionCreateParams) =>
+    args.idempotencyKey
+      ? stripe.checkout.sessions.create(params, { idempotencyKey: args.idempotencyKey })
+      : stripe.checkout.sessions.create(params);
   const session =
     interval === 'lifetime'
-      ? await stripe.checkout.sessions.create({ mode: 'payment', ...common })
-      : await stripe.checkout.sessions.create({
+      ? await createSession({ mode: 'payment', ...common })
+      : await createSession({
           mode: 'subscription',
           ...common,
           subscription_data: {
@@ -328,7 +344,8 @@ function planIdFromPriceId(priceId: string | null | undefined): PlanId | null {
 
 export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | null {
   switch (event.type) {
-    case 'checkout.session.completed': {
+    case 'checkout.session.completed':
+    case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object;
       const householdId = session.metadata?.householdId ?? session.client_reference_id ?? '';
       if (!householdId) return null;
@@ -491,7 +508,8 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // the now-orphaned Stripe subscription afterwards — otherwise it keeps
   // billing and later emits deleted/updated events.
   const isLifetimeGrant =
-    event.type === 'checkout.session.completed' &&
+    (event.type === 'checkout.session.completed' ||
+      event.type === 'checkout.session.async_payment_succeeded') &&
     (event.data.object as unknown as { mode?: string }).mode === 'payment' &&
     delta.fields.stripeSubscriptionId === null;
   let priorSubscriptionId: string | undefined;
@@ -514,9 +532,11 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   }
 
   if (priorSubscriptionId) {
-    // Best-effort: a failure here must not 5xx the webhook (the entitlement is
-    // already granted). Worst case the old sub keeps billing, but the mismatch
-    // guard above stops its events from revoking the lifetime grant.
+    // The entitlement is already granted, but cancellation is still part of
+    // completing this event: swallowing a Stripe failure here could leave the
+    // household billed indefinitely. Throw after logging so Stripe retries
+    // the webhook. The event has not entered our dedupe ledger yet, and the
+    // equal-timestamp update guard makes reapplying the grant safe.
     try {
       const stripe = await getStripe();
       await stripe.subscriptions.cancel(priorSubscriptionId);
@@ -529,6 +549,7 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
         { err, householdId: delta.householdId, subscriptionId: priorSubscriptionId },
         'lifetime_grant_cancel_prior_subscription_failed'
       );
+      throw err;
     }
   }
 
@@ -572,7 +593,9 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // promise, so an analytics outage can NEVER 5xx the webhook (which would make
   // Stripe retry an already-applied delivery).
   const isActivationEvent =
-    event.type === 'checkout.session.completed' || event.type === 'customer.subscription.created';
+    event.type === 'checkout.session.completed' ||
+    event.type === 'checkout.session.async_payment_succeeded' ||
+    event.type === 'customer.subscription.created';
   const activatedPlan = delta.fields.planId;
   if (
     isNew &&

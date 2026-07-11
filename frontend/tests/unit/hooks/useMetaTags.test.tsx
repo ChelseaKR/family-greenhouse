@@ -22,6 +22,36 @@ describe('useMetaTags canonical', () => {
     expect(document.querySelector('meta[property="og:url"]')).toBeNull();
   });
 
+  it('keeps Open Graph, Twitter, and robots metadata in sync per route', () => {
+    const { unmount } = renderHook(() =>
+      useMetaTags({
+        title: 'A dramatic fern',
+        description: 'Fern care without the guesswork.',
+        ogImage: 'https://familygreenhouse.net/fern.png',
+        ogType: 'article',
+        robots: 'noindex, follow',
+      })
+    );
+
+    expect(document.querySelector('meta[name="twitter:title"]')?.getAttribute('content')).toBe(
+      'A dramatic fern'
+    );
+    expect(
+      document.querySelector('meta[name="twitter:description"]')?.getAttribute('content')
+    ).toBe('Fern care without the guesswork.');
+    expect(document.querySelector('meta[name="twitter:image"]')?.getAttribute('content')).toBe(
+      'https://familygreenhouse.net/fern.png'
+    );
+    expect(document.querySelector('meta[property="og:type"]')?.getAttribute('content')).toBe(
+      'article'
+    );
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'noindex, follow'
+    );
+
+    unmount();
+  });
+
   it('overrides a pre-existing homepage canonical and restores its href on unmount', () => {
     // If a canonical link already exists (e.g. one route navigating to another
     // before cleanup), the hook overrides its href and restores it on unmount

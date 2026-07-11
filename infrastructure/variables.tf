@@ -184,6 +184,12 @@ variable "stripe_price_id_greenhouse_annual" {
   default     = ""
 }
 
+variable "stripe_automatic_tax_enabled" {
+  description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured."
+  type        = string
+  default     = ""
+}
+
 # Manual confirmation gate: Stripe price ids look identical in test and live
 # mode, so Terraform can't verify stripe_price_id_* actually match the mode of
 # stripe_secret_key. This must be deliberately flipped to true (see the check

@@ -118,6 +118,7 @@ module "api" {
   stripe_price_id_garden_lifetime   = var.stripe_price_id_garden_lifetime
   stripe_price_id_greenhouse        = var.stripe_price_id_greenhouse
   stripe_price_id_greenhouse_annual = var.stripe_price_id_greenhouse_annual
+  stripe_automatic_tax_enabled      = var.stripe_automatic_tax_enabled
 }
 
 # Price ids are visually identical in test and live Stripe mode, so this is

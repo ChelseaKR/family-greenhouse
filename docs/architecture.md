@@ -169,7 +169,7 @@ The `runReminders` Lambda walks household members, computes their assigned-and-d
 1. **Catalog** lives in `models/plans.ts` (Seedling/Garden/Greenhouse, with `maxPlants` and `maxMembers` per tier)
 2. **Plan caps** are enforced at write time in `createPlant` and `joinHousehold` — exceeded caps return HTTP 402 with a friendly message
 3. **Checkout**: `POST /billing/checkout` creates a Stripe Checkout Session, frontend redirects to Stripe
-4. **Webhook**: Stripe posts `checkout.session.completed`, `customer.subscription.{created,updated,deleted}` → `deltaForStripeEvent` translates them into a delta → `applyStripeEvent` writes back to the household row
+4. **Webhook**: Stripe posts `checkout.session.{completed,async_payment_succeeded}`, `customer.subscription.{created,updated,deleted}` → `deltaForStripeEvent` translates them into a delta → `applyStripeEvent` writes back to the household row
 5. **Portal**: `POST /billing/portal` creates a Stripe Customer Portal session for managing existing subs
 
 The local-server short-circuits the Stripe round-trip — checkout flips the household's plan immediately and returns a stub success URL. Plan caps still apply, so all the gating logic gets exercised against the real handlers.
