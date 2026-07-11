@@ -31,7 +31,7 @@
     "features/landing/LandingPage.tsx": 51,
     "features/onboarding/WelcomeFlow.tsx": 6,
     "features/petsafe/PetSafePage.tsx": 15,
-    "features/plants/AddPlantPage.tsx": 19,
+    "features/plants/AddPlantPage.tsx": 18,
     "features/plants/AddTaskModal.tsx": 11,
     "features/plants/BulkApplyTemplateDialog.tsx": 10,
     "features/plants/CareGuidanceCard.tsx": 4,

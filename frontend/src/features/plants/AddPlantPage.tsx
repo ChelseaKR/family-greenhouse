@@ -20,7 +20,7 @@ import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
 import { PetToxicityNote } from './PetToxicityNote';
-import { generatePlantName } from '@/utils/plantNameGenerator';
+import { PlantNameNursery } from './PlantNameNursery';
 import { downscaleImage } from '@/utils/image';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -444,13 +444,10 @@ export function AddPlantPage() {
               error={errors.name?.message}
               {...register('name')}
             />
-            <button
-              type="button"
-              className="inline-flex min-h-touch items-center text-xs text-primary-700 hover:text-primary-600"
-              onClick={() => setValue('name', generatePlantName(), { shouldValidate: true })}
-            >
-              ✨ Generate a fun name
-            </button>
+            <PlantNameNursery
+              species={speciesValue}
+              onUseName={(name) => setValue('name', name, { shouldValidate: true })}
+            />
           </div>
 
           <SpeciesCombobox

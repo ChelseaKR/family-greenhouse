@@ -1,35 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { generatePlantName } from '@/utils/plantNameGenerator';
+import {
+  generatePlantName,
+  generatePlantNameSuggestion,
+  type PlantNameVibe,
+} from '@/utils/plantNameGenerator';
 
-describe('generatePlantName', () => {
-  it('returns a non-empty string with first + last at minimum', () => {
+describe('plant name generator', () => {
+  it('keeps the original one-line helper usable', () => {
     const name = generatePlantName(() => 0.5);
-    expect(name.length).toBeGreaterThan(2);
-    // No-title path produces exactly two whitespace-separated tokens.
-    expect(name.split(' ').length).toBeGreaterThanOrEqual(2);
+    expect(name.trim().length).toBeGreaterThan(2);
+    expect(name.length).toBeLessThanOrEqual(100);
   });
 
-  it('uses a title when rng() < 0.3', () => {
-    // Force the title branch and make every pick deterministic.
-    const rng = () => 0;
-    const name = generatePlantName(rng);
-    expect(name.split(' ').length).toBe(3);
+  it.each<PlantNameVibe>(['punny', 'distinguished', 'chaotic', 'sweet'])(
+    'returns a complete %s suggestion',
+    (vibe) => {
+      const suggestion = generatePlantNameSuggestion(vibe, '', () => 0);
+
+      expect(suggestion.vibe).toBe(vibe);
+      expect(suggestion.name.trim()).not.toBe('');
+      expect(suggestion.note.trim()).not.toBe('');
+      expect(suggestion.name.length).toBeLessThanOrEqual(100);
+    }
+  );
+
+  it('uses the species for a tailored pun when one is available', () => {
+    const suggestion = generatePlantNameSuggestion('punny', 'Boston fern', () => 0);
+    expect(suggestion.name).toBe('Fernie');
   });
 
-  it('skips the title when rng() >= 0.3', () => {
-    let calls = 0;
+  it('is deterministic when supplied with a seeded rng', () => {
+    const first = generatePlantNameSuggestion('distinguished', '', () => 0.25);
+    const second = generatePlantNameSuggestion('distinguished', '', () => 0.25);
+    expect(first).toEqual(second);
+  });
+
+  it('produces a broad mix of names for a deterministic pseudo-random sequence', () => {
+    // A seeded sequence verifies variety without making the suite probabilistic.
+    let state = 0x12345678;
     const rng = () => {
-      calls += 1;
-      // First call decides title (>= 0.3 => skip); subsequent calls index picks.
-      return calls === 1 ? 0.5 : 0;
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 0x1_0000_0000;
     };
-    const name = generatePlantName(rng);
-    expect(name.split(' ').length).toBe(2);
-  });
-
-  it('produces different names across calls (with real randomness)', () => {
-    const names = new Set(Array.from({ length: 30 }, () => generatePlantName()));
-    // 30 calls into a name space of ~600 combos; collisions extremely unlikely.
+    const names = new Set(
+      Array.from({ length: 40 }, () => generatePlantNameSuggestion('surprise', '', rng).name)
+    );
     expect(names.size).toBeGreaterThan(20);
   });
 });
