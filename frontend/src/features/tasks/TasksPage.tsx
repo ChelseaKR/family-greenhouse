@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -9,6 +9,7 @@ import { deriveClimateSignals, climateSkipSuggestion } from './climateSignals';
 import { ClaimControls, ClimateSkipChip, CoveringBadge, UpForGrabsBadge } from './taskRowExtras';
 import {
   useClaimTaskMutation,
+  useCompleteTaskMutation,
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from './taskMutations';
@@ -26,7 +27,6 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
-import { toast } from '@/store/toastStore';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
@@ -70,7 +70,6 @@ export function TasksPage() {
   useDocumentTitle('Tasks');
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
-  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterType>('all');
 
   const {
@@ -105,15 +104,7 @@ export function TasksPage() {
     [plants]
   );
 
-  const completeTaskMutation = useMutation({
-    mutationFn: (taskId: string) => taskService.completeTask(taskId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
-      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
-      toast.success('Task completed');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
+  const completeTaskMutation = useCompleteTaskMutation(householdId);
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -184,7 +175,7 @@ export function TasksPage() {
             type="button"
             onClick={() => setFilter(f.id as FilterType)}
             className={clsx(
-              'inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+              'inline-flex min-h-touch items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
               filter === f.id
                 ? 'bg-primary-100 text-primary-800 border-primary-400'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -236,7 +227,9 @@ export function TasksPage() {
               title="Overdue"
               tasks={overdueTasks}
               onComplete={(id) => completeTaskMutation.mutate(id)}
-              isCompleting={completeTaskMutation.isPending}
+              completingTaskId={
+                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+              }
               variant="danger"
               extras={rowExtras}
             />
@@ -247,7 +240,9 @@ export function TasksPage() {
               title="Today"
               tasks={todayTasks}
               onComplete={(id) => completeTaskMutation.mutate(id)}
-              isCompleting={completeTaskMutation.isPending}
+              completingTaskId={
+                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+              }
               extras={rowExtras}
             />
           )}
@@ -257,7 +252,9 @@ export function TasksPage() {
               title="Upcoming"
               tasks={upcomingTasks}
               onComplete={(id) => completeTaskMutation.mutate(id)}
-              isCompleting={completeTaskMutation.isPending}
+              completingTaskId={
+                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+              }
               extras={rowExtras}
             />
           )}
@@ -281,7 +278,7 @@ interface TaskSectionProps {
   title: string;
   tasks: TaskWithCoverage[];
   onComplete: (taskId: string) => void;
-  isCompleting: boolean;
+  completingTaskId: string | null;
   variant?: 'default' | 'danger';
   extras: TaskRowExtras;
 }
@@ -290,7 +287,7 @@ function TaskSection({
   title,
   tasks,
   onComplete,
-  isCompleting,
+  completingTaskId,
   variant = 'default',
   extras,
 }: TaskSectionProps) {
@@ -322,7 +319,7 @@ function TaskSection({
           return (
             <li
               key={task.id}
-              className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-parchment/60"
+              className="flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-parchment/60 sm:flex-row sm:items-center sm:justify-between sm:px-6"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <span
@@ -368,7 +365,7 @@ function TaskSection({
                   )}
                 </div>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
                 <ClaimControls
                   task={task}
                   onClaim={extras.onClaim}
@@ -379,7 +376,7 @@ function TaskSection({
                   variant="secondary"
                   size="sm"
                   onClick={() => onComplete(task.id)}
-                  disabled={isCompleting}
+                  disabled={completingTaskId === task.id}
                   leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
                 >
                   Done

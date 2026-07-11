@@ -3,6 +3,8 @@ import { speciesService } from '@/services/speciesService';
 
 interface SuggestedCareCardProps {
   perenualSpeciesId: number | null;
+  /** The add flow may use a richer curated bundle instead of this fallback. */
+  showWateringTaskNotice: boolean;
 }
 
 /**
@@ -13,7 +15,10 @@ interface SuggestedCareCardProps {
  * the watering task is created from the suggestion *after* the plant is
  * saved (see AddPlantPage.applySuggestedSchedule).
  */
-export function SuggestedCareCard({ perenualSpeciesId }: SuggestedCareCardProps) {
+export function SuggestedCareCard({
+  perenualSpeciesId,
+  showWateringTaskNotice,
+}: SuggestedCareCardProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['species', 'care-suggestions', perenualSpeciesId],
     queryFn: () => speciesService.careSuggestions(perenualSpeciesId!),
@@ -30,7 +35,7 @@ export function SuggestedCareCard({ perenualSpeciesId }: SuggestedCareCardProps)
     >
       <p className="font-semibold text-primary-900">Suggested care</p>
       <p className="mt-1 text-primary-900">{data.summary}</p>
-      {data.wateringDays !== null && (
+      {showWateringTaskNotice && data.wateringDays !== null && (
         <p className="mt-2 text-xs text-primary-700">
           We&rsquo;ll create a watering task on a {data.wateringDays}-day cadence after you save
           this plant. You can edit it any time.

@@ -42,6 +42,7 @@ export function ApiKeysSettings() {
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [createdPlaintext, setCreatedPlaintext] = useState<string | null>(null);
   const [copyOk, setCopyOk] = useState(false);
+  const [copyError, setCopyError] = useState(false);
 
   const toggleScope = (scope: ApiScope) => {
     setScopes((prev) =>
@@ -84,9 +85,14 @@ export function ApiKeysSettings() {
 
   const handleCopy = async () => {
     if (!createdPlaintext) return;
-    await navigator.clipboard.writeText(createdPlaintext);
-    setCopyOk(true);
-    setTimeout(() => setCopyOk(false), 2000);
+    setCopyError(false);
+    try {
+      await navigator.clipboard.writeText(createdPlaintext);
+      setCopyOk(true);
+      setTimeout(() => setCopyOk(false), 2000);
+    } catch {
+      setCopyError(true);
+    }
   };
 
   if (keysQuery.isLoading) {
@@ -108,8 +114,8 @@ export function ApiKeysSettings() {
         {createdPlaintext && (
           <Alert variant="success" className="mb-4">
             <p className="font-medium">New key created — copy it now, it won't be shown again.</p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="flex-1 rounded bg-white px-2 py-1 text-xs font-mono break-all">
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code className="min-w-0 flex-1 rounded bg-white px-2 py-1 text-xs font-mono break-all">
                 {createdPlaintext}
               </code>
               <Button
@@ -120,10 +126,22 @@ export function ApiKeysSettings() {
               >
                 {copyOk ? 'Copied!' : 'Copy'}
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setCreatedPlaintext(null)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setCreatedPlaintext(null);
+                  setCopyError(false);
+                }}
+              >
                 Dismiss
               </Button>
             </div>
+            {copyError && (
+              <p className="mt-2 text-sm text-red-700" role="alert">
+                Could not copy automatically. Select the key and copy it manually.
+              </p>
+            )}
           </Alert>
         )}
 
@@ -135,7 +153,7 @@ export function ApiKeysSettings() {
 
         {isAdmin && (
           <div className="space-y-4">
-            <div className="flex items-end gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <Input
                   label="Key label"
@@ -204,7 +222,7 @@ export function ApiKeysSettings() {
             {keysQuery.data.map((key) => (
               <li
                 key={key.id}
-                className="flex items-center justify-between gap-3 px-6 py-3 text-sm"
+                className="flex flex-col items-stretch gap-3 px-6 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900 truncate">{key.label}</p>
@@ -229,6 +247,7 @@ export function ApiKeysSettings() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => setRevokeId(key.id)}
                     leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
                     aria-label={`Revoke key ${key.label}`}

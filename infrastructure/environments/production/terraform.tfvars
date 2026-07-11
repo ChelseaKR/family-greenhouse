@@ -27,6 +27,12 @@ monthly_budget_usd = "30"
 # cost-amplified by concurrency. Beta default is tracking-only ("").
 identify_metering_enabled = "1"
 
+# Keep SMS fail-closed until AWS approves SMS Production Access in us-east-1
+# and the required origination identity/registration is active. Once both are
+# confirmed, change this to "1" and deploy; the API returns 503 while disabled
+# instead of claiming that an undelivered verification code was sent.
+sms_notifications_enabled = ""
+
 # --- Stripe billing ---
 # Price IDs are NOT secret (they're just `price_…` references), so they live
 # here. Leaving one "" disables that cadence: an empty monthly ID makes the whole

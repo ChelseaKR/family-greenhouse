@@ -106,6 +106,7 @@ module "api" {
   openweather_daily_budget   = var.openweather_daily_budget
   bedrock_embed_model_id     = var.bedrock_embed_model_id
   identify_metering_enabled  = var.identify_metering_enabled
+  sms_notifications_enabled  = var.sms_notifications_enabled
 
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable

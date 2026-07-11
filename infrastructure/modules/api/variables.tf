@@ -142,7 +142,7 @@ variable "web_push_vapid_subject" {
 }
 
 variable "sms_notifications_enabled" {
-  description = "Set to '1' to actually publish SMS via SNS. Off by default; reminder code dry-runs to logs."
+  description = "Set to '1' only with SMS production access and an approved origination identity. Off by default; verification fails with 503 and reminders dry-run."
   type        = string
   default     = ""
 }
