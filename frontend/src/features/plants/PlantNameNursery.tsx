@@ -121,6 +121,17 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent-700">
               {t('plants.nameNursery.ready')}
             </p>
+            {suggestion.speciesMatch && (
+              <p className="mx-auto mt-2 w-fit rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-800">
+                <span aria-hidden="true">🧬</span>{' '}
+                {t('plants.nameNursery.speciesInspired', {
+                  species: t(
+                    `plants.nameNursery.speciesFamilies.${suggestion.speciesMatch.id}`,
+                    suggestion.speciesMatch.label
+                  ),
+                })}
+              </p>
+            )}
             <p className="mt-1 font-serif text-2xl leading-tight text-ink">{suggestion.name}</p>
             <p className="mt-1 text-xs italic text-gray-600">{suggestion.note}</p>
 

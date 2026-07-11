@@ -24,9 +24,43 @@ describe('plant name generator', () => {
     }
   );
 
-  it('uses the species for a tailored pun when one is available', () => {
+  it('uses a common species name for a tailored pun', () => {
     const suggestion = generatePlantNameSuggestion('punny', 'Boston fern', () => 0);
     expect(suggestion.name).toBe('Fernie');
+    expect(suggestion.speciesMatch).toEqual({ id: 'fern', label: 'ferns' });
+  });
+
+  it.each<PlantNameVibe>(['punny', 'distinguished', 'chaotic', 'sweet'])(
+    'tailors the %s personality to the species',
+    (vibe) => {
+      const suggestion = generatePlantNameSuggestion(vibe, 'Monstera deliciosa', () => 0);
+
+      expect(suggestion.speciesMatch).toEqual({ id: 'monstera', label: 'monsteras' });
+      expect(suggestion.name).toMatch(
+        /Monsterra Deliciosa|Professor Fenestration|The Hole Situation|Little Monster/
+      );
+    }
+  );
+
+  it('recognizes a scientific name even when the common name is absent', () => {
+    const suggestion = generatePlantNameSuggestion('distinguished', 'Epipremnum aureum', () => 0);
+
+    expect(suggestion.name).toBe('Sir Trails-a-Lot');
+    expect(suggestion.speciesMatch?.id).toBe('pothos');
+  });
+
+  it('preserves tailored palm support', () => {
+    const suggestion = generatePlantNameSuggestion('chaotic', 'Parlor palm', () => 0);
+
+    expect(suggestion.name).toBe('Vacation Mode');
+    expect(suggestion.speciesMatch?.id).toBe('palm');
+  });
+
+  it('falls back gracefully for an unknown species', () => {
+    const suggestion = generatePlantNameSuggestion('sweet', 'Mysteriophyta fabulous', () => 0);
+
+    expect(suggestion.name).toBe('Bean Baby');
+    expect(suggestion.speciesMatch).toBeUndefined();
   });
 
   it('is deterministic when supplied with a seeded rng', () => {

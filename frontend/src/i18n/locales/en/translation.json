@@ -59,6 +59,23 @@
       "close": "Close",
       "personalityLabel": "Name personality",
       "ready": "Ready for adoption",
+      "speciesInspired": "Inspired by {{species}}",
+      "speciesFamilies": {
+        "fern": "ferns",
+        "cactus": "cacti",
+        "pothos": "pothos",
+        "monstera": "monsteras",
+        "orchid": "orchids",
+        "palm": "palms",
+        "snake-plant": "snake plants",
+        "spider-plant": "spider plants",
+        "prayer-plant": "prayer plants",
+        "peace-lily": "peace lilies",
+        "rubber-plant": "rubber plants",
+        "aloe": "aloes and agaves",
+        "succulent": "succulents",
+        "philodendron": "philodendrons"
+      },
       "another": "Another one",
       "useName": "Use this name",
       "vibes": {
