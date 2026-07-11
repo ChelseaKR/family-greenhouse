@@ -514,9 +514,11 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   }
 
   if (priorSubscriptionId) {
-    // Best-effort: a failure here must not 5xx the webhook (the entitlement is
-    // already granted). Worst case the old sub keeps billing, but the mismatch
-    // guard above stops its events from revoking the lifetime grant.
+    // The entitlement is already granted, but cancellation is still part of
+    // completing this event: swallowing a Stripe failure here could leave the
+    // household billed indefinitely. Throw after logging so Stripe retries
+    // the webhook. The event has not entered our dedupe ledger yet, and the
+    // equal-timestamp update guard makes reapplying the grant safe.
     try {
       const stripe = await getStripe();
       await stripe.subscriptions.cancel(priorSubscriptionId);
@@ -529,6 +531,7 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
         { err, householdId: delta.householdId, subscriptionId: priorSubscriptionId },
         'lifetime_grant_cancel_prior_subscription_failed'
       );
+      throw err;
     }
   }
 
