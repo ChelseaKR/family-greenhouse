@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { uiLogin } from './helpers';
 
 /**
@@ -6,10 +6,12 @@ import { uiLogin } from './helpers';
  *
  * The app promises two layers of motion restraint:
  *
- *  1. Entrance animations are opt-in via Tailwind's `motion-safe:`
- *     variant (`motion-safe:animate-fade-in` on Card / plant cards) —
+ *  1. Recurring animations are opt-in via Tailwind's `motion-safe:`
+ *     variant (`motion-safe:animate-pulse` on the loading `Skeleton`) —
  *     under `prefers-reduced-motion: reduce` the animation class simply
- *     never applies.
+ *     never applies. (The card entrance fade this spec originally
+ *     targeted was removed outright by the 0.14.1 mobile-first rework;
+ *     the skeleton pulse is the remaining `motion-safe:` surface.)
  *  2. A global rule in `src/index.css` freezes anything that animates
  *     unconditionally (e.g. the landing hero's `animate-sway` sprigs)
  *     by forcing `animation-duration: 0.01ms` / one iteration.
@@ -24,9 +26,27 @@ import { uiLogin } from './helpers';
  * in parallel with everything else.
  */
 
-// The Tailwind class name contains a colon (`motion-safe:animate-fade-in`),
+// The Tailwind class name contains a colon (`motion-safe:animate-pulse`),
 // so match on the substring rather than fighting CSS escaping.
-const FADE_IN_CARD = '[class*="animate-fade-in"]';
+const PULSING_SKELETON = '[class*="animate-pulse"]';
+
+/**
+ * Hold every plants-list API response (backend on :4000; the glob's final
+ * `*` cannot cross `/`, so `/plants/<id>` detail calls pass through) until
+ * the returned release function is called — keeps the loading skeletons on
+ * screen long enough to read their computed animation style. Register it
+ * AFTER login: `page.goto('/plants')` is a full document load, so the query
+ * cache starts empty and the gated request always precedes content.
+ */
+async function holdPlantsList(page: Page): Promise<() => void> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route('http://localhost:4000/plants*', async (route) => {
+    await gate;
+    await route.continue();
+  });
+  return release;
+}
 
 /** Computed animation-duration in ms. Engines normalize units differently
  *  (Chromium reports `0.01ms` as `1e-05s`), so compare numerically. */
@@ -36,28 +56,32 @@ function durationMs(value: string): number {
 }
 
 test.describe('Reduced motion', () => {
-  test('motion-safe entrance animation does not run under reduce', async ({ page }) => {
+  test('motion-safe skeleton pulse does not run under reduce', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await uiLogin(page);
+    const release = await holdPlantsList(page);
     await page.goto('/plants');
-    const card = page.locator(FADE_IN_CARD).first();
-    await card.waitFor({ state: 'visible', timeout: 15000 });
+    const skeleton = page.locator(PULSING_SKELETON).first();
+    await skeleton.waitFor({ state: 'visible', timeout: 15000 });
 
-    const animationName = await card.evaluate((el) => getComputedStyle(el).animationName);
+    const animationName = await skeleton.evaluate((el) => getComputedStyle(el).animationName);
+    release();
     expect(animationName, 'motion-safe: variant must not apply under reduce').toBe('none');
   });
 
-  test('motion-safe entrance animation does run under no-preference', async ({ page }) => {
+  test('motion-safe skeleton pulse does run under no-preference', async ({ page }) => {
     // Guards the test above against passing vacuously (e.g. if the
     // animation were removed outright, or the selector went stale).
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await uiLogin(page);
+    const release = await holdPlantsList(page);
     await page.goto('/plants');
-    const card = page.locator(FADE_IN_CARD).first();
-    await card.waitFor({ state: 'visible', timeout: 15000 });
+    const skeleton = page.locator(PULSING_SKELETON).first();
+    await skeleton.waitFor({ state: 'visible', timeout: 15000 });
 
-    const animationName = await card.evaluate((el) => getComputedStyle(el).animationName);
-    expect(animationName).toBe('fade-in');
+    const animationName = await skeleton.evaluate((el) => getComputedStyle(el).animationName);
+    release();
+    expect(animationName).toBe('pulse');
   });
 
   test('always-on decorative animation is frozen by the global reduce rule', async ({ page }) => {
