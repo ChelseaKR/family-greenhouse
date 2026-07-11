@@ -44,7 +44,8 @@
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "eval": "npm run eval --workspace backend",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs"
+    "i18n:check": "npm run i18n:check --workspace frontend",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run i18n:check && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

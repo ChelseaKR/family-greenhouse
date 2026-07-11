@@ -1,0 +1,12 @@
+{
+  "$comment": "Untranslated-marker sidecar — see docs/i18n.md. `todo` lists keys whose es value is (deliberately) the English source text, pending human translation; `intentionallyEqual` lists keys whose correct Spanish rendering happens to be identical to English. Every catalog key whose value equals the English source MUST appear in exactly one of these lists, and entries here MUST still match the English source — both directions are enforced by scripts/check-i18n-catalogs.mjs.",
+  "todo": [
+    "chat.proposal.frequency_many",
+    "common.daysAgo_many",
+    "importPlants.results.created_many",
+    "importPlants.results.skipped_many",
+    "importPlants.submit_many",
+    "plants.lineage.childrenCount_many"
+  ],
+  "intentionallyEqual": ["common.no"]
+}
