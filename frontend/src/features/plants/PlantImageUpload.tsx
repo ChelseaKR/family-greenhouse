@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { PhotoIcon } from '@heroicons/react/24/outline';
+import clsx from 'clsx';
 import { plantService } from '@/services/plantService';
 import { getErrorMessage } from '@/services/api';
 import { downscaleImage } from '@/utils/image';
@@ -17,8 +19,10 @@ interface PlantImageUploadProps {
 export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
+  const inputId = useId();
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [lastFile, setLastFile] = useState<File | null>(null);
   // Cancels an in-flight upload when the component unmounts (navigating away
   // mid-upload) so the PUT is aborted and the confirm step never fires for an
   // abandoned upload.
@@ -55,6 +59,7 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       setProgress(0);
+      setLastFile(null);
     },
     onError: (err) => {
       // A cancelled upload (unmount, or a newer upload superseding this one)
@@ -71,28 +76,42 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
     if (!file) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError('Image must be a JPEG, PNG, or WebP file.');
+      e.target.value = '';
       return;
     }
     // No pre-downscale size check: a 12 MB camera original usually shrinks
     // well under the limit. The final blob is guarded in the mutation.
+    setLastFile(file);
     upload.mutate(file);
+    // Allow choosing the same photo again after an error.
+    e.target.value = '';
   }
 
   return (
     <div className="space-y-3">
       {error && <Alert variant="error">{error}</Alert>}
-      {/* max-w-full: <input type="file"> has a large intrinsic min-width in
-          Chrome, which otherwise overflows narrow containers/viewports. */}
-      <label className="block max-w-full">
-        <span className="sr-only">Upload plant photo</span>
+      <div>
         <input
+          id={inputId}
           type="file"
           accept={ACCEPTED_TYPES.join(',')}
           onChange={onPick}
           disabled={upload.isPending}
-          className="block w-full max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+          className="peer sr-only"
         />
-      </label>
+        <label
+          htmlFor={inputId}
+          className={clsx(
+            'inline-flex min-h-touch w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-primary-300/70 bg-paper px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-primary-50',
+            'peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2',
+            upload.isPending && 'cursor-wait opacity-50'
+          )}
+        >
+          <PhotoIcon className="h-4 w-4" aria-hidden="true" />
+          {upload.isPending ? 'Uploading photo…' : 'Upload photo'}
+        </label>
+        <p className="mt-1 text-xs text-gray-600">JPEG, PNG, or WebP. Up to 5 MB after resizing.</p>
+      </div>
       {upload.isPending && (
         <div
           className="h-2 w-full overflow-hidden rounded-full bg-gray-200"
@@ -107,8 +126,15 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
           />
         </div>
       )}
-      {upload.isError && (
-        <Button variant="secondary" size="sm" onClick={() => upload.reset()}>
+      {upload.isError && lastFile && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            setError(null);
+            upload.mutate(lastFile);
+          }}
+        >
           Try again
         </Button>
       )}

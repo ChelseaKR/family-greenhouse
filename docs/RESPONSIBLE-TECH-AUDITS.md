@@ -10,7 +10,7 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 
 - **A Ethics:** applies
 - **B Bias:** applies (light) — plant-care content and care-guide copy; EN/ES is the one first-class segment (no ranking/classification of people; the app never infers protected attributes)
-- **C Privacy:** applies — real PII (emails, phone numbers, plant/household photos, household membership graphs). DPIA-style content exists today in `docs/compliance.md` §3 (GDPR checklist) but is **not yet** a signed, dated `docs/audits/dpia.md` — tracked gap, see P2-1 in the remediation plan
+- **C Privacy:** applies — real PII (emails, phone numbers, plant/household photos, household membership graphs). DPIA: [`docs/audits/dpia.md`](audits/dpia.md) (committed 2026-07-10, closes P2-1); `docs/compliance.md` §3 remains the GDPR/sub-processor checklist
 - **D Transparency:** applies — model card: [`model-card.md`](../model-card.md)
 - **E Accessibility:** applies — see [`accessibility.md`](accessibility.md) (WCAG 2.2 AA enforced; ACR/VPAT not yet published — tracked gap, P2-3/P2-4)
 - **F Security:** applies — ASVS **L2** (declared below); threat model: [`security.md`](security.md) (OWASP Top 10 working audit) + [`security-review-2026-05-31.md`](security-review-2026-05-31.md)
@@ -41,7 +41,7 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 **Findings:** Real PII in play: emails, phone numbers, plant/household photos, household membership graphs, and (new with chat) conversation transcripts that may reference a household's plants/tasks (30-day TTL, `docs/chat-rag-design.md` "Privacy"). `docs/compliance.md` §3 covers lawful basis, subject rights (self-serve export/delete), sub-processors (AWS, Stripe, Perenual/Plant.id/OpenWeather, and now Bedrock) — but as a checklist, not a signed DPIA artifact.
 
 - **Commitment:** retention limits (30-day chat TTL; DDB item TTL generally), self-serve access/deletion (`GET /me/export`, `DELETE /me`), no third-party exfiltration beyond named sub-processors, tool-result redaction before anything reaches Bedrock (`chat/tools.ts` strips emails/Cognito subs/createdBy).
-- **Gate:** AUTO-GATE — no-PII-in-logs / redaction is unit-tested (`chat/tools.ts` redactor). REVIEW-GATE — a signed `docs/audits/dpia.md` is **not yet committed**; tracked gap (remediation P2-1, depends on this file).
+- **Gate:** AUTO-GATE — no-PII-in-logs / redaction is unit-tested (`chat/tools.ts` redactor). REVIEW-GATE — signed DPIA committed at [`docs/audits/dpia.md`](audits/dpia.md) (2026-07-10, closes P2-1); re-sign on any data-inventory change per its recheck cadence.
 
 ## D. Transparency & explainability audit
 

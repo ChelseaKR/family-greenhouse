@@ -40,7 +40,9 @@ export async function sendSms(msg: SmsMessage): Promise<boolean> {
   const text = msg.text.slice(0, 140);
 
   if (process.env.SMS_NOTIFICATIONS_ENABLED !== '1') {
-    logger.info({ msg: 'sms_dry_run', to: msg.to, body: text }, 'sms_dry_run');
+    // Never log destinations or message bodies here. Verification messages
+    // contain both a phone number and a live one-time code.
+    logger.info({ msg: 'sms_dry_run' }, 'sms_dry_run');
     return false;
   }
 
