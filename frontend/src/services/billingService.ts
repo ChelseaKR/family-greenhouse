@@ -65,7 +65,12 @@ export const billingService = {
     planId: Exclude<PlanId, 'seedling'>,
     interval: BillingInterval = 'month'
   ): Promise<{ url: string }> {
-    const response = await api.post<{ url: string }>('/billing/checkout', { planId, interval });
+    const checkoutAttemptId = crypto.randomUUID();
+    const response = await api.post<{ url: string }>('/billing/checkout', {
+      planId,
+      interval,
+      checkoutAttemptId,
+    });
     // Mark intent at checkout-start; the actual successful upgrade is
     // confirmed by the Stripe webhook server-side. We track intent here
     // as a leading indicator and rely on a separate `subscription_active`

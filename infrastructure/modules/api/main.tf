@@ -290,6 +290,7 @@ locals {
     STRIPE_PRICE_ID_GARDEN_LIFETIME   = var.stripe_price_id_garden_lifetime
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
+    STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
     SES_FROM_EMAIL                    = var.ses_from_email
     WEB_PUSH_VAPID_PUBLIC_KEY         = var.web_push_vapid_public_key
     WEB_PUSH_VAPID_PRIVATE_KEY        = var.web_push_vapid_private_key

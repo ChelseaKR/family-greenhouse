@@ -41,6 +41,7 @@ export function CareGuidePage() {
           title: guide.metaTitle,
           description: guide.metaDescription,
           canonical: `${SITE}/care/${guide.slug}`,
+          ogType: 'article',
           jsonLd: {
             '@context': 'https://schema.org',
             '@graph': [
@@ -76,6 +77,14 @@ export function CareGuidePage() {
                   name: f.q,
                   acceptedAnswer: { '@type': 'Answer', text: f.a },
                 })),
+              },
+              {
+                '@type': 'BreadcrumbList',
+                itemListElement: [
+                  { '@type': 'ListItem', position: 1, name: 'Home', item: SITE },
+                  { '@type': 'ListItem', position: 2, name: 'Plant care', item: `${SITE}/care` },
+                  { '@type': 'ListItem', position: 3, name: `${guide.commonName} care` },
+                ],
               },
             ],
           },

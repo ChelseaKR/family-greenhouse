@@ -62,3 +62,6 @@ stripe_price_id_greenhouse_annual = ""                               # Greenhous
 # SAME Stripe mode (test/live) as the STRIPE_SECRET_KEY secret. Terraform
 # cannot check this automatically — price ids don't encode their mode.
 stripe_price_ids_are_live = false
+
+# Enable only after Stripe Tax registrations and product tax codes are live.
+stripe_automatic_tax_enabled = ""
