@@ -108,7 +108,7 @@ interface Plant {
   location: string | null;
   imageUrl: string | null;
   notes: string | null;
-  status: 'active' | 'died' | 'gave_away';
+  status: 'active' | 'died' | 'gave_away' | 'archived';
   statusChangedAt: string | null;
   tags: string[];
   perenualSpeciesId: number | null;
@@ -232,6 +232,8 @@ interface ActivityEvent {
     | 'plant.deleted'
     | 'plant.died'
     | 'plant.gave_away'
+    | 'plant.archived'
+    | 'plant.restored'
     | 'plant.propagated'
     | 'plant.shared_accepted'
     | 'photo.uploaded'
@@ -1627,17 +1629,22 @@ app.put(
       plant.parentPlantId = body.parentPlantId;
     }
     if (body.status !== undefined && body.status !== plant.status) {
+      const previousStatus = plant.status;
       plant.status = body.status;
       plant.statusChangedAt = new Date().toISOString();
-      if (body.status === 'died' || body.status === 'gave_away') {
-        recordActivity({
-          type: body.status === 'died' ? 'plant.died' : 'plant.gave_away',
-          householdId: user.householdId,
-          actorId: user.userId,
-          actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
-          payload: { plantId: plant.id, plantName: plant.name },
-        });
-      }
+      const lifecycleType = {
+        active: 'plant.restored',
+        archived: 'plant.archived',
+        died: 'plant.died',
+        gave_away: 'plant.gave_away',
+      }[body.status] as ActivityEvent['type'];
+      recordActivity({
+        type: lifecycleType,
+        householdId: user.householdId,
+        actorId: user.userId,
+        actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+        payload: { plantId: plant.id, plantName: plant.name, previousStatus },
+      });
     }
     plant.updatedAt = new Date().toISOString();
 

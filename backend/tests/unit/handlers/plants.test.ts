@@ -269,6 +269,75 @@ describe('plants handler', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it.each([
+    ['active', 'archived', 'plant.archived'],
+    ['archived', 'active', 'plant.restored'],
+  ] as const)('records a real %s → %s lifecycle transition as %s', async (before, after, type) => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const activity = await import('../../../src/services/activity.js');
+    const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+      id: 'p1',
+      householdId: 'hh-1',
+      name: 'Pothos',
+      status: before,
+    } as never);
+    vi.mocked(plantService.updatePlant).mockResolvedValueOnce({
+      id: 'p1',
+      householdId: 'hh-1',
+      name: 'Pothos',
+      status: after,
+    } as never);
+
+    const res = (await updatePlant(
+      buildEvent({
+        httpMethod: 'PUT',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify({ status: after }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(activity.recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type,
+        householdId: 'hh-1',
+        payload: { plantId: 'p1', plantName: 'Pothos', previousStatus: before },
+      })
+    );
+  });
+
+  it('does not duplicate an archive activity on an idempotent retry', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const activity = await import('../../../src/services/activity.js');
+    const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+    const archived = {
+      id: 'p1',
+      householdId: 'hh-1',
+      name: 'Pothos',
+      status: 'archived',
+    } as never;
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce(archived);
+    vi.mocked(plantService.updatePlant).mockResolvedValueOnce(archived);
+
+    const res = (await updatePlant(
+      buildEvent({
+        httpMethod: 'PUT',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify({ status: 'archived' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(activity.recordActivity).not.toHaveBeenCalled();
+  });
+
   it('deletePlant returns 204 on success', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const { deletePlant } = await import('../../../src/handlers/plants/handler.js');

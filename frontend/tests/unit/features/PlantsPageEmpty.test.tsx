@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PlantsPage } from '@/features/plants/PlantsPage';
@@ -46,5 +47,17 @@ describe('PlantsPage empty state (first-plant activation)', () => {
     server.use(http.get(`${API}/plants`, () => HttpResponse.json([])));
     renderPlants();
     expect(await screen.findByText(/less than a minute/i)).toBeInTheDocument();
+  });
+
+  it('explains the empty history collection instead of showing the first-plant CTA', async () => {
+    const user = userEvent.setup();
+    server.use(http.get(`${API}/plants`, () => HttpResponse.json([])));
+    renderPlants();
+
+    await user.click(await screen.findByRole('tab', { name: /past plants/i }));
+
+    expect(await screen.findByText('No past plants')).toBeInTheDocument();
+    expect(screen.getByText(/care history intact/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /add your first plant/i })).not.toBeInTheDocument();
   });
 });

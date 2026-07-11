@@ -67,7 +67,7 @@ export const createPlantSchema = z.object({
   parentPlantId: z.string().uuid().optional(),
 });
 
-export const plantStatusEnum = z.enum(['active', 'died', 'gave_away']);
+export const plantStatusEnum = z.enum(['active', 'died', 'gave_away', 'archived']);
 
 export const updatePlantSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -76,7 +76,8 @@ export const updatePlantSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),
-  // Lifecycle transition. Setting 'died'/'gave_away' records an outcome
+  // Lifecycle transition. Setting 'died'/'gave_away' records an outcome;
+  // 'archived' neutrally removes a plant from active care without data loss
   // (drops the plant out of active views/cap/reminders, keeps history);
   // 'active' restores it.
   status: plantStatusEnum.optional(),

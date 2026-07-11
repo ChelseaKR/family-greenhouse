@@ -61,10 +61,7 @@ function filterActivity(
         e.type === 'task.claimed' ||
         e.type === 'task.unclaimed'
       );
-    if (filter === 'plants')
-      return (
-        e.type === 'plant.created' || e.type === 'plant.deleted' || e.type === 'photo.uploaded'
-      );
+    if (filter === 'plants') return e.type.startsWith('plant.') || e.type === 'photo.uploaded';
     if (filter === 'people') return e.type === 'member.joined' || e.type === 'member.left';
     return true;
   });
@@ -457,6 +454,25 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
+    case 'plant.archived':
+    case 'plant.restored':
+    case 'plant.died':
+    case 'plant.gave_away': {
+      const p = payload as { plantName?: string };
+      const verb = {
+        'plant.archived': 'archived',
+        'plant.restored': 'restored',
+        'plant.died': 'recorded the loss of',
+        'plant.gave_away': 'recorded giving away',
+      }[type];
+      body = (
+        <>
+          <span className="font-medium">{actorName}</span> {verb}{' '}
+          <span className="font-medium">{p.plantName ?? 'a plant'}</span>
+        </>
+      );
+      break;
+    }
     case 'photo.uploaded':
       body = (
         <>

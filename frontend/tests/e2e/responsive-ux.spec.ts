@@ -291,9 +291,11 @@ test.describe('Mobile-first UX correctness', () => {
     await leafDialog.getByRole('button', { name: /^close$/i }).click();
 
     await page.getByRole('button', { name: /^remove$/i }).click();
-    const removeDialog = page.getByRole('dialog', { name: /remove Audit Monstera/i });
+    const removeDialog = page.getByRole('dialog', {
+      name: /move Audit Monstera out of active care/i,
+    });
     await expect(
-      removeDialog.getByRole('heading', { name: /remove Audit Monstera/i })
+      removeDialog.getByRole('heading', { name: /move Audit Monstera out of active care/i })
     ).toBeVisible();
     await expectNoDocumentOverflow(page, 'remove plant dialog');
     await expectMinimumControlTargets(page, 'remove plant dialog');

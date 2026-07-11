@@ -17,6 +17,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- Plants can be archived without losing tasks, photos, care history, or propagation lineage, then restored through the cap-safe lifecycle flow.
+- Archive and restore transitions now appear in the household activity story and emit a lifecycle analytics event.
+
+### Changed
+
+- Plant removal now leads with the reversible archive action, past-plant cards show their lifecycle state, and inactive care schedules render as paused and read-only.
+
 ## [0.15.2] - 2026-07-11
 
 ### Added

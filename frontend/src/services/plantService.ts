@@ -1,7 +1,7 @@
 import { api } from './api';
 import { track } from './analytics';
 
-export type PlantStatus = 'active' | 'died' | 'gave_away';
+export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 
 /** List filter mirroring the backend: active (default), past, or all. */
 export type PlantFilter = 'active' | 'past' | 'all';
@@ -170,9 +170,10 @@ export const plantService = {
     return response.data;
   },
 
-  /** Record a lifecycle outcome (died / gave_away) or restore to active. */
+  /** Archive, record an outcome, or restore a plant to active care. */
   async setPlantStatus(id: string, status: PlantStatus): Promise<Plant> {
     const response = await api.put<Plant>(`/plants/${id}`, { status });
+    track('plant_lifecycle_changed', { context: status });
     return response.data;
   },
 

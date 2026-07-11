@@ -89,4 +89,20 @@ describe('plantService', () => {
     server.use(http.delete(`${API}/plants/p1`, () => new HttpResponse(null, { status: 204 })));
     await expect(plantService.deletePlant('p1')).resolves.toBeUndefined();
   });
+
+  it('archives a plant through the lifecycle endpoint', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    let received: unknown;
+    server.use(
+      http.put(`${API}/plants/p1`, async ({ request }) => {
+        received = await request.json();
+        return HttpResponse.json({ id: 'p1', name: 'Pothos', status: 'archived' });
+      })
+    );
+
+    const plant = await plantService.setPlantStatus('p1', 'archived');
+
+    expect(received).toEqual({ status: 'archived' });
+    expect(plant.status).toBe('archived');
+  });
 });

@@ -193,6 +193,14 @@ export const updatePlant = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
 
+    // Lifecycle events need the pre-write state so idempotent PUT retries do
+    // not create duplicate archive/restore feed entries. The service already
+    // protects the write and active-plant counter; this read is only for the
+    // human-facing event log.
+    const lifecycleBefore = validatedBody.status
+      ? await plantService.getPlant(user.householdId!, plantId)
+      : null;
+
     // Lineage edits: reject self-parenting, parents that don't exist in this
     // household, and parents that would close a cycle. (null detaches and
     // needs no validation.)
@@ -260,16 +268,27 @@ export const updatePlant = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
-    // Record the lifecycle outcome on the activity feed (feeds the
-    // plant-survival metric). Best-effort, same as plant.created.
-    if (validatedBody.status === 'died' || validatedBody.status === 'gave_away') {
+    // Record real lifecycle transitions on the household story. Archive and
+    // restore are operational events; died/gave-away additionally feed the
+    // survival metric. Best-effort, same as plant.created.
+    if (validatedBody.status && lifecycleBefore?.status !== plant.status) {
+      const lifecycleType = {
+        active: 'plant.restored',
+        archived: 'plant.archived',
+        died: 'plant.died',
+        gave_away: 'plant.gave_away',
+      }[validatedBody.status] as activity.ActivityType;
       activity
         .recordActivity({
-          type: validatedBody.status === 'died' ? 'plant.died' : 'plant.gave_away',
+          type: lifecycleType,
           householdId: user.householdId!,
           actorId: user.userId,
           actorName: await resolveActorName(user.householdId!, user.userId),
-          payload: { plantId: plant.id, plantName: plant.name },
+          payload: {
+            plantId: plant.id,
+            plantName: plant.name,
+            previousStatus: lifecycleBefore?.status,
+          },
         })
         .catch((err) => {
           logger.warn({ err }, 'activity_record_failed');

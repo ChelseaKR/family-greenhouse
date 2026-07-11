@@ -24,6 +24,8 @@ export type ActivityType =
   | 'plant.deleted'
   | 'plant.died'
   | 'plant.gave_away'
+  | 'plant.archived'
+  | 'plant.restored'
   | 'plant.propagated'
   | 'plant.shared_accepted'
   | 'plant.health_checked'
