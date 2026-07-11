@@ -17,6 +17,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-07-11
+
+### Added
+
+- Plant name suggestions now recognize 14 plant families from common and botanical species names, tailor every personality style to the match, and show localized species context in the name nursery.
+
 ## [0.15.1] - 2026-07-11
 
 ### Added
