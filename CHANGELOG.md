@@ -17,6 +17,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-07-11
+
+### Added
+
+- Public pages now publish route-specific Open Graph, Twitter, canonical, robots, breadcrumb, and structured application metadata for stronger search and link previews.
+- Stripe Tax can be enabled explicitly after registrations and product tax codes are configured, with deployment wiring and operator documentation included.
+
+### Fixed
+
+- Checkout attempts now carry household-scoped idempotency keys, preventing duplicate Stripe sessions during transport retries.
+- Delayed lifetime payments grant access only after Stripe confirms payment, and replacing an existing subscription retries safely if cancellation is temporarily unavailable instead of risking continued billing.
+
 ## [0.15.0] - 2026-07-11
 
 ### Fixed
