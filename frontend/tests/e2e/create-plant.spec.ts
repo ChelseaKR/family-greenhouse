@@ -36,16 +36,25 @@ test.describe('Create plant flow', () => {
 
     // Use a uniquely-named plant so re-runs against a sticky local server
     // don't collide and produce ambiguous selectors.
-    const uniqueName = `Hibiscus ${Date.now()}`;
+    const uniqueName = `Monstera ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(uniqueName);
-    // Hibiscus is in the species catalog (added this session); typing the
-    // common name should produce a usable suggestion path.
-    await page.getByLabel(/species/i).fill('Hibiscus');
+    await page.getByLabel(/species/i).fill('Monstera deliciosa');
+
+    const autoTasks = page.getByRole('checkbox', {
+      name: /automatically add recommended care tasks/i,
+    });
+    await expect(autoTasks).toBeChecked();
+    await expect(page.getByLabel('Recommended care tasks', { exact: true })).toContainText(
+      'Water every 7 days'
+    );
 
     await page.getByRole('button', { name: /add plant/i }).click();
 
     // After save we should land on the new plant's detail page.
     await expect(page.getByRole('heading', { name: uniqueName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Every 7 days')).toBeVisible();
+    await expect(page.getByText('Every 30 days')).toBeVisible();
+    await expect(page.getByText('Every 90 days')).toBeVisible();
 
     // No JS errors thrown during the round-trip.
     expect(consoleErrors).toEqual([]);

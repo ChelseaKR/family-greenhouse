@@ -32,6 +32,30 @@ export interface TaskFilters {
   overdue?: boolean;
 }
 
+/**
+ * Pick the most specific curated task bundle for a species name. Unknown
+ * species deliberately return undefined so the UI never invents a schedule.
+ */
+export function suggestTaskTemplate(
+  templates: TaskTemplate[],
+  species: string | null | undefined
+): TaskTemplate | undefined {
+  const normalized = species?.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  let bestMatch: { template: TaskTemplate; score: number } | undefined;
+  for (const template of templates) {
+    const score = template.suitsKeywords.reduce(
+      (total, keyword) => total + (normalized.includes(keyword.toLowerCase()) ? 1 : 0),
+      0
+    );
+    if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { template, score };
+    }
+  }
+  return bestMatch?.template;
+}
+
 /** Why a snooze happened — mirrored from backend snoozeReasonEnum. */
 export type SnoozeReason = 'rain' | 'frost' | 'heat' | 'other';
 

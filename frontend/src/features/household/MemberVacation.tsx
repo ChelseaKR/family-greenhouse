@@ -113,7 +113,7 @@ export function MemberVacation({
             type="button"
             onClick={() => cancelMutation.mutate()}
             disabled={cancelMutation.isPending}
-            className="text-xs font-medium text-accent-700 hover:underline disabled:opacity-50"
+            className="inline-flex min-h-touch items-center text-xs font-medium text-accent-700 hover:underline disabled:opacity-50"
           >
             {t('household.vacation.cancelWindow')}
           </button>
@@ -129,7 +129,7 @@ export function MemberVacation({
       <button
         type="button"
         onClick={() => setFormOpen(true)}
-        className="mt-1 text-xs font-medium text-primary-700 hover:underline"
+        className="mt-1 inline-flex min-h-touch items-center text-xs font-medium text-primary-700 hover:underline"
       >
         {t('household.vacation.setVacation')}
       </button>

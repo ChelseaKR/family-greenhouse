@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { plantService, Task } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
+import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -111,15 +112,7 @@ export function PlantDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const completeTaskMutation = useMutation({
-    mutationFn: (taskId: string) => taskService.completeTask(taskId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
-      toast.success('Task completed');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
+  const completeTaskMutation = useCompleteTaskMutation(householdId);
 
   const snoozeTaskMutation = useMutation({
     mutationFn: ({ taskId, days }: { taskId: string; days: number }) =>
@@ -233,12 +226,13 @@ export function PlantDetailPage() {
               <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
               {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
               {(plant.status ?? 'active') === 'active' && (
                 <>
                   <Button
                     variant="secondary"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() =>
                       // Prefill the add form and link the new plant back here.
                       navigate('/plants/new', {
@@ -256,6 +250,7 @@ export function PlantDetailPage() {
                   <Button
                     variant="secondary"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => setShowShare(true)}
                     leftIcon={<ShareIcon className="h-4 w-4" aria-hidden="true" />}
                   >
@@ -266,6 +261,7 @@ export function PlantDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
+                className="w-full sm:w-auto"
                 onClick={() => setShowEditPlant(true)}
                 leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
               >
@@ -275,6 +271,7 @@ export function PlantDetailPage() {
                 <Button
                   variant="danger"
                   size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => setShowRemove(true)}
                   leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
                 >
@@ -284,6 +281,7 @@ export function PlantDetailPage() {
                 <Button
                   variant="secondary"
                   size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => statusMutation.mutate('active')}
                   isLoading={statusMutation.isPending}
                 >
@@ -360,7 +358,9 @@ export function PlantDetailPage() {
                 onComplete={() => completeTaskMutation.mutate(task.id)}
                 onSnooze={(days) => snoozeTaskMutation.mutate({ taskId: task.id, days })}
                 onEdit={() => setEditingTask(task)}
-                isCompleting={completeTaskMutation.isPending}
+                isCompleting={
+                  completeTaskMutation.isPending && completeTaskMutation.variables === task.id
+                }
                 isSnoozing={snoozeTaskMutation.isPending}
               />
             ))}
@@ -482,58 +482,62 @@ function TaskRow({
   const { Icon } = style;
 
   return (
-    <li className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-parchment/60">
-      <div className="flex items-center gap-4 min-w-0">
-        <span
-          className={clsx(
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1',
-            style.chip
-          )}
-        >
-          <Icon className={clsx('h-4 w-4', style.iconColor)} aria-hidden="true" />
-          {task.customType || taskTypeLabels[task.type]}
-        </span>
-        <div>
-          <p className="text-sm text-gray-900">Every {task.frequency} days</p>
-          <p
+    <li className="px-4 py-4 hover:bg-parchment/60 sm:px-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+          <span
             className={clsx(
-              'text-xs',
-              isOverdue(task.nextDue) ? 'text-accent-700 font-medium' : 'text-gray-600'
+              'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1',
+              style.chip
             )}
           >
-            Due: {formatDate(task.nextDue)}
-            {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
-          </p>
-          {streakText && (
-            <p className="text-xs text-primary-700 font-medium mt-0.5">🌱 {streakText}</p>
-          )}
+            <Icon className={clsx('h-4 w-4', style.iconColor)} aria-hidden="true" />
+            {task.customType || taskTypeLabels[task.type]}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm text-gray-900">Every {task.frequency} days</p>
+            <p
+              className={clsx(
+                'text-xs',
+                isOverdue(task.nextDue) ? 'text-accent-700 font-medium' : 'text-gray-600'
+              )}
+            >
+              Due: {formatDate(task.nextDue)}
+              {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
+            </p>
+            {streakText && (
+              <p className="text-xs text-primary-700 font-medium mt-0.5">🌱 {streakText}</p>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <SnoozeMenu
-          isSnoozing={isSnoozing}
-          onPick={(days) => {
-            // "Skip cycle" sentinel — bump by one full frequency.
-            onSnooze(days === 0 ? task.frequency : days);
-          }}
-        />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onEdit}
-          leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
-          aria-label="Edit task"
-        >
-          Edit
-        </Button>
-        <Button
-          size="sm"
-          onClick={onComplete}
-          disabled={isCompleting}
-          leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
-        >
-          Done
-        </Button>
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+          <SnoozeMenu
+            isSnoozing={isSnoozing}
+            onPick={(days) => {
+              // "Skip cycle" sentinel — bump by one full frequency.
+              onSnooze(days === 0 ? task.frequency : days);
+            }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={onEdit}
+            leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
+            aria-label="Edit task"
+          >
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={onComplete}
+            disabled={isCompleting}
+            leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+          >
+            Done
+          </Button>
+        </div>
       </div>
     </li>
   );
@@ -551,10 +555,10 @@ interface SnoozeMenuProps {
  */
 function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
   return (
-    <details className="relative">
+    <details className="relative min-w-0">
       <summary
         className={clsx(
-          'list-none inline-flex items-center justify-center gap-1 px-3 py-2 text-sm font-medium rounded-md min-h-touch min-w-touch cursor-pointer',
+          'list-none inline-flex w-full items-center justify-center gap-1 px-3 py-2 text-sm font-medium rounded-md min-h-touch min-w-touch cursor-pointer sm:w-auto',
           'bg-paper text-gray-700 border border-primary-200/70 hover:bg-primary-50',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
           isSnoozing && 'opacity-50 cursor-wait'

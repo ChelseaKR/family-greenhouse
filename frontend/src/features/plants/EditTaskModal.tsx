@@ -112,11 +112,11 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+              <Dialog.Panel className="relative w-full transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:max-w-lg sm:p-6">
                 <div className="absolute right-0 top-0 pr-4 pt-4">
                   <button
                     type="button"
-                    className="rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     onClick={handleClose}
                   >
                     <span className="sr-only">Close</span>
@@ -126,7 +126,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
 
                 <Dialog.Title
                   as="h3"
-                  className="font-serif text-2xl font-semibold tracking-tight text-ink mb-4"
+                  className="mb-4 pr-12 font-serif text-2xl font-semibold tracking-tight text-ink"
                 >
                   Edit task
                 </Dialog.Title>

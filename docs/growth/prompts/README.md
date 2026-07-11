@@ -2,7 +2,7 @@
 
 Reusable Claude prompts that execute the content engine in [`../../marketing-plan.md`](../../marketing-plan.md). Copy a prompt, fill the `[BRACKETS]`, run it, then do the 30% that makes it human.
 
-These are Tier 1 (copy-paste). Tier 2 is the batch generator that runs the species-page prompt over the catalog and opens a review PR. The engine doc is not present yet, so document that path when the generator exists.
+These are Tier 1 (copy-paste). Tier 2 is the batch generator that runs the species-page prompt over the catalog and opens a review PR — see [`../engine.md`](../engine.md) if/when it's built.
 
 ## The one rule
 

@@ -115,14 +115,17 @@ We mark messages as `Transactional` (vs `Promotional`) — this gets you better 
 
 In SNS sandbox mode (default for new accounts), you can only send to verified phone numbers. To get out of sandbox you fill in a use-case form in the SNS console; AWS approves on the order of a day. Until then your test recipients need to verify themselves via the console.
 
-#### Phone-number verification (TODO)
+Production must also set `sms_notifications_enabled = "1"` in the root
+Terraform environment after sandbox exit and origination registration. The
+phone-verification endpoint returns 503 while the flag is off or SNS rejects
+delivery; it never reports a code as sent unless SNS accepted the publish.
 
-We don't currently send a verification code before enabling SMS for a new phone number. That's a real gap — a user could enter someone else's number and we'd happily send reminders to it. The right fix is to wire up a 2-step:
+#### Phone-number verification
 
-1. User enters phone, we send a confirmation code via SNS
-2. User enters code, we mark the number verified and persist
-
-It's a half-day's work; deferred until SMS gets actual usage. Tracked in [`production-checklist.md`](production-checklist.md).
+Users enter an E.164 number, receive a six-digit one-time code, and confirm it
+before SMS can be enabled. Codes expire after ten minutes, are stored only as
+hashes, and lock after five incorrect attempts. Changing the number clears its
+verified state.
 
 ## Sending arbitrary notifications
 
@@ -134,7 +137,7 @@ All channels degrade to structured `pino` log lines when their env vars aren't s
 
 ```
 {"level":"info","msg":"email_dry_run","to":"alice@example.com","subject":"Plant care reminder"}
-{"level":"info","msg":"sms_dry_run","to":"+15551234567","body":"3 tasks due"}
+{"level":"info","msg":"sms_dry_run"}
 {"level":"info","msg":"push_dry_run","userId":"user-1","count":2,"payload":{...}}
 ```
 

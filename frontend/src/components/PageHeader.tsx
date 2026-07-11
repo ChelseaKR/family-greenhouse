@@ -35,7 +35,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className={clsx('mb-8', className)}>
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="flex-1 min-w-0">
           {/* Eyebrow uses full-strength primary-700 — an /opacity modifier
               blends it into the paper background and drops small-text
@@ -53,8 +53,8 @@ export function PageHeader({
             <p className="mt-3 text-sm sm:text-base text-gray-600 max-w-2xl">{description}</p>
           )}
         </div>
-        {art && <div className="hidden sm:block flex-shrink-0 w-48 lg:w-56">{art}</div>}
-        {action && !art && <div className="flex-shrink-0">{action}</div>}
+        {art && <div className="hidden w-48 flex-shrink-0 sm:block lg:w-56">{art}</div>}
+        {action && !art && <div className="w-full flex-shrink-0 sm:w-auto">{action}</div>}
       </div>
       {action && art && <div className="mt-4 flex justify-end">{action}</div>}
     </header>
