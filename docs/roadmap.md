@@ -91,9 +91,10 @@ the principles — candidates earn their way on, they don't roll over.
   max 100/batch, plan caps respected, partial success by contract). Mirrors
   the export we already shipped.
 - ✅ **Plant lifecycle (née "plant archive")** — shipped as
-  `active`/`died`/`gave_away` statuses instead of an `archivedAt` flag:
+  `active`/`archived`/`died`/`gave_away` statuses instead of a separate
+  `archivedAt` flag: neutral archive and explicit outcomes are first-class,
   outcomes are first-class (they feed the plant-survival metric directly),
-  past plants keep their history, hard delete is reserved for true erasure.
+  past plants keep their history, and hard delete is reserved for true erasure.
 - ✅ **Weekly "plants at risk" digest (opt-in)** — the plant-survival metric
   turned into action; reuses the analytics ranking + notification prefs and
   respects the DND window.

@@ -81,6 +81,32 @@ test.describe('Plant CRUD', () => {
     await expect(page.getByRole('heading', { name: newName })).toBeVisible({ timeout: 15000 });
   });
 
+  test('archive a plant → find it in past plants → restore it', async ({ page }) => {
+    await login(page);
+    await goToPlants(page);
+
+    await page.getByRole('link', { name: /add plant/i }).click();
+    const plantName = `Archiveable ${Date.now()}`;
+    await page.getByLabel(/plant name/i).fill(plantName);
+    await page.getByRole('button', { name: /add plant/i }).click();
+    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
+
+    await page.getByRole('button', { name: /^remove$/i }).click();
+    await page.getByRole('button', { name: /archive for later/i }).click();
+
+    await expect(page).toHaveURL(/\/plants$/);
+    await page.getByRole('tab', { name: /past plants/i }).click();
+    const archivedPlant = page.getByRole('link', { name: new RegExp(plantName, 'i') });
+    await expect(archivedPlant).toBeVisible();
+    await expect(archivedPlant.getByText('Archived')).toBeVisible();
+
+    await archivedPlant.click();
+    await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /^restore$/i }).click();
+    await expect(page.getByText('Archived', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Plant restored')).toBeVisible();
+  });
+
   test('delete a plant → confirm → land on plants list without it', async ({ page }) => {
     await login(page);
     await goToPlants(page);
@@ -97,7 +123,9 @@ test.describe('Plant CRUD', () => {
     // "Remove" flow: Remove → outcome dialog → "Delete permanently" →
     // explicit ConfirmDialog. Walk the full flow.
     await page.getByRole('button', { name: /^remove$/i }).click();
-    await expect(page.getByRole('heading', { name: /remove .*\?/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /move .* out of active care\?/i })
+    ).toBeVisible();
     await page.getByRole('button', { name: /delete permanently/i }).click();
     // The ConfirmDialog title doubles as the dialog heading; matching it
     // anchors the dialog so the "Delete" button below is unambiguous.

@@ -44,6 +44,12 @@ describe('PlantLineageCard', () => {
           status: 'gave_away',
           createdAt: '2026-04-01T00:00:00Z',
         },
+        {
+          id: 'c4',
+          name: 'Archived Cutting',
+          status: 'archived',
+          createdAt: '2026-05-01T00:00:00Z',
+        },
       ],
     });
 
@@ -52,16 +58,18 @@ describe('PlantLineageCard', () => {
     expect(died).toHaveAttribute('href', '/plants/c1');
     expect(screen.getByRole('link', { name: 'Second Cutting' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Gifted Cutting' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Archived Cutting' })).toBeInTheDocument();
 
     // Status badges resolve through i18n.
     expect(screen.getByText('Died')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Gave away')).toBeInTheDocument();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
 
     // The died row renders muted, not hidden.
     expect(died.closest('li')!.className).toContain('opacity-60');
 
-    // Count summary ("3 cuttings").
-    expect(screen.getByText(/3 cuttings/)).toBeInTheDocument();
+    // Count summary ("4 cuttings").
+    expect(screen.getByText(/4 cuttings/)).toBeInTheDocument();
   });
 });

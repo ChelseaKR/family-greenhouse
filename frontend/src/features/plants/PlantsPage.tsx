@@ -23,6 +23,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { BulkApplyTemplateDialog } from './BulkApplyTemplateDialog';
 import { PlantImage } from '@/components/PlantImage';
+import { PlantStatusBadge } from './PlantLineageCard';
 
 type ViewMode = 'grid' | 'list';
 
@@ -95,7 +96,7 @@ export function PlantsPage() {
 
       <BulkApplyTemplateDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
 
-      {/* Active vs past (died / gave away) collection */}
+      {/* Active vs past (archived / died / gave away) collection */}
       <div
         className="flex gap-1 border-b border-primary-100/70"
         role="tablist"
@@ -188,6 +189,16 @@ export function PlantsPage() {
               </Button>
             }
           />
+        ) : view === 'past' ? (
+          <EmptyState
+            icon={
+              <span className="text-5xl" aria-hidden="true">
+                📚
+              </span>
+            }
+            title={t('plants.archive.emptyTitle')}
+            description={t('plants.archive.emptyDescription')}
+          />
         ) : (
           <EmptyState
             icon={<EmptyPlants className="mx-auto h-40 w-auto" />}
@@ -220,19 +231,22 @@ export function PlantsPage() {
                 />
               </div>
               <div className="p-4">
-                <p className="text-sm font-medium text-ink truncate">
-                  {plant.name}
-                  {plantsWithCuttings.has(plant.id) && (
-                    <span
-                      className="ml-1"
-                      role="img"
-                      aria-label={t('plants.lineage.hasCuttings')}
-                      title={t('plants.lineage.hasCuttings')}
-                    >
-                      🌱
-                    </span>
-                  )}
-                </p>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-medium text-ink">
+                    {plant.name}
+                    {plantsWithCuttings.has(plant.id) && (
+                      <span
+                        className="ml-1"
+                        role="img"
+                        aria-label={t('plants.lineage.hasCuttings')}
+                        title={t('plants.lineage.hasCuttings')}
+                      >
+                        🌱
+                      </span>
+                    )}
+                  </p>
+                  {view === 'past' && <PlantStatusBadge status={plant.status ?? 'active'} />}
+                </div>
                 {plant.species && (
                   <p className="text-xs text-gray-600 truncate italic">{plant.species}</p>
                 )}
@@ -256,19 +270,22 @@ export function PlantsPage() {
                     <PlantImage plant={plant} width={48} height={48} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink">
-                      {plant.name}
-                      {plantsWithCuttings.has(plant.id) && (
-                        <span
-                          className="ml-1"
-                          role="img"
-                          aria-label={t('plants.lineage.hasCuttings')}
-                          title={t('plants.lineage.hasCuttings')}
-                        >
-                          🌱
-                        </span>
-                      )}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-medium text-ink">
+                        {plant.name}
+                        {plantsWithCuttings.has(plant.id) && (
+                          <span
+                            className="ml-1"
+                            role="img"
+                            aria-label={t('plants.lineage.hasCuttings')}
+                            title={t('plants.lineage.hasCuttings')}
+                          >
+                            🌱
+                          </span>
+                        )}
+                      </p>
+                      {view === 'past' && <PlantStatusBadge status={plant.status ?? 'active'} />}
+                    </div>
                     <p className="text-sm text-gray-600">
                       {[plant.species, plant.location].filter(Boolean).join(' • ') || 'No details'}
                     </p>

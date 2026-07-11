@@ -91,7 +91,24 @@
     "status": {
       "active": "Activa",
       "died": "Murió",
-      "gaveAway": "Regalada"
+      "gaveAway": "Regalada",
+      "archived": "Archivada"
+    },
+    "archive": {
+      "dialogTitle": "¿Sacar a {{name}} del cuidado activo?",
+      "dialogDescription": "Archívala para conservar todas las tareas, fotos y notas de cuidado sin recibir recordatorios. Puedes restaurarla cuando quieras.",
+      "action": "Archivar para después",
+      "outcomePrompt": "O registra lo que pasó",
+      "gaveAway": "La regalé",
+      "died": "Murió",
+      "deletePermanently": "Eliminar permanentemente (no se puede deshacer)",
+      "archivedToast": "Planta archivada",
+      "diedToast": "Registrada como muerta",
+      "gaveAwayToast": "Registrada como regalada",
+      "tasksPaused": "Calendario de cuidados pausado",
+      "tasksPausedDescription": "Restaura esta planta para reanudar los recordatorios o cambiar sus tareas de cuidado.",
+      "emptyTitle": "No hay plantas anteriores",
+      "emptyDescription": "Las plantas archivadas, regaladas y conmemorativas permanecerán aquí con su historial de cuidado intacto."
     },
     "propagate": {
       "action": "Propagar esqueje",

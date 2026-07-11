@@ -13,7 +13,7 @@ import {
   ShareIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
-import { plantService, Task } from '@/services/plantService';
+import { plantService, Task, type PlantStatus } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
 import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
 import { Button } from '@/components/Button';
@@ -38,7 +38,7 @@ import { NoCareDataNotice } from './NoCareDataNotice';
 import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { RemovePlantDialog } from './RemovePlantDialog';
-import { PlantLineageCard } from './PlantLineageCard';
+import { PlantLineageCard, PlantStatusBadge } from './PlantLineageCard';
 import { ShareCuttingDialog } from './ShareCuttingDialog';
 import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
@@ -94,8 +94,7 @@ export function PlantDetailPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: (status: 'active' | 'died' | 'gave_away') =>
-      plantService.setPlantStatus(plantId!, status),
+    mutationFn: (status: PlantStatus) => plantService.setPlantStatus(plantId!, status),
     onSuccess: (_data, status) => {
       // ['plants', householdId] is a prefix of the detail key, so this
       // invalidates both the list and this plant's detail/photos queries.
@@ -105,7 +104,12 @@ export function PlantDetailPage() {
         toast.success('Plant restored');
       } else {
         // It's left the active list — back to the (active) plants view.
-        toast.success(status === 'died' ? 'Recorded as died' : 'Recorded as given away');
+        const message = {
+          archived: t('plants.archive.archivedToast'),
+          died: t('plants.archive.diedToast'),
+          gave_away: t('plants.archive.gaveAwayToast'),
+        }[status];
+        toast.success(message);
         navigate('/plants');
       }
     },
@@ -212,15 +216,8 @@ export function PlantDetailPage() {
                 <h1 className="font-serif text-3xl text-ink leading-tight tracking-tight">
                   {plant.name}
                 </h1>
-                {plant.status === 'died' && (
-                  <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-700">
-                    Died
-                  </span>
-                )}
-                {plant.status === 'gave_away' && (
-                  <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-900 ring-1 ring-sky-200/70">
-                    Gave away
-                  </span>
+                {(plant.status ?? 'active') !== 'active' && (
+                  <PlantStatusBadge status={plant.status!} />
                 )}
               </div>
               <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
@@ -330,15 +327,21 @@ export function PlantDetailPage() {
       <Card>
         <CardHeader
           title="Care Tasks"
-          description="Scheduled care tasks for this plant"
+          description={
+            (plant.status ?? 'active') === 'active'
+              ? 'Scheduled care tasks for this plant'
+              : t('plants.archive.tasksPausedDescription')
+          }
           action={
-            <Button
-              size="sm"
-              onClick={() => setShowAddTask(true)}
-              leftIcon={<PlusIcon className="h-4 w-4" aria-hidden="true" />}
-            >
-              Add task
-            </Button>
+            (plant.status ?? 'active') === 'active' ? (
+              <Button
+                size="sm"
+                onClick={() => setShowAddTask(true)}
+                leftIcon={<PlusIcon className="h-4 w-4" aria-hidden="true" />}
+              >
+                Add task
+              </Button>
+            ) : undefined
           }
         />
 
@@ -346,7 +349,11 @@ export function PlantDetailPage() {
           <EmptyState
             title="No tasks"
             description="Add care tasks to track watering, fertilizing, and more."
-            action={<Button onClick={() => setShowAddTask(true)}>Add first task</Button>}
+            action={
+              (plant.status ?? 'active') === 'active' ? (
+                <Button onClick={() => setShowAddTask(true)}>Add first task</Button>
+              ) : undefined
+            }
           />
         ) : (
           <ul className="divide-y divide-primary-100/60 -mx-6 -mb-6">
@@ -362,6 +369,7 @@ export function PlantDetailPage() {
                   completeTaskMutation.isPending && completeTaskMutation.variables === task.id
                 }
                 isSnoozing={snoozeTaskMutation.isPending}
+                isReadOnly={(plant.status ?? 'active') !== 'active'}
               />
             ))}
           </ul>
@@ -428,6 +436,7 @@ export function PlantDetailPage() {
         plantName={plant.name}
         isLoading={statusMutation.isPending || deleteMutation.isPending}
         onClose={() => setShowRemove(false)}
+        onArchive={() => statusMutation.mutate('archived')}
         onDied={() => statusMutation.mutate('died')}
         onGaveAway={() => statusMutation.mutate('gave_away')}
         onDelete={() => {
@@ -458,6 +467,7 @@ interface TaskRowProps {
   onEdit: () => void;
   isCompleting: boolean;
   isSnoozing: boolean;
+  isReadOnly: boolean;
 }
 
 const SNOOZE_OPTIONS = [
@@ -475,7 +485,9 @@ function TaskRow({
   onEdit,
   isCompleting,
   isSnoozing,
+  isReadOnly,
 }: TaskRowProps) {
+  const { t } = useTranslation();
   const streak = computeStreak(task, completions);
   const streakText = streakLabel(task, streak);
   const style = taskTypeStyle(task.type);
@@ -496,48 +508,56 @@ function TaskRow({
           </span>
           <div className="min-w-0">
             <p className="text-sm text-gray-900">Every {task.frequency} days</p>
-            <p
-              className={clsx(
-                'text-xs',
-                isOverdue(task.nextDue) ? 'text-accent-700 font-medium' : 'text-gray-600'
-              )}
-            >
-              Due: {formatDate(task.nextDue)}
-              {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
-            </p>
+            {isReadOnly ? (
+              <p className="text-xs font-medium text-amber-800">
+                {t('plants.archive.tasksPaused')}
+              </p>
+            ) : (
+              <p
+                className={clsx(
+                  'text-xs',
+                  isOverdue(task.nextDue) ? 'text-accent-700 font-medium' : 'text-gray-600'
+                )}
+              >
+                Due: {formatDate(task.nextDue)}
+                {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
+              </p>
+            )}
             {streakText && (
               <p className="text-xs text-primary-700 font-medium mt-0.5">🌱 {streakText}</p>
             )}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
-          <SnoozeMenu
-            isSnoozing={isSnoozing}
-            onPick={(days) => {
-              // "Skip cycle" sentinel — bump by one full frequency.
-              onSnooze(days === 0 ? task.frequency : days);
-            }}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={onEdit}
-            leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
-            aria-label="Edit task"
-          >
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={onComplete}
-            disabled={isCompleting}
-            leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
-          >
-            Done
-          </Button>
-        </div>
+        {!isReadOnly && (
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+            <SnoozeMenu
+              isSnoozing={isSnoozing}
+              onPick={(days) => {
+                // "Skip cycle" sentinel — bump by one full frequency.
+                onSnooze(days === 0 ? task.frequency : days);
+              }}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={onEdit}
+              leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
+              aria-label="Edit task"
+            >
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={onComplete}
+              disabled={isCompleting}
+              leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+            >
+              Done
+            </Button>
+          </div>
+        )}
       </div>
     </li>
   );

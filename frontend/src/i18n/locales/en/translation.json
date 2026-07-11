@@ -90,7 +90,24 @@
     "status": {
       "active": "Active",
       "died": "Died",
-      "gaveAway": "Gave away"
+      "gaveAway": "Gave away",
+      "archived": "Archived"
+    },
+    "archive": {
+      "dialogTitle": "Move {{name}} out of active care?",
+      "dialogDescription": "Archive it to keep every task, photo, and care note without receiving reminders. You can restore it whenever you’re ready.",
+      "action": "Archive for later",
+      "outcomePrompt": "Or record what happened",
+      "gaveAway": "I gave it away",
+      "died": "It died",
+      "deletePermanently": "Delete permanently (this can’t be undone)",
+      "archivedToast": "Plant archived",
+      "diedToast": "Recorded as died",
+      "gaveAwayToast": "Recorded as given away",
+      "tasksPaused": "Care schedule paused",
+      "tasksPausedDescription": "Restore this plant to resume reminders or change its care tasks.",
+      "emptyTitle": "No past plants",
+      "emptyDescription": "Archived, given-away, and memorial plants will stay here with their care history intact."
     },
     "propagate": {
       "action": "Propagate cutting",

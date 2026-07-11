@@ -172,6 +172,10 @@ export interface ActivityEvent {
     | 'task.unclaimed'
     | 'plant.created'
     | 'plant.deleted'
+    | 'plant.died'
+    | 'plant.gave_away'
+    | 'plant.archived'
+    | 'plant.restored'
     | 'photo.uploaded'
     | 'member.joined'
     | 'member.left';

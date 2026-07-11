@@ -317,6 +317,8 @@ export async function updatePlant(
     expressionAttributeValues[':parentPlantId'] = input.parentPlantId;
   }
 
+  const hasNonStatusUpdates = updateExpressions.length > 0;
+
   if (input.status !== undefined) {
     updateExpressions.push('#status = :status', '#statusChangedAt = :statusChangedAt');
     expressionAttributeNames['#status'] = 'status';
@@ -329,7 +331,22 @@ export async function updatePlant(
   expressionAttributeNames['#updatedAt'] = 'updatedAt';
   expressionAttributeValues[':updatedAt'] = new Date().toISOString();
 
-  const plainUpdate = async (): Promise<Plant | null> => {
+  const plainUpdate = async (omitStatus = false): Promise<Plant | null> => {
+    const effectiveExpressions = omitStatus
+      ? updateExpressions.filter(
+          (expression) =>
+            expression !== '#status = :status' &&
+            expression !== '#statusChangedAt = :statusChangedAt'
+        )
+      : updateExpressions;
+    const effectiveNames = { ...expressionAttributeNames };
+    const effectiveValues = { ...expressionAttributeValues };
+    if (omitStatus) {
+      delete effectiveNames['#status'];
+      delete effectiveNames['#statusChangedAt'];
+      delete effectiveValues[':status'];
+      delete effectiveValues[':statusChangedAt'];
+    }
     const result = await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
@@ -337,9 +354,9 @@ export async function updatePlant(
           PK: `HOUSEHOLD#${householdId}`,
           SK: `PLANT#${plantId}`,
         },
-        UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-        ExpressionAttributeNames: expressionAttributeNames,
-        ExpressionAttributeValues: expressionAttributeValues,
+        UpdateExpression: `SET ${effectiveExpressions.join(', ')}`,
+        ExpressionAttributeNames: effectiveNames,
+        ExpressionAttributeValues: effectiveValues,
         ReturnValues: 'ALL_NEW',
         ConditionExpression: 'attribute_exists(PK)',
       })
@@ -398,8 +415,13 @@ export async function updatePlant(
           : 0;
 
     if (delta === 0) {
-      // No counter movement (no-op re-set, or died <-> gave_away): same
-      // single conditional update as the non-status path.
+      // A true status no-op is idempotent: don't falsify statusChangedAt or
+      // updatedAt. If the request also edits ordinary fields, write those
+      // fields while explicitly omitting the redundant lifecycle values.
+      if (current.status === input.status) {
+        return hasNonStatusUpdates ? plainUpdate(true) : current;
+      }
+      // A real non-active → non-active transition doesn't move the counter.
       return plainUpdate();
     }
 

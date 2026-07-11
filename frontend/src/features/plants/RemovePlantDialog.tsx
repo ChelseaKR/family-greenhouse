@@ -1,5 +1,7 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
+import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/Button';
 
 interface RemovePlantDialogProps {
@@ -7,6 +9,8 @@ interface RemovePlantDialogProps {
   plantName: string;
   isLoading?: boolean;
   onClose: () => void;
+  /** Neutral, reversible removal from active care. */
+  onArchive: () => void;
   /** Record an outcome — keeps history, removes from active views, restorable. */
   onDied: () => void;
   onGaveAway: () => void;
@@ -25,10 +29,13 @@ export function RemovePlantDialog({
   plantName,
   isLoading = false,
   onClose,
+  onArchive,
   onDied,
   onGaveAway,
   onDelete,
 }: RemovePlantDialogProps) {
+  const { t } = useTranslation();
+
   return (
     <Transition.Root show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -60,21 +67,31 @@ export function RemovePlantDialog({
                   as="h3"
                   className="font-serif text-xl font-semibold leading-tight tracking-tight text-ink"
                 >
-                  Remove {plantName}?
+                  {t('plants.archive.dialogTitle', { name: plantName })}
                 </Dialog.Title>
                 <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                  Tell us what happened. Recording an outcome keeps this plant&apos;s history and
-                  you can restore it later.
+                  {t('plants.archive.dialogDescription')}
                 </p>
 
                 <div className="mt-5 flex flex-col gap-2">
+                  <Button
+                    onClick={onArchive}
+                    disabled={isLoading}
+                    className="w-full justify-center"
+                    leftIcon={<ArchiveBoxIcon className="h-5 w-5" aria-hidden="true" />}
+                  >
+                    {t('plants.archive.action')}
+                  </Button>
+                  <p className="my-1 text-center text-xs font-medium uppercase tracking-wide text-gray-500">
+                    {t('plants.archive.outcomePrompt')}
+                  </p>
                   <Button
                     variant="secondary"
                     onClick={onGaveAway}
                     disabled={isLoading}
                     className="w-full justify-center"
                   >
-                    I gave it away
+                    {t('plants.archive.gaveAway')}
                   </Button>
                   <Button
                     variant="secondary"
@@ -82,7 +99,7 @@ export function RemovePlantDialog({
                     disabled={isLoading}
                     className="w-full justify-center"
                   >
-                    It died
+                    {t('plants.archive.died')}
                   </Button>
                   <button
                     type="button"
@@ -90,7 +107,7 @@ export function RemovePlantDialog({
                     disabled={isLoading}
                     className="mt-1 text-sm text-red-700 underline underline-offset-2 hover:text-red-800 disabled:opacity-50 min-h-touch"
                   >
-                    Delete permanently (this can&apos;t be undone)
+                    {t('plants.archive.deletePermanently')}
                   </button>
                 </div>
 
@@ -101,7 +118,7 @@ export function RemovePlantDialog({
                     disabled={isLoading}
                     className="w-full text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50 min-h-touch"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               </Dialog.Panel>
