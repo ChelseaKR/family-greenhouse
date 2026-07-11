@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "0.15.3",
+  "version": "0.15.4",
   "description": "Family Greenhouse API — AWS Lambda + DynamoDB single-table + Cognito, with a local Express mock that mirrors the handlers.",
   "license": "Elastic-2.0",
   "private": true,

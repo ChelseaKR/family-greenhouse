@@ -17,6 +17,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.15.4] - 2026-07-11
+
+### Fixed
+
+- The edit-plant species test now waits for observable remote lookup results instead of racing a fixed delay during release builds.
+
 ## [0.15.3] - 2026-07-11
 
 ### Added
