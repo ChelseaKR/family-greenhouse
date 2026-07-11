@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { en } from '@/i18n/locales/en';
-import { es } from '@/i18n/locales/es';
+import en from '@/i18n/locales/en/translation.json';
+import es from '@/i18n/locales/es/translation.json';
 import { localeCoverage } from '@/i18n/coverage';
 
 /**
@@ -9,8 +9,9 @@ import { localeCoverage } from '@/i18n/coverage';
  * Two invariants:
  *  1. Every non-English locale must define every key English does — a missing
  *     key means a silent English fallback, which we never want to ship blind.
- *     (The `Translation` type already enforces this structurally; this keeps
- *     it true even if the type is ever loosened.)
+ *     (scripts/check-i18n-catalogs.mjs enforces this — plus placeholder and
+ *     plural-category parity — as a merge-blocking gate; this test keeps the
+ *     invariant visible in the unit suite too.)
  *  2. A locale may only be *enabled* (VITE_ENABLE_NON_ENGLISH_LOCALES=true)
  *     once it clears the coverage bar. Seed locales are intentionally partial,
  *     so when the flag is off we only report coverage; when a build flips it
