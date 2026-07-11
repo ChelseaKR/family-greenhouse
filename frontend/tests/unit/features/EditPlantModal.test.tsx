@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EditPlantModal } from '@/features/plants/EditPlantModal';
@@ -102,14 +102,14 @@ describe('EditPlantModal', () => {
     server.use(
       http.get(`${API}/species/search`, ({ request }) => {
         const q = new URL(request.url).searchParams.get('q');
-        if (q?.toLowerCase().includes('nephrolepis')) {
+        if (q?.toLowerCase().includes('nephrolepis remotissima')) {
           return HttpResponse.json({
             source: 'perenual',
             results: [
               {
                 id: 7,
-                commonName: 'Boston fern',
-                scientificName: 'Nephrolepis exaltata',
+                commonName: 'Remote-only fern',
+                scientificName: 'Nephrolepis remotissima',
                 thumbnailUrl: null,
               },
             ],
@@ -130,16 +130,20 @@ describe('EditPlantModal', () => {
 
     const input = screen.getByLabelText(/species/i);
     await user.clear(input);
-    await user.type(input, 'Nephrolepis exaltata');
+    await user.type(input, 'Nephrolepis remotissima');
 
-    // Give the combobox's 300ms debounce + mocked fetch time to resolve and
-    // re-check the match (Bug 3's catch-up effect).
-    await waitFor(() => expect((input as HTMLInputElement).value).toBe('Nephrolepis exaltata'), {
-      timeout: 2000,
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-    });
+    // Wait for the remote result to reach the combobox. Waiting for the input
+    // value only observes the synchronous keystrokes and races the 300 ms
+    // lookup; a fixed sleep has the same problem on a busy CI runner.
+    await waitFor(
+      () => {
+        const values = Array.from(document.querySelectorAll('datalist option')).map(
+          (option) => (option as HTMLOptionElement).value
+        );
+        expect(values).toContain('Nephrolepis remotissima');
+      },
+      { timeout: 2000 }
+    );
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
