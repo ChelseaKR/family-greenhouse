@@ -13,6 +13,7 @@ describe('PlantNameNursery', () => {
     expect(screen.getByRole('region', { name: 'Plant name nursery' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Punny/ }));
+    expect(screen.getByText('Inspired by ferns')).toBeInTheDocument();
     const firstSuggestion = screen.getByText('Ready for adoption').nextElementSibling?.textContent;
     expect(firstSuggestion).toBeTruthy();
 

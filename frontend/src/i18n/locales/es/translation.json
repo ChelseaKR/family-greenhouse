@@ -60,6 +60,23 @@
       "close": "Cerrar",
       "personalityLabel": "Personalidad del nombre",
       "ready": "Lista para adoptar",
+      "speciesInspired": "Inspirado en {{species}}",
+      "speciesFamilies": {
+        "fern": "helechos",
+        "cactus": "cactus",
+        "pothos": "potos",
+        "monstera": "plantas monstera",
+        "orchid": "orquídeas",
+        "palm": "palmeras",
+        "snake-plant": "sansevierias",
+        "spider-plant": "cintas",
+        "prayer-plant": "plantas de oración",
+        "peace-lily": "espatifilos",
+        "rubber-plant": "ficus de caucho",
+        "aloe": "aloes y agaves",
+        "succulent": "suculentas",
+        "philodendron": "filodendros"
+      },
       "another": "Otro nombre",
       "useName": "Usar este nombre",
       "vibes": {
