@@ -1,8 +1,13 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { en } from './locales/en';
-import { es } from './locales/es';
+// Per-locale JSON catalogs (i18next standard `<lng>/<namespace>.json` layout)
+// are the single source of truth for UI strings — see docs/i18n.md and
+// docs/adr/0007-i18n-json-catalogs-native-format.md. Key/placeholder/plural parity
+// across locales is enforced by `npm run i18n:check`
+// (frontend/scripts/check-i18n-catalogs.mjs), which CI runs on every PR.
+import en from './locales/en/translation.json';
+import es from './locales/es/translation.json';
 
 /**
  * i18n bootstrap. We don't ship a 50-language matrix — start with English

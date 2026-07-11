@@ -29,7 +29,9 @@ export function PricingGrid() {
           <span className="font-semibold">Beta:</span> {BETA_NOTICE}
         </div>
       )}
-      <div className="mt-10 flex items-center justify-center gap-3">
+      {/* flex-wrap + the narrower sub-sm button padding keep this row inside
+          a 320px viewport (WCAG 1.4.10 reflow — pinned by reflow.spec.ts). */}
+      <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
         <div
           role="radiogroup"
           aria-label="Billing interval"
@@ -43,7 +45,7 @@ export function PricingGrid() {
               aria-checked={interval === opt}
               onClick={() => setInterval(opt)}
               className={clsx(
-                'rounded-full px-5 py-1.5 text-sm font-medium capitalize transition-colors',
+                'rounded-full px-3 py-1.5 sm:px-5 text-sm font-medium capitalize transition-colors',
                 interval === opt ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-600'
               )}
             >

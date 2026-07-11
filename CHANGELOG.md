@@ -17,8 +17,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- The pricing billing-interval toggle overflowed a 320px viewport on the landing page (WCAG 1.4.10), surfaced by the new reflow spec. (The page-header action-row reflow fix originally on this branch was superseded by the broader mobile-first rework in 0.14.1.)
+
 ### Added
 
+- Playwright a11y specs closing the A11Y-07/08/09 audit gaps: keyboard-only path (login → skip link → complete a due task, with a visible-focus-ring assertion), `prefers-reduced-motion` behavior (both the `motion-safe:` variant and the global freeze rule), and 320×256 reflow across public + authenticated routes.
 - Backend tests pinning the structured-logging contract (OBS-09/10/12): every pino record is one `jq`-parseable NDJSON line with `service`/`env`/label-`level`/`msg`, `withRequest` binds `requestId`/`userId`/`householdId`/`traceId` onto child records, and `loggingMiddleware` correlates the parsed X-Ray root id from `_X_AMZN_TRACE_ID` into request-scoped logs. `createLogger()` factory extracted so tests exercise the real serialization path.
 
 ## [0.14.2] - 2026-07-10
