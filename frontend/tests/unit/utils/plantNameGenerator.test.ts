@@ -35,9 +35,15 @@ describe('plant name generator', () => {
     expect(first).toEqual(second);
   });
 
-  it('produces varied names across real random calls', () => {
+  it('produces a broad mix of names for a deterministic pseudo-random sequence', () => {
+    // A seeded sequence verifies variety without making the suite probabilistic.
+    let state = 0x12345678;
+    const rng = () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 0x1_0000_0000;
+    };
     const names = new Set(
-      Array.from({ length: 40 }, () => generatePlantNameSuggestion('surprise').name)
+      Array.from({ length: 40 }, () => generatePlantNameSuggestion('surprise', '', rng).name)
     );
     expect(names.size).toBeGreaterThan(20);
   });

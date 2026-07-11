@@ -31,7 +31,16 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
   const [suggestion, setSuggestion] = useState<PlantNameSuggestion | null>(null);
 
   const rollName = (nextVibe = vibe) => {
-    setSuggestion(generatePlantNameSuggestion(nextVibe, species));
+    setSuggestion((previous) => {
+      let next = generatePlantNameSuggestion(nextVibe, species);
+      // A reroll that returns the same card feels broken even when it is valid
+      // randomness. Give the nursery a few cheap client-side chances to find a
+      // different name; every pool has multiple possibilities.
+      for (let attempt = 0; previous && next.name === previous.name && attempt < 3; attempt += 1) {
+        next = generatePlantNameSuggestion(nextVibe, species);
+      }
+      return next;
+    });
   };
 
   const chooseVibe = (nextVibe: PlantNameVibe | 'surprise') => {
