@@ -1,6 +1,6 @@
 {
   "name": "family-greenhouse",
-  "version": "0.14.2",
+  "version": "0.15.0",
   "license": "Elastic-2.0",
   "private": true,
   "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person across browser/email/SMS, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
