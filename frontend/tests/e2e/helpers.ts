@@ -17,8 +17,8 @@ import { expect, request as playwrightRequest, Page } from '@playwright/test';
  * 2. **Mobile navigation.** On mobile viewports the sidebar nav links sit
  *    behind the "Open sidebar" hamburger, so a bare
  *    `getByRole('link').click()` times out. `navigateTo` opens the drawer
- *    when needed and closes it after navigating (the mobile sidebar Dialog
- *    doesn't auto-close on internal nav).
+ *    when needed and, after navigating, waits for the drawer's self-close
+ *    (NavLink onNavigate) to finish before returning.
  */
 
 const API_URL = 'http://localhost:4000';
@@ -139,7 +139,11 @@ export async function navigateTo(page: Page, linkName: RegExp, urlPattern: RegEx
   await visibleLink.first().click();
   await expect(page).toHaveURL(urlPattern, { timeout: 15000 });
   if (isMobile) {
-    const close = page.getByRole('button', { name: /close sidebar/i });
-    await close.waitFor({ state: 'hidden' });
+    // The drawer closes itself on nav (NavLink onNavigate). Under
+    // react-router 7 the navigation commits inside React.startTransition,
+    // so the close runs to completion and a manual dismiss click races
+    // the Dialog unmount ("element was detached from the DOM"); wait for
+    // the leave transition to finish instead.
+    await page.getByRole('button', { name: /close sidebar/i }).waitFor({ state: 'hidden' });
   }
 }

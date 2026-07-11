@@ -8,17 +8,30 @@ import pino from 'pino';
  *
  * In test, we silence output so `vitest run` stays clean.
  */
-export const logger = pino({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
-  base: {
-    service: 'family-greenhouse',
-    env: process.env.STAGE || process.env.NODE_ENV || 'dev',
-  },
-  // Lambda runtime captures stdout into CloudWatch already; no transports.
-  formatters: {
-    level: (label) => ({ level: label }),
-  },
-});
+
+/**
+ * Build a logger with the production configuration. The singleton below
+ * writes to stdout (what Lambda ships to CloudWatch); tests pass an
+ * in-memory destination so the *real* serialization path — single-line
+ * NDJSON, level labels, base fields — is what gets asserted, not a copy
+ * of the config (see tests/unit/utils/logger.test.ts).
+ */
+export function createLogger(destination?: pino.DestinationStream): pino.Logger {
+  const options: pino.LoggerOptions = {
+    level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
+    base: {
+      service: 'family-greenhouse',
+      env: process.env.STAGE || process.env.NODE_ENV || 'dev',
+    },
+    // Lambda runtime captures stdout into CloudWatch already; no transports.
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+  };
+  return destination ? pino(options, destination) : pino(options);
+}
+
+export const logger = createLogger();
 
 export type Logger = typeof logger;
 
@@ -31,8 +44,8 @@ export interface RequestContext {
   traceId?: string;
 }
 
-export function withRequest(ctx: RequestContext): Logger {
-  return logger.child(ctx);
+export function withRequest(ctx: RequestContext, base: Logger = logger): Logger {
+  return base.child(ctx);
 }
 
 /**
