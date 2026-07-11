@@ -21,30 +21,43 @@ export function BlogPost() {
           title: `${post.title} — Family Greenhouse`,
           description: post.description,
           canonical: `${SITE_URL}/blog/${post.slug}`,
+          ogType: 'article',
           // Article schema makes the post eligible for Google's article
           // rich-results treatment. We don't have author photos or a
           // publisher logo URL set up yet — those are nice-to-haves that
           // strengthen eligibility but aren't required.
           jsonLd: {
             '@context': 'https://schema.org',
-            '@type': 'Article',
-            headline: post.title,
-            description: post.description,
-            datePublished: post.date,
-            dateModified: post.date,
-            author: { '@type': 'Organization', name: 'Family Greenhouse' },
-            publisher: {
-              '@type': 'Organization',
-              name: 'Family Greenhouse',
-              logo: {
-                '@type': 'ImageObject',
-                url: `${SITE_URL}/brand/icon-512.png`,
+            '@graph': [
+              {
+                '@type': 'Article',
+                headline: post.title,
+                description: post.description,
+                datePublished: post.date,
+                dateModified: post.date,
+                author: { '@type': 'Organization', name: 'Family Greenhouse' },
+                publisher: {
+                  '@type': 'Organization',
+                  name: 'Family Greenhouse',
+                  logo: {
+                    '@type': 'ImageObject',
+                    url: `${SITE_URL}/brand/icon-512.png`,
+                  },
+                },
+                mainEntityOfPage: {
+                  '@type': 'WebPage',
+                  '@id': `${SITE_URL}/blog/${post.slug}`,
+                },
               },
-            },
-            mainEntityOfPage: {
-              '@type': 'WebPage',
-              '@id': `${SITE_URL}/blog/${post.slug}`,
-            },
+              {
+                '@type': 'BreadcrumbList',
+                itemListElement: [
+                  { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+                  { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+                  { '@type': 'ListItem', position: 3, name: post.title },
+                ],
+              },
+            ],
           },
         }
       : {}

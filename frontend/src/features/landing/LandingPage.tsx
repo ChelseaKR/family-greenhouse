@@ -37,6 +37,8 @@ import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
 import { RootLockIcon } from '@/components/icons/RootLockIcon';
 import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment';
 import { track, registerSuperProperties } from '@/services/analytics';
+import { useMetaTags } from '@/hooks/useMetaTags';
+import { SITE_URL, siteUrl } from '@/config/site';
 import clsx from 'clsx';
 
 // Hero copy for the two framings under test. Variant A (control) is the
@@ -561,6 +563,51 @@ export function LandingPage() {
   // A/B test of the hero framing (control vs solo-first). Bucketing is
   // stable per browser; see lib/experiment.ts.
   const variant = useHeroVariant();
+
+  useMetaTags({
+    title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
+    description:
+      'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for up to 10 plants.',
+    canonical: siteUrl('/'),
+    ogType: 'website',
+    ogImage: siteUrl('/brand/og-image.png'),
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'Organization',
+          '@id': `${SITE_URL}/#organization`,
+          name: 'Family Greenhouse',
+          url: SITE_URL,
+          logo: siteUrl('/brand/icon-512.png'),
+        },
+        {
+          '@type': 'WebSite',
+          '@id': `${SITE_URL}/#website`,
+          name: 'Family Greenhouse',
+          url: SITE_URL,
+          publisher: { '@id': `${SITE_URL}/#organization` },
+        },
+        {
+          '@type': 'SoftwareApplication',
+          '@id': `${SITE_URL}/#app`,
+          name: 'Family Greenhouse',
+          applicationCategory: 'LifestyleApplication',
+          operatingSystem: 'Web',
+          description:
+            'A collaborative plant care app for household watering schedules, reminders, tasks, and care logs.',
+          url: SITE_URL,
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'USD',
+            description: 'Free for up to 10 plants',
+          },
+          publisher: { '@id': `${SITE_URL}/#organization` },
+        },
+      ],
+    },
+  });
 
   useEffect(() => {
     // Fire once per landing-page mount: records the impression and pins the

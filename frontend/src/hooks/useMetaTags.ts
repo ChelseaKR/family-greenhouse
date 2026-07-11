@@ -17,10 +17,16 @@ export interface MetaTags {
   description?: string;
   /** Path under /og-cards/ for a per-post OG image, if shipped. */
   ogImage?: string;
+  /** Open Graph object type. Marketing pages default to `website`; posts and
+   * care guides should use `article`. */
+  ogType?: 'website' | 'article';
   /** Absolute canonical URL for this route. Sets <link rel="canonical"> + og:url
    *  so Google (which renders the SPA) attributes the page to the right URL
    *  instead of guessing — important for the indexable marketing routes. */
   canonical?: string;
+  /** Search-engine indexing policy. Use `noindex, nofollow` for app-only,
+   * tokenized, or error pages that can otherwise look like valid SPA URLs. */
+  robots?: 'index, follow' | 'noindex, follow' | 'noindex, nofollow';
   /** Optional JSON-LD payload (Article, FAQ, etc.). The shape isn't
    *  validated here — caller is responsible for emitting valid schema.org. */
   jsonLd?: Record<string, unknown>;
@@ -77,12 +83,21 @@ export function useMetaTags(meta: MetaTags): void {
     if (meta.description) {
       cleanups.push(setMeta('description', meta.description));
       cleanups.push(setMeta('og:description', meta.description, 'property'));
+      cleanups.push(setMeta('twitter:description', meta.description));
     }
     if (meta.title) {
       cleanups.push(setMeta('og:title', meta.title, 'property'));
+      cleanups.push(setMeta('twitter:title', meta.title));
     }
     if (meta.ogImage) {
       cleanups.push(setMeta('og:image', meta.ogImage, 'property'));
+      cleanups.push(setMeta('twitter:image', meta.ogImage));
+    }
+    if (meta.ogType) {
+      cleanups.push(setMeta('og:type', meta.ogType, 'property'));
+    }
+    if (meta.robots) {
+      cleanups.push(setMeta('robots', meta.robots));
     }
     if (meta.canonical) {
       cleanups.push(setCanonical(meta.canonical));
@@ -103,5 +118,13 @@ export function useMetaTags(meta: MetaTags): void {
     return () => {
       for (const cleanup of cleanups) cleanup();
     };
-  }, [meta.title, meta.description, meta.ogImage, meta.canonical, jsonLdKey]);
+  }, [
+    meta.title,
+    meta.description,
+    meta.ogImage,
+    meta.ogType,
+    meta.canonical,
+    meta.robots,
+    jsonLdKey,
+  ]);
 }

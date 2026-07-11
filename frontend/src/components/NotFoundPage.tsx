@@ -1,7 +1,14 @@
 import { Link } from 'react-router-dom';
 import { EmptySearch } from './illustrations/EmptySearch';
+import { useMetaTags } from '@/hooks/useMetaTags';
 
 export function NotFoundPage() {
+  useMetaTags({
+    title: 'Page not found — Family Greenhouse',
+    description: 'This page does not exist in Family Greenhouse.',
+    robots: 'noindex, nofollow',
+  });
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4 bg-paper text-center">
       <EmptySearch className="h-36 w-auto" />
