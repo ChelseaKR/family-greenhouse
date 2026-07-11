@@ -62,7 +62,7 @@ For any EU user/customer:
 SMS notifications are currently **gated off** (`SMS_NOTIFICATIONS_ENABLED` unset). **Do not enable SMS in production until all of the following exist**, or you risk TCPA liability (statutory damages per message):
 
 1. **Explicit, logged opt-in** — the user must affirmatively check a box to receive SMS, with consent timestamp + the exact consent language stored. A pre-checked box is not consent.
-2. **Phone-number verification** — send a one-time code and verify it before the number can receive any notification (prevents sending to a number the user mistyped or doesn't own). _This flow does not exist yet — it's the blocking work item._
+2. **Phone-number verification** — send a one-time code and verify it before the number can receive any notification (prevents sending to a number the user mistyped or doesn't own). Implemented; production delivery remains gated on AWS SMS production access and origination registration.
 3. **STOP / unsubscribe** — honor inbound STOP, and include opt-out guidance ("Reply STOP to unsubscribe") in messages. Wire SNS opt-out handling.
 4. **Quiet hours / DND** — already implemented (`isInDndWindow`); keep it.
 5. **Records** — retain consent + opt-out records.

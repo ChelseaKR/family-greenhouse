@@ -245,8 +245,9 @@ function hashCode(code: string): string {
  * Start verifying a phone number: store SHA-256(code) + expiry + attempt
  * counter on `USER#{id} / PHONE_VERIFY` (overwriting any previous attempt —
  * requesting a new code invalidates the old one), then text the code via SNS.
- * When SMS is disabled (`SMS_NOTIFICATIONS_ENABLED` ≠ 1) `sendSms` dry-run
- * logs the message, so the flow is exercisable in dev without spending money.
+ * If delivery is disabled or SNS rejects the message, remove the pending row
+ * and fail loudly. A verification endpoint must never claim success for a
+ * code that did not leave the service.
  */
 export async function startPhoneVerification(
   userId: string,
@@ -274,10 +275,34 @@ export async function startPhoneVerification(
       },
     })
   );
-  await smsNotifier.sendSms({
-    to: phone,
-    text: `Family Greenhouse verification code: ${code}. It expires in 10 minutes.`,
-  });
+  try {
+    const sent = await smsNotifier.sendSms({
+      to: phone,
+      text: `Family Greenhouse verification code: ${code}. It expires in 10 minutes.`,
+    });
+    if (!sent) throw new Error('SMS delivery is disabled');
+  } catch (err) {
+    try {
+      await dynamodb.send(
+        new DeleteCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `USER#${userId}`, SK: 'PHONE_VERIFY' },
+        })
+      );
+    } catch (cleanupErr) {
+      logger.error(
+        { err: cleanupErr, userId, msg: 'phone_verification_cleanup_failed' },
+        'phone_verification_cleanup_failed'
+      );
+    }
+    logger.warn(
+      { err, userId, msg: 'phone_verification_delivery_failed' },
+      'phone_verification_delivery_failed'
+    );
+    throw createHttpError(503, 'SMS verification is temporarily unavailable. Try again later.', {
+      expose: true,
+    });
+  }
   logger.info({ userId, msg: 'phone_verification_started' }, 'phone_verification_started');
 }
 

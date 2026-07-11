@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import {
   Bars3Icon,
@@ -59,6 +59,8 @@ export function Layout() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isChatRoute = location.pathname === '/chat';
 
   const handleLogout = () => {
     logout();
@@ -152,8 +154,8 @@ export function Layout() {
           </div>
         </div>
 
-        <main className="py-6">
-          <div className="px-4 sm:px-6 lg:px-8">
+        <main className={isChatRoute ? '' : 'py-6'}>
+          <div className={isChatRoute ? '' : 'px-4 sm:px-6 lg:px-8'}>
             <Outlet />
           </div>
         </main>
@@ -161,15 +163,17 @@ export function Layout() {
         {/* Memorial closing line, flanked by mirrored botanical sprigs. The
             text itself is unchanged from the original; only the decoration
             around it is new. Sprigs are aria-hidden as decoration. */}
-        <footer className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-center gap-4">
-            <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block" />
-            <p className="text-center text-xs italic text-gray-600">
-              In loving memory of my mom, Joyce — who taught us to keep growing.
-            </p>
-            <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block -scale-x-100" />
-          </div>
-        </footer>
+        {!isChatRoute && (
+          <footer className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-center gap-4">
+              <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block" />
+              <p className="text-center text-xs italic text-gray-600">
+                In loving memory of my mom, Joyce — who taught us to keep growing.
+              </p>
+              <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block -scale-x-100" />
+            </div>
+          </footer>
+        )}
       </div>
     </div>
   );

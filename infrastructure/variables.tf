@@ -123,6 +123,17 @@ variable "identify_metering_enabled" {
   default     = ""
 }
 
+variable "sms_notifications_enabled" {
+  description = "Set to '1' only after this region has SMS production access and an approved origination identity. Blank keeps paid SMS disabled."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = contains(["", "1"], var.sms_notifications_enabled)
+    error_message = "sms_notifications_enabled must be blank or '1'."
+  }
+}
+
 # --- Stripe ---
 # Mirrors modules/api/variables.tf. These MUST be declared here too: Terraform
 # only warns (and silently drops the value) on an undeclared variable passed

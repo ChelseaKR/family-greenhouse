@@ -235,6 +235,8 @@ export const en = {
       notifications: 'Notifications',
       preferences: 'Preferences',
       billing: 'Billing',
+      apiKeys: 'API keys',
+      account: 'Account',
       help: 'Help',
     },
     preferences: {

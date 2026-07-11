@@ -30,6 +30,7 @@ export function HouseholdPage() {
   const queryClient = useQueryClient();
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
 
   const {
@@ -47,6 +48,7 @@ export function HouseholdPage() {
     mutationFn: () => householdService.createInvite(householdId!),
     onSuccess: (data) => {
       setInviteLink(data.url);
+      setCopyError(false);
     },
   });
 
@@ -78,9 +80,14 @@ export function HouseholdPage() {
 
   const handleCopyInvite = async () => {
     if (inviteLink) {
-      await navigator.clipboard.writeText(inviteLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyError(false);
+      try {
+        await navigator.clipboard.writeText(inviteLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        setCopyError(true);
+      }
     }
   };
 
@@ -134,7 +141,7 @@ export function HouseholdPage() {
 
           {inviteLink ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
                   type="text"
                   readOnly
@@ -150,6 +157,11 @@ export function HouseholdPage() {
                   {copied ? 'Copied!' : 'Copy'}
                 </Button>
               </div>
+              {copyError && (
+                <p className="text-sm text-red-700" role="alert">
+                  Could not copy automatically. Select the link and copy it manually.
+                </p>
+              )}
               <p className="text-xs text-gray-600">This link will expire in 7 days.</p>
             </div>
           ) : (

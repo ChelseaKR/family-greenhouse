@@ -21,11 +21,7 @@ import AxeBuilder from '@axe-core/playwright';
 const ENFORCED_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 async function expectNoA11yViolations(page: import('@playwright/test').Page, label: string) {
-  // Let entrance animations (`motion-safe:animate-fade-in` cards) finish
-  // before sampling colors: axe computes blended colors from mid-animation
-  // opacity, which reports the transient frame rather than the settled UI.
-  // Poll until quiescent — cards mount progressively as queries resolve, so
-  // a single getAnimations() snapshot misses late-starting fades. Infinite
+  // Let finite UI transitions finish before sampling colors. Infinite
   // animations (e.g. spinners) are excluded; their `finished` never settles.
   await page.evaluate(async () => {
     const finite = (a: Animation) => {
@@ -115,6 +111,20 @@ test.describe('A11y — authenticated routes', () => {
     await expectNoA11yViolations(page, 'settings-preferences');
   });
 
+  for (const section of ['notifications', 'api-keys', 'account'] as const) {
+    test(`settings → ${section}`, async ({ page }) => {
+      await page.goto(`/settings?section=${section}`);
+      await page.waitForLoadState('networkidle');
+      await expectNoA11yViolations(page, `settings-${section}`);
+    });
+  }
+
+  test('settings → billing deep link', async ({ page }) => {
+    await page.goto('/settings/billing');
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'settings-billing');
+  });
+
   test('analytics', async ({ page }) => {
     await page.goto('/analytics');
     await page.waitForLoadState('networkidle');
@@ -125,5 +135,11 @@ test.describe('A11y — authenticated routes', () => {
     await page.goto('/help');
     await page.waitForLoadState('networkidle');
     await expectNoA11yViolations(page, 'help');
+  });
+
+  test('chat', async ({ page }) => {
+    await page.goto('/chat');
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'chat');
   });
 });

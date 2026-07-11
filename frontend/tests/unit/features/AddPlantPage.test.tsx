@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AddPlantPage } from '@/features/plants/AddPlantPage';
 import { plantService } from '@/services/plantService';
 import { speciesService, type SpeciesSearchResponse } from '@/services/speciesService';
+import { taskService } from '@/services/taskService';
 
 vi.mock('@/services/plantService', () => ({
   plantService: {
@@ -19,6 +20,13 @@ vi.mock('@/services/speciesService', () => ({
     detail: vi.fn(),
     careSuggestions: vi.fn(),
   },
+}));
+
+vi.mock('@/services/taskService', () => ({
+  taskService: {
+    listTemplates: vi.fn(),
+  },
+  suggestTaskTemplate: vi.fn(),
 }));
 
 // jsdom has no real image decoder, so the canvas pipeline never resolves —
@@ -68,6 +76,7 @@ describe('AddPlantPage acceptSuggestion race guard', () => {
       ],
     });
     vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
   });
 
   it('does not let a slower earlier pick clobber a faster later one', async () => {
