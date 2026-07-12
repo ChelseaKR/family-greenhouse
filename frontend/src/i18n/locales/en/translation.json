@@ -293,6 +293,7 @@
       "usageTitle": "Usage",
       "plantsUsage": "{{n}} of {{max}} plants",
       "membersUsage": "{{n}} of {{max}} members",
+      "nativeUnavailable": "Plan changes aren't available in the app.",
       "overLimitTitle": "Over your plan limit",
       "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit or upgrade.",
       "manageSubscription": "Manage subscription"
@@ -303,6 +304,9 @@
     "browser": "Browser",
     "email": "Email",
     "sms": "Text message",
+    "deviceTitle": "This device",
+    "deviceActive": "Push notifications are enabled on this device.",
+    "deviceInactive": "Enable push reminders on this device.",
     "weeklyDigestTitle": "Weekly plant digest",
     "weeklyDigestDescription": "One email a week listing the plants most at risk, ranked by the most overdue care.",
     "weeklyDigestRequiresEmail": "Turn on email notifications to receive the weekly digest.",

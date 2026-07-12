@@ -25,6 +25,14 @@
      inherits the brand tone instead of stock-Tailwind gray. */
   body {
     @apply bg-paper text-gray-900;
+    /* Edge-to-edge surfaces (Capacitor shells, installed PWAs with
+       viewport-fit=cover): keep content clear of the notch/home indicator.
+       env() resolves to 0 in regular browser tabs, so the web is unaffected.
+       Top inset is handled by the sticky header (Layout.tsx), not here, to
+       avoid double-padding it. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   /* Skip link for keyboard navigation */

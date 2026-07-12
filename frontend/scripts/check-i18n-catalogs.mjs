@@ -135,6 +135,7 @@ const BINARY_EXT = new Set([
   '.eot',
   '.pdf',
   '.zip',
+  '.jar', // zip container (Android gradle wrapper)
   '.gz',
   '.br',
   '.mp4',

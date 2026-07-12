@@ -1,13 +1,20 @@
 # Account id for scoping IAM resource ARNs (e.g. the SES send fallback below).
 data "aws_caller_identity" "current" {}
 
+locals {
+  # Web origin first — backend link-building falls back to the FIRST entry of
+  # the comma-joined ALLOWED_ORIGIN env (middleware/handler.ts
+  # firstAllowedOrigin), so order matters here.
+  allowed_origins = concat([var.allowed_origin], var.native_app_origins)
+}
+
 # API Gateway
 resource "aws_apigatewayv2_api" "main" {
   name          = "${var.project_name}-api-${var.environment}"
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = [var.allowed_origin]
+    allow_origins = local.allowed_origins
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     # X-Household-Id pins a non-default household per request (see
     # docs/multi-household.md). X-Cognito-Access-Token carries the Cognito
@@ -256,7 +263,10 @@ locals {
     COGNITO_USER_POOL_ID = var.cognito_user_pool_id
     COGNITO_CLIENT_ID    = var.cognito_client_id
     IMAGES_BUCKET        = var.images_bucket_name
-    ALLOWED_ORIGIN       = var.allowed_origin
+    # Comma-separated: web origin first, then the Capacitor shell origins.
+    # middleware/handler.ts resolveCorsOrigins splits this; link-building
+    # code uses the first entry only.
+    ALLOWED_ORIGIN = join(",", local.allowed_origins)
     # FRONTEND_URL is the user-facing URL the invite + checkout flows
     # use to build links. Same value as ALLOWED_ORIGIN today; kept as a
     # separate var so a future split (e.g. checkout-success URL on a
@@ -560,7 +570,7 @@ resource "aws_lambda_function_url" "chat_stream" {
   invoke_mode        = "RESPONSE_STREAM"
 
   cors {
-    allow_origins = [var.allowed_origin]
+    allow_origins = local.allowed_origins
     allow_methods = ["POST"]
     allow_headers = ["Content-Type", "Authorization", "X-Household-Id"]
     max_age       = 300
@@ -734,6 +744,10 @@ locals {
     "POST /notifications/run-year-recap"             = { group = "notifications", auth = "jwt" }
     "POST /notifications/phone/start-verification"   = { group = "notifications", auth = "jwt" }
     "POST /notifications/phone/confirm-verification" = { group = "notifications", auth = "jwt" }
+    # Native (Capacitor iOS/Android) push device tokens — capture-only until
+    # the APNs/FCM sender ships (docs/mobile.md § Push notifications).
+    "POST /notifications/devices"        = { group = "notifications", auth = "jwt" }
+    "POST /notifications/devices/remove" = { group = "notifications", auth = "jwt" }
 
     # --- billing (plans + webhook public; webhook is Stripe-signed) ---
     "GET /billing/plans"     = { group = "billing", auth = "none" }

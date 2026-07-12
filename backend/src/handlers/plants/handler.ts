@@ -4,7 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
-import { createHandler } from '../../middleware/handler.js';
+import { createHandler, firstAllowedOrigin } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
@@ -560,7 +560,7 @@ export const sharePlant = createHandler(
 
     // Same base-URL policy as household invites: FRONTEND_URL, falling back
     // to ALLOWED_ORIGIN; refuse to mint a placeholder URL.
-    const baseUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+    const baseUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
     if (!baseUrl) {
       // expose: true — intentional config-error message, safe to show.
       throw createHttpError(

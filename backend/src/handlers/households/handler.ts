@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
-import { createHandler } from '../../middleware/handler.js';
+import { createHandler, firstAllowedOrigin } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import {
   authMiddleware,
@@ -66,7 +66,7 @@ export const createHousehold = createHandler(
     if (!user.householdId) {
       await cognitoUsers.setHouseholdClaims(user.userId, household.id, 'admin');
 
-      const appUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+      const appUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
       if (appUrl) {
         void welcomeEmail.sendWelcomeEmail(user.userId, user.email, userName, appUrl);
       } else {
@@ -147,7 +147,7 @@ export const createInvite = createHandler(
     // isn't set explicitly. Refuse to emit a placeholder URL in production —
     // pre-fix, this defaulted to `family-greenhouse.example.com` and users got
     // invite links pointing at a non-existent domain.
-    const baseUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+    const baseUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
     if (!baseUrl) {
       // expose: true — intentional config-error message, safe to show.
       throw createHttpError(
@@ -529,7 +529,7 @@ export const createSitterLink = createHandler(
       throw createHttpError(403, 'Access denied');
     }
 
-    const baseUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN;
+    const baseUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
     if (!baseUrl) {
       throw createHttpError(
         500,
