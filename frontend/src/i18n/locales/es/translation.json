@@ -331,6 +331,13 @@
     "phoneVerifySuccess": "Número de teléfono verificado. Ya puedes activar los recordatorios por SMS.",
     "phoneUnverifiedHint": "Verifica tu número de teléfono para activar los recordatorios por SMS."
   },
+  "mobile": {
+    "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
+    "openAccount": "Abrir ajustes de la cuenta",
+    "backToSetup": "Volver a la configuración",
+    "planAvailableTitle": "Qué sigue disponible",
+    "planAvailableBody": "Al iniciar sesión tienes acceso a las plantas, tareas, funciones compartidas del hogar y cuidados incluidos en tu cuenta actual. Esta aplicación no cobra pagos."
+  },
   "validation": {
     "nameRequired": "El nombre es obligatorio",
     "nameTooLong": "El nombre es demasiado largo",
@@ -340,6 +347,21 @@
     "tooManyTags": "Demasiadas etiquetas"
   },
   "chat": {
+    "report": {
+      "success": "Respuesta denunciada. Gracias.",
+      "open": "Denunciar respuesta",
+      "reason": "¿Qué salió mal?",
+      "details": "Detalles (opcional)",
+      "sending": "Enviando…",
+      "submit": "Enviar denuncia",
+      "cancel": "Cancelar",
+      "reasons": {
+        "incorrect": "Incorrecta o engañosa",
+        "unsafe": "Consejo peligroso",
+        "offensive": "Contenido ofensivo",
+        "other": "Otro motivo"
+      }
+    },
     "proposal": {
       "suggested": "Recordatorio sugerido: {{type}} para {{plant}}",
       "created": "Recordatorio creado: {{type}} para {{plant}}",

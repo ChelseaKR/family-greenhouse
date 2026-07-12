@@ -21,14 +21,26 @@ import { userRateLimit } from '../../middleware/rateLimit.js';
 import { successResponse } from '../../utils/response.js';
 import { getConversationHistory, runChatTurn, BUDGET_CONFIG } from '../../services/chat/index.js';
 import { getBudget } from '../../services/chat/persistence.js';
+import { saveChatReport } from '../../services/chatReports.js';
+import { audit } from '../../utils/auditLog.js';
 
-const sendMessageSchema = z.object({
-  message: z.string().trim().min(1).max(4000),
-  conversationId: z.string().uuid().optional(),
-  // Idempotency key (#3): stable across a stream attempt and its sync fallback
-  // so the same user message can't be charged/persisted twice.
-  turnId: z.string().uuid().optional(),
-});
+const sendMessageSchema = z.union([
+  z.object({
+    action: z.literal('report'),
+    conversationId: z.string().uuid(),
+    responseText: z.string().trim().min(1).max(8000),
+    reason: z.enum(['incorrect', 'unsafe', 'offensive', 'other']),
+    details: z.string().trim().max(1000).optional(),
+  }),
+  z.object({
+    action: z.literal('message').optional(),
+    message: z.string().trim().min(1).max(4000),
+    conversationId: z.string().uuid().optional(),
+    // Idempotency key (#3): stable across a stream attempt and its sync fallback
+    // so the same user message can't be charged/persisted twice.
+    turnId: z.string().uuid().optional(),
+  }),
+]);
 type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 // POST /chat/messages
@@ -37,6 +49,46 @@ export const sendMessage = createHandler(
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<SendMessageInput>;
     if (!user.householdId) throw createHttpError(403, 'User must belong to a household');
+
+    // Google Play's generative-AI policy requires an in-app flagging path.
+    // Keep it on the already-deployed POST /chat/messages route so reporting
+    // does not depend on a new API Gateway route. Reports invoke no model and
+    // retain only the flagged response + optional reviewer context for 90 days.
+    if (validatedBody.action === 'report') {
+      const history = await getConversationHistory(user.householdId, validatedBody.conversationId);
+      const authoritativeResponse = history
+        .filter(
+          (message) =>
+            message.role === 'assistant' &&
+            !message.content.some((block) => block.type === 'tool_use')
+        )
+        .map((message) =>
+          message.content
+            .filter((block) => block.type === 'text')
+            .map((block) => (block.type === 'text' ? block.text : ''))
+            .join('\n')
+            .trim()
+        )
+        .find((text) => text === validatedBody.responseText);
+      if (!authoritativeResponse) {
+        throw createHttpError(404, 'Assistant response not found in this conversation');
+      }
+      const reportId = await saveChatReport({
+        userId: user.userId,
+        householdId: user.householdId,
+        conversationId: validatedBody.conversationId,
+        responseText: authoritativeResponse,
+        reason: validatedBody.reason,
+        details: validatedBody.details,
+      });
+      audit('chat.response_reported', {
+        actorId: user.userId,
+        householdId: user.householdId,
+        targetId: reportId,
+        metadata: { reason: validatedBody.reason },
+      });
+      return successResponse({ accepted: true, reportId });
+    }
 
     const result = await runChatTurn({
       userId: user.userId,

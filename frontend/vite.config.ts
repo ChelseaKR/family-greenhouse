@@ -83,7 +83,9 @@ export default defineConfig({
     port: 3000,
   },
   build: {
-    sourcemap: true,
+    // Keep maps for web/Sentry diagnostics, but never package source into a
+    // public native binary. The release wrapper sets this process-only flag.
+    sourcemap: process.env.MOBILE_STORE_BUILD !== 'true',
     // CQ-19: explicit chunk-size warning (500 KB) as a build-time signal
     // separate from the hard size-limit CI gate (`npm run size`), and pin the
     // build target to Baseline "Widely available" (evergreen browsers with

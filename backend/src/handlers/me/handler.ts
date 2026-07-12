@@ -10,7 +10,9 @@ import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as taskService from '../../services/taskService.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
+import * as deviceTokens from '../../services/deviceTokens.js';
 import * as apiKeys from '../../services/apiKeys.js';
+import * as accountCleanup from '../../services/accountCleanup.js';
 import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
 import { buildIcs } from '../../services/icsExport.js';
 import { noContentResponse, successResponse } from '../../utils/response.js';
@@ -56,12 +58,13 @@ async function wipeSoloHouseholdPlants(householdId: string, members: unknown[]):
 //   2. For households where they're the only member, wipe plants (cascading
 //      task/photo cleanup) and revoke the household's API keys — the
 //      household is being abandoned.
-//   3. Remove their member row from each household.
-//   4. Delete user-scoped rows: notification prefs + push subscriptions.
+//   3. Anonymize their identity in retained shared history and clear active
+//      task assignments, then remove their member row from each household.
+//   4. Delete user-scoped rows: notification prefs, browser subscriptions,
+//      and native APNs/FCM device tokens.
 //   5. Delete their Cognito user.
-// We deliberately don't anonymize past completions — those still belong to the
-// household's history. The user's display name on those rows becomes a
-// historical artifact.
+// Shared completion/activity facts remain useful to the household, but the
+// deleted user's display name and stable id do not.
 export const deleteMe = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -93,6 +96,7 @@ export const deleteMe = createHandler(
           await apiKeys.revokeApiKey(m.householdId, key.id);
         }
       }
+      await accountCleanup.anonymizeUserInHousehold(m.householdId, user.userId);
       await householdService.removeMember(m.householdId, user.userId);
     }
 
@@ -104,6 +108,7 @@ export const deleteMe = createHandler(
     for (const sub of subs) {
       await pushSubscriptions.deleteSubscription(user.userId, sub.endpoint);
     }
+    await deviceTokens.deleteUserDeviceTokens(user.userId);
     await dynamodb.send(
       new DeleteCommand({
         TableName: TABLE_NAME,

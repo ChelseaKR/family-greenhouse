@@ -1,0 +1,27 @@
+{
+  "shared": {
+    "appName": "Family Greenhouse",
+    "urls": {
+      "privacyPolicy": "https://familygreenhouse.net/legal/privacy",
+      "accountDeletion": "https://familygreenhouse.net/account-deletion",
+      "support": "https://familygreenhouse.net/support",
+      "marketing": "https://familygreenhouse.net"
+    }
+  },
+  "googlePlay": {
+    "title": "Family Greenhouse",
+    "shortDescription": "Shared plant care, reminders, tasks, photos, and history for your household.",
+    "fullDescription": "Keep every plant and every caregiver on the same page. Family Greenhouse brings plant profiles, care schedules, shared tasks, photos, reminders, and a household activity history into one calm workspace.\n\nAdd your plants and record the details that matter. See what needs attention today, assign care to household members, and keep a useful history of watering, feeding, repotting, and other work. Plant photos and leaf-health tools help you notice changes over time.\n\nThe plant care assistant can answer questions using your household's plant and task information. Suggested reminders are always shown for confirmation before anything changes.\n\nFamily Greenhouse is free to download. The mobile app does not sell subscriptions or collect payment.",
+    "releaseNotes": "First mobile release: shared plant profiles, care tasks, household history, photos, reminders, and plant care chat.",
+    "category": "HOUSE_AND_HOME"
+  },
+  "appStore": {
+    "name": "Family Greenhouse",
+    "subtitle": "Plant care, shared",
+    "promotionalText": "Keep plants, tasks, photos, reminders, and care history together for the whole household.",
+    "description": "Family Greenhouse is a shared plant-care workspace for households.\n\nKeep plant profiles, care schedules, photos, reminders, and history in one place. See what needs attention today, assign care to household members, and record watering, feeding, repotting, and other work.\n\nThe plant care assistant answers questions using your household's plant and task information. Suggested reminders are always shown for confirmation before anything changes.\n\nThe app is free to download and contains no purchase flow.",
+    "keywords": "plants,plant care,watering,reminders,houseplants,garden,tasks,household,plant tracker",
+    "releaseNotes": "First mobile release with shared plant profiles, care tasks, photos, household history, and plant care chat.",
+    "primaryCategory": "LIFESTYLE"
+  }
+}

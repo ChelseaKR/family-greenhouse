@@ -16,18 +16,17 @@ are build artifacts and gitignored.
 ## Build flow
 
 ```bash
+# One-time local setup; the populated file is gitignored.
+cp frontend/.env.mobile.production.example frontend/.env.mobile.production
+
+# Validates versions, metadata, assets, secrets hygiene, production env,
+# source-map removal, and synchronized native bundles. With JAVA_HOME set to
+# JDK 21 it also produces the unsigned release AAB.
+npm run mobile:release -- frontend/.env.mobile.production
+
 cd frontend
-
-# 1. Build the web bundle with PRODUCTION env vars. The bundle is baked into
-#    the app binary — a web deploy does NOT update shipped apps.
-VITE_API_URL=https://<prod-api> VITE_VAPID_PUBLIC_KEY=... npm run build
-
-# 2. Copy it into the native projects (also available as `npm run mobile:sync`)
-npx cap sync
-
-# 3. Open the native IDEs
-npx cap open android   # Android Studio (any OS)
-npx cap open ios       # Xcode (macOS only)
+npx cap open android
+npx cap open ios
 ```
 
 `npx cap run android`/`npx cap run ios` builds and launches on a connected
@@ -39,15 +38,20 @@ Because the binary pins a snapshot of the frontend, plan on shipping a store
 release for user-facing frontend changes (or adopt a live-update service such
 as Ionic Appflow/Capgo later). Backend/API changes reach the apps immediately.
 
+Keep `VITE_CHAT_STREAM_URL` unset in store builds for now. Capacitor's native
+HTTP bridge is used for ordinary API requests and image uploads, while the
+streaming client expects an incrementally readable browser `ReadableStream`.
+With no stream URL, chat uses the supported synchronous API endpoint.
+
 ## What differs inside the native shells
 
-| Area               | Behavior                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Billing            | All purchase UI is hidden (`BillingSettings.tsx` gates on `isNativeApp()`). Native shows the current plan + usage read-only. See "Store payment rules" below — do not add purchase links without reading it.                                                                                                                                                               |
-| Push notifications | Web push (service worker + VAPID) does not exist in the WebViews. The "This device" toggle in notification settings registers an APNs/FCM token via `@capacitor/push-notifications` and stores it with `POST /notifications/devices` (`backend/src/services/deviceTokens.ts`). **Capture-only for now** — see "Push notifications" below for what's left to actually send. |
-| CORS               | The shells call the API from `capacitor://localhost` (iOS) / `https://localhost` (Android). Both are allowed via `native_app_origins` (infrastructure/modules/api) and the comma-separated `ALLOWED_ORIGIN` env the middleware splits (`backend/src/middleware/handler.ts`).                                                                                               |
-| Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` padding on `body` (index.css) and the sticky mobile header (Layout.tsx) keep content clear of the notch/status bar/home indicator.                                                                                                                                                                                         |
-| Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                        |
+| Area               | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Billing            | All purchase UI is hidden (`BillingSettings.tsx` gates on `isNativeApp()`). Native shows the current plan + usage read-only. See "Store payment rules" below — do not add purchase links without reading it.                                                                                                                                                                                                                                     |
+| Push notifications | Web push does not exist in the WebViews. Native push UI is hidden until APNs/FCM delivery is complete, so store builds do not promise reminders that cannot arrive. See "Push notifications" below.                                                                                                                                                                                                                                              |
+| Networking         | `CapacitorHttp` patches `fetch`/`XMLHttpRequest` to use native networking. This lets iOS call the API and lets both shells PUT to presigned S3 image URLs without relying on WebView CORS. Keep API Gateway managed CORS enabled for the website: it makes gateway-generated JWT 401s readable so the web client can refresh tokens. `native_app_origins` remains an exact application-layer allowlist, not a reason to remove managed web CORS. |
+| Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` padding on `body` (index.css) and the sticky mobile header (Layout.tsx) keep content clear of the notch/status bar/home indicator.                                                                                                                                                                                                                                                               |
+| Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                                                                                              |
 
 ## Store payment rules (read before touching billing UI)
 
@@ -64,19 +68,17 @@ the app through Stripe:
 
 Options if in-app purchasing is ever wanted: implement StoreKit/Play Billing
 (RevenueCat is the usual cross-store glue and can reconcile with Stripe), or
-keep the current "reader" model where users subscribe on the web and the apps
-just honor the entitlement.
+keep the current free companion model where the app honors an existing account
+entitlement without directing users to a purchase flow.
 
-The public `/pricing` marketing page still renders in the apps (its CTAs go to
-account signup, not checkout). If app review ever objects to visible prices,
-hide that route behind `isNativeApp()` too.
+The native `/pricing` route is purchase-free plan information; web prices and
+billing help are not rendered inside the shells.
 
 ## Push notifications
 
-Current state: the apps **register** device tokens; nothing **sends** to them
-yet (email/SMS reminders work in the apps from day one, so this is not
-blocking). Registered tokens live under `USER#<id>` / `DEVICE#<hash>` in
-DynamoDB so the sender covers all existing installs the day it ships.
+Current state: native registration and delivery are disabled in the product UI.
+Email/SMS reminders still work. Do not restore the toggle until the following
+delivery work is complete and verified end to end.
 
 Remaining work for delivery:
 
@@ -107,18 +109,19 @@ Remaining work for delivery:
       before production access is granted — start this early.
 - [x] App icons and launch screens: branded iOS/Android assets are generated
       from the greenhouse mark by `frontend/scripts/render-brand-assets.sh`.
-- [ ] Google Play 1024×500 feature graphic (the launcher set already includes
-      the required 512×512 icon).
-- [ ] Screenshots per device class (6.7"/6.5" iPhone, 13" iPad if targeting
-      iPad, phone + 7"/10" tablet for Play).
+- [x] Google Play 1024×500 feature graphic and both store icons in
+      `store-assets/`.
+- [x] Review-safe screenshots for 6.9" iPhone, 13" iPad, and Android phone.
+      Regenerate with `npm run store:screenshots --workspace frontend`.
 
 ### Every submission
 
 - [ ] Bump the native version numbers (`versionCode`/`versionName` in
       `android/app/build.gradle`; `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`
       in Xcode) — keep them in step with `package.json`.
-- [ ] `npm run mobile:sync` with production env vars; verify login, plant
-      CRUD, and reminders in a simulator/emulator.
+- [ ] Run `npm run mobile:release -- frontend/.env.mobile.production`; verify
+      login, account deletion, plant/task CRUD, photo uploads, and AI reporting
+      on physical devices.
 - [ ] **Android:** Android Studio → Build → Generate Signed App Bundle (.aab),
       upload to a Play testing track, roll out.
 - [ ] **iOS:** Xcode → Product → Archive → distribute to TestFlight, then
@@ -126,16 +129,15 @@ Remaining work for delivery:
 
 ### Review-proofing (first submission especially)
 
-- [ ] Privacy policy URL (already live: the site's `/privacy` route) filled in
-      on both store listings.
+- [ ] Privacy policy (`/legal/privacy`), support (`/support`), and account
+      deletion (`/account-deletion`) URLs filled in on both store listings.
 - [ ] Apple "App Privacy" + Play "Data safety" forms: declare account data
       (email, name), phone number (optional, SMS reminders), photos users
       upload, and crash/analytics telemetry (Sentry; self-hosted analytics).
-- [ ] **Account deletion** must be reachable inside the app — it is
-      (Settings → Account → delete via `DELETE /me`); point reviewers at it in
-      the review notes.
+- [ ] **Account deletion** is reachable at `/account` even before household
+      setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra
-      scrutiny. Native push + camera photo capture + the offline app shell are
+      scrutiny. Camera photo capture + the offline app shell are
       the differentiation to call out in review notes. If rejected under 4.2,
       the usual fixes are adding haptics, widgets, or native share — talk to
       review, don't resubmit blind.

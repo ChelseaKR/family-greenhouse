@@ -31,7 +31,8 @@ export type AuditEvent =
   | 'plant.deleted'
   | 'rate_limit.tripped'
   | 'chat.message_sent'
-  | 'chat.tools_called';
+  | 'chat.tools_called'
+  | 'chat.response_reported';
 
 export interface AuditFields {
   actorId?: string;

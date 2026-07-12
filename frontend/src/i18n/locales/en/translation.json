@@ -326,6 +326,13 @@
     "phoneVerifySuccess": "Phone number verified. You can now enable SMS reminders.",
     "phoneUnverifiedHint": "Verify your phone number to enable SMS reminders."
   },
+  "mobile": {
+    "accountPrompt": "Need to manage or delete this account?",
+    "openAccount": "Open account settings",
+    "backToSetup": "Back to setup",
+    "planAvailableTitle": "What stays available",
+    "planAvailableBody": "Signing in gives you access to the plants, tasks, household sharing, and care features included with your existing account. No payment is collected in this app."
+  },
   "validation": {
     "nameRequired": "Name is required",
     "nameTooLong": "Name is too long",
@@ -335,6 +342,21 @@
     "tooManyTags": "Too many tags"
   },
   "chat": {
+    "report": {
+      "success": "Response reported. Thank you.",
+      "open": "Report response",
+      "reason": "What went wrong?",
+      "details": "Details (optional)",
+      "sending": "Sending…",
+      "submit": "Submit report",
+      "cancel": "Cancel",
+      "reasons": {
+        "incorrect": "Incorrect or misleading",
+        "unsafe": "Unsafe advice",
+        "offensive": "Offensive content",
+        "other": "Something else"
+      }
+    },
     "proposal": {
       "suggested": "Suggested reminder: {{type}} for {{plant}}",
       "created": "Reminder created: {{type}} for {{plant}}",

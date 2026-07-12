@@ -16,6 +16,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { ProposalCard } from './ProposalCard';
 import { historyToDisplayMessages, type DisplayMessage } from './chatHistory';
+import { ReportResponseControl } from './ReportResponseControl';
 
 /**
  * Plant care chat — Bedrock-backed Claude with read-only tool access to the
@@ -237,12 +238,17 @@ export function ChatPage() {
           <div key={m.id}>
             {m.text && (
               <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-xl rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
-                    m.role === 'user' ? 'bg-primary-700 text-white' : 'bg-parchment text-gray-900'
-                  }`}
-                >
-                  {m.text}
+                <div className="max-w-xl">
+                  <div
+                    className={`rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
+                      m.role === 'user' ? 'bg-primary-700 text-white' : 'bg-parchment text-gray-900'
+                    }`}
+                  >
+                    {m.text}
+                  </div>
+                  {m.role === 'assistant' && conversationId && (
+                    <ReportResponseControl conversationId={conversationId} responseText={m.text} />
+                  )}
                 </div>
               </div>
             )}

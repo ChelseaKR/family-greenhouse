@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+def uploadKeystore = System.getenv('ANDROID_UPLOAD_KEYSTORE')
+def uploadKeystorePassword = System.getenv('ANDROID_UPLOAD_KEYSTORE_PASSWORD')
+def uploadKeyAlias = System.getenv('ANDROID_UPLOAD_KEY_ALIAS')
+def uploadKeyPassword = System.getenv('ANDROID_UPLOAD_KEY_PASSWORD')
+
 android {
     namespace = "net.familygreenhouse.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +12,10 @@ android {
         applicationId "net.familygreenhouse.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Deterministic SemVer mapping: 0.16.1 -> 1601. Increment this for
+        // every store upload; Play never accepts a reused versionCode.
+        versionCode 1601
+        versionName "0.16.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +23,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (uploadKeystore && uploadKeystorePassword && uploadKeyAlias && uploadKeyPassword) {
+                storeFile file(uploadKeystore)
+                storePassword uploadKeystorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (uploadKeystore) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

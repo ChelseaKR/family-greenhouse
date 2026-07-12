@@ -17,6 +17,7 @@ out/
 .env
 .env.local
 .env.*.local
+frontend/.env.mobile.production
 
 # IDE
 .idea/

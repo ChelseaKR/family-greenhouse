@@ -19,7 +19,7 @@ export function PrivacyPage() {
   });
 
   return (
-    <LegalShell title="Privacy" effectiveDate="April 25, 2026">
+    <LegalShell title="Privacy" effectiveDate="July 12, 2026">
       <p className="lead">
         This page explains what data Family Greenhouse collects, why, and what you can do about it.
         We&rsquo;ve deliberately written it as plain text rather than a template — if anything is
@@ -46,6 +46,18 @@ export function PrivacyPage() {
         <li>
           <strong>Optional phone number</strong> — only if you opt in to SMS reminders.
         </li>
+        <li>
+          <strong>Notification credentials</strong> — a browser push subscription or native-device
+          notification token only when you explicitly enable a supported notification channel. These
+          credentials identify an app installation for delivery; they are not used for advertising
+          or cross-app tracking.
+        </li>
+        <li>
+          <strong>Care-assistant conversations</strong> — the prompts you send, the assistant
+          responses, and any plant/task context needed to answer. Conversation rows expire after 30
+          days. If you report a response, we retain the flagged response, your selected reason, and
+          optional details for up to 90 days so we can investigate it.
+        </li>
       </ul>
 
       <p>If you opt in to product analytics, we also collect:</p>
@@ -68,6 +80,12 @@ export function PrivacyPage() {
           <strong>AWS</strong> — hosts our database, file storage, authentication, email, SMS, and
           serverless functions. Bound by their{' '}
           <a href="https://aws.amazon.com/compliance/data-privacy/">Data Privacy</a> commitments.
+        </li>
+        <li>
+          <strong>Amazon Bedrock</strong> (only when you use the care assistant or plant health
+          analysis) — processes your prompt and the relevant plant-care context to generate a
+          response. We use Bedrock through our AWS account; reported responses are reviewed by us,
+          not sent back to the model as training data by Family Greenhouse.
         </li>
         <li>
           <strong>Stripe</strong> — handles paid subscriptions. We never see your card number;
@@ -111,10 +129,12 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Delete.</strong> The <em>Delete account</em> button in Settings wipes your login
-          and removes you from every household you&rsquo;re a member of. Past activity events keep
-          your display name as a historical artifact (so &ldquo;Sarah watered the monstera&rdquo;
-          doesn&rsquo;t become &ldquo;[deleted user] watered the monstera&rdquo; in your
-          housemate&rsquo;s feed) — this is documented in <code>docs/profile.md</code>.
+          and notification credentials and removes you from every household you&rsquo;re a member
+          of. It is also available from the setup screen before you create or join a household.
+          Shared care facts such as a past completion may remain useful to other members, but your
+          name and account id on those records are replaced with &ldquo;Former member.&rdquo; See
+          our <a href="/account-deletion">account-deletion instructions</a> for the web request
+          path.
         </li>
         <li>
           <strong>Access / correction.</strong> Email{' '}

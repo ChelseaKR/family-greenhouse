@@ -70,6 +70,8 @@ export interface BudgetSnapshot {
   costUsd: number;
 }
 
+export type ChatReportReason = 'incorrect' | 'unsafe' | 'offensive' | 'other';
+
 /** SSE events emitted by the streaming chat endpoint (mirrors the backend's
  *  ChatStreamEvent, plus the terminal error event). */
 export type ChatStreamEvent =
@@ -114,6 +116,19 @@ export function parseProposalBlock(block: ChatContentBlock): ProposedReminderTas
 }
 
 export const chatService = {
+  async reportResponse(input: {
+    conversationId: string;
+    responseText: string;
+    reason: ChatReportReason;
+    details?: string;
+  }): Promise<{ accepted: true; reportId: string }> {
+    const response = await api.post<{ accepted: true; reportId: string }>('/chat/messages', {
+      action: 'report',
+      ...input,
+    });
+    return response.data;
+  },
+
   async sendMessage(
     message: string,
     conversationId?: string,

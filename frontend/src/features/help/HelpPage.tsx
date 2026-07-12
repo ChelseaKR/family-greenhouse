@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { isNativeApp } from '@/lib/platform';
 
 /**
  * In-app help/FAQ. Hand-curated rather than CMS-driven because the article
@@ -291,8 +292,8 @@ by task type breakdown year to date completions empty hides few tasks new househ
         a: (
           <>
             <strong>Settings → Account</strong>. The name change propagates to every household
-            you&rsquo;re a member of. Past activity events and task completion records keep the name
-            you had at the time — we don&rsquo;t rewrite history.
+            you&rsquo;re a member of. If you later delete your account, retained shared care history
+            is labeled &ldquo;Former member&rdquo; instead of keeping your name.
           </>
         ),
         searchText: md`
@@ -331,7 +332,8 @@ export data CSV download plants tasks RFC 4180 spreadsheet account settings
             <strong>Settings → Account → Delete my account</strong>. We wipe your login and remove
             you from every household you belong to. If you&rsquo;re the only admin in any of those
             households (with other members), promote someone else first or the request is refused.
-            Past completion records keep your name on them as a historical artifact.
+            Shared completion records remain for the household, but your name and account id are
+            replaced with &ldquo;Former member.&rdquo;
           </>
         ),
         searchText: md`
@@ -426,19 +428,28 @@ function flatten(sections: HelpSection[]): Array<{ section: HelpSection; article
 
 export function HelpPage() {
   useDocumentTitle('Help');
+  const native = isNativeApp();
   const [open, setOpen] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return SECTIONS;
-    return SECTIONS.map((section) => {
-      const articles = section.articles.filter(
-        (a) => a.q.toLowerCase().includes(q) || a.searchText.toLowerCase().includes(q)
-      );
-      return { ...section, articles };
-    }).filter((s) => s.articles.length > 0);
-  }, [query]);
+    // Native store builds do not sell plans or send users to an external
+    // payment flow. The read-only Plan screen remains available in Settings,
+    // while web-only billing instructions stay out of native help/search.
+    const availableSections = native
+      ? SECTIONS.filter((section) => section.id !== 'billing')
+      : SECTIONS;
+    if (!q) return availableSections;
+    return availableSections
+      .map((section) => {
+        const articles = section.articles.filter(
+          (a) => a.q.toLowerCase().includes(q) || a.searchText.toLowerCase().includes(q)
+        );
+        return { ...section, articles };
+      })
+      .filter((s) => s.articles.length > 0);
+  }, [native, query]);
 
   const visibleArticles = flatten(filtered);
 

@@ -4,8 +4,10 @@
  * ALLOWED_ORIGIN is ordered: the public web origin first (also used for link
  * building), followed by the Capacitor shell origins. Custom WebView schemes
  * such as capacitor:// are valid browser origins but are rejected by AWS's
- * managed API Gateway / Function URL CORS APIs, so the application layer is
- * the eventual source of truth for the complete list.
+ * managed API Gateway / Function URL CORS APIs. Native apps therefore use
+ * CapacitorHttp; the application allowlist still governs Lambda-owned
+ * responses, while managed CORS MUST remain in front of browser traffic so
+ * API Gateway's own JWT 401 responses stay readable by the refresh client.
  */
 
 export const CORS_ALLOWED_HEADERS = [

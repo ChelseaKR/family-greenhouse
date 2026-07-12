@@ -7,7 +7,9 @@ const FOOTER_LINKS = [
   { label: 'Pricing', to: '/pricing' },
   { label: 'Changelog', to: '/changelog' },
   { label: 'Status', to: '/status' },
+  { label: 'Support', to: '/support' },
   { label: 'Privacy', to: '/legal/privacy' },
+  { label: 'Delete account', to: '/account-deletion' },
   { label: 'Terms', to: '/legal/terms' },
 ];
 

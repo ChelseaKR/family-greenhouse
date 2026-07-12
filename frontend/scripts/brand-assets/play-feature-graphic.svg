@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500" role="img" aria-labelledby="title desc">
+  <title id="title">Family Greenhouse</title>
+  <desc id="desc">Plant care, shared. Reminders, schedules, and one care log for the whole household.</desc>
+  <rect width="1024" height="500" fill="#173404"/>
+
+  <!-- Quiet greenhouse geometry keeps the edges useful when Play crops the art. -->
+  <g fill="none" stroke="#97C459" stroke-width="2" opacity=".12">
+    <path d="M0 144 170 0M0 330 365 0M676 500 1024 184M856 500 1024 348"/>
+    <path d="M0 144 170 0 340 144M676 500 850 342 1024 500"/>
+  </g>
+  <circle cx="914" cy="82" r="112" fill="#639922" opacity=".17"/>
+
+  <text x="76" y="102" font-family="Instrument Sans, Arial, sans-serif" font-size="19" font-weight="600" letter-spacing="4.5" fill="#97C459">FAMILY GREENHOUSE</text>
+  <text x="74" y="200" font-family="Gloock, Georgia, serif" font-size="62" font-weight="400" fill="#F7F8F2">
+    <tspan x="74" dy="0">Plant care,</tspan>
+    <tspan x="74" dy="68">shared.</tspan>
+  </text>
+  <text x="78" y="338" font-family="Instrument Sans, Arial, sans-serif" font-size="24" fill="#DDEEE7">
+    <tspan x="78" dy="0">Reminders · schedules · one care log</tspan>
+    <tspan x="78" dy="34">for the whole household.</tspan>
+  </text>
+  <path d="M78 420h390" stroke="#639922" stroke-width="3"/>
+  <text x="78" y="454" font-family="Instrument Sans, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="3" fill="#97C459">GROW TOGETHER</text>
+
+  <!-- Brand mark, redrawn from the canonical icon source at a store-safe scale. -->
+  <g transform="translate(604 72) scale(.68)">
+    <circle cx="382" cy="106" r="42" fill="#97C459" opacity=".75"/>
+    <path d="M96 224 256 82l160 142v202H96Z" fill="#EAF3DE"/>
+    <path d="M96 224 256 82l160 142M96 224h320v202H96Z" fill="none" stroke="#C0DD97" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M256 88v338M103 225h306" fill="none" stroke="#639922" stroke-width="7" opacity=".55"/>
+    <path d="M112 238v174h288V238M112 240 256 112l144 128" fill="none" stroke="#FFFFFF" stroke-width="8" opacity=".48"/>
+    <path d="M82 426h348" stroke="#DC6C1F" stroke-width="18" stroke-linecap="round"/>
+    <path d="M218 426V312h76v114" fill="#C0DD97" stroke="#27500A" stroke-width="9" stroke-linejoin="round"/>
+    <circle cx="278" cy="370" r="6" fill="#A23F1A"/>
+    <path d="M160 404V276M160 316c-33-2-51-21-54-51 33 0 53 18 54 51Zm0 40c37-2 58-22 62-57-37 1-59 20-62 57Z" fill="#639922" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M352 404V270M352 308c33-2 51-21 54-51-33 0-53 18-54 51Zm0 44c-37-2-58-22-62-57 37 1 59 20 62 57Z" fill="#97C459" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
