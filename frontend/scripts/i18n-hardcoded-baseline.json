@@ -51,7 +51,7 @@
     "features/settings/AccountSettings.tsx": 13,
     "features/settings/ApiKeysSettings.tsx": 11,
     "features/settings/BillingSettings.tsx": 18,
-    "features/settings/NotificationSettings.tsx": 17,
+    "features/settings/NotificationSettings.tsx": 16,
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 10,
     "features/status/StatusPage.tsx": 16,

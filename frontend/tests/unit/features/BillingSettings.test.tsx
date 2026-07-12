@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -154,6 +154,58 @@ describe('BillingSettings', () => {
     });
     expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
+  });
+
+  it('shows the plan grid on the web (no native notice)', async () => {
+    await renderBilling({ planId: 'seedling' });
+    expect(screen.getByRole('radiogroup', { name: 'Billing interval' })).toBeInTheDocument();
+    // Non-current plans render as cards (their CTA text varies with IS_BETA).
+    expect(screen.getByText('Greenhouse')).toBeInTheDocument();
+    expect(screen.queryByText("Plan changes aren't available in the app.")).not.toBeInTheDocument();
+  });
+
+  describe('inside the native (Capacitor) shells', () => {
+    beforeEach(() => {
+      // Simulate the global the Capacitor bridge injects (lib/platform.ts
+      // reads it instead of importing @capacitor/core).
+      (window as unknown as { Capacitor?: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+      };
+    });
+
+    afterEach(() => {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    });
+
+    it('hides ALL purchase UI (store payment rules) and shows the read-only notice', async () => {
+      await renderBilling({
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        usage: usage(),
+      });
+      // No checkout cards (Greenhouse is the non-current plan here), no
+      // cadence toggle, no Stripe portal button.
+      expect(screen.queryByText('Greenhouse')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Upgrade to/ })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('radiogroup', { name: 'Billing interval' })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
+      // Read-only state: current plan + usage still visible, plus the notice.
+      expect(screen.getByText("Plan changes aren't available in the app.")).toBeInTheDocument();
+      expect(screen.getByTestId('usage-meters')).toBeInTheDocument();
+    });
+
+    it('hides the over-limit banner portal link on native too', async () => {
+      await renderBilling({
+        planId: 'seedling',
+        stripeCustomerId: 'cus_1',
+        usage: { plantCount: 25, maxPlants: 10, memberCount: 1, maxMembers: 1 },
+      });
+      expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
+    });
   });
 
   it('shows the Lifetime cadence as "$149 once" on Garden only, leaving Greenhouse on its annual price', async () => {

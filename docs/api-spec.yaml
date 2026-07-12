@@ -716,6 +716,20 @@ paths:
       tags: [Notifications]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /notifications/devices:
+    post:
+      summary:
+        'Register a native (Capacitor iOS/Android) push device token (body: platform ios|android,
+        token). Capture-only until the APNs/FCM sender ships — see docs/mobile.md'
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/devices/remove:
+    post:
+      summary: Remove a native push device token
+      tags: [Notifications]
+      responses:
+        '204': { description: Device token removed }
 
   # --- Billing ---
   /billing/plans:

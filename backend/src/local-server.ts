@@ -174,6 +174,13 @@ interface PushSubscriptionRecord {
   createdAt: string;
 }
 
+interface DeviceTokenRecord {
+  userId: string;
+  platform: 'ios' | 'android';
+  token: string;
+  createdAt: string;
+}
+
 interface NotificationPrefsRecord {
   userId: string;
   browser: boolean;
@@ -294,6 +301,7 @@ export const db = {
   // member per household — mirrors the VACATION#{userId} SK in production).
   vacations: new Map<string, VacationWindow>(),
   pushSubscriptions: new Map<string, PushSubscriptionRecord>(),
+  deviceTokens: new Map<string, DeviceTokenRecord>(), // `${userId}|${token}` native push
   notificationPrefs: new Map<string, NotificationPrefsRecord>(),
   phoneVerifications: new Map<string, PhoneVerificationRecord>(), // userId -> pending code
   recapSent: new Set<string>(), // `${householdId}|${year}` once-per-year markers
@@ -319,6 +327,7 @@ export function resetDb(): void {
   db.activity.clear();
   db.vacations.clear();
   db.pushSubscriptions.clear();
+  db.deviceTokens.clear();
   db.notificationPrefs.clear();
   db.phoneVerifications.clear();
   db.recapSent.clear();
@@ -737,6 +746,9 @@ app.delete('/me', authMiddleware, (req, res) => {
   // User-scoped personal data: push subscriptions + notification prefs.
   for (const [key, sub] of db.pushSubscriptions.entries()) {
     if (sub.userId === dbUser.id) db.pushSubscriptions.delete(key);
+  }
+  for (const [key, device] of db.deviceTokens.entries()) {
+    if (device.userId === dbUser.id) db.deviceTokens.delete(key);
   }
   db.notificationPrefs.delete(dbUser.id);
 
@@ -3072,6 +3084,16 @@ const unsubscribeSchema = z.object({
   endpoint: z.string().url(),
 });
 
+// Mirrors registerDeviceSchema / unregisterDeviceSchema (native Capacitor push).
+const registerDeviceSchema = z.object({
+  platform: z.enum(['ios', 'android']),
+  token: z.string().min(16).max(4096),
+});
+
+const unregisterDeviceSchema = z.object({
+  token: z.string().min(16).max(4096),
+});
+
 app.get('/notifications/prefs', authMiddleware, (req, res) => {
   const user = (req as any).user;
   res.json(db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId));
@@ -3188,6 +3210,38 @@ app.post(
     const user = (req as any).user;
     const { endpoint } = (req as any).validatedBody;
     db.pushSubscriptions.delete(`${user.userId}|${endpoint}`);
+    res.status(204).send();
+  }
+);
+
+app.post(
+  '/notifications/devices',
+  authMiddleware,
+  validateBody(registerDeviceSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (!user.householdId) {
+      return res.status(403).json({ message: 'User must belong to a household' });
+    }
+    const { platform, token } = (req as any).validatedBody;
+    db.deviceTokens.set(`${user.userId}|${token}`, {
+      userId: user.userId,
+      platform,
+      token,
+      createdAt: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  }
+);
+
+app.post(
+  '/notifications/devices/remove',
+  authMiddleware,
+  validateBody(unregisterDeviceSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const { token } = (req as any).validatedBody;
+    db.deviceTokens.delete(`${user.userId}|${token}`);
     res.status(204).send();
   }
 );

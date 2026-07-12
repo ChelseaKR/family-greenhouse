@@ -39,8 +39,21 @@ variable "images_bucket_arn" {
 }
 
 variable "allowed_origin" {
-  description = "Allowed CORS origin"
+  description = "Allowed CORS origin (the user-facing web origin; also used to build links)"
   type        = string
+}
+
+variable "native_app_origins" {
+  description = <<-EOT
+    Extra CORS origins for the Capacitor mobile shells. The iOS WebView serves
+    the bundled app from capacitor://localhost and the Android WebView from
+    https://localhost, so API calls from inside the apps present these Origins.
+    Exact-scheme origins only reachable from the app binaries — no third-party
+    website can run script under them, so allowing them does not widen the
+    browser attack surface.
+  EOT
+  type        = list(string)
+  default     = ["capacitor://localhost", "https://localhost"]
 }
 
 variable "bedrock_chat_model_id" {

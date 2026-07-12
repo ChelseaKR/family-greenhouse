@@ -20,7 +20,7 @@ Built with React + TypeScript on the frontend and AWS Lambda + DynamoDB (single-
 
 ```
 family-greenhouse/
-├── frontend/         React + Vite SPA
+├── frontend/         React + Vite SPA (+ Capacitor iOS/Android shells — docs/mobile.md)
 ├── backend/          Lambda handlers + a local Express mock that mirrors them
 ├── infrastructure/   Terraform stack (network, Cognito, DDB, S3, API Gateway, CloudFront)
 ├── docs/             Detailed docs — start with development.md if you're new

@@ -14,7 +14,13 @@ import {
   requestPermission,
 } from '@/utils/notifications';
 import { notificationService } from '@/services/notificationService';
+import {
+  isNativePushEnabled,
+  registerNativePush,
+  unregisterNativePush,
+} from '@/services/nativePush';
 import { getErrorMessage } from '@/services/api';
+import { isNativeApp } from '@/lib/platform';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY ?? '') as string;
@@ -46,8 +52,14 @@ export function NotificationSettings() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
+  // Inside the Capacitor shells the web Notification/PushManager APIs don't
+  // exist (iOS WKWebView has neither) — the device channel goes through
+  // native APNs/FCM registration instead (services/nativePush.ts).
+  const native = isNativeApp();
   const [permission, setPermission] = useState<ReturnType<typeof getPermission>>(getPermission());
-  const [browserActive, setBrowserActive] = useState(isEnabledLocally());
+  const [browserActive, setBrowserActive] = useState(
+    native ? isNativePushEnabled() : isEnabledLocally()
+  );
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phoneDraft, setPhoneDraft] = useState('');
@@ -62,9 +74,10 @@ export function NotificationSettings() {
   );
 
   useEffect(() => {
+    if (native) return;
     setPermission(getPermission());
     setBrowserActive(isEnabledLocally());
-  }, []);
+  }, [native]);
 
   const prefsQuery = useQuery({
     // Preferences are stored per household membership — scope by household.
@@ -154,6 +167,11 @@ export function NotificationSettings() {
 
   const enableBrowser = useMutation({
     mutationFn: async () => {
+      if (native) {
+        // Throws on OS-level permission denial with a user-facing message.
+        await registerNativePush();
+        return;
+      }
       const result = await requestPermission();
       if (result === 'unsupported') {
         throw new Error('This browser does not support notifications.');
@@ -188,6 +206,10 @@ export function NotificationSettings() {
 
   const disableBrowser = useMutation({
     mutationFn: async () => {
+      if (native) {
+        await unregisterNativePush();
+        return;
+      }
       disableLocally();
       if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
@@ -204,7 +226,7 @@ export function NotificationSettings() {
     },
   });
 
-  if (!isSupported()) {
+  if (!native && !isSupported()) {
     return (
       <Card>
         <CardHeader title="Notifications" description="How you want to be reminded" />
@@ -222,7 +244,9 @@ export function NotificationSettings() {
   }
 
   const prefs = prefsQuery.data!;
-  const canEnableBrowser = permission !== 'denied';
+  // Native permission state is handled inside registerNativePush (the OS
+  // prompt), so the web permission gate only applies in browsers.
+  const canEnableBrowser = native || permission !== 'denied';
   // Verified status applies to the SAVED number; editing the field to a
   // different number drops back to the unverified flow until confirmed.
   const phoneIsVerified =
@@ -238,16 +262,22 @@ export function NotificationSettings() {
         {error && <Alert variant="error">{error}</Alert>}
         {info && <Alert variant="success">{info}</Alert>}
 
-        {/* Browser */}
+        {/* Browser (web) / this device (native shells) */}
         <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
-            <p className="text-sm font-medium text-gray-900">Browser</p>
+            <p className="text-sm font-medium text-gray-900">
+              {native ? t('notifications.deviceTitle') : 'Browser'}
+            </p>
             <p className="text-sm text-gray-600">
-              {browserActive
-                ? 'Pop-ups appear while a tab is open or the app is installed.'
-                : permission === 'denied'
-                  ? 'Permission denied — update your browser settings to re-enable.'
-                  : 'Enable to be alerted when overdue tasks appear in the dashboard.'}
+              {native
+                ? browserActive
+                  ? t('notifications.deviceActive')
+                  : t('notifications.deviceInactive')
+                : browserActive
+                  ? 'Pop-ups appear while a tab is open or the app is installed.'
+                  : permission === 'denied'
+                    ? 'Permission denied — update your browser settings to re-enable.'
+                    : 'Enable to be alerted when overdue tasks appear in the dashboard.'}
             </p>
           </div>
           {browserActive ? (

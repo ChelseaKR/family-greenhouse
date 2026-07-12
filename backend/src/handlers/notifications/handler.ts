@@ -12,6 +12,7 @@ import {
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { authRateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
+import * as deviceTokens from '../../services/deviceTokens.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
 import { remindHousehold } from '../../services/reminders.js';
 import { digestHousehold, recapHousehold, defaultRecapYear } from '../../services/digest.js';
@@ -32,6 +33,21 @@ const unsubscribeSchema = z.object({
 });
 
 type UnsubscribeInput = z.infer<typeof unsubscribeSchema>;
+
+/** Native (Capacitor iOS/Android) push device tokens. APNs tokens are 64+ hex
+ *  chars; FCM tokens are opaque strings up to a few hundred chars. */
+const registerDeviceSchema = z.object({
+  platform: z.enum(['ios', 'android']),
+  token: z.string().min(16).max(4096),
+});
+
+type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
+
+const unregisterDeviceSchema = z.object({
+  token: z.string().min(16).max(4096),
+});
+
+type UnregisterDeviceInput = z.infer<typeof unregisterDeviceSchema>;
 
 const TIME_HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
@@ -134,6 +150,45 @@ export const subscribe = createHandler(
 )
   .use(authMiddleware())
   .use(validateBody(subscribeSchema));
+
+/**
+ * POST /notifications/devices — register a native (iOS/Android) push device
+ * token from the Capacitor shells. Mirrors /notifications/subscribe for web
+ * push. CAPTURE-ONLY until the APNs/FCM sender lands (docs/mobile.md): tokens
+ * are stored so the sender covers existing installs the day it ships.
+ */
+// POST /notifications/devices
+export const registerDevice = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<RegisterDeviceInput>;
+    if (!user.householdId) {
+      throw createHttpError(403, 'User must belong to a household');
+    }
+    await deviceTokens.saveDeviceToken({
+      userId: user.userId,
+      householdId: user.householdId,
+      platform: validatedBody.platform,
+      token: validatedBody.token,
+      createdAt: new Date().toISOString(),
+    });
+    return successResponse({ ok: true });
+  }
+)
+  .use(authMiddleware())
+  .use(validateBody(registerDeviceSchema));
+
+// POST /notifications/devices/remove
+export const unregisterDevice = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<UnregisterDeviceInput>;
+    await deviceTokens.deleteDeviceToken(user.userId, validatedBody.token);
+    return noContentResponse();
+  }
+)
+  .use(authMiddleware())
+  .use(validateBody(unregisterDeviceSchema));
 
 // POST /notifications/unsubscribe
 export const unsubscribe = createHandler(
@@ -287,6 +342,8 @@ export const handler = createRouter({
   'PUT /notifications/prefs': updatePrefs,
   'POST /notifications/subscribe': subscribe,
   'POST /notifications/unsubscribe': unsubscribe,
+  'POST /notifications/devices': registerDevice,
+  'POST /notifications/devices/remove': unregisterDevice,
   'POST /notifications/run-reminders': runReminders,
   'POST /notifications/run-digests': runDigests,
   'POST /notifications/run-year-recap': runYearRecap,

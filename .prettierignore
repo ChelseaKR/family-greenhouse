@@ -12,6 +12,12 @@ coverage
 frontend/vite.config.js
 frontend/vite.config.d.ts
 
+# Capacitor native shells — generated Xcode/Gradle projects managed by the
+# Capacitor CLI and native tooling, not Prettier (reformatting them churns
+# every `npx cap sync` / Android Studio / Xcode touch).
+frontend/android
+frontend/ios
+
 # RAG corpus sources — hand-authored prose embedded verbatim into
 # plant-care-corpus-embeddings.json. Prettier's markdown emphasis rewrite
 # (*x* → _x_) would silently desync the committed embeddings and trip the

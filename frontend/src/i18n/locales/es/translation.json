@@ -298,6 +298,7 @@
       "usageTitle": "Uso",
       "plantsUsage": "{{n}} de {{max}} plantas",
       "membersUsage": "{{n}} de {{max}} miembros",
+      "nativeUnavailable": "Los cambios de plan no están disponibles en la aplicación.",
       "overLimitTitle": "Por encima del límite de tu plan",
       "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite o mejores tu plan.",
       "manageSubscription": "Gestionar suscripción"
@@ -308,6 +309,9 @@
     "browser": "Navegador",
     "email": "Correo",
     "sms": "Mensaje de texto",
+    "deviceTitle": "Este dispositivo",
+    "deviceActive": "Las notificaciones push están activadas en este dispositivo.",
+    "deviceInactive": "Activa los recordatorios push en este dispositivo.",
     "weeklyDigestTitle": "Resumen semanal de plantas",
     "weeklyDigestDescription": "Un correo a la semana con las plantas en mayor riesgo, ordenadas por el cuidado más atrasado.",
     "weeklyDigestRequiresEmail": "Activa las notificaciones por correo para recibir el resumen semanal.",

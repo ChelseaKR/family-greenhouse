@@ -139,7 +139,11 @@ export function Layout() {
             sticky bar lets page text show through at reduced contrast while
             scrolling, which both fails WCAG AA for the underlying text and
             makes axe color-contrast results nondeterministic. */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-primary-100/80 bg-paper px-4 sm:gap-x-6 sm:px-6 lg:hidden">
+        {/* min-h + safe-area padding (not fixed h-16): with viewport-fit=cover
+            the native shells and installed PWAs draw edge-to-edge, so the bar
+            extends its own background under the iOS/Android status bar and
+            keeps its content below it. env() is 0 in regular browser tabs. */}
+        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-primary-100/80 bg-paper px-4 pt-[env(safe-area-inset-top)] sm:gap-x-6 sm:px-6 lg:hidden">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"

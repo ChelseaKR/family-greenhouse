@@ -19,6 +19,7 @@ import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { IS_BETA, BETA_NOTICE } from '@/lib/betaMode';
+import { isNativeApp } from '@/lib/platform';
 import clsx from 'clsx';
 
 export function BillingSettings() {
@@ -36,6 +37,12 @@ export function BillingSettings() {
     if (status === 'success') setNotice('Subscription activated. Thanks for supporting the app!');
     if (status === 'cancel') setNotice('Checkout cancelled — no changes were made.');
   }, [searchParams]);
+
+  // App Store / Play Store compliance (Apple 3.1.1, Play Payments policy):
+  // inside the native shells we sell nothing and link to no external purchase
+  // flow — Stripe checkout, the Stripe portal, and upgrade CTAs are web-only.
+  // Native shows the current plan + usage read-only ("reader" model).
+  const native = isNativeApp();
 
   const householdId = useActiveHouseholdId();
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
@@ -103,7 +110,7 @@ export function BillingSettings() {
         {overLimit && (
           <Alert variant="warning" title={t('settings.billing.overLimitTitle')} className="mb-4">
             <p>{t('settings.billing.overLimitBody')}</p>
-            {isAdmin && subQuery.data?.stripeCustomerId && (
+            {!native && isAdmin && subQuery.data?.stripeCustomerId && (
               <button
                 type="button"
                 className="mt-2 inline-flex min-h-touch items-center font-medium underline"
@@ -123,7 +130,10 @@ export function BillingSettings() {
           {subQuery.data?.status === 'trialing' && ' (free trial)'}.
         </p>
         {usage && <UsageMeters usage={usage} />}
-        {!IS_BETA && isAdmin && subQuery.data?.stripeCustomerId && (
+        {native && (
+          <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+        )}
+        {!native && !IS_BETA && isAdmin && subQuery.data?.stripeCustomerId && (
           <Button
             className="mt-4"
             variant="secondary"
@@ -135,32 +145,36 @@ export function BillingSettings() {
         )}
       </Card>
 
-      <BillingIntervalToggle value={interval} onChange={setInterval} />
+      {!native && (
+        <>
+          <BillingIntervalToggle value={interval} onChange={setInterval} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
-        {plans.map((plan) => {
-          // Lifetime is Garden-only. For every other tier, the Lifetime cadence
-          // falls back to Annual so the card stays priced and checkout never
-          // sends interval='lifetime' for a tier the backend would reject.
-          const effectiveInterval: BillingInterval =
-            interval === 'lifetime' && plan.lifetimePrice == null ? 'year' : interval;
-          return (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              interval={effectiveInterval}
-              current={plan.id === currentPlanId}
-              isAdmin={isAdmin}
-              beta={IS_BETA}
-              onSelect={(id) => {
-                if (id === 'seedling') return;
-                checkout.mutate({ planId: id, interval: effectiveInterval });
-              }}
-              isLoading={checkout.isPending && checkout.variables?.planId === plan.id}
-            />
-          );
-        })}
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:grid-cols-3">
+            {plans.map((plan) => {
+              // Lifetime is Garden-only. For every other tier, the Lifetime cadence
+              // falls back to Annual so the card stays priced and checkout never
+              // sends interval='lifetime' for a tier the backend would reject.
+              const effectiveInterval: BillingInterval =
+                interval === 'lifetime' && plan.lifetimePrice == null ? 'year' : interval;
+              return (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  interval={effectiveInterval}
+                  current={plan.id === currentPlanId}
+                  isAdmin={isAdmin}
+                  beta={IS_BETA}
+                  onSelect={(id) => {
+                    if (id === 'seedling') return;
+                    checkout.mutate({ planId: id, interval: effectiveInterval });
+                  }}
+                  isLoading={checkout.isPending && checkout.variables?.planId === plan.id}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

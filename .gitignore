@@ -46,6 +46,16 @@ playwright-report/
 test-results/
 .lighthouseci/
 
+# Capacitor (native shells): the web bundle copied in by `npx cap sync` is a
+# build artifact of frontend/dist — regenerate it, never commit it. The native
+# projects themselves (frontend/android, frontend/ios) ARE source and are
+# tracked; each ships its own platform .gitignore for build outputs.
+frontend/android/app/src/main/assets/public/
+frontend/android/app/src/main/assets/capacitor.config.json
+frontend/android/app/src/main/assets/capacitor.plugins.json
+frontend/ios/App/App/public/
+frontend/ios/App/App/capacitor.config.json
+
 # Terraform
 **/.terraform/
 *.tfstate
