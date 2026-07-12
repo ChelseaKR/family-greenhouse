@@ -91,4 +91,22 @@ describe('AccountSettings — CSV export', () => {
       .mock.calls.find(([filename]) => filename.includes('plants'));
     expect(plantsCsvCall?.[1]).toContain('Fiddle Leaf Fig');
   });
+
+  it('keeps deletion available before household setup and hides household-only exports', () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u-1',
+        email: 'a@b.com',
+        name: 'Alice',
+        householdId: null,
+        householdRole: null,
+      },
+    } as never);
+    renderSettings();
+
+    expect(screen.getByRole('button', { name: 'Delete my account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download full data (JSON)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendar feed')).not.toBeInTheDocument();
+  });
 });

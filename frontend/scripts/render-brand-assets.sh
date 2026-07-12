@@ -3,14 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
 PUBLIC="$FRONTEND_DIR/public/brand"
 SOURCES="$SCRIPT_DIR/brand-assets"
 ANDROID="$FRONTEND_DIR/android/app/src/main/res"
 IOS="$FRONTEND_DIR/ios/App/App/Assets.xcassets"
+STORE="$REPO_ROOT/store-assets"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/family-greenhouse-brand.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 cd "$FRONTEND_DIR"
+mkdir -p "$STORE/google-play" "$STORE/app-store"
 export FONTCONFIG_FILE="$SOURCES/fonts.conf"
 export XDG_CACHE_HOME="$TMP/font-cache"
 
@@ -64,6 +67,12 @@ composite_on_color "$PUBLIC/logo-light.png" "white" 800 460 "$PUBLIC/logo-on-whi
 render "$PUBLIC/logo-dark.svg" 800 460 "$PUBLIC/logo-dark.png"
 render "$SOURCES/og-image.svg" 1200 630 "$PUBLIC/og-image.png"
 render "$SOURCES/twitter-card.svg" 1200 600 "$PUBLIC/twitter-card.png"
+
+# Store listing artwork. These are generated beside the metadata so the exact
+# binaries uploaded to the stores are reviewable and reproducible.
+render "$PUBLIC/icon.svg" 512 512 "$STORE/google-play/app-icon-512.png"
+render "$SOURCES/play-feature-graphic.svg" 1024 500 "$STORE/google-play/feature-graphic-1024x500.png"
+render "$PUBLIC/icon-on-green.svg" 1024 1024 "$STORE/app-store/app-icon-1024.png"
 
 # iOS app icon and universal launch art.
 render "$PUBLIC/icon-on-green.svg" 1024 1024 "$IOS/AppIcon.appiconset/AppIcon-512@2x.png"

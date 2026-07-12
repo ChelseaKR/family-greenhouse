@@ -7,9 +7,11 @@ locals {
   # firstAllowedOrigin), so order matters here.
   allowed_origins = concat([var.allowed_origin], var.native_app_origins)
   # AWS managed CORS accepts only HTTP(S) origins. Keep the full exact list in
-  # ALLOWED_ORIGIN for application-managed CORS, but filter custom WebView
-  # schemes (notably capacitor:// on iOS) out of API Gateway / Function URL
-  # configuration during the first phase of the ownership migration.
+  # ALLOWED_ORIGIN for Lambda-owned responses, but filter custom WebView
+  # schemes (notably capacitor:// on iOS) out of API Gateway / Function URL.
+  # Native shells use CapacitorHttp and do not depend on browser CORS. Do NOT
+  # remove this managed block: it also stamps Gateway-owned JWT 401 responses,
+  # which the website must read in order to run its refresh-token flow.
   managed_cors_origins = [
     for origin in local.allowed_origins : origin
     if can(regex("^https?://", origin))
@@ -346,11 +348,11 @@ locals {
     POSTHOG_HOST = var.posthog_host
   }
 
-  # Phase-one safety switch for the standalone streaming function. The API
-  # fleet can emit application CORS behind API Gateway managed CORS, whose
-  # response headers take precedence. Function URL CORS can instead duplicate
-  # handler headers, so keep them disabled until the follow-up release removes
-  # the managed block and flips this switch true.
+  # Safety switch for the standalone streaming function only. Function URL
+  # managed CORS and handler-emitted CORS can duplicate response headers, so
+  # keep application CORS disabled while the URL's managed block is present.
+  # Native store builds leave streaming unconfigured and use the synchronous
+  # chat API through CapacitorHttp.
   chat_stream_environment = merge(local.lambda_environment, {
     APPLICATION_CORS_ENABLED = tostring(var.application_cors_enabled)
   })

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { track } from '@/services/analytics';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import { Card } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { getPendingShareCode, clearPendingShareCode } from '@/features/plants/pendingShareCode';
+import { useTranslation } from 'react-i18next';
 
 type OnboardingStep = 'choice' | 'create' | 'join';
 
@@ -27,6 +28,7 @@ const createHouseholdSchema = z.object({
 type CreateHouseholdFormData = z.infer<typeof createHouseholdSchema>;
 
 export function HouseholdOnboarding() {
+  const { t } = useTranslation();
   useDocumentTitle('Welcome');
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -212,6 +214,17 @@ export function HouseholdOnboarding() {
               </Button>
             </div>
           </Card>
+        )}
+        {!isAddingAnother && (
+          <p className="mt-6 text-center text-sm text-gray-600">
+            {t('mobile.accountPrompt')}{' '}
+            <Link
+              to="/account"
+              className="font-medium text-primary-700 underline underline-offset-2"
+            >
+              {t('mobile.openAccount')}
+            </Link>
+          </p>
         )}
       </div>
     </div>

@@ -183,4 +183,19 @@ describe('NotificationSettings', () => {
       pestAlerts: true,
     });
   });
+
+  it('hides the nonfunctional device-push control in native shells', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      await renderSettings(prefs());
+      expect(screen.queryByText('Browser')).not.toBeInTheDocument();
+      expect(screen.queryByText('This device')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Email notifications' })).toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
 });

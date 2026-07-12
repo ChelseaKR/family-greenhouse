@@ -185,6 +185,17 @@ interface DeviceTokenRecord {
   createdAt: string;
 }
 
+interface ChatReportRecord {
+  id: string;
+  userId: string;
+  householdId: string;
+  conversationId: string;
+  responseText: string;
+  reason: 'incorrect' | 'unsafe' | 'offensive' | 'other';
+  details: string | null;
+  createdAt: string;
+}
+
 interface NotificationPrefsRecord {
   userId: string;
   browser: boolean;
@@ -306,6 +317,7 @@ export const db = {
   vacations: new Map<string, VacationWindow>(),
   pushSubscriptions: new Map<string, PushSubscriptionRecord>(),
   deviceTokens: new Map<string, DeviceTokenRecord>(), // `${userId}|${token}` native push
+  chatReports: new Map<string, ChatReportRecord>(),
   notificationPrefs: new Map<string, NotificationPrefsRecord>(),
   phoneVerifications: new Map<string, PhoneVerificationRecord>(), // userId -> pending code
   recapSent: new Set<string>(), // `${householdId}|${year}` once-per-year markers
@@ -332,6 +344,7 @@ export function resetDb(): void {
   db.vacations.clear();
   db.pushSubscriptions.clear();
   db.deviceTokens.clear();
+  db.chatReports.clear();
   db.notificationPrefs.clear();
   db.phoneVerifications.clear();
   db.recapSent.clear();
@@ -743,6 +756,36 @@ app.delete('/me', authMiddleware, (req, res) => {
         if (k.householdId === m.householdId) db.apiKeys.delete(kid);
       }
       db.households.delete(m.householdId);
+    }
+
+    // Retained shared records preserve the household's care history without
+    // retaining the departing member's name or stable account id.
+    const household = db.households.get(m.householdId);
+    if (household?.createdBy === dbUser.id) household.createdBy = 'deleted-user';
+    for (const plant of db.plants.values()) {
+      if (plant.householdId === m.householdId && plant.createdBy === dbUser.id) {
+        plant.createdBy = 'deleted-user';
+      }
+    }
+    for (const task of db.tasks.values()) {
+      if (task.householdId !== m.householdId) continue;
+      if (task.createdBy === dbUser.id) task.createdBy = 'deleted-user';
+      if (task.assignedTo === dbUser.id) {
+        task.assignedTo = null;
+        task.assignedToName = null;
+      }
+    }
+    for (const completion of db.completions.values()) {
+      if (completion.householdId === m.householdId && completion.completedBy === dbUser.id) {
+        completion.completedBy = 'deleted-user';
+        completion.completedByName = 'Former member';
+      }
+    }
+    for (const event of db.activity.values()) {
+      if (event.householdId === m.householdId && event.actorId === dbUser.id) {
+        event.actorId = 'deleted-user';
+        event.actorName = 'Former member';
+      }
     }
   }
   dbUser.memberships = [];
@@ -2924,11 +2967,23 @@ app.post('/billing/webhook', (req, res) => {
 // Bedrock; it returns a canned RunChatTurnResult-shaped response so the
 // frontend chat UI can be exercised offline.
 const sendMessageSchema = z.object({
+  action: z.literal('message').optional(),
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().uuid().optional(),
   // Idempotency key (#3). The mock has no Bedrock/budget so it just accepts it.
   turnId: z.string().uuid().optional(),
 });
+
+const chatRequestSchema = z.union([
+  z.object({
+    action: z.literal('report'),
+    conversationId: z.string().uuid(),
+    responseText: z.string().trim().min(1).max(8000),
+    reason: z.enum(['incorrect', 'unsafe', 'offensive', 'other']),
+    details: z.string().trim().max(1000).optional(),
+  }),
+  sendMessageSchema,
+]);
 
 const CHAT_BUDGET = {
   maxInputTokensPerMonth: Number(process.env.CHAT_BUDGET_INPUT_TOKENS || '250000'),
@@ -2939,9 +2994,24 @@ app.post(
   '/chat/messages',
   authMiddleware,
   requireHousehold,
-  validateBody(sendMessageSchema),
+  validateBody(chatRequestSchema),
   (req, res) => {
     const body = (req as any).validatedBody;
+    if (body.action === 'report') {
+      const user = (req as any).user;
+      const reportId = uuidv4();
+      db.chatReports.set(reportId, {
+        id: reportId,
+        userId: user.userId,
+        householdId: user.householdId,
+        conversationId: body.conversationId,
+        responseText: body.responseText,
+        reason: body.reason,
+        details: body.details || null,
+        createdAt: new Date().toISOString(),
+      });
+      return res.json({ accepted: true, reportId });
+    }
     res.json({
       conversationId: body.conversationId ?? uuidv4(),
       assistantText:

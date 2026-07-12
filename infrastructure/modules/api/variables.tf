@@ -45,19 +45,18 @@ variable "allowed_origin" {
 
 variable "native_app_origins" {
   description = <<-EOT
-    Extra CORS origins for the Capacitor mobile shells. The iOS WebView serves
+    Exact application-layer origins for the Capacitor mobile shells. iOS serves
     the bundled app from capacitor://localhost and the Android WebView from
-    https://localhost, so API calls from inside the apps present these Origins.
-    Exact-scheme origins only reachable from the app binaries — no third-party
-    website can run script under them, so allowing them does not widen the
-    browser attack surface.
+    https://localhost. The shells use CapacitorHttp for remote requests because
+    AWS managed CORS cannot represent capacitor://; this list still governs
+    Lambda-owned responses and must remain exact (never wildcarded).
   EOT
   type        = list(string)
   default     = ["capacitor://localhost", "https://localhost"]
 }
 
 variable "application_cors_enabled" {
-  description = "Whether Lambda responses own CORS (enable only after AWS managed CORS blocks are removed)"
+  description = "Whether the standalone chat-stream Lambda emits CORS headers; keep false while Function URL managed CORS is enabled"
   type        = bool
   default     = false
 }

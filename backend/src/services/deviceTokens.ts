@@ -72,3 +72,42 @@ export async function getUserDeviceTokens(userId: string): Promise<StoredDeviceT
     createdAt: item.createdAt as string,
   }));
 }
+
+/**
+ * Remove every native push token owned by a user.
+ *
+ * Account deletion must not leave an APNs/FCM credential behind. Querying
+ * keys directly (instead of calling getUserDeviceTokens) also avoids that
+ * read helper's UI-oriented 20-device cap and follows DynamoDB pagination.
+ */
+export async function deleteUserDeviceTokens(userId: string): Promise<void> {
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `USER#${userId}`,
+          ':sk': 'DEVICE#',
+        },
+        ProjectionExpression: 'PK, SK',
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    await Promise.all(
+      (result.Items ?? []).map((item) => {
+        const pk = typeof item.PK === 'string' ? item.PK : '';
+        const sk = typeof item.SK === 'string' ? item.SK : '';
+        if (!pk || !sk) return Promise.resolve();
+        return dynamodb.send(
+          new DeleteCommand({
+            TableName: TABLE_NAME,
+            Key: { PK: pk, SK: sk },
+          })
+        );
+      })
+    );
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+}

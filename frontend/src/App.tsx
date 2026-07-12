@@ -56,6 +56,7 @@ const HouseholdPage = lazyNamed(
   'HouseholdPage'
 );
 const SettingsPage = lazyNamed(() => import('@/features/settings/SettingsPage'), 'SettingsPage');
+const AccountPage = lazyNamed(() => import('@/features/settings/AccountPage'), 'AccountPage');
 const HelpPage = lazyNamed(() => import('@/features/help/HelpPage'), 'HelpPage');
 const AnalyticsPage = lazyNamed(
   () => import('@/features/analytics/AnalyticsPage'),
@@ -82,6 +83,11 @@ const ChangelogPage = lazyNamed(
   'ChangelogPage'
 );
 const PrivacyPage = lazyNamed(() => import('@/features/legal/PrivacyPage'), 'PrivacyPage');
+const AccountDeletionPage = lazyNamed(
+  () => import('@/features/legal/AccountDeletionPage'),
+  'AccountDeletionPage'
+);
+const SupportPage = lazyNamed(() => import('@/features/legal/SupportPage'), 'SupportPage');
 const TermsPage = lazyNamed(() => import('@/features/legal/TermsPage'), 'TermsPage');
 const StatusPage = lazyNamed(() => import('@/features/status/StatusPage'), 'StatusPage');
 const PricingPage = lazyNamed(() => import('@/features/pricing/PricingPage'), 'PricingPage');
@@ -159,6 +165,8 @@ function App() {
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />
+              <Route path="/account-deletion" element={<AccountDeletionPage />} />
+              <Route path="/support" element={<SupportPage />} />
               <Route path="/legal/terms" element={<TermsPage />} />
               <Route path="/status" element={<StatusPage />} />
               <Route path="/pricing" element={<PricingPage />} />
@@ -174,6 +182,7 @@ function App() {
                   }
                 />
                 <Route path="/welcome" element={<WelcomeFlow />} />
+                <Route path="/account" element={<AccountPage />} />
 
                 <Route element={hasHousehold ? <Layout /> : <Navigate to="/onboarding" replace />}>
                   <Route path="/dashboard" element={<DashboardPage />} />

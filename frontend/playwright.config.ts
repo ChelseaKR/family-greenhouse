@@ -11,7 +11,10 @@ export default defineConfig({
   // and throws if E2E_USER_POOL_ID isn't set. It runs through its own
   // smoke config (tests/e2e/playwright.smoke.config.ts) on a cron, not
   // as part of the local + CI default e2e sweep.
-  testIgnore: ['post-deploy-smoke.spec.ts'],
+  // These use dedicated configs: deployed Cognito smoke and deterministic
+  // store screenshot device projects. Running either in the default browser
+  // matrix gives them the wrong environment/project names.
+  testIgnore: ['post-deploy-smoke.spec.ts', 'store-screenshots.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

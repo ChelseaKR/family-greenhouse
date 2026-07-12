@@ -24,6 +24,7 @@ import { track } from '@/services/analytics';
 export function AccountSettings() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const hasHousehold = user?.householdId != null;
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const [nameDraft, setNameDraft] = useState(user?.name ?? '');
@@ -140,7 +141,11 @@ export function AccountSettings() {
       <Card>
         <CardHeader
           title="Profile"
-          description="Update how your name shows up in your household. Email changes aren't supported yet."
+          description={
+            hasHousehold
+              ? "Update how your name shows up in your household. Email changes aren't supported yet."
+              : "Update the name on your account. Email changes aren't supported yet."
+          }
         />
         {updateProfile.isError && (
           <Alert variant="error" className="mb-4">
@@ -260,30 +265,36 @@ export function AccountSettings() {
           <Button isLoading={exportJson.isPending} onClick={() => exportJson.mutate()}>
             Download full data (JSON)
           </Button>
-          <Button
-            variant="secondary"
-            isLoading={exportData.isPending}
-            onClick={() => exportData.mutate()}
-          >
-            Download CSV
-          </Button>
+          {hasHousehold && (
+            <Button
+              variant="secondary"
+              isLoading={exportData.isPending}
+              onClick={() => exportData.mutate()}
+            >
+              Download CSV
+            </Button>
+          )}
         </div>
-        <p className="mt-3 text-xs text-gray-600">
-          Moving in the other direction?{' '}
-          <RouterLink to="/plants/import" className="font-medium text-primary-700 underline">
-            Import plants from a CSV or JSON file
-          </RouterLink>{' '}
-          — including exports from this app.
-        </p>
+        {hasHousehold && (
+          <p className="mt-3 text-xs text-gray-600">
+            Moving in the other direction?{' '}
+            <RouterLink to="/plants/import" className="font-medium text-primary-700 underline">
+              Import plants from a CSV or JSON file
+            </RouterLink>{' '}
+            — including exports from this app.
+          </p>
+        )}
       </Card>
 
-      <Card>
-        <CardHeader
-          title="Calendar feed"
-          description="Subscribe to your plant care tasks in Apple Calendar, Google Calendar, or any iCalendar-aware app. The feed updates as your tasks change — no manual re-export."
-        />
-        <CalendarFeedRow />
-      </Card>
+      {hasHousehold && (
+        <Card>
+          <CardHeader
+            title="Calendar feed"
+            description="Subscribe to your plant care tasks in Apple Calendar, Google Calendar, or any iCalendar-aware app. The feed updates as your tasks change — no manual re-export."
+          />
+          <CalendarFeedRow />
+        </Card>
+      )}
 
       <Card>
         <CardHeader
@@ -305,7 +316,7 @@ export function AccountSettings() {
         onClose={() => setDeleteConfirm(false)}
         onConfirm={() => deleteMe.mutate()}
         title="Delete account?"
-        message="Your login is removed and you lose access to this household. Past completion records keep your name on them as historical artifacts. This cannot be undone."
+        message="Your login and notification tokens are removed, and you lose access to every household. Shared care history is retained without your name. This cannot be undone."
         confirmLabel="Yes, delete"
         variant="danger"
         isLoading={deleteMe.isPending}

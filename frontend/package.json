@@ -22,6 +22,7 @@
     "i18n:check": "node scripts/check-i18n-catalogs.mjs && node scripts/check-hardcoded-strings.mjs",
     "mobile:sync": "npm run build && cap sync",
     "test:e2e": "playwright test",
+    "store:screenshots": "playwright test --config tests/e2e/playwright.store.config.ts",
     "test:e2e:ui": "playwright test --ui",
     "lighthouse": "lhci autorun --config=lighthouserc.cjs",
     "lighthouse:desktop": "lhci autorun --config=lighthouserc.cjs",

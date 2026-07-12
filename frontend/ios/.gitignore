@@ -5,6 +5,12 @@ App/App/public
 DerivedData
 xcuserdata
 
+# Signing and service credentials stay local / in CI secrets.
+*.p12
+*.mobileprovision
+AuthKey_*.p8
+GoogleService-Info.plist
+
 # Cordova plugins for Capacitor
 capacitor-cordova-ios-plugins
 

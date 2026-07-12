@@ -2,6 +2,8 @@ import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { PricingGrid } from './PricingGrid';
+import { isNativeApp } from '@/lib/platform';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Standalone /pricing page. Same content as the LandingPage anchor
@@ -11,12 +13,32 @@ import { PricingGrid } from './PricingGrid';
  * users straight into the pricing decision.
  */
 export function PricingPage() {
+  const { t } = useTranslation();
+  const native = isNativeApp();
   useMetaTags({
     title: 'Pricing — Family Greenhouse',
     description:
       'Family Greenhouse pricing: free for up to 10 plants, paid plans for larger households and households that want care analytics, API access, and unlimited plants.',
     canonical: siteUrl('/pricing'),
   });
+
+  if (native) {
+    return (
+      <PublicShell>
+        <PageIntro
+          eyebrow="Plan information"
+          title="Your Family Greenhouse plan"
+          lede="The mobile app is free to download and does not offer purchases or plan changes. You can see your household's current plan and usage in Settings → Billing."
+        />
+        <section className="mt-12 rounded-2xl border border-primary-100 bg-white p-6">
+          <h2 className="font-serif text-2xl tracking-tight text-ink">
+            {t('mobile.planAvailableTitle')}
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-gray-700">{t('mobile.planAvailableBody')}</p>
+        </section>
+      </PublicShell>
+    );
+  }
 
   return (
     <PublicShell width="wide">

@@ -14,6 +14,8 @@ vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/notificationPrefs.js');
 vi.mock('../../../src/services/pushSubscriptions.js');
+vi.mock('../../../src/services/deviceTokens.js');
+vi.mock('../../../src/services/accountCleanup.js');
 vi.mock('../../../src/services/apiKeys.js');
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -72,9 +74,13 @@ describe('me handler', () => {
     // each test only declares what it cares about.
     async function mockUserScopedCleanup() {
       const pushSubscriptions = await import('../../../src/services/pushSubscriptions.js');
+      const deviceTokens = await import('../../../src/services/deviceTokens.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
       const { dynamodb } = await import('../../../src/utils/dynamodb.js');
       vi.mocked(pushSubscriptions.getUserSubscriptions).mockResolvedValue([]);
       vi.mocked(pushSubscriptions.deleteSubscription).mockResolvedValue(undefined);
+      vi.mocked(deviceTokens.deleteUserDeviceTokens).mockResolvedValue(undefined);
+      vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
       vi.mocked(dynamodb.send).mockResolvedValue({} as never);
     }
 
@@ -149,6 +155,8 @@ describe('me handler', () => {
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
       const apiKeys = await import('../../../src/services/apiKeys.js');
       const pushSubscriptions = await import('../../../src/services/pushSubscriptions.js');
+      const deviceTokens = await import('../../../src/services/deviceTokens.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
       const { dynamodb } = await import('../../../src/utils/dynamodb.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
 
@@ -202,6 +210,8 @@ describe('me handler', () => {
         },
       ]);
       vi.mocked(pushSubscriptions.deleteSubscription).mockResolvedValue(undefined);
+      vi.mocked(deviceTokens.deleteUserDeviceTokens).mockResolvedValue(undefined);
+      vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
       vi.mocked(dynamodb.send).mockResolvedValue({} as never);
       vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
 
@@ -223,6 +233,9 @@ describe('me handler', () => {
         'user-1',
         'https://push.example/ep1'
       );
+      expect(deviceTokens.deleteUserDeviceTokens).toHaveBeenCalledWith('user-1');
+      expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-1', 'user-1');
+      expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-2', 'user-1');
       // Notification prefs row deleted inline (USER#{id}/PREFS).
       const prefDelete = vi
         .mocked(dynamodb.send)
@@ -286,6 +299,26 @@ describe('me handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(401);
+    });
+
+    it('allows deletion before the user has created or joined a household', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const deviceTokens = await import('../../../src/services/deviceTokens.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([]);
+      vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
+
+      const event = buildEvent({ httpMethod: 'DELETE' });
+      event.requestContext.authorizer = {
+        claims: { sub: 'user-1', email: 'test@example.com', name: 'Test User' },
+      };
+      const res = (await deleteMe(event, ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(204);
+      expect(deviceTokens.deleteUserDeviceTokens).toHaveBeenCalledWith('user-1');
+      expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
     });
   });
 
