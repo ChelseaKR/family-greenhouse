@@ -17,6 +17,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-07-12
+
+### Added
+
+- Store-ready iPhone, iPad, and Android screenshots, app icons, Play feature artwork, localized
+  listing metadata, and deterministic validation/generation scripts for repeatable releases.
+- Public support and account-deletion pages, in-app AI response reporting, native privacy
+  disclosures, and complete account-cleanup coverage for store policy compliance.
+
+### Changed
+
+- Native networking now uses the platform HTTP stacks, mobile billing surfaces are purchase-free,
+  and release builds strip source maps before syncing into the iOS and Android shells.
+- iOS and Android release versions advance to `0.16.2` (build/version code `1602`).
+
+### Fixed
+
+- Store screenshot generation is isolated from the default Playwright suite so release-only
+  projects cannot be discovered by general CI browser profiles.
+
 ## [0.16.1] - 2026-07-12
 
 ### Fixed
