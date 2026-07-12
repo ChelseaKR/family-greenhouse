@@ -213,6 +213,24 @@ variable "bedrock_embed_model_id" {
   default     = ""
 }
 
+variable "sprout_integration_enabled" {
+  description = "Set to '1' to enable the first-party Sprout chat path."
+  type        = string
+  default     = ""
+}
+
+variable "sprout_api_url" {
+  description = "Base URL for the Sprout API."
+  type        = string
+  default     = ""
+}
+
+variable "sprout_integration_secret_id" {
+  description = "Secrets Manager id containing the Sprout HMAC secret."
+  type        = string
+  default     = ""
+}
+
 # --- Sentry / release tagging ---
 variable "sentry_dsn" {
   description = "Sentry DSN. Empty = Sentry disabled (instrument() falls through to a no-op wrapper)."

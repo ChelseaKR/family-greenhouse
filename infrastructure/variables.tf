@@ -21,9 +21,27 @@ variable "project_name" {
 }
 
 variable "domain_name" {
-  description = "Domain name for the application (optional)"
+  description = "Email/organizational domain. Also used as the legacy application domain when application_domain is blank."
   type        = string
   default     = ""
+}
+
+variable "application_domain" {
+  description = "User-facing application hostname. May be a subdomain; defaults to domain_name for backward compatibility."
+  type        = string
+  default     = ""
+}
+
+variable "hosted_zone_name" {
+  description = "Route 53 public hosted-zone name containing application_domain. Defaults to domain_name."
+  type        = string
+  default     = ""
+}
+
+variable "application_domain_include_www" {
+  description = "Create a www alias and certificate SAN. Usually false for an application subdomain."
+  type        = bool
+  default     = true
 }
 
 variable "alert_email" {
@@ -110,6 +128,28 @@ variable "openweather_daily_budget" {
 
 variable "bedrock_embed_model_id" {
   description = "Bedrock embedding model ID for the chat RAG corpus. Blank lets the code default (amazon.titan-embed-text-v2:0) apply."
+  type        = string
+  default     = ""
+}
+
+variable "sprout_integration_enabled" {
+  description = "Set to '1' to route plant-care chat through the first-party Sprout service."
+  type        = string
+  default     = ""
+  validation {
+    condition     = contains(["", "1"], var.sprout_integration_enabled)
+    error_message = "sprout_integration_enabled must be blank or '1'."
+  }
+}
+
+variable "sprout_api_url" {
+  description = "Base URL of the hosted Sprout API."
+  type        = string
+  default     = ""
+}
+
+variable "sprout_integration_secret_id" {
+  description = "Secrets Manager id containing the shared Sprout HMAC secret."
   type        = string
   default     = ""
 }

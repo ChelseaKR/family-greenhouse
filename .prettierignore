@@ -1,5 +1,6 @@
 # Dependencies & lockfiles (npm owns the lock's formatting)
 node_modules
+.claude/worktrees
 package-lock.json
 
 # Build outputs and generated artifacts

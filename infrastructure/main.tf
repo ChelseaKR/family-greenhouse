@@ -26,6 +26,11 @@ provider "aws" {
   }
 }
 
+locals {
+  application_domain = var.application_domain != "" ? var.application_domain : var.domain_name
+  hosted_zone_name   = var.hosted_zone_name != "" ? var.hosted_zone_name : var.domain_name
+}
+
 # Provider for CloudFront certificates (must be us-east-1)
 provider "aws" {
   alias  = "us_east_1"
@@ -100,13 +105,16 @@ module "api" {
   # — set via tfvars when you have credentials.
   # Perenual uses the Secrets-Manager-ID indirection so the API key never
   # touches Terraform state (see modules/api/main.tf IAM block).
-  perenual_api_key_secret_id = var.perenual_api_key_secret_id
-  perenual_daily_budget      = var.perenual_daily_budget
-  openweather_api_key        = var.openweather_api_key
-  openweather_daily_budget   = var.openweather_daily_budget
-  bedrock_embed_model_id     = var.bedrock_embed_model_id
-  identify_metering_enabled  = var.identify_metering_enabled
-  sms_notifications_enabled  = var.sms_notifications_enabled
+  perenual_api_key_secret_id   = var.perenual_api_key_secret_id
+  perenual_daily_budget        = var.perenual_daily_budget
+  openweather_api_key          = var.openweather_api_key
+  openweather_daily_budget     = var.openweather_daily_budget
+  bedrock_embed_model_id       = var.bedrock_embed_model_id
+  sprout_integration_enabled   = var.sprout_integration_enabled
+  sprout_api_url               = var.sprout_api_url
+  sprout_integration_secret_id = var.sprout_integration_secret_id
+  identify_metering_enabled    = var.identify_metering_enabled
+  sms_notifications_enabled    = var.sms_notifications_enabled
 
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
@@ -141,9 +149,11 @@ module "frontend" {
     aws.us_east_1 = aws.us_east_1
   }
 
-  environment  = var.environment
-  project_name = var.project_name
-  domain_name  = var.domain_name
+  environment       = var.environment
+  project_name      = var.project_name
+  domain_name       = local.application_domain
+  hosted_zone_name  = local.hosted_zone_name
+  include_www_alias = var.application_domain_include_www
 }
 
 # Monitoring module (CloudWatch)

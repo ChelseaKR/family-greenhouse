@@ -7,6 +7,14 @@ terraform {
   }
 }
 
+locals {
+  frontend_aliases = var.domain_name == "" ? [] : concat(
+    [var.domain_name],
+    var.include_www_alias ? ["www.${var.domain_name}"] : []
+  )
+  route53_zone_name = var.hosted_zone_name != "" ? var.hosted_zone_name : var.domain_name
+}
+
 # Frontend S3 Bucket
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.project_name}-frontend-${var.environment}-${random_id.bucket_suffix.hex}"
@@ -154,7 +162,7 @@ resource "aws_s3_bucket_cors_configuration" "images" {
     # Pin CORS to that origin instead of "*" (which let any site script the
     # cross-origin upload). Falls back to "*" only in the no-domain dev
     # environment, where there is no stable site origin to pin to.
-    allowed_origins = var.domain_name == "" ? ["*"] : ["https://${var.domain_name}", "https://www.${var.domain_name}"]
+    allowed_origins = var.domain_name == "" ? ["*"] : [for alias in local.frontend_aliases : "https://${alias}"]
     max_age_seconds = 3600
   }
 }
@@ -247,7 +255,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  aliases = var.domain_name == "" ? [] : [var.domain_name, "www.${var.domain_name}"]
+  aliases = local.frontend_aliases
 
   viewer_certificate {
     cloudfront_default_certificate = var.domain_name == ""
@@ -267,11 +275,12 @@ resource "aws_cloudfront_distribution" "frontend" {
 }
 
 # Custom domain wiring (only when var.domain_name is set).
-# The hosted zone is auto-created by Route 53 when the domain is registered,
-# so we read it via a data source rather than managing it here.
+# The application hostname may be a subdomain, while Route 53 owns its parent
+# zone. Keep those concepts separate so greenhouse.chelseakr.com correctly
+# resolves inside the chelseakr.com hosted zone.
 data "aws_route53_zone" "primary" {
   count        = var.domain_name == "" ? 0 : 1
-  name         = var.domain_name
+  name         = local.route53_zone_name
   private_zone = false
 }
 
@@ -280,7 +289,7 @@ resource "aws_acm_certificate" "frontend" {
   count                     = var.domain_name == "" ? 0 : 1
   provider                  = aws.us_east_1
   domain_name               = var.domain_name
-  subject_alternative_names = ["www.${var.domain_name}"]
+  subject_alternative_names = var.include_www_alias ? ["www.${var.domain_name}"] : []
   validation_method         = "DNS"
 
   lifecycle {
@@ -331,7 +340,7 @@ resource "aws_route53_record" "apex" {
 }
 
 resource "aws_route53_record" "www" {
-  count   = var.domain_name == "" ? 0 : 1
+  count   = var.domain_name == "" || !var.include_www_alias ? 0 : 1
   zone_id = data.aws_route53_zone.primary[0].zone_id
   name    = "www.${var.domain_name}"
   type    = "A"

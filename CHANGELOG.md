@@ -17,6 +17,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- Feature-flagged, server-to-server Sprout integration for corpus-grounded plant-care answers,
+  with HMAC authentication, minimized household context, nickname/contact redaction, citation
+  persistence, and a temporary fallback to the existing assistant.
+- Independent application-domain and Route 53 hosted-zone configuration, allowing an app
+  subdomain without treating it as its own hosted zone or automatically creating a `www` alias.
+
+### Changed
+
+- The public OpenAPI contract now documents the implemented, opt-in `write:tasks` complete and
+  snooze endpoints instead of incorrectly describing v1 as read-only.
+
 ## [0.16.0] - 2026-07-12
 
 ### Added

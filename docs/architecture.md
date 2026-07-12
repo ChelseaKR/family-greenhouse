@@ -1,5 +1,8 @@
 # Architecture
 
+See [Sprout integration](sprout-integration.md) for the feature-flagged,
+privacy-minimized plant-care assistant boundary.
+
 A family-scale collaborative app, designed for low ops cost: serverless on the backend, a static SPA on the frontend, a single DynamoDB table, and a thin Express mock for local dev that mirrors the production API.
 
 ## Block diagram
