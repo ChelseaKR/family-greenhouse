@@ -21,7 +21,10 @@ export function EmptyState({ icon, title, description, action, hint }: EmptyStat
           space — the bug that stacked the title and CTA right on top of
           the artwork. */}
       {icon && (
-        <div className="mb-4 text-primary-600" aria-hidden="true">
+        <div
+          className="greenhouse-grid mb-5 overflow-hidden rounded-[1.75rem] border border-dew/55 bg-glass/25 px-3 py-1 text-primary-700 shadow-journal"
+          aria-hidden="true"
+        >
           {icon}
         </div>
       )}

@@ -1,46 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Family Greenhouse">
-  <!-- Warm cream background — survives PWA mask shapes (round/squircle/rounded-square). -->
-  <rect width="512" height="512" fill="#EAF3DE"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Family Greenhouse</title>
+  <desc id="desc">Two plants growing together inside a small greenhouse.</desc>
+  <rect width="512" height="512" rx="72" fill="#F7F8F2"/>
+  <circle cx="382" cy="106" r="42" fill="#D7E8A9"/>
 
-  <!-- Terracotta pot. Drawn first so the stem rises out of it cleanly. -->
-  <path d="M 220 470
-           L 226 432
-           L 286 432
-           L 292 470
-           Q 256 482, 220 470 Z"
-        fill="#DC6C1F" stroke="#7E3219" stroke-width="6" stroke-linejoin="round"/>
-  <!-- Pot rim highlight -->
-  <line x1="218" y1="436" x2="294" y2="436" stroke="#7E3219" stroke-width="5" stroke-linecap="round"/>
+  <!-- Greenhouse glass and frame. The broad silhouette stays legible at favicon size. -->
+  <path d="M96 224 256 82l160 142v202H96Z" fill="#DDEEE7"/>
+  <path d="M96 224 256 82l160 142M96 224h320v202H96Z" fill="none" stroke="#27500A" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M256 88v338M103 225h306" fill="none" stroke="#3B6D11" stroke-width="7" opacity=".42"/>
+  <path d="M112 238v174h288V238" fill="none" stroke="#F7F8F2" stroke-width="8" opacity=".72"/>
+  <path d="M112 240 256 112l144 128" fill="none" stroke="#FFFFFF" stroke-width="8" opacity=".55"/>
 
-  <!-- Stem rising from pot into the leaf base. Slight S-curve = hand-drawn warmth. -->
-  <path d="M 256 432 C 256 410, 244 388, 240 360"
-        stroke="#3B6D11" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <!-- Shared threshold and door. -->
+  <path d="M82 426h348" stroke="#A23F1A" stroke-width="18" stroke-linecap="round"/>
+  <path d="M218 426V312h76v114" fill="#C0DD97" stroke="#27500A" stroke-width="9" stroke-linejoin="round"/>
+  <circle cx="278" cy="370" r="6" fill="#A23F1A"/>
 
-  <!-- Main leaf — pointed at the top, tapered to a base where the stem meets.
-       Slightly asymmetric (left side fuller) for a hand-drawn quality. -->
-  <path d="M 250 90
-           C 178 120, 130 200, 130 280
-           C 132 332, 184 366, 246 364
-           C 252 364, 256 364, 260 364
-           C 322 360, 380 320, 384 248
-           C 380 168, 326 110, 250 90 Z"
-        fill="#639922"
-        stroke="#27500A"
-        stroke-width="10"
-        stroke-linejoin="round"/>
-
-  <!-- Central rib — entry point at base flows up to the tip. -->
-  <path d="M 250 360 Q 254 230 250 100"
-        stroke="#27500A" stroke-width="7" stroke-linecap="round" fill="none"/>
-
-  <!-- Side veins — minimal pair on each side at the leaf's widest band.
-       Kept light so 32×32 silhouette stays legible. -->
-  <path d="M 252 180 Q 220 196 190 222" stroke="#27500A" stroke-width="5"
-        stroke-linecap="round" fill="none" opacity="0.6"/>
-  <path d="M 252 180 Q 290 196 320 222" stroke="#27500A" stroke-width="5"
-        stroke-linecap="round" fill="none" opacity="0.6"/>
-  <path d="M 250 270 Q 216 288 188 318" stroke="#27500A" stroke-width="5"
-        stroke-linecap="round" fill="none" opacity="0.6"/>
-  <path d="M 250 270 Q 294 288 322 318" stroke="#27500A" stroke-width="5"
-        stroke-linecap="round" fill="none" opacity="0.6"/>
+  <!-- Two distinct plants, one home. -->
+  <path d="M160 404V276M160 316c-33-2-51-21-54-51 33 0 53 18 54 51Zm0 40c37-2 58-22 62-57-37 1-59 20-62 57Z" fill="#639922" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M352 404V270M352 308c33-2 51-21 54-51-33 0-53 18-54 51Zm0 44c-37-2-58-22-62-57 37 1 59 20 62 57Z" fill="#97C459" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

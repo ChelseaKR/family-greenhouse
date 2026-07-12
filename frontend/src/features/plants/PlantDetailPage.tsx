@@ -45,6 +45,7 @@ import clsx from 'clsx';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { toast } from '@/store/toastStore';
+import { PlantImage } from '@/components/PlantImage';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -166,35 +167,7 @@ export function PlantDetailPage() {
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="w-full sm:w-48 flex-shrink-0 space-y-3">
           <div className="h-48 rounded-lg bg-parchment overflow-hidden">
-            {plant.imageUrl ? (
-              <img
-                src={plant.imageUrl}
-                alt={`Photo of ${plant.name}`}
-                width={192}
-                height={192}
-                loading="lazy"
-                decoding="async"
-                fetchPriority="high"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <svg
-                  className="h-20 w-20 text-primary-300"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1}
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 21c-2-2-5-3-5-8 0-3 2-5 5-5s5 2 5 5c0 5-3 6-5 8z"
-                  />
-                </svg>
-              </div>
-            )}
+            <PlantImage plant={plant} width={192} height={192} />
           </div>
           <PlantImageUpload plantId={plant.id} />
           <Button
@@ -503,7 +476,7 @@ function TaskRow({
               style.chip
             )}
           >
-            <Icon className={clsx('h-4 w-4', style.iconColor)} aria-hidden="true" />
+            <Icon className={clsx('h-5 w-5', style.iconColor)} aria-hidden="true" />
             {task.customType || taskTypeLabels[task.type]}
           </span>
           <div className="min-w-0">

@@ -12,7 +12,15 @@ export function EmptyMembers({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <ellipse cx="120" cy="156" rx="80" ry="6" fill="#EAF3DE" />
+      <path
+        d="M36 148V68L120 22l84 46v80"
+        fill="#F7F8F2"
+        stroke="#DDEEE7"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M120 23v125M37 68h166" stroke="#B7D9D1" strokeWidth="1.5" opacity="0.7" />
+      <ellipse cx="120" cy="156" rx="80" ry="6" fill="#DDEEE7" />
       {/* Existing member — solid */}
       <circle cx="84" cy="74" r="20" fill="#639922" />
       <path d="M64 144 c0 -20 12 -34 20 -34 s20 14 20 34" fill="#639922" />

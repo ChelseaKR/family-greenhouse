@@ -18,7 +18,7 @@ interface CardProps {
    *    where each card is a discrete item but the whole stack should
    *    read as one journal page.
    */
-  variant?: 'solid' | 'paper' | 'journal';
+  variant?: 'solid' | 'paper' | 'journal' | 'glass';
 }
 
 const PADDING_CLASSES = {
@@ -29,10 +29,11 @@ const PADDING_CLASSES = {
 };
 
 const VARIANT_CLASSES: Record<NonNullable<CardProps['variant']>, string> = {
-  solid: 'bg-white rounded-lg shadow-card border border-primary-100/70',
+  solid: 'bg-white/90 rounded-xl shadow-card border border-dew/60',
   paper:
-    'bg-paper rounded-xl shadow-journal hover:shadow-journal-hover transition-shadow duration-200 border border-primary-100/60',
+    'bg-paper/90 rounded-2xl shadow-journal transition-shadow duration-200 border border-dew/55',
   journal: 'bg-paper border-b border-primary-100/80 last:border-b-0 rounded-none',
+  glass: 'glass-surface rounded-2xl border backdrop-blur-sm',
 };
 
 export function Card({ children, className, padding = 'md', variant = 'solid' }: CardProps) {

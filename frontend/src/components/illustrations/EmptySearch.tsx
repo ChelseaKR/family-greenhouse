@@ -11,7 +11,15 @@ export function EmptySearch({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <ellipse cx="120" cy="156" rx="60" ry="6" fill="#EAF3DE" />
+      <path
+        d="M36 148V68L120 22l84 46v80"
+        fill="#F7F8F2"
+        stroke="#DDEEE7"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M120 23v125M37 68h166" stroke="#B7D9D1" strokeWidth="1.5" opacity="0.7" />
+      <ellipse cx="120" cy="156" rx="60" ry="6" fill="#DDEEE7" />
       <path
         d="M100 130 C 80 124, 70 100, 86 80 C 110 70, 130 90, 124 110 C 120 124, 110 130, 100 130 Z"
         fill="#C0DD97"

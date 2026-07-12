@@ -134,7 +134,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
 
                 <Dialog.Title
                   as="h3"
-                  className="mb-4 pr-12 font-serif text-2xl font-semibold tracking-tight text-ink"
+                  className="mb-4 pr-12 font-serif text-2xl tracking-tight text-ink"
                 >
                   Edit plant
                 </Dialog.Title>

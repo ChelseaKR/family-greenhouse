@@ -3,9 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <!-- Theme color is the Leaf Mid green (#639922) per brand guidelines —
-         the recognizable brand pop, not the darker Canopy text color. -->
-    <meta name="theme-color" content="#639922" />
+    <!-- The native browser chrome matches the forest launch screen and app icon. -->
+    <meta name="theme-color" content="#173404" />
     <meta name="color-scheme" content="light" />
 
     <title>Family Greenhouse — Grow together</title>
@@ -21,8 +20,8 @@
          useMetaTags; routes that don't set one fall back to URL-as-canonical
          (the safe default). -->
 
-    <!-- Open Graph + Twitter Card. v2 brand kit ships purpose-built PNGs
-         (1200×630 OG, 1600×800 Twitter) in /brand/. Image URLs are ABSOLUTE —
+    <!-- Open Graph + Twitter Card. The brand renderer ships purpose-built PNGs
+         (1200×630 OG, 1200×600 Twitter) in /brand/. Image URLs are ABSOLUTE —
          social scrapers (Facebook/LinkedIn/Slack) reject a relative og:image.
          These are HOMEPAGE defaults; per-route pages override title/description
          via useMetaTags. -->
@@ -53,6 +52,10 @@
       content="Share tasks, get reminders, and keep a care log everyone can see — so nobody asks 'did you water the Monstera?' again."
     />
     <meta name="twitter:image" content="https://familygreenhouse.net/brand/twitter-card.png" />
+    <meta
+      name="twitter:image:alt"
+      content="Family Greenhouse — every plant, every person, one care log"
+    />
 
     <!-- Icons. v2 brand kit covers favicon (.ico + 32px PNG), apple-touch
          (180×180), and the PWA manifest icons (192/512). All ship from

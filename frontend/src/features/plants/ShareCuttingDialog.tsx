@@ -89,7 +89,7 @@ export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDia
                   <div className="mt-3 w-full text-center sm:ml-4 sm:mt-0 sm:text-left">
                     <Dialog.Title
                       as="h3"
-                      className="font-serif text-xl font-semibold leading-tight tracking-tight text-ink"
+                      className="font-serif text-xl leading-tight tracking-tight text-ink"
                     >
                       {t('plants.share.title')}
                     </Dialog.Title>

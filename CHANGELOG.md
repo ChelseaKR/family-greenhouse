@@ -17,30 +17,42 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-12
+
 ### Added
 
+- Native iOS and Android app shells (Capacitor) wrap the existing web app so it can ship to the
+  App Store and Play Store; build flow and store-submission checklist live in `docs/mobile.md`.
+- Inside the mobile apps, the notification settings device toggle registers a native push device
+  token with the backend (capture-only groundwork — reminder delivery to native devices ships
+  with the APNs/FCM sender).
 - Feature-flagged, server-to-server Sprout integration for corpus-grounded plant-care answers,
   with HMAC authentication, minimized household context, nickname/contact redaction, citation
   persistence, and a temporary fallback to the existing assistant.
 - Independent application-domain and Route 53 hosted-zone configuration, allowing an app
   subdomain without treating it as its own hosted zone or automatically creating a `www` alias.
+- A deterministic vector-first brand pipeline that regenerates and verifies every web, PWA,
+  social, iOS, and Android image derivative, including Android 13 monochrome launcher support.
 
 ### Changed
 
+- Billing inside the mobile apps is read-only for store payment compliance: plan checkout and
+  subscription-management actions stay web-only, with a neutral notice shown in the apps.
+- The API's CORS allowlist now also accepts the mobile shells' origins, and the layout respects
+  device safe areas (notch, status bar, home indicator) on edge-to-edge screens.
+- The interface now uses one greenhouse identity across navigation, plant placeholders, empty
+  states, launch screens, app icons, social previews, and native shells, replacing the remaining
+  Capacitor template artwork and inconsistent legacy marks.
+- Public, authentication, onboarding, dashboard, and plant surfaces now share a brighter
+  greenhouse-glass visual system with stronger mobile navigation, contrast, typography, and
+  accessible decorative semantics.
 - The public OpenAPI contract now documents the implemented, opt-in `write:tasks` complete and
   snooze endpoints instead of incorrectly describing v1 as read-only.
 
-## [0.16.0] - 2026-07-12
+### Fixed
 
-### Added
-
-- Native iOS and Android app shells (Capacitor) wrap the existing web app so it can ship to the App Store and Play Store; build flow and store-submission checklist live in `docs/mobile.md`.
-- Inside the mobile apps, the notification settings device toggle registers a native push device token with the backend (capture-only groundwork — reminder delivery to native devices ships with the APNs/FCM sender).
-
-### Changed
-
-- Billing inside the mobile apps is read-only for store payment compliance: plan checkout and subscription-management actions stay web-only, with a neutral notice shown in the apps.
-- The API's CORS allowlist now also accepts the mobile shells' origins, and the layout respects device safe areas (notch, status bar, home indicator) on edge-to-edge screens.
+- Notification artwork now resolves from the shipped brand path, and the stacked BrandMark
+  variant no longer points to a missing file.
 
 ## [0.15.4] - 2026-07-11
 

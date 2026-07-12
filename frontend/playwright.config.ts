@@ -1,5 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Design/visual passes can point Playwright at an already-running Vite server
+// when port 3000 is occupied (for example by an SSH tunnel in Codex desktop).
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const baseURL = externalBaseURL ?? 'http://localhost:3000';
+
 export default defineConfig({
   testDir: './tests/e2e',
   // `post-deploy-smoke.spec.ts` reaches Cognito directly at module load
@@ -13,7 +18,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     // The app honors prefers-reduced-motion; prefer the calm rendering in tests.
@@ -53,10 +58,14 @@ export default defineConfig({
       cwd: '..',
       reuseExistingServer: !process.env.CI,
     },
-    {
-      command: 'npm run dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
-    },
+    ...(externalBaseURL
+      ? []
+      : [
+          {
+            command: 'npm run dev',
+            url: 'http://localhost:3000',
+            reuseExistingServer: !process.env.CI,
+          },
+        ]),
   ],
 });

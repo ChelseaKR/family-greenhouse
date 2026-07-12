@@ -1,9 +1,6 @@
 /**
- * Landing feature icon — the plant's memory. Three stems of rising
- * height along one ground line: a bar chart, but grown. Replaces the
- * stock Heroicons ChartBarIcon on the landing features grid. Same
- * hand-drawn stroke conventions as the botanical task icons
- * (WaterDropIcon et al.).
+ * Growth-history icon on the shared 32-unit botanical grid. Three dated
+ * shoots rise from one baseline, so it reads as both a log and living growth.
  */
 interface IconProps {
   className?: string;
@@ -13,40 +10,34 @@ export function GrowthRingsIcon({ className }: IconProps) {
   return (
     <svg
       className={className}
-      viewBox="0 0 24 24"
+      viewBox="0 0 32 32"
       fill="none"
       aria-hidden="true"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.4"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* Ground baseline */}
-      <path d="M 3.5 20.5 Q 12 19.6 20.5 20.5" />
-      {/* Short stem — the first entry in the log */}
-      <path d="M 6.5 20 V 16.4" />
-      <circle cx="6.5" cy="15.6" r="0.95" fill="currentColor" stroke="none" />
-      {/* Middle stem with one leaf */}
-      <path d="M 12 20 V 11.6" />
+      <path d="M4 27 Q16 25.8 28 27" opacity="0.7" />
+      <path d="M8.5 26V21.5M16 26V15M23.5 26V8" />
+      <circle cx="8.5" cy="20.5" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="14" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="23.5" cy="7" r="1.3" fill="currentColor" stroke="none" />
       <path
-        d="M 12 14.4 Q 9.6 13.8 8.7 15.8 Q 11 16.3 12 14.4 Z"
+        d="M16 19 Q12.5 18 11.2 20.5 Q14.5 21.4 16 19Z"
         fill="currentColor"
-        fillOpacity="0.8"
-      />
-      <circle cx="12" cy="10.8" r="0.95" fill="currentColor" stroke="none" />
-      {/* Tall stem with two leaves — the full history */}
-      <path d="M 17.5 20 V 6.6" />
-      <path
-        d="M 17.5 10 Q 15.1 9.4 14.2 11.4 Q 16.5 11.9 17.5 10 Z"
-        fill="currentColor"
-        fillOpacity="0.8"
+        fillOpacity="0.75"
       />
       <path
-        d="M 17.5 13 Q 19.9 12.4 20.8 14.4 Q 18.5 14.9 17.5 13 Z"
+        d="M23.5 12 Q20 11 18.8 13.5 Q22 14.4 23.5 12Z"
         fill="currentColor"
-        fillOpacity="0.8"
+        fillOpacity="0.75"
       />
-      <circle cx="17.5" cy="5.8" r="0.95" fill="currentColor" stroke="none" />
+      <path
+        d="M23.5 17 Q27 16 28.2 18.5 Q25 19.4 23.5 17Z"
+        fill="currentColor"
+        fillOpacity="0.75"
+      />
     </svg>
   );
 }

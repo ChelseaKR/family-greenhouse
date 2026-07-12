@@ -1,8 +1,4 @@
-/**
- * Botanical task-type icon — repot. A leaf with roots reaching out of one
- * pot into a slightly larger one. Reads as "moving up a size" rather than
- * the generic Tailwind UI ArrowsRightLeftIcon swap arrows.
- */
+/** A plant moving from a small pot into a larger pot. */
 interface IconProps {
   className?: string;
 }
@@ -19,27 +15,16 @@ export function RepotIcon({ className }: IconProps) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* Terracotta pot — trapezoidal */}
-      <path
-        d="M 8 18
-           L 9 26
-           L 22 26
-           L 23 18
-           Q 15.5 16 8 18 Z"
-        fill="currentColor"
-        fillOpacity="0.22"
-      />
-      {/* Pot rim */}
-      <line x1="7" y1="18.5" x2="24" y2="18.5" strokeWidth="1.6" />
-      {/* Plant rising from the pot */}
-      <path d="M 15 18 Q 15 13 15 9" />
-      {/* Two leaves at the top */}
-      <path d="M 15 11 Q 11 10 9 13 Q 12 13 15 11 Z" fill="currentColor" fillOpacity="0.85" />
-      <path d="M 15 9 Q 19 7 21 10 Q 18 11 15 9 Z" fill="currentColor" fillOpacity="0.85" />
-      {/* Roots emerging through the pot bottom — the "needs more room" signal */}
-      <path d="M 11 26 Q 11 28 9 30" opacity="0.7" />
-      <path d="M 15 26 Q 15 28 15 30" opacity="0.7" />
-      <path d="M 19 26 Q 19 28 21 30" opacity="0.7" />
+      <path d="M8 20V12" />
+      <path d="M8 14 Q4.5 13 3 15.5 Q6 16.5 8 14Z" fill="currentColor" fillOpacity="0.8" />
+      <path d="M8 11 Q11.5 9 13 12 Q10.5 13.5 8 11Z" fill="currentColor" fillOpacity="0.8" />
+      <path d="M3 20H13L12 28H4Z" fill="currentColor" fillOpacity="0.16" />
+      <path d="M2 20.5H14" />
+
+      <path d="M14 15H24M21 12l3 3-3 3" strokeWidth="1.8" />
+
+      <path d="M18 19H30L28.5 29H19.5Z" fill="currentColor" fillOpacity="0.28" />
+      <path d="M17 19.5H31" strokeWidth="1.7" />
     </svg>
   );
 }

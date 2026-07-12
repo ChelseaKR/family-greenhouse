@@ -29,13 +29,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     // AAA) for every button, including icon-only ones; sizes tune padding/text
     // on top of that floor.
     const baseClasses =
-      'inline-flex items-center justify-center whitespace-nowrap font-medium rounded-md transition-colors min-h-touch min-w-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+      'inline-flex items-center justify-center whitespace-nowrap font-medium rounded-lg transition-[color,background-color,border-color,box-shadow,transform] min-h-touch min-w-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-px';
 
     const variantClasses = {
       // primary-700 + white clears WCAG AA contrast (5:1); primary-600 was 3.76.
-      primary: 'bg-primary-700 text-white hover:bg-primary-800 focus-visible:ring-primary-500',
+      primary:
+        'bg-primary-700 text-white shadow-[0_8px_20px_-14px_rgba(23,52,4,0.9)] hover:bg-primary-800 hover:shadow-[0_12px_24px_-14px_rgba(23,52,4,0.95)] focus-visible:ring-primary-500',
       secondary:
-        'bg-paper text-ink border border-primary-300/70 hover:bg-primary-50 focus-visible:ring-primary-500',
+        'bg-paper/85 text-ink border border-dew hover:bg-glass/55 focus-visible:ring-primary-500',
       danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
     };
 

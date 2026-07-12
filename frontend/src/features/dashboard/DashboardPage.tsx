@@ -33,6 +33,7 @@ import { EmptyActivity } from '@/components/illustrations/EmptyActivity';
 import { Alert } from '@/components/Alert';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
+import { PlantImage } from '@/components/PlantImage';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -271,34 +272,12 @@ export function DashboardPage() {
                 className="group block rounded-lg border border-primary-100/70 bg-paper/60 p-4 transition-all hover:border-primary-400 hover:bg-paper hover:shadow-journal"
               >
                 <div className="aspect-square rounded-md bg-parchment mb-3 overflow-hidden ring-1 ring-primary-100/50">
-                  {plant.imageUrl ? (
-                    <img
-                      src={plant.imageUrl}
-                      alt={`Photo of ${plant.name}`}
-                      width={200}
-                      height={200}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <svg
-                        className="h-12 w-12 text-primary-300"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={1}
-                        stroke="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M12 21c-2-2-5-3-5-8 0-3 2-5 5-5s5 2 5 5c0 5-3 6-5 8z"
-                        />
-                      </svg>
-                    </div>
-                  )}
+                  <PlantImage
+                    plant={plant}
+                    width={200}
+                    height={200}
+                    className="transition-transform group-hover:scale-105"
+                  />
                 </div>
                 <p className="text-sm font-medium text-ink truncate">{plant.name}</p>
                 {plant.location && (

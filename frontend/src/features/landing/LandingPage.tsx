@@ -317,8 +317,15 @@ function AppMockup({ className }: { className?: string }) {
   };
 
   return (
-    <div className={className}>
-      <div className="relative -m-2 rounded-xl bg-primary-900/10 p-2 ring-1 ring-inset ring-primary-900/15 lg:-m-4 lg:rounded-2xl lg:p-4">
+    <div
+      className={className}
+      role="img"
+      aria-label="Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity."
+    >
+      <div
+        aria-hidden="true"
+        className="relative -m-2 rounded-2xl bg-glass/60 p-2 ring-1 ring-inset ring-dew lg:-m-4 lg:rounded-[1.75rem] lg:p-4"
+      >
         <div className="rounded-lg bg-paper shadow-2xl ring-1 ring-primary-900/10 overflow-hidden">
           {/* Browser chrome */}
           <div className="bg-parchment px-4 py-3 border-b border-primary-200/60 flex items-center gap-2">
@@ -342,7 +349,7 @@ function AppMockup({ className }: { className?: string }) {
                   <img src="/brand/icon.svg" alt="" aria-hidden="true" className="h-7 w-auto" />
                 </span>
                 <span className="flex flex-col leading-tight">
-                  <span className="font-serif text-sm font-semibold tracking-tight text-white">
+                  <span className="font-serif text-sm tracking-tight text-white">
                     Family Greenhouse
                   </span>
                   <span className="text-[8px] uppercase tracking-[0.2em] text-primary-200">
@@ -624,7 +631,7 @@ export function LandingPage() {
         <nav className="flex items-center justify-between gap-3 px-4 py-5 sm:p-6 lg:px-8 max-w-7xl mx-auto">
           <div className="flex lg:flex-1 items-center gap-2 min-w-0">
             <Link to="/" aria-label="Family Greenhouse home">
-              <BrandMark variant="wordmark" />
+              <BrandMark variant="wordmark" size="sm" compactOnMobile />
             </Link>
             {IS_BETA && (
               <span className="rounded-full bg-accent-100 text-accent-800 text-xs font-semibold px-2 py-0.5 border border-accent-200/70 whitespace-nowrap">
@@ -665,7 +672,7 @@ export function LandingPage() {
           column, the app mockup bleeding off the right edge (the
           overflow-hidden wrapper crops it). Below lg it stays the
           stacked, centered layout. */}
-      <div className="relative isolate pt-14 overflow-hidden">
+      <div className="greenhouse-grid relative isolate overflow-hidden bg-paper pt-14">
         {/* Botanical wash behind the hero copy. `origin-bottom
             animate-sway` rocks the sprigs from the soil line; the
             global prefers-reduced-motion rule freezes it. */}
@@ -720,7 +727,7 @@ export function LandingPage() {
       {/* Product facts band — kept on the dark-green brand surface so it
           punches between the paper hero and the paper features section.
           Sprig dividers above + below give it the journal frame. */}
-      <div className="bg-primary-800 py-16 relative">
+      <div className="bg-primary-900 py-16 relative">
         <SprigDivider
           className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-paper"
           aria-hidden="true"

@@ -1,8 +1,6 @@
 /**
- * Hand-drawn underline beneath page titles. Two slightly mismatched
- * strokes overlap to give it variable line weight; seed dots at each end
- * for botanical flavor. Stroke is `currentColor` so consumers recolor via
- * `text-*` utility classes.
+ * A living baseline for display titles: one confident stroke with a small
+ * leaf emerging from it. The simplified mark stays visible at mobile scale.
  */
 interface TitleUnderlineProps {
   className?: string;
@@ -16,12 +14,17 @@ export function TitleUnderline({ className }: TitleUnderlineProps) {
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M 6 8 Q 60 4 120 7 T 234 8" strokeWidth="3" opacity="0.85" />
-      <path d="M 30 9 Q 100 6 160 8 T 220 9" strokeWidth="2" opacity="0.5" />
-      <circle cx="6" cy="8" r="2" fill="currentColor" stroke="none" opacity="0.7" />
-      <circle cx="234" cy="8" r="2" fill="currentColor" stroke="none" opacity="0.7" />
+      <path d="M 5 9 Q 76 5 148 8 Q 196 10 235 7" strokeWidth="2.7" opacity="0.9" />
+      <path
+        d="M 174 8 Q 181 1 190 4 Q 185 11 174 8 Z"
+        fill="currentColor"
+        stroke="none"
+        opacity="0.82"
+      />
+      <circle cx="5" cy="9" r="1.7" fill="currentColor" stroke="none" opacity="0.65" />
     </svg>
   );
 }

@@ -8,6 +8,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { BrandMark } from '@/components/BrandMark';
+import { PlantPlaceholder } from '@/components/PlantImage';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
@@ -154,12 +155,7 @@ export function SharedPlantPage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div
-                className="flex h-full w-full items-center justify-center bg-gradient-to-b from-primary-100 to-primary-200/70 text-6xl"
-                aria-hidden="true"
-              >
-                🪴
-              </div>
+              <PlantPlaceholder />
             )}
             <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-paper/90 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary-800 shadow-sm backdrop-blur">
               {t('plants.shared.eyebrow')}

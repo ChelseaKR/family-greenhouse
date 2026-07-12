@@ -26,6 +26,13 @@
     "settings": "Settings",
     "signOut": "Sign out"
   },
+  "publicShell": {
+    "careGuides": "Care guides",
+    "blog": "Blog",
+    "pricing": "Pricing",
+    "openMenu": "Open site menu",
+    "tryApp": "Try the app"
+  },
   "auth": {
     "signIn": "Sign in to your account",
     "signInButton": "Sign in",
