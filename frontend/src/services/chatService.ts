@@ -12,6 +12,11 @@ export interface ChatContentBlock {
   tool_use_id?: string;
   /** tool_result payload — JSON-stringified tool output. */
   content?: string;
+  /** citation blocks persisted by the Sprout integration */
+  title?: string;
+  url?: string;
+  source?: string;
+  fetch_date?: string;
 }
 
 export interface ChatMessage {
@@ -47,6 +52,13 @@ export interface SendMessageResponse {
     inputTokens: number;
     outputTokens: number;
   };
+  provider?: 'sprout' | 'bedrock';
+  citations?: Array<{
+    title: string;
+    url: string;
+    source: string;
+    fetch_date: string;
+  }>;
 }
 
 export interface BudgetSnapshot {

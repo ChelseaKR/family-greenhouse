@@ -6,6 +6,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/chat/bedrock.js');
+vi.mock('../../../src/services/sprout.js', () => ({
+  askSprout: vi.fn(),
+  isSproutIntegrationEnabled: vi.fn(() => false),
+}));
 vi.mock('../../../src/services/chat/persistence.js', async () => {
   const actual = await vi.importActual<typeof import('../../../src/services/chat/persistence.js')>(
     '../../../src/services/chat/persistence.js'
@@ -16,6 +20,13 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     appendMessage: vi.fn(async () => undefined),
     appendMessagePair: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
+    getBudget: vi.fn(async () => ({
+      householdId: 'hh-1',
+      yearMonth: '2026-07',
+      inputTokens: 100,
+      outputTokens: 20,
+      costUsd: 0,
+    })),
     // The atomic gate: returns the POST-reservation committed totals. Default to
     // a fresh budget (committed 0 → post-reserve == the reservation).
     reserveBudget: vi.fn(
@@ -52,6 +63,7 @@ import {
   RESERVE_OUTPUT_TOKENS,
 } from '../../../src/services/chat/index.js';
 import * as billing from '../../../src/services/billing.js';
+import { askSprout, isSproutIntegrationEnabled } from '../../../src/services/sprout.js';
 import { invokeChatModel, type BedrockMessage } from '../../../src/services/chat/bedrock.js';
 import {
   appendMessage,
@@ -73,6 +85,7 @@ import * as plantService from '../../../src/services/plantService.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(isSproutIntegrationEnabled).mockReturnValue(false);
 });
 
 /**
@@ -110,6 +123,62 @@ function expectValidToolPairing(messages: BedrockMessage[]): void {
 }
 
 describe('runChatTurn', () => {
+  it('uses Sprout without Bedrock and persists citation metadata', async () => {
+    vi.mocked(isSproutIntegrationEnabled).mockReturnValueOnce(true);
+    vi.mocked(askSprout).mockResolvedValueOnce({
+      text: 'Grounded care.',
+      citations: [
+        {
+          title: 'Pothos care',
+          url: 'https://example.test/pothos',
+          source: 'pothos.md',
+          fetch_date: '2026-05-01',
+        },
+      ],
+      observations: [],
+      disclosure: 'AI-generated',
+    });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'Pothos care?',
+      turnId: 'turn-sprout',
+    });
+
+    expect(result.provider).toBe('sprout');
+    expect(result.budgetRemaining).toEqual({
+      inputTokens: BUDGET_CONFIG.maxInputTokensPerMonth - 100,
+      outputTokens: BUDGET_CONFIG.maxOutputTokensPerMonth - 20,
+    });
+    expect(invokeChatModel).not.toHaveBeenCalled();
+    expect(reserveBudget).not.toHaveBeenCalled();
+    expect(appendMessage).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(appendMessage).mock.calls[1][1].content[1]).toMatchObject({
+      type: 'citation',
+      source: 'pothos.md',
+    });
+    expect(finalizeTurn).toHaveBeenCalled();
+  });
+
+  it('falls back before persistence when Sprout is unavailable', async () => {
+    vi.mocked(isSproutIntegrationEnabled).mockReturnValueOnce(true);
+    vi.mocked(askSprout).mockRejectedValueOnce(new Error('sprout unavailable'));
+    vi.mocked(invokeChatModel).mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Bedrock fallback.' }],
+      stopReason: 'end_turn',
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.0001,
+    });
+
+    const result = await runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'care?' });
+
+    expect(result.provider).toBe('bedrock');
+    expect(invokeChatModel).toHaveBeenCalledOnce();
+    expect(appendMessage).toHaveBeenCalledTimes(2);
+  });
+
   it('returns the assistant text and persists exactly the right turns on a no-tool answer', async () => {
     vi.mocked(invokeChatModel).mockResolvedValueOnce({
       content: [{ type: 'text', text: 'You have no plants yet.' }],

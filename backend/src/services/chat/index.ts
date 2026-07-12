@@ -12,6 +12,7 @@ import createHttpError from 'http-errors';
 import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
 import * as billing from '../billing.js';
+import { askSprout, isSproutIntegrationEnabled, type SproutCitation } from '../sprout.js';
 import { getPlan } from '../../models/plans.js';
 import {
   invokeChatModel,
@@ -31,6 +32,7 @@ import {
   appendMessagePair,
   claimTurn,
   finalizeTurn,
+  getBudget,
   getConversation,
   incrementBudget,
   newConversationId,
@@ -138,6 +140,9 @@ export interface RunChatTurnResult {
     inputTokens: number;
     outputTokens: number;
   };
+  /** Present when the feature-flagged first-party Sprout path answered. */
+  citations?: SproutCitation[];
+  provider?: 'sprout' | 'bedrock';
 }
 
 /**
@@ -148,7 +153,10 @@ export interface RunChatTurnResult {
 function toBedrockMessages(history: ChatMessageRecord[]): BedrockMessage[] {
   return history.map((m) => ({
     role: m.role,
-    content: m.content,
+    // Citation blocks are Family Greenhouse display metadata, not Anthropic
+    // content blocks. Strip them before replaying a Sprout-authored turn into
+    // a later Bedrock fallback.
+    content: m.content.filter((block) => block.type !== 'citation'),
   }));
 }
 
@@ -269,6 +277,66 @@ async function* turnEvents(
       throw createHttpError(409, 'This message is already being processed — hang tight.');
     }
     // 'claimed' → we own this turn; run it (and finalize/release below).
+  }
+
+  // Phase A of the Sprout integration is intentionally read-only. It returns
+  // corpus-grounded prose and citations using only a minimized selector
+  // context. If the feature is enabled but unavailable, fall back to the
+  // existing assistant during rollout; no household payload has been persisted
+  // and the idempotency claim remains owned by this turn.
+  if (isSproutIntegrationEnabled()) {
+    let sprout: Awaited<ReturnType<typeof askSprout>> | undefined;
+    try {
+      sprout = await askSprout({ householdId, question: message });
+    } catch (err) {
+      logger.warn({ err: (err as Error).message }, 'sprout_integration_fallback');
+    }
+    if (sprout) {
+      const userRecord: ChatMessageRecord = {
+        conversationId,
+        timestamp: new Date().toISOString(),
+        role: 'user',
+        content: [{ type: 'text', text: message }],
+      };
+      const assistantRecord: ChatMessageRecord = {
+        conversationId,
+        timestamp: new Date().toISOString(),
+        role: 'assistant',
+        content: [
+          { type: 'text', text: sprout.text },
+          ...sprout.citations.map((citation) => ({ type: 'citation' as const, ...citation })),
+        ],
+      };
+      await appendMessage(householdId, userRecord);
+      await appendMessage(householdId, assistantRecord);
+      const budget = await getBudget(householdId);
+      const result: RunChatTurnResult = {
+        conversationId,
+        assistantText: sprout.text,
+        proposals: [],
+        citations: sprout.citations,
+        provider: 'sprout',
+        budgetRemaining: {
+          inputTokens: Math.max(0, BUDGET_CONFIG.maxInputTokensPerMonth - budget.inputTokens),
+          outputTokens: Math.max(0, BUDGET_CONFIG.maxOutputTokensPerMonth - budget.outputTokens),
+        },
+      };
+      if (turnId) {
+        try {
+          await finalizeTurn(householdId, turnId, result as unknown as Record<string, unknown>);
+        } catch (err) {
+          logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_finalize_failed');
+        }
+      }
+      audit('chat.message_sent', {
+        actorId: userId,
+        householdId,
+        metadata: { conversationId, provider: 'sprout', citationCount: sprout.citations.length },
+      });
+      yield { type: 'start', conversationId };
+      yield { type: 'done', result };
+      return result;
+    }
   }
 
   // Atomic budget gate (#4): reserve a representative turn up front. The
@@ -529,6 +597,7 @@ async function* turnEvents(
       extractAssistantText(finalAssistantBlocks) ||
       "I wasn't able to come up with a response — try rephrasing.",
     proposals,
+    provider: 'bedrock',
     budgetRemaining: {
       inputTokens: Math.max(
         0,

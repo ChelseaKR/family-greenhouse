@@ -97,6 +97,7 @@ export function ChatPage() {
         role: 'assistant',
         text: displayText,
         proposals: data.proposals?.length ? data.proposals : undefined,
+        citations: data.citations?.length ? data.citations : undefined,
       },
     ]);
   }
@@ -251,6 +252,23 @@ export function ChatPage() {
                   <ProposalCard key={p.proposalId ?? `${m.id}#${idx}`} proposal={p} />
                 ))}
               </div>
+            )}
+            {m.role === 'assistant' && m.citations && m.citations.length > 0 && (
+              <ul className="mt-2 max-w-xl space-y-1 text-xs text-gray-600" aria-label="Sources">
+                {m.citations.map((citation) => (
+                  <li key={`${citation.source}:${citation.fetch_date}`}>
+                    <a
+                      className="underline decoration-primary-300 underline-offset-2 hover:text-primary-800"
+                      href={citation.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {citation.title}
+                    </a>{' '}
+                    <span>({citation.fetch_date})</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         ))}

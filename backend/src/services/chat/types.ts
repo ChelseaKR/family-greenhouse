@@ -22,11 +22,20 @@ export interface ChatMessageRecord {
   costUsd?: number;
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | CitationBlock;
 
 export interface TextBlock {
   type: 'text';
   text: string;
+}
+
+/** Family Greenhouse display metadata. Never forwarded to Bedrock. */
+export interface CitationBlock {
+  type: 'citation';
+  title: string;
+  url: string;
+  source: string;
+  fetch_date: string;
 }
 
 export interface ToolUseBlock {

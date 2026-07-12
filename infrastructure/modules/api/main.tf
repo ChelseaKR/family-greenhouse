@@ -323,12 +323,15 @@ locals {
     PERENUAL_DAILY_BUDGET      = var.perenual_daily_budget
     # Bedrock embedding model for the chat RAG corpus. Empty lets the code
     # default to amazon.titan-embed-text-v2:0.
-    BEDROCK_EMBED_MODEL_ID    = var.bedrock_embed_model_id
-    SENTRY_DSN                = var.sentry_dsn
-    SENTRY_TRACES_SAMPLE_RATE = var.sentry_traces_sample_rate
-    GIT_SHA                   = var.git_sha
-    CHAT_BUDGET_INPUT_TOKENS  = var.chat_budget_input_tokens
-    CHAT_BUDGET_OUTPUT_TOKENS = var.chat_budget_output_tokens
+    BEDROCK_EMBED_MODEL_ID       = var.bedrock_embed_model_id
+    SPROUT_INTEGRATION_ENABLED   = var.sprout_integration_enabled
+    SPROUT_API_URL               = var.sprout_api_url
+    SPROUT_INTEGRATION_SECRET_ID = var.sprout_integration_secret_id
+    SENTRY_DSN                   = var.sentry_dsn
+    SENTRY_TRACES_SAMPLE_RATE    = var.sentry_traces_sample_rate
+    GIT_SHA                      = var.git_sha
+    CHAT_BUDGET_INPUT_TOKENS     = var.chat_budget_input_tokens
+    CHAT_BUDGET_OUTPUT_TOKENS    = var.chat_budget_output_tokens
     # PostHog server-side analytics. Powers confirmed conversion events from
     # the Stripe webhook (subscription_activated). Empty key = emitter no-ops,
     # so nothing leaks from environments without a configured project key.

@@ -1,6 +1,6 @@
 # Family Greenhouse public API v1
 #
-# Read-only endpoints scoped to the household that owns the API key. Issue
+# Read and opt-in task-write endpoints scoped to the household that owns the API key. Issue
 # keys from Settings → API keys (Greenhouse plan only). Authenticate either
 # with `Authorization: Bearer fg_...` or `X-Api-Key: fg_...`.
 #
@@ -11,9 +11,9 @@ info:
   title: Family Greenhouse API
   version: 1.0.0
   description: |
-    Read-only access to your household's plants, tasks, and activity feed.
+    Read access to your household's plants, tasks, and activity feed, plus
+    opt-in task completion and snoozing for keys granted `write:tasks`.
     Designed for personal automations (Home Assistant, scripts, dashboards).
-    Write access is not provided in v1 — use the web app to make changes.
 servers:
   - url: https://api.family-greenhouse.example/api/v1
     description: Production
@@ -147,6 +147,74 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Task' }
+  /tasks/{id}/complete:
+    post:
+      summary: Complete a task and advance its schedule
+      description: Requires the `write:tasks` scope. The action is attributed to the integration key.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                notes: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Completed task with its next due date advanced
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '403':
+          description: API key lacks `write:tasks`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /tasks/{id}/snooze:
+    post:
+      summary: Move a task's next due date forward
+      description: Requires the `write:tasks` scope. The action is attributed to the integration key.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                days: { type: integer, minimum: 1, maximum: 365 }
+      responses:
+        '200':
+          description: Snoozed task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '403':
+          description: API key lacks `write:tasks`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
   /activity:
     get:
       summary: List recent task completions across the household

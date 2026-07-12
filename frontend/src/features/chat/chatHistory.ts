@@ -11,6 +11,7 @@ export interface DisplayMessage {
   /** Reminder proposals attached to this assistant turn (only on assistant
    *  messages, and only when the bot called `propose_reminder_task`). */
   proposals?: ProposedReminderTask[];
+  citations?: Array<{ title: string; url: string; source: string; fetch_date: string }>;
 }
 
 /**
@@ -35,6 +36,18 @@ export function historyToDisplayMessages(history: ChatMessage[]): DisplayMessage
       .map((b) => b.text ?? '')
       .join('\n')
       .trim();
+    const citations = m.content.flatMap((block) =>
+      block.type === 'citation' && block.title && block.url && block.source && block.fetch_date
+        ? [
+            {
+              title: block.title,
+              url: block.url,
+              source: block.source,
+              fetch_date: block.fetch_date,
+            },
+          ]
+        : []
+    );
 
     if (m.role === 'user') {
       for (const block of m.content) {
@@ -57,6 +70,7 @@ export function historyToDisplayMessages(history: ChatMessage[]): DisplayMessage
         role: 'assistant',
         text,
         proposals: pendingProposals.length > 0 ? pendingProposals : undefined,
+        citations: citations.length > 0 ? citations : undefined,
       });
       pendingProposals = [];
     }
