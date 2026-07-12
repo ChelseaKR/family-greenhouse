@@ -53,9 +53,13 @@ function makeStream() {
  * drive `streamRequestToSse` directly.
  */
 const metadataCalls: Array<{ statusCode?: number; headers?: Record<string, string> }> = [];
+const originalAllowedOrigin = process.env.ALLOWED_ORIGIN;
+const originalApplicationCorsEnabled = process.env.APPLICATION_CORS_ENABLED;
 beforeAll(() => {
   process.env.COGNITO_USER_POOL_ID = 'us-east-1_TestPool';
   process.env.COGNITO_CLIENT_ID = 'test-client-id';
+  process.env.ALLOWED_ORIGIN =
+    'https://familygreenhouse.net,capacitor://localhost,https://localhost';
   (globalThis as Record<string, unknown>).awslambda = {
     HttpResponseStream: {
       from: (stream: unknown, metadata: (typeof metadataCalls)[number]) => {
@@ -67,6 +71,10 @@ beforeAll(() => {
 });
 afterAll(() => {
   delete (globalThis as Record<string, unknown>).awslambda;
+  if (originalAllowedOrigin === undefined) delete process.env.ALLOWED_ORIGIN;
+  else process.env.ALLOWED_ORIGIN = originalAllowedOrigin;
+  if (originalApplicationCorsEnabled === undefined) delete process.env.APPLICATION_CORS_ENABLED;
+  else process.env.APPLICATION_CORS_ENABLED = originalApplicationCorsEnabled;
 });
 
 beforeEach(() => {
@@ -75,6 +83,7 @@ beforeEach(() => {
   // Rate-limit buckets are module-level and per-warm-container; reset them so
   // one test's requests don't count against the next.
   __resetChatStreamRateLimitForTests();
+  delete process.env.APPLICATION_CORS_ENABLED;
 });
 
 const validClaims = {
@@ -100,6 +109,111 @@ async function* fakeTurn() {
 }
 
 describe('streamHandler auth (in-handler JWT verification)', () => {
+  it('answers an allowed iOS preflight before auth when application CORS is enabled', async () => {
+    process.env.APPLICATION_CORS_ENABLED = 'true';
+    const stream = makeStream();
+    await streamRequestToSse(
+      makeEvent({
+        headers: { origin: 'capacitor://localhost' },
+        requestContext: { http: { method: 'OPTIONS', sourceIp: '203.0.113.8' } },
+      }),
+      stream
+    );
+
+    expect(metadataCalls[0]).toMatchObject({
+      statusCode: 204,
+      headers: {
+        'Access-Control-Allow-Origin': 'capacitor://localhost',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Household-Id',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        Vary: 'Origin',
+      },
+    });
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(streamChatTurn).not.toHaveBeenCalled();
+    expect(stream.end).toHaveBeenCalled();
+  });
+
+  it('does not authorize an unknown stream preflight origin', async () => {
+    process.env.APPLICATION_CORS_ENABLED = 'true';
+    const stream = makeStream();
+    await streamRequestToSse(
+      makeEvent({
+        headers: { origin: 'https://attacker.example' },
+        requestContext: { http: { method: 'OPTIONS', sourceIp: '203.0.113.9' } },
+      }),
+      stream
+    );
+
+    expect(metadataCalls[0]?.statusCode).toBe(204);
+    expect(metadataCalls[0]?.headers?.['Access-Control-Allow-Origin']).toBeUndefined();
+    expect(metadataCalls[0]?.headers?.Vary).toBe('Origin');
+  });
+
+  it('adds exact CORS headers to an allowed POST error response', async () => {
+    process.env.APPLICATION_CORS_ENABLED = 'true';
+    const stream = makeStream();
+    await streamRequestToSse(
+      makeEvent({
+        headers: { origin: 'capacitor://localhost' },
+        requestContext: { http: { method: 'POST', sourceIp: '203.0.113.11' } },
+      }),
+      stream
+    );
+
+    expect(metadataCalls[0]).toMatchObject({
+      statusCode: 401,
+      headers: {
+        'Access-Control-Allow-Origin': 'capacitor://localhost',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        Vary: 'Origin',
+      },
+    });
+  });
+
+  it('does not add an allow-origin header to an unknown-origin POST error', async () => {
+    process.env.APPLICATION_CORS_ENABLED = 'true';
+    const stream = makeStream();
+    await streamRequestToSse(
+      makeEvent({
+        headers: { origin: 'https://attacker.example' },
+        requestContext: { http: { method: 'POST', sourceIp: '203.0.113.12' } },
+      }),
+      stream
+    );
+
+    expect(metadataCalls[0]?.statusCode).toBe(401);
+    expect(metadataCalls[0]?.headers?.['Access-Control-Allow-Origin']).toBeUndefined();
+    expect(metadataCalls[0]?.headers?.Vary).toBe('Origin');
+  });
+
+  it('rejects non-POST methods before auth or a chat turn', async () => {
+    process.env.APPLICATION_CORS_ENABLED = 'true';
+    const stream = makeStream();
+    await streamRequestToSse(
+      makeEvent({
+        headers: {
+          authorization: 'Bearer some.jwt.token',
+          origin: 'capacitor://localhost',
+        },
+        requestContext: { http: { method: 'PATCH', sourceIp: '203.0.113.10' } },
+      }),
+      stream
+    );
+
+    expect(metadataCalls[0]).toMatchObject({
+      statusCode: 405,
+      headers: {
+        Allow: 'POST, OPTIONS',
+        'Access-Control-Allow-Origin': 'capacitor://localhost',
+      },
+    });
+    expect(JSON.parse(stream.chunks.join(''))).toEqual({ message: 'Method Not Allowed' });
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(streamChatTurn).not.toHaveBeenCalled();
+  });
+
   it('401s when no Authorization header is present, without verifying or streaming', async () => {
     const stream = makeStream();
     await streamRequestToSse(makeEvent({ headers: {} }), stream);
@@ -171,6 +285,7 @@ describe('streamHandler auth (in-handler JWT verification)', () => {
   });
 
   it('streams SSE events for a verified member (status 200, text/event-stream)', async () => {
+    process.env.APPLICATION_CORS_ENABLED = 'true';
     mockVerify.mockResolvedValue(validClaims);
     vi.mocked(getMemberByUserId).mockResolvedValue({
       userId: 'user-1',
@@ -178,10 +293,22 @@ describe('streamHandler auth (in-handler JWT verification)', () => {
     } as Awaited<ReturnType<typeof getMemberByUserId>>);
     vi.mocked(streamChatTurn).mockImplementation(fakeTurn as unknown as typeof streamChatTurn);
     const stream = makeStream();
-    await streamRequestToSse(makeEvent(), stream);
+    await streamRequestToSse(
+      makeEvent({
+        headers: {
+          authorization: 'Bearer some.jwt.token',
+          origin: 'capacitor://localhost',
+        },
+        requestContext: { http: { method: 'POST', sourceIp: '203.0.113.13' } },
+      }),
+      stream
+    );
 
     expect(metadataCalls[0]?.statusCode).toBe(200);
     expect(metadataCalls[0]?.headers?.['Content-Type']).toBe('text/event-stream');
+    expect(metadataCalls[0]?.headers?.['Access-Control-Allow-Origin']).toBe(
+      'capacitor://localhost'
+    );
     expect(streamChatTurn).toHaveBeenCalledWith({
       userId: 'user-1',
       householdId: 'hh-claim',
@@ -232,5 +359,19 @@ describe('streamHandler auth (in-handler JWT verification)', () => {
     };
     expect(result.statusCode).toBe(401);
     expect(JSON.parse(result.body)).toEqual({ message: 'Unauthorized' });
+  });
+
+  it('buffered fallback handler rejects non-POST methods', async () => {
+    const result = (await (handler as (e: unknown) => Promise<unknown>)(
+      makeEvent({ requestContext: { http: { method: 'DELETE' } } })
+    )) as {
+      statusCode: number;
+      headers: Record<string, string>;
+      body: string;
+    };
+    expect(result.statusCode).toBe(405);
+    expect(result.headers.Allow).toBe('POST, OPTIONS');
+    expect(JSON.parse(result.body)).toEqual({ message: 'Method Not Allowed' });
+    expect(mockVerify).not.toHaveBeenCalled();
   });
 });

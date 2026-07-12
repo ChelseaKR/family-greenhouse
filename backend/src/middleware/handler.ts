@@ -16,6 +16,12 @@ import httpCors from '@middy/http-cors';
 import httpJsonBodyParser from '@middy/http-json-body-parser';
 import { Handler } from 'aws-lambda';
 import { bodySizeGuard } from './bodySize.js';
+import {
+  CORS_ALLOWED_HEADERS,
+  CORS_ALLOWED_METHODS,
+  CORS_MAX_AGE_SECONDS,
+  resolveCorsOrigins,
+} from './cors.js';
 import { loggingMiddleware } from './logging.js';
 import { securityHeaders } from './securityHeaders.js';
 
@@ -66,34 +72,20 @@ function jsonErrorHandler(): middy.MiddlewareObj<unknown, unknown> {
   return { onError };
 }
 
-/**
- * ALLOWED_ORIGIN is a comma-separated list: the web origin first, then the
- * Capacitor shell origins (`capacitor://localhost` on iOS, `https://localhost`
- * on Android — the schemes the native WebViews serve the bundled app from).
- * middy's http-cors echoes whichever listed origin the request presented,
- * which is required with credentials:true (a literal list in the header is
- * not valid CORS). Link-building code that falls back to ALLOWED_ORIGIN must
- * take the FIRST entry (the web origin) — see firstAllowedOrigin.
- */
-function resolveCorsOrigins(): string[] {
-  const allowed = process.env.ALLOWED_ORIGIN;
-  if (allowed && allowed.length > 0) {
-    return allowed
-      .split(',')
-      .map((o) => o.trim())
-      .filter((o) => o.length > 0);
-  }
-  // Wildcard with credentials:true is rejected by browsers and unsafe; only
-  // permit a wildcard in local development where ALLOWED_ORIGIN is unset.
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('ALLOWED_ORIGIN must be set in production');
-  }
-  return ['http://localhost:3000'];
-}
+export { firstAllowedOrigin } from './cors.js';
 
-/** The user-facing WEB origin (first ALLOWED_ORIGIN entry), for link building. */
-export function firstAllowedOrigin(): string | undefined {
-  return resolveCorsOrigins()[0];
+function corsOptions() {
+  return {
+    origins: resolveCorsOrigins(),
+    credentials: true,
+    disableBeforePreflightResponse: false,
+    headers: CORS_ALLOWED_HEADERS.join(', '),
+    methods: CORS_ALLOWED_METHODS.join(', '),
+    maxAge: CORS_MAX_AGE_SECONDS,
+    cacheControl: `public, max-age=${CORS_MAX_AGE_SECONDS}`,
+    requestHeaders: CORS_ALLOWED_HEADERS.map((header) => header.toLowerCase()),
+    requestMethods: [...CORS_ALLOWED_METHODS],
+  };
 }
 
 export function createHandler<TEvent, TResult>(
@@ -107,12 +99,7 @@ export function createHandler<TEvent, TResult>(
       .use(securityHeaders())
       .use(bodySizeGuard(opts?.maxBodyBytes))
       .use(httpJsonBodyParser({ disableContentTypeError: true }))
-      .use(
-        httpCors({
-          origins: resolveCorsOrigins(),
-          credentials: true,
-        })
-      )
+      .use(httpCors(corsOptions()))
       .use(loggingMiddleware())
       .use(jsonErrorHandler())
   );
@@ -131,12 +118,7 @@ export function createRawBodyHandler<TEvent, TResult>(handler: Handler<TEvent, T
   return middy(handler)
     .use(securityHeaders())
     .use(bodySizeGuard())
-    .use(
-      httpCors({
-        origins: resolveCorsOrigins(),
-        credentials: true,
-      })
-    )
+    .use(httpCors(corsOptions()))
     .use(loggingMiddleware())
     .use(jsonErrorHandler());
 }

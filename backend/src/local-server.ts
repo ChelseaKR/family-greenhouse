@@ -53,6 +53,10 @@ if (process.env.NODE_ENV === 'production') {
 export const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Mirror API Gateway's unauthenticated OPTIONS /{proxy+} route. The general
+// CORS middleware below also answers preflights, but registering the route
+// explicitly keeps the mock and production route surfaces in lockstep.
+app.options('/*proxy', cors());
 app.use(cors());
 app.use(express.json());
 

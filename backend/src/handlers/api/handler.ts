@@ -37,6 +37,18 @@ import { successResponse } from '../../utils/response.js';
 const apiRateLimit = () => rateLimit({ perWindowMs: 60_000, max: 120 });
 const perKeyRateLimit = () => userRateLimit({ perWindowMs: 60_000, max: 60 });
 
+// OPTIONS /{proxy+}
+// Catch-all unauthenticated preflight route. Middy's CORS `before` hook
+// short-circuits this handler with a 204 and the exact matching origin; the
+// body below is only a defensive fallback if middleware behavior changes.
+export const preflight = createHandler((): Promise<APIGatewayProxyResult> =>
+  Promise.resolve({
+    statusCode: 204,
+    headers: {},
+    body: '',
+  })
+);
+
 // GET /api/v1/me
 // Returns the household this API key is scoped to.
 export const me = createHandler((event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -252,6 +264,7 @@ export const health = createHandler(async (): Promise<APIGatewayProxyResult> => 
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
+  'OPTIONS /{proxy+}': preflight,
   'GET /health': health,
   'GET /api/v1/me': me,
   'GET /api/v1/plants': listPlants,

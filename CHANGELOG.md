@@ -17,6 +17,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-07-12
+
+### Fixed
+
+- Production deployment no longer passes the iOS `capacitor://` WebView origin to AWS-managed
+  CORS APIs, which reject custom URL schemes; AWS retains the valid web and Android origins while
+  the backend prepares exact-origin preflight handling for the complete native allowlist.
+- CORS preflight metadata now includes the implemented `PATCH` method and all four supported
+  request headers, with exact-origin tests for web, iOS, Android, and rejected callers.
+- Streaming chat now advertises only its `POST` contract, rejects other non-preflight methods,
+  and refuses wildcard CORS configuration so origin-policy drift fails closed.
+
 ## [0.16.0] - 2026-07-12
 
 ### Added

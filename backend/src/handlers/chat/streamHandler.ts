@@ -31,6 +31,7 @@
  * speaks the same protocol so the frontend path is exercisable offline.
  */
 import { z } from 'zod';
+import { corsHeadersForRequest } from '../../middleware/cors.js';
 import { logger } from '../../utils/logger.js';
 import { verifyCognitoIdToken } from '../../utils/jwtVerify.js';
 import { getMemberByUserId } from '../../services/householdService.js';
@@ -43,6 +44,9 @@ const sendMessageSchema = z.object({
   // completes server-side isn't re-run when the client falls back.
   turnId: z.string().uuid().optional(),
 });
+
+const STREAM_CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Household-Id'] as const;
+const STREAM_CORS_ALLOWED_METHODS = ['POST', 'OPTIONS'] as const;
 
 /**
  * Minimal shape of the Function URL (payload v2) event we read. Deliberately
@@ -61,7 +65,7 @@ interface StreamRequestEvent {
    * `requestContext.authorizer`: on an auth-NONE Function URL that field IS
    * caller-controlled and is never trusted here for identity (see module doc).
    */
-  requestContext?: { http?: { sourceIp?: string } };
+  requestContext?: { http?: { method?: string; sourceIp?: string } };
 }
 
 /** Writable side of awslambda's responseStream (Node Writable subset). */
@@ -98,6 +102,40 @@ class HttpishError extends Error {
   ) {
     super(message);
   }
+}
+
+function applicationCorsEnabled(): boolean {
+  return process.env.APPLICATION_CORS_ENABLED === 'true';
+}
+
+function applicationCorsHeaders(event: StreamRequestEvent): Record<string, string> {
+  return applicationCorsEnabled()
+    ? corsHeadersForRequest(event.headers, {
+        allowedHeaders: STREAM_CORS_ALLOWED_HEADERS,
+        allowedMethods: STREAM_CORS_ALLOWED_METHODS,
+      })
+    : {};
+}
+
+function requestMethod(event: StreamRequestEvent): string | undefined {
+  return event.requestContext?.http?.method?.toUpperCase();
+}
+
+function isPreflight(event: StreamRequestEvent): boolean {
+  return requestMethod(event) === 'OPTIONS';
+}
+
+function isDisallowedMethod(event: StreamRequestEvent): boolean {
+  const method = requestMethod(event);
+  return method !== undefined && method !== 'POST';
+}
+
+function methodNotAllowedHeaders(corsHeaders: Record<string, string>): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    Allow: STREAM_CORS_ALLOWED_METHODS.join(', '),
+    ...corsHeaders,
+  };
 }
 
 /**
@@ -251,6 +289,25 @@ export async function streamRequestToSse(
   responseStream: ResponseStreamLike
 ): Promise<void> {
   const httpResponseStream = (globalThis as StreamifyCapableGlobal).awslambda?.HttpResponseStream;
+  const corsHeaders = applicationCorsHeaders(event);
+  if (applicationCorsEnabled() && isPreflight(event)) {
+    const out = httpResponseStream
+      ? httpResponseStream.from(responseStream, { statusCode: 204, headers: corsHeaders })
+      : responseStream;
+    out.end();
+    return;
+  }
+  if (isDisallowedMethod(event)) {
+    const out = httpResponseStream
+      ? httpResponseStream.from(responseStream, {
+          statusCode: 405,
+          headers: methodNotAllowedHeaders(corsHeaders),
+        })
+      : responseStream;
+    out.write(JSON.stringify({ message: 'Method Not Allowed' }));
+    out.end();
+    return;
+  }
   let user: { userId: string; householdId: string };
   let body: { message: string; conversationId?: string; turnId?: string };
   try {
@@ -265,7 +322,7 @@ export async function streamRequestToSse(
     const out = httpResponseStream
       ? httpResponseStream.from(responseStream, {
           statusCode,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         })
       : responseStream;
     out.write(JSON.stringify({ message: (err as Error).message || 'Chat request failed' }));
@@ -276,7 +333,11 @@ export async function streamRequestToSse(
   const out = httpResponseStream
     ? httpResponseStream.from(responseStream, {
         statusCode: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' },
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-store',
+          ...corsHeaders,
+        },
       })
     : responseStream;
   try {
@@ -319,13 +380,24 @@ const streamify = (globalThis as StreamifyCapableGlobal).awslambda?.streamifyRes
 async function bufferedHandler(
   event: StreamRequestEvent
 ): Promise<{ statusCode: number; headers: Record<string, string>; body: string }> {
+  const corsHeaders = applicationCorsHeaders(event);
+  if (applicationCorsEnabled() && isPreflight(event)) {
+    return { statusCode: 204, headers: corsHeaders, body: '' };
+  }
+  if (isDisallowedMethod(event)) {
+    return {
+      statusCode: 405,
+      headers: methodNotAllowedHeaders(corsHeaders),
+      body: JSON.stringify({ message: 'Method Not Allowed' }),
+    };
+  }
   try {
     const { userId, householdId } = await resolveUser(event);
     const { message, conversationId, turnId } = parseBody(event);
     const result = await runChatTurn({ userId, householdId, conversationId, message, turnId });
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
       body: JSON.stringify(result),
     };
   } catch (err) {
@@ -335,7 +407,7 @@ async function bufferedHandler(
         : ((err as { statusCode?: number }).statusCode ?? 500);
     return {
       statusCode,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
       body: JSON.stringify({ message: (err as Error).message || 'Chat request failed' }),
     };
   }

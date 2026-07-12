@@ -56,6 +56,12 @@ variable "native_app_origins" {
   default     = ["capacitor://localhost", "https://localhost"]
 }
 
+variable "application_cors_enabled" {
+  description = "Whether Lambda responses own CORS (enable only after AWS managed CORS blocks are removed)"
+  type        = bool
+  default     = false
+}
+
 variable "bedrock_chat_model_id" {
   description = "Bedrock model ID or inference profile for the chat Lambda. Defaults to '' which lets the Lambda code fall back to Haiku 4.5."
   type        = string

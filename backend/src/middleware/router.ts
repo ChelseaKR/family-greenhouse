@@ -19,36 +19,24 @@
  */
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import { instrument } from '../utils/sentry.js';
+import { corsHeadersForRequest } from './cors.js';
 import { _securityHeaders } from './securityHeaders.js';
 
 /**
  * The inline 404 below never passes through the per-route middy stack, so it
  * misses the `securityHeaders` and `httpCors` middleware every real response
  * gets. Without CORS headers the browser surfaces an opaque CORS error
- * instead of the 404 body. Mirror `resolveCorsOrigins` in handler.ts (not
- * exported there); unlike the cold-start check there we don't throw on a
- * missing ALLOWED_ORIGIN — a 404 without a CORS header beats failing the
- * whole dispatch.
+ * instead of the 404 body. The shared policy fails closed on a missing or
+ * wildcard production allowlist and never authorizes an unknown request
+ * origin.
  */
-function notFoundHeaders(requestOrigin: string | undefined): Record<string, string> {
-  // ALLOWED_ORIGIN is a comma-separated list — web origin first, then the
-  // Capacitor shell origins (see resolveCorsOrigins in handler.ts). Echo the
-  // request's origin when it's on the list; otherwise fall back to the first
-  // (web) entry so the header stays a single valid origin.
-  const allowed = (process.env.ALLOWED_ORIGIN ?? '')
-    .split(',')
-    .map((o) => o.trim())
-    .filter((o) => o.length > 0);
-  const origin =
-    requestOrigin && allowed.includes(requestOrigin)
-      ? requestOrigin
-      : (allowed[0] ?? 'http://localhost:3000');
+function notFoundHeaders(
+  requestHeaders: Record<string, string | undefined> | undefined
+): Record<string, string> {
   return {
     'Content-Type': 'application/json',
     ..._securityHeaders,
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Credentials': 'true',
-    Vary: 'Origin',
+    ...corsHeadersForRequest(requestHeaders),
   };
 }
 
@@ -80,10 +68,9 @@ export function createRouter(routes: Record<string, RouteHandler>): RouterHandle
     const route = routes[key];
     if (!route) {
       const headers = ((event ?? {}) as { headers?: Record<string, string | undefined> }).headers;
-      const requestOrigin = headers?.origin ?? headers?.Origin;
       return Promise.resolve({
         statusCode: 404,
-        headers: notFoundHeaders(requestOrigin),
+        headers: notFoundHeaders(headers),
         body: JSON.stringify({ message: `No route handler for ${key}` }),
       });
     }

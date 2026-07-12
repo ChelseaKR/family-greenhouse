@@ -59,7 +59,7 @@ const GROUPS: Array<{ handler: { routes: string[] } }> = [
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAIN_TF = resolve(__dirname, '../../../infrastructure/modules/api/main.tf');
 
-const ROUTE_KEY = /^"((?:GET|POST|PUT|DELETE|PATCH) \/[^"]*)"\s*=/;
+const ROUTE_KEY = /^"((?:GET|POST|PUT|DELETE|PATCH|OPTIONS) \/[^"]*)"\s*=/;
 
 /**
  * Parse the `route_key` strings out of the `local.routes` map in main.tf.
