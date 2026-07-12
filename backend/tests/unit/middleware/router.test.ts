@@ -50,7 +50,13 @@ describe('createRouter', () => {
     // Without these the browser reports an opaque CORS failure instead of
     // surfacing the 404 to the frontend.
     const handler = createRouter(routes);
-    const res = await handler({ routeKey: 'DELETE /plants/{id}' }, ctx);
+    const res = await handler(
+      {
+        routeKey: 'DELETE /plants/{id}',
+        headers: { origin: 'http://localhost:3000' },
+      },
+      ctx
+    );
     expect(res.headers).toMatchObject({
       'Content-Type': 'application/json',
       'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
@@ -61,6 +67,19 @@ describe('createRouter', () => {
     });
     expect(typeof res.headers?.['Access-Control-Allow-Origin']).toBe('string');
     expect(res.headers?.['Access-Control-Allow-Origin']).not.toBe('');
+  });
+
+  it('does not authorize an unknown origin on an inline 404', async () => {
+    const handler = createRouter(routes);
+    const res = await handler(
+      {
+        routeKey: 'DELETE /plants/{id}',
+        headers: { origin: 'https://attacker.example' },
+      },
+      ctx
+    );
+    expect(res.headers?.['Access-Control-Allow-Origin']).toBeUndefined();
+    expect(res.headers?.Vary).toBe('Origin');
   });
 
   it('exposes its route keys', () => {
@@ -94,7 +113,7 @@ const GROUPS: Record<string, { handler: { routes: string[] } }> = {
 // Previously this regex missed JSDoc-style route docs (e.g. notifications/
 // run-reminders) — and was the reason a couple unregistered routes shipped
 // to production. Code review 2026-06-01.
-const ROUTE_COMMENT = /^(?:\/\/|\*)\s*(GET|POST|PUT|PATCH|DELETE)\s+(\/\S+)/;
+const ROUTE_COMMENT = /^(?:\/\/|\*)\s*(GET|POST|PUT|PATCH|DELETE|OPTIONS)\s+(\/\S+)/;
 
 function canonical(raw: string): string {
   return raw.split('?')[0].replace(/:([A-Za-z0-9_]+)/g, '{$1}');

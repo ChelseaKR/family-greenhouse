@@ -50,7 +50,7 @@ const GROUPS: Record<string, { handler: { routes: string[] } }> = {
 
 /** API Gateway routeKey ("GET /plants/{id}") → Express form ("GET /plants/:id"). */
 function toExpressKey(routeKey: string): string {
-  return routeKey.replace(/\{([^}]+)\}/g, ':$1');
+  return routeKey.replace(/\{([^}]+)\+\}/g, '*$1').replace(/\{([^}]+)\}/g, ':$1');
 }
 
 /** Every "METHOD /path" the mock Express app has registered. */
