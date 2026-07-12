@@ -17,6 +17,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-12
+
+### Added
+
+- Native iOS and Android app shells (Capacitor) wrap the existing web app so it can ship to the App Store and Play Store; build flow and store-submission checklist live in `docs/mobile.md`.
+- Inside the mobile apps, the notification settings device toggle registers a native push device token with the backend (capture-only groundwork — reminder delivery to native devices ships with the APNs/FCM sender).
+
+### Changed
+
+- Billing inside the mobile apps is read-only for store payment compliance: plan checkout and subscription-management actions stay web-only, with a neutral notice shown in the apps.
+- The API's CORS allowlist now also accepts the mobile shells' origins, and the layout respects device safe areas (notch, status bar, home indicator) on edge-to-edge screens.
+
 ## [0.15.4] - 2026-07-11
 
 ### Fixed
