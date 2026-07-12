@@ -19,7 +19,7 @@ describe('Card', () => {
       </Card>
     );
     const div = container.firstElementChild as HTMLElement;
-    expect(div).toHaveClass('bg-white', 'shadow-card');
+    expect(div).toHaveClass('bg-white/90', 'shadow-card');
     // And NOT paper / journal classes.
     expect(div).not.toHaveClass('bg-paper');
     expect(div).not.toHaveClass('shadow-journal');
@@ -32,7 +32,7 @@ describe('Card', () => {
       </Card>
     );
     const div = container.firstElementChild as HTMLElement;
-    expect(div).toHaveClass('bg-paper', 'shadow-journal');
+    expect(div).toHaveClass('bg-paper/90', 'shadow-journal');
     expect(div).not.toHaveClass('bg-white');
   });
 

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" role="img" aria-labelledby="title desc">
+  <title id="title">Family Greenhouse</title>
+  <desc id="desc">Every plant. Every person. One care log.</desc>
+  <rect width="1200" height="600" fill="#173404"/>
+  <g fill="none" stroke="#97C459" stroke-width="2" opacity=".11">
+    <path d="M0 160 190 0M0 360 390 0M810 600 1200 238M1010 600 1200 430"/>
+    <path d="M0 160 190 0 380 160M810 600 1005 420 1200 600"/>
+  </g>
+  <circle cx="1090" cy="92" r="116" fill="#639922" opacity=".16"/>
+
+  <g transform="translate(76 92) scale(.8125)">
+    <circle cx="382" cy="106" r="42" fill="#97C459" opacity=".75"/>
+    <path d="M96 224 256 82l160 142v202H96Z" fill="#EAF3DE"/>
+    <path d="M96 224 256 82l160 142M96 224h320v202H96Z" fill="none" stroke="#C0DD97" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M256 88v338M103 225h306" fill="none" stroke="#639922" stroke-width="7" opacity=".55"/>
+    <path d="M112 238v174h288V238M112 240 256 112l144 128" fill="none" stroke="#FFFFFF" stroke-width="8" opacity=".48"/>
+    <path d="M82 426h348" stroke="#DC6C1F" stroke-width="18" stroke-linecap="round"/>
+    <path d="M218 426V312h76v114" fill="#C0DD97" stroke="#27500A" stroke-width="9"/>
+    <circle cx="278" cy="370" r="6" fill="#A23F1A"/>
+    <path d="M160 404V276M160 316c-33-2-51-21-54-51 33 0 53 18 54 51Zm0 40c37-2 58-22 62-57-37 1-59 20-62 57Z" fill="#639922" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M352 404V270M352 308c33-2 51-21 54-51-33 0-53 18-54 51Zm0 44c-37-2-58-22-62-57 37 1 59 20 62 57Z" fill="#97C459" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="546" y="138" font-family="Instrument Sans, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="5" fill="#97C459">FAMILY GREENHOUSE</text>
+  <text x="546" y="226" font-family="Gloock, Georgia, serif" font-size="62" font-weight="400" fill="#F7F8F2">
+    <tspan x="546" dy="0">Every plant.</tspan>
+    <tspan x="546" dy="70">Every person.</tspan>
+    <tspan x="546" dy="70">One care log.</tspan>
+  </text>
+  <path d="M548 465h410" stroke="#639922" stroke-width="3"/>
+  <text x="548" y="510" font-family="Instrument Sans, Arial, sans-serif" font-size="25" fill="#DDEEE7">Shared plant care that keeps the whole house in sync.</text>
+</svg>

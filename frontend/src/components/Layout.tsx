@@ -143,7 +143,7 @@ export function Layout() {
             the native shells and installed PWAs draw edge-to-edge, so the bar
             extends its own background under the iOS/Android status bar and
             keeps its content below it. env() is 0 in regular browser tabs. */}
-        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-primary-100/80 bg-paper px-4 pt-[env(safe-area-inset-top)] sm:gap-x-6 sm:px-6 lg:hidden">
+        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-sm sm:gap-x-6 sm:px-6 lg:hidden">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"
@@ -193,10 +193,10 @@ interface SidebarContentProps {
 
 function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
   return (
-    <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-800 px-6 pb-4">
-      {/* Decorative botanical pattern texture in the sidebar margins.
-          Behind the nav at low opacity — reads as warmth, not content. */}
-      <SidebarPattern className="pointer-events-none absolute inset-0 w-full h-full opacity-[0.07]" />
+    <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 px-6 pb-4">
+      {/* Pane lines + a climbing vine turn the rail into the edge of the
+          greenhouse without competing with navigation labels. */}
+      <SidebarPattern className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.11]" />
 
       <div className="relative flex h-16 shrink-0 items-center">
         <BrandMark variant="wordmark" tone="light" size="sm" />
@@ -217,10 +217,10 @@ function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       clsx(
-                        'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 min-h-touch items-center transition-colors',
+                        'group flex min-h-touch items-center gap-x-3 rounded-lg border-l-2 p-2 text-sm font-semibold leading-6 transition-colors',
                         isActive
-                          ? 'bg-primary-700/80 text-white shadow-sm ring-1 ring-primary-600/50'
-                          : 'text-primary-100/90 hover:bg-primary-700/50 hover:text-white'
+                          ? 'border-accent-400 bg-white/10 text-white shadow-sm ring-1 ring-white/10'
+                          : 'border-transparent text-primary-100/90 hover:bg-white/[0.07] hover:text-white'
                       )
                     }
                   >
@@ -235,7 +235,7 @@ function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
           <li className="mt-auto">
             <div className="flex items-center gap-x-4 py-3 text-sm font-semibold text-primary-100">
               <div
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-700 ring-1 ring-primary-600/50"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-700 ring-1 ring-dew/40"
                 aria-hidden="true"
               >
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
@@ -248,7 +248,7 @@ function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
             <button
               type="button"
               onClick={onLogout}
-              className="w-full mt-2 btn-secondary text-primary-100 border-primary-600 hover:bg-primary-700/60"
+              className="mt-2 inline-flex min-h-touch w-full items-center justify-center rounded-lg border border-primary-600/80 bg-primary-950/35 px-4 py-2 text-sm font-medium text-primary-100 transition-colors hover:bg-primary-700/75 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-900"
             >
               Sign out
             </button>

@@ -1,7 +1,7 @@
 /**
  * Dashboard page header art — a small botanical vignette that sits in the
  * top-right of the dashboard's title block. Three stylized plants in a
- * row, each in a terracotta pot, with a low sun cresting behind them.
+ * row, each in a terracotta pot, framed by the panes of a small glasshouse.
  * Replaces what was a bare `Welcome back, Chelsea` H1.
  *
  * Sized via the consumer's `className` (defaults assume ~200×120 viewport).
@@ -22,9 +22,16 @@ export function DashboardHeaderArt({ className }: HeaderArtProps) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* Sun — soft Leaf Mid disc behind the plants */}
+      {/* Sun and glasshouse structure sit behind the plants. */}
       <circle cx="170" cy="38" r="22" fill="#97C459" fillOpacity="0.4" stroke="none" />
       <circle cx="170" cy="38" r="16" fill="#97C459" fillOpacity="0.6" stroke="none" />
+      <path
+        d="M 8 98 V 54 L 120 12 L 232 54 V 98 M 8 54 H 232 M 120 13 V 98"
+        stroke="#B7D9D1"
+        strokeWidth="1.5"
+        opacity="0.72"
+      />
+      <path d="M 17 58 L 120 20 L 223 58" stroke="white" strokeWidth="2" opacity="0.7" />
       {/* Small horizon line */}
       <line x1="0" y1="98" x2="240" y2="98" stroke="#27500A" strokeWidth="0.8" opacity="0.3" />
 

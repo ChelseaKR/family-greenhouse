@@ -21,7 +21,7 @@ interface AuthShellProps {
  */
 export function AuthShell({ title, subtitle, children, footer }: AuthShellProps) {
   return (
-    <div className="relative min-h-screen flex flex-col justify-center overflow-hidden bg-paper py-12 sm:px-6 lg:px-8">
+    <div className="greenhouse-grid relative min-h-screen flex flex-col justify-center overflow-hidden bg-paper px-4 py-12 sm:px-6 lg:px-8">
       <CornerSprig
         className="pointer-events-none absolute -left-8 top-0 hidden md:block w-56 h-auto text-primary-300/50"
         aria-hidden="true"
@@ -47,7 +47,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
       </div>
 
       <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-paper py-8 px-4 shadow-journal sm:rounded-xl sm:px-10 border border-primary-100/60">
+        <div className="glass-surface rounded-2xl border border-dew/60 bg-paper/90 px-4 py-8 shadow-journal backdrop-blur-sm sm:px-10">
           {children}
         </div>
         {footer && <p className="mt-6 text-center text-sm text-gray-700">{footer}</p>}

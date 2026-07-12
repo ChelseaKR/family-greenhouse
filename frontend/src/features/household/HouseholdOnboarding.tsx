@@ -102,10 +102,10 @@ export function HouseholdOnboarding() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gradient-to-b from-primary-50 to-white">
+    <div className="greenhouse-grid min-h-screen flex flex-col justify-center bg-paper py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
         <BrandMark variant="wordmark" />
-        <h2 className="mt-8 text-center font-serif text-3xl font-semibold tracking-tight text-ink">
+        <h2 className="mt-8 text-center font-serif text-3xl tracking-tight text-ink">
           {step === 'choice' &&
             (isAddingAnother ? 'Add another household' : 'Set up your household')}
           {step === 'create' &&

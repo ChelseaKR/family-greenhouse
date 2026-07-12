@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Android adaptive-icon foreground. Artwork stays inside the central 66% safe zone. -->
+  <g transform="translate(92 92) scale(.64)">
+    <circle cx="382" cy="106" r="42" fill="#97C459" opacity=".8"/>
+    <path d="M96 224 256 82l160 142v202H96Z" fill="#EAF3DE"/>
+    <path d="M96 224 256 82l160 142M96 224h320v202H96Z" fill="none" stroke="#C0DD97" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M256 88v338M103 225h306" fill="none" stroke="#639922" stroke-width="7" opacity=".55"/>
+    <path d="M82 426h348" stroke="#DC6C1F" stroke-width="18" stroke-linecap="round"/>
+    <path d="M218 426V312h76v114" fill="#C0DD97" stroke="#27500A" stroke-width="9"/>
+    <path d="M160 404V276M160 316c-33-2-51-21-54-51 33 0 53 18 54 51Zm0 40c37-2 58-22 62-57-37 1-59 20-62 57Z" fill="#639922" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M352 404V270M352 308c33-2 51-21 54-51-33 0-53 18-54 51Zm0 44c-37-2-58-22-62-57 37 1 59 20 62 57Z" fill="#97C459" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

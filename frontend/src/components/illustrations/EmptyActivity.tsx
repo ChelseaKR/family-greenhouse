@@ -11,7 +11,15 @@ export function EmptyActivity({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <ellipse cx="120" cy="160" rx="60" ry="6" fill="#EAF3DE" />
+      <path
+        d="M36 148V68L120 22l84 46v80"
+        fill="#F7F8F2"
+        stroke="#DDEEE7"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M120 23v125M37 68h166" stroke="#B7D9D1" strokeWidth="1.5" opacity="0.7" />
+      <ellipse cx="120" cy="160" rx="60" ry="6" fill="#DDEEE7" />
       <path
         d="M70 40 H170 a14 14 0 0 1 14 14 v60 a14 14 0 0 1 -14 14 H140 l-14 18 l-14 -18 H70 a14 14 0 0 1 -14 -14 V54 a14 14 0 0 1 14 -14 z"
         fill="#C0DD97"

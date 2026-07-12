@@ -105,12 +105,10 @@ Remaining work for delivery:
 - [ ] **Google Play Console** — $25 one-time, <https://play.google.com/console>.
       New personal accounts must run a closed test (≥12 testers for 14 days)
       before production access is granted — start this early.
-- [ ] App icons: stores need a 1024×1024 (Apple) and 512×512 + 1024×500
-      feature graphic (Play); derive from `frontend/public/brand/`. Replace
-      the Capacitor placeholder icons/splash screens in
-      `frontend/android/app/src/main/res/` and
-      `frontend/ios/App/App/Assets.xcassets/` (the `@capacitor/assets` CLI
-      generates all sizes from one source image).
+- [x] App icons and launch screens: branded iOS/Android assets are generated
+      from the greenhouse mark by `frontend/scripts/render-brand-assets.sh`.
+- [ ] Google Play 1024×500 feature graphic (the launcher set already includes
+      the required 512×512 icon).
 - [ ] Screenshots per device class (6.7"/6.5" iPhone, 13" iPad if targeting
       iPad, phone + 7"/10" tablet for Play).
 

@@ -27,6 +27,13 @@
     "settings": "Ajustes",
     "signOut": "Cerrar sesión"
   },
+  "publicShell": {
+    "careGuides": "Guías de cuidado",
+    "blog": "Blog",
+    "pricing": "Precios",
+    "openMenu": "Abrir menú del sitio",
+    "tryApp": "Probar la aplicación"
+  },
   "auth": {
     "signIn": "Inicia sesión",
     "signInButton": "Iniciar sesión",

@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { BrandMark } from './BrandMark';
 import { Footer } from './Footer';
 import { TitleUnderline } from './brand/TitleUnderline';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Shared chrome for the public content pages (care guides, blog, pricing,
@@ -32,41 +33,77 @@ interface PublicShellProps {
 }
 
 export function PublicShell({ width = 'prose', plainHeader = false, children }: PublicShellProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-paper flex flex-col">
-      <header className="border-b border-primary-100/80">
+      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 backdrop-blur-sm">
         <nav
-          className={clsx('mx-auto flex items-center justify-between gap-4 p-6', WIDTHS[width])}
+          className={clsx(
+            'mx-auto flex items-center justify-between gap-3 px-4 py-4 sm:px-6',
+            WIDTHS[width]
+          )}
           aria-label="Site"
         >
           <Link to="/" aria-label="Family Greenhouse home">
-            <BrandMark variant="wordmark" size="sm" />
+            <BrandMark variant="wordmark" size="sm" compactOnMobile />
           </Link>
           {!plainHeader && (
-            <div className="flex items-center gap-x-6">
+            <div className="flex items-center gap-x-3 sm:gap-x-6">
               <Link
                 to="/care"
                 className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
               >
-                Care guides
+                {t('publicShell.careGuides')}
               </Link>
               <Link
                 to="/blog"
                 className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
               >
-                Blog
+                {t('publicShell.blog')}
               </Link>
               <Link
                 to="/pricing"
                 className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
               >
-                Pricing
+                {t('publicShell.pricing')}
               </Link>
+              <details className="group relative md:hidden">
+                <summary className="flex min-h-touch min-w-touch cursor-pointer list-none items-center justify-center rounded-lg border border-dew bg-paper text-ink transition-colors hover:bg-glass/50 [&::-webkit-details-marker]:hidden">
+                  <span className="sr-only">{t('publicShell.openMenu')}</span>
+                  <svg
+                    className="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 7h14M5 12h14M5 17h14" />
+                  </svg>
+                </summary>
+                <div className="absolute right-0 top-[calc(100%+0.6rem)] z-50 w-44 overflow-hidden rounded-xl border border-dew bg-paper p-2 shadow-journal">
+                  {[
+                    [t('publicShell.careGuides'), '/care'],
+                    [t('publicShell.blog'), '/blog'],
+                    [t('publicShell.pricing'), '/pricing'],
+                  ].map(([label, to]) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className="block rounded-lg px-3 py-2 text-sm font-medium text-ink hover:bg-glass/55"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              </details>
               <Link
                 to="/"
                 className="text-sm font-semibold text-primary-700 hover:text-primary-800 whitespace-nowrap"
               >
-                Try the app →
+                {t('publicShell.tryApp')} →
               </Link>
             </div>
           )}

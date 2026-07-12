@@ -10,7 +10,6 @@
     "components/Layout.tsx": 4,
     "components/NotFoundPage.tsx": 3,
     "components/ProtectedRoute.tsx": 1,
-    "components/PublicShell.tsx": 4,
     "components/RouteErrorBoundary.tsx": 3,
     "components/Skeleton.tsx": 2,
     "features/analytics/AnalyticsPage.tsx": 5,

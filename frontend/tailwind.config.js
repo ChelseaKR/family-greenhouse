@@ -9,12 +9,14 @@ export default {
         // duplicating the `colors` key (a duplicate key would silently
         // wipe out the brand scales).
         ink: '#27500A',
-        // Paper + parchment as general palette colors (not just bg) so
-        // they're usable for text-, border-, ring-, stroke-, fill-, etc.
-        // The `backgroundColor` extension below still re-exports them so
-        // existing `bg-paper`/`bg-parchment` callers keep working.
-        paper: '#FBF8F0',
-        parchment: '#F4EFE0',
+        // Daylight surfaces: the prior cream/parchment pair leaned hard into
+        // a generic stationery look. These cooler neutrals pick up the color
+        // of greenhouse glass while keeping the journal warmth in the copy
+        // and terracotta details.
+        paper: '#F7F8F2',
+        parchment: '#EEF1E6',
+        glass: '#DDEEE7',
+        dew: '#B7D9D1',
         // Brand primary scale. Built around the greenhouse-asset palette
         // (#27500A, #639922, #97C459) with a 50–950 ramp interpolated for
         // UI use. WCAG: 700 (#27500A) on white = 9.3:1, 600 on white =
@@ -96,14 +98,14 @@ export default {
       minWidth: {
         touch: '44px',
       },
-      // Warm app shell + paper tones (added 2026-06-01 as part of the
-      // "garden journal" redesign). `paper` = a warmer cream than primary-50
-      // for app backgrounds; `parchment` is a touch deeper for cards over
-      // paper; `ink` is the rich dark-green used for hand-drawn strokes.
+      // Re-export the named greenhouse surfaces so existing `bg-paper` and
+      // `bg-parchment` callers plus the newer glass accents share one source.
       backgroundColor: ({ theme }) => ({
         ...theme('colors'),
-        paper: '#FBF8F0',
-        parchment: '#F4EFE0',
+        paper: '#F7F8F2',
+        parchment: '#EEF1E6',
+        glass: '#DDEEE7',
+        dew: '#B7D9D1',
       }),
       // Brand-green-tinted shadows. `card` is the original; `journal` is
       // softer + lifted as if a paper page rests on the desk; `lifted` is
@@ -111,8 +113,8 @@ export default {
       boxShadow: {
         card: '0 1px 2px 0 rgb(23 52 4 / 0.05), 0 1px 3px 0 rgb(23 52 4 / 0.06)',
         'card-hover': '0 4px 6px -1px rgb(23 52 4 / 0.09), 0 2px 4px -2px rgb(23 52 4 / 0.06)',
-        journal: '0 1px 0 0 rgb(23 52 4 / 0.04), 0 2px 8px -2px rgb(23 52 4 / 0.06)',
-        'journal-hover': '0 1px 0 0 rgb(23 52 4 / 0.04), 0 4px 14px -3px rgb(23 52 4 / 0.1)',
+        journal: '0 1px 0 0 rgb(23 52 4 / 0.04), 0 10px 30px -20px rgb(23 52 4 / 0.22)',
+        'journal-hover': '0 1px 0 0 rgb(23 52 4 / 0.04), 0 18px 40px -22px rgb(23 52 4 / 0.28)',
       },
       keyframes: {
         // Subtle entrance for cards as they hydrate. 200ms is the sweet

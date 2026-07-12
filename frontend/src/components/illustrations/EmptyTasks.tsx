@@ -13,17 +13,25 @@ export function EmptyTasks({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <ellipse cx="120" cy="160" rx="64" ry="6" fill="#EAF3DE" />
-      <rect x="78" y="36" width="84" height="112" rx="8" fill="#fef9c3" />
-      <rect x="78" y="36" width="84" height="14" rx="8" fill="#facc15" />
-      <rect x="100" y="28" width="40" height="14" rx="4" fill="#a16207" />
-      <rect x="106" y="34" width="28" height="2" rx="1" fill="#fef9c3" />
+      <path
+        d="M36 148V68L120 22l84 46v80"
+        fill="#F7F8F2"
+        stroke="#DDEEE7"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M120 23v125M37 68h166" stroke="#B7D9D1" strokeWidth="1.5" opacity="0.7" />
+      <ellipse cx="120" cy="160" rx="64" ry="6" fill="#DDEEE7" />
+      <rect x="78" y="36" width="84" height="112" rx="8" fill="#EAF3DE" />
+      <rect x="78" y="36" width="84" height="14" rx="8" fill="#F4CAA4" />
+      <rect x="100" y="28" width="40" height="14" rx="4" fill="#A23F1A" />
+      <rect x="106" y="34" width="28" height="2" rx="1" fill="#FDF4ED" />
       <line
         x1="92"
         y1="68"
         x2="148"
         y2="68"
-        stroke="#a16207"
+        stroke="#3B6D11"
         strokeWidth="2"
         strokeLinecap="round"
         opacity="0.4"
@@ -33,7 +41,7 @@ export function EmptyTasks({ className }: { className?: string }) {
         y1="84"
         x2="138"
         y2="84"
-        stroke="#a16207"
+        stroke="#3B6D11"
         strokeWidth="2"
         strokeLinecap="round"
         opacity="0.3"
@@ -43,7 +51,7 @@ export function EmptyTasks({ className }: { className?: string }) {
         y1="100"
         x2="142"
         y2="100"
-        stroke="#a16207"
+        stroke="#3B6D11"
         strokeWidth="2"
         strokeLinecap="round"
         opacity="0.3"

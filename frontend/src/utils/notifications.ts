@@ -37,8 +37,8 @@ export function notify(title: string, options?: NotificationOptions): void {
   if (!isEnabledLocally()) return;
   try {
     new Notification(title, {
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/brand/icon-192.png',
+      badge: '/brand/icon-192.png',
       ...options,
     });
   } catch {

@@ -70,19 +70,16 @@ export function WelcomeFlow() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-primary-50 to-paper p-6"
+      className="greenhouse-grid min-h-screen flex flex-col items-center justify-center bg-paper p-6"
       role="dialog"
       aria-labelledby="welcome-title"
     >
       <BrandMark variant="wordmark" className="mb-8" />
 
-      <Card className="w-full max-w-lg">
+      <Card variant="glass" className="w-full max-w-lg">
         <div className="text-center">
           <Illustration className="mx-auto h-32 w-auto" />
-          <h1
-            id="welcome-title"
-            className="mt-4 font-serif text-3xl font-semibold tracking-tight text-ink"
-          >
+          <h1 id="welcome-title" className="mt-4 font-serif text-3xl tracking-tight text-ink">
             {isFirst && firstName ? `Welcome, ${firstName}` : current.title}
           </h1>
           {isFirst && firstName && (

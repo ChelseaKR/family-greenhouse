@@ -1,9 +1,4 @@
-/**
- * Botanical task-type icon — prune. A stem with one leaf removed (the
- * "trim mark") and a small pair of pruning scissors below. Reads as
- * shaping/maintenance rather than the generic scissors that would feel
- * surgical.
- */
+/** Pruning shears closing around a leafy stem, on the shared 32-unit grid. */
 interface IconProps {
   className?: string;
 }
@@ -20,17 +15,14 @@ export function PruneIcon({ className }: IconProps) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* Stem with branching */}
-      <path d="M 14 28 Q 14 20 16 12 Q 16 8 18 5" />
-      {/* Remaining leaf at top */}
-      <path d="M 17 6 Q 22 4 24 8 Q 22 12 17 10 Z" fill="currentColor" fillOpacity="0.85" />
-      {/* Snipped leaf stub — short branch with nothing on the end (the cut) */}
-      <path d="M 15 16 Q 10 16 8 18" opacity="0.8" />
-      {/* Two small "X" cut marks to indicate the trim point */}
-      <line x1="6.5" y1="18.5" x2="9.5" y2="15.5" strokeWidth="1.1" />
-      <line x1="6.5" y1="15.5" x2="9.5" y2="18.5" strokeWidth="1.1" />
-      {/* Tiny side leaf below (the kept growth) */}
-      <path d="M 15 22 Q 19 22 21 20 Q 19 24 15 24 Z" fill="currentColor" fillOpacity="0.6" />
+      <path d="M20 29 Q19 20 20 11 Q20 7 22 4" />
+      <path d="M21 7 Q26 4 28 8 Q25 12 20 11Z" fill="currentColor" fillOpacity="0.78" />
+      <path d="M20 16 Q15 14 12 16" opacity="0.75" />
+      <path d="M7 22 L16 16 M11 26 L16 16" />
+      <path d="M16 16 L25 23 M16 16 L25 12" opacity="0.82" />
+      <circle cx="6.5" cy="23" r="3.2" />
+      <circle cx="10.5" cy="27" r="3.2" />
+      <circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none" />
     </svg>
   );
 }
