@@ -34,9 +34,12 @@ export interface HouseholdSubscription {
   currentPeriodEnd?: string;
 }
 
-export async function getHouseholdSubscription(
-  householdId: string
-): Promise<HouseholdSubscription> {
+interface HouseholdBillingState extends HouseholdSubscription {
+  /** Internal retry marker; never exposed by GET /billing/me. */
+  pendingStripeCancellationId?: string;
+}
+
+async function getHouseholdBillingState(householdId: string): Promise<HouseholdBillingState> {
   const result = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -51,8 +54,24 @@ export async function getHouseholdSubscription(
     stripeSubscriptionId: item.stripeSubscriptionId as string | undefined,
     status: item.subscriptionStatus as string | undefined,
     currentPeriodEnd: item.subscriptionCurrentPeriodEnd as string | undefined,
+    pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
   };
 }
+
+export async function getHouseholdSubscription(
+  householdId: string
+): Promise<HouseholdSubscription> {
+  const state = await getHouseholdBillingState(householdId);
+  return {
+    planId: state.planId,
+    stripeCustomerId: state.stripeCustomerId,
+    stripeSubscriptionId: state.stripeSubscriptionId,
+    status: state.status,
+    currentPeriodEnd: state.currentPeriodEnd,
+  };
+}
+
+type SubscriptionWriteField = keyof HouseholdSubscription | 'pendingStripeCancellationId';
 
 /**
  * Write subscription fields onto the household metadata row.
@@ -74,7 +93,7 @@ export async function getHouseholdSubscription(
  */
 export async function updateHouseholdSubscription(
   householdId: string,
-  fields: Partial<Record<keyof HouseholdSubscription, unknown>>,
+  fields: Partial<Record<SubscriptionWriteField, unknown>>,
   stripeEventCreated?: number
 ): Promise<boolean> {
   const setExpressions: string[] = [];
@@ -82,17 +101,18 @@ export async function updateHouseholdSubscription(
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = {};
 
-  const map: Record<keyof HouseholdSubscription, string> = {
+  const map: Record<SubscriptionWriteField, string> = {
     planId: 'planId',
     stripeCustomerId: 'stripeCustomerId',
     stripeSubscriptionId: 'stripeSubscriptionId',
     status: 'subscriptionStatus',
     currentPeriodEnd: 'subscriptionCurrentPeriodEnd',
+    pendingStripeCancellationId: 'pendingStripeCancellationId',
   };
 
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue;
-    const attr = map[key as keyof HouseholdSubscription];
+    const attr = map[key as SubscriptionWriteField];
     names[`#${attr}`] = attr;
     if (value === null) {
       // Explicit clear → REMOVE the attribute entirely.
@@ -209,8 +229,18 @@ export async function createCheckoutSession(args: {
   }
   const stripe = await getStripe();
   // `interval` is stamped onto metadata for analytics/debugging only —
-  // entitlement is resolved from `planId`, never the cadence.
-  const metadata = { householdId: args.householdId, planId: plan.id, interval };
+  // entitlement is resolved from `planId`, never the cadence. A lifetime
+  // checkout also records the exact subscription it intends to replace. The
+  // webhook must never cancel "whatever subscription happens to be current"
+  // when an old Checkout event is delivered after a newer subscription event.
+  const metadata: Record<string, string> = {
+    householdId: args.householdId,
+    planId: plan.id,
+    interval,
+    ...(interval === 'lifetime' && sub.stripeSubscriptionId
+      ? { replacesSubscriptionId: sub.stripeSubscriptionId }
+      : {}),
+  };
 
   // Lifetime is a one-time charge: Stripe `mode:'payment'` with NO
   // subscription_data/trial. Month/year stay recurring subscriptions exactly
@@ -443,10 +473,11 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
  * NOTE on ordering: the ledger is written AFTER the subscription update is
  * applied (see applyStripeEvent). Recording first would mean a failed apply
  * is permanently skipped when Stripe retries — the retry would hit the
- * ledger, see "duplicate", and drop the event. Re-applying on a true
- * duplicate is harmless (last-write-wins fields, guarded against
- * out-of-order delivery by `lastStripeEventCreated`), so the ledger is
- * observability/cheap-skip only, not the correctness mechanism.
+ * ledger, see "duplicate", and drop the event. Ordinary field-only events
+ * can be re-applied safely (last-write-wins fields, guarded against
+ * out-of-order delivery by `lastStripeEventCreated`). Lifetime grants first
+ * consult this ledger because canceling a Stripe subscription is an external
+ * side effect that a completed redelivery must not repeat.
  * The ledger row carries a 30-day TTL so the table sweeps it automatically.
  */
 export async function recordStripeEventOnce(eventId: string): Promise<boolean> {
@@ -469,6 +500,41 @@ export async function recordStripeEventOnce(eventId: string): Promise<boolean> {
     if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
       return false;
     }
+    throw err;
+  }
+}
+
+async function hasRecordedStripeEvent(eventId: string): Promise<boolean> {
+  const result = await dynamodb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `STRIPE_EVENT#${eventId}`, SK: 'METADATA' },
+      ProjectionExpression: 'PK',
+    })
+  );
+  return result.Item !== undefined;
+}
+
+async function clearPendingStripeCancellation(
+  householdId: string,
+  subscriptionId: string
+): Promise<void> {
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'REMOVE #pendingStripeCancellationId',
+        ConditionExpression: '#pendingStripeCancellationId = :subscriptionId',
+        ExpressionAttributeNames: {
+          '#pendingStripeCancellationId': 'pendingStripeCancellationId',
+        },
+        ExpressionAttributeValues: { ':subscriptionId': subscriptionId },
+      })
+    );
+  } catch (err) {
+    // Another transition replaced/cleared the marker; never remove its value.
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return;
     throw err;
   }
 }
@@ -503,10 +569,9 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     }
   }
 
-  // A paid lifetime checkout clears the stored subscription id (delta sets it
-  // to null). Capture the prior id BEFORE the apply wipes it, so we can cancel
-  // the now-orphaned Stripe subscription afterwards — otherwise it keeps
-  // billing and later emits deleted/updated events.
+  // A paid lifetime checkout clears the active subscription. Capture the exact
+  // subscription recorded when Checkout began; legacy/in-flight sessions fall
+  // back to an internal pending marker or the currently stored id.
   const isLifetimeGrant =
     (event.type === 'checkout.session.completed' ||
       event.type === 'checkout.session.async_payment_succeeded') &&
@@ -514,24 +579,54 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     delta.fields.stripeSubscriptionId === null;
   let priorSubscriptionId: string | undefined;
   if (isLifetimeGrant) {
-    priorSubscriptionId = (await getHouseholdSubscription(delta.householdId)).stripeSubscriptionId;
+    // Unlike ordinary entitlement fields, canceling a Stripe subscription is
+    // an external side effect. Once a delivery completed and its ledger row
+    // exists, a later redelivery must not resurrect the pending marker and
+    // call `subscriptions.cancel` again. A failed first cancellation never
+    // records the ledger row, so that delivery still reaches the retry path.
+    if (await hasRecordedStripeEvent(event.id)) {
+      logger.info(
+        { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
+        'stripe_event_duplicate_lifetime_skipped'
+      );
+      return;
+    }
+    const metadata = (event.data.object as unknown as { metadata?: Record<string, string> | null })
+      .metadata;
+    const state = await getHouseholdBillingState(delta.householdId);
+    priorSubscriptionId =
+      metadata?.replacesSubscriptionId ??
+      state.pendingStripeCancellationId ??
+      state.stripeSubscriptionId;
+  }
+
+  // Apply FIRST, including an internal cancellation retry marker. The
+  // event.created condition must succeed before any external cancellation:
+  // otherwise a stale lifetime event could cancel a newer active subscription
+  // and only then discover that its DDB update was out of order. If Stripe
+  // cancellation fails after this write, the marker (and Checkout metadata)
+  // preserve the exact target for redelivery even though the active id is now
+  // cleared from the public subscription state.
+  const fields = isLifetimeGrant
+    ? {
+        ...delta.fields,
+        pendingStripeCancellationId: priorSubscriptionId ?? null,
+      }
+    : delta.fields;
+  const applied = await updateHouseholdSubscription(delta.householdId, fields, event.created);
+  if (!applied) {
+    logger.info(
+      { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
+      'stripe_event_out_of_order_skipped'
+    );
+    return;
   }
 
   if (priorSubscriptionId) {
-    // Cancel the orphaned Stripe subscription BEFORE clearing the household
-    // row below. This must run first: if the DB were cleared first (the
-    // previous order) and this cancel then failed, we'd throw for Stripe to
-    // retry the webhook — but the retry re-reads priorSubscriptionId from a
-    // row that's now already cleared, gets undefined, and silently skips the
-    // cancel forever. The old subscription then keeps billing indefinitely
-    // alongside the new lifetime charge. Failing BEFORE any write means a
-    // retry re-reads the SAME uncleared id and retries the cancel — and
-    // canceling an already-canceled Stripe subscription is itself idempotent,
-    // so a retry that lands after a cancel that actually succeeded (but the
-    // apply below failed) is also safe.
     try {
       const stripe = await getStripe();
       await stripe.subscriptions.cancel(priorSubscriptionId);
+      await clearPendingStripeCancellation(delta.householdId, priorSubscriptionId);
       logger.info(
         { householdId: delta.householdId, subscriptionId: priorSubscriptionId },
         'lifetime_grant_canceled_prior_subscription'
@@ -543,20 +638,6 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       );
       throw err;
     }
-  }
-
-  // Apply FIRST, record SECOND. If the apply throws, we return 5xx to Stripe
-  // without having touched the ledger, so Stripe's retry gets a clean run.
-  // (The old record-first order permanently skipped an event whose apply
-  // failed once.) The `event.created` guard inside the update makes a stale
-  // redelivery a no-op rather than a clobber.
-  const applied = await updateHouseholdSubscription(delta.householdId, delta.fields, event.created);
-  if (!applied) {
-    logger.info(
-      { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
-      'stripe_event_out_of_order_skipped'
-    );
-    return;
   }
 
   const isNew = await recordStripeEventOnce(event.id);
@@ -588,12 +669,10 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // `subscription.created` with status `trialing`, so this won't double-count
   // with `checkout.session.completed`, which we stamp `active`.)
   //
-  // Gated on `isNew`: a Stripe webhook REDELIVERY (at-least-once delivery /
-  // retries) re-runs this whole function, but the event ledger has already
-  // recorded this event id, so we skip the emit and never double-count the
-  // same conversion. (updateHouseholdSubscription's `<=` ordering guard lets
-  // an identical redelivery re-apply the idempotent write, so the ledger is
-  // what protects the analytics count here.)
+  // Gated on `isNew`: an ordinary Stripe webhook REDELIVERY can re-apply its
+  // idempotent fields, but the ledger prevents the conversion emit from being
+  // counted twice. Completed lifetime redeliveries return earlier, before the
+  // cancellation side effect or this analytics path.
   //
   // Best-effort + fire-and-forget: `capture` never throws and we `void` its
   // promise, so an analytics outage can NEVER 5xx the webhook (which would make

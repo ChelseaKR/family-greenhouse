@@ -109,8 +109,9 @@ export function PrivacyPage() {
         </li>
       </ul>
       <p>
-        We do not sell your data. We do not run ad networks. We do not share your plant care data
-        with anyone outside the household members you&rsquo;ve invited.
+        We do not sell your data. We do not run ad networks. Except for a sitter link you
+        deliberately create, we do not share your plant care data with anyone outside the household
+        members you&rsquo;ve invited.
       </p>
 
       <h2>Household sharing</h2>
@@ -119,6 +120,16 @@ export function PrivacyPage() {
         plants, tasks, completions, and activity in that household. They can see your display name
         and which tasks you&rsquo;ve completed. They cannot see your email, phone number, or
         notification preferences.
+      </p>
+
+      <h2>Sitter links</h2>
+      <p>
+        A household member can create a temporary sitter link without creating an account for the
+        sitter. Anyone who has that link can see the household&rsquo;s plants and due care tasks,
+        and can mark those tasks complete, during the coverage window you selected. The link is a
+        bearer credential, so only send it to someone you trust. It expires after at most 60 days
+        and a household member can revoke it sooner. We do not ask for or store the sitter&rsquo;s
+        identity.
       </p>
 
       <h2>Your rights</h2>

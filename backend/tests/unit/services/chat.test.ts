@@ -5,7 +5,11 @@ vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/climate.js');
 vi.mock('../../../src/services/householdService.js');
 
-import { TOOL_REGISTRY, findTool } from '../../../src/services/chat/tools.js';
+import {
+  TOOL_REGISTRY,
+  findTool,
+  sanitizeToolResultForModel,
+} from '../../../src/services/chat/tools.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as taskService from '../../../src/services/taskService.js';
 import * as climateService from '../../../src/services/climate.js';
@@ -29,6 +33,36 @@ describe('chat tools registry', () => {
 
   it('findTool returns undefined for unknown names', () => {
     expect(findTool('nope')).toBeUndefined();
+  });
+
+  it('recursively strips PII-bearing field names at the model boundary', () => {
+    const safe = sanitizeToolResultForModel({
+      id: 'plant-1',
+      nickname: 'Bertha',
+      household_id: 'hh-secret',
+      nested: {
+        userId: 'cognito-sub-secret',
+        member_name: 'Household Member',
+        actorEmail: 'person@example.test',
+        completedByName: 'Household Member',
+        phone_number: '+15555550123',
+        allowed: [{ createdBy: 'u1', uploaded_by: 'u2', value: 'kept' }],
+      },
+      location: { city: 'Davis', lat: 38.54, longitude: -121.74 },
+      proposal: {
+        assignedTo: 'member-sub',
+        assigneeName: 'Household Member',
+        frequencyDays: 7,
+      },
+    });
+
+    expect(safe).toEqual({
+      id: 'plant-1',
+      nickname: 'Bertha',
+      nested: { allowed: [{ value: 'kept' }] },
+      location: { city: 'Davis' },
+      proposal: { frequencyDays: 7 },
+    });
   });
 
   describe('list_household_plants', () => {

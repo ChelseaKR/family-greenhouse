@@ -183,6 +183,26 @@ describe('authStore — verifySession', () => {
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
+
+  it('fails safe when /auth/me returns a malformed successful response', async () => {
+    server.use(
+      http.get(
+        `${API}/auth/me`,
+        () =>
+          new HttpResponse('{not-json', {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+      )
+    );
+    useAuthStore.setState({ idToken: 'id-1', accessToken: 'access-1' });
+
+    await expect(useAuthStore.getState().verifySession()).resolves.toBeUndefined();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.isLoading).toBe(false);
+  });
 });
 
 describe('authStore — localStorage / sessionStorage token split', () => {

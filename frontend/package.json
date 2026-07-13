@@ -76,7 +76,7 @@
     "react-hook-form": "^7.51.2",
     "react-i18next": "^17.0.4",
     "react-router-dom": "^7.18.1",
-    "zod": "^3.22.4",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

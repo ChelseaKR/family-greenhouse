@@ -141,11 +141,11 @@ export async function appendMessagePair(
 
 // Follow-the-cursor page cap for getConversation. A Query returns at most
 // 1 MB per page; without following LastEvaluatedKey a long conversation
-// silently loses its NEWEST messages (ascending SK order truncates the tail),
-// including the just-appended current user turn — which corrupts the model
-// input and the transcript replay. Capped so a pathological conversation
-// can't loop unbounded; 10 pages ≈ 10 MB comfortably exceeds anything the
-// 30-day TTL plus per-turn caps can accumulate.
+// silently loses messages at the page boundary. Query newest-first so even if
+// the defensive page cap is reached we retain the just-appended current turn,
+// then reverse the collected rows back into chronological order for callers.
+// Capped so a pathological conversation can't loop unbounded; 10 pages ≈
+// 10 MB comfortably exceeds normal 30-day-TTL usage.
 const MAX_CONVERSATION_PAGES = 10;
 
 export async function getConversation(
@@ -164,6 +164,7 @@ export async function getConversation(
           ':pk': `HOUSEHOLD#${householdId}`,
           ':sk': `CHAT#${conversationId}#MSG#`,
         },
+        ScanIndexForward: false,
         ExclusiveStartKey: exclusiveStartKey,
       })
     );
@@ -171,7 +172,7 @@ export async function getConversation(
     exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
     pages += 1;
   } while (exclusiveStartKey && pages < MAX_CONVERSATION_PAGES);
-  return items.map((item) => ({
+  return items.reverse().map((item) => ({
     conversationId: item.conversationId as string,
     timestamp: item.timestamp as string,
     role: item.role as ChatMessageRecord['role'],

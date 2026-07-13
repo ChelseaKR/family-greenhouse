@@ -59,6 +59,16 @@ const screenshotOptions = {
 test.describe('Visual regression — public pages', () => {
   test.describe.configure({ mode: 'serial' });
 
+  test.beforeEach(async ({ page }) => {
+    // The landing hero is intentionally randomized 50/50 in production.
+    // Pin the persisted draw to variant B before any app code runs so the
+    // visual gate compares one stable treatment instead of flaking with the
+    // browser's first Math.random() result.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('fg_exp_landing_hero_framing', '0.75');
+    });
+  });
+
   const pages = [
     { name: 'landing', path: '/' },
     { name: 'login', path: '/login' },

@@ -1,6 +1,6 @@
 # Security
 
-> Last verified: 2026-07-05 · Recheck: every release (see "Re-running the audit")
+> Last verified: 2026-07-13 · Recheck: every release (see "Re-running the audit")
 
 This is a working audit against the OWASP Top 10 (2021 edition). Each category lists what's mitigated in code today, what's deferred to infrastructure (with a pointer to `production-checklist.md`), and what's an open gap. Re-run the audit before every release.
 
@@ -41,12 +41,15 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 
 **Partially mitigated.**
 
-- **Rate limiting**: app-level limiter at `middleware/rateLimit.ts` (10 attempts/minute per IP per route, scoped tightly to `/auth/*`). This is in addition to the API Gateway usage plan you should configure in production — neither alone is sufficient.
-- **Password policy**: enforced in Cognito (configure in the user pool: 12+ chars, mixed case, digits, symbol). The signup form mirrors these rules client-side for UX.
-- **MFA**: optional TOTP via Cognito. Not enabled by default; surface in settings as a follow-up.
+- **Rate limiting**: app-level limiter at `middleware/rateLimit.ts` (10 attempts/minute per IP per route, scoped tightly to `/auth/*`) plus API Gateway stage throttling (100 burst / 50 requests per second). Cognito Threat Protection provides the identity-layer backstop.
+- **Password policy**: Terraform enforces 12+ characters, mixed case, and digits. Cognito Threat Protection is `ENFORCED`, adding compromised-credential and risk-based checks; symbols are deliberately not required.
+- **MFA**: optional software-token TOTP is enabled in the Cognito pool. The enrollment/settings UI remains a separately scoped product feature; SMS MFA is deliberately off.
 - **Account-takeover via email change**: Cognito requires re-verification of new email addresses before they replace the existing one.
 
-**Open**: account lockout after N failures; not currently enforced beyond the per-IP rate limit. Cognito has its own lockout but we should make sure it's enabled in the user pool config.
+**Residual:** the pool's enforced Threat Protection and Cognito's managed
+progressive lockout cover automated takeover attempts. A user-visible
+security-activity surface is not built and should be revisited with real abuse
+or support signal.
 
 ## A05:2021 — Security Misconfiguration
 
@@ -82,11 +85,17 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 **Mitigated.**
 
 - Email confirmation required before login (Cognito enforces; the local-server mirrors).
-- Token refresh rotates both access and refresh tokens (Cognito flow).
+- Token refresh replaces the short-lived ID/access tokens while retaining a
+  valid Cognito refresh token when Cognito does not rotate it.
 - The frontend axios interceptor handles a 401 once per request; if refresh itself 401s, the user is logged out silently rather than allowed to keep clicking around with stale state.
-- Session validation on app load (`authStore.verifySession`) calls `/auth/me` to confirm the access token is still valid.
+- Session validation on app load (`authStore.verifySession`) calls `/auth/me`
+  with the ID token and now attempts the same refresh flow on a 401 before
+  ending the session.
 
-**Open**: WebAuthn / passkeys as a stronger alternative to passwords. Cognito supports it; UI work pending.
+**Deferred product option:** WebAuthn/passkeys would be a stronger alternative
+to passwords, but no account-takeover signal currently justifies adding a
+second enrollment/recovery surface. Re-open on user demand or elevated auth
+incidents.
 
 ## A08:2021 — Software and Data Integrity Failures
 
@@ -97,7 +106,10 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 - DynamoDB point-in-time recovery enabled (configure in Terraform).
 - Stripe webhook signature verification on every billing event — bad signatures are rejected before any DB write.
 
-**Open**: SBOM publication. Not configured.
+**Release gap:** SBOM/provenance publication is not configured. It remains
+explicit in the standards declaration and should be closed together so an
+SBOM is tied to the exact shipped artifact, not emitted as an unauthenticated
+standalone file.
 
 ## A09:2021 — Security Logging and Monitoring Failures
 
@@ -107,13 +119,21 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 - Discrete `audit()` helper in `utils/auditLog.ts` for security-relevant events (login success/failure, household membership changes, billing changes, account deletion). Tagged with `audit: true` so they can be subscribed to a separate sink.
 - Sentry init stub on both backend and frontend; production deploys flip this on by setting the DSN env var.
 
-**Open**: alerting. Logs are written; no one is paged on suspicious patterns yet. CloudWatch alarms and a SIEM ingest are in `production-checklist.md`.
+**Alerting as code:** `infrastructure/modules/monitoring` provisions the
+CloudWatch dashboard, operational alarms, an auth-login-failure-spike alarm,
+and SNS email/SMS subscriptions when endpoints are supplied. Applying and
+confirming those external subscriptions remains an environment gate. A SIEM
+ingest is deliberately deferred until incident volume justifies the service.
 
 ## A10:2021 — Server-Side Request Forgery
 
 **Mitigated.**
 
-The only place we make outbound HTTP calls is the Plant.id adapter at `services/plantIdentification.ts`. The URL is hard-coded to `https://plant.id/api/v3/identification` — there's no way for a user to redirect the call to an internal endpoint. The image content is base64-encoded user data, but it's the request _body_, not the _target_.
+Outbound calls are confined to fixed-endpoint adapters: Plant.id, Perenual,
+OpenWeatherMap, Stripe, Bedrock, Sentry, and notification providers. Users can
+control request content (for example, an identification image or weather
+location) but not the destination host, so these paths cannot be redirected to
+an internal address.
 
 If we add user-supplied URLs in the future (e.g. profile-picture imports from a URL), we need to re-audit. The standard mitigations would apply: allowlist of trusted hostnames, DNS resolution check before request, no following redirects to private CIDRs.
 

@@ -20,7 +20,8 @@ const taskSchema = z.object({
   notes: z.string().max(500).optional(),
 });
 
-type TaskFormData = z.infer<typeof taskSchema>;
+type TaskFormInput = z.input<typeof taskSchema>;
+type TaskFormData = z.output<typeof taskSchema>;
 
 interface EditTaskModalProps {
   task: Task;
@@ -38,7 +39,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
     reset,
     watch,
     formState: { errors },
-  } = useForm<TaskFormData>({
+  } = useForm<TaskFormInput, unknown, TaskFormData>({
     resolver: zodResolver(taskSchema),
     defaultValues: {
       type: task.type,

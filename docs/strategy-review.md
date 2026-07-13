@@ -4,6 +4,8 @@ A frank look at where the product stands, what the engineering work has earned u
 
 This doc is opinionated. Treat it as one informed read, not the only one.
 
+> Last reconciled with the shipped product: 2026-07-13.
+
 ---
 
 ## What we've actually built
@@ -37,7 +39,8 @@ The architecture is consistent across both: raw client → cache + budget gate �
 
 ### Operational maturity (strong)
 
-- 243 backend + 104 frontend tests + a Playwright e2e suite running in CI.
+- More than 1,100 backend tests, 400 frontend tests, and a 100-test Playwright
+  browser suite running in CI.
 - API spec drift guarded by a CI script that diffs handler comments against the OpenAPI doc.
 - Every external integration returns `null` on failure rather than throwing — the app stays usable when Perenual, Plant.id, or OpenWeatherMap is down.
 - DDB-backed caches with TTLs and daily-budget circuit breakers for both external APIs.
@@ -48,10 +51,14 @@ The architecture is consistent across both: raw client → cache + budget gate �
 
 ### Honest gaps
 
-- DR rehearsal not done. PITR config needs to be verified before launch.
-- Localization is structurally ready but content-empty. Picker is now flag-gated to English until translations land.
+- DynamoDB PITR and a successful restore drill cover backup recovery, but a
+  regional outage still takes down the single-region stack.
+- Spanish catalogs have complete key coverage; the locale remains gated until
+  native-speaker review. Arabic/RTL content still requires a translator.
 - No real production data yet. Every dashboard, every chart, every metric we track is theoretical until users show up.
-- Mobile app deferred (Capacitor wrapper noted in roadmap as separate pipeline work).
+- Capacitor iOS/Android shells, store assets, and validation are shipped; store
+  accounts, signing credentials, physical-device checks, and submission are
+  external release gates.
 - Stripe-handled billing live but customer subscription splits across household members deferred (would need custom design).
 
 ---
@@ -84,11 +91,19 @@ Every "what should we do next" decision is being made without telemetry. The roa
 
 ### Marketing surface is thin
 
-Landing page is competent. The blog/content surface is empty. SEO presence is essentially zero. The audience for "shared plant care" is the kind that searches for solutions ("how do I get my partner to water the plants") — content marketing here is high-leverage and we haven't started.
+Landing page is competent and the first set of care articles is live, but the
+content surface is still thin and has no proven search distribution. The
+audience for "shared plant care" is the kind that searches for solutions
+("how do I get my partner to water the plants") — consistent publishing and
+measurement remain high-leverage.
 
 ### The species database is a leaky abstraction
 
-Perenual is great when the user picks a species we recognize. When they don't (free-text "the funky one Aunt Ruth gave me"), the app silently downgrades — no care guide, no auto-watering suggestion, no climate filter applies. Users may not realize they're missing features by typing a name we don't know. We should surface this gap more honestly in the UI ("we don't have care data for this species — care guide hidden").
+Perenual is great when the user picks a species we recognize. Free-text plants
+still receive less enrichment, but the product now says so explicitly through
+`NoCareDataNotice` instead of failing as a blank card. The remaining product
+question is whether that explanation is enough or whether we need a manual
+species-match correction flow.
 
 ### Notification UX hasn't been load-tested
 

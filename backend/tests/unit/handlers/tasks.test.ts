@@ -104,7 +104,7 @@ describe('tasks handler', () => {
     const event = buildEvent({
       httpMethod: 'POST',
       body: JSON.stringify({
-        plantId: '11111111-1111-1111-1111-111111111111',
+        plantId: '11111111-1111-4111-8111-111111111111',
         type: 'water',
         frequency: 7,
       }),
@@ -149,7 +149,7 @@ describe('tasks handler', () => {
     const event = buildEvent({
       httpMethod: 'POST',
       body: JSON.stringify({
-        plantId: '11111111-1111-1111-1111-111111111111',
+        plantId: '11111111-1111-4111-8111-111111111111',
         type: 'water',
         frequency: 7,
       }),
@@ -159,7 +159,7 @@ describe('tasks handler', () => {
     expect(res.statusCode).toBe(201);
     expect(taskService.createTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        plantId: '11111111-1111-1111-1111-111111111111',
+        plantId: '11111111-1111-4111-8111-111111111111',
         type: 'water',
         frequency: 7,
       }),
@@ -431,8 +431,10 @@ describe('tasks handler', () => {
   });
 
   describe('vacation endpoints', () => {
-    const COVER = '22222222-2222-2222-2222-222222222222';
-    const OTHER = '33333333-3333-3333-3333-333333333333';
+    // Zod 4 validates UUID version/variant bits, so fixtures are real v4 UUIDs
+    // rather than merely UUID-shaped strings.
+    const COVER = '22222222-2222-4222-8222-222222222222';
+    const OTHER = '33333333-3333-4333-8333-333333333333';
     const memberRow = (userId: string, role: 'admin' | 'member' = 'member') => ({
       householdId: 'hh-1',
       userId,

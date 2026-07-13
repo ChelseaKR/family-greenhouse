@@ -132,6 +132,16 @@ variable "bedrock_embed_model_id" {
   default     = ""
 }
 
+variable "chat_enabled" {
+  description = "Incident kill switch for new chat turns. Use '0' to return 503 before any model or persistence work."
+  type        = string
+  default     = "1"
+  validation {
+    condition     = contains(["0", "1"], var.chat_enabled)
+    error_message = "chat_enabled must be '0' or '1'."
+  }
+}
+
 variable "sprout_integration_enabled" {
   description = "Set to '1' to route plant-care chat through the first-party Sprout service."
   type        = string

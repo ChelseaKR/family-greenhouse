@@ -22,10 +22,11 @@
  * dated waiver in docs/RESPONSIBLE-TECH-AUDITS.md).
  *
  * This module is unit-tested against synthetic fixtures
- * (chatGroundingGuard.test.ts) and is NOT YET wired as a hard block into the
- * live turnEvents() response path — see the model card / waiver for why
- * (risk of false-positive-blocking a correct answer without more live
- * testing than this pass can safely do without calling real Bedrock).
+ * (chatGroundingGuard.test.ts) and wired into the live turnEvents() response
+ * path. When RAG context is present, the completed answer is checked before
+ * persistence or delivery; an unsupported quantitative claim is replaced by
+ * a safe verification message. Streaming RAG answers are buffered until this
+ * check completes so ungrounded text is never transiently shown.
  */
 
 export interface RetrievedSpan {
@@ -82,11 +83,12 @@ export function checkGrounding(
   const ungroundedClaims: string[] = [];
   for (const claim of claimSentences) {
     const claimNumbers = extractNumbers(claim);
-    // A claim sentence with numbers, none of which appear anywhere in the
-    // retrieved spans, is ungrounded. (Numbers that appear for an unrelated
-    // reason, e.g. a plant count, are an accepted false-negative risk in this
-    // heuristic — documented in evals/README.md.)
-    const hasSupport = claimNumbers.length === 0 || claimNumbers.some((n) => corpusNumbers.has(n));
+    // Every numeric token in the claim must appear in the retrieved spans. A
+    // fabricated threshold must not piggyback on one supported number in the
+    // same sentence (for example, "50% normally, but 92% today"). Numbers that
+    // appear in context for an unrelated reason remain an accepted heuristic
+    // false-negative risk documented in evals/README.md.
+    const hasSupport = claimNumbers.length === 0 || claimNumbers.every((n) => corpusNumbers.has(n));
     if (!hasSupport) ungroundedClaims.push(claim);
   }
 

@@ -2,7 +2,7 @@
 
 Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI systems" (NIST AI RMF **MAP** function). Seeded from `docs/chat-rag-design.md`'s non-goals and open-risks sections plus the tool-guard threat notes already in the codebase — this is a consolidation of existing, real design decisions into the register format the standard requires, not new analysis invented for this document.
 
-**Owner:** Chelsea Kelly-Reif. **Reviewed:** 2026-07-05 (first version — this repo had no risk register before this remediation pass). **Recheck cadence:** quarterly, and immediately on any new tool added to `TOOL_REGISTRY`, a system-prompt rewrite, or a model swap.
+**Owner:** Chelsea Kelly-Reif. **Reviewed:** 2026-07-13 (first version 2026-07-05; live guard/privacy/disclosure controls re-verified 2026-07-13). **Recheck cadence:** quarterly, and immediately on any new tool added to `TOOL_REGISTRY`, a system-prompt rewrite, or a model swap.
 
 ---
 
@@ -38,7 +38,7 @@ Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI sys
 
 - Tool-use architecture: for anything about the user's _own_ plants, the model must call a tool rather than guess — the tool result, not the model's prior, is the source of truth.
 - System-prompt rule 5: "If a tool returns no data... say so plainly" (explicit instruction against the missing-data-as-false-answer pattern).
-- `groundingGuard.ts`: a numeric-claim grounding heuristic, unit-tested, **not yet wired live** (see model card).
+- `groundingGuard.ts`: a numeric-claim grounding heuristic wired into both sync and streaming RAG turns. Every numeric token in a completed answer must occur in the retrieved spans; otherwise the answer is replaced before it is persisted or shown. Streaming RAG output is buffered until the same check passes.
 
 **Gap:** no live faithfulness/hallucination-rate measurement against real model output exists (`evals/README.md` limitation). **Tracked, dated waiver:** `docs/RESPONSIBLE-TECH-AUDITS.md`.
 
@@ -46,17 +46,17 @@ Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI sys
 
 **Risk:** PII (household plant/task data, indirectly member names via task assignment) reaching Bedrock, or leaking across households.
 
-**Mitigations:** tool-result redaction (`chat/tools.ts` strips emails/Cognito subs/`createdBy`); household-scoped tool execution (can't be tricked into reading another household's data, since every tool call applies the caller's own `householdId` server-side, never the model's input); 30-day DDB TTL on conversation records; no third-party data sharing beyond the named sub-processor (AWS Bedrock, in-account/in-region, excluded from model training per Bedrock's data policy).
+**Mitigations:** every structured tool result crosses a centralized recursive model-boundary sanitizer (`chat/tools.ts`) that strips emails, phone fields, Cognito/user/household identifiers, creator/actor fields, and reminder-assignee identity fields in both the live loop and history replay; nested-field regression coverage means a future executor cannot bypass the sanitizer by forgetting a hand-built projection. Raw reminder proposal data stays in the authenticated DDB/UI representation so confirmation still works, but is sanitized before model replay. Tool failures return generic text and do not log the exception message. Household-scoped tool execution prevents cross-household reads because every tool applies the authenticated `householdId`, never model input; conversation rows retain the 30-day DDB TTL; no third-party data sharing occurs beyond the named AWS Bedrock sub-processor.
 
-**Gap:** no automated test asserting the redactor's allowlist stays complete as new tools are added (a new tool that forgets to redact a field wouldn't be caught until manual review). Tracked as a cheap follow-up (add a schema-level "no PII field names" lint over `ToolDefinition` return shapes).
+**Residual limitation:** a field-name guard cannot recognize PII hidden inside a misleadingly generic string value. New tools still require privacy review, while the centralized sanitizer and unit test close the documented "executor forgot to redact a known PII field" failure mode.
 
 ### Over-reliance / human-AI configuration
 
 **Risk:** a user treats a chat answer or leaf-health assessment as authoritative advice rather than an aid.
 
-**Mitigations:** leaf-health's `disclaimer` field is schema-required on every response ("cosmetic visual check... not a plant-health diagnosis"). Chat's confirm-before-write architecture means the assistant literally cannot act on its own conclusions.
+**Mitigations:** leaf-health's `disclaimer` field is schema-required on every response ("cosmetic visual check... not a plant-health diagnosis"). Chat's confirm-before-write architecture means the assistant literally cannot act on its own conclusions. The persistent composer footer says "AI-generated — verify before acting" and remains visible throughout every chat; the authenticated responsive Playwright flow asserts its presence and viewport visibility.
 
-**Gap:** the chat UI does **not** currently render an "AI-generated, verify before acting" footer disclosure on every chat message (identified as an open risk in `chat-rag-design.md` itself, never implemented). Tracked gap — cheap UI + a11y-tested follow-up, not done in this pass.
+**Closed 2026-07-13:** the audit had incorrectly recorded the disclosure as absent even though the persistent footer and Playwright assertion were already present. This review reconciled the documentation with the tested UI.
 
 ### Information security (prompt injection / tool misuse)
 

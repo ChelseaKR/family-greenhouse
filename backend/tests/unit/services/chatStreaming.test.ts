@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/chat/bedrock.js');
+vi.mock('../../../src/services/chat/corpus.js');
 vi.mock('../../../src/services/chat/persistence.js', async () => {
   const actual = await vi.importActual<typeof import('../../../src/services/chat/persistence.js')>(
     '../../../src/services/chat/persistence.js'
@@ -44,6 +45,7 @@ vi.mock('../../../src/services/billing.js', () => ({
 
 import {
   streamChatTurn,
+  GROUNDING_BLOCK_MESSAGE,
   type ChatStreamEvent,
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
@@ -61,6 +63,7 @@ import {
   incrementBudget,
 } from '../../../src/services/chat/persistence.js';
 import * as plantService from '../../../src/services/plantService.js';
+import { searchCorpus } from '../../../src/services/chat/corpus.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -236,6 +239,126 @@ describe('streamChatTurn', () => {
     expect(budgetDelta.inputTokens).toBe(330 - RESERVE_INPUT_TOKENS);
     expect(budgetDelta.outputTokens).toBe(70 - RESERVE_OUTPUT_TOKENS);
     expect(budgetDelta.costUsd).toBeCloseTo(0.0021, 10);
+  });
+
+  it('buffers a RAG answer and never streams an ungrounded claim', async () => {
+    vi.mocked(searchCorpus).mockResolvedValueOnce([
+      {
+        articleTitle: 'Humidity',
+        sectionTitle: 'Tropicals',
+        source: 'humidity.md',
+        text: 'Calatheas prefer at least 50% humidity.',
+        score: 0.92,
+      },
+    ]);
+    vi.mocked(invokeChatModelStream)
+      .mockReturnValueOnce(
+        mockedStream([], {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-rag',
+              name: 'search_care_knowledge',
+              input: { query: 'calathea humidity' },
+            },
+          ],
+          stopReason: 'tool_use',
+          inputTokens: 100,
+          outputTokens: 10,
+          costUsd: 0.0003,
+        })
+      )
+      .mockReturnValueOnce(
+        mockedStream(['Use ', '92% humidity.'], {
+          content: [{ type: 'text', text: 'Use 92% humidity.' }],
+          stopReason: 'end_turn',
+          inputTokens: 120,
+          outputTokens: 15,
+          costUsd: 0.0004,
+        })
+      );
+
+    const events = await collect({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'What humidity does a calathea need?',
+    });
+    const deliveredText = events
+      .filter((event) => event.type === 'delta')
+      .map((event) => event.text)
+      .join('');
+
+    expect(deliveredText).toBe(GROUNDING_BLOCK_MESSAGE);
+    expect(deliveredText).not.toContain('92%');
+    const done = events.at(-1);
+    expect(done?.type).toBe('done');
+    if (done?.type === 'done') {
+      expect(done.result.assistantText).toBe(GROUNDING_BLOCK_MESSAGE);
+    }
+  });
+
+  it('does not expose an unguarded tool-use preamble after RAG context exists', async () => {
+    vi.mocked(searchCorpus).mockResolvedValueOnce([
+      {
+        articleTitle: 'Humidity',
+        sectionTitle: 'Tropicals',
+        source: 'humidity.md',
+        text: 'Calatheas prefer at least 50% humidity.',
+        score: 0.92,
+      },
+    ]);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([]);
+    vi.mocked(invokeChatModelStream)
+      .mockReturnValueOnce(
+        mockedStream([], {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-rag',
+              name: 'search_care_knowledge',
+              input: { query: 'calathea humidity' },
+            },
+          ],
+          stopReason: 'tool_use',
+          inputTokens: 100,
+          outputTokens: 10,
+          costUsd: 0.0003,
+        })
+      )
+      .mockReturnValueOnce(
+        mockedStream(['Use 92% humidity. '], {
+          content: [
+            { type: 'text', text: 'Use 92% humidity.' },
+            { type: 'tool_use', id: 'tu-plants', name: 'list_household_plants', input: {} },
+          ],
+          stopReason: 'tool_use',
+          inputTokens: 120,
+          outputTokens: 15,
+          costUsd: 0.0004,
+        })
+      )
+      .mockReturnValueOnce(
+        mockedStream(['Use 50% humidity.'], {
+          content: [{ type: 'text', text: 'Use 50% humidity.' }],
+          stopReason: 'end_turn',
+          inputTokens: 120,
+          outputTokens: 15,
+          costUsd: 0.0004,
+        })
+      );
+
+    const events = await collect({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'What humidity does a calathea need?',
+    });
+    const deliveredText = events
+      .filter((event) => event.type === 'delta')
+      .map((event) => event.text)
+      .join('');
+
+    expect(deliveredText).toBe('Use 50% humidity.');
+    expect(deliveredText).not.toContain('92%');
   });
 
   it('still gates on the budget before any Bedrock call', async () => {

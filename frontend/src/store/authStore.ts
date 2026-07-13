@@ -283,7 +283,10 @@ export const useAuthStore = create<AuthState>()(
         let response: Response | null;
         try {
           response = await fetchMe(authToken);
-          if (!response.ok) response = await refreshAndRetry();
+          // Refresh only means "the bearer expired" for a 401. Retrying a
+          // forbidden request or a server outage with fresh credentials adds
+          // load and cannot change the outcome.
+          if (response.status === 401) response = await refreshAndRetry();
         } catch {
           // The initial /auth/me call itself threw (network error) — still
           // worth trying a refresh (a flaky first request shouldn't cost an
@@ -299,8 +302,17 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        // Token (or the refreshed one) is valid, update user data.
-        const userData = await response.json();
+        // Token (or the refreshed one) is valid, update user data. Keep JSON
+        // decoding inside the same fail-safe boundary as the network calls:
+        // a malformed/truncated 200 response must not leave the boot screen
+        // stuck forever with isLoading=true.
+        let userData: User;
+        try {
+          userData = (await response.json()) as User;
+        } catch {
+          failSession();
+          return;
+        }
         // Session restore: re-establish the analytics household group from
         // the persisted active id (or the user's claim household) so events
         // captured before the user touches the switcher are still grouped.

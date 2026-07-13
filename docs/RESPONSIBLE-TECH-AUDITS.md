@@ -1,6 +1,6 @@
 # Responsible-Tech Audits — family-greenhouse
 
-Instantiates `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md`. Last regenerated: 2026-07-05 (baseline — first time this file exists; created as part of the 2026-07-05 conformance-audit remediation).
+Instantiates `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md`. Last regenerated: 2026-07-13 (baseline created 2026-07-05; controls re-verified and documented gaps drained 2026-07-13).
 
 This is the detail layer behind the README's `## Standards conformance` table. Where a control needs a number or a mechanical gate, it's owned by the sibling standard and only referenced here (per the framework's "reference, don't repeat" rule).
 
@@ -15,7 +15,7 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 - **E Accessibility:** applies — see [`accessibility.md`](accessibility.md) (WCAG 2.2 AA enforced; ACR/VPAT not yet published — tracked gap, P2-3/P2-4)
 - **F Security:** applies — ASVS **L2** (declared below); threat model: [`security.md`](security.md) (OWASP Top 10 working audit) + [`security-review-2026-05-31.md`](security-review-2026-05-31.md)
 - **AI-EVAL:** **APPLIES** (tiers: tool-use + RAG, citation/grounding guard, model-card; red-team and full RAGAS-class metric suite **not yet built** — see the dated waiver below). This repo predates its addition to `STANDARDS/AI-EVALUATION-STANDARD.md`'s explicit repo list; per that standard's §0, "a new `uses:` of an LLM SDK flips the declaration to APPLIES" regardless of whether the repo was enumerated when the standard was written.
-- **I18N:** applies (opted in) — EN/ES catalogs, i18next. See `docs/I18N.md` gap tracked in P2-9.
+- **I18N:** applies (opted in) — EN/ES catalogs, i18next. Current gates and residual work are recorded in [`docs/i18n.md`](i18n.md).
 
 ---
 
@@ -25,7 +25,12 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 
 - **Non-goals statement:** `docs/chat-rag-design.md` "Non-goals (for V1)" — no photo-based identification via chat, no multi-tenant/marketing chat, no agentic destructive actions without confirmation, text-only. Carried forward into the model card.
 - **Misuse-resistance (mechanical, AUTO-GATE):** hallucinated-plant-ID rejection (`chat/index.ts` — server-side proposal validation ignores the model's raw plantId and re-looks-up by name), per-turn tool-call cap (5), per-household token budget with atomic reservation (#136), write-nothing-without-confirm architecture (`propose_reminder_task` never calls `POST /tasks` itself). Unit-tested in `backend/tests/unit/services/chatTurn.test.ts` / `chat.test.ts`.
-- **Kill-switch:** `BEDROCK_CHAT_MODEL_ID` env var + the Garden-plan-and-up gate in `chat/index.ts` are both single points that already exist to disable/gate the feature; no dedicated feature-flag kill-switch beyond that today (gap — cheap to add, not yet built).
+- **Kill-switch:** Terraform's `chat_enabled` variable reaches every chat
+  Lambda as `CHAT_ENABLED`; setting it to `"0"` makes the shared sync/stream
+  orchestration return 503 before plan lookup, budget reservation,
+  persistence, Sprout, or Bedrock work. History and reporting remain readable
+  for incident review. A regression test proves the disabled path performs no
+  model/budget/write calls.
 - **Accountable owner:** Chelsea Kelly-Reif (solo maintainer).
 - **Gate:** REVIEW-GATE — this section is the sign-off; re-review on any prompt or tool-catalog change.
 
@@ -38,17 +43,17 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 
 ## C. Privacy & data-protection audit (DPIA-style)
 
-**Findings:** Real PII in play: emails, phone numbers, plant/household photos, household membership graphs, and (new with chat) conversation transcripts that may reference a household's plants/tasks (30-day TTL, `docs/chat-rag-design.md` "Privacy"). `docs/compliance.md` §3 covers lawful basis, subject rights (self-serve export/delete), sub-processors (AWS, Stripe, Perenual/Plant.id/OpenWeather, and now Bedrock) — but as a checklist, not a signed DPIA artifact.
+**Findings:** Real PII in play: emails, phone numbers, plant/household photos, household membership graphs, and chat conversation transcripts that may reference a household's plants/tasks (30-day TTL, `docs/chat-rag-design.md` "Privacy"). `docs/compliance.md` §3 covers lawful basis, subject rights (self-serve export/delete), and sub-processors; the dated DPIA in [`docs/audits/dpia.md`](audits/dpia.md) is the current inventory and residual-risk artifact.
 
 - **Commitment:** retention limits (30-day chat TTL; DDB item TTL generally), self-serve access/deletion (`GET /me/export`, `DELETE /me`), no third-party exfiltration beyond named sub-processors, tool-result redaction before anything reaches Bedrock (`chat/tools.ts` strips emails/Cognito subs/createdBy).
-- **Gate:** AUTO-GATE — no-PII-in-logs / redaction is unit-tested (`chat/tools.ts` redactor). REVIEW-GATE — signed DPIA committed at [`docs/audits/dpia.md`](audits/dpia.md) (2026-07-10, closes P2-1); re-sign on any data-inventory change per its recheck cadence.
+- **Gate:** AUTO-GATE — every current and future structured tool result passes through the recursive model-boundary sanitizer in `chat/tools.ts`; it strips member identifiers/contact fields on the live call and on history replay, with nested-field regression coverage in `chat.test.ts`. Tool failures expose a generic error to the model and log only the error class/tool name, not a potentially sensitive message. REVIEW-GATE — dated DPIA committed at [`docs/audits/dpia.md`](audits/dpia.md) (re-verified 2026-07-13); reassess it on any data-inventory change per its cadence.
 
 ## D. Transparency & explainability audit
 
 **Findings:** Every chat answer is attributable to either a tool call (the user's own data — inherently sourced) or the RAG corpus (`search_care_knowledge` → `backend/src/data/plant-care-corpus/`). Model card: [`model-card.md`](../model-card.md).
 
-- **Commitment:** model card exists with intended/out-of-scope use, known failure modes, and eval-baseline reference. "AI-generated, verify before acting" framing is a documented open risk in `chat-rag-design.md` ("Open risks") but is **not yet rendered in the chat UI** — tracked gap (add a footer disclosure string + a Playwright assertion that it's present; cheap follow-up, not done in this pass).
-- **Gate:** AUTO-GATE — citation/grounding guard is unit-tested, see `evals/README.md` and `backend/src/services/chat/groundingGuard.ts`; it validates the guard logic against synthetic fixtures and checks RAG-corpus retrieval recall against the starter benchmark. It is **not yet wired as a hard block into the live `turnEvents` response path** — see the AI-EVAL waiver below for the honest scope of what's enforced today vs. tracked.
+- **Commitment:** model card exists with intended/out-of-scope use, known failure modes, and eval-baseline reference. The persistent chat composer footer says "AI-generated — verify before acting," remains visible throughout the conversation, and is asserted in the authenticated responsive Playwright flow (`responsive-ux.spec.ts`).
+- **Gate:** AUTO-GATE — the citation/grounding guard is unit-tested and wired into the live `turnEvents` RAG path. It checks every quantitative token in the completed answer against retrieved spans before persistence or delivery; a failed answer is replaced by a safe verification message. RAG streaming text is held until the same guard passes, with sync and streaming regression tests. The deterministic starter benchmark still checks retrieval recall only; the full live-model scoring waiver below remains in force.
 
 ## E. Accessibility audit
 
@@ -84,7 +89,7 @@ AI-Evaluation-Standard: APPLIES (tiers: tool-use + RAG, citation/grounding guard
 >
 > The following AI-EVALUATION-STANDARD gates are **not yet fully wired** and are explicitly waived, not silently skipped, until the expiry date above:
 >
-> - **§1 full RAGAS/DeepEval three-layer metric suite** (faithfulness ≥0.80, context recall/precision, answer relevancy, citation accuracy, hallucination rate, refusal correctness, per-segment breakdown, TruthfulQA drift). This standard's reference tooling is Python (`uv run pytest`); this is a Node/TypeScript monorepo. **What exists instead (this pass):** a starter benchmark (`evals/benchmark.jsonl`, 24 questions across all 11 corpus articles — the standard's target is 100–500) and a citation/grounding guard (`backend/src/services/chat/groundingGuard.ts` + unit tests) that checks retrieval recall against expected source documents and flags ungrounded numeric care claims in synthetic fixtures. This is a real, CI-gated starter, **not** the full RAGAS metric suite — no faithfulness/hallucination/refusal scoring against live model output exists yet, because that requires calling live Bedrock, which is out of scope for an offline CI gate without a dedicated eval-run budget and is not something this remediation pass executes against real AWS infrastructure.
+> - **§1 full RAGAS/DeepEval three-layer metric suite** (faithfulness ≥0.80, context recall/precision, answer relevancy, citation accuracy, hallucination rate, refusal correctness, per-segment breakdown, TruthfulQA drift). This standard's reference tooling is Python (`uv run pytest`); this is a Node/TypeScript monorepo. **What exists instead:** a starter benchmark (`evals/benchmark.jsonl`, 22 questions across all 11 corpus articles — the standard's target is 100–500) and a live citation/grounding guard (`backend/src/services/chat/groundingGuard.ts` + sync/stream tests) that checks retrieved context and blocks unsupported numeric care claims before delivery. This is a real, CI-gated starter, **not** the full RAGAS metric suite — no faithfulness/hallucination/refusal scoring against live model output exists yet, because that requires calling live Bedrock, which is out of scope for an offline CI gate without a dedicated eval-run budget and is not something this remediation pass executes against real AWS infrastructure.
 > - **§2 red-team / Promptfoo OWASP-LLM scan + Garak baseline.** Not built. What exists: mechanical misuse-resistance tests (hallucinated-ID rejection, budget caps, tool-call caps — see audit A above) which cover some OWASP LLM categories (LLM01 prompt injection partially, via the fixed tool catalog; LLM06 excessive agency, via the confirm-before-write architecture) but were not run as a structured, mapped red-team exercise.
 > - **§3 judge calibration.** N/A — no LLM-as-judge is in use (no automated grading of chat output by a second model).
 > - **§6 governance:** `docs/audits/ai-risk-register.md` and `docs/audits/eu-ai-act-classification.md` **are** committed as of this pass (see below). `docs/audits/iso42001-soa.md` and a feature-level `docs/audits/ai-impact-assessment-chat.md` are **not** — tracked as follow-on gaps, same expiry.
@@ -110,4 +115,4 @@ See `evals/eval-baseline.json` and `evals/README.md` for the full method and hon
 
 ---
 
-Last verified: 2026-07-05 · Recheck cadence: quarterly, and immediately on any Bedrock model swap, system-prompt rewrite, or new tool added to the chat tool registry.
+Last verified: 2026-07-13 · Recheck cadence: quarterly, and immediately on any Bedrock model swap, system-prompt rewrite, or new tool added to the chat tool registry.

@@ -11,7 +11,7 @@ Rationale:
 - **No Annex III category applies.** Annex III's high-risk categories are: biometric identification/categorization, critical infrastructure management, education/vocational-training access or scoring, employment/worker-management decisions, access to essential public/private services (credit scoring, insurance, emergency services), law enforcement, migration/asylum/border control, and administration of justice/democratic processes. Family Greenhouse is a consumer plant-care assistant — none of these apply. The closest tangential category is "essential private services," which the Act's guidance interprets as things like credit/insurance access, not a household chore-tracking app.
 - **Not a general-purpose AI (GPAI) model.** This repo doesn't train or fine-tune a model; it calls a hosted third-party model (Claude on Bedrock) via API for a narrow, single-purpose task. GPAI obligations attach to the model provider (Anthropic/AWS), not to a downstream API consumer using it for a specific application — this repo is squarely in the "AI system built on top of a GPAI model" category, which the Act treats as a normal (non-GPAI) deployer obligation.
 - **Training compute:** zero. No training or fine-tuning run occurs in this repo.
-- **Limited-risk transparency obligations (Art. 50) — do apply, partially:** Art. 50 requires disclosure when a user is interacting with an AI system (rather than a human) and for AI-generated content. The chat feature is clearly presented as "the plant-care assistant" in the UI (not impersonating a human), which satisfies the interaction-disclosure intent informally. **Gap:** there is no explicit, per-message "AI-generated" label in the chat UI today (the same gap noted in the risk register's "over-reliance" section) — this is a cheap, worthwhile fix even though the app is not high-risk, since Art. 50 transparency obligations are separate from the Annex III risk tier and apply more broadly.
+- **Limited-risk transparency obligations (Art. 50) — do apply:** the chat is explicitly presented as the plant-care assistant, and a persistent, plain-language footer beside the composer says "AI-generated — verify before acting" throughout the interaction. The authenticated responsive Playwright flow asserts that the disclosure is present and visible. This reconciles the original 2026-07-05 audit, which incorrectly recorded the existing footer as absent.
 
 ## What would change this classification
 
@@ -22,5 +22,5 @@ Rationale:
 ## Review
 
 - **Classified by:** Chelsea Kelly-Reif.
-- **Date:** 2026-07-05 (first classification — this repo had none before this remediation pass).
+- **Date:** 2026-07-13 (first classification 2026-07-05; transparency control re-verified 2026-07-13).
 - **Recheck cadence:** per feature that adds new AI-driven decisioning, and at minimum on every major EU AI Act phase-gate (next: Annex III conformity deadline 2027-12-02, not applicable here unless the classification above changes).
