@@ -84,6 +84,8 @@ import type {
   ToolUseBlock,
 } from '../../../src/services/chat/types.js';
 import * as plantService from '../../../src/services/plantService.js';
+import * as climateService from '../../../src/services/climate.js';
+import * as householdService from '../../../src/services/householdService.js';
 import { searchCorpus } from '../../../src/services/chat/corpus.js';
 
 beforeEach(() => {
@@ -376,6 +378,99 @@ describe('runChatTurn', () => {
     const persistedAnswer = vi.mocked(appendMessage).mock.calls.at(-1)?.[1];
     expect(persistedAnswer?.content).toEqual([{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }]);
     expect(JSON.stringify(persistedAnswer)).not.toContain('92%');
+  });
+
+  it('accepts a current authoritative tool number when historical RAG keeps the guard active', async () => {
+    vi.mocked(getConversation).mockResolvedValueOnce([
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:00.000Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'What humidity does a calathea need?' }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:01.000Z',
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu-old-rag',
+            name: 'search_care_knowledge',
+            input: { query: 'calathea humidity' },
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:02.000Z',
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu-old-rag',
+            content: JSON.stringify([
+              {
+                source: 'humidity.md',
+                content: 'Calatheas prefer at least 50% humidity.',
+              },
+            ]),
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:03.000Z',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Aim for at least 50% humidity.' }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:01:00.000Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'What is the current humidity?' }],
+      },
+    ]);
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-1',
+      name: 'Home',
+      location: { city: 'Davis', lat: 38.54, lon: -121.74 },
+      createdAt: '2025-01-01',
+      createdBy: 'u1',
+    });
+    vi.mocked(climateService.getWeatherCached).mockResolvedValueOnce({
+      observedAt: '2026-07-12T10:00:00.000Z',
+      tempC: 24,
+      humidity: 42,
+      condition: 'Clear',
+      description: 'clear sky',
+      forecast: [],
+    });
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [{ type: 'tool_use', id: 'tu-climate', name: 'get_household_climate', input: {} }],
+        stopReason: 'tool_use',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'Current humidity is 42%.' }],
+        stopReason: 'end_turn',
+        inputTokens: 120,
+        outputTokens: 15,
+        costUsd: 0.0004,
+      });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      conversationId: 'conv-1',
+      message: 'What is the current humidity?',
+    });
+
+    expect(result.assistantText).toBe('Current humidity is 42%.');
+    expect(result.assistantText).not.toBe(GROUNDING_BLOCK_MESSAGE);
   });
 
   it('refuses to invoke Bedrock when the budget reservation is rejected (over cap)', async () => {

@@ -45,6 +45,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 - RAG answers now block unsupported quantitative care claims before they are
   persisted or delivered; streamed RAG text waits for the same grounding check.
+  A later authoritative plant/task/climate result now joins historical RAG
+  evidence, so its real numbers pass without disabling fabricated-number
+  blocking.
   Tool outputs and history replay cross a recursive PII-field sanitizer, raw
   tool exception messages no longer enter prompts/logs, and repeated identical
   tool calls reuse the validated result instead of duplicating work/cards.
@@ -55,13 +58,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   bounded window to chronological order, so a page boundary—or the defensive
   ten-page cap—cannot hide the actual tail of a thread.
 - Session restore now uses the still-valid refresh token before logging a user
-  out when the short-lived ID token has expired.
+  out when the short-lived ID token has expired, and rejects syntactically valid
+  `/auth/me` payloads that do not match the complete user shape.
 - Lifetime checkout metadata names the exact recurring subscription it
   replaces. The webhook first wins the out-of-order DDB condition and stages a
   private retry marker, then cancels that exact subscription; a stale lifetime
   event cannot cancel a newer subscription, a Stripe failure remains safely
   retryable after the public subscription ID is cleared, and a fully recorded
-  redelivery cannot cancel the same subscription twice.
+  redelivery cannot cancel the same subscription twice. Concurrent duplicate
+  deliveries now elect one cancellation worker through an expiring atomic
+  claim, backed by an event-stable Stripe idempotency key.
 - A crashed seasonal pest evaluation removes its daily claim marker so a later
   invocation can retry instead of silently suppressing that day's alerts.
 - The checked-in inbound-mail Lambda archive now matches its byte-safe,

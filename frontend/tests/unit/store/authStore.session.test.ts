@@ -203,6 +203,18 @@ describe('authStore — verifySession', () => {
     expect(state.isAuthenticated).toBe(false);
     expect(state.isLoading).toBe(false);
   });
+
+  it('fails safe when /auth/me returns valid JSON with an invalid user shape', async () => {
+    server.use(http.get(`${API}/auth/me`, () => HttpResponse.json({})));
+    useAuthStore.setState({ idToken: 'id-1', accessToken: 'access-1' });
+
+    await expect(useAuthStore.getState().verifySession()).resolves.toBeUndefined();
+
+    const state = useAuthStore.getState();
+    expect(state.user).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.isLoading).toBe(false);
+  });
 });
 
 describe('authStore — localStorage / sessionStorage token split', () => {

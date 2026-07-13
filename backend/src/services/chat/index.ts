@@ -638,6 +638,15 @@ async function* turnEvents(
             retrievedSpans.push(...spansFromToolResult(out));
           }
           const serialized = JSON.stringify(out);
+          if (use.name !== 'search_care_knowledge') {
+            // Historical RAG context keeps the quantitative guard active on a
+            // follow-up turn. Add the current turn's authoritative tool result
+            // to the same evidence set so a real plant count, temperature, or
+            // reminder frequency is accepted without letting a fabricated
+            // number through: every claimed number must still occur in one of
+            // the actual source/tool-result spans.
+            retrievedSpans.push({ source: `tool:${use.name}`, text: serialized });
+          }
           successfulToolResults.set(cacheKey, serialized);
           resultsContent.push({
             type: 'tool_result',

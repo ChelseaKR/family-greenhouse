@@ -3,7 +3,8 @@
 // billing.ts for getHouseholdSubscription (plants, api-keys, households…)
 // don't pay Stripe's module-evaluation cost on every cold start.
 import type Stripe from 'stripe';
-import { UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { randomUUID } from 'node:crypto';
+import { UpdateCommand, GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import { PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
@@ -504,15 +505,114 @@ export async function recordStripeEventOnce(eventId: string): Promise<boolean> {
   }
 }
 
-async function hasRecordedStripeEvent(eventId: string): Promise<boolean> {
-  const result = await dynamodb.send(
-    new GetCommand({
+const STRIPE_EVENT_CLAIM_LEASE_SECONDS = 5 * 60;
+
+type StripeEventClaim =
+  { state: 'claimed'; owner: string } | { state: 'processing' } | { state: 'completed' };
+
+/**
+ * Atomically claims a lifetime event before its external cancellation side
+ * effect. A plain read-then-write dedupe check lets concurrent deliveries both
+ * read "missing" and both call Stripe. The conditional put elects exactly one
+ * worker; contenders distinguish an in-flight claim (retryable failure) from
+ * a completed event (safe success). The short lease permits recovery if a
+ * Lambda dies while holding the claim, while the Stripe cancellation request
+ * also carries a stable event-scoped idempotency key below.
+ */
+async function claimLifetimeStripeEvent(eventId: string): Promise<StripeEventClaim> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const now = Math.floor(Date.now() / 1000);
+    const owner = randomUUID();
+    try {
+      await dynamodb.send(
+        new PutCommand({
+          TableName: TABLE_NAME,
+          Item: {
+            PK: `STRIPE_EVENT#${eventId}`,
+            SK: 'METADATA',
+            entityType: 'StripeEvent',
+            status: 'processing',
+            claimOwner: owner,
+            leaseExpiresAt: now + STRIPE_EVENT_CLAIM_LEASE_SECONDS,
+            ttl: now + 30 * 24 * 60 * 60,
+          },
+          ConditionExpression:
+            'attribute_not_exists(PK) OR (#status = :processing AND #leaseExpiresAt < :now)',
+          ExpressionAttributeNames: {
+            '#status': 'status',
+            '#leaseExpiresAt': 'leaseExpiresAt',
+          },
+          ExpressionAttributeValues: {
+            ':processing': 'processing',
+            ':now': now,
+          },
+        })
+      );
+      return { state: 'claimed', owner };
+    } catch (err) {
+      if (!(err instanceof Error) || err.name !== 'ConditionalCheckFailedException') throw err;
+      const existing = await dynamodb.send(
+        new GetCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `STRIPE_EVENT#${eventId}`, SK: 'METADATA' },
+          ProjectionExpression: '#status',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ConsistentRead: true,
+        })
+      );
+      // The holder may have released a failed claim between our conditional
+      // failure and this read. Retry the claim once instead of treating that
+      // transient absence as a completed event.
+      if (!existing.Item) continue;
+      return existing.Item.status === 'processing'
+        ? { state: 'processing' }
+        : { state: 'completed' };
+    }
+  }
+  throw new Error(`Unable to claim Stripe event ${eventId}`);
+}
+
+async function completeLifetimeStripeEvent(eventId: string, owner: string): Promise<void> {
+  await dynamodb.send(
+    new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { PK: `STRIPE_EVENT#${eventId}`, SK: 'METADATA' },
-      ProjectionExpression: 'PK',
+      UpdateExpression:
+        'SET #status = :completed, #completedAt = :completedAt REMOVE #claimOwner, #leaseExpiresAt',
+      ConditionExpression: '#status = :processing AND #claimOwner = :owner',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+        '#completedAt': 'completedAt',
+        '#claimOwner': 'claimOwner',
+        '#leaseExpiresAt': 'leaseExpiresAt',
+      },
+      ExpressionAttributeValues: {
+        ':completed': 'completed',
+        ':completedAt': new Date().toISOString(),
+        ':processing': 'processing',
+        ':owner': owner,
+      },
     })
   );
-  return result.Item !== undefined;
+}
+
+async function releaseLifetimeStripeEvent(eventId: string, owner: string): Promise<void> {
+  try {
+    await dynamodb.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `STRIPE_EVENT#${eventId}`, SK: 'METADATA' },
+        ConditionExpression: '#status = :processing AND #claimOwner = :owner',
+        ExpressionAttributeNames: { '#status': 'status', '#claimOwner': 'claimOwner' },
+        ExpressionAttributeValues: { ':processing': 'processing', ':owner': owner },
+      })
+    );
+  } catch (err) {
+    // A lease takeover/completion means this invocation no longer owns the
+    // claim. Never delete the successor's state.
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return;
+    throw err;
+  }
 }
 
 async function clearPendingStripeCancellation(
@@ -577,122 +677,161 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       event.type === 'checkout.session.async_payment_succeeded') &&
     (event.data.object as unknown as { mode?: string }).mode === 'payment' &&
     delta.fields.stripeSubscriptionId === null;
+  let lifetimeClaimOwner: string | undefined;
+  let lifetimeClaimSettled = false;
   let priorSubscriptionId: string | undefined;
   if (isLifetimeGrant) {
-    // Unlike ordinary entitlement fields, canceling a Stripe subscription is
-    // an external side effect. Once a delivery completed and its ledger row
-    // exists, a later redelivery must not resurrect the pending marker and
-    // call `subscriptions.cancel` again. A failed first cancellation never
-    // records the ledger row, so that delivery still reaches the retry path.
-    if (await hasRecordedStripeEvent(event.id)) {
+    const claim = await claimLifetimeStripeEvent(event.id);
+    if (claim.state === 'completed') {
       logger.info(
         { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
         'stripe_event_duplicate_lifetime_skipped'
       );
       return;
     }
-    const metadata = (event.data.object as unknown as { metadata?: Record<string, string> | null })
-      .metadata;
-    const state = await getHouseholdBillingState(delta.householdId);
-    priorSubscriptionId =
-      metadata?.replacesSubscriptionId ??
-      state.pendingStripeCancellationId ??
-      state.stripeSubscriptionId;
-  }
-
-  // Apply FIRST, including an internal cancellation retry marker. The
-  // event.created condition must succeed before any external cancellation:
-  // otherwise a stale lifetime event could cancel a newer active subscription
-  // and only then discover that its DDB update was out of order. If Stripe
-  // cancellation fails after this write, the marker (and Checkout metadata)
-  // preserve the exact target for redelivery even though the active id is now
-  // cleared from the public subscription state.
-  const fields = isLifetimeGrant
-    ? {
-        ...delta.fields,
-        pendingStripeCancellationId: priorSubscriptionId ?? null,
-      }
-    : delta.fields;
-  const applied = await updateHouseholdSubscription(delta.householdId, fields, event.created);
-  if (!applied) {
-    logger.info(
-      { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
-      'stripe_event_out_of_order_skipped'
-    );
-    return;
-  }
-
-  if (priorSubscriptionId) {
-    try {
-      const stripe = await getStripe();
-      await stripe.subscriptions.cancel(priorSubscriptionId);
-      await clearPendingStripeCancellation(delta.householdId, priorSubscriptionId);
-      logger.info(
-        { householdId: delta.householdId, subscriptionId: priorSubscriptionId },
-        'lifetime_grant_canceled_prior_subscription'
-      );
-    } catch (err) {
-      logger.error(
-        { err, householdId: delta.householdId, subscriptionId: priorSubscriptionId },
-        'lifetime_grant_cancel_prior_subscription_failed'
-      );
-      throw err;
+    if (claim.state === 'processing') {
+      // Do not acknowledge a competing delivery while its owner may still
+      // fail: a retryable error lets Stripe deliver again, whereas an early
+      // 2xx could lose the cancellation permanently.
+      throw new Error(`Stripe event ${event.id} is already being processed`);
     }
+    lifetimeClaimOwner = claim.owner;
   }
 
-  const isNew = await recordStripeEventOnce(event.id);
-  if (!isNew) {
-    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_reapplied');
-  }
+  try {
+    if (isLifetimeGrant) {
+      const metadata = (
+        event.data.object as unknown as { metadata?: Record<string, string> | null }
+      ).metadata;
+      const state = await getHouseholdBillingState(delta.householdId);
+      priorSubscriptionId =
+        metadata?.replacesSubscriptionId ??
+        state.pendingStripeCancellationId ??
+        state.stripeSubscriptionId;
+    }
 
-  logger.info(
-    { householdId: delta.householdId, fields: delta.fields, msg: 'subscription_updated' },
-    'subscription_updated'
-  );
-  audit('billing.subscription_changed', {
-    householdId: delta.householdId,
-    metadata: { stripeEventType: event.type, fields: delta.fields },
-  });
+    // Apply FIRST, including an internal cancellation retry marker. The
+    // event.created condition must succeed before any external cancellation:
+    // otherwise a stale lifetime event could cancel a newer active subscription
+    // and only then discover that its DDB update was out of order. If Stripe
+    // cancellation fails after this write, the marker (and Checkout metadata)
+    // preserve the exact target for redelivery even though the active id is now
+    // cleared from the public subscription state.
+    const fields = isLifetimeGrant
+      ? {
+          ...delta.fields,
+          pendingStripeCancellationId: priorSubscriptionId ?? null,
+        }
+      : delta.fields;
+    const applied = await updateHouseholdSubscription(delta.householdId, fields, event.created);
+    if (!applied) {
+      if (lifetimeClaimOwner) {
+        await completeLifetimeStripeEvent(event.id, lifetimeClaimOwner);
+        lifetimeClaimSettled = true;
+      }
+      logger.info(
+        { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
+        'stripe_event_out_of_order_skipped'
+      );
+      return;
+    }
 
-  // CONFIRMED conversion signal. The client fires `subscription_upgraded` at
-  // checkout START (intent); this is its server-confirmed counterpart, emitted
-  // once a household actually transitions to an ACTIVE paid plan (planId !=
-  // seedling + status active). The Stripe webhook is the source of truth for
-  // revenue.
-  //
-  // We restrict the emit to the ONE-TIME activation events — checkout
-  // completion and subscription creation — and deliberately exclude
-  // `customer.subscription.updated`. `updated` fires on every renewal, plan
-  // change, and metadata edit while a subscription stays `active`; emitting on
-  // it would re-fire `subscription_activated` repeatedly and inflate the
-  // conversion count. (Edge: a checkout that starts in a trial fires
-  // `subscription.created` with status `trialing`, so this won't double-count
-  // with `checkout.session.completed`, which we stamp `active`.)
-  //
-  // Gated on `isNew`: an ordinary Stripe webhook REDELIVERY can re-apply its
-  // idempotent fields, but the ledger prevents the conversion emit from being
-  // counted twice. Completed lifetime redeliveries return earlier, before the
-  // cancellation side effect or this analytics path.
-  //
-  // Best-effort + fire-and-forget: `capture` never throws and we `void` its
-  // promise, so an analytics outage can NEVER 5xx the webhook (which would make
-  // Stripe retry an already-applied delivery).
-  const isActivationEvent =
-    event.type === 'checkout.session.completed' ||
-    event.type === 'checkout.session.async_payment_succeeded' ||
-    event.type === 'customer.subscription.created';
-  const activatedPlan = delta.fields.planId;
-  if (
-    isNew &&
-    isActivationEvent &&
-    activatedPlan &&
-    activatedPlan !== 'seedling' &&
-    delta.fields.status === 'active'
-  ) {
-    void capture(delta.householdId, 'subscription_activated', {
-      plan: activatedPlan,
-      interval: intervalFromEvent(event),
+    if (priorSubscriptionId) {
+      try {
+        const stripe = await getStripe();
+        await stripe.subscriptions.cancel(
+          priorSubscriptionId,
+          {},
+          { idempotencyKey: `lifetime-cancel:${event.id}` }
+        );
+        await clearPendingStripeCancellation(delta.householdId, priorSubscriptionId);
+        logger.info(
+          { householdId: delta.householdId, subscriptionId: priorSubscriptionId },
+          'lifetime_grant_canceled_prior_subscription'
+        );
+      } catch (err) {
+        logger.error(
+          { err, householdId: delta.householdId, subscriptionId: priorSubscriptionId },
+          'lifetime_grant_cancel_prior_subscription_failed'
+        );
+        throw err;
+      }
+    }
+
+    if (lifetimeClaimOwner) {
+      await completeLifetimeStripeEvent(event.id, lifetimeClaimOwner);
+      lifetimeClaimSettled = true;
+    }
+
+    const isNew = isLifetimeGrant ? true : await recordStripeEventOnce(event.id);
+    if (!isNew) {
+      logger.info(
+        { stripeEventId: event.id, type: event.type },
+        'stripe_event_duplicate_reapplied'
+      );
+    }
+
+    logger.info(
+      { householdId: delta.householdId, fields: delta.fields, msg: 'subscription_updated' },
+      'subscription_updated'
+    );
+    audit('billing.subscription_changed', {
+      householdId: delta.householdId,
+      metadata: { stripeEventType: event.type, fields: delta.fields },
     });
+
+    // CONFIRMED conversion signal. The client fires `subscription_upgraded` at
+    // checkout START (intent); this is its server-confirmed counterpart, emitted
+    // once a household actually transitions to an ACTIVE paid plan (planId !=
+    // seedling + status active). The Stripe webhook is the source of truth for
+    // revenue.
+    //
+    // We restrict the emit to the ONE-TIME activation events — checkout
+    // completion and subscription creation — and deliberately exclude
+    // `customer.subscription.updated`. `updated` fires on every renewal, plan
+    // change, and metadata edit while a subscription stays `active`; emitting on
+    // it would re-fire `subscription_activated` repeatedly and inflate the
+    // conversion count. (Edge: a checkout that starts in a trial fires
+    // `subscription.created` with status `trialing`, so this won't double-count
+    // with `checkout.session.completed`, which we stamp `active`.)
+    //
+    // Gated on `isNew`: an ordinary Stripe webhook REDELIVERY can re-apply its
+    // idempotent fields, but the ledger prevents the conversion emit from being
+    // counted twice. Completed lifetime redeliveries return earlier, before the
+    // cancellation side effect or this analytics path.
+    //
+    // Best-effort + fire-and-forget: `capture` never throws and we `void` its
+    // promise, so an analytics outage can NEVER 5xx the webhook (which would make
+    // Stripe retry an already-applied delivery).
+    const isActivationEvent =
+      event.type === 'checkout.session.completed' ||
+      event.type === 'checkout.session.async_payment_succeeded' ||
+      event.type === 'customer.subscription.created';
+    const activatedPlan = delta.fields.planId;
+    if (
+      isNew &&
+      isActivationEvent &&
+      activatedPlan &&
+      activatedPlan !== 'seedling' &&
+      delta.fields.status === 'active'
+    ) {
+      void capture(delta.householdId, 'subscription_activated', {
+        plan: activatedPlan,
+        interval: intervalFromEvent(event),
+      });
+    }
+  } catch (err) {
+    if (lifetimeClaimOwner && !lifetimeClaimSettled) {
+      try {
+        await releaseLifetimeStripeEvent(event.id, lifetimeClaimOwner);
+      } catch (releaseErr) {
+        logger.error(
+          { err: releaseErr, stripeEventId: event.id },
+          'stripe_event_lifetime_claim_release_failed'
+        );
+      }
+    }
+    throw err;
   }
 }
 

@@ -29,6 +29,20 @@ export interface User {
   householdRole: 'admin' | 'member' | null;
 }
 
+function isUser(value: unknown): value is User {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.email === 'string' &&
+    typeof candidate.name === 'string' &&
+    (candidate.householdId === null || typeof candidate.householdId === 'string') &&
+    (candidate.householdRole === null ||
+      candidate.householdRole === 'admin' ||
+      candidate.householdRole === 'member')
+  );
+}
+
 interface AuthState {
   user: User | null;
   /** Cognito ID token — sent as Authorization: Bearer for all API calls.
@@ -306,17 +320,21 @@ export const useAuthStore = create<AuthState>()(
         // decoding inside the same fail-safe boundary as the network calls:
         // a malformed/truncated 200 response must not leave the boot screen
         // stuck forever with isLoading=true.
-        let userData: User;
+        let userData: unknown;
         try {
-          userData = (await response.json()) as User;
+          userData = await response.json();
         } catch {
+          failSession();
+          return;
+        }
+        if (!isUser(userData)) {
           failSession();
           return;
         }
         // Session restore: re-establish the analytics household group from
         // the persisted active id (or the user's claim household) so events
         // captured before the user touches the switcher are still grouped.
-        setActiveHousehold(get().activeHouseholdId ?? userData?.householdId ?? null);
+        setActiveHousehold(get().activeHouseholdId ?? userData.householdId ?? null);
         set({
           user: userData,
           isAuthenticated: true,
