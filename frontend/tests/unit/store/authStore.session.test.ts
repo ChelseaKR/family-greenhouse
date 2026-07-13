@@ -85,9 +85,56 @@ describe('authStore — verifySession', () => {
     expect(seenAuth).toBe('Bearer access-only');
   });
 
-  it('logs out fully on an invalid token when a refresh token exists', async () => {
+  it('refreshes and stays logged in when the idToken is expired but the refresh token is still valid', async () => {
+    // Regression test: verifySession used to call logout() straight away on
+    // any non-OK /auth/me response, wiping a still-valid 30-day refresh
+    // token just because the ~1h idToken had expired (the common case on a
+    // page reload). It must now attempt the same refresh flow the axios
+    // interceptor uses on a 401 before giving up.
+    let refreshCalled = false;
     server.use(
-      http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 }))
+      http.get(`${API}/auth/me`, ({ request }) => {
+        const auth = request.headers.get('authorization');
+        if (auth === 'Bearer id-2') {
+          return HttpResponse.json({
+            id: 'u1',
+            email: 'test@example.com',
+            name: 'Test',
+            householdId: 'hh-1',
+            householdRole: 'admin',
+          });
+        }
+        return HttpResponse.json({ message: 'expired' }, { status: 401 });
+      }),
+      http.post(`${API}/auth/refresh`, async ({ request }) => {
+        refreshCalled = true;
+        const body = (await request.json()) as { refreshToken: string };
+        expect(body.refreshToken).toBe('refresh-1');
+        return HttpResponse.json({
+          idToken: 'id-2',
+          accessToken: 'access-2',
+          refreshToken: 'refresh-2',
+        });
+      })
+    );
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
+
+    await useAuthStore.getState().verifySession();
+
+    expect(refreshCalled).toBe(true);
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.user?.id).toBe('u1');
+    expect(state.idToken).toBe('id-2');
+    expect(state.refreshToken).toBe('refresh-2');
+  });
+
+  it('logs out fully when the idToken is invalid and the refresh attempt also fails', async () => {
+    server.use(
+      http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 })),
+      http.post(`${API}/auth/refresh`, () =>
+        HttpResponse.json({ message: 'Bad refresh' }, { status: 401 })
+      )
     );
     useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
     expect(localStorage.getItem('auth-storage')).toContain('id-1');
@@ -118,11 +165,17 @@ describe('authStore — verifySession', () => {
     expect(localStorage.getItem('auth-storage')).toContain('id-1');
   });
 
-  it('fails safe (session ended) on a network error', async () => {
+  it('fails safe (session ended) on a network error when the refresh attempt also fails', async () => {
     server.use(
       http.get(`${API}/auth/me`, () => {
         throw new Error('network down');
-      })
+      }),
+      // The retry-via-refresh path still runs after the network error; a
+      // total connectivity failure would fail this too, but a plain 401 here
+      // is enough to prove the session correctly ends either way.
+      http.post(`${API}/auth/refresh`, () =>
+        HttpResponse.json({ message: 'refresh unavailable' }, { status: 401 })
+      )
     );
     useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
 
