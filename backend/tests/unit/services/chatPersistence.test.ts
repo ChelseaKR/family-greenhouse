@@ -339,4 +339,38 @@ describe('chat message persistence', () => {
       expect(parsed.proposal).toEqual(proposalPayload.proposal);
     }
   });
+
+  it('follows LastEvaluatedKey so a >1MB conversation keeps its newest messages', async () => {
+    const item = (i: number) => ({
+      conversationId: 'c1',
+      timestamp: `2026-06-11T12:00:0${i}.000Z`,
+      role: 'user',
+      content: [{ type: 'text', text: `msg ${i}` }],
+    });
+    // Page 1 signals truncation via LastEvaluatedKey; page 2 holds the
+    // newest message. Before the pagination fix, msg 2 was silently dropped
+    // — including the just-appended current user turn.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [item(1)],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: 'CHAT#c1#MSG#...' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [item(2)] } as never);
+
+    const replayed = await getConversation('hh-1', 'c1');
+
+    expect(replayed).toHaveLength(2);
+    expect(replayed[1].content).toEqual([{ type: 'text', text: 'msg 2' }]);
+    // Second Query must resume from the cursor, not restart.
+    const queries = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: Record<string, unknown> })
+      .filter((cmd) => cmd.kind === 'Query');
+    expect(queries).toHaveLength(2);
+    expect(queries[0].input.ExclusiveStartKey).toBeUndefined();
+    expect(queries[1].input.ExclusiveStartKey).toEqual({
+      PK: 'HOUSEHOLD#hh-1',
+      SK: 'CHAT#c1#MSG#...',
+    });
+  });
 });
