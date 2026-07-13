@@ -139,21 +139,40 @@ export async function appendMessagePair(
   );
 }
 
+// Follow-the-cursor page cap for getConversation. A Query returns at most
+// 1 MB per page; without following LastEvaluatedKey a long conversation
+// silently loses messages at the page boundary. Query newest-first so even if
+// the defensive page cap is reached we retain the just-appended current turn,
+// then reverse the collected rows back into chronological order for callers.
+// Capped so a pathological conversation can't loop unbounded; 10 pages ≈
+// 10 MB comfortably exceeds normal 30-day-TTL usage.
+const MAX_CONVERSATION_PAGES = 10;
+
 export async function getConversation(
   householdId: string,
   conversationId: string
 ): Promise<ChatMessageRecord[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}`,
-        ':sk': `CHAT#${conversationId}#MSG#`,
-      },
-    })
-  );
-  return (result.Items ?? []).map((item) => ({
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  let pages = 0;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `HOUSEHOLD#${householdId}`,
+          ':sk': `CHAT#${conversationId}#MSG#`,
+        },
+        ScanIndexForward: false,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((result.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    pages += 1;
+  } while (exclusiveStartKey && pages < MAX_CONVERSATION_PAGES);
+  return items.reverse().map((item) => ({
     conversationId: item.conversationId as string,
     timestamp: item.timestamp as string,
     role: item.role as ChatMessageRecord['role'],

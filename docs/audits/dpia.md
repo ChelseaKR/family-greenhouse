@@ -8,7 +8,7 @@ Closes the tracked gap in `docs/RESPONSIBLE-TECH-AUDITS.md` §C (remediation P2-
 completions. Backend: AWS Lambda + a single DynamoDB table + S3 for photos;
 auth via Cognito. Every claim below cites the code or Terraform that implements it.
 
-**Assessor:** repository owner (solo maintainer). **Date:** 2026-07-10.
+**Assessor:** repository owner (solo maintainer). **Date:** 2026-07-13.
 
 ---
 
@@ -78,7 +78,7 @@ public-access block (`infrastructure/modules/frontend/main.tf` lines 85–170).
 3. **Sitter-link forwarding.** A sitter URL is a bearer credential. Bounded: 256-bit CSPRNG token, ≤60-day creator-set window enforced on _every_ public call, revocable, generic 404/410 so the endpoint is not a token oracle, non-PII label (`sitterService.ts`).
 4. **Photo URL exposure.** Image URLs are unguessable (UUID key segment) but **bearer-access**: anyone holding the CloudFront URL can fetch the photo — there are no signed URLs or auth on image GET (`publicImageUrl`, `handlers/plants/handler.ts`). Plant photos can incidentally capture home interiors. Open item below.
 5. **Invite-code leakage.** 128-bit code, 7-day TTL, single household scope.
-6. **Model/API egress.** Chat text and leaf/identification photos leave for Bedrock/Plant.id only on explicit user action; chat tool outputs are redacted before they reach the model. No training use is granted by these APIs' standard terms — verify on renewal (open item).
+6. **Model/API egress.** Chat text and leaf/identification photos leave for Bedrock/Plant.id only on explicit user action; every live and replayed chat-tool result passes through the recursive denylist sanitizer in `backend/src/services/chat/tools.ts` before it reaches the model. No training use is granted by these APIs' standard terms — verify on renewal (open item).
 7. **Logs.** Audit lines carry actorEmail + IP by design (bounded set, 30-day retention); application logs are structured and the no-PII discipline is unit-tested for the chat redactor.
 
 ---
@@ -96,15 +96,15 @@ public-access block (`infrastructure/modules/frontend/main.tf` lines 85–170).
 
 ## 5. Open items (honest)
 
-| #   | Item                                                                                                                                                                                                                                                                                                                                                    | Status    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 1   | **Deletion-wording discrepancy:** `docs/compliance.md` §3 says activity history persists "under a pseudonymized member name," but `DELETE /me` deliberately keeps the real display name on past completions as "a historical artifact" (`handlers/me/handler.ts` comment). Reconcile the policy text with the code (or anonymize the name on deletion). | open      |
-| 2   | **Photo access is URL-bearer:** consider CloudFront signed URLs/cookies for the images distribution so a leaked URL expires.                                                                                                                                                                                                                            | open      |
-| 3   | **Children:** no age gate or children's-data policy; household invites could be sent to minors. Document a minimum age in Terms.                                                                                                                                                                                                                        | open      |
-| 4   | **Processor terms:** confirm current Plant.id / OpenWeatherMap / PostHog data-use terms (esp. model-training clauses) at renewal; keep the sub-processor list in `docs/compliance.md` §3 current.                                                                                                                                                       | recurring |
-| 5   | **Privacy-policy cross-check:** verify `frontend/src/features/legal/PrivacyPage.tsx` states the household-visibility model, the deletion caveat (#1), and the sitter-link mechanics in plain language.                                                                                                                                                  | open      |
-| 6   | **SMS in production** stays off until the TCPA checklist (`docs/compliance.md` §4) is complete — consent records, STOP handling.                                                                                                                                                                                                                        | gated off |
+| #   | Item                                                                                                                                                                                                                                                                                                                        | Status    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1   | **Deletion wording:** verified that `accountCleanup.anonymizeUserInHousehold` replaces the deleted user's id/name on retained activity, completions, plants, photos, and task references. `docs/profile.md`, `docs/compliance.md`, the Privacy page, and the account-deletion page now describe that behavior consistently. | closed    |
+| 2   | **Photo access is URL-bearer:** consider CloudFront signed URLs/cookies for the images distribution so a leaked URL expires.                                                                                                                                                                                                | open      |
+| 3   | **Children:** the Terms now require users to be at least 13 (and guardian permission below legal majority); the Privacy page states the same under-13 exclusion and the parent/guardian deletion path.                                                                                                                      | closed    |
+| 4   | **Processor terms:** confirm current Plant.id / OpenWeatherMap / PostHog data-use terms (esp. model-training clauses) at renewal; keep the sub-processor list in `docs/compliance.md` §3 current.                                                                                                                           | recurring |
+| 5   | **Privacy-policy cross-check:** verified household visibility, deletion-time anonymization, and sitter-link scope, bearer-link risk, expiry, revocation, and no-account mechanics in plain language on the Privacy page.                                                                                                    | closed    |
+| 6   | **SMS in production** stays off until the TCPA checklist (`docs/compliance.md` §4) is complete — consent records, STOP handling.                                                                                                                                                                                            | gated off |
 
 ---
 
-Last verified: 2026-07-10 · Recheck cadence: re-verify on any change to `backend/src/models/`, a new external processor, a new notification channel, or a new data-bearing feature — and at least quarterly. Regenerate the inventory against the code, not from memory.
+Last verified: 2026-07-13 · Recheck cadence: re-verify on any change to `backend/src/models/`, a new external processor, a new notification channel, or a new data-bearing feature — and at least quarterly. Regenerate the inventory against the code, not from memory.

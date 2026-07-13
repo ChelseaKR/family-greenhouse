@@ -29,6 +29,20 @@ export interface User {
   householdRole: 'admin' | 'member' | null;
 }
 
+function isUser(value: unknown): value is User {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.email === 'string' &&
+    typeof candidate.name === 'string' &&
+    (candidate.householdId === null || typeof candidate.householdId === 'string') &&
+    (candidate.householdRole === null ||
+      candidate.householdRole === 'admin' ||
+      candidate.householdRole === 'member')
+  );
+}
+
 interface AuthState {
   user: User | null;
   /** Cognito ID token — sent as Authorization: Bearer for all API calls.
@@ -221,7 +235,15 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       verifySession: async () => {
-        const { idToken, accessToken, refreshToken, logout, clearLocalSession, setLoading } = get();
+        const {
+          idToken,
+          accessToken,
+          refreshToken,
+          logout,
+          clearLocalSession,
+          setLoading,
+          setTokens,
+        } = get();
         // Prefer ID token (carries the household claims the backend reads).
         // Fall back to access token only to handle pre-fix persisted state.
         const authToken = idToken ?? accessToken;
@@ -238,37 +260,86 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        try {
-          // Try to verify the token by calling a protected endpoint
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-          const response = await fetch(`${API_URL}/auth/me`, {
-            headers: {
-              Authorization: `Bearer ${authToken}`,
-            },
-          });
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        const fetchMe = (token: string) =>
+          fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
 
-          if (!response.ok) {
-            // Token is invalid — end the session silently (tab-local when
-            // this tab has no refresh token, full logout otherwise).
-            failSession();
-          } else {
-            // Token is valid, update user data
-            const userData = await response.json();
-            // Session restore: re-establish the analytics household group from
-            // the persisted active id (or the user's claim household) so events
-            // captured before the user touches the switcher are still grouped.
-            setActiveHousehold(get().activeHouseholdId ?? userData?.householdId ?? null);
-            set({
-              user: userData,
-              isAuthenticated: true,
-              isLoading: false,
+        /**
+         * Mirrors the axios interceptor's 401-refresh flow (services/api.ts)
+         * for this boot-time check, which uses a raw `fetch` rather than the
+         * shared axios instance. An expired short-lived idToken does NOT mean
+         * the session is over — the 30-day refresh token this tab holds may
+         * still be good, and a page reload (when this runs) is exactly when
+         * the idToken is most likely to have expired. Returns the retried
+         * `/auth/me` response on a successful refresh, null on any failure
+         * (no refresh token, refresh 401s, or a network error) — the caller
+         * then fails the session exactly as it would have without a retry.
+         */
+        async function refreshAndRetry(): Promise<Response | null> {
+          if (!refreshToken) return null;
+          try {
+            const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken }),
             });
+            if (!refreshResponse.ok) return null;
+            const data = await refreshResponse.json();
+            const newBearer = data.idToken ?? data.accessToken;
+            if (!newBearer) return null;
+            setTokens(data.idToken, data.accessToken, data.refreshToken ?? refreshToken);
+            return await fetchMe(newBearer);
+          } catch {
+            return null;
           }
-        } catch {
-          // Network error or other issue — fail safe, but only tab-locally
-          // when this tab couldn't have refreshed anyway.
-          failSession();
         }
+
+        let response: Response | null;
+        try {
+          response = await fetchMe(authToken);
+          // Refresh only means "the bearer expired" for a 401. Retrying a
+          // forbidden request or a server outage with fresh credentials adds
+          // load and cannot change the outcome.
+          if (response.status === 401) response = await refreshAndRetry();
+        } catch {
+          // The initial /auth/me call itself threw (network error) — still
+          // worth trying a refresh (a flaky first request shouldn't cost an
+          // otherwise-valid 30-day session) before failing safe.
+          response = await refreshAndRetry();
+        }
+
+        if (!response || !response.ok) {
+          // Token is invalid and refreshing didn't help (or wasn't possible)
+          // — end the session silently (tab-local when this tab has no
+          // refresh token, full logout otherwise).
+          failSession();
+          return;
+        }
+
+        // Token (or the refreshed one) is valid, update user data. Keep JSON
+        // decoding inside the same fail-safe boundary as the network calls:
+        // a malformed/truncated 200 response must not leave the boot screen
+        // stuck forever with isLoading=true.
+        let userData: unknown;
+        try {
+          userData = await response.json();
+        } catch {
+          failSession();
+          return;
+        }
+        if (!isUser(userData)) {
+          failSession();
+          return;
+        }
+        // Session restore: re-establish the analytics household group from
+        // the persisted active id (or the user's claim household) so events
+        // captured before the user touches the switcher are still grouped.
+        setActiveHousehold(get().activeHouseholdId ?? userData.householdId ?? null);
+        set({
+          user: userData,
+          isAuthenticated: true,
+          isLoading: false,
+        });
       },
     }),
     {

@@ -16,7 +16,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title="Terms of Service" effectiveDate="April 25, 2026">
+    <LegalShell title="Terms of Service" effectiveDate="July 13, 2026">
       <p className="lead">
         These terms govern your use of Family Greenhouse. We&rsquo;ve kept them readable. If
         anything is unclear, email{' '}
@@ -29,6 +29,16 @@ export function TermsPage() {
         By creating an account or using the service, you agree to these terms. If you don&rsquo;t
         agree, don&rsquo;t use the service. Material changes will be announced in-app with at least
         14 days&rsquo; notice; continued use after that is acceptance of the new terms.
+      </p>
+
+      <h2>Who may use the service</h2>
+      <p>
+        You must be at least 13 years old to create an account or accept a household invitation. If
+        you are under the age of legal majority where you live, use the service only with permission
+        from a parent or legal guardian. A parent or guardian who believes a child under 13 created
+        an account can email{' '}
+        <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a> to have it
+        deleted.
       </p>
 
       <h2>What you can expect from us</h2>

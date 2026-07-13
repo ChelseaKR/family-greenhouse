@@ -32,7 +32,10 @@ The collaborative loop has to feel obvious before any expansion makes sense.
 - ✅ **Plant photo timeline** — `appendPlantPhoto` + `getPlantPhotos` + `PhotoTimeline` component. Atomic transact-write keeps the primary `imageUrl` and the timeline in sync.
 - ✅ **Watering log with notes** — completion records carry `notes`; complete-task endpoint accepts notes
 - ✅ **Tap-to-snooze options** — `<details>` popover with 1d/3d/1w/skip-cycle; skip-cycle uses task's frequency
-- ⏸ **Sentry + dashboards live** — code-side stubs honor `SENTRY_DSN`; flipping it on requires creating the actual Sentry project + provisioning CloudWatch dashboards in Terraform
+- ⏸ **Sentry project live / ✅ dashboards as code** — code-side stubs honor
+  `SENTRY_DSN`; creating the hosted Sentry project remains external. The
+  six-panel CloudWatch dashboard and alarms are already committed in
+  `infrastructure/modules/monitoring` and only require the environment apply.
 
 ### Y1Q3 — Growth + retention ✅
 
@@ -43,9 +46,15 @@ The collaborative loop has to feel obvious before any expansion makes sense.
 
 ### Y1Q4 — Reach (mostly deferred — needs external services)
 
-- ⏸ **Plant species database integration** — Plant.id adapter already in code for _identification_. The "pre-fill care frequencies" piece needs Trefle (or Plant.id pro tier) — also legal review of redistributing botanical data. Deferred.
+- ✅ **Plant species database integration** — Perenual search/enrichment now
+  pre-fills care frequencies, serves care guides, and powers seasonal pest
+  alerts behind a budgeted/cache-backed adapter. Plant.id remains the photo
+  identification path.
 - ⏸ **Localized markets (Arabic + RTL)** — RTL infrastructure ready (`RTL_LANGS` set, `dir` applied). Adding Arabic = drop a translation file + entry to `RTL_LANGS`; needs a translator.
-- ⏸ **Mobile app via Capacitor** — separate build pipeline + App Store / Play Store accounts. Not codable in this repo.
+- ✅ **Mobile app via Capacitor (code/assets)** — committed iOS and Android
+  shells, native guards, release validation, and store assets are complete.
+  Developer accounts, signing, physical-device verification, and store review
+  remain external release work in `docs/mobile-release-checklist.md`.
 - ✅ **Smart reminders DND window** — `dndStart`/`dndEnd`/`timezone` on `NotificationPreferences`; `isInDndWindow` is timezone-aware and handles wrap-past-midnight. Notifier respects DND for email + SMS (browser push left to OS).
 
 ---
@@ -63,7 +72,10 @@ The quality of advice the app gives goes from "you told us 7 days" to "based on 
 ### Y2Q2 — Insights ✅ _(year-in-review aggregation in code)_
 
 - ✅ **Care analytics dashboards** — KPI tiles (active plants, tasks, last-7-day completions, currently-overdue), 30-day trend with 7-day moving average overlay, by-task-type breakdown, plants-at-risk ranked by max days overdue, per-member contributions. Pure SVG/CSS — no charting library dependency.
-- ✅ **Year-in-review** — `getYearInReview` aggregates completions by member, type, and plant for any given year; `GET /households/:id/year-in-review`, surfaced as the `YearInReviewCard` on the dashboard (KPI tiles + by-task-type bar chart, hidden when there are no completions). The end-of-year _recap email_ is the remaining follow-on (needs the EventBridge schedule in `production-checklist.md`).
+- ✅ **Year-in-review** — `getYearInReview` aggregates completions by member,
+  type, and plant for any given year; `GET /households/:id/year-in-review`
+  feeds the dashboard card, and the recap email has its Jan 2 EventBridge
+  schedule plus an admin preview trigger in Terraform.
 
 ### Y2Q3 — Multi-household _(deferred — schema migration)_
 
@@ -85,8 +97,7 @@ the principles — candidates earn their way on, they don't roll over.
 
 - ✅ **End-of-year recap email** — retention re-engagement; reuses
   `getYearInReview`, renders text/HTML, ships via the existing `notifier`.
-  The annual EventBridge trigger remains tracked in
-  `production-checklist.md`; the admin "send me a preview" path works today.
+  The annual EventBridge trigger and admin "send me a preview" path both ship.
 - ✅ **CSV / JSON import** — bulk onboarding (validate → preview → commit,
   max 100/batch, plan caps respected, partial success by contract). Mirrors
   the export we already shipped.

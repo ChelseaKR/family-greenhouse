@@ -211,7 +211,10 @@ CloudWatch logs surface these structured events:
 - `perenual.budget_exhausted` — breaker tripped; consider raising `PERENUAL_DAILY_BUDGET` or the paid tier
 - `perenual.budget_check_failed` — DDB error during the budget update; we fail open
 
-A dashboard surfacing call rate, cache hit %, daily budget consumed, and error rate is a Phase-7 nice-to-have — not blocking.
+The committed CloudWatch dashboard includes a
+`perenual.budget_exhausted` Logs Insights panel. Call-rate, cache-hit, and
+provider-error panels remain a Phase-7 enhancement; they are observability
+depth, not a launch correctness blocker.
 
 ### Cost ceiling
 
@@ -235,17 +238,19 @@ Unit-test coverage lives in `tests/unit/services/perenual.test.ts` and `tests/un
 
 ## Pest alerts
 
-Driven by `services/pestAlerts.ts:evaluatePestAlerts(householdId)`. To wire the weekly cadence:
-
-1. EventBridge rule, weekly schedule, payload `{ householdId }` per household.
-2. New Lambda invokes `evaluatePestAlerts`, then dispatches each alert through the existing `notificationService` fanout (email/SMS/push).
-3. Per-user opt-in lives on `NotificationPreferences.pestAlerts` (default false). Users without the toggle on are skipped before notification dispatch.
-
-The dedupe write happens **inside** `evaluatePestAlerts`, before any notification is sent. If the notification fanout fails after that, the user just doesn't get a duplicate next week — better than risking spam.
+Driven by `services/pestAlerts.ts:evaluatePestAlerts(householdId)` through the
+existing hourly reminder Lambda. A per-household/day conditional marker keeps
+evaluation to once daily while allowing a later hourly invocation to retry if
+Perenual was unavailable or the evaluation path threw. The reminder scan reads
+each member's `NotificationPreferences.pestAlerts` flag (default false), fans
+out through the shared notifier, and writes the 90-day plant/pest suppression
+marker only after at least one delivery succeeds. This avoids suppressing an
+alert merely because its first notification attempt failed.
 
 ## Future work
 
-- **Phase 7 (post-roadmap)**: build the CloudWatch dashboard for ongoing observability.
+- **Phase 7 (post-roadmap)**: extend the existing Perenual budget-exhaustion
+  panel with call-rate, cache-hit, and provider-error views.
 - **AWS Translate** for non-English care guides. Wire into `handlers/species/handler.ts:guide`. Cost: ~$15/M chars; cache aggressively per `(speciesId, locale)`.
 - **Image licensing audit**: only ~half of Perenual's images are CC-licensed. Filter by license at ingestion and only proxy permissively-licensed ones.
 - **Trefle migration plan**: keep the `enrichment.ts` interface stable so swapping the upstream provider is one file. The raw client (`perenual.ts`) is the only thing that knows about the wire format.

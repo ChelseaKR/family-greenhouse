@@ -1,6 +1,6 @@
 # Accessibility (WCAG 2.2 AA, AAA where feasible)
 
-> Last verified: 2026-07-05 · Recheck: every release
+> Last verified: 2026-07-13 · Recheck: every release
 
 We commit to WCAG 2.2 **AA** as the conformance bar, and push to **AAA on the
 criteria that are codeable and machine-checkable** — notably 1.4.6 Contrast
@@ -24,7 +24,7 @@ Four layers, all gating:
 
 **Contrast (1.4.6 AAA):** body/helper text uses `gray-600`+ (≥7:1 on white), status/type badges use `text-*-900` on `*-100` tints (≥7:1), placeholders are `gray-500` (AA — placeholders are never the only label, so AAA is not required of them). This is a design-token discipline, not an automated gate — the axe suite enforces AA (`color-contrast`) only; a regression to a lower-contrast AAA token would not fail CI today. Tracked as a gap in the conformance table (README).
 
-Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` logs in via the local-server seed account (`test@example.com`) before scanning `/dashboard`, `/plants`, `/plants/:id`, `/tasks`, `/household`, `/settings`, `/analytics`, and `/help`. This suite runs against the local-server (Cognito mock); production a11y is verified on every deploy by Lighthouse + manual axe DevTools spot-checks.
+Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` logs in via the local-server seed account (`test@example.com`) before scanning `/dashboard`, `/plants`, `/plants/:id`, `/tasks`, `/household`, `/settings` (including deep-linked sections), `/analytics`, `/help`, and `/chat`. This suite runs against the local-server (Cognito mock); production a11y is verified on every deploy by Lighthouse + manual axe DevTools spot-checks.
 
 ## Per-criterion status
 
@@ -73,7 +73,7 @@ Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` log
 ### 2.4 — Navigable
 
 - **2.4.1 Bypass Blocks (A)** — Skip-link is the first focusable element on every page; target wrapper exists on both authenticated and public routes. ✅
-- **2.4.2 Page Titled (A)** — `<title>` set in `index.html`. Per-route titles deferred (would require setting `document.title` in each lazy route). ⚠️ See gaps below.
+- **2.4.2 Page Titled (A)** — Every route sets a specific title through `useDocumentTitle()` or `useMetaTags()`; the hook coverage includes lazy public and authenticated pages. ✅
 - **2.4.3 Focus Order (A)** — Tab order matches visual order. Mobile sidebar dialog traps focus while open (HeadlessUI). ✅
 - **2.4.4 Link Purpose (A)** — Link text describes destination. ✅
 - **2.4.5 Multiple Ways (AA)** — Sidebar nav + breadcrumb anchors on detail pages. ✅
@@ -126,7 +126,7 @@ Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` log
 
 Closed:
 
-- **2.4.2 Page Titled** — `useDocumentTitle()` hook called from every route page; `<title>` reflects the current page plus a "• Family Greenhouse" suffix.
+- **2.4.2 Page Titled** — every route calls `useDocumentTitle()` or `useMetaTags()`; `<title>` reflects the current page and product identity.
 - **Authenticated route a11y in CI** — `tests/e2e/a11y-authenticated.spec.ts` covers it.
 
 ## Manual checks before each public release
@@ -136,4 +136,4 @@ Closed:
 - [ ] Render at 200% browser zoom; nothing overflows
 - [ ] Render at 400% zoom on a 320px viewport (Reflow); no 2D scrolling
 - [ ] Windows High Contrast Mode check for missing borders / color-conveyed info
-- [ ] axe DevTools on at least the dashboard and plant-detail page (authenticated routes the e2e suite skips)
+- [ ] axe DevTools spot-check on the production dashboard and plant-detail page (the local authenticated e2e suite covers both, but cannot prove deployed-environment behavior)

@@ -67,6 +67,16 @@ variable "bedrock_chat_model_id" {
   default     = ""
 }
 
+variable "chat_enabled" {
+  description = "Incident kill switch for new chat model turns. '1' enables; '0' returns 503 before budget/persistence/model work."
+  type        = string
+  default     = "1"
+  validation {
+    condition     = contains(["0", "1"], var.chat_enabled)
+    error_message = "chat_enabled must be '0' or '1'."
+  }
+}
+
 variable "bedrock_input_usd_per_mtok" {
   description = "USD per million input tokens for the configured model. Empty string leaves the Lambda code default in place (Haiku 4.5 = 1.0)."
   type        = string

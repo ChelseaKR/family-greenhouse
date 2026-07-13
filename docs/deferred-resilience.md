@@ -58,15 +58,15 @@ If any one step after the first fails, the rows drift. Today the user can retry 
 
 ## 5. Database resilience beyond regional AZ failover
 
-**Status:** deferred.
+**Status:** closed; quarterly drill remains an operational release check.
 
-**What's missing.** Single backing store; no read-replicas, no async standby, no point-in-time-recovery rehearsal.
+**Original finding.** Single backing store; no read-replicas, no async standby, and no point-in-time-recovery rehearsal.
 
-**Why deferred.** PITR is a Terraform flag (`point_in_time_recovery { enabled = true }` on the table). The actual gap is that we've never restored from a backup — if PITR isn't enabled, or is enabled but the snapshot is broken, we'd find out the worst possible way.
+**Resolution.** PITR is enabled in Terraform and the 2026-06-09 restore drill validated all 35 restored items. Multi-region/read replicas remain the separate, deliberately deferred item in §2; the backup-recovery rehearsal itself is no longer a gap.
 
-**Trigger to re-open.** Before launch, full stop. Listed in `production-checklist.md`.
+**Trigger to re-open.** A quarterly drill fails, the table/PITR configuration changes, or observed recovery exceeds the documented objective.
 
-**Sketched path.** Same-day work: verify `point_in_time_recovery.enabled = true` on the prod table, then run a staging restore drill (`aws dynamodb restore-table-to-point-in-time` against a non-prod target table name, validate the restored data, document the runbook). Add the runbook to `production-checklist.md` and the deployment workflow.
+**Runbook.** Re-run `aws dynamodb restore-table-to-point-in-time` against a throwaway non-production target, validate counts and representative rows, record RTO/RPO, then delete the target. The exact procedure is in `docs/runbooks.md`.
 
 **✅ DONE 2026-06-09.** PITR confirmed enabled; restore drill run against the live table → throwaway target, **35/35 items validated, RTO ≈ 3.5 min, RPO ≈ 5 min**, throwaway table deleted. Full procedure (with the validation + cutover steps) is in [`runbooks.md` → Data restore (DynamoDB PITR)](runbooks.md#data-restore-dynamodb-pitr). Re-run ~quarterly.
 

@@ -339,4 +339,64 @@ describe('chat message persistence', () => {
       expect(parsed.proposal).toEqual(proposalPayload.proposal);
     }
   });
+
+  it('follows LastEvaluatedKey so a >1MB conversation keeps its newest messages', async () => {
+    const item = (i: number) => ({
+      conversationId: 'c1',
+      timestamp: `2026-06-11T12:00:0${i}.000Z`,
+      role: 'user',
+      content: [{ type: 'text', text: `msg ${i}` }],
+    });
+    // Querying newest-first means page 1 holds the just-appended tail; page 2
+    // resumes toward older rows. The result is reversed back to chronology.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [item(2)],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: 'CHAT#c1#MSG#...' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [item(1)] } as never);
+
+    const replayed = await getConversation('hh-1', 'c1');
+
+    expect(replayed).toHaveLength(2);
+    expect(replayed[1].content).toEqual([{ type: 'text', text: 'msg 2' }]);
+    // Second Query must resume from the cursor, not restart.
+    const queries = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: Record<string, unknown> })
+      .filter((cmd) => cmd.kind === 'Query');
+    expect(queries).toHaveLength(2);
+    expect(queries[0].input.ScanIndexForward).toBe(false);
+    expect(queries[0].input.ExclusiveStartKey).toBeUndefined();
+    expect(queries[1].input.ExclusiveStartKey).toEqual({
+      PK: 'HOUSEHOLD#hh-1',
+      SK: 'CHAT#c1#MSG#...',
+    });
+  });
+
+  it('keeps the newest tail even when the defensive 10-page cap is reached', async () => {
+    const pageItem = (i: number) => ({
+      conversationId: 'c1',
+      timestamp: new Date(Date.UTC(2026, 5, 11, 12, 0, i)).toISOString(),
+      role: 'user',
+      content: [{ type: 'text', text: `msg ${i}` }],
+    });
+    // DynamoDB returns descending pages: 10 is newest, 1 is oldest among the
+    // bounded window. Every page advertises another cursor; the implementation
+    // must stop at 10 without ever dropping page 1 (the actual conversation
+    // tail) and return the collected window chronologically.
+    for (let i = 10; i >= 1; i -= 1) {
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [pageItem(i)],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: `cursor-${i}` },
+      } as never);
+    }
+
+    const replayed = await getConversation('hh-1', 'c1');
+
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(10);
+    expect(replayed).toHaveLength(10);
+    expect(replayed[0].content).toEqual([{ type: 'text', text: 'msg 1' }]);
+    expect(replayed.at(-1)?.content).toEqual([{ type: 'text', text: 'msg 10' }]);
+  });
 });

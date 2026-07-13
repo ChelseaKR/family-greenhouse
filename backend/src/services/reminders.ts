@@ -237,10 +237,13 @@ export async function remindHousehold(
  *
  * The per-day marker itself is written BEFORE evaluation (needed as a
  * test-and-set guard so two hourly runs for the same household don't
- * double-process), but if evaluation reports Perenual was unreachable for
- * any plant this hour, the marker is deleted again afterward — otherwise a
- * transient outage or an exhausted daily budget would look exactly like
- * "checked, nothing to report" and silently lose the whole day's pest
+ * double-process), but it's deleted again afterward whenever evaluation
+ * DIDN'T fully complete — either because it reported Perenual was
+ * unreachable for any plant this hour, or because something in the
+ * evaluation path threw outright (a member/prefs read failing,
+ * evaluatePestAlerts itself throwing, etc.). Otherwise a transient outage,
+ * an exhausted daily budget, OR an unhandled crash would all look exactly
+ * like "checked, nothing to report" and silently lose the whole day's pest
  * alerts with no way to retry until tomorrow.
  */
 async function runPestAlerts(householdId: string, now: Date): Promise<void> {
@@ -266,6 +269,13 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
   }
 
   let dataUnavailable = false;
+  // Only flips to true once the try block runs to completion (including the
+  // "nobody opted in" early return). Any thrown exception along the way — a
+  // member/prefs read failing, evaluatePestAlerts itself throwing, a
+  // markAlerted failure — leaves this false, so the finally below cleans up
+  // the marker exactly as it would for an explicit dataUnavailable result,
+  // instead of leaving a household wrongly marked "checked" after a crash.
+  let completed = false;
   try {
     const members = await householdService.getHouseholdMembers(householdId);
     const optedIn = [];
@@ -273,7 +283,10 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
       const prefs = await notificationPrefs.getPreferences(member.userId);
       if (prefs.pestAlerts) optedIn.push(member);
     }
-    if (optedIn.length === 0) return;
+    if (optedIn.length === 0) {
+      completed = true;
+      return;
+    }
 
     const result = await pestAlerts.evaluatePestAlerts(householdId, now);
     dataUnavailable = result.dataUnavailable;
@@ -297,8 +310,9 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
         await pestAlerts.markAlerted(alert.plantId, alert.pestId);
       }
     }
+    completed = true;
   } finally {
-    if (dataUnavailable) {
+    if (dataUnavailable || !completed) {
       await dynamodb
         .send(
           new DeleteCommand({

@@ -39,17 +39,16 @@
     "stripe": "^22.1.0",
     "uuid": "^14.0.1",
     "web-push": "^3.6.7",
-    "zod": "^3.22.4"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/aws-lambda": "^8.10.136",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/http-errors": "^2.0.4",
     "@types/node": "^26.1.1",
     "@types/supertest": "^7.2.0",
-    "@types/uuid": "^9.0.8",
-    "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.1.10",
     "cors": "^2.8.5",
     "esbuild": "^0.28.1",

@@ -180,7 +180,10 @@ The local-server short-circuits the Stripe round-trip — checkout flips the hou
 ## What's NOT yet built (and why)
 
 - **Per-PR preview environments** — needs a Terraform workspace per PR, infrastructure work
-- **EventBridge scheduled reminders** — the Lambda is built; the schedule rule needs to be provisioned in Terraform
-- **Real WAF/CSP** — described in the production checklist; CloudFront response headers + AWS WAF managed rule sets, deployment-time concerns
-- **Plant species DB API** — we ship a curated 110-entry catalog instead; the right step up is integrating Trefle or POWO when the curated list stops scaling
+- **API-edge WAF** — the web distribution already has CloudFront security headers and the app ships a strict CSP. HTTP API WAF coverage still requires the documented CloudFront-in-front architecture decision; it is not represented as already provisioned.
+- **Native APNs/FCM delivery** — device-token capture exists, but the credentialed sender stays hidden until Apple/Firebase setup and physical-device verification are complete (`docs/mobile.md`).
 - **Multiple households per user** — the schema supports it (GSI1 on user→household). The auth middleware now accepts an `X-Household-Id` request header that overrides the Cognito-claim household for that request; the frontend has a sidebar household-switcher that uses it. The Cognito custom-attribute path remains the default; fully retiring it is a deploy migration (backfill membership rows for users who only ever had a Cognito-claim household, drop the claim from the JWT, retire the override-header code path). Tracked separately as a deploy task.
+
+Previously listed here but now built: EventBridge schedules invoke reminders,
+weekly digests, and year recaps; Perenual enriches the curated species catalog
+behind a budget breaker and Secrets Manager indirection.

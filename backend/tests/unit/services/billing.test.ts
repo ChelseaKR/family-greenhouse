@@ -442,9 +442,10 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
   it('cancels the prior Stripe subscription when a lifetime payment grants Garden', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    // 1st send: pre-apply getHouseholdSubscription read → prior sub on file.
-    // 2nd send: the household Update. 3rd send: the dedupe ledger Put.
+    // 1st send: ledger pre-read → not recorded. 2nd: billing-state read →
+    // prior sub on file. Remaining sends stage, clear, then record the event.
     vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: undefined })
       .mockResolvedValueOnce({ Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } })
       .mockResolvedValue({});
     subscriptionsCancel.mockResolvedValueOnce({});
@@ -462,17 +463,24 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
         },
       },
     } as unknown as Stripe.Event);
-    expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
+    expect(subscriptionsCancel).toHaveBeenCalledWith(
+      'sub_old',
+      {},
+      { idempotencyKey: 'lifetime-cancel:evt_lifetime' }
+    );
   });
 
-  it('retries the webhook when canceling a prior subscription fails', async () => {
+  it('stages the exact cancellation target before clearing the public subscription id', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    // Read prior subscription, then apply the lifetime entitlement. The
-    // dedupe Put must not run after cancellation fails so Stripe can retry.
+    // The conditioned household update stores a private retry marker before
+    // cancellation. A Stripe redelivery can therefore recover sub_old even
+    // though the public stripeSubscriptionId is cleared by the lifetime grant.
     vi.mocked(dynamodb.send)
-      .mockResolvedValueOnce({ Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } })
-      .mockResolvedValueOnce({});
+      .mockResolvedValueOnce({ Item: undefined })
+      .mockResolvedValueOnce({
+        Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' },
+      });
     subscriptionsCancel.mockRejectedValueOnce(new Error('stripe unavailable'));
     const { applyStripeEvent } = await import('../../../src/services/billing.js');
 
@@ -492,8 +500,229 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       } as unknown as Stripe.Event)
     ).rejects.toThrow('stripe unavailable');
 
-    expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
+    expect(subscriptionsCancel).toHaveBeenCalledWith(
+      'sub_old',
+      {},
+      { idempotencyKey: 'lifetime-cancel:evt_lifetime_retry' }
+    );
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(4);
+    const stage = vi.mocked(dynamodb.send).mock.calls[2][0] as unknown as {
+      input: {
+        UpdateExpression: string;
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, unknown>;
+      };
+    };
+    expect(stage.input.UpdateExpression).toContain(
+      '#pendingStripeCancellationId = :pendingStripeCancellationId'
+    );
+    expect(stage.input.ExpressionAttributeValues[':pendingStripeCancellationId']).toBe('sub_old');
+    expect(stage.input.ConditionExpression).toContain('lastStripeEventCreated');
+  });
+
+  it('a Stripe redelivery after a failed cancel retries against the SAME prior subscription id', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      id: 'evt_lifetime_retry_2',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    // First delivery: the target is staged atomically with the entitlement,
+    // then cancellation fails.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: undefined })
+      .mockResolvedValueOnce({
+        Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' },
+      })
+      .mockResolvedValueOnce({});
+    subscriptionsCancel.mockRejectedValueOnce(new Error('stripe unavailable'));
+    await expect(applyStripeEvent(event)).rejects.toThrow('stripe unavailable');
+
+    // Stripe redelivers the identical event. The active id is now cleared, but
+    // the private pending marker preserves sub_old for the retry.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: undefined })
+      .mockResolvedValueOnce({
+        Item: { pendingStripeCancellationId: 'sub_old', planId: 'garden' },
+      })
+      .mockResolvedValue({});
+    subscriptionsCancel.mockResolvedValueOnce({});
+    await applyStripeEvent(event);
+
+    expect(subscriptionsCancel).toHaveBeenCalledTimes(2);
+    expect(subscriptionsCancel).toHaveBeenNthCalledWith(
+      1,
+      'sub_old',
+      {},
+      { idempotencyKey: 'lifetime-cancel:evt_lifetime_retry_2' }
+    );
+    expect(subscriptionsCancel).toHaveBeenNthCalledWith(
+      2,
+      'sub_old',
+      {},
+      { idempotencyKey: 'lifetime-cancel:evt_lifetime_retry_2' }
+    );
+  });
+
+  it('never cancels a subscription when a lifetime event loses the out-of-order condition', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    const conditionErr = Object.assign(new Error('stale'), {
+      name: 'ConditionalCheckFailedException',
+    });
+    vi.mocked(dynamodb.send)
+      // The event has not completed before, so there is no ledger row.
+      .mockResolvedValueOnce({ Item: undefined })
+      // A newer subscription is currently active.
+      .mockResolvedValueOnce({
+        Item: { stripeSubscriptionId: 'sub_new', planId: 'greenhouse' },
+      })
+      // The lifetime event is older, so its conditioned entitlement/staging
+      // write is rejected before any Stripe side effect.
+      .mockRejectedValueOnce(conditionErr);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+
+    await applyStripeEvent({
+      id: 'evt_stale_lifetime',
+      created: 1_600_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: {
+            householdId: 'hh-1',
+            planId: 'garden',
+            interval: 'lifetime',
+            replacesSubscriptionId: 'sub_old',
+          },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+
+    expect(subscriptionsCancel).not.toHaveBeenCalled();
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not cancel again after a completed lifetime event is redelivered', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    const alreadyExists = Object.assign(new Error('recorded'), {
+      name: 'ConditionalCheckFailedException',
+    });
+    vi.mocked(dynamodb.send)
+      .mockRejectedValueOnce(alreadyExists)
+      .mockResolvedValueOnce({
+        Item: { PK: 'STRIPE_EVENT#evt_lifetime_done', status: 'completed' },
+      });
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+
+    await applyStripeEvent({
+      id: 'evt_lifetime_done',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: {
+            householdId: 'hh-1',
+            planId: 'garden',
+            interval: 'lifetime',
+            replacesSubscriptionId: 'sub_old',
+          },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+
     expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+    expect(subscriptionsCancel).not.toHaveBeenCalled();
+  });
+
+  it('atomically elects one cancellation worker for concurrent duplicate lifetime deliveries', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    let claimed = false;
+    let claimStatus = 'processing';
+    const conditional = () =>
+      Object.assign(new Error('claimed'), { name: 'ConditionalCheckFailedException' });
+    vi.mocked(dynamodb.send).mockImplementation(async (command: unknown) => {
+      const typed = command as {
+        kind?: string;
+        input?: {
+          Item?: Record<string, unknown>;
+          Key?: Record<string, unknown>;
+          UpdateExpression?: string;
+        };
+      };
+      if (typed.kind === 'Put' && String(typed.input?.Item?.PK).startsWith('STRIPE_EVENT#')) {
+        if (claimed) throw conditional();
+        claimed = true;
+        return {};
+      }
+      if (typed.kind === 'Get' && String(typed.input?.Key?.PK).startsWith('STRIPE_EVENT#')) {
+        return { Item: { status: claimStatus } };
+      }
+      if (typed.kind === 'Get') {
+        return { Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } };
+      }
+      if (typed.input?.UpdateExpression?.includes('#status = :completed')) {
+        claimStatus = 'completed';
+      }
+      return {};
+    });
+
+    let releaseCancel!: () => void;
+    const cancelStarted = new Promise<void>((resolveStarted) => {
+      subscriptionsCancel.mockImplementationOnce(
+        () =>
+          new Promise((resolveCancel) => {
+            releaseCancel = () => resolveCancel({});
+            resolveStarted();
+          })
+      );
+    });
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      id: 'evt_lifetime_concurrent',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: {
+            householdId: 'hh-1',
+            planId: 'garden',
+            interval: 'lifetime',
+            replacesSubscriptionId: 'sub_old',
+          },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    const first = applyStripeEvent(event);
+    await cancelStarted;
+    await expect(applyStripeEvent(event)).rejects.toThrow('already being processed');
+    expect(subscriptionsCancel).toHaveBeenCalledTimes(1);
+
+    releaseCancel();
+    await first;
+    expect(subscriptionsCancel).toHaveBeenCalledTimes(1);
   });
 
   it('does NOT downgrade a lifetime household on a subscription.deleted for an unknown sub', async () => {
@@ -886,7 +1115,9 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     const result = await runWithExistingSub('active', 'lifetime');
     expect(result.url).toBe('https://checkout.stripe.test/cs');
     expect(sessionsCreate).toHaveBeenCalledTimes(1);
-    expect((sessionsCreate.mock.calls[0][0] as Record<string, unknown>).mode).toBe('payment');
+    const params = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.mode).toBe('payment');
+    expect(params.metadata).toMatchObject({ replacesSubscriptionId: 'sub_existing' });
   });
 });
 
@@ -900,6 +1131,24 @@ describe('getHouseholdSubscription', () => {
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
     expect(await getHouseholdSubscription('hh-1')).toEqual({ planId: 'seedling' });
+  });
+
+  it('never exposes the internal cancellation retry marker', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: {
+        planId: 'garden',
+        pendingStripeCancellationId: 'sub_private_retry_target',
+      },
+    });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    expect(await getHouseholdSubscription('hh-1')).toEqual({
+      planId: 'garden',
+      stripeCustomerId: undefined,
+      stripeSubscriptionId: undefined,
+      status: undefined,
+      currentPeriodEnd: undefined,
+    });
   });
 
   it('reads stored plan + Stripe ids', async () => {

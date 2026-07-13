@@ -1,7 +1,8 @@
 # Plant care chatbot — design
 
-**Status:** draft, 2026-05-31. Author: paired with Claude Code.
-**Decision needed before implementation lands in prod:** see "Open decisions" at the end.
+**Status:** implemented; original design drafted 2026-05-31, reconciled with production 2026-07-13. Author: paired with Claude Code.
+
+This document preserves the original phased design and explains why the architecture was chosen; it is not a current backlog. The implemented source of truth is `backend/src/services/chat/`, `frontend/src/features/chat/`, the [model card](../model-card.md), and the dated gaps/waiver in [`RESPONSIBLE-TECH-AUDITS.md`](RESPONSIBLE-TECH-AUDITS.md). Items explicitly described below as an original MVP/V1/V2 plan are historical unless the current roadmap separately tracks them.
 
 ## Goal
 
@@ -84,7 +85,7 @@ Conversations are scoped to the active household. A user with multiple household
 
 ## Cost + safety controls
 
-- **Per-household monthly token budget**: 250k input + 50k output tokens, ≈ $1.50/month at Sonnet 4.6 list price. Gate at the handler before invoking Bedrock; over budget → return a clear "you've used this month's chat allowance" response. Resets on the 1st of each month. (Knob in `tfvars` so we can raise it for trusted households.)
+- **Per-household monthly token budget**: 250k input + 50k output tokens by default, with spend calculated from the configured model-price environment variables (current default: Claude Haiku 4.5). The atomic reservation gate runs before Bedrock; over budget returns a clear allowance response and resets on the first of each month. The limits remain Terraform knobs.
 - **Per-message turn cap**: max 5 tool calls per turn before forcing a final answer. Prevents infinite tool loops.
 - **Per-conversation context cap**: trim oldest turns once the prompt + history > 50k tokens. Don't lose the system prompt or the last 6 turns.
 - **Per-IP rate limit**: reuse `rateLimit` middleware, 20 msg/min per IP. Reuses the `audit('rate_limit.tripped')` path.
@@ -110,7 +111,7 @@ V2 streaming options to evaluate (in order of preference):
 
 ## Bedrock model + region
 
-- **Model:** `anthropic.claude-sonnet-4-20250514-v1:0` (Sonnet 4.6 once GA on Bedrock in us-east-1 — the system prompt confirms 4.6 is the current Claude flagship; if it's not yet on Bedrock in the user's region at deploy time, fall back to `anthropic.claude-3-5-sonnet-20241022-v2:0`).
+- **Original model plan:** Sonnet-family Bedrock model. **Implemented source of truth:** `BEDROCK_CHAT_MODEL_ID`, whose documented/default deployment is Haiku 4.5; see `model-card.md`. Model changes are frozen during the dated evaluation waiver unless the starter eval and baseline are rerun.
 - **Region:** us-east-1 (same as the rest of the stack — keeps inter-service latency low and avoids cross-region data movement).
 - **Model access:** has to be requested in the Bedrock console once per account. Free; usually granted instantly for Claude models. **User must do this before the first invocation succeeds.**
 
@@ -133,23 +134,23 @@ V2 streaming options to evaluate (in order of preference):
 5. Frontend chat panel with synchronous send + typing indicator.
 6. **No RAG yet** — pure tool-use to validate the loop end-to-end.
 
-**V1 (next session):** 7. The remaining 3 read tools. 8. RAG: corpus ingest script, DDB-stored embeddings, in-Lambda cosine, top-3 retrieval. 9. Initial 30-article corpus seeded.
+**Historical V1 sequence (completed):** 7. Remaining read tools. 8. RAG corpus ingest, embeddings, in-Lambda similarity retrieval. 9. Initial curated corpus.
 
 **V2:** 10. Write-side tool: `propose_reminder_task` with confirm-card UI. 11. Streaming via Lambda Function URL. 12. Photo semantic search via second embedding store.
 
-## Open decisions
+## Original decisions and current disposition
 
-| Decision                                                 | My recommendation              | Need from user                                                         |
-| -------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
-| Skip OpenSearch / pgvector for RAG, use in-Lambda cosine | Yes — saves $700/mo            | Confirm                                                                |
-| Sync response, no streaming for MVP                      | Yes — defer Function URL story | Confirm                                                                |
-| Per-household token budget = 250k in + 50k out / month   | Knob in tfvars; defaults safe  | Confirm or change number                                               |
-| Conversation TTL 30 days                                 | Reasonable for forensics + UX  | Confirm                                                                |
-| Bedrock model access                                     | Required, free                 | **You must request access in Bedrock console** before first invocation |
+| Decision                                                 | Original recommendation        | Current disposition                                                  |
+| -------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------- |
+| Skip OpenSearch / pgvector for RAG, use in-Lambda cosine | Yes — saves $700/mo            | Implemented with the bundled pre-embedded corpus                     |
+| Sync response, no streaming for MVP                      | Yes — defer Function URL story | MVP shipped sync; opt-in Function URL streaming subsequently shipped |
+| Per-household token budget = 250k in + 50k out / month   | Knob in tfvars; defaults safe  | Implemented as Terraform-configurable atomic reservation/counter     |
+| Conversation TTL 30 days                                 | Reasonable for forensics + UX  | Implemented                                                          |
+| Bedrock model access                                     | Required                       | External deployment prerequisite; verify in the target AWS account   |
 
-## Open risks
+## Original risks and current controls (reconciled 2026-07-13)
 
-- **Hallucinated care advice.** Even with tool use, Claude can confidently invent care details. Mitigation: every assistant message includes a small footer like "Generated by AI based on your plant data — verify before acting." For pesticide/herbicide questions, add a hard refusal in the system prompt.
-- **Cost surprises if the budget gate has a bug.** Mitigation: also gate at the AWS Budget level — alarm at $5/month/account. Worst case the user gets a SNS notification, not a $500 bill.
-- **PII leakage in tool results.** Mitigation: tool output redactor + integration tests asserting redactor strips emails.
-- **Tool-use loop divergence.** Claude could call the same tool repeatedly. Mitigation: per-turn tool call cap (5) + deduplication of identical tool calls within a turn.
+- **Hallucinated care advice.** The UI keeps an "AI-generated — verify before acting" disclosure visible; pesticide/dosage refusal is in the system prompt. RAG quantitative claims now pass the live grounding guard before persistence/delivery, including the streaming path. Broader semantic faithfulness scoring remains under the dated AI-evaluation waiver.
+- **Cost surprises.** The chat has an atomic household token reservation/cap, and the infrastructure already provisions account-level AWS Budget actual/forecast notifications through the alerts topic.
+- **PII leakage in tool results.** A centralized recursive sanitizer strips known PII-bearing field names on live results and history replay; nested-field tests protect the boundary. New tools still require privacy review for PII hidden in generic values.
+- **Tool-use loop divergence.** The five-call cap is enforced and identical calls reuse the first validated result instead of repeating service work or creating duplicate confirm cards.

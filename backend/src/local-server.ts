@@ -437,15 +437,12 @@ function validateBody(schema: z.ZodTypeAny) {
     // `.nullable()` for "no body" clients keep validating as before.
     const result = schema.safeParse(req.body ?? null);
     if (!result.success) {
-      const details = result.error.errors.reduce(
-        (acc, err) => {
-          const path = err.path.join('.');
-          if (!acc[path]) acc[path] = [];
-          acc[path].push(err.message);
-          return acc;
-        },
-        {} as Record<string, string[]>
-      );
+      const details = result.error.issues.reduce<Record<string, string[]>>((acc, err) => {
+        const path = err.path.join('.');
+        if (!acc[path]) acc[path] = [];
+        acc[path].push(err.message);
+        return acc;
+      }, {});
       return res.status(400).json({ message: 'Validation failed', details });
     }
     (req as any).validatedBody = result.data;

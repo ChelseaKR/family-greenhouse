@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/chat/bedrock.js');
+vi.mock('../../../src/services/chat/corpus.js');
 vi.mock('../../../src/services/sprout.js', () => ({
   askSprout: vi.fn(),
   isSproutIntegrationEnabled: vi.fn(() => false),
@@ -59,6 +60,7 @@ import {
   runChatTurn,
   trimHistory,
   BUDGET_CONFIG,
+  GROUNDING_BLOCK_MESSAGE,
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
 } from '../../../src/services/chat/index.js';
@@ -82,9 +84,13 @@ import type {
   ToolUseBlock,
 } from '../../../src/services/chat/types.js';
 import * as plantService from '../../../src/services/plantService.js';
+import * as climateService from '../../../src/services/climate.js';
+import * as householdService from '../../../src/services/householdService.js';
+import { searchCorpus } from '../../../src/services/chat/corpus.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  delete process.env.CHAT_ENABLED;
   vi.mocked(isSproutIntegrationEnabled).mockReturnValue(false);
 });
 
@@ -123,6 +129,19 @@ function expectValidToolPairing(messages: BedrockMessage[]): void {
 }
 
 describe('runChatTurn', () => {
+  it('stops before any model, budget, or persistence work when the kill switch is off', async () => {
+    process.env.CHAT_ENABLED = '0';
+
+    await expect(
+      runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'help my fern' })
+    ).rejects.toMatchObject({ statusCode: 503 });
+
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+    expect(reserveBudget).not.toHaveBeenCalled();
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(invokeChatModel).not.toHaveBeenCalled();
+  });
+
   it('uses Sprout without Bedrock and persists citation metadata', async () => {
     vi.mocked(isSproutIntegrationEnabled).mockReturnValueOnce(true);
     vi.mocked(askSprout).mockResolvedValueOnce({
@@ -268,6 +287,295 @@ describe('runChatTurn', () => {
     });
   });
 
+  it('deduplicates an identical tool call across model iterations', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([]);
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [
+          { type: 'tool_use', id: 'tu-repeat-1', name: 'list_household_plants', input: {} },
+        ],
+        stopReason: 'tool_use',
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.0001,
+      })
+      .mockResolvedValueOnce({
+        content: [
+          { type: 'tool_use', id: 'tu-repeat-2', name: 'list_household_plants', input: {} },
+        ],
+        stopReason: 'tool_use',
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.0001,
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'You have no plants yet.' }],
+        stopReason: 'end_turn',
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.0001,
+      });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'List my plants.',
+    });
+
+    expect(result.assistantText).toBe('You have no plants yet.');
+    expect(plantService.getPlants).toHaveBeenCalledTimes(1);
+    expect(appendMessagePair).toHaveBeenCalledTimes(2);
+    const firstResult = vi.mocked(appendMessagePair).mock.calls[0][2].content[0];
+    const secondResult = vi.mocked(appendMessagePair).mock.calls[1][2].content[0];
+    expect(firstResult.type).toBe('tool_result');
+    expect(secondResult.type).toBe('tool_result');
+    if (firstResult.type === 'tool_result' && secondResult.type === 'tool_result') {
+      expect(secondResult.content).toBe(firstResult.content);
+      expect(secondResult.tool_use_id).not.toBe(firstResult.tool_use_id);
+    }
+  });
+
+  it('blocks an ungrounded quantitative claim on the live RAG path before persistence', async () => {
+    vi.mocked(searchCorpus).mockResolvedValueOnce([
+      {
+        articleTitle: 'Humidity',
+        sectionTitle: 'Tropicals',
+        source: 'humidity.md',
+        text: 'Calatheas prefer at least 50% humidity.',
+        score: 0.92,
+      },
+    ]);
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu-rag',
+            name: 'search_care_knowledge',
+            input: { query: 'calathea humidity' },
+          },
+        ],
+        stopReason: 'tool_use',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'Keep it at exactly 92% humidity.' }],
+        stopReason: 'end_turn',
+        inputTokens: 120,
+        outputTokens: 15,
+        costUsd: 0.0004,
+      });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'What humidity does a calathea need?',
+    });
+
+    expect(result.assistantText).toBe(GROUNDING_BLOCK_MESSAGE);
+    const persistedAnswer = vi.mocked(appendMessage).mock.calls.at(-1)?.[1];
+    expect(persistedAnswer?.content).toEqual([{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }]);
+    expect(JSON.stringify(persistedAnswer)).not.toContain('92%');
+  });
+
+  it('accepts a current authoritative tool number when historical RAG keeps the guard active', async () => {
+    vi.mocked(getConversation).mockResolvedValueOnce([
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:00.000Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'What humidity does a calathea need?' }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:01.000Z',
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu-old-rag',
+            name: 'search_care_knowledge',
+            input: { query: 'calathea humidity' },
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:02.000Z',
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu-old-rag',
+            content: JSON.stringify([
+              {
+                source: 'humidity.md',
+                content: 'Calatheas prefer at least 50% humidity.',
+              },
+            ]),
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:00:03.000Z',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Aim for at least 50% humidity.' }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-07-12T10:01:00.000Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'What is the current humidity?' }],
+      },
+    ]);
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-1',
+      name: 'Home',
+      location: { city: 'Davis', lat: 38.54, lon: -121.74 },
+      createdAt: '2025-01-01',
+      createdBy: 'u1',
+    });
+    vi.mocked(climateService.getWeatherCached).mockResolvedValueOnce({
+      observedAt: '2026-07-12T10:00:00.000Z',
+      tempC: 24,
+      humidity: 42,
+      condition: 'Clear',
+      description: 'clear sky',
+      forecast: [],
+    });
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [{ type: 'tool_use', id: 'tu-climate', name: 'get_household_climate', input: {} }],
+        stopReason: 'tool_use',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'Current humidity is 42%.' }],
+        stopReason: 'end_turn',
+        inputTokens: 120,
+        outputTokens: 15,
+        costUsd: 0.0004,
+      });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      conversationId: 'conv-1',
+      message: 'What is the current humidity?',
+    });
+
+    expect(result.assistantText).toBe('Current humidity is 42%.');
+    expect(result.assistantText).not.toBe(GROUNDING_BLOCK_MESSAGE);
+  });
+
+  it.each([
+    ['You have 0 plants.', GROUNDING_BLOCK_MESSAGE],
+    ['You have 1 plant.', GROUNDING_BLOCK_MESSAGE],
+    ['You have 2 plants.', GROUNDING_BLOCK_MESSAGE],
+    ['You have 3 plants.', 'You have 3 plants.'],
+    ['You have 4 plants.', GROUNDING_BLOCK_MESSAGE],
+  ])(
+    'grounds collection counts explicitly when three plants are returned: %s',
+    async (modelAnswer, expectedAnswer) => {
+      vi.mocked(getConversation).mockResolvedValueOnce([
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:00.000Z',
+          role: 'user',
+          content: [{ type: 'text', text: 'What humidity does a calathea need?' }],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:01.000Z',
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-old-rag',
+              name: 'search_care_knowledge',
+              input: { query: 'calathea humidity' },
+            },
+          ],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:02.000Z',
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu-old-rag',
+              content: JSON.stringify([
+                {
+                  source: 'humidity.md',
+                  content: 'Calatheas prefer at least 50% humidity.',
+                },
+              ]),
+            },
+          ],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:03.000Z',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Aim for at least 50% humidity.' }],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:01:00.000Z',
+          role: 'user',
+          content: [{ type: 'text', text: 'How many plants do I have?' }],
+        },
+      ]);
+      vi.mocked(plantService.getPlants).mockResolvedValueOnce(
+        ['Aloe', 'Fern', 'Pothos'].map((name, index) => ({
+          id: `plant-${String.fromCharCode(97 + index)}`,
+          householdId: 'hh-1',
+          name,
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          tags: [],
+          createdAt: '2025-01-01',
+          createdBy: 'u1',
+          updatedAt: '2025-01-01',
+        }))
+      );
+      vi.mocked(invokeChatModel)
+        .mockResolvedValueOnce({
+          content: [
+            { type: 'tool_use', id: 'tu-plants', name: 'list_household_plants', input: {} },
+          ],
+          stopReason: 'tool_use',
+          inputTokens: 100,
+          outputTokens: 10,
+          costUsd: 0.0003,
+        })
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: modelAnswer }],
+          stopReason: 'end_turn',
+          inputTokens: 120,
+          outputTokens: 15,
+          costUsd: 0.0004,
+        });
+
+      const result = await runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        conversationId: 'conv-1',
+        message: 'How many plants do I have?',
+      });
+
+      expect(result.assistantText).toBe(expectedAnswer);
+    }
+  );
+
   it('refuses to invoke Bedrock when the budget reservation is rejected (over cap)', async () => {
     // The atomic gate (reserveBudget) throws when the reservation can't fit.
     vi.mocked(reserveBudget).mockRejectedValueOnce(new ChatBudgetExceededError());
@@ -352,7 +660,9 @@ describe('runChatTurn', () => {
       is_error: true,
     });
     if (firstBlock && firstBlock.type === 'tool_result') {
-      expect(firstBlock.content).toContain('Unknown tool');
+      expect(firstBlock.content).toBe(
+        'Tool result unavailable. Continue with the remaining context.'
+      );
     }
   });
 
@@ -419,6 +729,65 @@ describe('runChatTurn', () => {
       tool_use_id: 'tu-prev',
     });
     expectValidToolPairing(firstCall.messages);
+  });
+
+  it('does not replay a legacy non-JSON tool error into the model', async () => {
+    vi.mocked(getConversation).mockResolvedValueOnce([
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-06-11T10:00:00.000Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'check my plants' }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-06-11T10:00:01.000Z',
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tu-prev', name: 'list_household_plants', input: {} }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-06-11T10:00:01.500Z',
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu-prev',
+            content: 'upstream failed for owner@example.test',
+            is_error: true,
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-06-11T10:05:00.000Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'try again' }],
+      },
+    ]);
+    vi.mocked(invokeChatModel).mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Please try the plant lookup again.' }],
+      stopReason: 'end_turn',
+      inputTokens: 80,
+      outputTokens: 12,
+      costUsd: 0.0002,
+    });
+
+    await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      conversationId: 'conv-1',
+      message: 'try again',
+    });
+
+    const replayed = vi.mocked(invokeChatModel).mock.calls[0][0].messages[2].content[0];
+    expect(replayed).toMatchObject({ type: 'tool_result', is_error: true });
+    if (replayed.type === 'tool_result') {
+      expect(replayed.content).toBe(
+        'Tool result unavailable. Continue with the remaining context.'
+      );
+      expect(replayed.content).not.toContain('owner@example.test');
+    }
   });
 
   it('persists the tool_result turn during a tool-use loop', async () => {
@@ -652,6 +1021,17 @@ describe('runChatTurn', () => {
       };
       expect(parsed.status).toBe('proposed');
       expect(parsed.proposal.plantName).toBe('Bertha');
+      // The authenticated history keeps confirm-card fields, while the copy
+      // sent back to Bedrock is centrally redacted at the model boundary.
+      expect(parsed.proposal).toHaveProperty('assignedTo');
+    }
+    const modelToolResult = vi
+      .mocked(invokeChatModel)
+      .mock.calls[1][0].messages.at(-1)
+      ?.content.find((block) => block.type === 'tool_result');
+    expect(modelToolResult?.type).toBe('tool_result');
+    if (modelToolResult?.type === 'tool_result') {
+      expect(modelToolResult.content).not.toMatch(/assignedTo|assigneeName/);
     }
   });
 });

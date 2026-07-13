@@ -22,7 +22,7 @@ github_repo = "family-greenhouse"
 ```bash
 cd infrastructure
 terraform plan -var-file=environments/production/terraform.tfvars -out=cicd.tfplan
-# expect: ~3 resources added (OIDC provider, role, admin policy attachment)
+# expect: OIDC provider, deploy role, and the project-scoped customer policy
 terraform apply cicd.tfplan
 ```
 
@@ -88,7 +88,12 @@ This kicks off `cd-production.yml`. Walk through:
 
 ## Notes
 
-- The OIDC role is currently `AdministratorAccess`. The **trust policy** is what limits damage: only the configured repo + refs + `production` environment can assume it. Scope the permission policy to least-privilege as a follow-up — IAM, Lambda, API Gateway, DynamoDB, Cognito, S3, CloudFront, Route 53, SES, ACM, WAFv2, EventBridge, CloudWatch suffice.
+- The OIDC role uses the customer-managed policy in
+  `infrastructure/modules/cicd/main.tf`, scoped to this stack's service set;
+  IAM writes are limited to project-prefixed resources and an explicit deny
+  prevents the deploy role from attaching/embedding broader policy on itself.
+  The first deploy after adding a new AWS service should fail closed until its
+  required action is deliberately added to that policy.
 - The IAM OIDC provider is a global, one-per-account resource. If you ever add another OIDC consumer in this AWS account, share this provider rather than creating a second one.
 - Rotate the thumbprint values in `infrastructure/modules/cicd/main.tf` if GitHub rotates its OIDC cert (rare — once a year at most).
 

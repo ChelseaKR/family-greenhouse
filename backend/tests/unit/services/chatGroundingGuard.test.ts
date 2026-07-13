@@ -49,6 +49,15 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
     expect(result.ungroundedClaims[0]).toMatch(/92%/);
   });
 
+  it('requires every number in a claim to be supported, not merely one of them', () => {
+    const result = checkGrounding(
+      'Keep humidity above 50%, and raise it to 92% whenever the leaves curl.',
+      [HUMIDITY_SPAN]
+    );
+    expect(result.grounded).toBe(false);
+    expect(result.ungroundedClaims[0]).toMatch(/92%/);
+  });
+
   it('flags a numeric claim when there are no retrieved spans at all (no data, asserted anyway)', () => {
     const result = checkGrounding('Water it every 9 days without fail.', []);
     expect(result.grounded).toBe(false);

@@ -37,7 +37,8 @@ Auto-gates that run but are **not** in the ruleset's required list (honest note)
 - `Scorecard analysis` (`.github/workflows/scorecard.yml`, OpenSSF Scorecard) —
   runs on `main` push/schedule, not per-PR; posture monitoring, not a PR gate.
 
-**Local parity:** `npm run verify` (repo root) = format:check + lint +
+**Local parity:** `make verify` (a thin, portable wrapper around
+`npm run verify` at the repo root) = format:check + lint +
 typecheck + test + `npm audit --omit=dev --audit-level=high` + the bare-marker
 and silenced-gates guards — the local mirror of the CI gates that have no
 browser/cloud dependency. Run it before pushing.
@@ -72,6 +73,6 @@ browser/cloud dependency. Run it before pushing.
 
 ---
 
-Last verified: 2026-07-10 (against `.github/workflows/` and ruleset id 18752847) ·
+Last verified: 2026-07-13 (against `.github/workflows/` and ruleset id 18752847) ·
 Recheck cadence: on any change to `.github/workflows/` or the branch ruleset —
 re-verify job names match this file and the committed ruleset; quarterly otherwise.

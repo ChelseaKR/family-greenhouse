@@ -42,9 +42,11 @@ Unchanged. Mentioned here for completeness — `PATCH /auth/me` is for non-sensi
 
 ## Historical artifacts
 
-Past activity events (`actorName`) and task completion records (`completedByName`) snapshot the user's name at the time of the action. **They are not rewritten when the user renames themselves.** This is intentional — a completion record signed by "Alex (formerly known as Sam)" tells a less truthful story than the snapshot at the time the task was completed. This also matches the documented behavior of `DELETE /me`, which leaves historical names intact as well.
+Past activity events (`actorName`) and task completion records (`completedByName`) snapshot the user's name at the time of the action. **They are not rewritten when the user renames themselves.** This is intentional — a completion record signed by "Alex (formerly known as Sam)" tells a less truthful story than the snapshot at the time the task was completed.
 
-If the long-tail of user research argues we should rewrite history, the path is `householdService.updateMemberNameAcrossHouseholds` — extend it to also walk activity rows. Don't do this without an explicit user-facing "rename my history" action; silent retroactive edits to audit-style data are a trust hazard.
+Account deletion is different from a rename. `DELETE /me` retains shared care facts that other household members still need, but `accountCleanup.anonymizeUserInHousehold` replaces the departing user's id and display name on activity events, task completions, plants, photos, task assignments, and related household records with `deleted-user` / `Former member` (or clears the field where absence is valid). The deleted user's login, membership, and private notification data are removed.
+
+If the long-tail of user research argues that a profile rename should also rewrite history, the path is `householdService.updateMemberNameAcrossHouseholds` — extend it to walk activity rows. Don't do this without an explicit user-facing "rename my history" action; silent retroactive edits to audit-style data are a trust hazard. That choice does not weaken the separate deletion-time anonymization described above.
 
 ## Local development
 

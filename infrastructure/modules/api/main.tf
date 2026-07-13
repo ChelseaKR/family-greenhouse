@@ -294,6 +294,7 @@ locals {
     BEDROCK_CHAT_MODEL_ID       = var.bedrock_chat_model_id
     BEDROCK_INPUT_USD_PER_MTOK  = var.bedrock_input_usd_per_mtok
     BEDROCK_OUTPUT_USD_PER_MTOK = var.bedrock_output_usd_per_mtok
+    CHAT_ENABLED                = var.chat_enabled
     # Source maps in stack traces: esbuild already emits them; this flag
     # tells Node 20 to actually use them when printing CloudWatch errors.
     NODE_OPTIONS = "--enable-source-maps"

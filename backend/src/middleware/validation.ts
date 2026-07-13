@@ -31,17 +31,14 @@ export const validateBody = <T>(
       (event as ValidatedEvent<T>).validatedBody = validated;
     } catch (error) {
       if (error instanceof ZodError) {
-        const details = error.errors.reduce(
-          (acc, err) => {
-            const path = err.path.join('.');
-            if (!acc[path]) {
-              acc[path] = [];
-            }
-            acc[path].push(err.message);
-            return acc;
-          },
-          {} as Record<string, string[]>
-        );
+        const details = error.issues.reduce<Record<string, string[]>>((acc, err) => {
+          const path = err.path.join('.');
+          if (!acc[path]) {
+            acc[path] = [];
+          }
+          acc[path].push(err.message);
+          return acc;
+        }, {});
 
         throw createHttpError(400, 'Validation failed', { details });
       }

@@ -17,6 +17,66 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- Dependency maintenance now advances every compatible in-range package,
+  migrates both workspaces to Zod 4, aligns Commitlint and CodeQL action
+  versions, removes the obsolete external UUID declarations, and records a
+  complete disposition for all 84 historical Dependabot PRs. Tailwind 4 and
+  TypeScript 7 remain explicit major-version holds, not silently skipped bot
+  work.
+- Dependabot's GitHub Actions cadence returns to weekly now that every required
+  Node 24-compatible action major has landed; the configured dependency labels
+  now exist in the repository.
+- The legal pages now state the minimum account age and describe temporary
+  sitter-link access in plain language; the DPIA and profile documentation now
+  match the implemented deletion-time anonymization behavior.
+- Current conformance and accessibility documentation now replaces stale
+  pre-remediation claims, and `make verify` provides the documented local CI
+  parity entry point.
+- Chat now has a Terraform-controlled incident kill switch that stops new sync
+  and streaming model turns before any spend or persistence while leaving
+  history/reporting available.
+- Architecture and quality records now recognize the shipped schedules,
+  Perenual integration, and successful PITR drill instead of carrying them as
+  unfinished work.
+
+### Fixed
+
+- RAG answers now block unsupported quantitative care claims before they are
+  persisted or delivered; streamed RAG text waits for the same grounding check.
+  A later authoritative plant/task/climate result now joins historical RAG
+  evidence through explicit numeric facts and collection counts, so its real
+  numbers pass without letting incidental digits in IDs/dates—or a fabricated
+  count—disable blocking.
+  Tool outputs and history replay cross a recursive PII-field sanitizer, raw
+  tool exception messages no longer enter prompts/logs, and repeated identical
+  tool calls reuse the validated result instead of duplicating work/cards.
+- The responsible-tech, model-card, and EU-transparency records now reflect the
+  disclosure footer and authenticated Playwright assertion that were already
+  present, rather than carrying a stale open-gap claim.
+- Long chat conversations follow DynamoDB cursors newest-first and restore the
+  bounded window to chronological order, so a page boundary—or the defensive
+  ten-page cap—cannot hide the actual tail of a thread.
+- Session restore now uses the still-valid refresh token before logging a user
+  out when the short-lived ID token has expired, and rejects syntactically valid
+  `/auth/me` payloads that do not match the complete user shape.
+- Lifetime checkout metadata names the exact recurring subscription it
+  replaces. The webhook first wins the out-of-order DDB condition and stages a
+  private retry marker, then cancels that exact subscription; a stale lifetime
+  event cannot cancel a newer subscription, a Stripe failure remains safely
+  retryable after the public subscription ID is cleared, and a fully recorded
+  redelivery cannot cancel the same subscription twice. Concurrent duplicate
+  deliveries now elect one cancellation worker through an expiring atomic
+  claim, backed by an event-stable Stripe idempotency key.
+- A crashed seasonal pest evaluation removes its daily claim marker so a later
+  invocation can retry instead of silently suppressing that day's alerts.
+- The checked-in inbound-mail Lambda archive now matches its byte-safe,
+  scan-verdict-enforcing source instead of deploying the older UTF-8-reencoding
+  forwarder.
+- The landing-page visual regression gate now pins its A/B experiment bucket,
+  removing random control-versus-treatment screenshot failures.
+
 ## [0.16.2] - 2026-07-12
 
 ### Added

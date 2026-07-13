@@ -145,9 +145,14 @@ To exercise the _real_ Stripe integration in dev, point the frontend at a stagin
 
 ## Plan caps and downgrades
 
-If a household downgrades from Greenhouse → Seedling and they have 200 plants, the cap is breached. We don't auto-delete; we just stop allowing new creations. The dashboard could show a "you are over your plan limits" banner — that UI isn't built yet.
+If a household downgrades from Greenhouse → Seedling and they have 200 plants,
+the cap is breached. We don't auto-delete; we just stop allowing new
+creations. Billing settings shows an explicit over-limit warning explaining
+that existing data remains usable while new plants/members are paused.
 
-For now: downgrades are best-effort. The household can still read/edit/delete what they have; they just can't add more until they're back under the new cap. Document this in the support FAQ once we have one.
+The household can still read/edit/delete what it has; it just can't add more
+until it is back under the new cap or upgrades. Support follows the same
+contract rather than asking users to delete data automatically.
 
 ## Reading invoices
 

@@ -23,10 +23,12 @@ import {
 import {
   findTool,
   MAX_PROPOSALS_PER_TURN,
+  sanitizeToolResultForModel,
   TOOL_REGISTRY,
   type ProposeReminderResult,
   type ReminderProposal,
 } from './tools.js';
+import { checkGrounding, type RetrievedSpan } from './groundingGuard.js';
 import {
   appendMessage,
   appendMessagePair,
@@ -51,6 +53,9 @@ import type {
 const MAX_TOOL_CALLS_PER_TURN = 5;
 const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
 const MAX_HISTORY_MESSAGES = 24;
+
+export const GROUNDING_BLOCK_MESSAGE =
+  "I couldn't verify every quantitative detail in that answer against the care knowledge I retrieved. Please rephrase the question or check a trusted horticultural source before acting.";
 
 // Tokens reserved up front by the atomic budget gate (reserveBudget), then
 // reconciled to actual usage when the turn finishes. A modest representative
@@ -150,14 +155,110 @@ export interface RunChatTurnResult {
  * array Bedrock expects. Tool results are paired with the assistant turn
  * that requested them, preserving the original ordering.
  */
+function sanitizeToolResultBlock(block: ContentBlock): ContentBlock {
+  if (block.type !== 'tool_result') return block;
+  try {
+    return {
+      ...block,
+      content: JSON.stringify(sanitizeToolResultForModel(JSON.parse(block.content) as unknown)),
+    };
+  } catch {
+    // Tool definitions return JSON. A non-JSON historical result may be a
+    // legacy raw exception string, so fail closed instead of replaying it to
+    // the model where it could contain contact data or an upstream payload.
+    return {
+      ...block,
+      content: 'Tool result unavailable. Continue with the remaining context.',
+      is_error: true,
+    };
+  }
+}
+
 function toBedrockMessages(history: ChatMessageRecord[]): BedrockMessage[] {
   return history.map((m) => ({
     role: m.role,
     // Citation blocks are Family Greenhouse display metadata, not Anthropic
     // content blocks. Strip them before replaying a Sprout-authored turn into
-    // a later Bedrock fallback.
-    content: m.content.filter((block) => block.type !== 'citation'),
+    // a later Bedrock fallback. Persisted tool results may contain fields used
+    // by the authenticated UI; redact them again at this model boundary.
+    content: m.content.filter((block) => block.type !== 'citation').map(sanitizeToolResultBlock),
   }));
+}
+
+function spansFromToolResult(value: unknown): RetrievedSpan[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const record = entry as Record<string, unknown>;
+    return typeof record.source === 'string' && typeof record.content === 'string'
+      ? [{ source: record.source, text: record.content }]
+      : [];
+  });
+}
+
+/**
+ * Extract only authoritative quantitative facts from a structured tool result.
+ * String values are deliberately ignored: UUIDs and ISO timestamps contain
+ * incidental digits that must not "ground" an unrelated plant count or care
+ * threshold. Arrays contribute their explicit collection length; finite JSON
+ * numbers contribute their keyed value.
+ */
+function quantitativeSpanFromToolResult(toolName: string, value: unknown): RetrievedSpan | null {
+  const facts: string[] = [];
+  const collect = (nested: unknown, topLevel: boolean): void => {
+    if (typeof nested === 'number' && Number.isFinite(nested)) {
+      facts.push(`numeric value: ${nested}`);
+      return;
+    }
+    if (Array.isArray(nested)) {
+      // Only the tool's top-level list is an authoritative collection count.
+      // Nested arrays (for example each plant's empty tags or a weather
+      // forecast) are traversed for numeric leaves but do not contribute
+      // unrelated lengths; paths/indices are omitted so they cannot themselves
+      // satisfy a claim for 0, 1, 2, … items.
+      if (topLevel) facts.push(`collection count: ${nested.length}`);
+      nested.forEach((entry) => collect(entry, false));
+      return;
+    }
+    if (!nested || typeof nested !== 'object') return;
+    for (const entry of Object.values(nested as Record<string, unknown>)) {
+      collect(entry, false);
+    }
+  };
+  collect(sanitizeToolResultForModel(value), true);
+  return facts.length > 0 ? { source: `tool:${toolName}`, text: facts.join('\n') } : null;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b)
+    );
+    return `{${entries.map(([key, nested]) => `${JSON.stringify(key)}:${canonicalJson(nested)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/** Collect RAG context already present in the trimmed model history. */
+function collectHistoryRagSpans(history: ChatMessageRecord[]): RetrievedSpan[] {
+  const ragToolUseIds = new Set<string>();
+  const spans: RetrievedSpan[] = [];
+  for (const message of history) {
+    for (const block of message.content) {
+      if (block.type === 'tool_use' && block.name === 'search_care_knowledge') {
+        ragToolUseIds.add(block.id);
+      }
+      if (block.type === 'tool_result' && ragToolUseIds.has(block.tool_use_id)) {
+        try {
+          spans.push(...spansFromToolResult(JSON.parse(block.content) as unknown));
+        } catch {
+          // A malformed historical tool result cannot provide grounding.
+        }
+      }
+    }
+  }
+  return spans;
 }
 
 /**
@@ -245,6 +346,14 @@ async function* turnEvents(
 ): AsyncGenerator<ChatStreamEvent, RunChatTurnResult> {
   const { userId, householdId, message, turnId } = input;
   const conversationId = input.conversationId ?? newConversationId();
+
+  // Deploy-time incident kill switch. Keep history/reporting routes readable,
+  // but stop every new sync/stream model turn before plan, budget, persistence,
+  // Sprout, or Bedrock work. Missing/"1" means enabled so local development
+  // and existing environments remain backward compatible.
+  if (process.env.CHAT_ENABLED === '0') {
+    throw createHttpError(503, 'The care assistant is temporarily unavailable. Please try later.');
+  }
 
   // "Garden plan and up" — the care assistant is a paid feature (marketed as
   // such on the landing page), but nothing previously enforced that: the free
@@ -385,6 +494,7 @@ async function* turnEvents(
   const history = trimHistory([...(await getConversation(householdId, conversationId))]);
 
   let messagesForModel: BedrockMessage[] = toBedrockMessages(history);
+  const retrievedSpans = collectHistoryRagSpans(history);
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCost = 0;
@@ -393,6 +503,10 @@ async function* turnEvents(
   // Collected across all iterations — a single turn may include multiple
   // propose_reminder_task calls (e.g. "set up watering + fertilizing").
   const proposals: ProposedReminderTask[] = [];
+  // A looping model may repeat a byte-for-byte-equivalent read/proposal call.
+  // Reuse the validated result instead of repeating DB/network work or adding
+  // duplicate confirm cards. Repeats still consume the global call cap.
+  const successfulToolResults = new Map<string, string>();
 
   // Distinguishes a clean loop exit from a thrown one inside the finally, which
   // owns both the budget reconcile and the turn-claim resolution.
@@ -407,11 +521,15 @@ async function* turnEvents(
       };
 
       let response: BedrockChatResponse;
+      let heldStreamForGrounding = false;
       if (opts.streaming) {
         // Manual iteration: `for await` would discard the generator's return
-        // value (the assembled response). Forward each text delta as it lands.
+        // value (the assembled response). Once RAG context is present, hold
+        // response text until the completed answer passes the grounding guard;
+        // otherwise an unsupported claim could be visible before we retract it.
         const stream = invokeChatModelStream(modelArgs);
         let sawText = false;
+        heldStreamForGrounding = retrievedSpans.length > 0;
         for (;;) {
           const next = await stream.next();
           if (next.done) {
@@ -419,12 +537,14 @@ async function* turnEvents(
             break;
           }
           sawText = true;
-          yield { type: 'delta', text: next.value.text };
+          if (!heldStreamForGrounding) {
+            yield { type: 'delta', text: next.value.text };
+          }
         }
         // A tool-use turn often opens with text ("Let me check your
         // plants…"). Separate it from the next iteration's text so the
         // streamed transcript stays readable. Transport-only.
-        if (sawText && response.stopReason === 'tool_use') {
+        if (!heldStreamForGrounding && sawText && response.stopReason === 'tool_use') {
           yield { type: 'delta', text: '\n\n' };
         }
       } else {
@@ -434,6 +554,37 @@ async function* turnEvents(
       totalInputTokens += response.inputTokens;
       totalOutputTokens += response.outputTokens;
       totalCost += response.costUsd;
+
+      if (response.stopReason !== 'tool_use' && retrievedSpans.length > 0) {
+        const grounding = checkGrounding(extractAssistantText(response.content), retrievedSpans);
+        if (!grounding.grounded) {
+          // Never log the claim text: chat content can itself contain PII.
+          logger.warn(
+            {
+              conversationId,
+              claimsChecked: grounding.claimsChecked.length,
+              ungroundedClaimCount: grounding.ungroundedClaims.length,
+              sourceCount: new Set(retrievedSpans.map((span) => span.source)).size,
+            },
+            'chat_grounding_blocked'
+          );
+          response = {
+            ...response,
+            content: [{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }],
+          };
+        }
+      }
+
+      // Held final RAG text is emitted only after the guard has approved or
+      // replaced the completed response. Do not emit text attached to an
+      // intermediate tool-use turn: it has not passed the final-answer guard
+      // and could itself contain a transient unsupported claim.
+      if (opts.streaming && heldStreamForGrounding) {
+        if (response.stopReason !== 'tool_use') {
+          const safeText = extractAssistantText(response.content);
+          if (safeText) yield { type: 'delta', text: safeText };
+        }
+      }
 
       // Build this assistant turn (which may include tool_use blocks). A
       // tool_use turn is persisted TOGETHER with its tool_result turn below
@@ -480,6 +631,16 @@ async function* turnEvents(
           });
           continue;
         }
+        const cacheKey = `${use.name}:${canonicalJson(use.input)}`;
+        const cachedContent = successfulToolResults.get(cacheKey);
+        if (cachedContent !== undefined) {
+          resultsContent.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: cachedContent,
+          });
+          continue;
+        }
         yield { type: 'tool_start', name: use.name };
         try {
           // Deliberate `as never` dispatch cast — Claude's JSON-schema validation
@@ -506,17 +667,36 @@ async function* turnEvents(
               yield { type: 'proposal', proposal: result.proposal };
             }
           }
+          if (use.name === 'search_care_knowledge') {
+            retrievedSpans.push(...spansFromToolResult(out));
+          }
+          const serialized = JSON.stringify(out);
+          if (use.name !== 'search_care_knowledge') {
+            // Historical RAG context keeps the quantitative guard active on a
+            // follow-up turn. Add the current turn's authoritative tool result
+            // to the same evidence set so a real plant count, temperature, or
+            // reminder frequency is accepted without letting a fabricated
+            // number through. Use derived numeric facts (including array
+            // length), not raw JSON whose UUIDs/dates contain incidental
+            // digits that could create a false match.
+            const quantitativeSpan = quantitativeSpanFromToolResult(use.name, out);
+            if (quantitativeSpan) retrievedSpans.push(quantitativeSpan);
+          }
+          successfulToolResults.set(cacheKey, serialized);
           resultsContent.push({
             type: 'tool_result',
             tool_use_id: use.id,
-            content: JSON.stringify(out),
+            content: serialized,
           });
         } catch (err) {
-          logger.warn({ err, toolName: use.name }, 'chat_tool_error');
+          logger.warn(
+            { errorName: err instanceof Error ? err.name : 'unknown', toolName: use.name },
+            'chat_tool_error'
+          );
           resultsContent.push({
             type: 'tool_result',
             tool_use_id: use.id,
-            content: `Tool ${use.name} failed: ${(err as Error).message}`,
+            content: `Tool ${use.name} failed. Try another approach or answer with the available context.`,
             is_error: true,
           });
         }
@@ -552,7 +732,7 @@ async function* turnEvents(
       messagesForModel = [
         ...messagesForModel,
         { role: 'assistant', content: response.content },
-        { role: 'user', content: resultsContent },
+        { role: 'user', content: resultsContent.map(sanitizeToolResultBlock) },
       ];
     }
     failed = false;

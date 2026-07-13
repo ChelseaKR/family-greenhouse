@@ -16,9 +16,10 @@ backend "production live" rather than "production-ready in code".
       and `custom:household_role` declared as mutable strings. SES verified
       email identity for confirmation messages. Pool ID and Client ID exposed
       to Lambdas as `COGNITO_USER_POOL_ID` and `COGNITO_CLIENT_ID`.
-- [ ] **S3 bucket** — `IMAGES_BUCKET`, with public-read on the `plants/`
-      prefix or a CloudFront signed-URL setup. CORS allowing `PUT` from the
-      frontend domain.
+- [ ] **S3 image bucket apply** — `infrastructure/modules/frontend` keeps the
+      bucket private, serves `plants/*` through CloudFront OAC, and limits
+      upload CORS to the configured frontend aliases. Verify those resources
+      in the target account; do not add public-read.
 - [ ] **API Gateway** — REST API mapped onto the handlers in
       `backend/src/handlers/`, Cognito authorizer wired up so claims arrive on
       the request context (this is what `authMiddleware` reads).
@@ -45,48 +46,56 @@ backend "production live" rather than "production-ready in code".
       `backend/src/utils/sentry.ts` and `frontend/src/sentry.ts` no-op without
       them, so flipping observability on is a deploy-time config change, not a
       code change.
-- [ ] **AWS X-Ray** — wrap each Lambda handler with the Powertools tracer
-      (`@aws-lambda-powertools/tracer`). Requires `Tracing: Active` on the
-      Lambda and IAM `xray:PutTraceSegments` / `xray:PutTelemetryRecords`. This
-      isn't done in code yet because tracer init needs the runtime to register
-      a Lambda extension; do it as part of the Lambda layer setup.
-- [ ] **CloudWatch dashboards + alarms** — error rate, p99 latency, cold-start
-      count per handler. `infrastructure/modules/monitoring` is the home for
-      this.
+- [ ] **AWS X-Ray apply check** — every Lambda, including chat streaming, has
+      active tracing and the managed X-Ray write policy in Terraform; logs
+      correlate the current trace id. Verify the applied functions retain
+      those settings.
+- [ ] **CloudWatch dashboard + alarms apply check** —
+      `infrastructure/modules/monitoring` defines the dashboard, Lambda/API/DDB
+      alarms, health check, DLQ alarms, auth-failure spike, budget, and SNS
+      targets. Verify the target environment and confirm the SNS subscription.
 - ✅ **Log retention** — Lambda + API Gateway log groups set to 30d in
   `infrastructure/modules/api/main.tf`.
 
 ## Security
 
-- [ ] **WAF** — attach AWS WAF managed rule sets (Common, Known Bad Inputs, and
-      a per-IP rate-limit rule) to the CloudFront distribution and API
-      Gateway.
-- [ ] **CSP** — add this header via the CloudFront response-headers policy:
-      `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://${IMAGES_BUCKET}.s3.amazonaws.com; connect-src 'self' https://${API_DOMAIN}`.
-      Plus `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`,
-      `Referrer-Policy: strict-origin-when-cross-origin`.
-- [ ] **Cognito password policy** — minimum 12 chars, complexity, breach-list
-      check. Configure in the user pool, not in code.
-- [ ] **MFA** — opt-in TOTP. Same as above.
-- [ ] **API Gateway throttling** — usage plan with a burst/rate per Cognito
-      user, plus a tighter per-IP rule on `/auth/*`.
-- [ ] **S3 bucket policy** — block public access except via CloudFront OAI;
-      lifecycle rule deleting objects under `plants/` whose plant is gone (the
-      Lambda doesn't know how to delete S3 objects yet — see "TODOs" below).
+- ✅ **WAF disposition** — intentionally not attached to the HTTP API: WAFv2
+  cannot attach to API Gateway v2 directly and the previous regional ACL
+  protected nothing. Stage throttling, Cognito Threat Protection, and in-code
+  limits are the accepted control; reintroducing WAF requires CloudFront in
+  front of the API. See `docs/adr/0004-no-waf-on-http-api.md`.
+- [ ] **Security headers apply check** — CloudFront's committed response-header
+      policy provides CSP, HSTS, nosniff, frame denial, and strict referrer
+      policy; `frontend/index.html` provides the CSP defense-in-depth copy.
+      Verify the deployed response, not just the Terraform plan.
+- [ ] **Cognito security apply check** — the module sets a 12-character mixed
+      case/digit policy, `ENFORCED` Threat Protection (including compromised
+      credentials), and optional software-token TOTP. Verify the applied pool;
+      user-facing TOTP enrollment is separate product scope.
+- [ ] **API Gateway throttling apply check** — the HTTP API stage is configured
+      at 100 burst / 50 requests per second; `/auth/*` also has the tighter
+      application per-IP limiter. Verify the stage values after apply.
+- [ ] **S3 privacy/lifecycle apply check** — public access is blocked, CloudFront
+      OAC is the only reader, uploads use presigned PUTs, version history is
+      bounded, incomplete multipart uploads expire, and plant deletion performs
+      a best-effort prefix sweep. Verify the target buckets retain the policy.
 
 ## CI/CD
 
-- [ ] **Terraform remote state** — S3 backend with DynamoDB state-lock table.
-      `backend.tf` declares the backend; the bucket and lock table need to
-      exist before `terraform init`.
+- [ ] **Terraform remote state apply check** — `backend.tf` is active with an
+      encrypted, versioned S3 backend and DynamoDB lock table; confirm the
+      bootstrapped bucket/table exist and that staging initializes with its
+      distinct key before any shared apply.
 - [ ] **GitHub Actions secrets** — `AWS_ROLE_ARN` (use OIDC, not static keys),
       `SENTRY_AUTH_TOKEN` (for source-map upload), `STAGING_API_URL`,
       `PRODUCTION_API_URL`.
 - [ ] **Per-PR preview environments** — spin up a per-branch frontend on a
       CloudFront preview stage that points at a shared dev backend. Out of
       scope for the current code; needs a Terraform workspace per PR.
-- [ ] **Promote staging → production** — manual approval gate in
-      `cd-production.yml`.
+- [ ] **Promote staging → production** — all production deploy jobs reference
+      the `production` GitHub Environment. Confirm that Environment has a
+      required reviewer; the workflow reference alone cannot enforce who may
+      approve.
 
 ## Reminders / notifications
 
@@ -117,9 +126,9 @@ backend "production live" rather than "production-ready in code".
   first `/dashboard` request carries the freshly-minted `custom:household_id`
   claim instead of eating a 403 and bouncing through the interceptor. The
   401-refresh interceptor remains the safety net if that refresh fails.
-- **Bundle size budget**: add `size-limit` to `frontend/package.json` with a
-  ceiling per chunk so PRs that double the bundle get flagged. Drop it in
-  `ci.yml` after the first deploy gives us baseline numbers.
+- ✅ **Bundle size budget**: `frontend/package.json` defines brotli budgets for
+  initial JS, vendor JS, aggregate JS, and CSS; the blocking `Bundle size` CI
+  job runs `size-limit` on frontend changes.
 - ✅ **GDPR data export**: `GET /me/export` is implemented (handler +
   local-server mirror + OpenAPI entry + integration tests), returning a
   downloadable JSON document of the caller's profile, notification

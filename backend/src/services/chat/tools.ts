@@ -17,6 +17,75 @@ import * as householdService from '../householdService.js';
 import { searchCorpus } from './corpus.js';
 import type { ToolDefinition, ToolExecutionContext } from './types.js';
 
+// Tool outputs are copied directly into the next Bedrock prompt. Keep this
+// denylist centralized at the serialization boundary so a future tool cannot
+// leak a member identifier merely because its executor forgot to hand-pick a
+// projection. Keys are normalized before comparison, covering camelCase,
+// snake_case, and kebab-case spellings.
+const FORBIDDEN_MODEL_OUTPUT_KEYS = new Set([
+  'email',
+  'actoremail',
+  'phone',
+  'phonenumber',
+  'cognitosub',
+  'sub',
+  'userid',
+  'memberid',
+  'membername',
+  'householdid',
+  'createdby',
+  'createdbyname',
+  'creatorid',
+  'creatorname',
+  'updatedby',
+  'updatedbyname',
+  'actorid',
+  'actorname',
+  'ownerid',
+  'ownername',
+  'reporterid',
+  'reportername',
+  'uploadedby',
+  'uploadedbyname',
+  'completedby',
+  'completedbyname',
+  // Weather is already resolved before this boundary; the model needs the
+  // conditions and coarse city label, not household coordinates.
+  'lat',
+  'lon',
+  'latitude',
+  'longitude',
+  // Reminder proposals retain these fields in the authenticated API/DDB
+  // representation so the confirm card works, but the model does not need a
+  // household member's Cognito sub or display name echoed back to it.
+  'assignedto',
+  'assigneename',
+  'assignedby',
+  'assignedbyname',
+]);
+
+function normalizedKey(key: string): string {
+  return key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+/**
+ * Recursively removes PII-bearing field names before a tool result enters a
+ * model prompt. The raw result may still be persisted for the authenticated
+ * product UI (for example, a reminder confirm card); replay is sanitized again
+ * at the model boundary. Values are JSON-compatible by ToolDefinition's
+ * contract, so preserving arrays/primitives and copying records is sufficient.
+ */
+export function sanitizeToolResultForModel(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeToolResultForModel);
+  if (value === null || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !FORBIDDEN_MODEL_OUTPUT_KEYS.has(normalizedKey(key)))
+      .map(([key, nested]) => [key, sanitizeToolResultForModel(nested)])
+  );
+}
+
 const listHouseholdPlants: ToolDefinition = {
   name: 'list_household_plants',
   description:

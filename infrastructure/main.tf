@@ -110,6 +110,7 @@ module "api" {
   openweather_api_key          = var.openweather_api_key
   openweather_daily_budget     = var.openweather_daily_budget
   bedrock_embed_model_id       = var.bedrock_embed_model_id
+  chat_enabled                 = var.chat_enabled
   sprout_integration_enabled   = var.sprout_integration_enabled
   sprout_api_url               = var.sprout_api_url
   sprout_integration_secret_id = var.sprout_integration_secret_id

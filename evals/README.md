@@ -22,7 +22,10 @@ real decision.
   and has no reason to run less often than every backend test run).
 - **`../backend/src/services/chat/groundingGuard.ts`** — the citation/grounding
   guard (AIEV-12), a numeric-claim grounding heuristic, unit-tested in
-  `backend/tests/unit/services/chatGroundingGuard.test.ts`.
+  `backend/tests/unit/services/chatGroundingGuard.test.ts` and enforced by the
+  live sync/stream orchestration tests. When RAG context exists, the completed
+  answer is checked before persistence or delivery; unsupported quantitative
+  claims are replaced, and streaming output is buffered until the check passes.
 
 Run it directly: `npm run eval` (root) or `npm run eval --workspace backend`
 — both alias to `vitest run tests/eval` in the backend workspace.
@@ -69,10 +72,10 @@ breakdown (the chat is English-only today).
    neither exists yet (§2 of the standard).
 4. **Judge calibration** — N/A today (no LLM-as-judge is in use); revisit if
    one is introduced.
-5. Wire `groundingGuard.checkGrounding()` into the live `turnEvents()` RAG
-   path (currently unit-tested but not called from production code) once
-   there's a plan for what to do on a detected ungrounded claim (regenerate?
-   append a disclaimer? log-only?) — a product decision, not just a code change.
+5. Expand beyond the live numeric-token guard to semantic entailment for
+   qualitative care claims. That requires a calibrated scorer or equivalent
+   evidence; the current deterministic guard deliberately does not pretend to
+   measure it.
 
 See the dated waiver in `docs/RESPONSIBLE-TECH-AUDITS.md` for the owner and
 expiry on closing this list.

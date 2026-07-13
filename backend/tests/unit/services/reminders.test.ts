@@ -506,6 +506,37 @@ describe('reminders service', () => {
       expect(pestAlerts.evaluatePestAlerts).toHaveBeenCalledTimes(2);
     });
 
+    it('retries later the same day when evaluation THROWS outright (regression: crash must not look like "checked")', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const prefs = await import('../../../src/services/notificationPrefs.js');
+      const pestAlerts = await import('../../../src/services/pestAlerts.js');
+      const { remindHousehold } = await import('../../../src/services/reminders.js');
+      await mockConditionalMarkerStore();
+
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue([] as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      vi.mocked(prefs.getPreferences).mockResolvedValue({ pestAlerts: true } as never);
+      // First hour: evaluatePestAlerts crashes outright (not a reported
+      // dataUnavailable result) — e.g. an unexpected exception, not a
+      // graceful "Perenual unreachable" outcome.
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockRejectedValueOnce(new Error('boom'));
+
+      // remindHousehold must not throw — pest alerts are best-effort — and
+      // must not leave the household wrongly marked "checked today".
+      await expect(remindHousehold('hh', NOW)).resolves.not.toThrow();
+      expect(pestAlerts.evaluatePestAlerts).toHaveBeenCalledOnce();
+
+      // A later hour, same UTC day: must retry rather than treat the crash
+      // as "nothing to report".
+      vi.mocked(pestAlerts.evaluatePestAlerts).mockResolvedValueOnce({
+        alerts: [],
+        dataUnavailable: false,
+      });
+      await remindHousehold('hh', new Date(NOW.getTime() + 60 * 60 * 1000));
+      expect(pestAlerts.evaluatePestAlerts).toHaveBeenCalledTimes(2);
+    });
+
     it('does NOT retry when everything was fully evaluated (no data-unavailable flag)', async () => {
       const household = await import('../../../src/services/householdService.js');
       const tasks = await import('../../../src/services/taskService.js');
