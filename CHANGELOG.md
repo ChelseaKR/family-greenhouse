@@ -46,8 +46,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - RAG answers now block unsupported quantitative care claims before they are
   persisted or delivered; streamed RAG text waits for the same grounding check.
   A later authoritative plant/task/climate result now joins historical RAG
-  evidence, so its real numbers pass without disabling fabricated-number
-  blocking.
+  evidence through explicit numeric facts and collection counts, so its real
+  numbers pass without letting incidental digits in IDs/dates—or a fabricated
+  count—disable blocking.
   Tool outputs and history replay cross a recursive PII-field sanitizer, raw
   tool exception messages no longer enter prompts/logs, and repeated identical
   tool calls reuse the validated result instead of duplicating work/cards.

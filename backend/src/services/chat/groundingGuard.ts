@@ -50,7 +50,7 @@ export interface GroundingResult {
 // word/non-word transition between "%" and a following space) — that gap
 // silently dropped every percentage claim in earlier testing.
 const CLAIM_PATTERN =
-  /\d+(\.\d+)?\s*(%|percent|degrees?|°[fc]?|days?|weeks?|months?|years?|hours?|minutes?|inches?|in\.|cm|ft)(?![a-z])|every\s+\d+/i;
+  /\d+(\.\d+)?\s*(%|percent|degrees?|°[fc]?|days?|weeks?|months?|years?|hours?|minutes?|inches?|in\.|cm|ft|plants?|tasks?|reminders?)(?![a-z])|every\s+\d+/i;
 
 function splitSentences(text: string): string[] {
   return text

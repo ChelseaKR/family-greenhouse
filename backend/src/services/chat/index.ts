@@ -196,6 +196,34 @@ function spansFromToolResult(value: unknown): RetrievedSpan[] {
   });
 }
 
+/**
+ * Extract only authoritative quantitative facts from a structured tool result.
+ * String values are deliberately ignored: UUIDs and ISO timestamps contain
+ * incidental digits that must not "ground" an unrelated plant count or care
+ * threshold. Arrays contribute their explicit collection length; finite JSON
+ * numbers contribute their keyed value.
+ */
+function quantitativeSpanFromToolResult(toolName: string, value: unknown): RetrievedSpan | null {
+  const facts: string[] = [];
+  const collect = (nested: unknown, path: string): void => {
+    if (typeof nested === 'number' && Number.isFinite(nested)) {
+      facts.push(`${path}: ${nested}`);
+      return;
+    }
+    if (Array.isArray(nested)) {
+      facts.push(`${path}.count: ${nested.length}`);
+      nested.forEach((entry, index) => collect(entry, `${path}[${index}]`));
+      return;
+    }
+    if (!nested || typeof nested !== 'object') return;
+    for (const [key, entry] of Object.entries(nested as Record<string, unknown>)) {
+      collect(entry, `${path}.${key}`);
+    }
+  };
+  collect(sanitizeToolResultForModel(value), 'result');
+  return facts.length > 0 ? { source: `tool:${toolName}`, text: facts.join('\n') } : null;
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value !== null && typeof value === 'object') {
@@ -643,9 +671,11 @@ async function* turnEvents(
             // follow-up turn. Add the current turn's authoritative tool result
             // to the same evidence set so a real plant count, temperature, or
             // reminder frequency is accepted without letting a fabricated
-            // number through: every claimed number must still occur in one of
-            // the actual source/tool-result spans.
-            retrievedSpans.push({ source: `tool:${use.name}`, text: serialized });
+            // number through. Use derived numeric facts (including array
+            // length), not raw JSON whose UUIDs/dates contain incidental
+            // digits that could create a false match.
+            const quantitativeSpan = quantitativeSpanFromToolResult(use.name, out);
+            if (quantitativeSpan) retrievedSpans.push(quantitativeSpan);
           }
           successfulToolResults.set(cacheKey, serialized);
           resultsContent.push({

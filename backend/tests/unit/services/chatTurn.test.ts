@@ -473,6 +473,106 @@ describe('runChatTurn', () => {
     expect(result.assistantText).not.toBe(GROUNDING_BLOCK_MESSAGE);
   });
 
+  it.each([
+    ['You have 3 plants.', 'You have 3 plants.'],
+    ['You have 4 plants.', GROUNDING_BLOCK_MESSAGE],
+  ])(
+    'grounds collection counts explicitly when three plants are returned: %s',
+    async (modelAnswer, expectedAnswer) => {
+      vi.mocked(getConversation).mockResolvedValueOnce([
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:00.000Z',
+          role: 'user',
+          content: [{ type: 'text', text: 'What humidity does a calathea need?' }],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:01.000Z',
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-old-rag',
+              name: 'search_care_knowledge',
+              input: { query: 'calathea humidity' },
+            },
+          ],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:02.000Z',
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu-old-rag',
+              content: JSON.stringify([
+                {
+                  source: 'humidity.md',
+                  content: 'Calatheas prefer at least 50% humidity.',
+                },
+              ]),
+            },
+          ],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:00:03.000Z',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Aim for at least 50% humidity.' }],
+        },
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-12T10:01:00.000Z',
+          role: 'user',
+          content: [{ type: 'text', text: 'How many plants do I have?' }],
+        },
+      ]);
+      vi.mocked(plantService.getPlants).mockResolvedValueOnce(
+        ['Aloe', 'Fern', 'Pothos'].map((name, index) => ({
+          id: `plant-${String.fromCharCode(97 + index)}`,
+          householdId: 'hh-1',
+          name,
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          tags: [],
+          createdAt: '2025-01-01',
+          createdBy: 'u1',
+          updatedAt: '2025-01-01',
+        }))
+      );
+      vi.mocked(invokeChatModel)
+        .mockResolvedValueOnce({
+          content: [
+            { type: 'tool_use', id: 'tu-plants', name: 'list_household_plants', input: {} },
+          ],
+          stopReason: 'tool_use',
+          inputTokens: 100,
+          outputTokens: 10,
+          costUsd: 0.0003,
+        })
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: modelAnswer }],
+          stopReason: 'end_turn',
+          inputTokens: 120,
+          outputTokens: 15,
+          costUsd: 0.0004,
+        });
+
+      const result = await runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        conversationId: 'conv-1',
+        message: 'How many plants do I have?',
+      });
+
+      expect(result.assistantText).toBe(expectedAnswer);
+    }
+  );
+
   it('refuses to invoke Bedrock when the budget reservation is rejected (over cap)', async () => {
     // The atomic gate (reserveBudget) throws when the reservation can't fit.
     vi.mocked(reserveBudget).mockRejectedValueOnce(new ChatBudgetExceededError());
