@@ -205,22 +205,27 @@ function spansFromToolResult(value: unknown): RetrievedSpan[] {
  */
 function quantitativeSpanFromToolResult(toolName: string, value: unknown): RetrievedSpan | null {
   const facts: string[] = [];
-  const collect = (nested: unknown, path: string): void => {
+  const collect = (nested: unknown, topLevel: boolean): void => {
     if (typeof nested === 'number' && Number.isFinite(nested)) {
-      facts.push(`${path}: ${nested}`);
+      facts.push(`numeric value: ${nested}`);
       return;
     }
     if (Array.isArray(nested)) {
-      facts.push(`${path}.count: ${nested.length}`);
-      nested.forEach((entry, index) => collect(entry, `${path}[${index}]`));
+      // Only the tool's top-level list is an authoritative collection count.
+      // Nested arrays (for example each plant's empty tags or a weather
+      // forecast) are traversed for numeric leaves but do not contribute
+      // unrelated lengths; paths/indices are omitted so they cannot themselves
+      // satisfy a claim for 0, 1, 2, … items.
+      if (topLevel) facts.push(`collection count: ${nested.length}`);
+      nested.forEach((entry) => collect(entry, false));
       return;
     }
     if (!nested || typeof nested !== 'object') return;
-    for (const [key, entry] of Object.entries(nested as Record<string, unknown>)) {
-      collect(entry, `${path}.${key}`);
+    for (const entry of Object.values(nested as Record<string, unknown>)) {
+      collect(entry, false);
     }
   };
-  collect(sanitizeToolResultForModel(value), 'result');
+  collect(sanitizeToolResultForModel(value), true);
   return facts.length > 0 ? { source: `tool:${toolName}`, text: facts.join('\n') } : null;
 }
 

@@ -474,6 +474,9 @@ describe('runChatTurn', () => {
   });
 
   it.each([
+    ['You have 0 plants.', GROUNDING_BLOCK_MESSAGE],
+    ['You have 1 plant.', GROUNDING_BLOCK_MESSAGE],
+    ['You have 2 plants.', GROUNDING_BLOCK_MESSAGE],
     ['You have 3 plants.', 'You have 3 plants.'],
     ['You have 4 plants.', GROUNDING_BLOCK_MESSAGE],
   ])(
