@@ -465,14 +465,18 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
     expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
   });
 
-  it('retries the webhook when canceling a prior subscription fails', async () => {
+  it('retries the webhook when canceling a prior subscription fails, WITHOUT clearing the DB row first', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    // Read prior subscription, then apply the lifetime entitlement. The
-    // dedupe Put must not run after cancellation fails so Stripe can retry.
-    vi.mocked(dynamodb.send)
-      .mockResolvedValueOnce({ Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } })
-      .mockResolvedValueOnce({});
+    // Only the pre-cancel read happens before the throw: the household
+    // Update (which clears stripeSubscriptionId) must NOT run until the
+    // cancel has actually succeeded. Regression for the double-billing bug —
+    // clearing the row first meant a Stripe retry re-read the id as
+    // undefined and silently gave up on canceling the old subscription
+    // forever, leaving it billing alongside the new lifetime charge.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' },
+    });
     subscriptionsCancel.mockRejectedValueOnce(new Error('stripe unavailable'));
     const { applyStripeEvent } = await import('../../../src/services/billing.js');
 
@@ -493,7 +497,50 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
     ).rejects.toThrow('stripe unavailable');
 
     expect(subscriptionsCancel).toHaveBeenCalledWith('sub_old');
-    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+    // Only the pre-cancel read ran — updateHouseholdSubscription must not
+    // have been reached, so a Stripe retry re-reads the SAME prior
+    // subscription id instead of finding it already cleared.
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+
+  it('a Stripe redelivery after a failed cancel retries against the SAME prior subscription id', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = {
+      id: 'evt_lifetime_retry_2',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    // First delivery: cancel fails, and (per the fix) the household row is
+    // never touched.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' },
+    });
+    subscriptionsCancel.mockRejectedValueOnce(new Error('stripe unavailable'));
+    await expect(applyStripeEvent(event)).rejects.toThrow('stripe unavailable');
+
+    // Stripe redelivers the identical event. Because nothing was written on
+    // the first attempt, the household row still has sub_old on file — the
+    // retry must see it again (not undefined) and actually cancel it.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSubscriptionId: 'sub_old', planId: 'garden' } })
+      .mockResolvedValue({});
+    subscriptionsCancel.mockResolvedValueOnce({});
+    await applyStripeEvent(event);
+
+    expect(subscriptionsCancel).toHaveBeenCalledTimes(2);
+    expect(subscriptionsCancel).toHaveBeenNthCalledWith(1, 'sub_old');
+    expect(subscriptionsCancel).toHaveBeenNthCalledWith(2, 'sub_old');
   });
 
   it('does NOT downgrade a lifetime household on a subscription.deleted for an unknown sub', async () => {

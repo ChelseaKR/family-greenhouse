@@ -517,26 +517,18 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     priorSubscriptionId = (await getHouseholdSubscription(delta.householdId)).stripeSubscriptionId;
   }
 
-  // Apply FIRST, record SECOND. If the apply throws, we return 5xx to Stripe
-  // without having touched the ledger, so Stripe's retry gets a clean run.
-  // (The old record-first order permanently skipped an event whose apply
-  // failed once.) The `event.created` guard inside the update makes a stale
-  // redelivery a no-op rather than a clobber.
-  const applied = await updateHouseholdSubscription(delta.householdId, delta.fields, event.created);
-  if (!applied) {
-    logger.info(
-      { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
-      'stripe_event_out_of_order_skipped'
-    );
-    return;
-  }
-
   if (priorSubscriptionId) {
-    // The entitlement is already granted, but cancellation is still part of
-    // completing this event: swallowing a Stripe failure here could leave the
-    // household billed indefinitely. Throw after logging so Stripe retries
-    // the webhook. The event has not entered our dedupe ledger yet, and the
-    // equal-timestamp update guard makes reapplying the grant safe.
+    // Cancel the orphaned Stripe subscription BEFORE clearing the household
+    // row below. This must run first: if the DB were cleared first (the
+    // previous order) and this cancel then failed, we'd throw for Stripe to
+    // retry the webhook — but the retry re-reads priorSubscriptionId from a
+    // row that's now already cleared, gets undefined, and silently skips the
+    // cancel forever. The old subscription then keeps billing indefinitely
+    // alongside the new lifetime charge. Failing BEFORE any write means a
+    // retry re-reads the SAME uncleared id and retries the cancel — and
+    // canceling an already-canceled Stripe subscription is itself idempotent,
+    // so a retry that lands after a cancel that actually succeeded (but the
+    // apply below failed) is also safe.
     try {
       const stripe = await getStripe();
       await stripe.subscriptions.cancel(priorSubscriptionId);
@@ -551,6 +543,20 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       );
       throw err;
     }
+  }
+
+  // Apply FIRST, record SECOND. If the apply throws, we return 5xx to Stripe
+  // without having touched the ledger, so Stripe's retry gets a clean run.
+  // (The old record-first order permanently skipped an event whose apply
+  // failed once.) The `event.created` guard inside the update makes a stale
+  // redelivery a no-op rather than a clobber.
+  const applied = await updateHouseholdSubscription(delta.householdId, delta.fields, event.created);
+  if (!applied) {
+    logger.info(
+      { stripeEventId: event.id, type: event.type, householdId: delta.householdId },
+      'stripe_event_out_of_order_skipped'
+    );
+    return;
   }
 
   const isNew = await recordStripeEventOnce(event.id);
