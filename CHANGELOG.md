@@ -43,6 +43,10 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- SMS reminder bodies are now trimmed to the promised one-segment budget by
+  UTF-8 bytes rather than UTF-16 code units, so accented Spanish text or the
+  streak emoji can no longer overflow into a second billed segment or split an
+  emoji surrogate pair mid-code-point.
 - RAG answers now block unsupported quantitative care claims before they are
   persisted or delivered; streamed RAG text waits for the same grounding check.
   A later authoritative plant/task/climate result now joins historical RAG
