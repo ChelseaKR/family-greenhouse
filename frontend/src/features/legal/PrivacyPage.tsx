@@ -88,8 +88,11 @@ export function PrivacyPage() {
           not sent back to the model as training data by Family Greenhouse.
         </li>
         <li>
-          <strong>Stripe</strong> — handles paid subscriptions. We never see your card number;
-          Stripe gives us back a customer id we store for billing flows.
+          <strong>Stripe</strong> — the retained integration may process supported,
+          already-originated billing events, including subscription cancellations. New Checkout and
+          customer-portal sessions are disabled during the commercial hold. We never see a card
+          number; if Stripe returns a historical customer id, it is stored only for the associated
+          billing record.
         </li>
         <li>
           <strong>Plant.id</strong> (optional, only if you use plant identification) — receives the

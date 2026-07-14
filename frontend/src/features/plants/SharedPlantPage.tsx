@@ -14,9 +14,8 @@ import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { track } from '@/services/analytics';
 import { toast } from '@/store/toastStore';
-import { setPendingShareCode } from './pendingShareCode';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 
 /**
  * PUBLIC landing page for a shared cutting link (/shared/:code).
@@ -24,13 +23,13 @@ import { setPendingShareCode } from './pendingShareCode';
  * This is the share-worthy face of the propagation loop: a logged-out visitor
  * who's been passed a cutting sees a warm, brand-styled card that leads with
  * the plant and its provenance ("a cutting of …, grown by …"), then a clear
- * "grow your own cutting" call to action that pulls them into signup and back
- * here to graft it into their own greenhouse — so the lineage continues across
- * people.
+ * "grow your own cutting" action for existing account holders. Logged-out
+ * visitors can still see provenance and sign in, but public registration is
+ * not offered while the commercial hold is active.
  *
  * Works logged-out: the preview endpoint requires no auth (mirroring invite
  * previews), so a recipient sees the plant card before having an account.
- *   - logged out         → card + graft CTA into register (share code carried)
+ *   - logged out         → card + status notice + existing-account sign-in
  *   - logged in, no household → card + onboarding CTA
  *   - logged in + household   → card + "Add to my greenhouse"
  *
@@ -92,15 +91,6 @@ export function SharedPlantPage() {
     },
     onError: (err) => setAcceptError(getErrorMessage(err)),
   });
-
-  // Logged-out visitor taps the graft CTA: stash the code so it survives the
-  // register → confirm-email → onboarding hops (which drop URL params), then
-  // send them into signup. After household setup we bring them back here.
-  const startGraft = () => {
-    if (code) setPendingShareCode(code);
-    track('cutting_graft_started');
-    navigate(`/register?redirect=/shared/${code}`);
-  };
 
   if (isLoading) {
     return (
@@ -210,12 +200,10 @@ export function SharedPlantPage() {
               </p>
 
               {!isAuthenticated ? (
-                <div className="mt-4 space-y-2">
-                  <Button className="w-full" onClick={startGraft}>
-                    🌱 {t('plants.shared.graftCta')}
-                  </Button>
+                <div className="mt-4 space-y-3">
+                  <CommercialHoldNotice compact />
                   <p className="text-center text-xs text-gray-600">
-                    {t('plants.shared.signInPrompt')}{' '}
+                    {t('auth.existingAccount')}{' '}
                     <Link
                       to={`/login?redirect=/shared/${code}`}
                       className="font-medium text-primary-700 hover:text-primary-600"

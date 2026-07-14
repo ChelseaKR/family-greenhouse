@@ -30,19 +30,23 @@
   "publicShell": {
     "careGuides": "Guías de cuidado",
     "blog": "Blog",
-    "pricing": "Precios",
+    "pricing": "Estado de la demostración",
     "openMenu": "Abrir menú del sitio",
     "tryApp": "Probar la aplicación"
+  },
+  "commercialHold": {
+    "statusLabel": "Estado de la demostración técnica",
+    "headline": "El registro nuevo y la actividad comercial están en pausa",
+    "message": "La actividad comercial, el registro de cuentas nuevas y el cobro de pagos están en pausa. Este sitio sigue siendo una demostración técnica; las inscripciones nuevas, los planes de pago, las compras y los cambios de plan no están disponibles. Las personas con una cuenta existente aún pueden iniciar sesión.",
+    "effectiveDate": "Pausa comercial vigente desde {{date}}."
   },
   "auth": {
     "signIn": "Inicia sesión",
     "signInButton": "Iniciar sesión",
-    "signUp": "Registrarse",
-    "signUpFree": "Regístrate gratis",
+    "existingAccount": "¿Ya tienes una cuenta?",
     "email": "Correo electrónico",
     "password": "Contraseña",
     "forgotPassword": "¿Olvidaste tu contraseña?",
-    "noAccount": "¿No tienes cuenta?",
     "invalidEmail": "Introduce un correo válido",
     "passwordRequired": "La contraseña es obligatoria"
   },
@@ -181,10 +185,7 @@
       "added": "{{name}} añadida a tu invernadero",
       "graftHeading": "Empieza su próximo capítulo",
       "graftBody": "Cultiva tu propio esqueje de {{name}} y continúa su historia en tu invernadero.",
-      "graftCta": "Cultiva tu propio esqueje",
-      "signInPrompt": "¿Ya tienes un invernadero? Inicia sesión para añadir este esqueje.",
       "signIn": "Iniciar sesión",
-      "createAccount": "Crear cuenta",
       "needHousehold": "Crea o únete a un hogar primero para cultivar este esqueje.",
       "goToOnboarding": "Configurar mi hogar",
       "metaTitle": "{{name}} — un esqueje en Family Greenhouse",
@@ -234,8 +235,7 @@
       "skipped_one": "1 fila omitida",
       "skippedRowsTitle": "Filas omitidas",
       "skippedRowLabel": "Fila {{row}} — {{name}}",
-      "planLimit": "Alcanzaste el límite de plantas de tu plan, así que las filas restantes se omitieron. Mejora tu plan para importar el resto.",
-      "upgradeCta": "Ver opciones de mejora",
+      "planLimit": "Alcanzaste el límite de plantas de tu plan de demostración actual, así que las filas restantes se omitieron. Los cambios de plan están en pausa.",
       "viewPlants": "Ver mis plantas"
     }
   },
@@ -281,11 +281,11 @@
   },
   "settings": {
     "title": "Ajustes",
-    "description": "Administra notificaciones y tu suscripción.",
+    "description": "Administra notificaciones y consulta el estado del plan de tu hogar.",
     "tabs": {
       "notifications": "Notificaciones",
       "preferences": "Preferencias",
-      "billing": "Facturación",
+      "billing": "Estado del plan",
       "apiKeys": "Claves API",
       "account": "Cuenta",
       "help": "Ayuda"
@@ -307,8 +307,7 @@
       "membersUsage": "{{n}} de {{max}} miembros",
       "nativeUnavailable": "Los cambios de plan no están disponibles en la aplicación.",
       "overLimitTitle": "Por encima del límite de tu plan",
-      "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite o mejores tu plan.",
-      "manageSubscription": "Gestionar suscripción"
+      "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite."
     }
   },
   "notifications": {

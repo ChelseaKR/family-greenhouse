@@ -30,6 +30,7 @@ import {
   AdminCreateUserCommand,
   AdminSetUserPasswordCommand,
   AdminDeleteUserCommand,
+  DescribeUserPoolCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient, QueryCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
 
@@ -56,6 +57,11 @@ function uniqueEmail(): string {
 }
 
 const PASSWORD = 'E2E-Smoke!Pass1234';
+
+test.beforeAll(async () => {
+  const pool = await cognito.send(new DescribeUserPoolCommand({ UserPoolId: USER_POOL_ID }));
+  expect(pool.UserPool?.AdminCreateUserConfig?.AllowAdminCreateUserOnly).toBe(true);
+});
 
 async function createConfirmedUser(email: string): Promise<string> {
   const created = await cognito.send(

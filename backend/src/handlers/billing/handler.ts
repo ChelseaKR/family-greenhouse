@@ -19,6 +19,12 @@ import { getHouseholdCounters } from '../../services/householdUsage.js';
 import { getPlan } from '../../models/plans.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
+import {
+  COMMERCIAL_HOLD_ACTIVE,
+  COMMERCIAL_HOLD_EFFECTIVE_DATE,
+  paymentsAreAvailable,
+  isPaymentActivityDisabledError,
+} from '../../config/commercialStatus.js';
 
 const checkoutSchema = z
   .object({
@@ -43,11 +49,22 @@ type CheckoutInput = z.infer<typeof checkoutSchema>;
 // CloudFront absorbs landing-page traffic, short enough that a price-change
 // deploy is reflected without a cache bust.
 export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
+  const paymentsAvailable = paymentsAreAvailable();
   return Promise.resolve(
-    cacheableResponse(ALL_PLANS.map(billing.planSummary), {
-      maxAgeSeconds: 300,
-      visibility: 'public',
-    })
+    cacheableResponse(
+      {
+        paymentsAvailable,
+        commercialHold: {
+          active: COMMERCIAL_HOLD_ACTIVE,
+          effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
+        },
+        plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable)),
+      },
+      {
+        maxAgeSeconds: 300,
+        visibility: 'public',
+      }
+    )
   );
 });
 
@@ -107,6 +124,9 @@ export const checkout = createHandler(
           'Your household already has an active subscription. Use "Manage subscription" to change plans.'
         );
       }
+      if (isPaymentActivityDisabledError(err)) {
+        throw createHttpError(503, 'Payments are currently paused.', { expose: true });
+      }
       // Don't echo the raw Stripe SDK error to clients — log it, return a
       // safe upstream-failure message. `expose: true` marks this 502 as
       // intentional so the JSON error handler keeps the message.
@@ -134,6 +154,9 @@ export const portal = createHandler(
       );
       return successResponse(result);
     } catch (err) {
+      if (isPaymentActivityDisabledError(err)) {
+        throw createHttpError(503, 'Billing access is currently paused.', { expose: true });
+      }
       // The only client-correctable failure is "household has never checked
       // out" — map that to a friendly 400. Everything else is an upstream
       // Stripe problem: log the raw error, return a safe 502 (never echo the

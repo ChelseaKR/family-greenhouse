@@ -19,6 +19,12 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/node_modules/**', 'tests/e2e/**'],
+    // Keep the 70+ jsdom files inside a bounded thread pool. The fork pool
+    // intermittently times out while starting or terminating child processes
+    // on laptops and shared CI runners before tests execute. A serial thread
+    // runner trades a little wall time for deterministic execution.
+    pool: 'threads',
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

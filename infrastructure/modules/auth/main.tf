@@ -10,6 +10,14 @@ resource "aws_cognito_user_pool" "main" {
   # grows past a few thousand.
   user_pool_tier = "PLUS"
 
+  # Commercial-hold backstop: Cognito rejects public SignUp calls while
+  # preserving existing-user authentication and administrator-created users.
+  # Keep this literal and review-visible; reactivation requires a deliberate
+  # source change plus an in-place production plan (never a pool replacement).
+  admin_create_user_config {
+    allow_admin_create_user_only = true
+  }
+
   # Cognito's "Advanced Security" (Threat Protection) — risk-based adaptive
   # auth + compromised-credential checks against Cognito's leaked-password
   # DB + per-user brute-force detection. ENFORCED means Cognito itself

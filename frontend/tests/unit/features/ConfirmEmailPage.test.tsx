@@ -29,7 +29,6 @@ function renderPage(state?: { email?: string; redirect?: string }) {
       <Routes>
         <Route path="/confirm-email" element={<ConfirmEmailPage />} />
         <Route path="/onboarding" element={<div>Onboarding Page</div>} />
-        <Route path="/register" element={<div>Register Page</div>} />
         <Route path="/login" element={<LoginLanding />} />
       </Routes>
     </MemoryRouter>
@@ -37,9 +36,16 @@ function renderPage(state?: { email?: string; redirect?: string }) {
 }
 
 describe('ConfirmEmailPage', () => {
-  it('redirects unprovided email to a "go register" prompt', () => {
+  it('shows hold status and existing-account sign-in when no confirmation is in progress', () => {
     renderPage();
     expect(screen.getByText(/no email address provided/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        name: /new registration and commercial activity are paused/i,
+      })
+    ).toBeInTheDocument();
+    expect(document.querySelector('a[href^="/register"]')).toBeNull();
+    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
   });
 
   it('clicking Resend code calls the backend and shows a success notice', async () => {

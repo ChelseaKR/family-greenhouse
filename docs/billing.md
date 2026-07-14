@@ -1,6 +1,17 @@
-# Billing
+# Billing — historical implementation reference
 
-Stripe-backed subscriptions. Three plans with per-tier caps that the API enforces server-side, plus a customer-portal escape hatch so we don't have to build account-management UI ourselves.
+> **Commercial activity hold — July 14, 2026.** Payments and paid-plan offers
+> are disabled. The prices, Stripe flow, and setup instructions below document a
+> prior product hypothesis; they are not a current offer or an authorization to
+> configure billing. See [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).
+
+The retained architecture models Stripe-backed subscriptions and three plans
+with per-tier caps. During the hold, plan-cap code may operate for technical
+testing, but public plan responses omit prices, the API refuses to create new
+Checkout or customer-portal Sessions, and production price identifiers remain
+empty. The hold does not gate webhook handling, so a correctly configured
+environment can still process cancellation and other supported,
+already-originated Stripe events; a webhook cannot initiate a purchase.
 
 ## Plans
 
@@ -99,10 +110,10 @@ For this to work in API Gateway:
 
 ## Setup checklist
 
-The **frontend needs no Stripe config** — checkout is a server-driven redirect
-(no publishable key, no Stripe.js). Everything is the seven backend env vars,
-which reach every billing Lambda through Terraform (`modules/api` wires them
-into the Lambda environment):
+The retained frontend needs no Stripe key. The historical Stripe implementation
+uses the variables below, but two independent controls remain ahead of them:
+the repository status must be inactive and `PAYMENTS_ENABLED` must be exactly
+`1`.
 
 | Var(s)                                                           | How it's set                                                   |
 | ---------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -110,10 +121,15 @@ into the Lambda environment):
 | `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                    |
 | `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml) |
 | `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`         |
+| `commercial-status.json`                                         | committed shared status; currently keeps the hold active       |
+| `PAYMENTS_ENABLED`                                               | intentionally absent from repository deployment configuration  |
 
 Empty values keep Stripe inert (the pre-billing behavior), so a half-finished
 setup never breaks the app. An empty MONTHLY id makes a plan unbuyable; an empty
 annual/lifetime id just hides that cadence.
+
+The following is a historical reactivation checklist, not an instruction to
+execute work during the hold:
 
 1. Create a Stripe account; do the whole flow in **test mode** first, then repeat in live mode.
 2. Create two **products** — Garden and Greenhouse (Seedling is free → no Stripe object). Add prices:
@@ -127,21 +143,27 @@ annual/lifetime id just hides that cadence.
    ```
 6. Add the endpoint's signing secret (`whsec_…`) as the `STRIPE_WEBHOOK_SECRET` GitHub Actions repo secret.
 7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices.
-8. **Deploy** (tag a release `v*`). Terraform pushes all seven vars onto the Lambdas; until then the upgrade button returns the "billing not configured" path.
+8. Complete the separate status, UI-restoration, runtime-gate, review, and
+   deployment approvals in [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).
 
 For staging, repeat with the **test-mode** Stripe account + the staging tfvars/secrets. Use Stripe's test card `4242 4242 4242 4242` for paid flows.
 
 ## Local development
 
-The local Express server bypasses Stripe entirely. `POST /billing/checkout` flips the household's plan immediately and returns a stub success URL:
+The local Express server mirrors production's hold: Checkout and portal requests
+return 503 and never mutate the in-memory household. Integration tests that need
+to exercise retained entitlement behavior seed an in-memory plan fixture
+directly; they do not reopen a purchase path.
 
 ```
-[billing] dev-mode upgrade: <householdId> -> garden. (Stripe is bypassed.)
+POST /billing/checkout -> 503 Payments are currently paused.
+POST /billing/portal   -> 503 Billing access is currently paused.
 ```
 
-This lets the upgrade flow be exercised end-to-end (including plan-cap enforcement) without a Stripe account. The "Manage subscription" button hits a similarly stubbed `/billing/dev-portal` page.
-
-To exercise the _real_ Stripe integration in dev, point the frontend at a staging API instead and use Stripe test cards.
+This deliberately prevents local-development convenience code from becoming a
+second activation path. Retained Stripe mechanics are covered with isolated
+unit mocks; do not point development UI at an external billing environment
+while the hold remains active.
 
 ## Plan caps and downgrades
 
@@ -151,7 +173,7 @@ creations. Billing settings shows an explicit over-limit warning explaining
 that existing data remains usable while new plants/members are paused.
 
 The household can still read/edit/delete what it has; it just can't add more
-until it is back under the new cap or upgrades. Support follows the same
+until it is back under the new cap. Support follows the same
 contract rather than asking users to delete data automatically.
 
 ## Reading invoices

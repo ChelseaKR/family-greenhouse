@@ -175,9 +175,10 @@ streaks consecutive on-time completions 1.5x frequency slack break weekly longes
           <>
             Check <strong>Settings → Notifications</strong>. Each channel (browser, email, SMS) is
             opt-in. Email is on by default; browser requires <em>Allow notifications</em> in your
-            OS. SMS needs a phone number in E.164 format (e.g. <code>+15551234567</code>) and is on
-            a free trial — paid plans only. Quiet hours pause email + SMS during the window you set;
-            browser push respects your OS Do Not Disturb settings.
+            OS. SMS needs a phone number in E.164 format (e.g. <code>+15551234567</code>) and an
+            operator-enabled delivery configuration; there is no paid upgrade path during the
+            commercial hold. Quiet hours pause email + SMS during the window you set; browser push
+            respects your OS Do Not Disturb settings.
           </>
         ),
         searchText: md`
@@ -389,20 +390,32 @@ Spanish language translation i18n English picker hidden gated
   },
   {
     id: 'billing',
-    title: 'Billing',
-    description: 'Plans, payments, cancellation.',
+    title: 'Plan status',
+    description: 'Current demo limits and the commercial hold.',
     articles: [
       {
-        q: 'How do I cancel my subscription?',
+        q: 'Can I buy or change a plan?',
         a: (
           <>
-            <strong>Settings → Billing</strong> → <strong>Manage subscription</strong>. That opens
-            our payment provider&rsquo;s portal where you can cancel, change plans, or update your
-            payment method. Your plan stays active until the end of the current billing period.
+            No. Paid-plan offers, purchases, upgrades, and billing-portal access are paused. If you
+            believe an earlier test or billing event affected you, contact support so it can be
+            investigated and resolved directly.
           </>
         ),
         searchText: md`
-cancel subscription settings billing manage portal change plan payment method billing period
+commercial hold paid plan purchase upgrade billing portal unavailable contact support
+        `,
+      },
+      {
+        q: 'Can I create a new account?',
+        a: (
+          <>
+            No. New account registration is paused while Family Greenhouse remains a technical
+            demonstration. Existing account holders can continue to sign in and use recovery tools.
+          </>
+        ),
+        searchText: md`
+new account registration paused technical demonstration existing sign in recovery
         `,
       },
       {
@@ -410,8 +423,7 @@ cancel subscription settings billing manage portal change plan payment method bi
         a: (
           <>
             Existing plants and members stay — we never auto-delete data. You won&rsquo;t be able to
-            add new ones until you&rsquo;re back under the cap, or upgrade again. Active tasks keep
-            running.
+            add new ones until you&rsquo;re back under the cap. Active tasks keep running.
           </>
         ),
         searchText: md`

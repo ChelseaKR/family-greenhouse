@@ -12,6 +12,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { track } from '@/services/analytics';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 
 export function JoinHouseholdPage() {
   useDocumentTitle('Join household');
@@ -127,14 +128,13 @@ export function JoinHouseholdPage() {
                 You've been invited to join <strong>{inviteData?.household.name}</strong>
               </p>
               <p className="text-sm text-gray-500">
-                Please sign in or create an account to accept this invitation.
+                Sign in with an existing account to accept this invitation. New account registration
+                is paused.
               </p>
-              <div className="flex gap-3 justify-center">
+              <CommercialHoldNotice compact />
+              <div className="flex justify-center">
                 <Link to={`/login?redirect=/join/${inviteCode}`}>
                   <Button>Sign in</Button>
-                </Link>
-                <Link to={`/register?redirect=/join/${inviteCode}`}>
-                  <Button variant="secondary">Create account</Button>
                 </Link>
               </div>
             </div>

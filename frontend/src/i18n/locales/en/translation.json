@@ -29,19 +29,23 @@
   "publicShell": {
     "careGuides": "Care guides",
     "blog": "Blog",
-    "pricing": "Pricing",
+    "pricing": "Demo status",
     "openMenu": "Open site menu",
     "tryApp": "Try the app"
+  },
+  "commercialHold": {
+    "statusLabel": "Technical demo status",
+    "headline": "New registration and commercial activity are paused",
+    "message": "Commercial activity, new account registration, and payment collection are paused. This remains a technical demonstration; new signups, paid plans, purchases, and plan changes are unavailable. Existing account holders can still sign in.",
+    "effectiveDate": "Commercial hold effective {{date}}."
   },
   "auth": {
     "signIn": "Sign in to your account",
     "signInButton": "Sign in",
-    "signUp": "Sign up",
-    "signUpFree": "Sign up free",
+    "existingAccount": "Existing account holder?",
     "email": "Email address",
     "password": "Password",
     "forgotPassword": "Forgot your password?",
-    "noAccount": "Don't have an account?",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Password is required"
   },
@@ -179,10 +183,7 @@
       "added": "{{name}} added to your greenhouse",
       "graftHeading": "Start its next chapter",
       "graftBody": "Grow your own cutting from {{name}} and keep its story going in your greenhouse.",
-      "graftCta": "Grow your own cutting",
-      "signInPrompt": "Already have a greenhouse? Sign in to add this cutting.",
       "signIn": "Sign in",
-      "createAccount": "Create account",
       "needHousehold": "Create or join a household first to grow this cutting.",
       "goToOnboarding": "Set up my household",
       "metaTitle": "{{name}} — a cutting on Family Greenhouse",
@@ -229,8 +230,7 @@
       "skipped_one": "1 row skipped",
       "skippedRowsTitle": "Skipped rows",
       "skippedRowLabel": "Row {{row}} — {{name}}",
-      "planLimit": "You reached your plan’s plant limit, so the remaining rows were skipped. Upgrade your plan to import the rest.",
-      "upgradeCta": "See upgrade options",
+      "planLimit": "You reached your current demo plan’s plant limit, so the remaining rows were skipped. Plan changes are paused.",
       "viewPlants": "View my plants"
     }
   },
@@ -276,11 +276,11 @@
   },
   "settings": {
     "title": "Settings",
-    "description": "Manage notifications and your household subscription.",
+    "description": "Manage notifications and view your household plan status.",
     "tabs": {
       "notifications": "Notifications",
       "preferences": "Preferences",
-      "billing": "Billing",
+      "billing": "Plan status",
       "apiKeys": "API keys",
       "account": "Account",
       "help": "Help"
@@ -302,8 +302,7 @@
       "membersUsage": "{{n}} of {{max}} members",
       "nativeUnavailable": "Plan changes aren't available in the app.",
       "overLimitTitle": "Over your plan limit",
-      "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit or upgrade.",
-      "manageSubscription": "Manage subscription"
+      "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit."
     }
   },
   "notifications": {

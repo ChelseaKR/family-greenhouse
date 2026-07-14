@@ -1,5 +1,5 @@
 /**
- * Critical-path integration test: brand-new user → household → first plant
+ * Critical-path integration test: provisioned user → household → first plant
  * → first task → completion.
  *
  * Asserts the WHOLE flow a new signup walks through. This is the test that
@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { app, resetDb } from '../../src/local-server';
+import { app, provisionLocalUserFixture, resetDb } from '../../src/local-server';
 
 const NEW_EMAIL = 'new-user@example.com';
 const NEW_PASSWORD = 'StrongPass123!';
@@ -30,25 +30,17 @@ afterEach(() => {
   console.log = originalLog;
 });
 
-describe('critical path: signup → household → plant → task → complete', () => {
-  it('walks a brand new user through the whole first-session flow', async () => {
-    // 1. Signup
-    const signup = await request(app)
-      .post('/auth/signup')
-      .send({ email: NEW_EMAIL, password: NEW_PASSWORD, name: NEW_NAME });
-    expect(signup.status).toBe(201);
+describe('critical path: provision → household → plant → task → complete', () => {
+  it('walks a provisioned user through the whole first-session flow', async () => {
+    // Public signup is closed during the commercial hold. A direct local-only
+    // fixture mirrors Cognito AdminCreateUser used by the deployed smoke test.
+    provisionLocalUserFixture({
+      email: NEW_EMAIL,
+      password: NEW_PASSWORD,
+      name: NEW_NAME,
+    });
 
-    // 2. Confirm with the well-known dev code (local-server uses 123456).
-    //    Production returns ONLY a message — no tokens, no user object; the
-    //    client must login next.
-    const confirm = await request(app)
-      .post('/auth/confirm')
-      .send({ email: NEW_EMAIL, code: '123456' });
-    expect(confirm.status).toBe(200);
-    expect(confirm.body).toEqual({ message: 'Email confirmed successfully. Please login.' });
-    expect(confirm.body.accessToken).toBeUndefined();
-
-    // 3. Login — user is confirmed but has no household yet.
+    // 1. Login — user is confirmed but has no household yet.
     const login = await request(app)
       .post('/auth/login')
       .send({ email: NEW_EMAIL, password: NEW_PASSWORD });
@@ -60,7 +52,7 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(login.body.user.householdId).toBeNull();
     const token = login.body.accessToken as string;
 
-    // 4. Create the first household. This is the step where the real
+    // 2. Create the first household. This is the step where the real
     //    Cognito-claim regression hit — make sure the immediately-following
     //    request sees the household.
     const householdRes = await request(app)
@@ -71,7 +63,7 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(householdRes.body.id).toBeTruthy();
     const householdId = householdRes.body.id as string;
 
-    // 5. The very next request after household creation — fetching the
+    // 3. The very next request after household creation — fetching the
     //    user's own household — must succeed without re-authenticating.
     //    A 403 here means the household claim never propagated.
     const meHousehold = await request(app)
@@ -80,7 +72,7 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(meHousehold.status).toBe(200);
     expect(meHousehold.body.id).toBe(householdId);
 
-    // 6. Add the user's first plant. The create schema requires `name` —
+    // 4. Add the user's first plant. The create schema requires `name` —
     //    a body missing it (e.g. legacy `nickname`) is a Zod 400 in
     //    production, never a silent 201.
     const badPlant = await request(app)
@@ -100,12 +92,12 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(plant.body.id).toBeTruthy();
     const plantId = plant.body.id as string;
 
-    // 7. Plant listing should include the new plant.
+    // 5. Plant listing should include the new plant.
     const plants = await request(app).get('/plants').set('Authorization', `Bearer ${token}`);
     expect(plants.status).toBe(200);
     expect(plants.body.map((p: { id: string }) => p.id)).toContain(plantId);
 
-    // 8. Create a recurring watering task for the plant.
+    // 6. Create a recurring watering task for the plant.
     const task = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`).send({
       plantId,
       type: 'water',
@@ -115,14 +107,14 @@ describe('critical path: signup → household → plant → task → complete', 
     expect(task.body.id).toBeTruthy();
     const taskId = task.body.id as string;
 
-    // 9. Mark it complete.
+    // 7. Mark it complete.
     const complete = await request(app)
       .post(`/tasks/${taskId}/complete`)
       .set('Authorization', `Bearer ${token}`)
       .send({});
     expect(complete.status).toBe(200);
 
-    // 10. Activity feed reflects the completion (this is the dashboard's
+    // 8. Activity feed reflects the completion (this is the dashboard's
     //     Recent Activity panel — the one that was blank in the bug report).
     const activity = await request(app)
       .get(`/households/${householdId}/activity`)
@@ -134,11 +126,11 @@ describe('critical path: signup → household → plant → task → complete', 
   });
 
   it('403s a fresh, householdless user on /plants (requireHousehold, no leak)', async () => {
-    // Signup, confirm, login — no household yet.
-    await request(app)
-      .post('/auth/signup')
-      .send({ email: NEW_EMAIL, password: NEW_PASSWORD, name: NEW_NAME });
-    await request(app).post('/auth/confirm').send({ email: NEW_EMAIL, code: '123456' });
+    provisionLocalUserFixture({
+      email: NEW_EMAIL,
+      password: NEW_PASSWORD,
+      name: NEW_NAME,
+    });
     const login = await request(app)
       .post('/auth/login')
       .send({ email: NEW_EMAIL, password: NEW_PASSWORD });
@@ -153,10 +145,11 @@ describe('critical path: signup → household → plant → task → complete', 
   });
 
   it('rejects login when the password is wrong without leaking account existence', async () => {
-    await request(app)
-      .post('/auth/signup')
-      .send({ email: NEW_EMAIL, password: NEW_PASSWORD, name: NEW_NAME });
-    await request(app).post('/auth/confirm').send({ email: NEW_EMAIL, code: '123456' });
+    provisionLocalUserFixture({
+      email: NEW_EMAIL,
+      password: NEW_PASSWORD,
+      name: NEW_NAME,
+    });
 
     const bad = await request(app)
       .post('/auth/login')

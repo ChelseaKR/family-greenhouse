@@ -118,12 +118,13 @@ export default function SharingPlantCare() {
         beloved, and small enough to start with.
       </p>
 
-      <h2>If you want to try this</h2>
+      <h2>If you want to use this pattern</h2>
       <p>
         You don&rsquo;t need our app. You need a shared system that meets the three criteria above.{' '}
         <a href="/">Family Greenhouse</a> happens to be the one I built &mdash; collaborative by
-        default, free for up to 10 plants, and structured around exactly this dynamic. But if a
-        Google Sheet works for you, use the Google Sheet.
+        default and structured around exactly this dynamic. The hosted site is currently a technical
+        demonstration with new account registration paused. If a Google Sheet works for you, use the
+        Google Sheet.
       </p>
       <p>
         The point isn&rsquo;t the tool. The point is that you stop having the same argument every

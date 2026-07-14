@@ -11,6 +11,8 @@ import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { AuthShell } from './AuthShell';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { useTranslation } from 'react-i18next';
 
 const confirmSchema = z.object({
   code: z.string().length(6, 'Confirmation code must be 6 digits'),
@@ -19,6 +21,7 @@ const confirmSchema = z.object({
 type ConfirmFormData = z.infer<typeof confirmSchema>;
 
 export function ConfirmEmailPage() {
+  const { t } = useTranslation();
   useDocumentTitle('Confirm email');
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,17 +42,13 @@ export function ConfirmEmailPage() {
 
   if (!email) {
     return (
-      <AuthShell
-        title="No email on file"
-        subtitle="Start the registration flow from the beginning."
-      >
+      <AuthShell title="No confirmation in progress" subtitle={t('commercialHold.headline')}>
         <p className="text-center text-gray-700">No email address provided.</p>
-        <div className="mt-4 text-center">
-          <Link
-            to="/register"
-            className="text-sm font-medium text-primary-700 hover:text-primary-600"
-          >
-            Go to registration
+        <CommercialHoldNotice compact className="mt-4" />
+        <div className="mt-4 text-center text-sm text-gray-700">
+          {t('auth.existingAccount')}{' '}
+          <Link to="/login" className="text-sm font-medium text-primary-700 hover:text-primary-600">
+            {t('auth.signInButton')}
           </Link>
         </div>
       </AuthShell>

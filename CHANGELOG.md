@@ -17,6 +17,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-07-14
+
+### Security
+
+- A repository-wide commercial hold now fails closed across public plan
+  surfaces and both Stripe session-creation paths. Public UI and API responses
+  expose no prices, billing intervals, purchase, upgrade, or paid-plan
+  registration controls; production price IDs remain blank; and tests pin the
+  shared status, exact runtime gate, and Terraform invariants. The commercial
+  hold does not gate Stripe webhook code used for cancellation and other
+  already-originated event processing.
+- The same hold now closes new-account acquisition end to end: public surfaces
+  and social artwork contain no registration CTA or free/no-card offer, the
+  stable registration route has no form, public signup returns `503` without a
+  Cognito call or local mutation, and Cognito independently requires
+  administrator-created users. Existing login, recovery, and already-pending
+  confirmation/resend flows remain available.
+
 ### Changed
 
 - Dependency maintenance now advances every compatible in-range package,

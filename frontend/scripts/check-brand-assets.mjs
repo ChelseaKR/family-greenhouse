@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -67,6 +68,34 @@ function pngDimensions(path) {
 }
 
 const problems = [];
+const socialSourcePath = resolve(root, 'scripts/brand-assets/og-image.svg');
+const socialRasterPath = resolve(root, 'public/brand/og-image.png');
+const socialSource = readFileSync(socialSourcePath, 'utf8');
+if (/free for up to|sign up|get started|no (?:credit )?card/i.test(socialSource)) {
+  problems.push('scripts/brand-assets/og-image.svg contains commercial acquisition copy');
+}
+
+// The PNG is checked into source control and can otherwise drift from its SVG
+// while still passing the dimension gate. These reviewed hashes bind the pair:
+// a deliberate social-card edit must regenerate the raster and update both
+// values in the same change.
+const reviewedSocialCardHashes = {
+  source: '0f0693e20c089636f0ca64f708bf54f9d340fe3eb6c790b3e9cf29d784bf9904',
+  raster: '5669f2c05c0e96892ca89435fcab039820730cd8e9b572347b9fdedddb97ced4',
+};
+const sha256 = (contents) => createHash('sha256').update(contents).digest('hex');
+const actualSocialCardHashes = {
+  source: sha256(readFileSync(socialSourcePath)),
+  raster: sha256(readFileSync(socialRasterPath)),
+};
+for (const kind of ['source', 'raster']) {
+  if (actualSocialCardHashes[kind] !== reviewedSocialCardHashes[kind]) {
+    problems.push(
+      `social card ${kind} hash is unreviewed; regenerate og-image.png and update the reviewed source+raster hash pair`
+    );
+  }
+}
+
 for (const [relativePath, dimensions] of expected) {
   const actual = pngDimensions(resolve(root, relativePath));
   if (actual[0] !== dimensions[0] || actual[1] !== dimensions[1]) {

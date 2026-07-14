@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js';
 import { PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
+import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -197,6 +198,10 @@ export async function createCheckoutSession(args: {
    * Session if an HTTP request is safely retried. */
   idempotencyKey?: string;
 }): Promise<CheckoutSessionResult> {
+  // Commercial hold: fail before configuration, DynamoDB, or Stripe access.
+  // Reactivation requires both the repository status file and exact runtime
+  // enablement to change under review.
+  assertPaymentActivityAllowed();
   const plan = getPlan(args.planId);
   const interval: BillingInterval = args.interval ?? 'month';
   const priceEnv =
@@ -287,6 +292,11 @@ export async function createPortalSession(
   householdId: string,
   returnUrl: string
 ): Promise<{ url: string }> {
+  // The Stripe portal can permit plan changes depending on dashboard
+  // configuration, so it is a payment surface and shares Checkout's gate.
+  // Webhooks remain active separately for cancellation and other
+  // already-originated subscription-event processing.
+  assertPaymentActivityAllowed();
   const sub = await getHouseholdSubscription(householdId);
   if (!sub.stripeCustomerId) {
     throw new Error('No Stripe customer on file for this household');

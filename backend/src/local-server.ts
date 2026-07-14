@@ -42,6 +42,11 @@ import {
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
+import {
+  COMMERCIAL_HOLD_ACTIVE,
+  COMMERCIAL_HOLD_EFFECTIVE_DATE,
+  paymentsAreAvailable,
+} from './config/commercialStatus.js';
 
 // Hard refusal to boot in production — this server has no real auth, no
 // persistence, and a well-known seed account. Mirrors the resolveCorsOrigin
@@ -425,6 +430,45 @@ function findUserByEmail(email: string): User | undefined {
 }
 
 /**
+ * Direct local fixture helper. Public `/auth/signup` remains closed during the
+ * commercial hold; integration tests use this in-process helper, and browser
+ * tests use the explicitly enabled `__test__` endpoint below.
+ */
+export function provisionLocalUserFixture({
+  email,
+  password,
+  name,
+  confirmed = true,
+}: {
+  email: string;
+  password: string;
+  name: string;
+  confirmed?: boolean;
+}): User {
+  if (findUserByEmail(email)) {
+    throw new Error('An account with this email already exists');
+  }
+
+  const user: User = {
+    id: uuidv4(),
+    email,
+    password,
+    name,
+    confirmed,
+    householdId: null,
+    householdRole: null,
+    memberships: [],
+  };
+  db.users.set(user.id, user);
+
+  if (!confirmed) {
+    db.pendingConfirmations.set(email, '123456');
+  }
+
+  return user;
+}
+
+/**
  * Zod body validation, mirroring middleware/validation.ts exactly: failures
  * are 400 `{ message: 'Validation failed', details: { '<path>': [msgs] } }`.
  * The validated (stripped) body is stashed on `req.validatedBody`.
@@ -594,39 +638,26 @@ app.get('/health', (req, res) => {
 
 // ============ AUTH ROUTES ============
 
-app.post('/auth/signup', validateBody(signupSchema), (req, res) => {
-  const { email, password, name } = (req as any).validatedBody;
+app.post('/auth/signup', (_req, res) => {
+  res.status(503).json({ message: 'New account registration is currently paused.' });
+});
 
-  if (findUserByEmail(email)) {
-    return res.status(400).json({ message: 'An account with this email already exists' });
+// Browser-test fixture provisioning is intentionally separate from the public
+// route and exists only in this non-deployed local server. The exact opt-in is
+// set by playwright.config.ts; without it the endpoint is indistinguishable
+// from an unknown route.
+app.post('/__test__/accounts', validateBody(signupSchema), (req, res) => {
+  if (process.env.ALLOW_TEST_ACCOUNT_PROVISIONING !== '1') {
+    return res.status(404).json({ message: 'Not found' });
   }
 
-  const userId = uuidv4();
-  const confirmationCode = '123456'; // Fixed code for local dev
-
-  db.users.set(userId, {
-    id: userId,
-    email,
-    password,
-    name,
-    confirmed: false,
-    householdId: null,
-    householdRole: null,
-    memberships: [],
-  });
-
-  db.pendingConfirmations.set(email, confirmationCode);
-
-  console.log('\n========================================');
-  console.log('NEW USER SIGNUP');
-  console.log(`Email: ${email}`);
-  console.log(`Confirmation Code: ${confirmationCode}`);
-  console.log('========================================\n');
-
-  // Production returns only a message (the Cognito user id is never exposed).
-  res.status(201).json({
-    message: 'User created. Please check your email for confirmation code.',
-  });
+  const { email, password, name } = (req as any).validatedBody;
+  try {
+    provisionLocalUserFixture({ email, password, name });
+    return res.status(201).json({ message: 'Local test account provisioned.' });
+  } catch (error) {
+    return res.status(400).json({ message: (error as Error).message });
+  }
 });
 
 app.post('/auth/confirm', validateBody(confirmEmailSchema), (req, res) => {
@@ -2869,10 +2900,17 @@ app.get('/species/:id/guide', authMiddleware, (req, res) => {
 
 app.get('/billing/plans', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=300');
-  // Reuse the production projection so the dev server can't drift from the
-  // real /billing/plans contract (annualPrice, lifetimePrice, …) and never
-  // leaks stripePriceEnv.
-  res.json(Object.values(PLANS).map(planSummary));
+  const paymentsAvailable = paymentsAreAvailable();
+  // Reuse the production projection so the dev server cannot drift from the
+  // real contract or publish prices while the commercial hold is active.
+  res.json({
+    paymentsAvailable,
+    commercialHold: {
+      active: COMMERCIAL_HOLD_ACTIVE,
+      effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
+    },
+    plans: Object.values(PLANS).map((plan) => planSummary(plan, paymentsAvailable)),
+  });
 });
 
 app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
@@ -2910,37 +2948,15 @@ app.post(
   requireHousehold,
   requireAdmin,
   validateBody(checkoutSchema),
-  (req, res) => {
-    const user = (req as any).user;
-    const { planId } = (req as any).validatedBody;
-    // Local dev "checkout": skip Stripe and apply the upgrade immediately so the
-    // UI flow can be exercised end-to-end. Real prod returns a Stripe URL.
-    const h = db.households.get(user.householdId);
-    if (h) {
-      h.planId = planId;
-      h.subscriptionStatus = 'active';
-    }
-    console.log(
-      `[billing] dev-mode upgrade: ${user.householdId} -> ${planId}. (Stripe is bypassed.)`
-    );
-    res.json({ url: `http://localhost:${PORT}/billing/dev-success` });
+  (_req, res) => {
+    // The mock mirrors production's fail-closed commercial status. Tests that
+    // need a paid entitlement seed the in-memory fixture directly.
+    res.status(503).json({ message: 'Payments are currently paused.' });
   }
 );
 
-app.get('/billing/dev-success', (_req, res) => {
-  res.send(
-    '<html><body><h1>Mock checkout success</h1><p>You can close this window.</p></body></html>'
-  );
-});
-
-app.post('/billing/portal', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
-  res.json({ url: `http://localhost:${PORT}/billing/dev-portal` });
-});
-
-app.get('/billing/dev-portal', (_req, res) => {
-  res.send(
-    '<html><body><h1>Mock billing portal</h1><p>Stripe customer portal stub.</p></body></html>'
-  );
+app.post('/billing/portal', authMiddleware, requireHousehold, requireAdmin, (_req, res) => {
+  res.status(503).json({ message: 'Billing access is currently paused.' });
 });
 
 // POST /billing/webhook — Stripe webhook receiver. Local dev has no Stripe

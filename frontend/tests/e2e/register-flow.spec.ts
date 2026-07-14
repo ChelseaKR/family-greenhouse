@@ -1,97 +1,34 @@
 import { test, expect } from '@playwright/test';
 
-/**
- * Sign-up + email confirmation flow.
- *
- * The local Express dev server (`backend/src/local-server.ts`) uses a fixed
- * confirmation code of `123456` for every signup so tests can exercise the
- * full register → confirm → dashboard handoff without needing to scrape
- * server logs or hit a test-only endpoint. Each test mints a fresh email so
- * the in-memory user store doesn't reject the signup as a duplicate on
- * re-runs against a sticky local server.
- */
-test.describe('Register flow', () => {
-  test('register → confirm → sign in → land on onboarding', async ({ page }) => {
-    const consoleErrors: string[] = [];
-    page.on('pageerror', (err) => consoleErrors.push(String(err)));
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
+/** Commercial-hold regression coverage for registration and confirmation entry points. */
+test.describe('Registration hold', () => {
+  test('direct /register navigation exposes no form and sends no signup request', async ({
+    page,
+  }) => {
+    let signupRequests = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('/auth/signup')) signupRequests += 1;
     });
 
-    const email = `new-user-${Date.now()}@example.com`;
-
     await page.goto('/register');
-    await page.getByLabel(/full name/i).fill('Test Newcomer');
-    await page.getByLabel(/email/i).fill(email);
-    // The Input component renders the label as `Password` + a hidden `*`
-    // marker, so the accessible name is `Password *`. Match by exact
-    // attribute via the input element itself to dodge that quirk.
-    await page.locator('input[autocomplete="new-password"]').first().fill('Password123');
-    await page.locator('input[autocomplete="new-password"]').nth(1).fill('Password123');
-    await page.getByRole('button', { name: /create account/i }).click();
 
-    // After a successful signup we're routed to /confirm-email with the
-    // email tucked into router state. The page surfaces the address as a
-    // verification cue.
-    await expect(page).toHaveURL(/\/confirm-email/);
-    await expect(page.getByText(email)).toBeVisible();
-
-    // 123456 is the fixed dev-mode code from local-server.ts.
-    await page.getByLabel(/confirmation code/i).fill('123456');
-    await page.getByRole('button', { name: /confirm email/i }).click();
-
-    // Cognito's confirmSignUp mints NO tokens, so confirmation routes to the
-    // sign-in page — email prefilled, with a "confirmed" notice — rather than
-    // writing a half-authenticated session and bouncing off a guarded route.
-    await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByText(/email confirmed/i)).toBeVisible();
-    await expect(page.getByLabel(/email address/i)).toHaveValue(email);
-
-    // Sign in to finish: a household-less new user is then routed into the
-    // onboarding wizard (App.tsx redirects when hasHousehold is false).
-    await page.getByLabel(/password/i).fill('Password123');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/\/onboarding/);
-    expect(consoleErrors).toEqual([]);
+    await expect(
+      page.getByRole('heading', { name: /new account registration is paused/i })
+    ).toBeVisible();
+    await expect(page.getByText(/new signups.*unavailable/i)).toBeVisible();
+    await expect(page.locator('form')).toHaveCount(0);
+    await expect(page.locator('input')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /create account/i })).toHaveCount(0);
+    await expect(page.locator('a[href^="/register"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
+    expect(signupRequests).toBe(0);
   });
 
-  test('register → confirm with wrong code shows an error and stays on confirm', async ({
-    page,
-  }) => {
-    const email = `bad-code-${Date.now()}@example.com`;
-
-    await page.goto('/register');
-    await page.getByLabel(/full name/i).fill('Bad Code User');
-    await page.getByLabel(/email/i).fill(email);
-    // See note above: Input label renders "Password *" so /^password$/i
-    // misses. autocomplete is the most stable hook.
-    await page.locator('input[autocomplete="new-password"]').first().fill('Password123');
-    await page.locator('input[autocomplete="new-password"]').nth(1).fill('Password123');
-    await page.getByRole('button', { name: /create account/i }).click();
-
-    await expect(page).toHaveURL(/\/confirm-email/);
-
-    // A 6-digit value clears the zod min-length check but fails the
-    // backend's pendingConfirmations lookup, so the API returns
-    // "Invalid confirmation code".
-    await page.getByLabel(/confirmation code/i).fill('000000');
-    await page.getByRole('button', { name: /confirm email/i }).click();
-
-    await expect(page.getByRole('alert')).toBeVisible();
-    await expect(page.getByRole('alert')).toContainText(/invalid confirmation code/i);
-    await expect(page).toHaveURL(/\/confirm-email/);
-  });
-
-  test('confirm-email page without a registered email shows the recovery prompt', async ({
-    page,
-  }) => {
-    // Hitting /confirm-email directly (no router state) should not crash;
-    // the page renders a "No email on file" fallback with a link back to
-    // /register.
+  test('confirm-email without pending state points existing users to login', async ({ page }) => {
     await page.goto('/confirm-email');
 
     await expect(page.getByText(/no email address provided/i)).toBeVisible();
-    await page.getByRole('link', { name: /go to registration/i }).click();
-    await expect(page).toHaveURL(/\/register/);
+    await expect(page.locator('a[href^="/register"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
   });
 });

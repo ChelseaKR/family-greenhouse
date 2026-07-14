@@ -82,7 +82,9 @@ it('GET /plants/:id returns upcomingTasks', async () => {
 The seed data is reset between tests via `resetDb()` from `local-server.ts`. Use this layer for:
 
 - Wiring tests (does the route exist? does middleware fire in the right order?)
-- Cross-resource flows (signup → confirm → create household → upgrade plan → add plant)
+- Cross-resource flows (direct test fixture → login → create household → add plant)
+- Commercial-hold controls (`/auth/signup` 503/no mutation, status-only
+  `/register`, and Cognito administrator-only self-signup policy)
 - Regression tests for bugs we've previously hit (the JWT-uuid bug, the upcomingTasks shape mismatch)
 
 ## Frontend unit tests

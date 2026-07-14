@@ -18,8 +18,8 @@ import {
   CameraIcon,
   BellAlertIcon,
 } from '@heroicons/react/24/outline';
-import { Button } from '@/components/Button';
 import { BrandMark } from '@/components/BrandMark';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { PricingGrid } from '@/features/pricing/PricingGrid';
 import { IS_BETA, BETA_BADGE } from '@/lib/betaMode';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
@@ -166,8 +166,8 @@ const featureCardVariants = [
   },
 ];
 
-// Pricing data lives in features/pricing/plans.ts so the standalone
-// /pricing page and this anchor section stay in sync.
+// The stable pricing anchor currently renders the repository-level commercial
+// hold rather than plan or purchase content.
 
 // Product facts the landing page can stand behind without lying about
 // users we don't yet have. The earlier "50,000+ Happy Plants / 99.2%
@@ -175,9 +175,9 @@ const featureCardVariants = [
 // auditable claims about the app itself. When real adoption metrics
 // exist, they belong in this list — sourced from analytics, not vibes.
 const productFacts = [
-  { value: 'Free', label: 'Up to 10 plants — no credit card' },
+  { value: 'Demo', label: 'New account registration is paused' },
   { value: 'Multi-user', label: 'Share care across the whole household' },
-  { value: '5 minutes', label: 'From signup to first task' },
+  { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
   { value: 'Open APIs', label: 'Export your data any time' },
 ];
 
@@ -200,7 +200,7 @@ const personas = [
   {
     icon: GrowthRingsIcon,
     label: 'A growing collection',
-    body: 'Ten plants turned into forty. Go unlimited, import the spreadsheet you have been keeping, and let one dashboard hold every due date.',
+    body: 'Ten plants turned into forty. Import the spreadsheet you have been keeping, and let one dashboard hold every due date.',
     href: '#pricing',
   },
   {
@@ -574,7 +574,7 @@ export function LandingPage() {
   useMetaTags({
     title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
     description:
-      'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for up to 10 plants.',
+      'A technical demonstration of shared plant watering schedules, reminders, care logs, and household tasks. New account registration is paused.',
     canonical: siteUrl('/'),
     ogType: 'website',
     ogImage: siteUrl('/brand/og-image.png'),
@@ -604,12 +604,6 @@ export function LandingPage() {
           description:
             'A collaborative plant care app for household watering schedules, reminders, tasks, and care logs.',
           url: SITE_URL,
-          offers: {
-            '@type': 'Offer',
-            price: '0',
-            priceCurrency: 'USD',
-            description: 'Free for up to 10 plants',
-          },
           publisher: { '@id': `${SITE_URL}/#organization` },
         },
       ],
@@ -650,7 +644,7 @@ export function LandingPage() {
               href="#pricing"
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
             >
-              Pricing
+              Demo status
             </a>
           </div>
           <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
@@ -659,9 +653,6 @@ export function LandingPage() {
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors py-2 whitespace-nowrap"
             >
               Log in
-            </Link>
-            <Link to="/register" className="block">
-              <Button size="md">Sign up free</Button>
             </Link>
           </div>
         </nav>
@@ -699,13 +690,11 @@ export function LandingPage() {
                   <TitleUnderline className="h-4 w-56 text-primary-600" />
                 </div>
                 <p className="mt-6 text-lg leading-8 text-gray-700">{heroCopy[variant].subhead}</p>
-                <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
-                  <Link to="/register">
-                    <Button size="lg">Sign up free</Button>
-                  </Link>
+                <div className="mt-10 space-y-4">
+                  <CommercialHoldNotice compact />
                   <a
                     href="#features"
-                    className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
+                    className="inline-flex text-sm font-semibold leading-6 text-ink items-center gap-1 hover:text-primary-700 transition-colors"
                   >
                     See how it works <span aria-hidden="true">→</span>
                   </a>
@@ -973,11 +962,8 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Pricing Section — now on paper after the parchment "before you
-          buy" band; the sprig marks the seam. The description frames the
-          tiers as a path (free household → unlimited plants → unlimited +
-          API) so collectors and power users see themselves, not just
-          abstract plan names. */}
+      {/* Stable plan-status anchor. Commercial pricing and purchase content is
+          absent while the repository-level hold remains active. */}
       <div id="pricing" className="py-20 sm:py-28 bg-paper relative">
         <SprigDivider
           className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
@@ -985,55 +971,18 @@ export function LandingPage() {
         />
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
-            eyebrow="Pricing"
-            title="Plans for every greenhouse"
-            description="Start free with ten plants and your whole household — up to six people. Go unlimited on Garden, then open up the API on Greenhouse."
+            eyebrow="Demo status"
+            title="Commercial activity is paused"
+            description="Family Greenhouse remains available as a technical demonstration. New account registration, paid plans, purchases, and plan changes are unavailable."
           />
           <PricingGrid />
           <p className="mt-12 text-center text-sm text-gray-700">
-            See more on the dedicated{' '}
+            Read the full{' '}
             <Link to="/pricing" className="font-medium text-primary-700 hover:underline">
-              pricing page
+              demo-status notice
             </Link>
-            , including a small FAQ.
+            .
           </p>
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="bg-primary-800 relative">
-        <SprigDivider
-          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-paper"
-          aria-hidden="true"
-        />
-        <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8 lg:flex lg:items-center lg:justify-between">
-          <div>
-            <h2 className="font-serif text-4xl tracking-tight text-white sm:text-5xl">
-              Set it up before the next{' '}
-              <span className="italic text-primary-200">watering day</span>
-            </h2>
-            <p className="mt-4 text-lg text-primary-100 max-w-xl">
-              Make a household, share the link with the people you live with, and the right person
-              gets reminded at the right time. Free for up to 10 plants.
-            </p>
-          </div>
-          <div className="mt-10 flex items-center gap-x-6 lg:mt-0 lg:flex-shrink-0">
-            <Link to="/register">
-              {/* Inverted CTA on the dark green band. The `!` prefix on
-                  the override classes forces them to win over the Button
-                  variant's `bg-primary-700 text-white`, which otherwise
-                  ties on specificity and renders white-on-white. */}
-              <Button size="lg" className="!bg-paper !text-primary-800 hover:!bg-primary-50">
-                Get started free
-              </Button>
-            </Link>
-            <a
-              href="#features"
-              className="text-sm font-semibold leading-6 text-primary-100 hover:text-white"
-            >
-              Learn more <span aria-hidden="true">→</span>
-            </a>
-          </div>
         </div>
       </div>
 
@@ -1059,7 +1008,7 @@ export function LandingPage() {
                 </li>
                 <li>
                   <a href="#pricing" className="text-sm text-primary-200 hover:text-white">
-                    Pricing
+                    Demo status
                   </a>
                 </li>
                 <li>

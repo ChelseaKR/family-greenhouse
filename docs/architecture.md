@@ -41,7 +41,7 @@ The frontend never talks to AWS services directly — every read/write goes thro
 ```
 backend/src/
 ├── handlers/        # one folder per resource; each exports the Lambda entry points
-│   ├── auth/        signup, login, confirm, refresh, forgot/reset password, resend code
+│   ├── auth/        held signup, login, confirm, refresh, forgot/reset password, resend code
 │   ├── households/  create/get, members, invites, role updates, activity
 │   ├── plants/      CRUD + image upload-url + confirm + identify
 │   ├── tasks/       CRUD + complete + snooze
@@ -112,8 +112,10 @@ Service-level guarantees:
 
 ## Auth flow
 
-1. User signs up → Cognito `SignUpCommand`, an email confirmation code is mailed via SES (or printed in the dev server console)
-2. User confirms email → Cognito `ConfirmSignUpCommand`
+1. During the commercial hold, public signup returns `503` before Cognito and
+   the pool independently permits administrator-created users only.
+2. An already-pending user can still confirm email through Cognito
+   `ConfirmSignUpCommand`; existing users continue through login/recovery.
 3. User logs in → Cognito `InitiateAuthCommand` returns access + refresh + ID tokens
 4. Subsequent requests carry the access token; API Gateway's Cognito authorizer validates it and forwards `claims` on `requestContext.authorizer.claims`
 5. `authMiddleware` reads claims and attaches an `event.user` shape with `userId`, `email`, `householdId`, `householdRole`

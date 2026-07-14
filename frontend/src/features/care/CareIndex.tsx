@@ -3,6 +3,7 @@ import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { CARE_GUIDES } from './careGuides';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 
 /**
  * Index of the species care guides. Doubles as the internal-linking hub that
@@ -42,21 +43,7 @@ export function CareIndex() {
         ))}
       </ul>
 
-      <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-        <p className="font-serif text-xl text-ink">Knowing the schedule is the easy part</p>
-        <p className="mt-2 text-sm text-gray-600">
-          The hard part is remembering — and not assuming someone else did it. Family Greenhouse
-          handles both. Free for up to 10 plants.
-        </p>
-        <div className="mt-4">
-          <Link
-            to="/register"
-            className="inline-flex items-center rounded-md bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 min-h-touch"
-          >
-            Get started
-          </Link>
-        </div>
-      </aside>
+      <CommercialHoldNotice compact className="mt-16" />
     </PublicShell>
   );
 }

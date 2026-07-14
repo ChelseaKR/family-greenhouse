@@ -1,18 +1,20 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
 
 // Mock the Stripe SDK that billing.getStripe() dynamically imports, so
 // createCheckoutSession can be exercised without a network/key. `sessionsCreate`
 // is hoisted (vi.mock factories run before module init) and shared so tests can
 // assert what was sent to Stripe.
-const { sessionsCreate, subscriptionsCancel } = vi.hoisted(() => ({
+const { sessionsCreate, portalSessionsCreate, subscriptionsCancel } = vi.hoisted(() => ({
   sessionsCreate: vi.fn(),
+  portalSessionsCreate: vi.fn(),
   subscriptionsCancel: vi.fn(),
 }));
 vi.mock('stripe', () => ({
   default: vi.fn(function () {
     return {
       checkout: { sessions: { create: sessionsCreate } },
+      billingPortal: { sessions: { create: portalSessionsCreate } },
       subscriptions: { cancel: subscriptionsCancel },
     };
   }),
@@ -54,6 +56,24 @@ const { captureMock } = vi.hoisted(() => ({ captureMock: vi.fn() }));
 vi.mock('../../../src/utils/serverAnalytics.js', () => ({
   capture: captureMock,
 }));
+
+// Most of this file tests the retained Stripe implementation beneath the
+// repository hold. Keep the exact runtime env gate in place while treating the
+// status decision as reviewed-off for those mechanics tests. The real shared
+// status and full allow/deny matrix have their own config test.
+vi.mock('../../../src/config/commercialStatus.js', () => ({
+  assertPaymentActivityAllowed: () => {
+    if (process.env.PAYMENTS_ENABLED !== '1') {
+      const error = new Error('Payment activity is disabled') as Error & { code?: string };
+      error.code = 'PAYMENTS_DISABLED';
+      throw error;
+    }
+  },
+}));
+
+afterEach(() => {
+  delete process.env.PAYMENTS_ENABLED;
+});
 
 describe('deltaForStripeEvent', () => {
   beforeEach(() => {
@@ -952,23 +972,36 @@ describe('planSummary', () => {
   it('exposes annualPrice (null for the free tier, the dollar figure for paid tiers)', async () => {
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
-    expect(planSummary(PLANS.seedling).annualPrice).toBeNull();
-    expect(planSummary(PLANS.garden).annualPrice).toBe(39.99);
-    expect(planSummary(PLANS.greenhouse).annualPrice).toBe(79.99);
+    expect(planSummary(PLANS.seedling, true).annualPrice).toBeNull();
+    expect(planSummary(PLANS.garden, true).annualPrice).toBe(39.99);
+    expect(planSummary(PLANS.greenhouse, true).annualPrice).toBe(79.99);
   });
 
   it('exposes lifetimePrice (149 for Garden, null for tiers without a lifetime option)', async () => {
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
-    expect(planSummary(PLANS.garden).lifetimePrice).toBe(149);
-    expect(planSummary(PLANS.seedling).lifetimePrice).toBeNull();
-    expect(planSummary(PLANS.greenhouse).lifetimePrice).toBeNull();
+    expect(planSummary(PLANS.garden, true).lifetimePrice).toBe(149);
+    expect(planSummary(PLANS.seedling, true).lifetimePrice).toBeNull();
+    expect(planSummary(PLANS.greenhouse, true).lifetimePrice).toBeNull();
+  });
+
+  it('omits every price field unless a caller explicitly enables them', async () => {
+    const { planSummary } = await import('../../../src/services/billing.js');
+    const { PLANS } = await import('../../../src/models/plans.js');
+    expect(planSummary(PLANS.garden)).toEqual({
+      id: 'garden',
+      name: 'Garden',
+      description: 'For growing families',
+      maxPlants: 500,
+      maxMembers: 6,
+    });
   });
 });
 
 describe('createCheckoutSession — interval resolves the Stripe price', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
@@ -991,6 +1024,26 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     });
   }
 
+  it.each([undefined, '', '0', 'true', '01', ' 1', '1 '])(
+    'fails closed for PAYMENTS_ENABLED=%s before reading configuration or calling Stripe',
+    async (value) => {
+      if (value === undefined) delete process.env.PAYMENTS_ENABLED;
+      else process.env.PAYMENTS_ENABLED = value;
+      const { createCheckoutSession } = await import('../../../src/services/billing.js');
+      await expect(
+        createCheckoutSession({
+          householdId: 'hh-1',
+          customerEmail: 'a@b.test',
+          planId: 'garden',
+          interval: 'month',
+          successUrl: 's',
+          cancelUrl: 'c',
+        })
+      ).rejects.toMatchObject({ code: 'PAYMENTS_DISABLED' });
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    }
+  );
+
   it('uses the MONTHLY price id by default and stamps interval=month on metadata', async () => {
     const result = await runCheckout(undefined);
     expect(result.url).toBe('https://checkout.stripe.test/cs');
@@ -1000,6 +1053,27 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
         metadata: expect.objectContaining({ planId: 'garden', interval: 'month' }),
       })
     );
+  });
+
+  /*
+   * PAYMENTS_ENABLED='1' is exercised below only with the shared status module
+   * mocked inactive for retained-mechanics coverage. Production still requires
+   * the root commercial-status decision to be inactive as well.
+   */
+  it('does not reach Stripe when the exact runtime gate is absent', async () => {
+    delete process.env.PAYMENTS_ENABLED;
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    await expect(
+      createCheckoutSession({
+        householdId: 'hh-1',
+        customerEmail: 'a@b.test',
+        planId: 'garden',
+        interval: 'month',
+        successUrl: 's',
+        cancelUrl: 'c',
+      })
+    ).rejects.toMatchObject({ code: 'PAYMENTS_DISABLED' });
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
   it('forwards a checkout-attempt idempotency key to Stripe', async () => {
@@ -1070,6 +1144,7 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
 describe('createCheckoutSession — refuses a second checkout for a household with a live subscription', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
@@ -1118,6 +1193,47 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     const params = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(params.mode).toBe('payment');
     expect(params.metadata).toMatchObject({ replacesSubscriptionId: 'sub_existing' });
+  });
+});
+
+describe('createPortalSession — shares the payment-activity gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    portalSessionsCreate.mockResolvedValue({ url: 'https://billing.stripe.test/portal' });
+  });
+
+  it.each([undefined, '', '0', 'true', '01', ' 1', '1 '])(
+    'fails closed for PAYMENTS_ENABLED=%s before DynamoDB or Stripe',
+    async (value) => {
+      if (value === undefined) delete process.env.PAYMENTS_ENABLED;
+      else process.env.PAYMENTS_ENABLED = value;
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { createPortalSession } = await import('../../../src/services/billing.js');
+
+      await expect(createPortalSession('hh-1', 'https://app.test/settings')).rejects.toMatchObject({
+        code: 'PAYMENTS_DISABLED',
+      });
+      expect(dynamodb.send).not.toHaveBeenCalled();
+      expect(portalSessionsCreate).not.toHaveBeenCalled();
+    }
+  );
+
+  it('creates a portal session only behind the exact runtime gate in mechanics tests', async () => {
+    process.env.PAYMENTS_ENABLED = '1';
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { planId: 'garden', stripeCustomerId: 'cus_1' },
+    });
+    const { createPortalSession } = await import('../../../src/services/billing.js');
+
+    await expect(createPortalSession('hh-1', 'https://app.test/settings')).resolves.toEqual({
+      url: 'https://billing.stripe.test/portal',
+    });
+    expect(portalSessionsCreate).toHaveBeenCalledWith({
+      customer: 'cus_1',
+      return_url: 'https://app.test/settings',
+    });
   });
 });
 

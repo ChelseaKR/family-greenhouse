@@ -83,9 +83,9 @@ export function LoginPage() {
       subtitle="Sign in to tend to your greenhouse."
       footer={
         <>
-          Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-primary-700 hover:text-primary-600">
-            Sign up
+          New account registration is paused.{' '}
+          <Link to="/pricing" className="font-medium text-primary-700 hover:text-primary-600">
+            View demo status
           </Link>
         </>
       }

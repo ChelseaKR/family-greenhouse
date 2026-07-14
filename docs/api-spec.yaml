@@ -25,7 +25,7 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
   /auth/signup:
     post:
-      summary: Register a new user
+      summary: Register a new user (paused during the commercial hold)
       tags: [Auth]
       security: []
       requestBody:
@@ -43,6 +43,12 @@ paths:
                 $ref: '#/components/schemas/MessageResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '503':
+          description: New account registration is paused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
 
   /auth/login:
     post:

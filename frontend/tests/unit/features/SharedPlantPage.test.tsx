@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SharedPlantPage } from '@/features/plants/SharedPlantPage';
 import { plantService } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
-import { getPendingShareCode } from '@/features/plants/pendingShareCode';
 
 vi.mock('@/services/plantService', () => ({
   plantService: {
@@ -27,12 +25,6 @@ const PREVIEW = {
   expiresAt: '2099-01-01T00:00:00.000Z',
 };
 
-// Surfaces the current pathname so we can assert post-CTA navigation.
-function LocationProbe() {
-  const location = useLocation();
-  return <div data-testid="location">{location.pathname + location.search}</div>;
-}
-
 function renderPage(code = 'abc123') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -40,10 +32,8 @@ function renderPage(code = 'abc123') {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/shared/${code}`]}>
-        <LocationProbe />
         <Routes>
           <Route path="/shared/:code" element={<SharedPlantPage />} />
-          <Route path="/register" element={<div>register page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -87,16 +77,20 @@ describe('SharedPlantPage', () => {
     expect(ogImage?.getAttribute('content')).toBe('/brand/og-image.png');
   });
 
-  it('graft CTA stashes the share code and routes a logged-out visitor into signup', async () => {
+  it('replaces logged-out acquisition with status and preserves existing-account sign-in', async () => {
     vi.mocked(plantService.getSharedPlant).mockResolvedValueOnce(PREVIEW);
     renderPage('graft-me');
 
-    const cta = await screen.findByRole('button', { name: /grow your own cutting/i });
-    await userEvent.click(cta);
-
-    // Share code is carried across the signup hops, and we land in register.
-    expect(getPendingShareCode()).toBe('graft-me');
-    expect(screen.getByTestId('location').textContent).toBe('/register?redirect=/shared/graft-me');
+    await screen.findByRole('heading', { name: 'Mother Monstera', level: 1 });
+    expect(
+      screen.queryByRole('button', { name: /grow your own cutting/i })
+    ).not.toBeInTheDocument();
+    expect(document.querySelector('a[href^="/register"]')).toBeNull();
+    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute(
+      'href',
+      '/login?redirect=/shared/graft-me'
+    );
+    expect(screen.getByText(/new account registration.*paused/i)).toBeInTheDocument();
   });
 
   it('offers "Add to my greenhouse" when signed in with a household', async () => {

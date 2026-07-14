@@ -97,14 +97,14 @@ export default function RememberingToWater() {
         doesn&rsquo;t is just a nicer-looking sticky note.
       </p>
 
-      <h2>If you want to try ours</h2>
+      <h2>A shared-system example</h2>
       <p>
         We built <a href="/">Family Greenhouse</a> because every other plant-care app we tried was
         built for one person, and most plant care happens in households. It does the feedback-loop
         thing (completing a task pushes the next due date forward from now, not from the original
-        schedule), it lets multiple people see and act on the same plant list, and the free tier is
-        generous enough to actually try with no card on file. If it works for you, great. If not,
-        the spreadsheet still beats the sticky note.
+        schedule), and it lets multiple people see and act on the same plant list. The hosted site
+        is currently a technical demonstration with new account registration paused; the spreadsheet
+        still beats the sticky note.
       </p>
     </article>
   );

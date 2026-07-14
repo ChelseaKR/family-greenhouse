@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 // The billing handler is a thin wrapper over services/billing.ts; mock the
@@ -61,6 +61,7 @@ const ctx = {} as Context;
 describe('billing handler', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
+    process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.FRONTEND_URL = 'https://test.familygreenhouse.net';
     // authMiddleware validates the claim household against the membership
@@ -74,8 +75,12 @@ describe('billing handler', () => {
     vi.mocked(getHouseholdCounters).mockResolvedValue({ plantCount: 0, memberCount: 0 });
   });
 
+  afterEach(() => {
+    delete process.env.PAYMENTS_ENABLED;
+  });
+
   describe('listPlans', () => {
-    it('returns the catalog as a cacheable response with all three tiers', async () => {
+    it('returns a cacheable, explicitly unavailable catalog with no public prices', async () => {
       const { listPlans } = await import('../../../src/handlers/billing/handler.js');
       const res = (await listPlans(
         buildEvent({ httpMethod: 'GET' }),
@@ -86,18 +91,21 @@ describe('billing handler', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers?.['Cache-Control']).toMatch(/public.*max-age=300/);
       const body = JSON.parse(res.body);
-      expect(body).toHaveLength(3);
-      expect(body.map((p: { id: string }) => p.id).sort()).toEqual([
+      expect(body).toMatchObject({
+        paymentsAvailable: false,
+        commercialHold: { active: true, effectiveDate: '2026-07-14' },
+      });
+      expect(body.plans).toHaveLength(3);
+      expect(body.plans.map((p: { id: string }) => p.id).sort()).toEqual([
         'garden',
         'greenhouse',
         'seedling',
       ]);
-      // Annual prices are exposed so the pricing UI can render the yearly
-      // cadence; the free tier reports null (no annual option).
-      const byId = Object.fromEntries(
-        body.map((p: { id: string; annualPrice: number | null }) => [p.id, p.annualPrice])
-      );
-      expect(byId).toEqual({ seedling: null, garden: 39.99, greenhouse: 79.99 });
+      for (const plan of body.plans) {
+        expect(plan).not.toHaveProperty('monthlyPrice');
+        expect(plan).not.toHaveProperty('annualPrice');
+        expect(plan).not.toHaveProperty('lifetimePrice');
+      }
     });
   });
 
@@ -203,6 +211,27 @@ describe('billing handler', () => {
   });
 
   describe('checkout', () => {
+    it('returns 503 when payment collection has not been explicitly enabled', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+      process.env.PAYMENTS_ENABLED = '0';
+      const error = new Error('Payment activity is disabled') as Error & { code?: string };
+      error.code = 'PAYMENTS_DISABLED';
+      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(error);
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'garden' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(503);
+      expect(JSON.parse(res.body).message).toMatch(/payments are currently paused/i);
+    });
+
     it('creates a Stripe checkout session and returns the URL', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');
@@ -427,6 +456,19 @@ describe('billing handler', () => {
   });
 
   describe('portal', () => {
+    it('returns 503 when billing-portal access is paused', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { portal } = await import('../../../src/handlers/billing/handler.js');
+      const error = new Error('Payment activity is disabled') as Error & { code?: string };
+      error.code = 'PAYMENTS_DISABLED';
+      vi.mocked(billing.createPortalSession).mockRejectedValueOnce(error);
+
+      const res = (await portal(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(503);
+      expect(JSON.parse(res.body).message).toMatch(/billing access is currently paused/i);
+    });
+
     it('returns the Stripe portal URL', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { portal } = await import('../../../src/handlers/billing/handler.js');

@@ -49,16 +49,15 @@ sms_notifications_enabled = ""
 # live keys charge real cards (the 4242 test card is rejected); test prices +
 # sk_test_ let you verify with 4242.
 #
-# These are still the TEST-MODE ids created for the Garden tier (sk_test world).
-# A prior commit relabeled this comment to say "LIVE-mode" without actually
-# replacing the ids — do not trust that label. Before flipping
-# stripe_price_ids_are_live below, create the real products/prices in the
-# Stripe LIVE dashboard and paste those ids here instead.
-stripe_price_id_garden            = "price_1Tkur4AhnUt8CMG0b07WYF1t" # Garden monthly ($4.99/mo) — TEST-mode id
-stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL" # Garden annual ($39.99/yr) — TEST-mode id
-stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO" # Garden lifetime ($149 one-time) — TEST-mode id
-stripe_price_id_greenhouse        = ""                               # Greenhouse monthly ($9.99/mo)
-stripe_price_id_greenhouse_annual = ""                               # Greenhouse annual ($79.99/yr)
+# Commercial hold effective 2026-07-14: all price ids remain empty. The API
+# also requires PAYMENTS_ENABLED=1, which this repository's infrastructure
+# intentionally does not supply. Do not add live-mode ids while the hold is in
+# effect.
+stripe_price_id_garden            = ""
+stripe_price_id_garden_annual     = ""
+stripe_price_id_garden_lifetime   = ""
+stripe_price_id_greenhouse        = ""
+stripe_price_id_greenhouse_annual = ""
 
 # Manual confirmation gate (see check block in main.tf): only set true once
 # every non-empty stripe_price_id_* above has been verified to exist in the

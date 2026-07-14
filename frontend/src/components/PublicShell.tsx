@@ -5,6 +5,7 @@ import { BrandMark } from './BrandMark';
 import { Footer } from './Footer';
 import { TitleUnderline } from './brand/TitleUnderline';
 import { useTranslation } from 'react-i18next';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
  * Shared chrome for the public content pages (care guides, blog, pricing,
@@ -100,10 +101,10 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
                 </div>
               </details>
               <Link
-                to="/"
+                to={PUBLIC_REGISTRATION_AVAILABLE ? '/' : '/login'}
                 className="text-sm font-semibold text-primary-700 hover:text-primary-800 whitespace-nowrap"
               >
-                {t('publicShell.tryApp')} →
+                {PUBLIC_REGISTRATION_AVAILABLE ? t('publicShell.tryApp') : t('auth.signIn')} →
               </Link>
             </div>
           )}

@@ -154,10 +154,7 @@ export function ImportPlantsPage() {
             )}
             {summary.planLimitHit && (
               <Alert variant="warning">
-                <span>{t('importPlants.results.planLimit')}</span>{' '}
-                <Link to="/settings/billing" className="font-medium underline">
-                  {t('importPlants.results.upgradeCta')}
-                </Link>
+                <span>{t('importPlants.results.planLimit')}</span>
               </Alert>
             )}
             <div className="flex flex-wrap gap-3">

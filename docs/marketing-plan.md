@@ -1,4 +1,9 @@
-# Marketing & distribution plan — solo founder + Claude tools
+# Marketing & distribution plan — historical hypotheses
+
+> **Commercial activity hold — July 14, 2026.** This is an unexecuted planning
+> artifact, not an active launch, outreach, acquisition, signup, customer, or
+> revenue program. Do not perform the activities below while
+> [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md) remains in effect.
 
 A realistic, executable go-to-market plan for one person (you) with Claude as a force multiplier. The goal is **100 active households in 6 months**, not viral growth — that's the threshold where the strategy review's empirical questions become answerable.
 

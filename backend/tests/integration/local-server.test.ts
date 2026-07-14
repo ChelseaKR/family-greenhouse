@@ -3,6 +3,7 @@ import request from 'supertest';
 import {
   app,
   db,
+  provisionLocalUserFixture,
   resetDb,
   seedHouseholdId,
   seedPlantId,
@@ -21,17 +22,13 @@ async function loginAsSeed(): Promise<string> {
   return res.body.accessToken as string;
 }
 
-// Signup → confirm → login. Production's confirm endpoint returns only a
-// message (no tokens), so every flow that needs a token must login.
+// Direct local fixture → login. Public signup remains closed during the hold.
 async function createConfirmedUser(
   email: string,
   password = 'password-123',
   name = 'Test Person'
 ): Promise<string> {
-  const signup = await request(app).post('/auth/signup').send({ email, password, name });
-  expect(signup.status).toBe(201);
-  const confirm = await request(app).post('/auth/confirm').send({ email, code: '123456' });
-  expect(confirm.status).toBe(200);
+  provisionLocalUserFixture({ email, password, name });
   const login = await request(app).post('/auth/login').send({ email, password });
   expect(login.status).toBe(200);
   return login.body.accessToken as string;
@@ -86,49 +83,32 @@ describe('GET /health', () => {
 
 describe('auth routes', () => {
   describe('POST /auth/signup', () => {
-    it('creates a pending user (no user id in the response, like production)', async () => {
+    it('fails closed without creating a user or pending confirmation', async () => {
       const res = await request(app)
         .post('/auth/signup')
         .send({ email: 'new@example.com', password: 'password-123', name: 'New User' });
-      expect(res.status).toBe(201);
-      expect(res.body.userId).toBeUndefined();
-      expect(typeof res.body.message).toBe('string');
+      expect(res.status).toBe(503);
+      expect(res.body.message).toMatch(/registration.*paused/i);
       const created = [...db.users.values()].find((u) => u.email === 'new@example.com');
-      expect(created?.confirmed).toBe(false);
-      expect(db.pendingConfirmations.get('new@example.com')).toBe('123456');
+      expect(created).toBeUndefined();
+      expect(db.pendingConfirmations.has('new@example.com')).toBe(false);
     });
 
-    it('rejects missing fields with the Zod validation contract', async () => {
+    it('returns the hold response even for malformed acquisition attempts', async () => {
       const res = await request(app).post('/auth/signup').send({ email: 'a@b.com' });
-      expect(res.status).toBe(400);
-      expect(res.body.message).toBe('Validation failed');
-      expect(res.body.details).toHaveProperty('password');
-      expect(res.body.details).toHaveProperty('name');
-    });
-
-    it('rejects too-short passwords (signupSchema min 8)', async () => {
-      const res = await request(app)
-        .post('/auth/signup')
-        .send({ email: 'short@example.com', password: 'pw1', name: 'Shorty' });
-      expect(res.status).toBe(400);
-      expect(res.body.message).toBe('Validation failed');
-      expect(res.body.details).toHaveProperty('password');
-    });
-
-    it('rejects duplicate email', async () => {
-      const res = await request(app)
-        .post('/auth/signup')
-        .send({ email: SEED_EMAIL, password: 'password-123', name: 'Dup User' });
-      expect(res.status).toBe(400);
-      expect(res.body.message).toBe('An account with this email already exists');
+      expect(res.status).toBe(503);
+      expect(res.body.message).toMatch(/registration.*paused/i);
     });
   });
 
   describe('POST /auth/confirm', () => {
     it('confirms the user and returns only a message — production never returns tokens here', async () => {
-      await request(app)
-        .post('/auth/signup')
-        .send({ email: 'c@example.com', password: 'password-123', name: 'Cee' });
+      provisionLocalUserFixture({
+        email: 'c@example.com',
+        password: 'password-123',
+        name: 'Cee',
+        confirmed: false,
+      });
       const res = await request(app)
         .post('/auth/confirm')
         .send({ email: 'c@example.com', code: '123456' });
@@ -143,9 +123,12 @@ describe('auth routes', () => {
     });
 
     it('rejects invalid code', async () => {
-      await request(app)
-        .post('/auth/signup')
-        .send({ email: 'd@example.com', password: 'password-123', name: 'Dee' });
+      provisionLocalUserFixture({
+        email: 'd@example.com',
+        password: 'password-123',
+        name: 'Dee',
+        confirmed: false,
+      });
       const res = await request(app)
         .post('/auth/confirm')
         .send({ email: 'd@example.com', code: '999999' });
@@ -196,9 +179,12 @@ describe('auth routes', () => {
     });
 
     it('rejects unconfirmed user', async () => {
-      await request(app)
-        .post('/auth/signup')
-        .send({ email: 'u@example.com', password: 'password-123', name: 'Uma' });
+      provisionLocalUserFixture({
+        email: 'u@example.com',
+        password: 'password-123',
+        name: 'Uma',
+        confirmed: false,
+      });
       const res = await request(app)
         .post('/auth/login')
         .send({ email: 'u@example.com', password: 'password-123' });
@@ -249,9 +235,12 @@ describe('auth routes', () => {
     });
 
     it('regenerates the pending code for unconfirmed users', async () => {
-      await request(app)
-        .post('/auth/signup')
-        .send({ email: 'r@example.com', password: 'password-123', name: 'Ria' });
+      provisionLocalUserFixture({
+        email: 'r@example.com',
+        password: 'password-123',
+        name: 'Ria',
+        confirmed: false,
+      });
       // Tamper with the stored code so we can verify resend overwrites it.
       db.pendingConfirmations.set('r@example.com', 'OLD');
       const res = await request(app).post('/auth/resend-code').send({ email: 'r@example.com' });
@@ -735,12 +724,8 @@ describe('DELETE /me', () => {
 });
 
 describe('invite + join flow', () => {
-  async function upgradeSeedHousehold(token: string, planId: 'garden' | 'greenhouse' = 'garden') {
-    const res = await request(app)
-      .post('/billing/checkout')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ planId });
-    expect(res.status).toBe(200);
+  function seedPaidPlan(planId: 'garden' | 'greenhouse' = 'garden') {
+    db.households.get(seedHouseholdId)!.planId = planId;
   }
 
   it('POST /households/join/:inviteCode joins via a valid invite and returns the household', async () => {
@@ -810,7 +795,7 @@ describe('invite + join flow', () => {
 
   it('400s a double-join into the same household', async () => {
     const adminToken = await loginAsSeed();
-    await upgradeSeedHousehold(adminToken);
+    seedPaidPlan();
     const invite = await request(app)
       .post(`/households/${seedHouseholdId}/invites`)
       .set('Authorization', `Bearer ${adminToken}`);
@@ -1133,10 +1118,7 @@ describe('public API + API keys', () => {
 
   it('admin on Greenhouse can issue + use a key end-to-end', async () => {
     const token = await loginAsSeed();
-    await request(app)
-      .post('/billing/checkout')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ planId: 'greenhouse' });
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
     const create = await request(app)
       .post('/api-keys')
       .set('Authorization', `Bearer ${token}`)
@@ -1161,10 +1143,7 @@ describe('public API + API keys', () => {
 
   it('a scoped key can only reach endpoints within its scopes', async () => {
     const token = await loginAsSeed();
-    await request(app)
-      .post('/billing/checkout')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ planId: 'greenhouse' });
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
     const create = await request(app)
       .post('/api-keys')
       .set('Authorization', `Bearer ${token}`)
@@ -1193,10 +1172,7 @@ describe('public API + API keys', () => {
 
   it('rejects an unknown scope at key creation', async () => {
     const token = await loginAsSeed();
-    await request(app)
-      .post('/billing/checkout')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ planId: 'greenhouse' });
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
     const res = await request(app)
       .post('/api-keys')
       .set('Authorization', `Bearer ${token}`)
@@ -1215,10 +1191,7 @@ describe('public API + API keys', () => {
 
   it('revoking a key locks out subsequent requests', async () => {
     const token = await loginAsSeed();
-    await request(app)
-      .post('/billing/checkout')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ planId: 'greenhouse' });
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
     const created = await request(app)
       .post('/api-keys')
       .set('Authorization', `Bearer ${token}`)
@@ -1339,8 +1312,20 @@ describe('billing', () => {
   it('GET /billing/plans is public and lists three tiers', async () => {
     const res = await request(app).get('/billing/plans');
     expect(res.status).toBe(200);
-    expect(res.body.length).toBe(3);
-    expect(res.body.map((p: { id: string }) => p.id)).toEqual(['seedling', 'garden', 'greenhouse']);
+    expect(res.body).toMatchObject({
+      paymentsAvailable: false,
+      commercialHold: { active: true, effectiveDate: '2026-07-14' },
+    });
+    expect(res.body.plans.map((p: { id: string }) => p.id)).toEqual([
+      'seedling',
+      'garden',
+      'greenhouse',
+    ]);
+    for (const plan of res.body.plans) {
+      expect(plan).not.toHaveProperty('monthlyPrice');
+      expect(plan).not.toHaveProperty('annualPrice');
+      expect(plan).not.toHaveProperty('lifetimePrice');
+    }
   });
 
   it('GET /billing/me defaults to seedling', async () => {
@@ -1350,16 +1335,23 @@ describe('billing', () => {
     expect(res.body.planId).toBe('seedling');
   });
 
-  it('admin can checkout (dev mode flips plan immediately)', async () => {
+  it('admin checkout fails closed without changing the plan', async () => {
     const token = await loginAsSeed();
     const res = await request(app)
       .post('/billing/checkout')
       .set('Authorization', `Bearer ${token}`)
       .send({ planId: 'garden' });
-    expect(res.status).toBe(200);
-    expect(res.body.url).toContain('/billing/dev-success');
+    expect(res.status).toBe(503);
+    expect(res.body.message).toMatch(/payments are currently paused/i);
     const me = await request(app).get('/billing/me').set('Authorization', `Bearer ${token}`);
-    expect(me.body.planId).toBe('garden');
+    expect(me.body.planId).toBe('seedling');
+  });
+
+  it('admin portal access also fails closed', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app).post('/billing/portal').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(503);
+    expect(res.body.message).toMatch(/billing access is currently paused/i);
   });
 
   it('non-admin cannot checkout', async () => {
@@ -1393,7 +1385,7 @@ describe('plan limits', () => {
     expect(overflow.status).toBe(402);
   });
 
-  it('upgrading to Garden lifts the cap', async () => {
+  it('a retained Garden entitlement lifts the cap', async () => {
     const token = await loginAsSeed();
     // Cap out on Seedling.
     for (let i = 0; i < 9; i++) {
@@ -1402,11 +1394,9 @@ describe('plan limits', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ name: `Plant ${i}` });
     }
-    // Upgrade.
-    await request(app)
-      .post('/billing/checkout')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ planId: 'garden' });
+    // Seed the retained entitlement architecture directly; public checkout is
+    // intentionally unavailable during the commercial hold.
+    db.households.get(seedHouseholdId)!.planId = 'garden';
     const after = await request(app)
       .post('/plants')
       .set('Authorization', `Bearer ${token}`)

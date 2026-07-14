@@ -16,7 +16,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title="Terms of Service" effectiveDate="July 13, 2026">
+    <LegalShell title="Terms of Service" effectiveDate="July 14, 2026">
       <p className="lead">
         These terms govern your use of Family Greenhouse. We&rsquo;ve kept them readable. If
         anything is unclear, email{' '}
@@ -53,14 +53,14 @@ export function TermsPage() {
           <a href="/legal/privacy">Privacy Policy</a> for the specifics.
         </li>
         <li>
-          <strong>Reasonable notice before changes.</strong> Pricing, plan limits, and material
-          features are stable for at least 14 days from announcement. Bug fixes and improvements
-          ship continuously.
+          <strong>Reasonable notice before changes.</strong> Material features and usage limits are
+          stable for at least 14 days from announcement. Bug fixes and improvements ship
+          continuously.
         </li>
         <li>
-          <strong>Honest billing.</strong> Paid plans are billed via Stripe. You can cancel any time
-          from <em>Settings → Billing</em>; the plan stays active until the end of the current
-          period. We don&rsquo;t auto-upgrade you out of free.
+          <strong>No current registration or payment collection.</strong> Family Greenhouse is
+          operating as a technical demonstration. It does not currently accept new account
+          registrations, offer paid plans, or create new Checkout or billing-portal sessions.
         </li>
       </ul>
 
@@ -91,16 +91,13 @@ export function TermsPage() {
         a chance to fix the issue first unless the violation is serious (e.g. abuse of other users).
       </p>
 
-      <h2>Pricing &amp; plans</h2>
+      <h2>Plan status</h2>
       <p>
-        Current plans: Seedling (free, up to 10 plants), Garden ($4.99/month), Greenhouse
-        ($9.99/month). Plan limits and prices may change with 14 days&rsquo; notice. We will not
-        retroactively bill or charge you for existing usage above a new free-tier cap; instead,
-        you&rsquo;ll be unable to add new plants/members until you upgrade or trim back.
-      </p>
-      <p>
-        Refunds: monthly subscriptions aren&rsquo;t pro-rated on cancel. If you&rsquo;ve been billed
-        by mistake or our service was seriously broken for you, email us; we&rsquo;ll make it right.
+        New account registration, paid-plan offers, purchases, upgrades, and plan changes are
+        paused. Historical tier and billing code remains in the project as implementation
+        documentation, but it is not a current offer. Existing account holders can still sign in. If
+        you believe an earlier test or billing event affected you, email us so it can be
+        investigated and resolved directly.
       </p>
 
       <h2>Limitations</h2>
@@ -108,7 +105,7 @@ export function TermsPage() {
         The service is provided &ldquo;as is.&rdquo; We aim for high availability but do not promise
         zero downtime, zero data loss, or that every feature will work in every browser at every
         moment. Our liability is limited to the amount you&rsquo;ve paid us in the previous 12
-        months — for free-tier users, that&rsquo;s zero.
+        months; the current demonstration does not accept payments.
       </p>
       <p>
         We don&rsquo;t give plant-care advice as a regulated service — the suggestions come from
