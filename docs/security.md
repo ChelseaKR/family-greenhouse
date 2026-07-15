@@ -1,6 +1,6 @@
 # Security
 
-> Last verified: 2026-07-13 · Recheck: every release (see "Re-running the audit")
+> Last verified: 2026-07-14 · Recheck: every release (see "Re-running the audit")
 
 This is a working audit against the OWASP Top 10 (2021 edition). Each category lists what's mitigated in code today, what's deferred to infrastructure (with a pointer to `production-checklist.md`), and what's an open gap. Re-run the audit before every release.
 
@@ -45,6 +45,10 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 - **Password policy**: Terraform enforces 12+ characters, mixed case, and digits. Cognito Threat Protection is `ENFORCED`, adding compromised-credential and risk-based checks; symbols are deliberately not required.
 - **MFA**: optional software-token TOTP is enabled in the Cognito pool. The enrollment/settings UI remains a separately scoped product feature; SMS MFA is deliberately off.
 - **Account-takeover via email change**: Cognito requires re-verification of new email addresses before they replace the existing one.
+- **Commercial-hold registration backstop**: the public signup handler returns
+  `503` before Cognito, and the Cognito pool independently requires
+  administrator-created users. Existing login, refresh, recovery, and pending
+  confirmation/resend flows remain enabled.
 
 **Residual:** the pool's enforced Threat Protection and Cognito's managed
 progressive lockout cover automated takeover attempts. A user-visible
@@ -91,6 +95,10 @@ or support signal.
 - Session validation on app load (`authStore.verifySession`) calls `/auth/me`
   with the ID token and now attempts the same refresh flow on a 401 before
   ending the session.
+- Public self-registration is disabled in both application code and Cognito
+  pool policy during the commercial hold; deployed smoke coverage asserts the
+  admin-only pool setting before proving an administrator-created user can log
+  in normally.
 
 **Deferred product option:** WebAuthn/passkeys would be a stronger alternative
 to passwords, but no account-takeover signal currently justifies adding a

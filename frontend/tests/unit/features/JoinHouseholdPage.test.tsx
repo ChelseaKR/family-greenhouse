@@ -41,6 +41,30 @@ describe('JoinHouseholdPage', () => {
     } as never);
   });
 
+  it('offers logged-out invitees existing-account sign-in only', async () => {
+    useAuthStore.setState({ isAuthenticated: false, user: null } as never);
+    server.use(
+      http.get(`${API}/households/invites/code-public`, () =>
+        HttpResponse.json({ valid: true, household: { id: 'hh-9', name: 'The Brikis' } })
+      )
+    );
+
+    renderJoin('code-public');
+
+    expect(await screen.findByText(/invited to join/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute(
+      'href',
+      '/login?redirect=/join/code-public'
+    );
+    expect(screen.queryByRole('button', { name: /create account/i })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href^="/register"]')).toBeNull();
+    expect(
+      screen.getByRole('heading', {
+        name: /new registration and commercial activity are paused/i,
+      })
+    ).toBeInTheDocument();
+  });
+
   it('refreshes the token after joining so the new household claim lands (the add-plant 403 fix)', async () => {
     let refreshCalls = 0;
     server.use(

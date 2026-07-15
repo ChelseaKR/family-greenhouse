@@ -17,6 +17,9 @@ export default defineConfig({
     // The structural fix (refactor local-server.ts to a createApp() factory
     // so each test file gets an isolated app+db) is on the roadmap; this
     // unblocks CI in the meantime.
+    // Threads also avoid intermittent child-process startup timeouts in the
+    // fork pool on laptops and shared runners; fileParallelism remains off.
+    pool: 'threads',
     fileParallelism: false,
     testTimeout: 10_000,
     retry: 1,

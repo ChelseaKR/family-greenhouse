@@ -16,6 +16,10 @@ vi.mock('../../../src/services/cognitoUsers.js', () => ({
 vi.mock('../../../src/services/householdService.js', () => ({
   updateMemberNameAcrossHouseholds: vi.fn(),
 }));
+const commercialStatus = vi.hoisted(() => ({ registrationAvailable: false }));
+vi.mock('../../../src/config/commercialStatus.js', () => ({
+  publicRegistrationIsAvailable: () => commercialStatus.registrationAvailable,
+}));
 
 function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
@@ -65,6 +69,7 @@ describe('auth handler', () => {
     // additionally drops the implementations, so each test starts from
     // a clean Cognito mock.
     vi.resetAllMocks();
+    commercialStatus.registrationAvailable = false;
     // The rate limiter holds in-memory buckets keyed by IP+path. Tests
     // share an IP (127.0.0.1) and route, so without resetting between
     // tests the 11th call would 429 even though the test suite is
@@ -81,7 +86,29 @@ describe('auth handler', () => {
   });
 
   describe('signup', () => {
+    it('returns 503 before Cognito while public registration is paused', async () => {
+      const { cognito } = await import('../../../src/utils/cognito.js');
+      const { signup } = await import('../../../src/handlers/auth/handler.js');
+
+      const res = (await signup(
+        buildEvent({
+          body: JSON.stringify({
+            email: 'new@example.com',
+            password: 'Passw0rd!',
+            name: 'New User',
+          }),
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body).toMatch(/registration.*paused/i);
+      expect(cognito.send).not.toHaveBeenCalled();
+    });
+
     it('returns 201 on successful Cognito SignUp', async () => {
+      commercialStatus.registrationAvailable = true;
       const { cognito } = await import('../../../src/utils/cognito.js');
       const { signup } = await import('../../../src/handlers/auth/handler.js');
       vi.mocked(cognito.send).mockResolvedValueOnce({} as never);
@@ -105,6 +132,7 @@ describe('auth handler', () => {
     });
 
     it('translates UsernameExistsException to 400', async () => {
+      commercialStatus.registrationAvailable = true;
       const { cognito } = await import('../../../src/utils/cognito.js');
       const { signup } = await import('../../../src/handlers/auth/handler.js');
       vi.mocked(cognito.send).mockRejectedValueOnce(new CognitoError('UsernameExistsException'));
@@ -126,6 +154,7 @@ describe('auth handler', () => {
     });
 
     it('translates InvalidPasswordException to 400', async () => {
+      commercialStatus.registrationAvailable = true;
       const { cognito } = await import('../../../src/utils/cognito.js');
       const { signup } = await import('../../../src/handlers/auth/handler.js');
       vi.mocked(cognito.send).mockRejectedValueOnce(new CognitoError('InvalidPasswordException'));

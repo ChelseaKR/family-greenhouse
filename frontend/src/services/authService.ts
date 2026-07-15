@@ -6,12 +6,6 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface RegisterData {
-  email: string;
-  password: string;
-  name: string;
-}
-
 export interface AuthResponse {
   user: User;
   /** Cognito ID token — what we send in Authorization. Carries the household
@@ -41,11 +35,6 @@ export interface ResetPasswordData {
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>('/auth/login', credentials);
-    return response.data;
-  },
-
-  async register(data: RegisterData): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/signup', data);
     return response.data;
   },
 

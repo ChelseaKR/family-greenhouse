@@ -16,7 +16,6 @@ function renderPage() {
     <MemoryRouter initialEntries={['/pet-safe']}>
       <Routes>
         <Route path="/pet-safe" element={<PetSafePage />} />
-        <Route path="/register" element={<div>Register Page</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -98,9 +97,11 @@ describe('PetSafePage', () => {
     expect(lookup).not.toHaveBeenCalled();
   });
 
-  it('links to sign-up via the call to action', () => {
+  it('keeps the public checker but replaces account acquisition with hold status', () => {
     renderPage();
-    const cta = screen.getByRole('link', { name: /get started/i });
-    expect(cta).toHaveAttribute('href', '/register');
+    expect(screen.getByLabelText(/plant or species name/i)).toBeInTheDocument();
+    expect(screen.getByText(/new account registration.*paused/i)).toBeInTheDocument();
+    expect(document.querySelector('a[href^="/register"]')).toBeNull();
+    expect(screen.queryByRole('link', { name: /get started/i })).not.toBeInTheDocument();
   });
 });

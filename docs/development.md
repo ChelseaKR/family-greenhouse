@@ -37,7 +37,11 @@ Open http://localhost:3000. The dev server seeds:
 - One household ("Test Household") with the user as admin
 - One plant ("Monstera") with one task
 
-For new signups, the confirmation code is always `123456`. Forgot-password reset code is also `123456`.
+Public signup returns `503` during the commercial hold. Browser tests provision
+isolated users through the non-deployed `/__test__/accounts` local fixture route,
+which exists only when `ALLOW_TEST_ACCOUNT_PROVISIONING=1`; Playwright sets that
+flag in its local server command. Pending-user integration fixtures still use
+confirmation code `123456`, and the forgot-password reset code remains `123456`.
 
 ## What's running
 

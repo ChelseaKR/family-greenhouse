@@ -29,22 +29,26 @@ test.describe('Authentication', () => {
     await expect(page.getByRole('alert').filter({ hasText: /email/i })).toBeVisible();
   });
 
-  test('has link to register page', async ({ page }) => {
+  test('keeps login available without a registration link', async ({ page }) => {
     await page.goto('/login');
 
-    await page.getByRole('link', { name: /sign up/i }).click();
-    await expect(page).toHaveURL(/\/register/);
+    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
+    await expect(page.locator('a[href^="/register"]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /demo status/i })).toHaveAttribute(
+      'href',
+      '/pricing'
+    );
   });
 
-  test('register page has required fields', async ({ page }) => {
+  test('register route is status-only with no signup form', async ({ page }) => {
     await page.goto('/register');
 
-    await expect(page.getByLabel(/full name/i)).toBeVisible();
-    await expect(page.getByLabel(/email/i)).toBeVisible();
-    // Required fields render a trailing "*" marker inside the label, so
-    // anchor on the word but allow the marker.
-    await expect(page.getByLabel(/^password\s*\*?$/i)).toBeVisible();
-    await expect(page.getByLabel(/confirm password/i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /new account registration is paused/i })
+    ).toBeVisible();
+    await expect(page.locator('form')).toHaveCount(0);
+    await expect(page.locator('input')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
   });
 
   test('has link to forgot password', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillingSettings } from '@/features/settings/BillingSettings';
@@ -35,9 +35,6 @@ const PLANS: Plan[] = [
     id: 'seedling',
     name: 'Seedling',
     description: 'Free',
-    monthlyPrice: 0,
-    annualPrice: null,
-    lifetimePrice: null,
     maxPlants: 10,
     maxMembers: 1,
   },
@@ -45,9 +42,6 @@ const PLANS: Plan[] = [
     id: 'garden',
     name: 'Garden',
     description: 'Families',
-    monthlyPrice: 4.99,
-    annualPrice: 39.99,
-    lifetimePrice: 149,
     maxPlants: 500,
     maxMembers: 6,
   },
@@ -55,9 +49,6 @@ const PLANS: Plan[] = [
     id: 'greenhouse',
     name: 'Greenhouse',
     description: 'Serious',
-    monthlyPrice: 9.99,
-    annualPrice: 79.99,
-    lifetimePrice: null,
     maxPlants: 5000,
     maxMembers: 50,
   },
@@ -69,7 +60,11 @@ function usage(over: Partial<PlanUsage> = {}): PlanUsage {
 
 async function renderBilling(sub: SubscriptionState) {
   const { billingService } = await import('@/services/billingService');
-  vi.mocked(billingService.listPlans).mockResolvedValue(PLANS);
+  vi.mocked(billingService.listPlans).mockResolvedValue({
+    paymentsAvailable: false,
+    commercialHold: { active: true, effectiveDate: '2026-07-14' },
+    plans: PLANS,
+  });
   vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
   useAuthStore.setState({
     user: {
@@ -141,8 +136,8 @@ describe('BillingSettings', () => {
     expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
     // Read/edit/delete keep working; adding is what's blocked.
     expect(screen.getByText(/view, edit, and remove/)).toBeInTheDocument();
-    // Admin with a Stripe customer gets the manage-subscription link.
-    expect(screen.getByRole('button', { name: 'Manage subscription' })).toBeInTheDocument();
+    // Historical Stripe state does not reopen a billing-management surface.
+    expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
     // Meters still render, flagged as over.
     expect(screen.getByText('25 of 10 plants')).toBeInTheDocument();
   });
@@ -156,11 +151,15 @@ describe('BillingSettings', () => {
     expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
   });
 
-  it('shows the plan grid on the web (no native notice)', async () => {
+  it('shows only current plan status on the web, with no commercial controls or amounts', async () => {
     await renderBilling({ planId: 'seedling' });
-    expect(screen.getByRole('radiogroup', { name: 'Billing interval' })).toBeInTheDocument();
-    // Non-current plans render as cards (their CTA text varies with IS_BETA).
-    expect(screen.getByText('Greenhouse')).toBeInTheDocument();
+    expect(screen.getByText(/technical demo — plan changes paused/i)).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Billing interval' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Greenhouse')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /upgrade|subscribe|manage/i })
+    ).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\$\s*\d/);
     expect(screen.queryByText("Plan changes aren't available in the app.")).not.toBeInTheDocument();
   });
 
@@ -208,21 +207,11 @@ describe('BillingSettings', () => {
     });
   });
 
-  it('shows the Lifetime cadence as "$149 once" on Garden only, leaving Greenhouse on its annual price', async () => {
+  it('does not expose retained monthly, annual, or lifetime pricing', async () => {
     await renderBilling({ planId: 'seedling' });
-    // Default cadence is Annual — Garden shows its yearly headline, no lifetime.
-    expect(screen.queryByText('once')).not.toBeInTheDocument();
-
-    // Switch to the Lifetime cadence.
-    fireEvent.click(screen.getByRole('radio', { name: 'Lifetime' }));
-
-    // Garden (the only lifetime tier) now shows the one-time price.
-    expect(screen.getByText('$149')).toBeInTheDocument();
-    expect(screen.getByText('once')).toBeInTheDocument();
-    expect(screen.getByText(/keep Garden forever/)).toBeInTheDocument();
-    // Greenhouse has no lifetime — it falls back to its annual price, not "once".
-    expect(screen.getByText('$79.99')).toBeInTheDocument();
-    // The nudge reflects the Garden-only constraint.
-    expect(screen.getByText(/Garden only/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\$\s*\d/);
+    expect(
+      screen.queryByText(/monthly|annual|lifetime|billed yearly|pay once/i)
+    ).not.toBeInTheDocument();
   });
 });

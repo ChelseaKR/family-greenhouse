@@ -87,33 +87,40 @@ export function isPlanId(id: unknown): id is PlanId {
   return typeof id === 'string' && Object.hasOwn(PLANS, id);
 }
 
-/**
- * Public, client-facing projection of a plan. Lives here (not in
- * services/billing.ts) so the dev mock server and other pure consumers can
- * price plan cards without importing the billing service — which eagerly
- * connects to DynamoDB and requires TABLE_NAME at module load.
- */
-export function planSummary(plan: Plan): {
+export interface PlanSummary {
   id: PlanId;
   name: string;
   description: string;
-  monthlyPrice: number;
-  annualPrice: number | null;
-  lifetimePrice: number | null;
   maxPlants: number;
   maxMembers: number;
-} {
-  return {
+  monthlyPrice?: number;
+  annualPrice?: number | null;
+  lifetimePrice?: number | null;
+}
+
+/**
+ * Public, client-facing projection of a plan. Price fields are fail-closed:
+ * callers must explicitly prove that payments are available before including
+ * them. The API and local server pass their commercial-status decision here,
+ * while internal tests can still exercise the retained historical billing
+ * implementation without publishing amounts.
+ */
+export function planSummary(plan: Plan, includePrices = false): PlanSummary {
+  const summary: PlanSummary = {
     id: plan.id,
     name: plan.name,
     description: plan.description,
-    monthlyPrice: plan.monthlyPrice,
-    // null (not undefined) so it survives JSON serialization as an explicit
-    // "no annual option" signal the client can branch on.
-    annualPrice: plan.annualPrice ?? null,
-    // Same null-not-undefined contract: null means "no lifetime option".
-    lifetimePrice: plan.lifetimePrice ?? null,
     maxPlants: plan.maxPlants,
     maxMembers: plan.maxMembers,
   };
+
+  if (includePrices) {
+    summary.monthlyPrice = plan.monthlyPrice;
+    // null (not undefined) survives JSON serialization as an explicit
+    // "no annual option" signal when payment activity is enabled.
+    summary.annualPrice = plan.annualPrice ?? null;
+    summary.lifetimePrice = plan.lifetimePrice ?? null;
+  }
+
+  return summary;
 }

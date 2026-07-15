@@ -21,9 +21,8 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { getErrorMessage } from '@/services/api';
 
 /**
- * Manage household API keys. Greenhouse plan only — the create call returns
- * 402 with a clear message for other plans, which we surface as the "upgrade
- * to use the API" state.
+ * Manage household API keys. Existing Greenhouse-entitled households retain
+ * this capability; plan changes remain unavailable during the commercial hold.
  *
  * The plaintext key is shown ONCE in a flash banner after creation. We never
  * store it in component state beyond the current render, and once the user
@@ -108,7 +107,7 @@ export function ApiKeysSettings() {
       <Card>
         <CardHeader
           title="API keys"
-          description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Greenhouse plan only."
+          description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Availability depends on the household’s existing demo entitlement; plan changes are paused."
         />
 
         {createdPlaintext && (

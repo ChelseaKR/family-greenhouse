@@ -271,7 +271,11 @@ jobs:
   deploy-backend:
     name: Deploy Backend
     runs-on: ubuntu-latest
-    needs: [validate, terraform]
+    # The commercial-hold release changes GET /billing/plans from a legacy
+    # array to a status-bearing object. Deploy the backward-compatible frontend
+    # first so no old bundle can observe the new contract and render stale
+    # pricing controls during a rolling release.
+    needs: [validate, terraform, deploy-frontend]
     # OIDC: assumes AWS_PRODUCTION_ROLE_ARN via configure-aws-credentials.
     permissions:
       id-token: write
@@ -378,7 +382,7 @@ jobs:
   smoke-tests:
     name: Post-deploy smoke (Playwright e2e against prod)
     runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend]
+    needs: [validate, deploy-frontend, deploy-backend]
     # OIDC: assumes AWS_PRODUCTION_ROLE_ARN for Cognito test-user create+delete.
     permissions:
       id-token: write

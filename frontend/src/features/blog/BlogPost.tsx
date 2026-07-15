@@ -1,7 +1,7 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
-import { Button } from '@/components/Button';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { findPost, POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
@@ -96,17 +96,7 @@ export function BlogPost() {
 
       <Body />
 
-      <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-        <p className="font-serif text-xl text-ink">Try Family Greenhouse</p>
-        <p className="mt-2 text-sm text-gray-600">
-          Free for up to 10 plants. No credit card. Share with whoever you live with.
-        </p>
-        <div className="mt-4">
-          <Link to="/register">
-            <Button>Get started</Button>
-          </Link>
-        </div>
-      </aside>
+      <CommercialHoldNotice compact className="mt-16" />
 
       {otherPosts.length > 0 && (
         <section className="mt-16">

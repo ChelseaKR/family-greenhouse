@@ -1,25 +1,23 @@
 import { api } from './api';
-import { track } from './analytics';
+import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
-
-/** Billing cadence sent to /billing/checkout. `lifetime` is a one-time payment
- *  (Garden tier only). */
-export type BillingInterval = 'month' | 'year' | 'lifetime';
 
 export interface Plan {
   id: PlanId;
   name: string;
   description: string;
-  monthlyPrice: number;
-  /** Yearly price in dollars, or null when the tier has no annual option
-   *  (free tier). */
-  annualPrice: number | null;
-  /** One-time lifetime price in dollars, or null when the tier has no lifetime
-   *  option (only Garden offers one). */
-  lifetimePrice: number | null;
   maxPlants: number;
   maxMembers: number;
+}
+
+export interface PlanCatalog {
+  paymentsAvailable: boolean;
+  commercialHold: {
+    active: boolean;
+    effectiveDate: string;
+  };
+  plans: Plan[];
 }
 
 /** Current usage vs. the active plan's caps, from GET /billing/me. */
@@ -51,37 +49,32 @@ export function isOverPlanLimit(usage?: PlanUsage | null): boolean {
 }
 
 export const billingService = {
-  async listPlans(): Promise<Plan[]> {
-    const response = await api.get<Plan[]>('/billing/plans');
+  async listPlans(): Promise<PlanCatalog> {
+    const response = await api.get<PlanCatalog | Plan[]>('/billing/plans');
+    if (Array.isArray(response.data)) {
+      // Rolling-deploy compatibility: the prior API returned a bare array with
+      // price fields. Strip it to the noncommercial plan projection and fail
+      // closed until the new status-bearing API is live.
+      return {
+        paymentsAvailable: false,
+        commercialHold: {
+          active: COMMERCIAL_HOLD_ACTIVE,
+          effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
+        },
+        plans: response.data.map(({ id, name, description, maxPlants, maxMembers }) => ({
+          id,
+          name,
+          description,
+          maxPlants,
+          maxMembers,
+        })),
+      };
+    }
     return response.data;
   },
 
   async getCurrentSubscription(): Promise<SubscriptionState> {
     const response = await api.get<SubscriptionState>('/billing/me');
-    return response.data;
-  },
-
-  async startCheckout(
-    planId: Exclude<PlanId, 'seedling'>,
-    interval: BillingInterval = 'month'
-  ): Promise<{ url: string }> {
-    const checkoutAttemptId = crypto.randomUUID();
-    const response = await api.post<{ url: string }>('/billing/checkout', {
-      planId,
-      interval,
-      checkoutAttemptId,
-    });
-    // Mark intent at checkout-start; the actual successful upgrade is
-    // confirmed by the Stripe webhook server-side. We track intent here
-    // as a leading indicator and rely on a separate `subscription_active`
-    // signal (post-webhook) for billing source-of-truth.
-    track('subscription_upgraded', { upgradeTo: planId, interval });
-    return response.data;
-  },
-
-  async openPortal(): Promise<{ url: string }> {
-    const response = await api.post<{ url: string }>('/billing/portal');
-    track('subscription_canceled');
     return response.data;
   },
 };

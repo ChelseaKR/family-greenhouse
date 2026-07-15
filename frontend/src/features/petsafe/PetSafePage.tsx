@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Input } from '@/components/Input';
@@ -7,6 +6,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { useDebounce } from '@/hooks/useDebounce';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
+import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 
 /**
  * Free, no-signup "Is this plant safe for pets?" checker. A top-of-funnel
@@ -139,31 +139,7 @@ export function PetSafePage() {
         </p>
       </aside>
 
-      <section className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-        <h2 className="font-serif text-xl text-ink">
-          Keeping a pet-safe home is easier when everyone’s on the same page
-        </h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Family Greenhouse keeps your plants, their care, and who’s looking after what in one
-          shared place — so the whole household knows which plants to keep out of reach. Free to
-          start, no card needed.
-        </p>
-        <div className="mt-4">
-          <Link
-            to="/register"
-            className="inline-flex items-center rounded-md bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 min-h-touch"
-          >
-            Get started
-          </Link>
-          <p className="mt-3 text-xs text-gray-600">
-            Just browsing? Read our{' '}
-            <Link to="/care" className="text-primary-700 underline hover:text-primary-800">
-              plant care guides
-            </Link>
-            .
-          </p>
-        </div>
-      </section>
+      <CommercialHoldNotice compact className="mt-16" />
     </PublicShell>
   );
 }

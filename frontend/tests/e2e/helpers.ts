@@ -11,8 +11,9 @@ import { expect, request as playwrightRequest, Page } from '@playwright/test';
  *    account (test@example.com) race each other across projects — e.g.
  *    completing the seeded water task in one project breaks another
  *    project's "task is due today" assertion. `provisionAccount` gives a
- *    spec its own freshly registered user + household (+ optional plant
- *    and water task) over the local API so mutations stay isolated.
+ *    spec its own directly provisioned local-only user + household (+ optional
+ *    plant and water task) so mutations stay isolated without reopening the
+ *    public signup route during the commercial hold.
  *
  * 2. **Mobile navigation.** On mobile viewports the sidebar nav links sit
  *    behind the "Open sidebar" hamburger, so a bare
@@ -53,12 +54,8 @@ export async function provisionAccount(opts: {
 
   const api = await playwrightRequest.newContext();
   try {
-    let res = await api.post(`${API_URL}/auth/signup`, { data: { email, password, name } });
-    expect(res.status(), 'signup should succeed').toBe(201);
-
-    // The local server uses a fixed confirmation code.
-    res = await api.post(`${API_URL}/auth/confirm`, { data: { email, code: '123456' } });
-    expect(res.ok(), 'confirm should succeed').toBeTruthy();
+    let res = await api.post(`${API_URL}/__test__/accounts`, { data: { email, password, name } });
+    expect(res.status(), 'local test provisioning should succeed').toBe(201);
 
     res = await api.post(`${API_URL}/auth/login`, { data: { email, password } });
     expect(res.ok(), 'login should succeed').toBeTruthy();

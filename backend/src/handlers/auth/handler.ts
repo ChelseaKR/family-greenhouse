@@ -38,11 +38,18 @@ import { cognito, CLIENT_ID } from '../../utils/cognito.js';
 import { getUserName } from '../../services/cognitoUsers.js';
 import { successResponse, createdResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
+import { publicRegistrationIsAvailable } from '../../config/commercialStatus.js';
 
 // POST /auth/signup
 export const signup = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { validatedBody } = event as ValidatedEvent<SignupInput>;
+
+    if (!publicRegistrationIsAvailable()) {
+      throw createHttpError(503, 'New account registration is currently paused.', {
+        expose: true,
+      });
+    }
 
     try {
       await cognito.send(

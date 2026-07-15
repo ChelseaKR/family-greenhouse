@@ -19,6 +19,13 @@ function renderLogin(entry = '/login') {
 }
 
 describe('LoginPage', () => {
+  it('keeps existing-account login while exposing no registration link', () => {
+    renderLogin();
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(document.querySelector('a[href^="/register"]')).toBeNull();
+    expect(screen.getByRole('link', { name: /demo status/i })).toHaveAttribute('href', '/pricing');
+  });
+
   it('rejects invalid emails before submission', async () => {
     const user = userEvent.setup();
     renderLogin();

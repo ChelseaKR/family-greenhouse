@@ -8,7 +8,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { app, db, resetDb, seedHouseholdId, seedTaskId } from '../../src/local-server';
+import {
+  app,
+  db,
+  provisionLocalUserFixture,
+  resetDb,
+  seedHouseholdId,
+  seedTaskId,
+} from '../../src/local-server';
 
 const SEED_EMAIL = 'test@example.com';
 const SEED_PASSWORD = 'password123';
@@ -21,13 +28,9 @@ async function loginAsSeed(): Promise<string> {
   return res.body.accessToken as string;
 }
 
-/** Signup → confirm → login → create an own household; returns the token. */
+/** Direct local fixture → login → own household; returns the token. */
 async function createUserWithHousehold(email: string, householdName: string): Promise<string> {
-  const signup = await request(app)
-    .post('/auth/signup')
-    .send({ email, password: 'password-123', name: 'Neighbor' });
-  expect(signup.status).toBe(201);
-  await request(app).post('/auth/confirm').send({ email, code: '123456' });
+  provisionLocalUserFixture({ email, password: 'password-123', name: 'Neighbor' });
   const login = await request(app).post('/auth/login').send({ email, password: 'password-123' });
   expect(login.status).toBe(200);
   const token = login.body.accessToken as string;

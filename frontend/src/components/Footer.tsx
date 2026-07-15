@@ -4,7 +4,7 @@ import { MemorialFrame } from './brand/MemorialFrame';
 const FOOTER_LINKS = [
   { label: 'Care guides', to: '/care' },
   { label: 'Blog', to: '/blog' },
-  { label: 'Pricing', to: '/pricing' },
+  { label: 'Demo status', to: '/pricing' },
   { label: 'Changelog', to: '/changelog' },
   { label: 'Status', to: '/status' },
   { label: 'Support', to: '/support' },

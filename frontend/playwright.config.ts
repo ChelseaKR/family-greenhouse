@@ -56,7 +56,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npm --workspace backend run dev',
+      command: 'ALLOW_TEST_ACCOUNT_PROVISIONING=1 npm --workspace backend run dev',
       url: 'http://localhost:4000/health',
       cwd: '..',
       reuseExistingServer: !process.env.CI,
