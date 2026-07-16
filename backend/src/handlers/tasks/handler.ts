@@ -541,8 +541,10 @@ export const listVacations = createHandler(
 //   - sitterService.getActiveLink enforces existence + active + within the
 //     [startsAt, expiresAt] window on EVERY call, and is generic on failure so
 //     the endpoint isn't a token-existence oracle (single 404 for any miss).
-//   - The response exposes ONLY the PII-free SitterTask projection — no member
-//     names/emails, no other households, no full plant records, no notes.
+//   - The response exposes ONLY the minimal SitterTask projection — no member
+//     names/emails, no other households, no full plant records, no private
+//     plant/task notes, and no household climate location. Current space and
+//     placement note are intentionally shared as care directions.
 
 // GET /sitter/{token}
 //
@@ -632,6 +634,10 @@ export const completeSitterTask = createHandler(
       plantName: task.plantName,
       taskType: task.customType || task.type,
       dueDate: task.nextDue,
+      // The completion response is only an acknowledgement; placements are
+      // supplied on GET and can change independently of the recurring task.
+      spaceName: null,
+      placementNote: null,
       overdue: false,
     });
   }

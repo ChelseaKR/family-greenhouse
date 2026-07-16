@@ -9,7 +9,8 @@
  * otherwise try to refresh a (non-existent) session for an anonymous visitor.
  *
  * The 256-bit token in the path is the only credential. The endpoints expose
- * NO PII — just the plant common name, task type, due date, and id.
+ * NO member identity, private notes, or household climate location. They do
+ * include the current space and placement note as explicit care directions.
  */
 
 export interface SitterTask {
@@ -17,6 +18,8 @@ export interface SitterTask {
   plantName: string;
   taskType: string;
   dueDate: string;
+  spaceName: string | null;
+  placementNote: string | null;
   overdue: boolean;
 }
 

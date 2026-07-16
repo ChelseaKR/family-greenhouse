@@ -42,6 +42,7 @@
     "fieldLabel": "Space (optional)",
     "placementNoteLabel": "Placement note",
     "placementNotePlaceholder": "e.g., east window, top shelf",
+    "placementNoteSitterHint": "Shared with anyone who has an active sitter link.",
     "createAction": "Create space",
     "nameLabel": "Space name",
     "namePlaceholder": "e.g., Living room or Back patio",

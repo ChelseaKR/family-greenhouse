@@ -73,7 +73,7 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
     <Card>
       <CardHeader
         title="Plant-sitter links"
-        description="Going away? Share a temporary link so a neighbour or friend can see what needs care and check it off — no account needed. The link expires on its own, and you can revoke it any time."
+        description="Going away? Share a temporary link so a neighbour or friend can see due care, plant names, current spaces, and placement notes — never your saved city, private notes, or member details. The link expires on its own, and you can revoke it any time."
       />
 
       {created ? (

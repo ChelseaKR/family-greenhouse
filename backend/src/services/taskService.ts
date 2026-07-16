@@ -27,6 +27,7 @@ import { Task, TaskCompletion, DynamoDBItem } from '../models/types.js';
 import { CreateTaskInput, UpdateTaskInput, TaskFilters } from '../models/schemas.js';
 import { getMemberByUserId } from './householdService.js';
 import * as plantService from './plantService.js';
+import * as spaceService from './spaceService.js';
 import { recordActivity } from './activity.js';
 
 const MAX_QUERY_LIMIT = 200;
@@ -223,14 +224,20 @@ export async function getTasks(
 /**
  * The minimal, PII-free task shape a plant-sitter sees. Deliberately NOT the
  * full Task: no assignee names/ids, no createdBy, no notes (notes can contain
- * household-private context), no householdId. Just enough to do the job:
- * which plant, what to do, when it's due.
+ * household-private context), no householdId, and no household climate
+ * location. Just enough to do the job: which plant, where it is, what to do,
+ * and when it's due. Space names and placement notes are user-authored fields
+ * that the household explicitly chooses to share with active sitter links.
  */
 export interface SitterTask {
   taskId: string;
   plantName: string;
   taskType: string;
   dueDate: string;
+  /** Current structured space name, or the legacy location string. */
+  spaceName: string | null;
+  /** Short directions within that space, e.g. "east window, top shelf". */
+  placementNote: string | null;
   /** True when dueDate is in the past — drives the "overdue" badge. */
   overdue: boolean;
 }
@@ -241,7 +248,7 @@ export interface SitterTask {
  * already overdue — the sitter should see everything that needs doing during
  * their window, not just strictly-overdue items. Tasks for died/gave_away
  * plants are filtered out (getTasks already does this). The returned objects
- * expose ONLY plant common name, task type, due date, and id — see SitterTask.
+ * expose ONLY the fields documented by SitterTask.
  */
 export async function getSitterTasks(
   householdId: string,
@@ -254,19 +261,35 @@ export async function getSitterTasks(
   const nowIso = now.toISOString();
 
   // getTasks already lifecycle-filters (active plants only) and returns the
-  // denormalized plantName + customType we need — reuse it rather than
-  // re-deriving the projection.
+  // denormalized plantName + customType we need. Placements are deliberately
+  // resolved at read time so moving a plant or renaming a space is reflected
+  // immediately without rewriting recurring task rows.
   const tasks = await getTasks(householdId);
+  const [plants, spaces] = await Promise.all([
+    plantService.getPlants(householdId),
+    spaceService.getSpaces(householdId),
+  ]);
+  const plantsById = new Map(plants.map((plant) => [plant.id, plant]));
+  const spacesById = new Map(spaces.map((space) => [space.id, space]));
+
   return tasks
     .filter((t) => t.nextDue <= cutoffIso)
     .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
-    .map((t) => ({
-      taskId: t.id,
-      plantName: t.plantName,
-      taskType: t.customType || t.type,
-      dueDate: t.nextDue,
-      overdue: t.nextDue < nowIso,
-    }));
+    .map((t) => {
+      const plant = plantsById.get(t.plantId);
+      const spaceName = plant?.spaceId
+        ? (spacesById.get(plant.spaceId)?.name ?? plant.location ?? null)
+        : (plant?.location ?? null);
+      return {
+        taskId: t.id,
+        plantName: t.plantName,
+        taskType: t.customType || t.type,
+        dueDate: t.nextDue,
+        spaceName,
+        placementNote: plant?.placementNote ?? null,
+        overdue: t.nextDue < nowIso,
+      };
+    });
 }
 
 export async function getUpcomingTasks(householdId: string): Promise<TaskWithCoverage[]> {

@@ -2311,10 +2311,12 @@ app.get('/plants/shared/:code', (req, res) => {
 // --- Plant-sitter PUBLIC endpoints (no auth) ------------------------------
 // Mirrors handlers/tasks/handler.ts: getSitterView / completeSitterTask. The
 // 256-bit token in the path is the only credential; we validate it on every
-// call and expose ONLY the PII-free due-task projection.
+// call and expose ONLY the minimal due-task projection. Current space and
+// placement note are shared; private notes, saved climate location, and member
+// data are not.
 
-/** PII-free due/overdue tasks for a household. Mirrors taskService.getSitterTasks:
- *  due within 7 days OR overdue, active plants only, minimal fields. */
+/** Minimal due/overdue tasks for a household. Mirrors taskService.getSitterTasks:
+ *  due within 7 days OR overdue, active plants only, with sitter-safe location. */
 function sitterTasksFor(householdId: string) {
   const now = new Date();
   const cutoff = new Date(now);
@@ -2326,13 +2328,19 @@ function sitterTasksFor(householdId: string) {
     .filter((t) => (db.plants.get(t.plantId)?.status ?? 'active') === 'active')
     .filter((t) => t.nextDue <= cutoffIso)
     .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
-    .map((t) => ({
-      taskId: t.id,
-      plantName: t.plantName,
-      taskType: t.customType || t.type,
-      dueDate: t.nextDue,
-      overdue: t.nextDue < nowIso,
-    }));
+    .map((t) => {
+      const plant = db.plants.get(t.plantId);
+      const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+      return {
+        taskId: t.id,
+        plantName: t.plantName,
+        taskType: t.customType || t.type,
+        dueDate: t.nextDue,
+        spaceName: space?.name ?? plant?.location ?? null,
+        placementNote: plant?.placementNote ?? null,
+        overdue: t.nextDue < nowIso,
+      };
+    });
 }
 
 // GET /sitter/:token
@@ -2397,6 +2405,8 @@ app.post('/sitter/:token/tasks/:taskId/complete', (req, res) => {
     plantName: task.plantName,
     taskType: task.customType || task.type,
     dueDate: task.nextDue,
+    spaceName: null,
+    placementNote: null,
     overdue: false,
   });
 });

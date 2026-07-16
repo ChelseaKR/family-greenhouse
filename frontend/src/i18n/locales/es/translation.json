@@ -43,6 +43,7 @@
     "fieldLabel": "Espacio (opcional)",
     "placementNoteLabel": "Nota de ubicación",
     "placementNotePlaceholder": "p. ej., ventana este, estante superior",
+    "placementNoteSitterHint": "Se comparte con quien tenga un enlace de cuidador activo.",
     "createAction": "Crear espacio",
     "nameLabel": "Nombre del espacio",
     "namePlaceholder": "p. ej., Sala o Patio trasero",

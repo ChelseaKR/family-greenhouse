@@ -306,7 +306,7 @@ paths:
 
   /sitter/{token}:
     get:
-      summary: Public plant-sitter view — due/overdue tasks for a time-boxed link. No auth; token is the only credential. Returns ONLY plant common name, task type, due date, taskId (no PII).
+      summary: Public plant-sitter view — due/overdue tasks for a time-boxed link. No auth; token is the only credential. Returns only task essentials plus current space and placement note; never household climate location, private notes, or member data.
       tags: [Tasks]
       security: []
       parameters:
@@ -330,6 +330,8 @@ paths:
                         plantName: { type: string }
                         taskType: { type: string }
                         dueDate: { type: string, format: date-time }
+                        spaceName: { type: string, nullable: true }
+                        placementNote: { type: string, nullable: true }
                         overdue: { type: boolean }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -353,6 +355,8 @@ paths:
                   plantName: { type: string }
                   taskType: { type: string }
                   dueDate: { type: string, format: date-time }
+                  spaceName: { type: string, nullable: true }
+                  placementNote: { type: string, nullable: true }
                   overdue: { type: boolean }
         '404': { $ref: '#/components/responses/NotFound' }
 
