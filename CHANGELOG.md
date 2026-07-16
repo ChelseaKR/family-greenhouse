@@ -17,6 +17,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-07-16
+
+### Added
+
+- Spaces can record whether outdoor plants are exposed to rain, so weather
+  guidance targets only plants whose current placement is actually affected.
+- Plants can remember preferred summer and winter spaces and receive an
+  explicit, latitude-aware move suggestion when the active season changes.
+- Placement-fit guidance can flag conservative light-level mismatches and
+  known pet-toxicity concerns using optional space conditions.
+- Active sitter links now show each due plant's current space and short
+  placement note without exposing household climate data, private notes, or
+  member identity details.
+- Spaces can name a usual caregiver. New tasks for plants in that space inherit
+  the caregiver while explicit assignments continue to win and existing tasks
+  remain unchanged.
+
+### Changed
+
+- Legacy spaces hydrate safe rain, light, pet-access, and caregiver defaults,
+  so the new placement features require no data migration or backfill.
+
 ## [0.17.0] - 2026-07-15
 
 ### Added
