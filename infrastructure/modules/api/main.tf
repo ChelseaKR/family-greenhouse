@@ -684,10 +684,10 @@ locals {
     "PATCH /auth/me"             = { group = "auth", auth = "jwt" }
 
     # --- household plant spaces + plants ---
-    "GET /spaces"         = { group = "plants", auth = "jwt" }
-    "POST /spaces"        = { group = "plants", auth = "jwt" }
-    "PUT /spaces/{id}"    = { group = "plants", auth = "jwt" }
-    "DELETE /spaces/{id}" = { group = "plants", auth = "jwt" }
+    "GET /spaces"                     = { group = "plants", auth = "jwt" }
+    "POST /spaces"                    = { group = "plants", auth = "jwt" }
+    "PUT /spaces/{id}"                = { group = "plants", auth = "jwt" }
+    "DELETE /spaces/{id}"             = { group = "plants", auth = "jwt" }
     "GET /plants"                     = { group = "plants", auth = "jwt" }
     "POST /plants"                    = { group = "plants", auth = "jwt" }
     "POST /plants/move"               = { group = "plants", auth = "jwt" }
