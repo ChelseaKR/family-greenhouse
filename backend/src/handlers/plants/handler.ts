@@ -116,8 +116,15 @@ export const deleteSpace = createHandler(
     const id = event.pathParameters?.id;
     if (!id) throw createHttpError(400, 'Space ID is required');
     const plants = await plantService.getPlants(user.householdId!, 'all');
-    if (plants.some((plant) => plant.spaceId === id)) {
-      throw createHttpError(409, 'Move plants out of this space before deleting it');
+    if (
+      plants.some(
+        (plant) => plant.spaceId === id || plant.summerSpaceId === id || plant.winterSpaceId === id
+      )
+    ) {
+      throw createHttpError(
+        409,
+        'Remove this space from all current and seasonal plant homes before deleting it'
+      );
     }
     if (!(await spaceService.deleteSpace(user.householdId!, id))) {
       throw createHttpError(404, 'Space not found');
@@ -152,6 +159,18 @@ export const createPlant = createHandler(
       !(await spaceService.getSpace(user.householdId!, validatedBody.spaceId))
     ) {
       throw createHttpError(400, 'Space not found in this household');
+    }
+    const seasonalSpaceIds = [validatedBody.summerSpaceId, validatedBody.winterSpaceId].filter(
+      (spaceId): spaceId is string => Boolean(spaceId)
+    );
+    if (
+      (
+        await Promise.all(
+          seasonalSpaceIds.map((spaceId) => spaceService.getSpace(user.householdId!, spaceId))
+        )
+      ).some((space) => !space)
+    ) {
+      throw createHttpError(400, 'Seasonal home not found in this household');
     }
 
     // Enforce per-tier plant cap. The "free" tier limits a household to 10
@@ -245,7 +264,6 @@ export const movePlants = createHandler(
     ) {
       throw createHttpError(400, 'Space not found in this household');
     }
-
     const plants = await Promise.all(
       validatedBody.plantIds.map((plantId) => plantService.getPlant(user.householdId!, plantId))
     );
@@ -313,6 +331,18 @@ export const updatePlant = createHandler(
       !(await spaceService.getSpace(user.householdId!, validatedBody.spaceId))
     ) {
       throw createHttpError(400, 'Space not found in this household');
+    }
+    const seasonalSpaceIds = [validatedBody.summerSpaceId, validatedBody.winterSpaceId].filter(
+      (spaceId): spaceId is string => Boolean(spaceId)
+    );
+    if (
+      (
+        await Promise.all(
+          seasonalSpaceIds.map((spaceId) => spaceService.getSpace(user.householdId!, spaceId))
+        )
+      ).some((space) => !space)
+    ) {
+      throw createHttpError(400, 'Seasonal home not found in this household');
     }
 
     // Lifecycle events need the pre-write state so idempotent PUT retries do

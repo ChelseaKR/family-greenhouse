@@ -89,6 +89,10 @@ export interface Plant {
   spaceId?: string | null;
   /** Specific position inside a space, e.g. "east window, top shelf". */
   placementNote?: string | null;
+  /** Preferred warm-season home. Optional for legacy rows. */
+  summerSpaceId?: string | null;
+  /** Preferred cool-season home. Optional for legacy rows. */
+  winterSpaceId?: string | null;
   imageUrl: string | null;
   notes: string | null;
   /** Lifecycle status; absent on legacy rows → treated as 'active'. */

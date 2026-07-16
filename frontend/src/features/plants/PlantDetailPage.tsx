@@ -50,6 +50,8 @@ import { PlantImage } from '@/components/PlantImage';
 import { spaceService } from '@/services/spaceService';
 import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 import { MovePlantsDialog } from './MovePlantsDialog';
+import { householdService } from '@/services/householdService';
+import { seasonalHomeSuggestion } from './seasonalHomes';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -87,6 +89,11 @@ export function PlantDetailPage() {
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
+  });
+  const { data: household, isFetched: householdLoaded } = useQuery({
+    queryKey: ['household', householdId],
+    queryFn: () => householdService.getHousehold(householdId!),
+    enabled: !!householdId,
   });
 
   // Title reflects the plant once it's loaded; falls back to a generic
@@ -139,6 +146,17 @@ export function PlantDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const seasonalMoveMutation = useMutation({
+    mutationFn: (spaceId: string) =>
+      plantService.movePlants({ plantIds: [plantId!], spaceId, placementNote: null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['spaces', householdId] });
+      toast.success(t('seasonalHomes.moveSuccess'));
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -161,6 +179,10 @@ export function PlantDetailPage() {
       </div>
     );
   }
+
+  const seasonalSuggestion = seasonalHomeSuggestion(plant, spaces, household?.location?.lat);
+  const hasSeasonalHomes = Boolean(plant.summerSpaceId || plant.winterSpaceId);
+  const spacesById = spaceMap(spaces);
 
   return (
     <div className="space-y-6">
@@ -283,8 +305,26 @@ export function PlantDetailPage() {
             {(plant.spaceId || plant.location) && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">Space</dt>
+                <dd className="text-sm text-gray-900">{plantLocationLabel(plant, spacesById)}</dd>
+              </div>
+            )}
+            {plant.summerSpaceId && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">
+                  {t('seasonalHomes.summerDisplayLabel')}
+                </dt>
                 <dd className="text-sm text-gray-900">
-                  {plantLocationLabel(plant, spaceMap(spaces))}
+                  {spacesById.get(plant.summerSpaceId)?.name ?? t('seasonalHomes.unavailable')}
+                </dd>
+              </div>
+            )}
+            {plant.winterSpaceId && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">
+                  {t('seasonalHomes.winterDisplayLabel')}
+                </dt>
+                <dd className="text-sm text-gray-900">
+                  {spacesById.get(plant.winterSpaceId)?.name ?? t('seasonalHomes.unavailable')}
                 </dd>
               </div>
             )}
@@ -303,6 +343,38 @@ export function PlantDetailPage() {
           </dl>
         </div>
       </div>
+
+      {seasonalSuggestion && (plant.status ?? 'active') === 'active' && (
+        <Alert variant="info" title={t('seasonalHomes.suggestionTitle')}>
+          <p>
+            {t('seasonalHomes.suggestionDescription', {
+              season: t(`seasonalHomes.${seasonalSuggestion.season}`),
+              space: seasonalSuggestion.targetSpace.name,
+            })}
+          </p>
+          <Button
+            size="sm"
+            className="mt-3"
+            isLoading={seasonalMoveMutation.isPending}
+            onClick={() => seasonalMoveMutation.mutate(seasonalSuggestion.targetSpace.id)}
+            leftIcon={<ArrowsRightLeftIcon className="h-4 w-4" aria-hidden="true" />}
+          >
+            {t('seasonalHomes.moveAction', { space: seasonalSuggestion.targetSpace.name })}
+          </Button>
+        </Alert>
+      )}
+
+      {hasSeasonalHomes && householdLoaded && !household?.location && (
+        <Alert variant="info" title={t('seasonalHomes.locationTitle')}>
+          <p>{t('seasonalHomes.locationDescription')}</p>
+          <Link
+            to="/household"
+            className="mt-2 inline-flex min-h-touch items-center font-medium underline"
+          >
+            {t('seasonalHomes.locationAction')}
+          </Link>
+        </Alert>
+      )}
 
       {/* Curated care guidance — only renders if plant.species matches a known entry */}
       <CareGuidanceCard species={plant.species} />

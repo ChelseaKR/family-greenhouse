@@ -398,6 +398,51 @@ describe('plants routes', () => {
     expect(res.body.location).toBe('Office');
   });
 
+  it('stores and validates seasonal homes and protects referenced spaces', async () => {
+    const token = await loginAsSeed();
+    const summer = await request(app)
+      .post('/spaces')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Summer patio', environment: 'outside' });
+    const winter = await request(app)
+      .post('/spaces')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Winter window', environment: 'inside' });
+
+    const created = await request(app)
+      .post('/plants')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Seasonal citrus',
+        summerSpaceId: summer.body.id,
+        winterSpaceId: winter.body.id,
+      });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      summerSpaceId: summer.body.id,
+      winterSpaceId: winter.body.id,
+    });
+
+    const protectedDelete = await request(app)
+      .delete(`/spaces/${summer.body.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(protectedDelete.status).toBe(409);
+
+    const updated = await request(app)
+      .put(`/plants/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ summerSpaceId: null });
+    expect(updated.status).toBe(200);
+    expect(updated.body.summerSpaceId).toBeNull();
+
+    const invalid = await request(app)
+      .put(`/plants/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ winterSpaceId: '00000000-0000-0000-0000-000000000000' });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.message).toMatch(/Seasonal home not found/);
+  });
+
   it('deletes a plant and cascades to its tasks', async () => {
     const token = await loginAsSeed();
     const res = await request(app)

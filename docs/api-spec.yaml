@@ -1328,6 +1328,14 @@ components:
         placementNote:
           type: string
           nullable: true
+        summerSpaceId:
+          type: string
+          format: uuid
+          nullable: true
+        winterSpaceId:
+          type: string
+          format: uuid
+          nullable: true
         imageUrl:
           type: string
           nullable: true
@@ -1377,6 +1385,12 @@ components:
         placementNote:
           type: string
           maxLength: 120
+        summerSpaceId:
+          type: string
+          format: uuid
+        winterSpaceId:
+          type: string
+          format: uuid
         notes:
           type: string
           maxLength: 1000
@@ -1402,6 +1416,14 @@ components:
         placementNote:
           type: string
           maxLength: 120
+          nullable: true
+        summerSpaceId:
+          type: string
+          format: uuid
+          nullable: true
+        winterSpaceId:
+          type: string
+          format: uuid
           nullable: true
         notes:
           type: string
