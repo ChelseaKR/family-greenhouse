@@ -313,7 +313,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expect(sectionSelect).toBeVisible();
     await sectionSelect.selectOption('billing');
     await expect(page).toHaveURL(/\/settings\/billing$/);
-    await expect(page.getByRole('heading', { name: /billing/i }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: /plan status/i }).first()).toBeVisible();
     await expectNoDocumentOverflow(page, 'mobile billing settings');
     await expectMinimumControlTargets(page, 'mobile billing settings');
     await sectionSelect.selectOption('api-keys');
