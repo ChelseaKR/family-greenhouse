@@ -26,6 +26,8 @@ export interface Plant {
   location: string | null;
   spaceId?: string | null;
   placementNote?: string | null;
+  summerSpaceId?: string | null;
+  winterSpaceId?: string | null;
   imageUrl: string | null;
   notes: string | null;
   /** Lifecycle status; legacy rows may omit it → treat as 'active'. */
@@ -46,6 +48,8 @@ export interface CreatePlantData {
   location?: string;
   spaceId?: string;
   placementNote?: string;
+  summerSpaceId?: string;
+  winterSpaceId?: string;
   notes?: string;
   tags?: string[];
   perenualSpeciesId?: number;
@@ -59,6 +63,8 @@ export interface UpdatePlantData {
   location?: string;
   spaceId?: string | null;
   placementNote?: string | null;
+  summerSpaceId?: string | null;
+  winterSpaceId?: string | null;
   notes?: string;
   tags?: string[];
   perenualSpeciesId?: number | null;

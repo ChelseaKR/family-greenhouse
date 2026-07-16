@@ -38,6 +38,8 @@ components:
         location: { type: string, nullable: true, maxLength: 100 }
         spaceId: { type: string, format: uuid, nullable: true }
         placementNote: { type: string, nullable: true, maxLength: 120 }
+        summerSpaceId: { type: string, format: uuid, nullable: true }
+        winterSpaceId: { type: string, format: uuid, nullable: true }
         imageUrl: { type: string, nullable: true, format: uri }
         notes: { type: string, nullable: true, maxLength: 1000 }
         tags:

@@ -177,6 +177,8 @@ describe('plantService', () => {
       expect(result.species).toBeNull();
       expect(result.location).toBeNull();
       expect(result.notes).toBeNull();
+      expect(result.summerSpaceId).toBeNull();
+      expect(result.winterSpaceId).toBeNull();
     });
 
     it('maps a TransactionCanceled cap-condition failure to PlanLimitError (concurrent creates)', async () => {
@@ -303,6 +305,8 @@ describe('plantService', () => {
         parentPlantId: null,
         spaceId: null,
         placementNote: null,
+        summerSpaceId: null,
+        winterSpaceId: null,
       });
     });
 
@@ -583,6 +587,42 @@ describe('plantService', () => {
       const calls = vi.mocked(dynamodb.send).mock.calls;
       expect(calls).toHaveLength(1);
       expect((calls[0][0] as unknown as { kind: string }).kind).toBe('Update');
+    });
+
+    it('writes and returns both seasonal home IDs as ordinary plant fields', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { updatePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          ...plantRow('active').Item,
+          summerSpaceId: 'summer-space',
+          winterSpaceId: 'winter-space',
+        },
+      });
+
+      const result = await updatePlant(
+        'hh',
+        'p1',
+        { summerSpaceId: 'summer-space', winterSpaceId: 'winter-space' },
+        10
+      );
+
+      expect(result).toMatchObject({
+        summerSpaceId: 'summer-space',
+        winterSpaceId: 'winter-space',
+      });
+      const update = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+        input: {
+          UpdateExpression: string;
+          ExpressionAttributeValues: Record<string, unknown>;
+        };
+      };
+      expect(update.input.UpdateExpression).toContain('#summerSpaceId = :summerSpaceId');
+      expect(update.input.UpdateExpression).toContain('#winterSpaceId = :winterSpaceId');
+      expect(update.input.ExpressionAttributeValues).toMatchObject({
+        ':summerSpaceId': 'summer-space',
+        ':winterSpaceId': 'winter-space',
+      });
     });
 
     it('active → died decrements plantCount in the same transaction as the status write', async () => {

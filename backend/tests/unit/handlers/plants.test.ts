@@ -124,6 +124,29 @@ describe('plants handler', () => {
     expect(JSON.parse(res.body).message).toMatch(/Space not found/);
   });
 
+  it('refuses to create a plant with a seasonal home outside the household', async () => {
+    const spaceService = await import('../../../src/services/spaceService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(spaceService.getSpace).mockResolvedValueOnce(null);
+    const res = (await createPlant(
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify({
+          name: 'Pothos',
+          summerSpaceId: '550e8400-e29b-41d4-a716-446655440099',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toMatch(/Seasonal home not found/);
+    expect(plantService.createPlant).not.toHaveBeenCalled();
+  });
+
   it('moves plants only after validating the destination and every household plant', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const spaceService = await import('../../../src/services/spaceService.js');
@@ -358,6 +381,30 @@ describe('plants handler', () => {
     });
     const res = (await updatePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(404);
+  });
+
+  it('validates seasonal homes before updating a plant', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const spaceService = await import('../../../src/services/spaceService.js');
+    const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(spaceService.getSpace).mockResolvedValueOnce(null);
+
+    const res = (await updatePlant(
+      buildEvent({
+        httpMethod: 'PUT',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify({
+          winterSpaceId: '550e8400-e29b-41d4-a716-446655440099',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toMatch(/Seasonal home not found/);
+    expect(plantService.updatePlant).not.toHaveBeenCalled();
   });
 
   it.each([

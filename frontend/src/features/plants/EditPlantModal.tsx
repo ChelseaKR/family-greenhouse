@@ -20,6 +20,8 @@ const plantSchema = z.object({
   species: z.string().max(100).optional(),
   spaceId: z.string().optional(),
   placementNote: z.string().max(120).optional(),
+  summerSpaceId: z.string().optional(),
+  winterSpaceId: z.string().optional(),
   notes: z.string().max(1000).optional(),
 });
 
@@ -50,6 +52,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
       species: plant.species || '',
       spaceId: plant.spaceId || '',
       placementNote: plant.placementNote || '',
+      summerSpaceId: plant.summerSpaceId || '',
+      winterSpaceId: plant.winterSpaceId || '',
       notes: plant.notes || '',
     },
   });
@@ -59,6 +63,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
   );
   const speciesValue = watch('species') ?? '';
   const spaceIdValue = watch('spaceId') ?? '';
+  const summerSpaceIdValue = watch('summerSpaceId') ?? '';
+  const winterSpaceIdValue = watch('winterSpaceId') ?? '';
 
   useEffect(() => {
     if (isOpen) {
@@ -67,6 +73,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         species: plant.species || '',
         spaceId: plant.spaceId || '',
         placementNote: plant.placementNote || '',
+        summerSpaceId: plant.summerSpaceId || '',
+        winterSpaceId: plant.winterSpaceId || '',
         notes: plant.notes || '',
       });
       setPerenualSpeciesId(plant.perenualSpeciesId ?? null);
@@ -80,6 +88,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         species: data.species || undefined,
         spaceId: data.spaceId || null,
         placementNote: data.placementNote || null,
+        summerSpaceId: data.summerSpaceId || null,
+        winterSpaceId: data.winterSpaceId || null,
         notes: data.notes || undefined,
         // Always explicit, including null — omitting it would leave the
         // backend's existing link untouched and reintroduce stale care/
@@ -180,6 +190,37 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                     error={errors.placementNote?.message}
                     {...register('placementNote')}
                   />
+
+                  <fieldset className="space-y-3 rounded-lg border border-primary-100/70 bg-parchment/40 p-4">
+                    <legend className="px-1 text-sm font-semibold text-ink">
+                      {t('seasonalHomes.title')}
+                    </legend>
+                    <p className="text-sm text-gray-600">{t('seasonalHomes.description')}</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <SpacePicker
+                        id="plant-summer-space"
+                        label={t('seasonalHomes.summerLabel')}
+                        value={summerSpaceIdValue}
+                        onChange={(spaceId) =>
+                          setValue('summerSpaceId', spaceId, { shouldValidate: true })
+                        }
+                        error={errors.summerSpaceId?.message}
+                        allowCreate={false}
+                        emptyLabel={t('seasonalHomes.notSet')}
+                      />
+                      <SpacePicker
+                        id="plant-winter-space"
+                        label={t('seasonalHomes.winterLabel')}
+                        value={winterSpaceIdValue}
+                        onChange={(spaceId) =>
+                          setValue('winterSpaceId', spaceId, { shouldValidate: true })
+                        }
+                        error={errors.winterSpaceId?.message}
+                        allowCreate={false}
+                        emptyLabel={t('seasonalHomes.notSet')}
+                      />
+                    </div>
+                  </fieldset>
 
                   <div>
                     <label htmlFor="notes" className="label">

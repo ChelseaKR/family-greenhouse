@@ -56,6 +56,25 @@
     "moveSuccess_one": "Plant moved",
     "moveSuccess_other": "{{count}} plants moved"
   },
+  "seasonalHomes": {
+    "title": "Seasonal homes",
+    "description": "Choose where this plant usually lives in warm and cool seasons.",
+    "summerLabel": "Summer home (optional)",
+    "winterLabel": "Winter home (optional)",
+    "summerDisplayLabel": "Summer home",
+    "winterDisplayLabel": "Winter home",
+    "notSet": "Not set",
+    "unavailable": "Unavailable space",
+    "summer": "summer",
+    "winter": "winter",
+    "suggestionTitle": "Seasonal move suggested",
+    "suggestionDescription": "It is {{season}} in your hemisphere. Move this plant to {{space}}?",
+    "moveAction": "Move to {{space}}",
+    "moveSuccess": "Plant moved to its seasonal home",
+    "locationTitle": "Add a location for seasonal reminders",
+    "locationDescription": "Your household location tells us which season is current in your hemisphere.",
+    "locationAction": "Set household location"
+  },
   "careRounds": {
     "displayMode": "Task organization",
     "schedule": "By date",

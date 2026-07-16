@@ -120,6 +120,8 @@ interface Plant {
   location: string | null;
   spaceId: string | null;
   placementNote: string | null;
+  summerSpaceId: string | null;
+  winterSpaceId: string | null;
   imageUrl: string | null;
   notes: string | null;
   status: 'active' | 'died' | 'gave_away' | 'archived';
@@ -415,6 +417,8 @@ export function resetDb(): void {
     location: 'Living Room',
     spaceId: seedSpaceId,
     placementNote: null,
+    summerSpaceId: null,
+    winterSpaceId: null,
     imageUrl: null,
     notes: 'Needs indirect light',
     status: 'active',
@@ -1543,10 +1547,16 @@ app.delete('/spaces/:id', authMiddleware, requireHousehold, (req, res) => {
   }
   if (
     [...db.plants.values()].some(
-      (plant) => plant.householdId === user.householdId && plant.spaceId === space.id
+      (plant) =>
+        plant.householdId === user.householdId &&
+        (plant.spaceId === space.id ||
+          plant.summerSpaceId === space.id ||
+          plant.winterSpaceId === space.id)
     )
   ) {
-    return res.status(409).json({ message: 'Move plants out of this space before deleting it' });
+    return res.status(409).json({
+      message: 'Remove this space from all current and seasonal plant homes before deleting it',
+    });
   }
   db.spaces.delete(space.id);
   res.status(204).send();
@@ -1582,6 +1592,8 @@ app.post(
       location,
       spaceId,
       placementNote,
+      summerSpaceId,
+      winterSpaceId,
       notes,
       tags,
       perenualSpeciesId,
@@ -1614,6 +1626,13 @@ app.post(
         return res.status(400).json({ message: 'Space not found in this household' });
       }
     }
+    for (const seasonalSpaceId of [summerSpaceId, winterSpaceId]) {
+      if (!seasonalSpaceId) continue;
+      const space = db.spaces.get(seasonalSpaceId);
+      if (!space || space.householdId !== user.householdId) {
+        return res.status(400).json({ message: 'Seasonal home not found in this household' });
+      }
+    }
 
     const plantId = uuidv4();
     const now = new Date().toISOString();
@@ -1626,6 +1645,8 @@ app.post(
       location: location || null,
       spaceId: spaceId ?? null,
       placementNote: placementNote || null,
+      summerSpaceId: summerSpaceId ?? null,
+      winterSpaceId: winterSpaceId ?? null,
       imageUrl: null,
       notes: notes || null,
       status: 'active',
@@ -1743,6 +1764,8 @@ app.post(
         location: input.location || null,
         spaceId: null,
         placementNote: null,
+        summerSpaceId: null,
+        winterSpaceId: null,
         imageUrl: null,
         notes: input.notes || null,
         status: 'active',
@@ -1856,6 +1879,16 @@ app.put(
       plant.spaceId = body.spaceId;
     }
     if (body.placementNote !== undefined) plant.placementNote = body.placementNote;
+    for (const field of ['summerSpaceId', 'winterSpaceId'] as const) {
+      if (body[field] === undefined) continue;
+      if (body[field]) {
+        const space = db.spaces.get(body[field]);
+        if (!space || space.householdId !== user.householdId) {
+          return res.status(400).json({ message: 'Seasonal home not found in this household' });
+        }
+      }
+      plant[field] = body[field];
+    }
     if (body.notes !== undefined) plant.notes = body.notes;
     if (body.tags !== undefined) {
       plant.tags = body.tags
@@ -2393,6 +2426,8 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
     location: null,
     spaceId: null,
     placementNote: null,
+    summerSpaceId: null,
+    winterSpaceId: null,
     imageUrl: null,
     notes,
     status: 'active',

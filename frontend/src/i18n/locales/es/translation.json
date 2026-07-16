@@ -61,6 +61,25 @@
     "moveSuccess_other": "{{count}} plantas movidas",
     "moveSuccess_many": "{{count}} plantas movidas"
   },
+  "seasonalHomes": {
+    "title": "Hogares de temporada",
+    "description": "Elige dónde suele vivir esta planta en las temporadas cálida y fría.",
+    "summerLabel": "Hogar de verano (opcional)",
+    "winterLabel": "Hogar de invierno (opcional)",
+    "summerDisplayLabel": "Hogar de verano",
+    "winterDisplayLabel": "Hogar de invierno",
+    "notSet": "Sin configurar",
+    "unavailable": "Espacio no disponible",
+    "summer": "verano",
+    "winter": "invierno",
+    "suggestionTitle": "Se recomienda un cambio de temporada",
+    "suggestionDescription": "Es {{season}} en tu hemisferio. ¿Mover esta planta a {{space}}?",
+    "moveAction": "Mover a {{space}}",
+    "moveSuccess": "Planta movida a su hogar de temporada",
+    "locationTitle": "Añade una ubicación para recibir recordatorios de temporada",
+    "locationDescription": "La ubicación del hogar indica qué temporada es actual en tu hemisferio.",
+    "locationAction": "Configurar ubicación del hogar"
+  },
   "careRounds": {
     "displayMode": "Organización de tareas",
     "schedule": "Por fecha",

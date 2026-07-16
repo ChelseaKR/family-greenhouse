@@ -84,6 +84,8 @@ export const createPlantSchema = z.object({
   location: z.string().max(100).optional(),
   spaceId: z.string().uuid().optional(),
   placementNote: z.string().max(120).optional(),
+  summerSpaceId: z.string().uuid().optional(),
+  winterSpaceId: z.string().uuid().optional(),
   notes: z.string().max(1000).optional(),
   perenualSpeciesId: z.number().int().positive().optional(),
   // Propagation: the same-household plant this cutting was taken from.
@@ -99,6 +101,8 @@ export const updatePlantSchema = z.object({
   location: z.string().max(100).optional().nullable(),
   spaceId: z.string().uuid().optional().nullable(),
   placementNote: z.string().max(120).optional().nullable(),
+  summerSpaceId: z.string().uuid().optional().nullable(),
+  winterSpaceId: z.string().uuid().optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),

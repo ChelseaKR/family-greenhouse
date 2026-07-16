@@ -6,10 +6,10 @@ space remain visible in the `Unplaced` group.
 
 ## Data model
 
-| Entity          | DynamoDB key                         | Important fields           |
-| --------------- | ------------------------------------ | -------------------------- |
-| Plant space     | `PK=HOUSEHOLD#{id}`, `SK=SPACE#{id}` | `name`, `environment`      |
-| Plant placement | existing `PLANT#{id}` row            | `spaceId`, `placementNote` |
+| Entity          | DynamoDB key                         | Important fields                                             |
+| --------------- | ------------------------------------ | ------------------------------------------------------------ |
+| Plant space     | `PK=HOUSEHOLD#{id}`, `SK=SPACE#{id}` | `name`, `environment`                                        |
+| Plant placement | existing `PLANT#{id}` row            | `spaceId`, `placementNote`, `summerSpaceId`, `winterSpaceId` |
 
 The legacy plant `location` string remains readable for imports, exports, and old clients. New UI
 placement writes use `spaceId`; `placementNote` stores the position within that space, such as
@@ -25,8 +25,9 @@ does not change its species traits.
 - `POST /plants/move` with one to 50 unique plant IDs, a destination `spaceId` (or `null` for
   Unplaced), and an optional placement note
 
-Plant create and update accept `spaceId` and `placementNote`. The handler verifies that a supplied
-space belongs to the caller's active household.
+Plant create and update accept `spaceId`, `placementNote`, `summerSpaceId`, and `winterSpaceId`.
+The handler verifies that every supplied space belongs to the caller's active household. A space
+cannot be deleted while any plant uses it as its current or seasonal home.
 
 ## UX rules
 
@@ -59,3 +60,10 @@ The plant detail page offers a one-step Move action, while the collection page s
 up to 50 plants and moving them together. Both use the same atomic endpoint, so a mixed-household or
 missing plant cannot leave half of a batch in the new space. A one-plant move can set a precise
 placement note; bulk moves clear old position notes that no longer describe the destination.
+
+## Seasonal homes
+
+A plant can optionally remember a preferred summer and winter space. The plant detail page uses the
+saved household latitude and a broad April–September northern warm season (inverted in the southern
+hemisphere) to suggest a move when the current space differs. Accepting the suggestion uses the same
+`POST /plants/move` operation as quick and bulk moves; it does not silently relocate plants.
