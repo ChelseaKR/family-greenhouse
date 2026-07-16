@@ -43,3 +43,10 @@ The Tasks page offers two organizations over the same due-work query:
 
 The route respects the active task filter, so “My tasks” plus “Care round” becomes a personal route
 through the household.
+
+## Task location visibility
+
+The dashboard and both Tasks organizations resolve each task's plant to its current space at read
+time. This avoids denormalizing a space name onto recurring task rows, which would become stale every
+time a plant moves or a space is renamed. Placement notes ride with the displayed space label, and
+plants without a structured space are explicitly shown as Unplaced.

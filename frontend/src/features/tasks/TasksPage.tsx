@@ -30,6 +30,8 @@ import { calendarDaysBetween } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { spaceService } from '@/services/spaceService';
 import { buildCareRoundGroups } from './careRounds';
+import { TaskLocation } from '@/components/TaskLocation';
+import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
@@ -112,6 +114,8 @@ export function TasksPage() {
     () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
     [plants]
   );
+  const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
+  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
 
   const completeTaskMutation = useCompleteTaskMutation(householdId);
 
@@ -124,6 +128,10 @@ export function TasksPage() {
 
   const rowExtras: TaskRowExtras = {
     skipReasonFor,
+    locationFor: (task) =>
+      plantsById.has(task.plantId)
+        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, t('spaces.unplaced'))
+        : t('spaces.unplaced'),
     onClaim: (id) => claimMutation.mutate(id),
     onUnclaim: (id) => unclaimMutation.mutate(id),
     onSkip: (task, reason) => skipMutation.mutate({ task, reason }),
@@ -349,6 +357,7 @@ export function TasksPage() {
 /** Claim / vacation / climate-skip plumbing shared by every section row. */
 interface TaskRowExtras {
   skipReasonFor: (task: TaskWithCoverage) => Extract<SnoozeReason, 'rain' | 'frost'> | null;
+  locationFor: (task: TaskWithCoverage) => string;
   onClaim: (taskId: string) => void;
   onUnclaim: (taskId: string) => void;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
@@ -432,6 +441,7 @@ function TaskSection({
                     </span>
                     {task.assignedToName && ` • Assigned to ${task.assignedToName}`}
                   </p>
+                  <TaskLocation label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       {!task.assignedTo && <UpForGrabsBadge />}

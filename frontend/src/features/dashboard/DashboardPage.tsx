@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -36,6 +37,7 @@ import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { PlantImage } from '@/components/PlantImage';
 import { spaceService } from '@/services/spaceService';
 import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { TaskLocation } from '@/components/TaskLocation';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -72,6 +74,7 @@ function filterActivity(
 
 export function DashboardPage() {
   useDocumentTitle('Dashboard');
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
 
@@ -140,6 +143,7 @@ export function DashboardPage() {
     () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
     [plants]
   );
+  const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -222,6 +226,11 @@ export function DashboardPage() {
               <TaskItem
                 key={task.id}
                 task={task}
+                locationLabel={
+                  plantsById.has(task.plantId)
+                    ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById)
+                    : t('spaces.unplaced')
+                }
                 onComplete={handleCompleteTask}
                 isCompleting={
                   completeTaskMutation.isPending && completeTaskMutation.variables === task.id
@@ -505,6 +514,7 @@ function ActivityRow({ event }: ActivityRowProps) {
 
 interface TaskItemProps {
   task: TaskWithCoverage;
+  locationLabel: string;
   onComplete: (taskId: string) => void;
   isCompleting: boolean;
   skipReason: Extract<SnoozeReason, 'rain' | 'frost'> | null;
@@ -517,6 +527,7 @@ interface TaskItemProps {
 
 function TaskItem({
   task,
+  locationLabel,
   onComplete,
   isCompleting,
   skipReason,
@@ -557,6 +568,7 @@ function TaskItem({
             </span>
             {task.assignedToName && ` • ${task.assignedToName}`}
           </p>
+          <TaskLocation label={locationLabel} />
           {(!task.assignedTo || task.coveringFor || skipReason) && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {!task.assignedTo && <UpForGrabsBadge />}
