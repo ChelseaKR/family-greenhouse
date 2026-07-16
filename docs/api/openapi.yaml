@@ -66,6 +66,7 @@ components:
         nextDue: { type: string, format: date-time }
         assignedTo: { type: string, nullable: true }
         assignedToName: { type: string, nullable: true }
+        assignmentSource: { type: string, enum: [space_default], nullable: true }
         notes: { type: string, nullable: true }
         createdBy: { type: string }
         createdAt: { type: string, format: date-time }

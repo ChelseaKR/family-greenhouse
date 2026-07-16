@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import type { PlantSpace } from '../models/types.js';
 import type { CreateSpaceInput, UpdateSpaceInput } from '../models/schemas.js';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { getMemberByUserId } from './householdService.js';
 
 const MAX_SPACES = 100;
 
@@ -25,6 +26,7 @@ function itemToSpace(item: Record<string, unknown>): PlantSpace {
       (environment === 'outside' ? 'exposed' : 'sheltered'),
     lightLevel: (item.lightLevel as PlantSpace['lightLevel'] | undefined) ?? null,
     petAccess: (item.petAccess as boolean | undefined) ?? null,
+    defaultCaregiverId: (item.defaultCaregiverId as string | undefined) ?? null,
     createdAt: item.createdAt as string,
     createdBy: item.createdBy as string,
     updatedAt: item.updatedAt as string,
@@ -35,6 +37,23 @@ export class DuplicateSpaceNameError extends Error {
   constructor() {
     super('A space with that name already exists');
     this.name = 'DuplicateSpaceNameError';
+  }
+}
+
+export class DefaultCaregiverNotMemberError extends Error {
+  constructor() {
+    super('defaultCaregiverId must be a current household member');
+    this.name = 'DefaultCaregiverNotMemberError';
+  }
+}
+
+async function assertDefaultCaregiver(
+  householdId: string,
+  defaultCaregiverId: string | null | undefined
+): Promise<void> {
+  if (!defaultCaregiverId) return;
+  if (!(await getMemberByUserId(householdId, defaultCaregiverId))) {
+    throw new DefaultCaregiverNotMemberError();
   }
 }
 
@@ -84,6 +103,7 @@ export async function createSpace(
   householdId: string,
   userId: string
 ): Promise<PlantSpace> {
+  await assertDefaultCaregiver(householdId, input.defaultCaregiverId);
   await assertUniqueName(householdId, input.name);
   const now = new Date().toISOString();
   const space: PlantSpace = {
@@ -94,6 +114,7 @@ export async function createSpace(
     rainExposure: input.environment === 'outside' ? (input.rainExposure ?? 'exposed') : 'sheltered',
     lightLevel: input.lightLevel ?? null,
     petAccess: input.petAccess ?? null,
+    defaultCaregiverId: input.defaultCaregiverId ?? null,
     createdAt: now,
     createdBy: userId,
     updatedAt: now,
@@ -118,6 +139,7 @@ export async function updateSpace(
   id: string,
   input: UpdateSpaceInput
 ): Promise<PlantSpace | null> {
+  await assertDefaultCaregiver(householdId, input.defaultCaregiverId);
   if (input.name !== undefined) await assertUniqueName(householdId, input.name, id);
   const names: Record<string, string> = { '#updatedAt': 'updatedAt' };
   const values: Record<string, unknown> = { ':updatedAt': new Date().toISOString() };
@@ -150,6 +172,11 @@ export async function updateSpace(
     names['#petAccess'] = 'petAccess';
     values[':petAccess'] = input.petAccess;
     updates.push('#petAccess = :petAccess');
+  }
+  if (input.defaultCaregiverId !== undefined) {
+    names['#defaultCaregiverId'] = 'defaultCaregiverId';
+    values[':defaultCaregiverId'] = input.defaultCaregiverId;
+    updates.push('#defaultCaregiverId = :defaultCaregiverId');
   }
   try {
     const result = await dynamodb.send(

@@ -1058,7 +1058,7 @@ paths:
   # --- digests, phone verification, public-API writes ---
   /tasks/{id}/claim:
     post:
-      summary: Claim an unassigned ("up for grabs") task (409 if already claimed)
+      summary: Claim an unassigned task or take over a space-inherited assignment (409 for an explicit/already-claimed task)
       tags: [Tasks]
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
       responses:
@@ -1483,6 +1483,11 @@ components:
           type: boolean
           nullable: true
           description: Whether cats or dogs can reach plants; null means unknown.
+        defaultCaregiverId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Current household member inherited by new tasks for plants in this space.
         createdAt:
           type: string
           format: date-time
@@ -1511,6 +1516,9 @@ components:
           enum: [low, medium, bright]
         petAccess:
           type: boolean
+        defaultCaregiverId:
+          type: string
+          format: uuid
 
     UpdateSpaceRequest:
       type: object
@@ -1530,6 +1538,10 @@ components:
           nullable: true
         petAccess:
           type: boolean
+          nullable: true
+        defaultCaregiverId:
+          type: string
+          format: uuid
           nullable: true
 
     Task:
@@ -1561,10 +1573,16 @@ components:
         assignedTo:
           type: string
           format: uuid
+          description: Current assignee; assignmentSource identifies a space-inherited assignment.
           nullable: true
         assignedToName:
           type: string
           nullable: true
+        assignmentSource:
+          type: string
+          enum: [space_default]
+          nullable: true
+          description: Space-inherited assignments remain claimable by another household member; null means explicit or unassigned.
         notes:
           type: string
           nullable: true
@@ -1612,6 +1630,7 @@ components:
         assignedTo:
           type: string
           format: uuid
+          description: Explicit assignee. When omitted, the plant's current space caregiver is inherited if configured.
         notes:
           type: string
           maxLength: 500

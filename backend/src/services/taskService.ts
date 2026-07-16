@@ -92,18 +92,33 @@ export async function createTask(
   input: CreateTaskInput,
   householdId: string,
   userId: string,
-  plantName: string
+  plantName: string,
+  options: { defaultAssigneeId?: string } = {}
 ): Promise<Task> {
   const id = uuid();
   const now = new Date();
   const nextDue = input.nextDue || now.toISOString();
 
+  // Explicit task assignment always wins. If it is omitted, a space's usual
+  // caregiver may be supplied by the caller; stale defaults are ignored so a
+  // departed member can never prevent care tasks from being created.
+  let assignedTo = input.assignedTo ?? options.defaultAssigneeId ?? null;
+  let assignmentSource: Task['assignmentSource'] =
+    input.assignedTo === undefined && options.defaultAssigneeId ? 'space_default' : null;
   let assignedToName: string | null = null;
-  if (input.assignedTo) {
-    const member = await getMemberByUserId(householdId, input.assignedTo);
+  if (assignedTo) {
+    const member = await getMemberByUserId(householdId, assignedTo);
     // Reject a dangling assignee rather than writing a task nobody can see (M4).
-    if (!member) throw new AssigneeNotMemberError();
-    assignedToName = member.name;
+    if (!member) {
+      if (assignmentSource === 'space_default') {
+        assignedTo = null;
+        assignmentSource = null;
+      } else {
+        throw new AssigneeNotMemberError();
+      }
+    } else {
+      assignedToName = member.name;
+    }
   }
 
   const task: Task = {
@@ -116,8 +131,9 @@ export async function createTask(
     frequency: input.frequency,
     lastCompleted: null,
     nextDue,
-    assignedTo: input.assignedTo || null,
+    assignedTo,
     assignedToName,
+    assignmentSource,
     notes: input.notes || null,
     createdBy: userId,
     createdAt: now.toISOString(),
@@ -132,8 +148,8 @@ export async function createTask(
     ...task,
   };
 
-  if (input.assignedTo) {
-    item.GSI2PK = `HOUSEHOLD#${householdId}#ASSIGNEE#${input.assignedTo}`;
+  if (assignedTo) {
+    item.GSI2PK = `HOUSEHOLD#${householdId}#ASSIGNEE#${assignedTo}`;
     item.GSI2SK = nextDue;
   }
 
@@ -360,10 +376,18 @@ export async function updateTask(
   }
 
   if (input.assignedTo !== undefined) {
-    setExpressions.push('#assignedTo = :assignedTo', '#assignedToName = :assignedToName');
+    setExpressions.push(
+      '#assignedTo = :assignedTo',
+      '#assignedToName = :assignedToName',
+      '#assignmentSource = :assignmentSource'
+    );
     expressionAttributeNames['#assignedTo'] = 'assignedTo';
     expressionAttributeNames['#assignedToName'] = 'assignedToName';
+    expressionAttributeNames['#assignmentSource'] = 'assignmentSource';
     expressionAttributeValues[':assignedTo'] = input.assignedTo || null;
+    // Any edit through the task assignment control is explicit, including
+    // selecting the same person who was inherited from the space.
+    expressionAttributeValues[':assignmentSource'] = null;
 
     if (input.assignedTo) {
       // Re-resolve the denormalized assignee name — without this the task
@@ -820,14 +844,15 @@ export async function getTasksForPlant(householdId: string, plantId: string): Pr
 // ---------------------------------------------------------------------------
 
 /**
- * Atomically claim an unassigned task for `userId`.
+ * Atomically claim an unassigned task, or take over a space-inherited task,
+ * for `userId`. Explicit assignments remain protected.
  *
- * The ConditionExpression guards both halves of the race in one write:
- * the task must still exist AND must not already have an assignee. Two
- * members tapping "Claim" at once means exactly one wins; the loser's
- * conditional write fails and we re-read to distinguish "someone beat you
- * to it" ('already_claimed' → 409 in the handler) from "task was deleted
- * under you" (null → 404).
+ * The ConditionExpression guards both halves of the race in one write: the
+ * task must still exist AND be unassigned or carry `space_default`. Two
+ * members tapping Claim/Take over at once means exactly one wins; the loser's
+ * conditional write fails and we re-read to distinguish "someone beat you to
+ * it" ('already_claimed' → 409 in the handler) from "task was deleted under
+ * you" (null → 404).
  *
  * GSI2SK is set from the stored nextDue (`SET GSI2SK = #nextDue` references
  * the live attribute) so the assignee index never goes stale, with no
@@ -851,10 +876,11 @@ export async function claimTask(
           SK: `TASK#${taskId}`,
         },
         UpdateExpression:
-          'SET #assignedTo = :userId, #assignedToName = :name, GSI2PK = :gsi2pk, GSI2SK = #nextDue',
+          'SET #assignedTo = :userId, #assignedToName = :name, #assignmentSource = :null, GSI2PK = :gsi2pk, GSI2SK = #nextDue',
         ExpressionAttributeNames: {
           '#assignedTo': 'assignedTo',
           '#assignedToName': 'assignedToName',
+          '#assignmentSource': 'assignmentSource',
           '#nextDue': 'nextDue',
         },
         ExpressionAttributeValues: {
@@ -862,9 +888,10 @@ export async function claimTask(
           ':name': member?.name ?? null,
           ':gsi2pk': `HOUSEHOLD#${householdId}#ASSIGNEE#${userId}`,
           ':null': null,
+          ':spaceDefault': 'space_default',
         },
         ConditionExpression:
-          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null)',
+          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault)',
         ReturnValues: 'ALL_NEW',
       })
     );
@@ -917,10 +944,12 @@ export async function unclaimTask(
           PK: `HOUSEHOLD#${householdId}`,
           SK: `TASK#${taskId}`,
         },
-        UpdateExpression: 'SET #assignedTo = :null, #assignedToName = :null REMOVE GSI2PK, GSI2SK',
+        UpdateExpression:
+          'SET #assignedTo = :null, #assignedToName = :null, #assignmentSource = :null REMOVE GSI2PK, GSI2SK',
         ExpressionAttributeNames: {
           '#assignedTo': 'assignedTo',
           '#assignedToName': 'assignedToName',
+          '#assignmentSource': 'assignmentSource',
         },
         ExpressionAttributeValues: {
           ':null': null,
@@ -1149,6 +1178,7 @@ function itemToTask(item: Record<string, unknown>): Task {
     nextDue: item.nextDue as string,
     assignedTo: item.assignedTo as string | null,
     assignedToName: item.assignedToName as string | null,
+    assignmentSource: (item.assignmentSource as Task['assignmentSource'] | undefined) ?? null,
     notes: item.notes as string | null,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,

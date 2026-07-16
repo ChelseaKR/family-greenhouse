@@ -17,6 +17,8 @@ export interface PlantSpace {
   lightLevel?: 'low' | 'medium' | 'bright' | null;
   /** Whether household pets can reach plants in this space. */
   petAccess?: boolean | null;
+  /** Household member who usually handles new tasks for plants here. */
+  defaultCaregiverId?: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -126,6 +128,8 @@ export interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
+  /** Space-inherited assignments can be taken over by another member. */
+  assignmentSource?: 'space_default' | null;
   notes: string | null;
   createdBy: string;
   createdAt: string;

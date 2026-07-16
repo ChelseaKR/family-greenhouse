@@ -192,7 +192,12 @@ export function useClaimTaskMutation(householdId: string | null) {
     (taskId) => (tasks) =>
       tasks.map((task) =>
         task.id === taskId
-          ? { ...task, assignedTo: user?.id ?? null, assignedToName: user?.name ?? null }
+          ? {
+              ...task,
+              assignedTo: user?.id ?? null,
+              assignedToName: user?.name ?? null,
+              assignmentSource: null,
+            }
           : task
       ),
     t('tasks.claimedToast')
@@ -206,7 +211,9 @@ export function useUnclaimTaskMutation(householdId: string | null) {
     (taskId) => taskService.unclaimTask(taskId),
     (taskId) => (tasks) =>
       tasks.map((task) =>
-        task.id === taskId ? { ...task, assignedTo: null, assignedToName: null } : task
+        task.id === taskId
+          ? { ...task, assignedTo: null, assignedToName: null, assignmentSource: null }
+          : task
       ),
     t('tasks.unclaimedToast')
   );

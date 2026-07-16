@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { spaceService } from '@/services/spaceService';
+import { householdService } from '@/services/householdService';
 import { getErrorMessage } from '@/services/api';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Alert } from '@/components/Alert';
@@ -22,10 +23,17 @@ export function SpaceManagerPanel() {
   const [rainExposure, setRainExposure] = useState<'exposed' | 'sheltered'>('exposed');
   const [lightLevel, setLightLevel] = useState<'' | LightLevel>('');
   const [petAccess, setPetAccess] = useState<PetAccessChoice>('');
+  const [defaultCaregiverId, setDefaultCaregiverId] = useState('');
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
   });
+  const { data: household } = useQuery({
+    queryKey: ['household', householdId],
+    queryFn: () => householdService.getHousehold(householdId!),
+    enabled: Boolean(householdId),
+  });
+  const members = household?.members ?? [];
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['spaces', householdId] });
   const createMutation = useMutation({
@@ -36,11 +44,13 @@ export function SpaceManagerPanel() {
         rainExposure: environment === 'outside' ? rainExposure : 'sheltered',
         lightLevel: lightLevel || undefined,
         petAccess: petAccess === '' ? undefined : petAccess === 'yes',
+        defaultCaregiverId: defaultCaregiverId || undefined,
       }),
     onSuccess: () => {
       setName('');
       setLightLevel('');
       setPetAccess('');
+      setDefaultCaregiverId('');
       refresh();
     },
   });
@@ -54,7 +64,9 @@ export function SpaceManagerPanel() {
       input,
     }: {
       id: string;
-      input: Partial<Pick<PlantSpace, 'rainExposure' | 'lightLevel' | 'petAccess'>>;
+      input: Partial<
+        Pick<PlantSpace, 'rainExposure' | 'lightLevel' | 'petAccess' | 'defaultCaregiverId'>
+      >;
     }) => spaceService.updateSpace(id, input),
     onSuccess: refresh,
   });
@@ -137,6 +149,22 @@ export function SpaceManagerPanel() {
             </select>
           </label>
         )}
+        <label className="space-y-1 sm:col-span-2 lg:col-span-2">
+          <span className="label">{t('spaces.defaultCaregiver')}</span>
+          <select
+            className="input"
+            value={defaultCaregiverId}
+            onChange={(event) => setDefaultCaregiverId(event.target.value)}
+          >
+            <option value="">{t('spaces.noDefaultCaregiver')}</option>
+            {members.map((member) => (
+              <option key={member.userId} value={member.userId}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+          <span className="block text-xs text-gray-600">{t('spaces.defaultCaregiverHint')}</span>
+        </label>
       </div>
 
       {spaces.length > 0 && (
@@ -209,6 +237,25 @@ export function SpaceManagerPanel() {
                     <option value="sheltered">{t('spaces.sheltered')}</option>
                   </select>
                 )}
+                <select
+                  className="input min-w-40 flex-1 py-2 text-sm sm:flex-none"
+                  aria-label={t('spaces.defaultCaregiverAria', { name: space.name })}
+                  value={space.defaultCaregiverId ?? ''}
+                  disabled={updateMutation.isPending}
+                  onChange={(event) =>
+                    updateMutation.mutate({
+                      id: space.id,
+                      input: { defaultCaregiverId: event.target.value || null },
+                    })
+                  }
+                >
+                  <option value="">{t('spaces.noDefaultCaregiver')}</option>
+                  {members.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   type="button"
                   variant="danger"

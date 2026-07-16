@@ -39,7 +39,7 @@ interface ClaimControlsProps {
   isPending: boolean;
 }
 
-/** Claim (unassigned) / Unclaim (assigned to me) button for a task row. */
+/** Claim unassigned work, take over a space default, or unclaim your task. */
 export function ClaimControls({ task, onClaim, onUnclaim, isPending }: ClaimControlsProps) {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
@@ -67,6 +67,20 @@ export function ClaimControls({ task, onClaim, onUnclaim, isPending }: ClaimCont
         aria-label={t('tasks.unclaimAria', { plant: task.plantName })}
       >
         {t('tasks.unclaim')}
+      </Button>
+    );
+  }
+  if (task.assignmentSource === 'space_default') {
+    return (
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => onClaim(task.id)}
+        disabled={isPending}
+        leftIcon={<HandRaisedIcon className="h-4 w-4" aria-hidden="true" />}
+        aria-label={t('tasks.takeOverAria', { plant: task.plantName })}
+      >
+        {t('tasks.takeOver')}
       </Button>
     );
   }

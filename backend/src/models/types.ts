@@ -78,6 +78,8 @@ export interface PlantSpace {
   lightLevel: 'low' | 'medium' | 'bright' | null;
   /** Whether cats or dogs can reach plants here. Null means unknown. */
   petAccess: boolean | null;
+  /** Current household member assigned to new tasks for plants here. */
+  defaultCaregiverId: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -131,6 +133,8 @@ export interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
+  /** Inherited space assignments remain claimable; null means explicit/unassigned. */
+  assignmentSource: 'space_default' | null;
   notes: string | null;
   createdBy: string;
   createdAt: string;

@@ -63,6 +63,7 @@ const baseTask = {
   nextDue: '2026-05-01T00:00:00.000Z',
   assignedTo: null,
   assignedToName: null,
+  assignmentSource: null,
   notes: null,
   createdBy: 'user-1',
   createdAt: '2026-04-25T00:00:00.000Z',
@@ -100,6 +101,7 @@ describe('taskService', () => {
       type: 'water',
       frequency: 7,
       assignedTo: null,
+      assignmentSource: null,
     });
     const sentCommand = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       input: { Item: Record<string, unknown> };
@@ -126,13 +128,63 @@ describe('taskService', () => {
       { plantId: 'p1', type: 'water', frequency: 7, assignedTo: 'user-2' },
       'hh-1',
       'user-1',
-      'Pothos'
+      'Pothos',
+      { defaultAssigneeId: 'user-3' }
     );
     expect(task.assignedToName).toBe('Bob');
+    expect(task.assignmentSource).toBeNull();
     const sentCommand = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       input: { Item: Record<string, unknown> };
     };
     expect(sentCommand.input.Item.GSI2PK).toBe('HOUSEHOLD#hh-1#ASSIGNEE#user-2');
+  });
+
+  it('createTask inherits a valid space caregiver and marks it claimable', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { createTask } = await import('../../../src/services/taskService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-2',
+      name: 'Alex',
+      email: 'alex@example.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+
+    const task = await createTask(
+      { plantId: 'p1', type: 'water', frequency: 7 },
+      'hh-1',
+      'user-1',
+      'Pothos',
+      { defaultAssigneeId: 'user-2' }
+    );
+
+    expect(task).toMatchObject({
+      assignedTo: 'user-2',
+      assignedToName: 'Alex',
+      assignmentSource: 'space_default',
+    });
+    const put = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { Item: Record<string, unknown> };
+    };
+    expect(put.input.Item.GSI2PK).toBe('HOUSEHOLD#hh-1#ASSIGNEE#user-2');
+  });
+
+  it('createTask ignores a stale space caregiver instead of blocking task creation', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { createTask } = await import('../../../src/services/taskService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+
+    await expect(
+      createTask({ plantId: 'p1', type: 'water', frequency: 7 }, 'hh-1', 'user-1', 'Pothos', {
+        defaultAssigneeId: 'departed-user',
+      })
+    ).resolves.toMatchObject({ assignedTo: null, assignmentSource: null });
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
   });
 
   it('createTask rejects a non-member assignee with AssigneeNotMemberError and writes nothing (M4)', async () => {
@@ -621,10 +673,11 @@ describe('taskService', () => {
       expect(result).toMatchObject({ assignedTo: 'user-2', assignedToName: 'Bob' });
 
       const update = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as SentCommand;
-      // Exists AND unassigned, atomically — the whole point of the feature.
+      // Exists AND either unassigned or inherited, atomically.
       expect(update.input.ConditionExpression).toBe(
-        'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null)'
+        'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault)'
       );
+      expect(update.input.UpdateExpression).toContain('#assignmentSource = :null');
       expect(update.input.ExpressionAttributeValues[':gsi2pk']).toBe(
         'HOUSEHOLD#hh-1#ASSIGNEE#user-2'
       );

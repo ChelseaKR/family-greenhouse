@@ -378,6 +378,30 @@ describe('plant-space routes', () => {
       .send({ lightLevel: 'sunny-ish' });
     expect(invalid.status).toBe(400);
   });
+
+  it('stores only a current household member as the usual caregiver', async () => {
+    const token = await loginAsSeed();
+    const create = await request(app).post('/spaces').set('Authorization', `Bearer ${token}`).send({
+      name: 'Alex room',
+      environment: 'inside',
+      defaultCaregiverId: seedUserId,
+    });
+    expect(create.status).toBe(201);
+    expect(create.body.defaultCaregiverId).toBe(seedUserId);
+
+    const invalid = await request(app)
+      .put(`/spaces/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ defaultCaregiverId: '22222222-2222-4222-8222-222222222222' });
+    expect(invalid.status).toBe(400);
+
+    const cleared = await request(app)
+      .put(`/spaces/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ defaultCaregiverId: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.defaultCaregiverId).toBeNull();
+  });
 });
 
 describe('plants routes', () => {
@@ -532,6 +556,52 @@ describe('tasks routes', () => {
       .send({ plantId: seedPlantId, type: 'fertilize', frequency: 14, nextDue });
     expect(res.status).toBe(201);
     expect(res.body.nextDue).toBe(nextDue);
+  });
+
+  it('inherits the space caregiver and lets another household member take over', async () => {
+    const token = await loginAsSeed();
+    const seedPlant = db.plants.get(seedPlantId)!;
+    db.spaces.get(seedPlant.spaceId!)!.defaultCaregiverId = seedUserId;
+
+    const created = await request(app)
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plantId: seedPlantId, type: 'fertilize', frequency: 14 });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      assignedTo: seedUserId,
+      assignmentSource: 'space_default',
+    });
+
+    const helperId = '22222222-2222-4222-8222-222222222222';
+    seedMember(helperId, 'helper@example.com', 'member');
+    const helperLogin = await request(app)
+      .post('/auth/login')
+      .send({ email: 'helper@example.com', password: 'password-123' });
+    const claimed = await request(app)
+      .post(`/tasks/${created.body.id}/claim`)
+      .set('Authorization', `Bearer ${helperLogin.body.accessToken}`);
+
+    expect(claimed.status).toBe(200);
+    expect(claimed.body).toMatchObject({ assignedTo: helperId, assignmentSource: null });
+  });
+
+  it('keeps an explicit task assignee ahead of the space default', async () => {
+    const token = await loginAsSeed();
+    const helperId = '22222222-2222-4222-8222-222222222222';
+    seedMember(helperId, 'helper@example.com', 'member');
+    const seedPlant = db.plants.get(seedPlantId)!;
+    db.spaces.get(seedPlant.spaceId!)!.defaultCaregiverId = seedUserId;
+
+    const created = await request(app).post('/tasks').set('Authorization', `Bearer ${token}`).send({
+      plantId: seedPlantId,
+      type: 'fertilize',
+      frequency: 14,
+      assignedTo: helperId,
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ assignedTo: helperId, assignmentSource: null });
   });
 
   it('400s task creation with a missing frequency (Zod, no RangeError crash)', async () => {

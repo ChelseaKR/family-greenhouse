@@ -25,6 +25,7 @@ import {
 } from '../../models/schemas.js';
 import * as taskService from '../../services/taskService.js';
 import * as plantService from '../../services/plantService.js';
+import * as spaceService from '../../services/spaceService.js';
 import * as householdService from '../../services/householdService.js';
 import { recordActivity } from '../../services/activity.js';
 import {
@@ -56,6 +57,16 @@ async function resolveCompleterName(
     logger.warn({ err }, 'completer_name_lookup_failed');
   }
   return email.split('@')[0];
+}
+
+/** Resolve the optional usual caregiver from a plant's current space. The
+ * task service re-validates membership and ignores a stale departed member. */
+async function defaultCaregiverForPlant(
+  householdId: string,
+  plant: { spaceId?: string | null }
+): Promise<string | undefined> {
+  if (!plant.spaceId) return undefined;
+  return (await spaceService.getSpace(householdId, plant.spaceId))?.defaultCaregiverId ?? undefined;
 }
 
 // GET /tasks
@@ -120,11 +131,16 @@ export const createTask = createHandler(
 
     let task;
     try {
+      const defaultAssigneeId =
+        validatedBody.assignedTo === undefined
+          ? await defaultCaregiverForPlant(user.householdId!, plant)
+          : undefined;
       task = await taskService.createTask(
         validatedBody,
         user.householdId!,
         user.userId,
-        plant.name
+        plant.name,
+        { defaultAssigneeId }
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'AssigneeNotMemberError') {
@@ -286,6 +302,7 @@ export const applyTemplateBulk = createHandler(
         continue;
       }
       const taskIds: string[] = [];
+      const defaultAssigneeId = await defaultCaregiverForPlant(user.householdId!, plant);
       for (const taskDef of tpl.tasks) {
         const t = await taskService.createTask(
           {
@@ -297,7 +314,8 @@ export const applyTemplateBulk = createHandler(
           },
           user.householdId!,
           user.userId,
-          plant.name
+          plant.name,
+          { defaultAssigneeId }
         );
         taskIds.push(t.id);
       }
@@ -335,6 +353,7 @@ export const applyTemplate = createHandler(
     if (!plant) throw createHttpError(404, 'Plant not found');
 
     const created = [];
+    const defaultAssigneeId = await defaultCaregiverForPlant(user.householdId!, plant);
     for (const taskDef of tpl.tasks) {
       const task = await taskService.createTask(
         {
@@ -346,7 +365,8 @@ export const applyTemplate = createHandler(
         },
         user.householdId!,
         user.userId,
-        plant.name
+        plant.name,
+        { defaultAssigneeId }
       );
       created.push(task);
     }
@@ -401,8 +421,9 @@ export const snoozeTask = createHandler(
   .use(requireHousehold())
   .use(validateBody(snoozeTaskSchema));
 
-// POST /tasks/:id/claim — take an unassigned task ("up for grabs").
-// Atomic in the service: 409 when someone else claimed it first.
+// POST /tasks/:id/claim — take unassigned work or a space-default assignment.
+// Explicit assignments stay protected. Atomic in the service: 409 when
+// someone else claimed it first.
 export const claimTask = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
