@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Plant, plantService } from '@/services/plantService';
 import { getErrorMessage } from '@/services/api';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -12,11 +13,13 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
+import { SpacePicker } from './SpacePicker';
 
 const plantSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   species: z.string().max(100).optional(),
-  location: z.string().max(100).optional(),
+  spaceId: z.string().optional(),
+  placementNote: z.string().max(120).optional(),
   notes: z.string().max(1000).optional(),
 });
 
@@ -29,6 +32,7 @@ interface EditPlantModalProps {
 }
 
 export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
 
@@ -44,7 +48,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
     defaultValues: {
       name: plant.name,
       species: plant.species || '',
-      location: plant.location || '',
+      spaceId: plant.spaceId || '',
+      placementNote: plant.placementNote || '',
       notes: plant.notes || '',
     },
   });
@@ -53,13 +58,15 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
     plant.perenualSpeciesId ?? null
   );
   const speciesValue = watch('species') ?? '';
+  const spaceIdValue = watch('spaceId') ?? '';
 
   useEffect(() => {
     if (isOpen) {
       reset({
         name: plant.name,
         species: plant.species || '',
-        location: plant.location || '',
+        spaceId: plant.spaceId || '',
+        placementNote: plant.placementNote || '',
         notes: plant.notes || '',
       });
       setPerenualSpeciesId(plant.perenualSpeciesId ?? null);
@@ -71,7 +78,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
       plantService.updatePlant(plant.id, {
         name: data.name,
         species: data.species || undefined,
-        location: data.location || undefined,
+        spaceId: data.spaceId || null,
+        placementNote: data.placementNote || null,
         notes: data.notes || undefined,
         // Always explicit, including null — omitting it would leave the
         // backend's existing link untouched and reintroduce stale care/
@@ -160,10 +168,17 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                     error={errors.species?.message}
                   />
 
+                  <SpacePicker
+                    value={spaceIdValue}
+                    onChange={(spaceId) => setValue('spaceId', spaceId, { shouldValidate: true })}
+                    error={errors.spaceId?.message}
+                  />
+
                   <Input
-                    label="Location"
-                    error={errors.location?.message}
-                    {...register('location')}
+                    label={t('spaces.placementNoteLabel')}
+                    placeholder={t('spaces.placementNotePlaceholder')}
+                    error={errors.placementNote?.message}
+                    {...register('placementNote')}
                   />
 
                   <div>

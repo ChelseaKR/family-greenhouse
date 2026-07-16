@@ -69,6 +69,8 @@ export async function createPlant(
     name: input.name,
     species: input.species || null,
     location: input.location || null,
+    spaceId: input.spaceId ?? null,
+    placementNote: input.placementNote || null,
     imageUrl: null,
     notes: input.notes || null,
     status: 'active',
@@ -176,6 +178,8 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
     name: result.Item.name as string,
     species: result.Item.species as string | null,
     location: result.Item.location as string | null,
+    spaceId: (result.Item.spaceId as string | null | undefined) ?? null,
+    placementNote: (result.Item.placementNote as string | null | undefined) ?? null,
     imageUrl: result.Item.imageUrl as string | null,
     notes: result.Item.notes as string | null,
     status: (result.Item.status as PlantStatus | undefined) ?? 'active',
@@ -241,6 +245,8 @@ export async function getPlants(
       name: item.name as string,
       species: item.species as string | null,
       location: item.location as string | null,
+      spaceId: (item.spaceId as string | null | undefined) ?? null,
+      placementNote: (item.placementNote as string | null | undefined) ?? null,
       imageUrl: item.imageUrl as string | null,
       notes: item.notes as string | null,
       status: (item.status as PlantStatus | undefined) ?? 'active',
@@ -285,6 +291,18 @@ export async function updatePlant(
     updateExpressions.push('#location = :location');
     expressionAttributeNames['#location'] = 'location';
     expressionAttributeValues[':location'] = input.location;
+  }
+
+  if (input.spaceId !== undefined) {
+    updateExpressions.push('#spaceId = :spaceId');
+    expressionAttributeNames['#spaceId'] = 'spaceId';
+    expressionAttributeValues[':spaceId'] = input.spaceId;
+  }
+
+  if (input.placementNote !== undefined) {
+    updateExpressions.push('#placementNote = :placementNote');
+    expressionAttributeNames['#placementNote'] = 'placementNote';
+    expressionAttributeValues[':placementNote'] = input.placementNote;
   }
 
   if (input.notes !== undefined) {
@@ -372,6 +390,8 @@ export async function updatePlant(
       name: result.Attributes.name as string,
       species: result.Attributes.species as string | null,
       location: result.Attributes.location as string | null,
+      spaceId: (result.Attributes.spaceId as string | null | undefined) ?? null,
+      placementNote: (result.Attributes.placementNote as string | null | undefined) ?? null,
       imageUrl: result.Attributes.imageUrl as string | null,
       notes: result.Attributes.notes as string | null,
       status: (result.Attributes.status as PlantStatus | undefined) ?? 'active',
@@ -555,6 +575,8 @@ export async function deletePlant(householdId: string, plantId: string): Promise
         name: item.name as string,
         species: (item.species as string | null | undefined) ?? null,
         location: (item.location as string | null | undefined) ?? null,
+        spaceId: (item.spaceId as string | null | undefined) ?? null,
+        placementNote: (item.placementNote as string | null | undefined) ?? null,
         imageUrl: (item.imageUrl as string | null | undefined) ?? null,
         notes: (item.notes as string | null | undefined) ?? null,
         status: (item.status as PlantStatus | undefined) ?? 'active',

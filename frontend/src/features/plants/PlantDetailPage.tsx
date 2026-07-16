@@ -46,6 +46,8 @@ import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { toast } from '@/store/toastStore';
 import { PlantImage } from '@/components/PlantImage';
+import { spaceService } from '@/services/spaceService';
+import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -78,6 +80,10 @@ export function PlantDetailPage() {
     queryKey: ['plants', householdId, plantId],
     queryFn: () => plantService.getPlant(plantId!),
     enabled: !!plantId,
+  });
+  const { data: spaces = [] } = useQuery({
+    queryKey: ['spaces', householdId],
+    queryFn: spaceService.getSpaces,
   });
 
   // Title reflects the plant once it's loaded; falls back to a generic
@@ -262,10 +268,12 @@ export function PlantDetailPage() {
           </div>
 
           <dl className="mt-4 grid grid-cols-2 gap-4">
-            {plant.location && (
+            {(plant.spaceId || plant.location) && (
               <div>
-                <dt className="text-sm font-medium text-gray-500">Location</dt>
-                <dd className="text-sm text-gray-900">{plant.location}</dd>
+                <dt className="text-sm font-medium text-gray-500">Space</dt>
+                <dd className="text-sm text-gray-900">
+                  {plantLocationLabel(plant, spaceMap(spaces))}
+                </dd>
               </div>
             )}
             <div>

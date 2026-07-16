@@ -3,9 +3,8 @@ name: zizmor
 # Closes the "zizmor (workflow SAST)" gap declared in docs/roadmap.md's
 # metrics ledger (CICD-29): static analysis of our own GitHub Actions
 # workflows for injection risks, unpinned actions, overbroad permissions,
-# etc. Results upload to the repo's code-scanning tab (free for public
-# repos, same posture as codeql.yml) rather than failing the build outright
-# — see CICD-29 note there on why this is "declare or N/A", not "must gate".
+# etc. The repository is private without GHAS, so findings are retained as a
+# SARIF artifact rather than uploaded to the unavailable code-scanning API.
 on:
   push:
     branches: [main]
@@ -27,7 +26,6 @@ jobs:
     name: zizmor workflow audit
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
       contents: read
       actions: read
     steps:
@@ -37,4 +35,22 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor
-        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIZMOR_IMAGE: ghcr.io/zizmorcore/zizmor:latest@sha256:d1117e5dbd9ee4970644067b534ab6ab50371f3c6f7f4d05446eb603a6e78f48
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --workdir /workspace \
+            --env GH_TOKEN \
+            "$ZIZMOR_IMAGE" \
+            --persona=regular \
+            --format=sarif \
+            -- . > zizmor.sarif
+
+      - name: Preserve zizmor results
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zizmor-sarif
+          path: zizmor.sarif
+          retention-days: 14

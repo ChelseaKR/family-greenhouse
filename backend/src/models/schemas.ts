@@ -52,6 +52,20 @@ export const updateMemberRoleSchema = z.object({
   role: z.enum(['admin', 'member']),
 });
 
+// Household plant-space schemas
+export const spaceEnvironmentEnum = z.enum(['inside', 'outside']);
+
+export const createSpaceSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  environment: spaceEnvironmentEnum,
+});
+
+export const updateSpaceSchema = createSpaceSchema
+  .partial()
+  .refine((input) => input.name !== undefined || input.environment !== undefined, {
+    message: 'At least one space field is required',
+  });
+
 // Plant schemas
 const tagsSchema = z.array(z.string().min(1).max(40)).max(10).optional();
 
@@ -60,6 +74,8 @@ export const createPlantSchema = z.object({
   species: z.string().max(100).optional(),
   tags: tagsSchema,
   location: z.string().max(100).optional(),
+  spaceId: z.string().uuid().optional(),
+  placementNote: z.string().max(120).optional(),
   notes: z.string().max(1000).optional(),
   perenualSpeciesId: z.number().int().positive().optional(),
   // Propagation: the same-household plant this cutting was taken from.
@@ -73,6 +89,8 @@ export const updatePlantSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   species: z.string().max(100).optional().nullable(),
   location: z.string().max(100).optional().nullable(),
+  spaceId: z.string().uuid().optional().nullable(),
+  placementNote: z.string().max(120).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),
@@ -262,6 +280,8 @@ export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 
 export type CreatePlantInput = z.infer<typeof createPlantSchema>;
 export type UpdatePlantInput = z.infer<typeof updatePlantSchema>;
+export type CreateSpaceInput = z.infer<typeof createSpaceSchema>;
+export type UpdateSpaceInput = z.infer<typeof updateSpaceSchema>;
 
 export type TaskType = z.infer<typeof taskTypeEnum>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;

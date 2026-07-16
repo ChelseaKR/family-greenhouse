@@ -258,6 +258,8 @@ describe('plantService', () => {
         status: 'active',
         statusChangedAt: null,
         parentPlantId: null,
+        spaceId: null,
+        placementNote: null,
       });
     });
 

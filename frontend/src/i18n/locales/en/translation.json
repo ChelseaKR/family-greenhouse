@@ -18,6 +18,28 @@
     "daysAgo_one": "{{count}} day ago",
     "daysAgo_other": "{{count}} days ago"
   },
+  "spaces": {
+    "all": "All spaces",
+    "inside": "Inside",
+    "outside": "Outside",
+    "unplaced": "Unplaced",
+    "fieldLabel": "Space (optional)",
+    "placementNoteLabel": "Placement note",
+    "placementNotePlaceholder": "e.g., east window, top shelf",
+    "createAction": "Create space",
+    "nameLabel": "Space name",
+    "namePlaceholder": "e.g., Living room or Back patio",
+    "environment": "Inside or outside",
+    "manageTitle": "Household spaces",
+    "manageDescription": "Create the rooms and outdoor areas where your plants live.",
+    "manageAction": "Manage spaces",
+    "viewLabel": "Spaces view",
+    "filterAria": "Filter plants by space",
+    "plantCount_one": "{{count}} plant",
+    "plantCount_other": "{{count}} plants",
+    "deleteAction": "Delete",
+    "deleteAria": "Delete {{name}}"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "plants": "Plants",
