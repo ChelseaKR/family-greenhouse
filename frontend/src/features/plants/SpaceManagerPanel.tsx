@@ -15,6 +15,7 @@ export function SpaceManagerPanel() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [environment, setEnvironment] = useState<'inside' | 'outside'>('inside');
+  const [rainExposure, setRainExposure] = useState<'exposed' | 'sheltered'>('exposed');
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
@@ -22,7 +23,12 @@ export function SpaceManagerPanel() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['spaces', householdId] });
   const createMutation = useMutation({
-    mutationFn: () => spaceService.createSpace({ name, environment }),
+    mutationFn: () =>
+      spaceService.createSpace({
+        name,
+        environment,
+        rainExposure: environment === 'outside' ? rainExposure : 'sheltered',
+      }),
     onSuccess: () => {
       setName('');
       refresh();
@@ -32,8 +38,13 @@ export function SpaceManagerPanel() {
     mutationFn: spaceService.deleteSpace,
     onSuccess: refresh,
   });
+  const updateMutation = useMutation({
+    mutationFn: ({ id, exposure }: { id: string; exposure: 'exposed' | 'sheltered' }) =>
+      spaceService.updateSpace(id, { rainExposure: exposure }),
+    onSuccess: refresh,
+  });
 
-  const error = createMutation.error || deleteMutation.error;
+  const error = createMutation.error || updateMutation.error || deleteMutation.error;
 
   return (
     <Card variant="paper">
@@ -43,7 +54,7 @@ export function SpaceManagerPanel() {
           {getErrorMessage(error)}
         </Alert>
       )}
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
         <label className="space-y-1">
           <span className="label">{t('spaces.nameLabel')}</span>
           <input
@@ -63,6 +74,19 @@ export function SpaceManagerPanel() {
           <option value="inside">{t('spaces.inside')}</option>
           <option value="outside">{t('spaces.outside')}</option>
         </select>
+        {environment === 'outside' && (
+          <label className="space-y-1">
+            <span className="label">{t('spaces.rainExposure')}</span>
+            <select
+              className="input"
+              value={rainExposure}
+              onChange={(event) => setRainExposure(event.target.value as 'exposed' | 'sheltered')}
+            >
+              <option value="exposed">{t('spaces.exposed')}</option>
+              <option value="sheltered">{t('spaces.sheltered')}</option>
+            </select>
+          </label>
+        )}
         <Button
           type="button"
           disabled={!name.trim()}
@@ -79,19 +103,42 @@ export function SpaceManagerPanel() {
             <li key={space.id} className="flex items-center justify-between gap-3 py-3">
               <div>
                 <p className="text-sm font-medium text-ink">{space.name}</p>
-                <p className="text-xs text-gray-600">{t(`spaces.${space.environment}`)}</p>
+                <p className="text-xs text-gray-600">
+                  {t(`spaces.${space.environment}`)}
+                  {space.environment === 'outside' &&
+                    ` · ${t(`spaces.${space.rainExposure ?? 'exposed'}`)}`}
+                </p>
               </div>
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                aria-label={t('spaces.deleteAria', { name: space.name })}
-                isLoading={deleteMutation.isPending && deleteMutation.variables === space.id}
-                onClick={() => deleteMutation.mutate(space.id)}
-                leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
-              >
-                {t('spaces.deleteAction')}
-              </Button>
+              <div className="flex items-center gap-2">
+                {space.environment === 'outside' && (
+                  <select
+                    className="input min-w-32 py-2 text-sm"
+                    aria-label={t('spaces.rainExposureAria', { name: space.name })}
+                    value={space.rainExposure ?? 'exposed'}
+                    disabled={updateMutation.isPending}
+                    onChange={(event) =>
+                      updateMutation.mutate({
+                        id: space.id,
+                        exposure: event.target.value as 'exposed' | 'sheltered',
+                      })
+                    }
+                  >
+                    <option value="exposed">{t('spaces.exposed')}</option>
+                    <option value="sheltered">{t('spaces.sheltered')}</option>
+                  </select>
+                )}
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  aria-label={t('spaces.deleteAria', { name: space.name })}
+                  isLoading={deleteMutation.isPending && deleteMutation.variables === space.id}
+                  onClick={() => deleteMutation.mutate(space.id)}
+                  leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
+                >
+                  {t('spaces.deleteAction')}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

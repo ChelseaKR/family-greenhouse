@@ -11,6 +11,8 @@ export interface PlantSpace {
   householdId: string;
   name: string;
   environment: 'inside' | 'outside';
+  /** Whether rain reaches plants here. Older outdoor spaces are treated as exposed. */
+  rainExposure?: 'exposed' | 'sheltered';
   createdAt: string;
   createdBy: string;
   updatedAt: string;

@@ -10,6 +10,7 @@
  * the existing `['household', hh, 'climate']` query result.
  */
 import type { ClimateResponse } from '@/services/climateService';
+import type { PlantSpace } from '@/services/plantService';
 import type { SnoozeReason } from '@/services/taskService';
 
 export interface ClimateSignals {
@@ -44,19 +45,19 @@ interface SkippableTask {
 
 /**
  * Which climate skip suggestion (if any) applies to a task:
- *   - 'rain'  — water task due within 48h while rain is expected
- *   - 'frost' — water task due within 48h on an *outdoor-tagged* plant
- *               while a freeze is expected (skipped entirely when the plant
- *               isn't tagged 'outdoor')
+ *   - 'rain'  — water task due within 48h in a rain-exposed outdoor space
+ *   - 'frost' — water task due within 48h in any outdoor space
+ * Legacy outdoor spaces with no rainExposure are treated as exposed.
  */
 export function climateSkipSuggestion(
   task: SkippableTask,
-  plantTags: string[] | undefined,
+  placement: PlantSpace | undefined,
   signals: ClimateSignals,
   now: Date = new Date()
 ): Extract<SnoozeReason, 'rain' | 'frost'> | null {
   if (task.type !== 'water' || !isDueWithinHours(task.nextDue, 48, now)) return null;
-  if (signals.rainSoon) return 'rain';
-  if (signals.frostSoon && plantTags?.includes('outdoor')) return 'frost';
+  if (placement?.environment !== 'outside') return null;
+  if (signals.rainSoon && placement.rainExposure !== 'sheltered') return 'rain';
+  if (signals.frostSoon) return 'frost';
   return null;
 }

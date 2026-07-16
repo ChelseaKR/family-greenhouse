@@ -210,9 +210,11 @@ care template multiple plants bulk apply Plants page button water fertilize 50 l
         a: (
           <>
             When your household has a saved location, the dashboard shows local weather plus derived
-            care tips: low-humidity warnings for tropicals, freeze alerts for outdoor plants,
-            &ldquo;skip watering today&rdquo; on rainy days, hot-day soil-moisture nudges. Set or
-            change the location on the <strong>Household</strong> page (admin only).
+            care tips: low-humidity warnings for tropicals, freeze alerts for plants in outdoor
+            spaces, and hot-day soil-moisture nudges. Rainy-day skips only appear for plants in
+            outdoor spaces marked <strong>Rain exposed</strong>; covered patios and porches stay on
+            their normal watering schedule. Set or change the location on the{' '}
+            <strong>Household</strong> page (admin only).
           </>
         ),
         searchText: md`

@@ -54,17 +54,25 @@ export const updateMemberRoleSchema = z.object({
 
 // Household plant-space schemas
 export const spaceEnvironmentEnum = z.enum(['inside', 'outside']);
+export const rainExposureEnum = z.enum(['exposed', 'sheltered']);
 
 export const createSpaceSchema = z.object({
   name: z.string().trim().min(1).max(80),
   environment: spaceEnvironmentEnum,
+  rainExposure: rainExposureEnum.optional(),
 });
 
 export const updateSpaceSchema = createSpaceSchema
   .partial()
-  .refine((input) => input.name !== undefined || input.environment !== undefined, {
-    message: 'At least one space field is required',
-  });
+  .refine(
+    (input) =>
+      input.name !== undefined ||
+      input.environment !== undefined ||
+      input.rainExposure !== undefined,
+    {
+      message: 'At least one space field is required',
+    }
+  );
 
 // Plant schemas
 const tagsSchema = z.array(z.string().min(1).max(40)).max(10).optional();

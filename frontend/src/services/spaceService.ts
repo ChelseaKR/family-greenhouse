@@ -10,6 +10,7 @@ export const spaceService = {
   async createSpace(input: {
     name: string;
     environment: PlantSpace['environment'];
+    rainExposure?: PlantSpace['rainExposure'];
   }): Promise<PlantSpace> {
     const response = await api.post<PlantSpace>('/spaces', input);
     return response.data;
@@ -17,7 +18,7 @@ export const spaceService = {
 
   async updateSpace(
     id: string,
-    input: Partial<Pick<PlantSpace, 'name' | 'environment'>>
+    input: Partial<Pick<PlantSpace, 'name' | 'environment' | 'rainExposure'>>
   ): Promise<PlantSpace> {
     const response = await api.put<PlantSpace>(`/spaces/${id}`, input);
     return response.data;

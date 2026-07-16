@@ -100,8 +100,8 @@ export function TasksPage() {
   );
   const signals = deriveClimateSignals(climate);
 
-  // Plant tags (for the outdoor-only frost variant) — standard plants query,
-  // also typically already cached.
+  // Plant placement makes rain/frost suggestions specific to where the plant
+  // actually lives, rather than relying on a free-form "outdoor" tag.
   const { data: plants } = useQuery({
     queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
@@ -110,10 +110,6 @@ export function TasksPage() {
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
   });
-  const tagsByPlantId = useMemo(
-    () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
-    [plants]
-  );
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
   const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
 
@@ -123,8 +119,10 @@ export function TasksPage() {
   const unclaimMutation = useUnclaimTaskMutation(householdId);
   const skipMutation = useSkipCycleMutation(householdId);
 
-  const skipReasonFor = (task: TaskWithCoverage) =>
-    climateSkipSuggestion(task, tagsByPlantId.get(task.plantId), signals);
+  const skipReasonFor = (task: TaskWithCoverage) => {
+    const spaceId = plantsById.get(task.plantId)?.spaceId;
+    return climateSkipSuggestion(task, spaceId ? spacesById.get(spaceId) : undefined, signals);
+  };
 
   const rowExtras: TaskRowExtras = {
     skipReasonFor,

@@ -139,11 +139,11 @@ export function DashboardPage() {
     )
   );
   const climateSignals = deriveClimateSignals(climate);
-  const tagsByPlantId = useMemo(
-    () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
-    [plants]
-  );
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
+  const placementForTask = (task: TaskWithCoverage) => {
+    const spaceId = plantsById.get(task.plantId)?.spaceId;
+    return spaceId ? spacesById.get(spaceId) : undefined;
+  };
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -235,11 +235,7 @@ export function DashboardPage() {
                 isCompleting={
                   completeTaskMutation.isPending && completeTaskMutation.variables === task.id
                 }
-                skipReason={climateSkipSuggestion(
-                  task,
-                  tagsByPlantId.get(task.plantId),
-                  climateSignals
-                )}
+                skipReason={climateSkipSuggestion(task, placementForTask(task), climateSignals)}
                 onSkip={(t, reason) => skipMutation.mutate({ task: t, reason })}
                 skipPending={skipMutation.isPending}
                 onClaim={(id) => claimMutation.mutate(id)}

@@ -138,6 +138,7 @@ interface PlantSpace {
   householdId: string;
   name: string;
   environment: 'inside' | 'outside';
+  rainExposure: 'exposed' | 'sheltered';
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -399,6 +400,7 @@ export function resetDb(): void {
     householdId: seedHouseholdId,
     name: 'Living Room',
     environment: 'inside',
+    rainExposure: 'sheltered',
     createdAt: now,
     createdBy: seedUserId,
     updatedAt: now,
@@ -1485,6 +1487,8 @@ app.post(
       householdId: user.householdId,
       name: input.name.trim(),
       environment: input.environment,
+      rainExposure:
+        input.environment === 'outside' ? (input.rainExposure ?? 'exposed') : 'sheltered',
       createdAt: now,
       createdBy: user.userId,
       updatedAt: now,
@@ -1519,6 +1523,13 @@ app.put(
       space.name = input.name.trim();
     }
     if (input.environment !== undefined) space.environment = input.environment;
+    if (input.environment === 'inside') {
+      space.rainExposure = 'sheltered';
+    } else if (input.rainExposure !== undefined) {
+      space.rainExposure = input.rainExposure;
+    } else if (input.environment === 'outside') {
+      space.rainExposure = 'exposed';
+    }
     space.updatedAt = new Date().toISOString();
     res.json(space);
   }

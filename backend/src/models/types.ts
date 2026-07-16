@@ -71,6 +71,9 @@ export interface PlantSpace {
   householdId: string;
   name: string;
   environment: 'inside' | 'outside';
+  /** Whether rainfall reaches plants in this space. Legacy outdoor spaces
+   * default to exposed; indoor spaces default to sheltered. */
+  rainExposure: 'exposed' | 'sheltered';
   createdAt: string;
   createdBy: string;
   updatedAt: string;
