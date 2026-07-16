@@ -10,7 +10,7 @@ test.describe('Public plan-status page', () => {
     await page.goto('/pricing');
 
     await expect(
-      page.getByRole('heading', { name: /paid plans and purchases are unavailable/i })
+      page.getByRole('heading', { name: /commercial activity is paused/i })
     ).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: /billing interval/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /upgrade|subscribe|trial/i })).toHaveCount(0);
