@@ -90,6 +90,22 @@ describe('plantService', () => {
     await expect(plantService.deletePlant('p1')).resolves.toBeUndefined();
   });
 
+  it('moves a batch of plants to a space', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    let received: unknown;
+    server.use(
+      http.post(`${API}/plants/move`, async ({ request }) => {
+        received = await request.json();
+        return HttpResponse.json([{ id: 'p1', name: 'Pothos', spaceId: 'space-1' }]);
+      })
+    );
+
+    const plants = await plantService.movePlants({ plantIds: ['p1'], spaceId: 'space-1' });
+
+    expect(received).toEqual({ plantIds: ['p1'], spaceId: 'space-1' });
+    expect(plants[0].spaceId).toBe('space-1');
+  });
+
   it('archives a plant through the lifecycle endpoint', async () => {
     useAuthStore.setState({ accessToken: 'access-1' });
     let received: unknown;

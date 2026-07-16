@@ -51,6 +51,49 @@ describe('plantService', () => {
     vi.clearAllMocks();
   });
 
+  describe('movePlants', () => {
+    it('moves every requested plant in one transaction and returns refreshed rows', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { movePlants } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({
+          Item: {
+            id: 'p1',
+            householdId: 'hh',
+            name: 'Fern',
+            species: null,
+            location: null,
+            spaceId: 'space-1',
+            placementNote: 'top shelf',
+            imageUrl: null,
+            notes: null,
+            createdAt: '',
+            createdBy: 'u',
+            updatedAt: '',
+          },
+        });
+
+      const result = await movePlants('hh', {
+        plantIds: ['p1'],
+        spaceId: 'space-1',
+        placementNote: 'top shelf',
+      });
+
+      expect(result).toHaveLength(1);
+      const transaction = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+        kind: string;
+        input: { TransactItems: Array<{ Update: Record<string, unknown> }> };
+      };
+      expect(transaction.kind).toBe('TransactWrite');
+      expect(transaction.input.TransactItems).toHaveLength(1);
+      expect(transaction.input.TransactItems[0].Update).toMatchObject({
+        Key: { PK: 'HOUSEHOLD#hh', SK: 'PLANT#p1' },
+        ConditionExpression: 'attribute_exists(PK)',
+      });
+    });
+  });
+
   describe('createPlant', () => {
     // Shape of the TransactWrite payload createPlant sends.
     type CreateTransact = {

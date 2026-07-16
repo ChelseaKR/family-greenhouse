@@ -12,6 +12,7 @@ import {
   ScissorsIcon,
   ShareIcon,
   SparklesIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 import { plantService, Task, type PlantStatus } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
@@ -48,6 +49,7 @@ import { toast } from '@/store/toastStore';
 import { PlantImage } from '@/components/PlantImage';
 import { spaceService } from '@/services/spaceService';
 import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { MovePlantsDialog } from './MovePlantsDialog';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -70,6 +72,7 @@ export function PlantDetailPage() {
   const [showRemove, setShowRemove] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showLeafHealth, setShowLeafHealth] = useState(false);
+  const [showMove, setShowMove] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const {
@@ -205,6 +208,15 @@ export function PlantDetailPage() {
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
               {(plant.status ?? 'active') === 'active' && (
                 <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => setShowMove(true)}
+                    leftIcon={<ArrowsRightLeftIcon className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    {t('spaces.quickMoveAction')}
+                  </Button>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -407,6 +419,8 @@ export function PlantDetailPage() {
         isOpen={showEditPlant}
         onClose={() => setShowEditPlant(false)}
       />
+
+      <MovePlantsDialog plant={plant} isOpen={showMove} onClose={() => setShowMove(false)} />
 
       {editingTask && (
         <EditTaskModal task={editingTask} isOpen={true} onClose={() => setEditingTask(null)} />

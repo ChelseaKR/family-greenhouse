@@ -96,6 +96,7 @@ export type EventName =
   | 'plant_added' // Plant successfully created. Distinguishable via `plantNumber=1` for first-plant.
   | 'plant_lifecycle_changed' // Archived, restored, died, or gave away; `context` is the new status.
   | 'plants_imported' // Bulk CSV/JSON import submitted; `context` carries the row count.
+  | 'plants_moved' // Quick or bulk placement change; `context` carries the plant count.
   | 'task_created'
   | 'task_completed' // Includes `completionNumber` so we can chart "first task completed" funnel.
   | 'task_snoozed'

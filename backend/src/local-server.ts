@@ -28,6 +28,7 @@ import {
   updateMemberRoleSchema,
   createPlantSchema,
   updatePlantSchema,
+  movePlantsSchema,
   createSpaceSchema,
   updateSpaceSchema,
   importPlantsSchema,
@@ -1648,6 +1649,36 @@ app.post(
     });
 
     res.status(201).json(plant);
+  }
+);
+
+app.post(
+  '/plants/move',
+  authMiddleware,
+  requireHousehold,
+  validateBody(movePlantsSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const { plantIds, spaceId, placementNote } = (req as any).validatedBody;
+    if (spaceId) {
+      const space = db.spaces.get(spaceId);
+      if (!space || space.householdId !== user.householdId) {
+        return res.status(400).json({ message: 'Space not found in this household' });
+      }
+    }
+    const plants = plantIds.map((plantId: string) => db.plants.get(plantId));
+    if (
+      plants.some((plant: Plant | undefined) => !plant || plant.householdId !== user.householdId)
+    ) {
+      return res.status(404).json({ message: 'One or more plants were not found' });
+    }
+    const updatedAt = new Date().toISOString();
+    for (const plant of plants as Plant[]) {
+      plant.spaceId = spaceId;
+      if (placementNote !== undefined) plant.placementNote = placementNote;
+      plant.updatedAt = updatedAt;
+    }
+    res.json(plants);
   }
 );
 

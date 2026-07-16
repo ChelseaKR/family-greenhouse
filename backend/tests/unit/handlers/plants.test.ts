@@ -123,6 +123,58 @@ describe('plants handler', () => {
     expect(JSON.parse(res.body).message).toMatch(/Space not found/);
   });
 
+  it('moves plants only after validating the destination and every household plant', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const spaceService = await import('../../../src/services/spaceService.js');
+    const { movePlants } = await import('../../../src/handlers/plants/handler.js');
+    const plant = {
+      id: '550e8400-e29b-41d4-a716-446655440001',
+      householdId: 'hh-1',
+      name: 'Fern',
+      species: null,
+      location: null,
+      spaceId: null,
+      placementNote: null,
+      imageUrl: null,
+      notes: null,
+      status: 'active' as const,
+      tags: [],
+      createdAt: '',
+      createdBy: 'user-1',
+      updatedAt: '',
+    };
+    vi.mocked(spaceService.getSpace).mockResolvedValueOnce({
+      id: '550e8400-e29b-41d4-a716-446655440002',
+      householdId: 'hh-1',
+      name: 'Patio',
+      environment: 'outside',
+      createdAt: '',
+      createdBy: 'user-1',
+      updatedAt: '',
+    });
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce(plant);
+    vi.mocked(plantService.movePlants).mockResolvedValueOnce([
+      { ...plant, spaceId: '550e8400-e29b-41d4-a716-446655440002' },
+    ]);
+    const body = {
+      plantIds: [plant.id],
+      spaceId: '550e8400-e29b-41d4-a716-446655440002',
+      placementNote: 'by the door',
+    };
+    const res = (await movePlants(
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(plantService.movePlants).toHaveBeenCalledWith('hh-1', body);
+  });
+
   it('listPlants returns plants for the caller household', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const { listPlants } = await import('../../../src/handlers/plants/handler.js');

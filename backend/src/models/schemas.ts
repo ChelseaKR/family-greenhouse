@@ -104,6 +104,17 @@ export const updatePlantSchema = z.object({
   parentPlantId: z.string().uuid().nullable().optional(),
 });
 
+export const movePlantsSchema = z
+  .object({
+    plantIds: z.array(z.string().uuid()).min(1).max(50),
+    spaceId: z.string().uuid().nullable(),
+    placementNote: z.string().trim().max(120).nullable().optional(),
+  })
+  .refine((input) => new Set(input.plantIds).size === input.plantIds.length, {
+    message: 'Plant IDs must be unique',
+    path: ['plantIds'],
+  });
+
 // Task schemas
 export const taskTypeEnum = z.enum(['water', 'fertilize', 'prune', 'repot', 'custom']);
 
@@ -280,6 +291,7 @@ export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 
 export type CreatePlantInput = z.infer<typeof createPlantSchema>;
 export type UpdatePlantInput = z.infer<typeof updatePlantSchema>;
+export type MovePlantsInput = z.infer<typeof movePlantsSchema>;
 export type CreateSpaceInput = z.infer<typeof createSpaceSchema>;
 export type UpdateSpaceInput = z.infer<typeof updateSpaceSchema>;
 

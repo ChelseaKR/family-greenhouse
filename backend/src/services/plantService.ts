@@ -19,7 +19,7 @@ import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/c
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { Plant, PlantStatus, DynamoDBItem } from '../models/types.js';
-import { CreatePlantInput, UpdatePlantInput } from '../models/schemas.js';
+import { CreatePlantInput, MovePlantsInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 
@@ -507,6 +507,43 @@ export async function updatePlant(
     return getPlant(householdId, plantId);
   }
   throw new Error(`Concurrent status updates for plant ${plantId}; giving up`);
+}
+
+/** Move up to 50 plants as one all-or-nothing household-scoped write. */
+export async function movePlants(householdId: string, input: MovePlantsInput): Promise<Plant[]> {
+  const updatedAt = new Date().toISOString();
+  const setPlacementNote = input.placementNote !== undefined;
+
+  await dynamodb.send(
+    new TransactWriteCommand({
+      TransactItems: input.plantIds.map((plantId) => ({
+        Update: {
+          TableName: TABLE_NAME,
+          Key: {
+            PK: `HOUSEHOLD#${householdId}`,
+            SK: `PLANT#${plantId}`,
+          },
+          UpdateExpression: setPlacementNote
+            ? 'SET #spaceId = :spaceId, #placementNote = :placementNote, #updatedAt = :updatedAt'
+            : 'SET #spaceId = :spaceId, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#spaceId': 'spaceId',
+            '#updatedAt': 'updatedAt',
+            ...(setPlacementNote ? { '#placementNote': 'placementNote' } : {}),
+          },
+          ExpressionAttributeValues: {
+            ':spaceId': input.spaceId,
+            ':updatedAt': updatedAt,
+            ...(setPlacementNote ? { ':placementNote': input.placementNote } : {}),
+          },
+          ConditionExpression: 'attribute_exists(PK)',
+        },
+      })),
+    })
+  );
+
+  const moved = await Promise.all(input.plantIds.map((plantId) => getPlant(householdId, plantId)));
+  return moved.filter((plant): plant is Plant => plant !== null);
 }
 
 export async function deletePlant(householdId: string, plantId: string): Promise<Plant | null> {

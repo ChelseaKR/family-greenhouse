@@ -22,6 +22,8 @@ does not change its species traits.
 - `POST /spaces` with `{ name, environment }`
 - `PUT /spaces/{id}` with either field
 - `DELETE /spaces/{id}` only when no plants still reference it
+- `POST /plants/move` with one to 50 unique plant IDs, a destination `spaceId` (or `null` for
+  Unplaced), and an optional placement note
 
 Plant create and update accept `spaceId` and `placementNote`. The handler verifies that a supplied
 space belongs to the caller's active household.
@@ -50,3 +52,10 @@ The dashboard and both Tasks organizations resolve each task's plant to its curr
 time. This avoids denormalizing a space name onto recurring task rows, which would become stale every
 time a plant moves or a space is renamed. Placement notes ride with the displayed space label, and
 plants without a structured space are explicitly shown as Unplaced.
+
+## Moving plants
+
+The plant detail page offers a one-step Move action, while the collection page supports selecting
+up to 50 plants and moving them together. Both use the same atomic endpoint, so a mixed-household or
+missing plant cannot leave half of a batch in the new space. A one-plant move can set a precise
+placement note; bulk moves clear old position notes that no longer describe the destination.

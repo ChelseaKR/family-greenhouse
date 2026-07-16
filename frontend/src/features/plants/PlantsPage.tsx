@@ -10,6 +10,7 @@ import {
   ClipboardDocumentListIcon,
   MapPinIcon,
   Cog6ToothIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 import { plantService } from '@/services/plantService';
 import { Button } from '@/components/Button';
@@ -29,6 +30,7 @@ import { PlantStatusBadge } from './PlantLineageCard';
 import { spaceService } from '@/services/spaceService';
 import { SpaceBrowseView } from './SpaceBrowseView';
 import { SpaceManagerPanel } from './SpaceManagerPanel';
+import { MovePlantsDialog } from './MovePlantsDialog';
 import { matchesSpaceFilter, plantLocationLabel, spaceMap, type SpaceFilter } from '@/utils/spaces';
 
 type ViewMode = 'grid' | 'list' | 'spaces';
@@ -40,6 +42,7 @@ export function PlantsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [spaceManagerOpen, setSpaceManagerOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>('all');
   // 'active' is the default living collection; 'past' shows died/gave-away
   // plants whose history we keep. Active stays under the ['plants', hh] key
@@ -92,6 +95,13 @@ export function PlantsPage() {
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <Button
               variant="secondary"
+              onClick={() => setMoveOpen(true)}
+              leftIcon={<ArrowsRightLeftIcon className="h-5 w-5" aria-hidden="true" />}
+            >
+              {t('spaces.bulkMoveAction')}
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => setBulkOpen(true)}
               leftIcon={<ClipboardDocumentListIcon className="h-5 w-5" aria-hidden="true" />}
             >
@@ -110,6 +120,7 @@ export function PlantsPage() {
       />
 
       <BulkApplyTemplateDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
+      <MovePlantsDialog isOpen={moveOpen} onClose={() => setMoveOpen(false)} />
 
       {spaceManagerOpen && <SpaceManagerPanel />}
 

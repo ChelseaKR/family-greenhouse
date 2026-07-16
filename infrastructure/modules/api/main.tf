@@ -690,6 +690,7 @@ locals {
     "DELETE /spaces/{id}"             = { group = "plants", auth = "jwt" }
     "GET /plants"                     = { group = "plants", auth = "jwt" }
     "POST /plants"                    = { group = "plants", auth = "jwt" }
+    "POST /plants/move"               = { group = "plants", auth = "jwt" }
     "GET /plants/{id}"                = { group = "plants", auth = "jwt" }
     "PUT /plants/{id}"                = { group = "plants", auth = "jwt" }
     "DELETE /plants/{id}"             = { group = "plants", auth = "jwt" }
