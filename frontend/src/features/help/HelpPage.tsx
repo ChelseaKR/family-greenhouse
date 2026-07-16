@@ -236,6 +236,22 @@ care guide plant detail Perenual species watering sunlight pruning toxicity hard
         `,
       },
       {
+        q: 'How do placement checks work?',
+        a: (
+          <>
+            You can optionally mark each household space with its typical light level and whether
+            pets can reach plants there. On a plant&rsquo;s detail page, Family Greenhouse compares
+            those details with care data for recognized species and may suggest a brighter or
+            pet-safer spot. These are cautious checks, not measurements or diagnoses; observe the
+            plant and use your judgment before moving it. Unknown space or species details never
+            produce a warning.
+          </>
+        ),
+        searchText: md`
+placement check space light low medium bright pet access toxic warning move species optional
+        `,
+      },
+      {
         q: 'What are pest alerts?',
         a: (
           <>

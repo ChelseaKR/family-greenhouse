@@ -36,8 +36,20 @@ describe('spaceService', () => {
       ],
     });
     await expect(getSpaces('hh')).resolves.toMatchObject([
-      { id: 'a', name: 'Kitchen', rainExposure: 'sheltered' },
-      { id: 'b', name: 'Yard', rainExposure: 'exposed' },
+      {
+        id: 'a',
+        name: 'Kitchen',
+        rainExposure: 'sheltered',
+        lightLevel: null,
+        petAccess: null,
+      },
+      {
+        id: 'b',
+        name: 'Yard',
+        rainExposure: 'exposed',
+        lightLevel: null,
+        petAccess: null,
+      },
     ]);
   });
 
@@ -70,6 +82,56 @@ describe('spaceService', () => {
         'u'
       )
     ).resolves.toMatchObject({ environment: 'outside', rainExposure: 'sheltered' });
+  });
+
+  it('persists optional light and pet-access details', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { createSpace } = await import('../../../src/services/spaceService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({});
+
+    await expect(
+      createSpace(
+        {
+          name: 'Sunny pet room',
+          environment: 'inside',
+          lightLevel: 'bright',
+          petAccess: true,
+        },
+        'hh',
+        'u'
+      )
+    ).resolves.toMatchObject({ lightLevel: 'bright', petAccess: true });
+  });
+
+  it('updates and clears placement-fit properties', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { updateSpace } = await import('../../../src/services/spaceService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Attributes: {
+        id: 'space-1',
+        householdId: 'hh',
+        name: 'Room',
+        environment: 'inside',
+        lightLevel: null,
+        petAccess: false,
+      },
+    });
+
+    const result = await updateSpace('hh', 'space-1', {
+      lightLevel: null,
+      petAccess: false,
+    });
+
+    expect(result).toMatchObject({ lightLevel: null, petAccess: false });
+    const update = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { UpdateExpression: string; ExpressionAttributeValues: Record<string, unknown> };
+    };
+    expect(update.input.UpdateExpression).toContain('#lightLevel = :lightLevel');
+    expect(update.input.UpdateExpression).toContain('#petAccess = :petAccess');
+    expect(update.input.ExpressionAttributeValues).toMatchObject({
+      ':lightLevel': null,
+      ':petAccess': false,
+    });
   });
 
   it('rejects a case-insensitive duplicate name', async () => {

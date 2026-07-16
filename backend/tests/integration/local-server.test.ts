@@ -353,6 +353,31 @@ describe('plant-space routes', () => {
     expect(update.status).toBe(200);
     expect(update.body).toMatchObject({ environment: 'inside', rainExposure: 'sheltered' });
   });
+
+  it('stores, updates, and clears optional placement-fit details', async () => {
+    const token = await loginAsSeed();
+    const create = await request(app).post('/spaces').set('Authorization', `Bearer ${token}`).send({
+      name: 'Pet-friendly sunroom',
+      environment: 'inside',
+      lightLevel: 'bright',
+      petAccess: true,
+    });
+    expect(create.status).toBe(201);
+    expect(create.body).toMatchObject({ lightLevel: 'bright', petAccess: true });
+
+    const update = await request(app)
+      .put(`/spaces/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ lightLevel: null, petAccess: false });
+    expect(update.status).toBe(200);
+    expect(update.body).toMatchObject({ lightLevel: null, petAccess: false });
+
+    const invalid = await request(app)
+      .put(`/spaces/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ lightLevel: 'sunny-ish' });
+    expect(invalid.status).toBe(400);
+  });
 });
 
 describe('plants routes', () => {

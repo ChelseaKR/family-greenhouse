@@ -52,6 +52,7 @@ import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { householdService } from '@/services/householdService';
 import { seasonalHomeSuggestion } from './seasonalHomes';
+import { PlacementFitCard } from './PlacementFitCard';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -374,6 +375,14 @@ export function PlantDetailPage() {
             {t('seasonalHomes.locationAction')}
           </Link>
         </Alert>
+      )}
+
+      {(plant.status ?? 'active') === 'active' && (
+        <PlacementFitCard
+          space={plant.spaceId ? spacesById.get(plant.spaceId) : undefined}
+          species={plant.species}
+          perenualSpeciesId={plant.perenualSpeciesId}
+        />
       )}
 
       {/* Curated care guidance — only renders if plant.species matches a known entry */}

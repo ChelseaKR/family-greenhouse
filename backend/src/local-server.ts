@@ -141,6 +141,8 @@ interface PlantSpace {
   name: string;
   environment: 'inside' | 'outside';
   rainExposure: 'exposed' | 'sheltered';
+  lightLevel: 'low' | 'medium' | 'bright' | null;
+  petAccess: boolean | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -403,6 +405,8 @@ export function resetDb(): void {
     name: 'Living Room',
     environment: 'inside',
     rainExposure: 'sheltered',
+    lightLevel: null,
+    petAccess: null,
     createdAt: now,
     createdBy: seedUserId,
     updatedAt: now,
@@ -1466,6 +1470,11 @@ app.get('/spaces', authMiddleware, requireHousehold, (req, res) => {
   res.json(
     [...db.spaces.values()]
       .filter((space) => space.householdId === user.householdId)
+      .map((space) => ({
+        ...space,
+        lightLevel: space.lightLevel ?? null,
+        petAccess: space.petAccess ?? null,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name))
   );
 });
@@ -1493,6 +1502,8 @@ app.post(
       environment: input.environment,
       rainExposure:
         input.environment === 'outside' ? (input.rainExposure ?? 'exposed') : 'sheltered',
+      lightLevel: input.lightLevel ?? null,
+      petAccess: input.petAccess ?? null,
       createdAt: now,
       createdBy: user.userId,
       updatedAt: now,
@@ -1534,6 +1545,8 @@ app.put(
     } else if (input.environment === 'outside') {
       space.rainExposure = 'exposed';
     }
+    if (input.lightLevel !== undefined) space.lightLevel = input.lightLevel;
+    if (input.petAccess !== undefined) space.petAccess = input.petAccess;
     space.updatedAt = new Date().toISOString();
     res.json(space);
   }

@@ -8,6 +8,10 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
+import type { PlantSpace } from '@/services/plantService';
+
+type LightLevel = NonNullable<PlantSpace['lightLevel']>;
+type PetAccessChoice = '' | 'yes' | 'no';
 
 export function SpaceManagerPanel() {
   const { t } = useTranslation();
@@ -16,6 +20,8 @@ export function SpaceManagerPanel() {
   const [name, setName] = useState('');
   const [environment, setEnvironment] = useState<'inside' | 'outside'>('inside');
   const [rainExposure, setRainExposure] = useState<'exposed' | 'sheltered'>('exposed');
+  const [lightLevel, setLightLevel] = useState<'' | LightLevel>('');
+  const [petAccess, setPetAccess] = useState<PetAccessChoice>('');
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
@@ -28,9 +34,13 @@ export function SpaceManagerPanel() {
         name,
         environment,
         rainExposure: environment === 'outside' ? rainExposure : 'sheltered',
+        lightLevel: lightLevel || undefined,
+        petAccess: petAccess === '' ? undefined : petAccess === 'yes',
       }),
     onSuccess: () => {
       setName('');
+      setLightLevel('');
+      setPetAccess('');
       refresh();
     },
   });
@@ -39,8 +49,13 @@ export function SpaceManagerPanel() {
     onSuccess: refresh,
   });
   const updateMutation = useMutation({
-    mutationFn: ({ id, exposure }: { id: string; exposure: 'exposed' | 'sheltered' }) =>
-      spaceService.updateSpace(id, { rainExposure: exposure }),
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: Partial<Pick<PlantSpace, 'rainExposure' | 'lightLevel' | 'petAccess'>>;
+    }) => spaceService.updateSpace(id, input),
     onSuccess: refresh,
   });
 
@@ -54,8 +69,8 @@ export function SpaceManagerPanel() {
           {getErrorMessage(error)}
         </Alert>
       )}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
-        <label className="space-y-1">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+        <label className="space-y-1 lg:col-span-2">
           <span className="label">{t('spaces.nameLabel')}</span>
           <input
             className="input"
@@ -65,15 +80,50 @@ export function SpaceManagerPanel() {
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <select
-          className="input"
-          aria-label={t('spaces.environment')}
-          value={environment}
-          onChange={(event) => setEnvironment(event.target.value as 'inside' | 'outside')}
+        <label className="space-y-1">
+          <span className="label">{t('spaces.environment')}</span>
+          <select
+            className="input"
+            value={environment}
+            onChange={(event) => setEnvironment(event.target.value as 'inside' | 'outside')}
+          >
+            <option value="inside">{t('spaces.inside')}</option>
+            <option value="outside">{t('spaces.outside')}</option>
+          </select>
+        </label>
+        <Button
+          type="button"
+          disabled={!name.trim()}
+          isLoading={createMutation.isPending}
+          onClick={() => createMutation.mutate()}
         >
-          <option value="inside">{t('spaces.inside')}</option>
-          <option value="outside">{t('spaces.outside')}</option>
-        </select>
+          {t('spaces.createAction')}
+        </Button>
+        <label className="space-y-1">
+          <span className="label">{t('spaces.lightLevel')}</span>
+          <select
+            className="input"
+            value={lightLevel}
+            onChange={(event) => setLightLevel(event.target.value as '' | LightLevel)}
+          >
+            <option value="">{t('spaces.unknown')}</option>
+            <option value="low">{t('spaces.lightLow')}</option>
+            <option value="medium">{t('spaces.lightMedium')}</option>
+            <option value="bright">{t('spaces.lightBright')}</option>
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="label">{t('spaces.petAccess')}</span>
+          <select
+            className="input"
+            value={petAccess}
+            onChange={(event) => setPetAccess(event.target.value as PetAccessChoice)}
+          >
+            <option value="">{t('spaces.unknown')}</option>
+            <option value="yes">{t('spaces.petAccessYes')}</option>
+            <option value="no">{t('spaces.petAccessNo')}</option>
+          </select>
+        </label>
         {environment === 'outside' && (
           <label className="space-y-1">
             <span className="label">{t('spaces.rainExposure')}</span>
@@ -87,20 +137,15 @@ export function SpaceManagerPanel() {
             </select>
           </label>
         )}
-        <Button
-          type="button"
-          disabled={!name.trim()}
-          isLoading={createMutation.isPending}
-          onClick={() => createMutation.mutate()}
-        >
-          {t('spaces.createAction')}
-        </Button>
       </div>
 
       {spaces.length > 0 && (
         <ul className="mt-5 divide-y divide-primary-100/60 border-t border-primary-100/60">
           {spaces.map((space) => (
-            <li key={space.id} className="flex items-center justify-between gap-3 py-3">
+            <li
+              key={space.id}
+              className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
               <div>
                 <p className="text-sm font-medium text-ink">{space.name}</p>
                 <p className="text-xs text-gray-600">
@@ -109,17 +154,54 @@ export function SpaceManagerPanel() {
                     ` · ${t(`spaces.${space.rainExposure ?? 'exposed'}`)}`}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                <select
+                  className="input min-w-32 flex-1 py-2 text-sm sm:flex-none"
+                  aria-label={t('spaces.lightLevelAria', { name: space.name })}
+                  value={space.lightLevel ?? ''}
+                  disabled={updateMutation.isPending}
+                  onChange={(event) =>
+                    updateMutation.mutate({
+                      id: space.id,
+                      input: { lightLevel: (event.target.value || null) as LightLevel | null },
+                    })
+                  }
+                >
+                  <option value="">{t('spaces.lightUnknown')}</option>
+                  <option value="low">{t('spaces.lightLow')}</option>
+                  <option value="medium">{t('spaces.lightMedium')}</option>
+                  <option value="bright">{t('spaces.lightBright')}</option>
+                </select>
+                <select
+                  className="input min-w-32 flex-1 py-2 text-sm sm:flex-none"
+                  aria-label={t('spaces.petAccessAria', { name: space.name })}
+                  value={space.petAccess == null ? '' : space.petAccess ? 'yes' : 'no'}
+                  disabled={updateMutation.isPending}
+                  onChange={(event) =>
+                    updateMutation.mutate({
+                      id: space.id,
+                      input: {
+                        petAccess: event.target.value === '' ? null : event.target.value === 'yes',
+                      },
+                    })
+                  }
+                >
+                  <option value="">{t('spaces.petsUnknown')}</option>
+                  <option value="yes">{t('spaces.petAccessYes')}</option>
+                  <option value="no">{t('spaces.petAccessNo')}</option>
+                </select>
                 {space.environment === 'outside' && (
                   <select
-                    className="input min-w-32 py-2 text-sm"
+                    className="input min-w-32 flex-1 py-2 text-sm sm:flex-none"
                     aria-label={t('spaces.rainExposureAria', { name: space.name })}
                     value={space.rainExposure ?? 'exposed'}
                     disabled={updateMutation.isPending}
                     onChange={(event) =>
                       updateMutation.mutate({
                         id: space.id,
-                        exposure: event.target.value as 'exposed' | 'sheltered',
+                        input: {
+                          rainExposure: event.target.value as 'exposed' | 'sheltered',
+                        },
                       })
                     }
                   >

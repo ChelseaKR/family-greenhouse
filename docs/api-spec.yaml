@@ -1470,6 +1470,15 @@ components:
           type: string
           enum: [exposed, sheltered]
           description: Whether rainfall reaches plants; legacy outdoor spaces default to exposed.
+        lightLevel:
+          type: string
+          enum: [low, medium, bright]
+          nullable: true
+          description: Approximate ambient light; null means the household has not assessed it.
+        petAccess:
+          type: boolean
+          nullable: true
+          description: Whether cats or dogs can reach plants; null means unknown.
         createdAt:
           type: string
           format: date-time
@@ -1493,6 +1502,11 @@ components:
         rainExposure:
           type: string
           enum: [exposed, sheltered]
+        lightLevel:
+          type: string
+          enum: [low, medium, bright]
+        petAccess:
+          type: boolean
 
     UpdateSpaceRequest:
       type: object
@@ -1506,6 +1520,13 @@ components:
         rainExposure:
           type: string
           enum: [exposed, sheltered]
+        lightLevel:
+          type: string
+          enum: [low, medium, bright]
+          nullable: true
+        petAccess:
+          type: boolean
+          nullable: true
 
     Task:
       type: object

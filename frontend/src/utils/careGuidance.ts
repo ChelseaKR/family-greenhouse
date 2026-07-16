@@ -14,6 +14,10 @@ export interface CareGuide {
   common: string;
   /** Keywords that match this guide via fuzzy match (lowercase). */
   keywords: string[];
+  /** Lowest approximate room-light level this plant is known to tolerate. */
+  minimumLight: 'low' | 'medium' | 'bright';
+  /** Curated pet-safety flag; only `true` triggers a placement warning. */
+  toxicToPets: boolean;
   light: string;
   water: string;
   humidity: string;
@@ -25,6 +29,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Monstera deliciosa',
     common: 'Monstera',
     keywords: ['monstera', 'swiss cheese plant'],
+    minimumLight: 'medium',
+    toxicToPets: true,
     light:
       'Bright indirect light. Can tolerate medium light but grows slower and produces fewer fenestrations.',
     water: 'Water when the top 1-2 inches of soil are dry. Reduce in winter.',
@@ -36,6 +42,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Epipremnum aureum',
     common: 'Pothos',
     keywords: ['pothos', "devil's ivy", 'epipremnum'],
+    minimumLight: 'low',
+    toxicToPets: true,
     light:
       'Anything from low to bright indirect. Variegated cultivars need more light to keep their patterns.',
     water: 'Let the top inch dry out between waterings. Pothos forgives an occasional missed week.',
@@ -47,6 +55,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Dracaena trifasciata',
     common: 'Snake plant',
     keywords: ['snake plant', 'sansevieria', 'mother-in-law'],
+    minimumLight: 'low',
+    toxicToPets: true,
     light: 'Low to bright indirect. One of the most light-tolerant houseplants there is.',
     water: 'Sparingly. Wait until the soil is bone-dry, then soak. Overwatering is the #1 killer.',
     humidity: 'No special needs — desert-tolerant.',
@@ -56,6 +66,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Spathiphyllum wallisii',
     common: 'Peace lily',
     keywords: ['peace lily', 'spathiphyllum'],
+    minimumLight: 'medium',
+    toxicToPets: true,
     light: 'Medium to bright indirect. Direct sun scorches the leaves.',
     water:
       "Drinks more than most houseplants — drooping leaves are its signal that it's thirsty (and recovers within hours of watering).",
@@ -66,6 +78,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Ficus lyrata',
     common: 'Fiddle leaf fig',
     keywords: ['fiddle leaf', 'ficus lyrata'],
+    minimumLight: 'bright',
+    toxicToPets: true,
     light: 'Bright indirect, ideally near a south-facing window with sheer curtains.',
     water:
       'Only when the top 2 inches are dry. Consistency matters — fiddle leaves dislike shifting routines.',
@@ -77,6 +91,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Crassula ovata',
     common: 'Jade plant',
     keywords: ['jade plant', 'crassula'],
+    minimumLight: 'bright',
+    toxicToPets: true,
     light: 'Bright direct light at least 4-6 hours/day. Indoor sun-room or south window.',
     water: 'Only when soil is fully dry. In winter, monthly is plenty.',
     humidity: "Low. Don't mist.",
@@ -87,6 +103,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Phalaenopsis',
     common: 'Moth orchid',
     keywords: ['orchid', 'phalaenopsis'],
+    minimumLight: 'bright',
+    toxicToPets: false,
     light: 'Bright indirect. East-facing windows are ideal.',
     water:
       'Once a week — soak the bark medium thoroughly, let it drain completely. Roots should be silvery between waterings.',
@@ -98,6 +116,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Aloe vera',
     common: 'Aloe vera',
     keywords: ['aloe'],
+    minimumLight: 'bright',
+    toxicToPets: true,
     light: 'Bright direct or very bright indirect. Pale leaves mean not enough light.',
     water: 'Deep soak when soil is fully dry; let drain completely. Roots rot easily.',
     humidity: 'Low.',
@@ -107,6 +127,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Chlorophytum comosum',
     common: 'Spider plant',
     keywords: ['spider plant', 'chlorophytum'],
+    minimumLight: 'medium',
+    toxicToPets: false,
     light: 'Medium to bright indirect. Tolerates lower light at the cost of slower growth.',
     water: 'Keep soil lightly moist; let the top inch dry between waterings.',
     humidity: 'Average is fine; appreciates a misting in dry winters.',
@@ -117,6 +139,8 @@ export const CARE_GUIDES: CareGuide[] = [
     scientific: 'Zamioculcas zamiifolia',
     common: 'ZZ plant',
     keywords: ['zz plant', 'zamioculcas', 'zz'],
+    minimumLight: 'low',
+    toxicToPets: true,
     light: 'Anywhere from low to bright indirect. Genuinely tolerates dim corners.',
     water: 'Every 2-3 weeks. The rhizome stores water and resents being soaked.',
     humidity: 'No special needs.',
