@@ -6,12 +6,24 @@ export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 /** List filter mirroring the backend: active (default), past, or all. */
 export type PlantFilter = 'active' | 'past' | 'all';
 
+export interface PlantSpace {
+  id: string;
+  householdId: string;
+  name: string;
+  environment: 'inside' | 'outside';
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
 export interface Plant {
   id: string;
   householdId: string;
   name: string;
   species: string | null;
   location: string | null;
+  spaceId?: string | null;
+  placementNote?: string | null;
   imageUrl: string | null;
   notes: string | null;
   /** Lifecycle status; legacy rows may omit it → treat as 'active'. */
@@ -30,6 +42,8 @@ export interface CreatePlantData {
   name: string;
   species?: string;
   location?: string;
+  spaceId?: string;
+  placementNote?: string;
   notes?: string;
   tags?: string[];
   perenualSpeciesId?: number;
@@ -41,6 +55,8 @@ export interface UpdatePlantData {
   name?: string;
   species?: string;
   location?: string;
+  spaceId?: string | null;
+  placementNote?: string | null;
   notes?: string;
   tags?: string[];
   perenualSpeciesId?: number | null;

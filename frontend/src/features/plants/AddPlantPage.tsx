@@ -21,6 +21,7 @@ import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SuggestedCareCard } from './SuggestedCareCard';
 import { PetToxicityNote } from './PetToxicityNote';
 import { PlantNameNursery } from './PlantNameNursery';
+import { SpacePicker } from './SpacePicker';
 import { downscaleImage } from '@/utils/image';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -42,7 +43,8 @@ const makeAddPlantSchema = (t: TFunction) =>
   z.object({
     name: z.string().min(1, t('validation.nameRequired')).max(100, t('validation.nameTooLong')),
     species: z.string().max(100, t('validation.speciesTooLong')).optional(),
-    location: z.string().max(100, t('validation.locationTooLong')).optional(),
+    spaceId: z.string().optional(),
+    placementNote: z.string().max(120, t('validation.locationTooLong')).optional(),
     notes: z.string().max(1000, t('validation.notesTooLong')).optional(),
     tags: z.string().max(200, t('validation.tooManyTags')).optional(),
   });
@@ -107,6 +109,7 @@ export function AddPlantPage() {
 
   const speciesValue = watch('species') ?? '';
   const nameValue = watch('name') ?? '';
+  const spaceIdValue = watch('spaceId') ?? '';
   const [perenualSpeciesId, setPerenualSpeciesId] = useState<number | null>(null);
   const { data: taskTemplates = [] } = useQuery({
     queryKey: ['task-templates'],
@@ -228,7 +231,8 @@ export function AddPlantPage() {
       const plant = await plantService.createPlant({
         name: data.name,
         species: data.species || undefined,
-        location: data.location || undefined,
+        spaceId: data.spaceId || undefined,
+        placementNote: data.placementNote || undefined,
         notes: data.notes || undefined,
         tags: tags.length > 0 ? tags : undefined,
         perenualSpeciesId: perenualSpeciesId ?? undefined,
@@ -509,11 +513,17 @@ export function AddPlantPage() {
             </div>
           )}
 
+          <SpacePicker
+            value={spaceIdValue}
+            onChange={(spaceId) => setValue('spaceId', spaceId, { shouldValidate: true })}
+            error={errors.spaceId?.message}
+          />
+
           <Input
-            label="Location"
-            placeholder="e.g., Living room, by the window"
-            error={errors.location?.message}
-            {...register('location')}
+            label={t('spaces.placementNoteLabel')}
+            placeholder={t('spaces.placementNotePlaceholder')}
+            error={errors.placementNote?.message}
+            {...register('placementNote')}
           />
 
           <Input

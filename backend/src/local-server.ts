@@ -28,6 +28,8 @@ import {
   updateMemberRoleSchema,
   createPlantSchema,
   updatePlantSchema,
+  createSpaceSchema,
+  updateSpaceSchema,
   importPlantsSchema,
   confirmImageUploadSchema,
   createTaskSchema,
@@ -115,6 +117,8 @@ interface Plant {
   name: string;
   species: string | null;
   location: string | null;
+  spaceId: string | null;
+  placementNote: string | null;
   imageUrl: string | null;
   notes: string | null;
   status: 'active' | 'died' | 'gave_away' | 'archived';
@@ -123,6 +127,16 @@ interface Plant {
   perenualSpeciesId: number | null;
   /** Propagation lineage: same-household parent plant, if a cutting. */
   parentPlantId: string | null;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
+interface PlantSpace {
+  id: string;
+  householdId: string;
+  name: string;
+  environment: 'inside' | 'outside';
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -311,6 +325,7 @@ export const db = {
   households: new Map<string, Household>(),
   invites: new Map<string, Invite>(),
   plants: new Map<string, Plant>(),
+  spaces: new Map<string, PlantSpace>(),
   shares: new Map<string, PlantShare>(),
   tasks: new Map<string, Task>(),
   completions: new Map<string, Completion>(),
@@ -340,6 +355,7 @@ export function resetDb(): void {
   db.households.clear();
   db.invites.clear();
   db.plants.clear();
+  db.spaces.clear();
   db.shares.clear();
   db.tasks.clear();
   db.completions.clear();
@@ -376,6 +392,17 @@ export function resetDb(): void {
     createdBy: seedUserId,
   });
 
+  const seedSpaceId = uuidv4();
+  db.spaces.set(seedSpaceId, {
+    id: seedSpaceId,
+    householdId: seedHouseholdId,
+    name: 'Living Room',
+    environment: 'inside',
+    createdAt: now,
+    createdBy: seedUserId,
+    updatedAt: now,
+  });
+
   seedPlantId = uuidv4();
   db.plants.set(seedPlantId, {
     id: seedPlantId,
@@ -383,6 +410,8 @@ export function resetDb(): void {
     name: 'Monstera',
     species: 'Monstera deliciosa',
     location: 'Living Room',
+    spaceId: seedSpaceId,
+    placementNote: null,
     imageUrl: null,
     notes: 'Needs indirect light',
     status: 'active',
@@ -1425,6 +1454,92 @@ app.delete(
 
 // ============ PLANT ROUTES ============
 
+app.get('/spaces', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  res.json(
+    [...db.spaces.values()]
+      .filter((space) => space.householdId === user.householdId)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
+});
+
+app.post(
+  '/spaces',
+  authMiddleware,
+  requireHousehold,
+  validateBody(createSpaceSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const input = (req as any).validatedBody;
+    const duplicate = [...db.spaces.values()].some(
+      (space) =>
+        space.householdId === user.householdId &&
+        space.name.toLocaleLowerCase() === input.name.toLocaleLowerCase()
+    );
+    if (duplicate)
+      return res.status(409).json({ message: 'A space with that name already exists' });
+    const now = new Date().toISOString();
+    const space: PlantSpace = {
+      id: uuidv4(),
+      householdId: user.householdId,
+      name: input.name.trim(),
+      environment: input.environment,
+      createdAt: now,
+      createdBy: user.userId,
+      updatedAt: now,
+    };
+    db.spaces.set(space.id, space);
+    res.status(201).json(space);
+  }
+);
+
+app.put(
+  '/spaces/:id',
+  authMiddleware,
+  requireHousehold,
+  validateBody(updateSpaceSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const space = db.spaces.get(req.params.id);
+    if (!space || space.householdId !== user.householdId) {
+      return res.status(404).json({ message: 'Space not found' });
+    }
+    const input = (req as any).validatedBody;
+    if (input.name !== undefined) {
+      const duplicate = [...db.spaces.values()].some(
+        (candidate) =>
+          candidate.id !== space.id &&
+          candidate.householdId === user.householdId &&
+          candidate.name.toLocaleLowerCase() === input.name.toLocaleLowerCase()
+      );
+      if (duplicate) {
+        return res.status(409).json({ message: 'A space with that name already exists' });
+      }
+      space.name = input.name.trim();
+    }
+    if (input.environment !== undefined) space.environment = input.environment;
+    space.updatedAt = new Date().toISOString();
+    res.json(space);
+  }
+);
+
+app.delete('/spaces/:id', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  const space = db.spaces.get(req.params.id);
+  if (!space || space.householdId !== user.householdId) {
+    return res.status(404).json({ message: 'Space not found' });
+  }
+  if (
+    [...db.plants.values()].some(
+      (plant) => plant.householdId === user.householdId && plant.spaceId === space.id
+    )
+  ) {
+    return res.status(409).json({ message: 'Move plants out of this space before deleting it' });
+  }
+  db.spaces.delete(space.id);
+  res.status(204).send();
+});
+
 app.get('/plants', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
   const filter =
@@ -1449,8 +1564,17 @@ app.post(
   validateBody(createPlantSchema),
   (req, res) => {
     const user = (req as any).user;
-    const { name, species, location, notes, tags, perenualSpeciesId, parentPlantId } = (req as any)
-      .validatedBody;
+    const {
+      name,
+      species,
+      location,
+      spaceId,
+      placementNote,
+      notes,
+      tags,
+      perenualSpeciesId,
+      parentPlantId,
+    } = (req as any).validatedBody;
 
     const h = db.households.get(user.householdId);
     const plan = PLANS[h?.planId ?? 'seedling'];
@@ -1472,6 +1596,12 @@ app.post(
         return res.status(400).json({ message: 'Parent plant not found in this household' });
       }
     }
+    if (spaceId) {
+      const space = db.spaces.get(spaceId);
+      if (!space || space.householdId !== user.householdId) {
+        return res.status(400).json({ message: 'Space not found in this household' });
+      }
+    }
 
     const plantId = uuidv4();
     const now = new Date().toISOString();
@@ -1482,6 +1612,8 @@ app.post(
       name,
       species: species || null,
       location: location || null,
+      spaceId: spaceId ?? null,
+      placementNote: placementNote || null,
       imageUrl: null,
       notes: notes || null,
       status: 'active',
@@ -1567,6 +1699,8 @@ app.post(
         name: input.name,
         species: input.species || null,
         location: input.location || null,
+        spaceId: null,
+        placementNote: null,
         imageUrl: null,
         notes: input.notes || null,
         status: 'active',
@@ -1670,6 +1804,16 @@ app.put(
     if (body.name !== undefined) plant.name = body.name;
     if (body.species !== undefined) plant.species = body.species;
     if (body.location !== undefined) plant.location = body.location;
+    if (body.spaceId !== undefined) {
+      if (body.spaceId) {
+        const space = db.spaces.get(body.spaceId);
+        if (!space || space.householdId !== user.householdId) {
+          return res.status(400).json({ message: 'Space not found in this household' });
+        }
+      }
+      plant.spaceId = body.spaceId;
+    }
+    if (body.placementNote !== undefined) plant.placementNote = body.placementNote;
     if (body.notes !== undefined) plant.notes = body.notes;
     if (body.tags !== undefined) {
       plant.tags = body.tags
@@ -2205,6 +2349,8 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
     name: share.plantSnapshot.name,
     species: share.plantSnapshot.species,
     location: null,
+    spaceId: null,
+    placementNote: null,
     imageUrl: null,
     notes,
     status: 'active',

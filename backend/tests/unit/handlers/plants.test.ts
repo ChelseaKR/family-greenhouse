@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/plantService.js');
+vi.mock('../../../src/services/spaceService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
 // Serves double duty: authMiddleware validates the claim household against
@@ -84,6 +85,42 @@ describe('plants handler', () => {
     __resetMembershipCacheForTests();
     const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
     __resetRateLimitForTests();
+  });
+
+  it('lists spaces for the caller household', async () => {
+    const spaceService = await import('../../../src/services/spaceService.js');
+    const { listSpaces } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(spaceService.getSpaces).mockResolvedValueOnce([
+      {
+        id: 'space-1',
+        householdId: 'hh-1',
+        name: 'Kitchen',
+        environment: 'inside',
+        createdAt: '',
+        createdBy: 'user-1',
+        updatedAt: '',
+      },
+    ]);
+    const res = (await listSpaces(buildEvent(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(spaceService.getSpaces).toHaveBeenCalledWith('hh-1');
+  });
+
+  it('refuses to create a plant in another household space', async () => {
+    const spaceService = await import('../../../src/services/spaceService.js');
+    const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(spaceService.getSpace).mockResolvedValueOnce(null);
+    const event = buildEvent({
+      httpMethod: 'POST',
+      body: JSON.stringify({
+        name: 'Pothos',
+        spaceId: '550e8400-e29b-41d4-a716-446655440099',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = (await createPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toMatch(/Space not found/);
   });
 
   it('listPlants returns plants for the caller household', async () => {

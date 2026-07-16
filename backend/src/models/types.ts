@@ -63,12 +63,29 @@ export interface HouseholdInvite {
  */
 export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 
+/** A household-scoped place where plants currently live. Keeping the
+ * inside/outside classification on the space (rather than the plant) means a
+ * seasonal move changes one relationship instead of rewriting plant traits. */
+export interface PlantSpace {
+  id: string;
+  householdId: string;
+  name: string;
+  environment: 'inside' | 'outside';
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
 export interface Plant {
   id: string;
   householdId: string;
   name: string;
   species: string | null;
   location: string | null;
+  /** Current first-class household space. Optional for legacy rows. */
+  spaceId?: string | null;
+  /** Specific position inside a space, e.g. "east window, top shelf". */
+  placementNote?: string | null;
   imageUrl: string | null;
   notes: string | null;
   /** Lifecycle status; absent on legacy rows → treated as 'active'. */

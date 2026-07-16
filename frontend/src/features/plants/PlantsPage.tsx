@@ -8,6 +8,8 @@ import {
   Squares2X2Icon,
   ListBulletIcon,
   ClipboardDocumentListIcon,
+  MapPinIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { plantService } from '@/services/plantService';
 import { Button } from '@/components/Button';
@@ -24,8 +26,12 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { BulkApplyTemplateDialog } from './BulkApplyTemplateDialog';
 import { PlantImage } from '@/components/PlantImage';
 import { PlantStatusBadge } from './PlantLineageCard';
+import { spaceService } from '@/services/spaceService';
+import { SpaceBrowseView } from './SpaceBrowseView';
+import { SpaceManagerPanel } from './SpaceManagerPanel';
+import { matchesSpaceFilter, plantLocationLabel, spaceMap, type SpaceFilter } from '@/utils/spaces';
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'spaces';
 
 export function PlantsPage() {
   useDocumentTitle('Plants');
@@ -33,6 +39,8 @@ export function PlantsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [spaceManagerOpen, setSpaceManagerOpen] = useState(false);
+  const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>('all');
   // 'active' is the default living collection; 'past' shows died/gave-away
   // plants whose history we keep. Active stays under the ['plants', hh] key
   // so existing invalidations + the add-flow's cache read keep working.
@@ -48,15 +56,22 @@ export function PlantsPage() {
     queryFn: () => plantService.getPlants(view),
   });
 
+  const { data: spaces = [] } = useQuery({
+    queryKey: ['spaces', householdId],
+    queryFn: spaceService.getSpaces,
+  });
+  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+
   const filteredPlants = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return plants?.filter(
-      (plant) =>
+    return plants?.filter((plant) => {
+      const matchesQuery =
         plant.name.toLowerCase().includes(q) ||
         plant.species?.toLowerCase().includes(q) ||
-        plant.location?.toLowerCase().includes(q)
-    );
-  }, [plants, searchQuery]);
+        plantLocationLabel(plant, spacesById).toLowerCase().includes(q);
+      return matchesQuery && matchesSpaceFilter(plant, spacesById, spaceFilter);
+    });
+  }, [plants, searchQuery, spaceFilter, spacesById]);
 
   // Propagation cue: plants that have cuttings get a 🌱 mark on their card.
   // Derived from the already-fetched list (parentPlantId is on every plant),
@@ -95,6 +110,8 @@ export function PlantsPage() {
       />
 
       <BulkApplyTemplateDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
+
+      {spaceManagerOpen && <SpaceManagerPanel />}
 
       {/* Active vs past (archived / died / gave away) collection */}
       <div
@@ -137,6 +154,14 @@ export function PlantsPage() {
             aria-label="Search plants"
           />
         </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setSpaceManagerOpen((open) => !open)}
+          leftIcon={<Cog6ToothIcon className="h-5 w-5" aria-hidden="true" />}
+        >
+          {t('spaces.manageAction')}
+        </Button>
         <div className="flex rounded-md shadow-sm" role="group" aria-label="View mode">
           <button
             type="button"
@@ -155,7 +180,7 @@ export function PlantsPage() {
           <button
             type="button"
             className={clsx(
-              'relative -ml-px inline-flex items-center rounded-r-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+              'relative -ml-px inline-flex items-center min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
               viewMode === 'list'
                 ? 'bg-primary-50 text-primary-700 border-primary-500'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -166,7 +191,40 @@ export function PlantsPage() {
             <ListBulletIcon className="h-5 w-5" aria-hidden="true" />
             <span className="sr-only">List view</span>
           </button>
+          <button
+            type="button"
+            className={clsx(
+              'relative -ml-px inline-flex items-center rounded-r-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+              viewMode === 'spaces'
+                ? 'bg-primary-50 text-primary-700 border-primary-500'
+                : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
+            )}
+            onClick={() => setViewMode('spaces')}
+            aria-pressed={viewMode === 'spaces'}
+          >
+            <MapPinIcon className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only">{t('spaces.viewLabel')}</span>
+          </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t('spaces.filterAria')}>
+        {(['all', 'inside', 'outside', 'unplaced'] as const).map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => setSpaceFilter(filter)}
+            aria-pressed={spaceFilter === filter}
+            className={clsx(
+              'min-h-touch rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+              spaceFilter === filter
+                ? 'border-primary-400 bg-primary-100 text-primary-800'
+                : 'border-primary-200/70 bg-paper text-gray-700 hover:bg-primary-50'
+            )}
+          >
+            {t(`spaces.${filter}`)}
+          </button>
+        ))}
       </div>
 
       {/* Plant list */}
@@ -250,13 +308,15 @@ export function PlantsPage() {
                 {plant.species && (
                   <p className="text-xs text-gray-600 truncate italic">{plant.species}</p>
                 )}
-                {plant.location && (
-                  <p className="text-xs text-gray-600 truncate mt-1">{plant.location}</p>
-                )}
+                <p className="text-xs text-gray-600 truncate mt-1">
+                  {plantLocationLabel(plant, spacesById)}
+                </p>
               </div>
             </Link>
           ))}
         </div>
+      ) : viewMode === 'spaces' ? (
+        <SpaceBrowseView plants={filteredPlants} spaces={spaces} />
       ) : (
         <Card variant="paper" padding="none">
           <ul className="divide-y divide-primary-100/60">
@@ -287,7 +347,9 @@ export function PlantsPage() {
                       {view === 'past' && <PlantStatusBadge status={plant.status ?? 'active'} />}
                     </div>
                     <p className="text-sm text-gray-600">
-                      {[plant.species, plant.location].filter(Boolean).join(' • ') || 'No details'}
+                      {[plant.species, plantLocationLabel(plant, spacesById)]
+                        .filter(Boolean)
+                        .join(' • ') || 'No details'}
                     </p>
                   </div>
                 </Link>

@@ -71,6 +71,73 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /spaces:
+    get:
+      summary: List household plant spaces
+      tags: [Spaces]
+      responses:
+        '200':
+          description: Household spaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlantSpace'
+    post:
+      summary: Create a household plant space
+      tags: [Spaces]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSpaceRequest'
+      responses:
+        '201':
+          description: Space created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantSpace'
+        '409':
+          description: A space with that name already exists
+
+  /spaces/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Update a household plant space
+      tags: [Spaces]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSpaceRequest'
+      responses:
+        '200':
+          description: Space updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantSpace'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete an empty household plant space
+      tags: [Spaces]
+      responses:
+        '204':
+          description: Space deleted
+        '409':
+          description: The space still contains plants
+
   /plants:
     get:
       summary: List all plants
@@ -1231,6 +1298,13 @@ components:
         location:
           type: string
           nullable: true
+        spaceId:
+          type: string
+          format: uuid
+          nullable: true
+        placementNote:
+          type: string
+          nullable: true
         imageUrl:
           type: string
           nullable: true
@@ -1274,6 +1348,12 @@ components:
         location:
           type: string
           maxLength: 100
+        spaceId:
+          type: string
+          format: uuid
+        placementNote:
+          type: string
+          maxLength: 120
         notes:
           type: string
           maxLength: 1000
@@ -1292,10 +1372,64 @@ components:
           type: string
           maxLength: 100
           nullable: true
+        spaceId:
+          type: string
+          format: uuid
+          nullable: true
+        placementNote:
+          type: string
+          maxLength: 120
+          nullable: true
         notes:
           type: string
           maxLength: 1000
           nullable: true
+
+    PlantSpace:
+      type: object
+      required: [id, householdId, name, environment, createdAt, createdBy, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        householdId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        environment:
+          type: string
+          enum: [inside, outside]
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateSpaceRequest:
+      type: object
+      required: [name, environment]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        environment:
+          type: string
+          enum: [inside, outside]
+
+    UpdateSpaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        environment:
+          type: string
+          enum: [inside, outside]
 
     Task:
       type: object

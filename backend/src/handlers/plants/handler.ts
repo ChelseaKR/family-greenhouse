@@ -13,11 +13,16 @@ import {
   createPlantSchema,
   updatePlantSchema,
   confirmImageUploadSchema,
+  createSpaceSchema,
+  updateSpaceSchema,
   CreatePlantInput,
   UpdatePlantInput,
   ConfirmImageUploadInput,
+  CreateSpaceInput,
+  UpdateSpaceInput,
 } from '../../models/schemas.js';
 import * as plantService from '../../services/plantService.js';
+import * as spaceService from '../../services/spaceService.js';
 import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
@@ -48,6 +53,79 @@ async function resolveActorName(householdId: string, userId: string): Promise<st
 // Hop cap on the ancestor-chain walk in updatePlant's cycle guard — see there.
 const MAX_LINEAGE_DEPTH = 50;
 
+// GET /spaces
+export const listSpaces = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    return successResponse(await spaceService.getSpaces(user.householdId!));
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
+// POST /spaces
+export const createSpace = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<CreateSpaceInput>;
+    try {
+      const space = await spaceService.createSpace(validatedBody, user.householdId!, user.userId);
+      return createdResponse(space);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
+        throw createHttpError(409, error.message);
+      }
+      throw error;
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(userRateLimit())
+  .use(requireHousehold())
+  .use(validateBody(createSpaceSchema));
+
+// PUT /spaces/:id
+export const updateSpace = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<UpdateSpaceInput>;
+    const id = event.pathParameters?.id;
+    if (!id) throw createHttpError(400, 'Space ID is required');
+    try {
+      const space = await spaceService.updateSpace(user.householdId!, id, validatedBody);
+      if (!space) throw createHttpError(404, 'Space not found');
+      return successResponse(space);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
+        throw createHttpError(409, error.message);
+      }
+      throw error;
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(validateBody(updateSpaceSchema));
+
+// DELETE /spaces/:id
+export const deleteSpace = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const id = event.pathParameters?.id;
+    if (!id) throw createHttpError(400, 'Space ID is required');
+    const plants = await plantService.getPlants(user.householdId!, 'all');
+    if (plants.some((plant) => plant.spaceId === id)) {
+      throw createHttpError(409, 'Move plants out of this space before deleting it');
+    }
+    if (!(await spaceService.deleteSpace(user.householdId!, id))) {
+      throw createHttpError(404, 'Space not found');
+    }
+    return noContentResponse();
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
 // GET /plants?filter=active|past|all  (default: active)
 export const listPlants = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -66,6 +144,13 @@ export const createPlant = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<CreatePlantInput>;
+
+    if (
+      validatedBody.spaceId &&
+      !(await spaceService.getSpace(user.householdId!, validatedBody.spaceId))
+    ) {
+      throw createHttpError(400, 'Space not found in this household');
+    }
 
     // Enforce per-tier plant cap. The "free" tier limits a household to 10
     // plants; paid tiers raise this dramatically. Enforcement is atomic in
@@ -191,6 +276,13 @@ export const updatePlant = createHandler(
 
     if (!plantId) {
       throw createHttpError(400, 'Plant ID is required');
+    }
+
+    if (
+      validatedBody.spaceId &&
+      !(await spaceService.getSpace(user.householdId!, validatedBody.spaceId))
+    ) {
+      throw createHttpError(400, 'Space not found in this household');
     }
 
     // Lifecycle events need the pre-write state so idempotent PUT retries do
@@ -702,6 +794,10 @@ import { checkPlantHealth } from './health.js';
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
+  'GET /spaces': listSpaces,
+  'POST /spaces': createSpace,
+  'PUT /spaces/{id}': updateSpace,
+  'DELETE /spaces/{id}': deleteSpace,
   'GET /plants': listPlants,
   'POST /plants': createPlant,
   'POST /plants/import': importPlants,

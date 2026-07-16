@@ -34,6 +34,8 @@ import { Alert } from '@/components/Alert';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { PlantImage } from '@/components/PlantImage';
+import { spaceService } from '@/services/spaceService';
+import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -81,6 +83,11 @@ export function DashboardPage() {
     queryKey: ['tasks', householdId, 'upcoming'],
     queryFn: taskService.getUpcomingTasks,
   });
+  const { data: spaces = [] } = useQuery({
+    queryKey: ['spaces', householdId],
+    queryFn: spaceService.getSpaces,
+  });
+  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
 
   const {
     data: plants,
@@ -280,9 +287,9 @@ export function DashboardPage() {
                   />
                 </div>
                 <p className="text-sm font-medium text-ink truncate">{plant.name}</p>
-                {plant.location && (
-                  <p className="text-xs text-gray-600 truncate">{plant.location}</p>
-                )}
+                <p className="text-xs text-gray-600 truncate">
+                  {plantLocationLabel(plant, spacesById)}
+                </p>
               </Link>
             ))}
           </div>
