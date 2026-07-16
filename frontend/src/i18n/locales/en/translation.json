@@ -38,7 +38,19 @@
     "plantCount_one": "{{count}} plant",
     "plantCount_other": "{{count}} plants",
     "deleteAction": "Delete",
-    "deleteAria": "Delete {{name}}"
+    "deleteAria": "Delete {{name}}",
+    "quickMoveAction": "Move",
+    "bulkMoveAction": "Move plants",
+    "quickMoveTitle": "Move {{name}}",
+    "bulkMoveTitle": "Move plants",
+    "moveDescription": "Choose a new household space. Tasks will show the new location right away.",
+    "selectedPlants_one": "{{count}} plant selected",
+    "selectedPlants_other": "{{count}} plants selected",
+    "moveDestination": "Move to",
+    "moveAction_one": "Move plant",
+    "moveAction_other": "Move {{count}} plants",
+    "moveSuccess_one": "Plant moved",
+    "moveSuccess_other": "{{count}} plants moved"
   },
   "careRounds": {
     "displayMode": "Task organization",

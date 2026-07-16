@@ -219,6 +219,16 @@ export const plantService = {
     return response.data;
   },
 
+  async movePlants(input: {
+    plantIds: string[];
+    spaceId: string | null;
+    placementNote?: string | null;
+  }): Promise<Plant[]> {
+    const response = await api.post<Plant[]>('/plants/move', input);
+    track('plants_moved', { context: String(input.plantIds.length) });
+    return response.data;
+  },
+
   async deletePlant(id: string): Promise<void> {
     await api.delete(`/plants/${id}`);
   },

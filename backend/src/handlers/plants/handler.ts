@@ -12,11 +12,13 @@ import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import {
   createPlantSchema,
   updatePlantSchema,
+  movePlantsSchema,
   confirmImageUploadSchema,
   createSpaceSchema,
   updateSpaceSchema,
   CreatePlantInput,
   UpdatePlantInput,
+  MovePlantsInput,
   ConfirmImageUploadInput,
   CreateSpaceInput,
   UpdateSpaceInput,
@@ -230,6 +232,34 @@ export const createPlant = createHandler(
   .use(userRateLimit())
   .use(requireHousehold())
   .use(validateBody(createPlantSchema));
+
+// POST /plants/move — one plant for a quick move, or up to 50 as a bulk move.
+export const movePlants = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<MovePlantsInput>;
+
+    if (
+      validatedBody.spaceId &&
+      !(await spaceService.getSpace(user.householdId!, validatedBody.spaceId))
+    ) {
+      throw createHttpError(400, 'Space not found in this household');
+    }
+
+    const plants = await Promise.all(
+      validatedBody.plantIds.map((plantId) => plantService.getPlant(user.householdId!, plantId))
+    );
+    if (plants.some((plant) => !plant)) {
+      throw createHttpError(404, 'One or more plants were not found');
+    }
+
+    return successResponse(await plantService.movePlants(user.householdId!, validatedBody));
+  }
+)
+  .use(authMiddleware())
+  .use(userRateLimit())
+  .use(requireHousehold())
+  .use(validateBody(movePlantsSchema));
 
 // GET /plants/:id
 export const getPlant = createHandler(
@@ -800,6 +830,7 @@ export const handler = createRouter({
   'DELETE /spaces/{id}': deleteSpace,
   'GET /plants': listPlants,
   'POST /plants': createPlant,
+  'POST /plants/move': movePlants,
   'POST /plants/import': importPlants,
   // Cutting shares. NOTE: /plants/shared/{code} must be wired in API
   // Gateway with auth=none (public preview, like invite validation); the

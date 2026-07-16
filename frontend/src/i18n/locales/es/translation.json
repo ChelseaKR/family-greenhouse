@@ -40,7 +40,22 @@
     "plantCount_other": "{{count}} plantas",
     "plantCount_many": "{{count}} plantas",
     "deleteAction": "Eliminar",
-    "deleteAria": "Eliminar {{name}}"
+    "deleteAria": "Eliminar {{name}}",
+    "quickMoveAction": "Mover",
+    "bulkMoveAction": "Mover plantas",
+    "quickMoveTitle": "Mover {{name}}",
+    "bulkMoveTitle": "Mover plantas",
+    "moveDescription": "Elige un nuevo espacio del hogar. Las tareas mostrarán la nueva ubicación de inmediato.",
+    "selectedPlants_one": "{{count}} planta seleccionada",
+    "selectedPlants_other": "{{count}} plantas seleccionadas",
+    "selectedPlants_many": "{{count}} plantas seleccionadas",
+    "moveDestination": "Mover a",
+    "moveAction_one": "Mover planta",
+    "moveAction_other": "Mover {{count}} plantas",
+    "moveAction_many": "Mover {{count}} plantas",
+    "moveSuccess_one": "Planta movida",
+    "moveSuccess_other": "{{count}} plantas movidas",
+    "moveSuccess_many": "{{count}} plantas movidas"
   },
   "careRounds": {
     "displayMode": "Organización de tareas",
