@@ -13,6 +13,10 @@ export interface PlantSpace {
   environment: 'inside' | 'outside';
   /** Whether rain reaches plants here. Older outdoor spaces are treated as exposed. */
   rainExposure?: 'exposed' | 'sheltered';
+  /** Approximate ambient light; absent/null until the household assesses it. */
+  lightLevel?: 'low' | 'medium' | 'bright' | null;
+  /** Whether household pets can reach plants in this space. */
+  petAccess?: boolean | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

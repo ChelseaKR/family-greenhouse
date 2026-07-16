@@ -8,7 +8,7 @@ space remain visible in the `Unplaced` group.
 
 | Entity          | DynamoDB key                         | Important fields                                             |
 | --------------- | ------------------------------------ | ------------------------------------------------------------ |
-| Plant space     | `PK=HOUSEHOLD#{id}`, `SK=SPACE#{id}` | `name`, `environment`                                        |
+| Plant space     | `PK=HOUSEHOLD#{id}`, `SK=SPACE#{id}` | `name`, `environment`, optional `lightLevel` / `petAccess`   |
 | Plant placement | existing `PLANT#{id}` row            | `spaceId`, `placementNote`, `summerSpaceId`, `winterSpaceId` |
 
 The legacy plant `location` string remains readable for imports, exports, and old clients. New UI
@@ -67,3 +67,15 @@ A plant can optionally remember a preferred summer and winter space. The plant d
 saved household latitude and a broad April–September northern warm season (inverted in the southern
 hemisphere) to suggest a move when the current space differs. Accepting the suggestion uses the same
 `POST /plants/move` operation as quick and bulk moves; it does not silently relocate plants.
+
+## Placement-fit checks
+
+Spaces can optionally record a broad `lightLevel` (`low`, `medium`, or `bright`) and whether pets
+can reach their plants. Both fields hydrate to `null` for legacy rows, so an unknown value never
+becomes a warning. On plant detail, recognized species can surface two conservative checks:
+
+- the space's recorded light is below the species' lowest known tolerated level;
+- the species is known to be toxic and the space is marked as accessible to pets.
+
+The UI frames these as observations to consider, not measurements, diagnoses, or automatic move
+instructions. Weather exposure remains driven by `environment` and `rainExposure`.

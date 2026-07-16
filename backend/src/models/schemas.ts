@@ -55,20 +55,29 @@ export const updateMemberRoleSchema = z.object({
 // Household plant-space schemas
 export const spaceEnvironmentEnum = z.enum(['inside', 'outside']);
 export const rainExposureEnum = z.enum(['exposed', 'sheltered']);
+export const lightLevelEnum = z.enum(['low', 'medium', 'bright']);
 
 export const createSpaceSchema = z.object({
   name: z.string().trim().min(1).max(80),
   environment: spaceEnvironmentEnum,
   rainExposure: rainExposureEnum.optional(),
+  lightLevel: lightLevelEnum.optional(),
+  petAccess: z.boolean().optional(),
 });
 
 export const updateSpaceSchema = createSpaceSchema
   .partial()
+  .extend({
+    lightLevel: lightLevelEnum.nullable().optional(),
+    petAccess: z.boolean().nullable().optional(),
+  })
   .refine(
     (input) =>
       input.name !== undefined ||
       input.environment !== undefined ||
-      input.rainExposure !== undefined,
+      input.rainExposure !== undefined ||
+      input.lightLevel !== undefined ||
+      input.petAccess !== undefined,
     {
       message: 'At least one space field is required',
     }

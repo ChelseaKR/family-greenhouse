@@ -74,6 +74,10 @@ export interface PlantSpace {
   /** Whether rainfall reaches plants in this space. Legacy outdoor spaces
    * default to exposed; indoor spaces default to sheltered. */
   rainExposure: 'exposed' | 'sheltered';
+  /** Approximate ambient light. Null means the household has not assessed it. */
+  lightLevel: 'low' | 'medium' | 'bright' | null;
+  /** Whether cats or dogs can reach plants here. Null means unknown. */
+  petAccess: boolean | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

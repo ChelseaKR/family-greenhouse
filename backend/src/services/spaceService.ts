@@ -23,6 +23,8 @@ function itemToSpace(item: Record<string, unknown>): PlantSpace {
     rainExposure:
       (item.rainExposure as PlantSpace['rainExposure'] | undefined) ??
       (environment === 'outside' ? 'exposed' : 'sheltered'),
+    lightLevel: (item.lightLevel as PlantSpace['lightLevel'] | undefined) ?? null,
+    petAccess: (item.petAccess as boolean | undefined) ?? null,
     createdAt: item.createdAt as string,
     createdBy: item.createdBy as string,
     updatedAt: item.updatedAt as string,
@@ -90,6 +92,8 @@ export async function createSpace(
     name: input.name.trim(),
     environment: input.environment,
     rainExposure: input.environment === 'outside' ? (input.rainExposure ?? 'exposed') : 'sheltered',
+    lightLevel: input.lightLevel ?? null,
+    petAccess: input.petAccess ?? null,
     createdAt: now,
     createdBy: userId,
     updatedAt: now,
@@ -136,6 +140,16 @@ export async function updateSpace(
     names['#rainExposure'] = 'rainExposure';
     values[':rainExposure'] = rainExposure;
     updates.push('#rainExposure = :rainExposure');
+  }
+  if (input.lightLevel !== undefined) {
+    names['#lightLevel'] = 'lightLevel';
+    values[':lightLevel'] = input.lightLevel;
+    updates.push('#lightLevel = :lightLevel');
+  }
+  if (input.petAccess !== undefined) {
+    names['#petAccess'] = 'petAccess';
+    values[':petAccess'] = input.petAccess;
+    updates.push('#petAccess = :petAccess');
   }
   try {
     const result = await dynamodb.send(
