@@ -1431,7 +1431,7 @@ components:
 
     PlantSpace:
       type: object
-      required: [id, householdId, name, environment, createdAt, createdBy, updatedAt]
+      required: [id, householdId, name, environment, rainExposure, createdAt, createdBy, updatedAt]
       properties:
         id:
           type: string
@@ -1444,6 +1444,10 @@ components:
         environment:
           type: string
           enum: [inside, outside]
+        rainExposure:
+          type: string
+          enum: [exposed, sheltered]
+          description: Whether rainfall reaches plants; legacy outdoor spaces default to exposed.
         createdAt:
           type: string
           format: date-time
@@ -1464,6 +1468,9 @@ components:
         environment:
           type: string
           enum: [inside, outside]
+        rainExposure:
+          type: string
+          enum: [exposed, sheltered]
 
     UpdateSpaceRequest:
       type: object
@@ -1474,6 +1481,9 @@ components:
         environment:
           type: string
           enum: [inside, outside]
+        rainExposure:
+          type: string
+          enum: [exposed, sheltered]
 
     Task:
       type: object

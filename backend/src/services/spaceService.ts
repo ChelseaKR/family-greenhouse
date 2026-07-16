@@ -14,11 +14,15 @@ import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 const MAX_SPACES = 100;
 
 function itemToSpace(item: Record<string, unknown>): PlantSpace {
+  const environment = item.environment as PlantSpace['environment'];
   return {
     id: item.id as string,
     householdId: item.householdId as string,
     name: item.name as string,
-    environment: item.environment as PlantSpace['environment'],
+    environment,
+    rainExposure:
+      (item.rainExposure as PlantSpace['rainExposure'] | undefined) ??
+      (environment === 'outside' ? 'exposed' : 'sheltered'),
     createdAt: item.createdAt as string,
     createdBy: item.createdBy as string,
     updatedAt: item.updatedAt as string,
@@ -85,6 +89,7 @@ export async function createSpace(
     householdId,
     name: input.name.trim(),
     environment: input.environment,
+    rainExposure: input.environment === 'outside' ? (input.rainExposure ?? 'exposed') : 'sheltered',
     createdAt: now,
     createdBy: userId,
     updatedAt: now,
@@ -122,6 +127,15 @@ export async function updateSpace(
     names['#environment'] = 'environment';
     values[':environment'] = input.environment;
     updates.push('#environment = :environment');
+  }
+  const rainExposure =
+    input.environment === 'inside'
+      ? 'sheltered'
+      : (input.rainExposure ?? (input.environment === 'outside' ? 'exposed' : undefined));
+  if (rainExposure !== undefined) {
+    names['#rainExposure'] = 'rainExposure';
+    values[':rainExposure'] = rainExposure;
+    updates.push('#rainExposure = :rainExposure');
   }
   try {
     const result = await dynamodb.send(

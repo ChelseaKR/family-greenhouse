@@ -322,6 +322,39 @@ describe('households routes', () => {
   });
 });
 
+describe('plant-space routes', () => {
+  it('defaults new outdoor spaces to rain exposed', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post('/spaces')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Back garden', environment: 'outside' });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      householdId: seedHouseholdId,
+      environment: 'outside',
+      rainExposure: 'exposed',
+    });
+  });
+
+  it('stores covered outdoor placement and resets indoor spaces to sheltered', async () => {
+    const token = await loginAsSeed();
+    const create = await request(app)
+      .post('/spaces')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Covered porch', environment: 'outside', rainExposure: 'sheltered' });
+    expect(create.status).toBe(201);
+    expect(create.body.rainExposure).toBe('sheltered');
+
+    const update = await request(app)
+      .put(`/spaces/${create.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ environment: 'inside', rainExposure: 'exposed' });
+    expect(update.status).toBe(200);
+    expect(update.body).toMatchObject({ environment: 'inside', rainExposure: 'sheltered' });
+  });
+});
+
 describe('plants routes', () => {
   it('lists plants scoped to the user household', async () => {
     const token = await loginAsSeed();
