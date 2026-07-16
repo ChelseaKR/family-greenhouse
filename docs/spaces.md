@@ -31,3 +31,15 @@ space belongs to the caller's active household.
 - Space setup is optional; unplaced plants continue through every care flow.
 - The consumer hierarchy stops at Inside/Outside → Space. There are no floors, shelves, or maps.
 - Household city/coordinates remain the “Local climate” setting and are not a plant space.
+
+## Care rounds
+
+The Tasks page offers two organizations over the same due-work query:
+
+- **By date** preserves the existing Overdue, Today, and Upcoming sections.
+- **Care round** joins tasks to their plants and current spaces in the client, then orders the
+  route as inside spaces, outside spaces, and unplaced plants. No task rows or schedules are
+  duplicated; completion, claiming, vacation cover, and climate-skip controls are reused.
+
+The route respects the active task filter, so “My tasks” plus “Care round” becomes a personal route
+through the household.

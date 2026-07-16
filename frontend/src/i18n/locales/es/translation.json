@@ -42,6 +42,13 @@
     "deleteAction": "Eliminar",
     "deleteAria": "Eliminar {{name}}"
   },
+  "careRounds": {
+    "displayMode": "Organización de tareas",
+    "schedule": "Por fecha",
+    "round": "Ronda de cuidado",
+    "title": "Tu ruta de cuidado",
+    "summary": "Tareas pendientes: {{tasks}} · Espacios por visitar: {{spaces}}"
+  },
   "nav": {
     "dashboard": "Panel",
     "plants": "Plantas",

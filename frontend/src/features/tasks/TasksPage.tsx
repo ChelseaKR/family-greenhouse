@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { CheckIcon } from '@heroicons/react/24/outline';
+import { useTranslation } from 'react-i18next';
+import { CalendarDaysIcon, CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
 import { climateService } from '@/services/climateService';
@@ -27,6 +28,8 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
+import { spaceService } from '@/services/spaceService';
+import { buildCareRoundGroups } from './careRounds';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
@@ -68,9 +71,11 @@ function isToday(dateString: string): boolean {
 
 export function TasksPage() {
   useDocumentTitle('Tasks');
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [displayMode, setDisplayMode] = useState<'schedule' | 'round'>('schedule');
 
   const {
     data: tasks,
@@ -98,6 +103,10 @@ export function TasksPage() {
   const { data: plants } = useQuery({
     queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
+  });
+  const { data: spaces = [] } = useQuery({
+    queryKey: ['spaces', householdId],
+    queryFn: spaceService.getSpaces,
   });
   const tagsByPlantId = useMemo(
     () => new Map((plants ?? []).map((p) => [p.id, p.tags ?? []])),
@@ -152,6 +161,10 @@ export function TasksPage() {
   const overdueTasks = sortedTasks.filter((t) => isOverdue(t.nextDue));
   const todayTasks = sortedTasks.filter((t) => isToday(t.nextDue));
   const upcomingTasks = sortedTasks.filter((t) => !isOverdue(t.nextDue) && !isToday(t.nextDue));
+  const careRoundGroups = useMemo(
+    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, t('spaces.unplaced')),
+    [plants, sortedTasks, spaces, t]
+  );
 
   return (
     <div className="space-y-6">
@@ -160,6 +173,41 @@ export function TasksPage() {
         title="Tasks"
         description="Manage your plant care tasks."
       />
+
+      <div
+        className="inline-flex rounded-lg border border-primary-200/70 bg-paper p-1"
+        role="group"
+        aria-label={t('careRounds.displayMode')}
+      >
+        <button
+          type="button"
+          onClick={() => setDisplayMode('schedule')}
+          aria-pressed={displayMode === 'schedule'}
+          className={clsx(
+            'inline-flex min-h-touch items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
+            displayMode === 'schedule'
+              ? 'bg-primary-100 text-primary-900'
+              : 'text-gray-600 hover:bg-primary-50'
+          )}
+        >
+          <CalendarDaysIcon className="h-5 w-5" aria-hidden="true" />
+          {t('careRounds.schedule')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDisplayMode('round')}
+          aria-pressed={displayMode === 'round'}
+          className={clsx(
+            'inline-flex min-h-touch items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
+            displayMode === 'round'
+              ? 'bg-primary-100 text-primary-900'
+              : 'text-gray-600 hover:bg-primary-50'
+          )}
+        >
+          <MapPinIcon className="h-5 w-5" aria-hidden="true" />
+          {t('careRounds.round')}
+        </button>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Task filters">
@@ -220,6 +268,40 @@ export function TasksPage() {
             )
           }
         />
+      ) : displayMode === 'round' ? (
+        <div className="space-y-6">
+          <Card variant="paper">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-full bg-primary-100 text-primary-800">
+                <MapPinIcon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="font-serif text-xl text-ink">{t('careRounds.title')}</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  {t('careRounds.summary', {
+                    tasks: sortedTasks.length,
+                    spaces: careRoundGroups.length,
+                  })}
+                </p>
+                <p className="mt-2 text-xs text-gray-500">
+                  {careRoundGroups.map((group) => group.name).join(' → ')}
+                </p>
+              </div>
+            </div>
+          </Card>
+          {careRoundGroups.map((group) => (
+            <TaskSection
+              key={group.id}
+              title={`${t(`spaces.${group.environment}`)} · ${group.name}`}
+              tasks={group.tasks}
+              onComplete={(id) => completeTaskMutation.mutate(id)}
+              completingTaskId={
+                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+              }
+              extras={rowExtras}
+            />
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
           {overdueTasks.length > 0 && (
