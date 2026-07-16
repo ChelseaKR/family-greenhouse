@@ -40,6 +40,13 @@
     "deleteAction": "Delete",
     "deleteAria": "Delete {{name}}"
   },
+  "careRounds": {
+    "displayMode": "Task organization",
+    "schedule": "By date",
+    "round": "Care round",
+    "title": "Your care route",
+    "summary": "Tasks remaining: {{tasks}} · Spaces to visit: {{spaces}}"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "plants": "Plants",
