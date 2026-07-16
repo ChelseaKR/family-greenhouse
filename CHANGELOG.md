@@ -17,6 +17,31 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-15
+
+### Added
+
+- Households can define named indoor and outdoor spaces, browse plants by
+  placement, and see unplaced plants without relying on free-form tags.
+- Care Rounds group due work by space so a caregiver can finish one physical
+  area at a time and track progress through the round.
+- Task rows now show each plant's current space and indoor/outdoor context.
+- Quick-move and bulk-move workflows let caregivers relocate plants between
+  spaces while recording the placement change consistently.
+
+### Changed
+
+- The new move workflow remains a lazy-loaded chunk; the aggregate bundle
+  budget is recalibrated with tight headroom while initial JS, vendor, and CSS
+  budgets remain unchanged.
+
+### Fixed
+
+- CodeQL and zizmor now retain SARIF artifacts on private repositories without
+  requiring the unavailable GitHub Advanced Security upload endpoint.
+- Production UI browser assertions now match the commercial-hold pricing and
+  billing headings.
+
 ## [0.16.3] - 2026-07-14
 
 ### Security

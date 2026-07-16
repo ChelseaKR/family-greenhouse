@@ -12,10 +12,10 @@ android {
         applicationId "net.familygreenhouse.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Deterministic SemVer mapping: 0.16.2 -> 1602. Increment this for
+        // Deterministic SemVer mapping: 0.17.0 -> 1700. Increment this for
         // every store upload; Play never accepts a reused versionCode.
-        versionCode 1602
-        versionName "0.16.2"
+        versionCode 1700
+        versionName "0.17.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
