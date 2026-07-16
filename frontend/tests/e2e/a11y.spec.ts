@@ -132,6 +132,8 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
               plantName: 'Monstera',
               taskType: 'water',
               dueDate: new Date(Date.now() - 1000).toISOString(),
+              spaceName: 'Living Room',
+              placementNote: 'east window, top shelf',
               overdue: true,
             },
           ],

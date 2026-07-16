@@ -14,6 +14,7 @@ import {
   provisionLocalUserFixture,
   resetDb,
   seedHouseholdId,
+  seedPlantId,
   seedTaskId,
 } from '../../src/local-server';
 
@@ -111,7 +112,16 @@ describe('public sitter view (no auth)', () => {
     return res.body.token as string;
   }
 
-  it('returns the due task list with NO PII and no auth header', async () => {
+  it('returns sitter-safe task locations with no private household data or auth header', async () => {
+    const plant = db.plants.get(seedPlantId)!;
+    plant.placementNote = 'east window, top shelf';
+    plant.notes = 'Private propagation plan';
+    db.tasks.get(seedTaskId)!.notes = 'Use the private measuring cup';
+    db.households.get(seedHouseholdId)!.location = {
+      city: 'Private Climate City',
+      lat: 1,
+      lon: 2,
+    };
     const sitterToken = await createLink();
     const res = await request(app).get(`/sitter/${sitterToken}`); // no Authorization
     expect(res.status).toBe(200);
@@ -121,19 +131,24 @@ describe('public sitter view (no auth)', () => {
     expect(res.body.tasks.length).toBeGreaterThan(0);
 
     const task = res.body.tasks[0];
-    // Only the PII-free projection — exactly these keys, nothing more.
+    // Only the sitter-safe projection — exactly these keys, nothing more.
     expect(Object.keys(task).sort()).toEqual(
-      ['dueDate', 'overdue', 'plantName', 'taskType', 'taskId'].sort()
+      ['dueDate', 'overdue', 'placementNote', 'plantName', 'spaceName', 'taskType', 'taskId'].sort()
     );
     expect(task.plantName).toBe('Monstera');
     expect(task.taskType).toBe('water');
+    expect(task.spaceName).toBe('Living Room');
+    expect(task.placementNote).toBe('east window, top shelf');
 
     // Assert the whole payload carries no member identity / household id / notes.
     const blob = JSON.stringify(res.body);
     expect(blob).not.toContain(SEED_EMAIL);
     expect(blob).not.toContain('Test User'); // seed member name
     expect(blob).not.toContain(seedHouseholdId);
-    expect(blob).not.toMatch(/assignedTo|completedBy|createdBy|notes|email/);
+    expect(blob).not.toContain('Private Climate City');
+    expect(blob).not.toContain('Private propagation plan');
+    expect(blob).not.toContain('Use the private measuring cup');
+    expect(blob).not.toMatch(/assignedTo|completedBy|createdBy|"notes"|email/);
   });
 
   it('404s on an unknown / malformed token (no enumeration oracle)', async () => {

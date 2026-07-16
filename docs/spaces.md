@@ -54,6 +54,10 @@ time. This avoids denormalizing a space name onto recurring task rows, which wou
 time a plant moves or a space is renamed. Placement notes ride with the displayed space label, and
 plants without a structured space are explicitly shown as Unplaced.
 
+Active sitter links use the same read-time lookup for due tasks, sharing the current space name and
+short placement note so a sitter can find the plant. The public projection never includes the
+household's saved climate location, private plant/task notes, or member identity/contact details.
+
 ## Moving plants
 
 The plant detail page offers a one-step Move action, while the collection page supports selecting

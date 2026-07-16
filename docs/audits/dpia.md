@@ -89,7 +89,7 @@ public-access block (`infrastructure/modules/frontend/main.tf` lines 85–170).
 - Phone: empty string unless SMS opted in; changing it clears `phoneVerified`.
 - Analytics carries no PII on either rail; DNT honored in the browser.
 - Chat history auto-expires at 30 days rather than accreting.
-- Sitter view exposes due tasks only — "the token grants exactly one household's due-task view + completion, nothing else."
+- Sitter view exposes a minimal care projection: due task, plant name, current space, and placement note. It excludes saved household location, private plant/task notes, and member data — "the token grants exactly one household's sitter-safe task view + completion, nothing else."
 - Location is a feature-gated opt-in with a stated reason.
 
 ---

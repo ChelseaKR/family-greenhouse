@@ -72,7 +72,15 @@ describe('GET /sitter/{token} (public)', () => {
     const { getSitterTasks } = await import('../../../src/services/taskService.js');
     vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
     vi.mocked(getSitterTasks).mockResolvedValueOnce([
-      { taskId: 't1', plantName: 'Monstera', taskType: 'water', dueDate: 'now', overdue: true },
+      {
+        taskId: 't1',
+        plantName: 'Monstera',
+        taskType: 'water',
+        dueDate: 'now',
+        spaceName: 'Living Room',
+        placementNote: 'east window',
+        overdue: true,
+      },
     ] as never);
 
     const { getSitterView } = await import('../../../src/handlers/tasks/handler.js');
@@ -90,6 +98,8 @@ describe('GET /sitter/{token} (public)', () => {
       plantName: 'Monstera',
       taskType: 'water',
       dueDate: 'now',
+      spaceName: 'Living Room',
+      placementNote: 'east window',
       overdue: true,
     });
     // No member identity / household id leaked anywhere in the payload.
@@ -161,6 +171,8 @@ describe('POST /sitter/{token}/tasks/{taskId}/complete (public)', () => {
       plantName: 'Monstera',
       taskType: 'water',
       dueDate: '2999-01-02T00:00:00.000Z',
+      spaceName: null,
+      placementNote: null,
       overdue: false,
     });
 

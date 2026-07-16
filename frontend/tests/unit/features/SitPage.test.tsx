@@ -39,6 +39,8 @@ const waterTask: SitterTask = {
   plantName: 'Monstera',
   taskType: 'water',
   dueDate: new Date(Date.now() - 1000).toISOString(),
+  spaceName: 'Living Room',
+  placementNote: 'east window, top shelf',
   overdue: true,
 };
 
@@ -58,6 +60,7 @@ describe('SitPage', () => {
     renderPage();
 
     expect(await screen.findByText(/Water the Monstera/i)).toBeInTheDocument();
+    expect(screen.getByText(/Living Room · east window, top shelf/i)).toBeInTheDocument();
     expect(screen.getByText(/Overdue/i)).toBeInTheDocument();
     // Single h1 for accessibility.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);

@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { sitterService, SitterLinkInactiveError, type SitterTask } from '@/services/sitterService';
+import { MapPinIcon } from '@heroicons/react/24/outline';
 
 /**
  * Public, no-account plant-sitting page. A household member shares a
@@ -16,8 +17,9 @@ import { sitterService, SitterLinkInactiveError, type SitterTask } from '@/servi
  * Auth-free by design: it talks to the public GET /sitter/{token} +
  * POST /sitter/{token}/tasks/{taskId}/complete endpoints via the bare-fetch
  * sitterService (no axios interceptors), exactly like the pet-safe page. The
- * endpoints expose no PII — just the plant common name, task type, and due
- * date. An expired/revoked link shows a friendly message, not a raw error.
+ * endpoints expose no member identity, climate location, or private notes.
+ * The current space and short placement note are included as care directions.
+ * An expired/revoked link shows a friendly message, not a raw error.
  */
 
 /** Turn a task type + plant name into a warm, plain instruction. */
@@ -156,6 +158,7 @@ export function SitPage() {
               <ul className="space-y-3">
                 {remaining.map((task) => {
                   const isPending = pending.has(task.taskId);
+                  const location = [task.spaceName, task.placementNote].filter(Boolean).join(' · ');
                   return (
                     <li
                       key={task.taskId}
@@ -163,6 +166,12 @@ export function SitPage() {
                     >
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900">{instructionFor(task)}</p>
+                        {location && (
+                          <p className="mt-1 flex items-start gap-1 text-sm text-primary-800">
+                            <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span>{location}</span>
+                          </p>
+                        )}
                         <p
                           className={
                             'mt-0.5 text-sm ' + (task.overdue ? 'text-amber-700' : 'text-gray-600')

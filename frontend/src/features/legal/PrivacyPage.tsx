@@ -128,8 +128,10 @@ export function PrivacyPage() {
       <h2>Sitter links</h2>
       <p>
         A household member can create a temporary sitter link without creating an account for the
-        sitter. Anyone who has that link can see the household&rsquo;s plants and due care tasks,
-        and can mark those tasks complete, during the coverage window you selected. The link is a
+        sitter. Anyone who has that link can see due care tasks, plant names, each plant&rsquo;s
+        current space, and its short placement note, and can mark those tasks complete during the
+        coverage window you selected. Sitter links do not expose your saved household location,
+        plant or task private notes, or household member identity and contact details. The link is a
         bearer credential, so only send it to someone you trust. It expires after at most 60 days
         and a household member can revoke it sooner. We do not ask for or store the sitter&rsquo;s
         identity.

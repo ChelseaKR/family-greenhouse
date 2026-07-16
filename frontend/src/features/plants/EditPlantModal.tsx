@@ -187,6 +187,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                   <Input
                     label={t('spaces.placementNoteLabel')}
                     placeholder={t('spaces.placementNotePlaceholder')}
+                    helperText={t('spaces.placementNoteSitterHint')}
                     error={errors.placementNote?.message}
                     {...register('placementNote')}
                   />
