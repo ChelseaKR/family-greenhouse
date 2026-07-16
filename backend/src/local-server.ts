@@ -143,6 +143,7 @@ interface PlantSpace {
   rainExposure: 'exposed' | 'sheltered';
   lightLevel: 'low' | 'medium' | 'bright' | null;
   petAccess: boolean | null;
+  defaultCaregiverId: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -177,6 +178,7 @@ interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
+  assignmentSource: 'space_default' | null;
   notes: string | null;
   createdBy: string;
   createdAt: string;
@@ -407,6 +409,7 @@ export function resetDb(): void {
     rainExposure: 'sheltered',
     lightLevel: null,
     petAccess: null,
+    defaultCaregiverId: null,
     createdAt: now,
     createdBy: seedUserId,
     updatedAt: now,
@@ -448,6 +451,7 @@ export function resetDb(): void {
     nextDue: now,
     assignedTo: null,
     assignedToName: null,
+    assignmentSource: null,
     notes: null,
     createdBy: seedUserId,
     createdAt: now,
@@ -1474,6 +1478,7 @@ app.get('/spaces', authMiddleware, requireHousehold, (req, res) => {
         ...space,
         lightLevel: space.lightLevel ?? null,
         petAccess: space.petAccess ?? null,
+        defaultCaregiverId: space.defaultCaregiverId ?? null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
   );
@@ -1494,6 +1499,16 @@ app.post(
     );
     if (duplicate)
       return res.status(409).json({ message: 'A space with that name already exists' });
+    if (
+      input.defaultCaregiverId &&
+      !db.users
+        .get(input.defaultCaregiverId)
+        ?.memberships.some((membership) => membership.householdId === user.householdId)
+    ) {
+      return res
+        .status(400)
+        .json({ message: 'defaultCaregiverId must be a current household member' });
+    }
     const now = new Date().toISOString();
     const space: PlantSpace = {
       id: uuidv4(),
@@ -1504,6 +1519,7 @@ app.post(
         input.environment === 'outside' ? (input.rainExposure ?? 'exposed') : 'sheltered',
       lightLevel: input.lightLevel ?? null,
       petAccess: input.petAccess ?? null,
+      defaultCaregiverId: input.defaultCaregiverId ?? null,
       createdAt: now,
       createdBy: user.userId,
       updatedAt: now,
@@ -1525,6 +1541,16 @@ app.put(
       return res.status(404).json({ message: 'Space not found' });
     }
     const input = (req as any).validatedBody;
+    if (
+      input.defaultCaregiverId &&
+      !db.users
+        .get(input.defaultCaregiverId)
+        ?.memberships.some((membership) => membership.householdId === user.householdId)
+    ) {
+      return res
+        .status(400)
+        .json({ message: 'defaultCaregiverId must be a current household member' });
+    }
     if (input.name !== undefined) {
       const duplicate = [...db.spaces.values()].some(
         (candidate) =>
@@ -1547,6 +1573,9 @@ app.put(
     }
     if (input.lightLevel !== undefined) space.lightLevel = input.lightLevel;
     if (input.petAccess !== undefined) space.petAccess = input.petAccess;
+    if (input.defaultCaregiverId !== undefined) {
+      space.defaultCaregiverId = input.defaultCaregiverId;
+    }
     space.updatedAt = new Date().toISOString();
     res.json(space);
   }
@@ -2586,9 +2615,22 @@ function buildTask(
   // Production: nextDue defaults to NOW (the task is due immediately), not
   // now + frequency.
   const nextDue = input.nextDue || now.toISOString();
+  const plant = db.plants.get(input.plantId);
+  const defaultAssigneeId = plant?.spaceId
+    ? (db.spaces.get(plant.spaceId)?.defaultCaregiverId ?? undefined)
+    : undefined;
+  let assignedTo = input.assignedTo ?? defaultAssigneeId ?? null;
+  let assignmentSource: Task['assignmentSource'] =
+    input.assignedTo === undefined && defaultAssigneeId ? 'space_default' : null;
   let assignedToName: string | null = null;
-  if (input.assignedTo) {
-    assignedToName = db.users.get(input.assignedTo)?.name ?? null;
+  if (assignedTo) {
+    const assignee = db.users.get(assignedTo);
+    if (assignee?.memberships.some((membership) => membership.householdId === householdId)) {
+      assignedToName = assignee.name;
+    } else {
+      assignedTo = null;
+      assignmentSource = null;
+    }
   }
   const task: Task = {
     id,
@@ -2600,8 +2642,9 @@ function buildTask(
     frequency: input.frequency,
     lastCompleted: null,
     nextDue,
-    assignedTo: input.assignedTo || null,
+    assignedTo,
     assignedToName,
+    assignmentSource,
     notes: input.notes || null,
     createdBy: userId,
     createdAt: now.toISOString(),
@@ -2706,21 +2749,21 @@ app.delete('/tasks/vacation/:userId', authMiddleware, requireHousehold, (req, re
 
 // ---- Task claiming ("up for grabs") ----
 
-// POST /tasks/:id/claim — mirrors taskService.claimTask: 409 when already
-// assigned (the mock can't race, so the sequential check is equivalent to
-// production's conditional write).
+// POST /tasks/:id/claim — mirrors taskService.claimTask: space-inherited
+// assignments can be taken over, while explicit assignments return 409.
 app.post('/tasks/:id/claim', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
   const task = db.tasks.get(req.params.id);
   if (!task || task.householdId !== user.householdId) {
     return res.status(404).json({ message: 'Task not found' });
   }
-  if (task.assignedTo) {
+  if (task.assignedTo && task.assignmentSource !== 'space_default') {
     return res.status(409).json({ message: 'Already claimed' });
   }
   const dbUser = db.users.get(user.userId);
   task.assignedTo = user.userId;
   task.assignedToName = dbUser?.name ?? null;
+  task.assignmentSource = null;
   recordActivity({
     type: 'task.claimed',
     householdId: user.householdId,
@@ -2748,6 +2791,7 @@ app.post('/tasks/:id/unclaim', authMiddleware, requireHousehold, (req, res) => {
   }
   task.assignedTo = null;
   task.assignedToName = null;
+  task.assignmentSource = null;
   const dbUser = db.users.get(user.userId);
   recordActivity({
     type: 'task.unclaimed',
@@ -2872,6 +2916,7 @@ app.put(
     if (body.assignedTo !== undefined) {
       task.assignedTo = body.assignedTo || null;
       task.assignedToName = body.assignedTo ? (db.users.get(body.assignedTo)?.name ?? null) : null;
+      task.assignmentSource = null;
     }
 
     res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });

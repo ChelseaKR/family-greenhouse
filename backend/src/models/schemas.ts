@@ -63,6 +63,7 @@ export const createSpaceSchema = z.object({
   rainExposure: rainExposureEnum.optional(),
   lightLevel: lightLevelEnum.optional(),
   petAccess: z.boolean().optional(),
+  defaultCaregiverId: z.string().uuid().optional(),
 });
 
 export const updateSpaceSchema = createSpaceSchema
@@ -70,6 +71,7 @@ export const updateSpaceSchema = createSpaceSchema
   .extend({
     lightLevel: lightLevelEnum.nullable().optional(),
     petAccess: z.boolean().nullable().optional(),
+    defaultCaregiverId: z.string().uuid().nullable().optional(),
   })
   .refine(
     (input) =>
@@ -77,7 +79,8 @@ export const updateSpaceSchema = createSpaceSchema
       input.environment !== undefined ||
       input.rainExposure !== undefined ||
       input.lightLevel !== undefined ||
-      input.petAccess !== undefined,
+      input.petAccess !== undefined ||
+      input.defaultCaregiverId !== undefined,
     {
       message: 'At least one space field is required',
     }

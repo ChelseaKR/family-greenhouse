@@ -23,6 +23,10 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   TABLE_NAME: 'test-table',
 }));
 
+vi.mock('../../../src/services/householdService.js', () => ({
+  getMemberByUserId: vi.fn(),
+}));
+
 describe('spaceService', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -101,6 +105,45 @@ describe('spaceService', () => {
         'u'
       )
     ).resolves.toMatchObject({ lightLevel: 'bright', petAccess: true });
+  });
+
+  it('persists a validated default caregiver', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { createSpace } = await import('../../../src/services/spaceService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh',
+      userId: 'user-2',
+      name: 'Alex',
+      email: 'alex@example.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({});
+
+    await expect(
+      createSpace(
+        { name: 'Patio', environment: 'outside', defaultCaregiverId: 'user-2' },
+        'hh',
+        'u'
+      )
+    ).resolves.toMatchObject({ defaultCaregiverId: 'user-2' });
+  });
+
+  it('rejects a default caregiver outside the household', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { createSpace } = await import('../../../src/services/spaceService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+
+    await expect(
+      createSpace(
+        { name: 'Patio', environment: 'outside', defaultCaregiverId: 'outsider' },
+        'hh',
+        'u'
+      )
+    ).rejects.toMatchObject({ name: 'DefaultCaregiverNotMemberError' });
+    expect(vi.mocked(dynamodb.send)).not.toHaveBeenCalled();
   });
 
   it('updates and clears placement-fit properties', async () => {

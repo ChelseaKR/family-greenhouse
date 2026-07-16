@@ -77,6 +77,9 @@ export const createSpace = createHandler(
       if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
         throw createHttpError(409, error.message);
       }
+      if (error instanceof Error && error.name === 'DefaultCaregiverNotMemberError') {
+        throw createHttpError(400, error.message);
+      }
       throw error;
     }
   }
@@ -100,6 +103,9 @@ export const updateSpace = createHandler(
     } catch (error) {
       if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
         throw createHttpError(409, error.message);
+      }
+      if (error instanceof Error && error.name === 'DefaultCaregiverNotMemberError') {
+        throw createHttpError(400, error.message);
       }
       throw error;
     }

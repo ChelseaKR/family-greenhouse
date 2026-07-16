@@ -13,6 +13,7 @@ export const spaceService = {
     rainExposure?: PlantSpace['rainExposure'];
     lightLevel?: NonNullable<PlantSpace['lightLevel']>;
     petAccess?: boolean;
+    defaultCaregiverId?: string;
   }): Promise<PlantSpace> {
     const response = await api.post<PlantSpace>('/spaces', input);
     return response.data;
@@ -21,7 +22,10 @@ export const spaceService = {
   async updateSpace(
     id: string,
     input: Partial<
-      Pick<PlantSpace, 'name' | 'environment' | 'rainExposure' | 'lightLevel' | 'petAccess'>
+      Pick<
+        PlantSpace,
+        'name' | 'environment' | 'rainExposure' | 'lightLevel' | 'petAccess' | 'defaultCaregiverId'
+      >
     >
   ): Promise<PlantSpace> {
     const response = await api.put<PlantSpace>(`/spaces/${id}`, input);

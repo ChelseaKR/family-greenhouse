@@ -8,7 +8,7 @@ space remain visible in the `Unplaced` group.
 
 | Entity          | DynamoDB key                         | Important fields                                             |
 | --------------- | ------------------------------------ | ------------------------------------------------------------ |
-| Plant space     | `PK=HOUSEHOLD#{id}`, `SK=SPACE#{id}` | `name`, `environment`, optional `lightLevel` / `petAccess`   |
+| Plant space     | `PK=HOUSEHOLD#{id}`, `SK=SPACE#{id}` | `name`, `environment`, optional conditions / usual caregiver |
 | Plant placement | existing `PLANT#{id}` row            | `spaceId`, `placementNote`, `summerSpaceId`, `winterSpaceId` |
 
 The legacy plant `location` string remains readable for imports, exports, and old clients. New UI
@@ -83,3 +83,14 @@ becomes a warning. On plant detail, recognized species can surface two conservat
 
 The UI frames these as observations to consider, not measurements, diagnoses, or automatic move
 instructions. Weather exposure remains driven by `environment` and `rainExposure`.
+
+## Usual caregiver
+
+A space can optionally name a current household member as its usual caregiver. New tasks created
+for plants currently in that space inherit the member and a `space_default` assignment source;
+explicit task assignment always wins, and existing tasks are never rewritten when the space default
+changes. Another household member can take over a space-inherited task, which converts it to an
+explicit assignment. Explicitly assigned tasks retain the existing protected claim behavior.
+
+The API validates the default against the current household roster. If a saved caregiver later
+leaves, task creation safely falls back to unassigned until the household selects someone else.

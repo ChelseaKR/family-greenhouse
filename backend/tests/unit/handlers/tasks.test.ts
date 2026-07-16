@@ -3,6 +3,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/plantService.js');
+vi.mock('../../../src/services/spaceService.js');
 // Activity records are best-effort side writes; mocked so handlers don't
 // touch the real DDB client.
 vi.mock('../../../src/services/activity.js', () => ({
@@ -165,7 +166,81 @@ describe('tasks handler', () => {
       }),
       'hh-1',
       'user-1',
-      'Pothos'
+      'Pothos',
+      { defaultAssigneeId: undefined }
+    );
+  });
+
+  it('createTask passes the plant space caregiver as the inherited default', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const spaceService = await import('../../../src/services/spaceService.js');
+    const taskService = await import('../../../src/services/taskService.js');
+    const { createTask } = await import('../../../src/handlers/tasks/handler.js');
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+      id: 'p1',
+      householdId: 'hh-1',
+      name: 'Pothos',
+      species: null,
+      location: null,
+      spaceId: 'space-1',
+      imageUrl: null,
+      notes: null,
+      createdAt: '',
+      createdBy: '',
+      updatedAt: '',
+    });
+    vi.mocked(spaceService.getSpace).mockResolvedValueOnce({
+      id: 'space-1',
+      householdId: 'hh-1',
+      name: 'Patio',
+      environment: 'outside',
+      rainExposure: 'exposed',
+      lightLevel: null,
+      petAccess: null,
+      defaultCaregiverId: '22222222-2222-4222-8222-222222222222',
+      createdAt: '',
+      createdBy: '',
+      updatedAt: '',
+    });
+    vi.mocked(taskService.createTask).mockResolvedValueOnce({
+      id: 't1',
+      householdId: 'hh-1',
+      plantId: 'p1',
+      plantName: 'Pothos',
+      type: 'water',
+      customType: null,
+      frequency: 7,
+      lastCompleted: null,
+      nextDue: '',
+      assignedTo: '22222222-2222-4222-8222-222222222222',
+      assignedToName: 'Alex',
+      assignmentSource: 'space_default',
+      notes: null,
+      createdBy: 'user-1',
+      createdAt: '',
+    });
+
+    const res = (await createTask(
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify({
+          plantId: '11111111-1111-4111-8111-111111111111',
+          type: 'water',
+          frequency: 7,
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
+    expect(taskService.createTask).toHaveBeenCalledWith(
+      expect.anything(),
+      'hh-1',
+      'user-1',
+      'Pothos',
+      { defaultAssigneeId: '22222222-2222-4222-8222-222222222222' }
     );
   });
 
