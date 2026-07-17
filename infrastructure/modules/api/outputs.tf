@@ -8,6 +8,26 @@ output "api_gateway_name" {
   value       = aws_apigatewayv2_api.main.name
 }
 
+output "api_gateway_id" {
+  description = "HTTP API Gateway ID used by CloudWatch's ApiId dimension"
+  value       = aws_apigatewayv2_api.main.id
+}
+
+output "api_access_log_group_name" {
+  description = "CloudWatch log group containing structured HTTP API access logs"
+  value       = aws_cloudwatch_log_group.api_gateway.name
+}
+
+output "api_lambda_log_group_name" {
+  description = "CloudWatch log group for the API/telemetry Lambda"
+  value       = aws_cloudwatch_log_group.lambda["api"].name
+}
+
+output "auth_lambda_log_group_name" {
+  description = "CloudWatch log group for the authentication Lambda"
+  value       = aws_cloudwatch_log_group.lambda["auth"].name
+}
+
 output "api_gateway_arn" {
   description = "API Gateway ARN"
   value       = aws_apigatewayv2_api.main.arn

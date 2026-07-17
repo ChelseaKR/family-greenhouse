@@ -17,6 +17,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- First-party, privacy-bounded browser RUM now captures sanitized errors and
+  LCP/CLS/INP with normalized route and release correlation; authenticated,
+  typed product events now reach CloudWatch even without PostHog credentials.
+- A machine-checked 28-day SLO contract, health-excluded application RED
+  metrics, per-route dashboard panels, fast/slow availability burn alerts,
+  frontend error alerts, and DynamoDB write-throttle coverage.
+
+### Fixed
+
+- CloudWatch HTTP API panels and alarms now use the real API ID and the `4xx` /
+  `5xx` metric names instead of querying nonexistent REST API series.
+- Notification settings now expose actual SMS capability and hide the phone
+  verification flow while production delivery is disabled, preventing the
+  user-facing 503 loop.
+- Dashboard, plant, task, and notification queries wait for a valid household
+  context before issuing authenticated requests.
+
 ## [0.20.0] - 2026-07-16
 
 ### Added

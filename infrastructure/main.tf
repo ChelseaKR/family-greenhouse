@@ -116,6 +116,11 @@ module "api" {
   sprout_integration_secret_id = var.sprout_integration_secret_id
   identify_metering_enabled    = var.identify_metering_enabled
   sms_notifications_enabled    = var.sms_notifications_enabled
+  git_sha                      = var.git_sha
+  sentry_dsn                   = var.sentry_dsn
+  sentry_traces_sample_rate    = var.sentry_traces_sample_rate
+  posthog_key                  = var.posthog_key
+  posthog_host                 = var.posthog_host
 
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
@@ -161,16 +166,19 @@ module "frontend" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  environment           = var.environment
-  project_name          = var.project_name
-  api_gateway_name      = module.api.api_gateway_name
-  lambda_function_names = module.api.lambda_function_names
-  alert_email           = var.alert_email
-  alert_sms_number      = var.alert_sms_number
-  dynamodb_table_name   = module.database.table_name
-  api_endpoint          = module.api.api_gateway_endpoint
-  monthly_budget_usd    = var.monthly_budget_usd
-  lambda_dlq_name       = module.api.lambda_dlq_name
+  environment                = var.environment
+  project_name               = var.project_name
+  api_gateway_id             = module.api.api_gateway_id
+  api_access_log_group_name  = module.api.api_access_log_group_name
+  api_lambda_log_group_name  = module.api.api_lambda_log_group_name
+  auth_lambda_log_group_name = module.api.auth_lambda_log_group_name
+  lambda_function_names      = module.api.lambda_function_names
+  alert_email                = var.alert_email
+  alert_sms_number           = var.alert_sms_number
+  dynamodb_table_name        = module.database.table_name
+  api_endpoint               = module.api.api_gateway_endpoint
+  monthly_budget_usd         = var.monthly_budget_usd
+  lambda_dlq_name            = module.api.lambda_dlq_name
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.

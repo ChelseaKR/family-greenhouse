@@ -51,14 +51,18 @@ resource "aws_apigatewayv2_stage" "main" {
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway.arn
     format = jsonencode({
-      requestId      = "$context.requestId"
-      ip             = "$context.identity.sourceIp"
-      requestTime    = "$context.requestTime"
-      httpMethod     = "$context.httpMethod"
-      routeKey       = "$context.routeKey"
-      status         = "$context.status"
-      responseLength = "$context.responseLength"
-      errorMessage   = "$context.error.message"
+      requestId               = "$context.requestId"
+      ip                      = "$context.identity.sourceIp"
+      requestTime             = "$context.requestTime"
+      httpMethod              = "$context.httpMethod"
+      routeKey                = "$context.routeKey"
+      status                  = "$context.status"
+      responseLength          = "$context.responseLength"
+      responseLatency         = "$context.responseLatency"
+      integrationLatency      = "$context.integrationLatency"
+      integrationStatus       = "$context.integrationStatus"
+      integrationErrorMessage = "$context.integrationErrorMessage"
+      errorMessage            = "$context.error.message"
     })
   }
 
@@ -342,9 +346,9 @@ locals {
     GIT_SHA                      = var.git_sha
     CHAT_BUDGET_INPUT_TOKENS     = var.chat_budget_input_tokens
     CHAT_BUDGET_OUTPUT_TOKENS    = var.chat_budget_output_tokens
-    # PostHog server-side analytics. Powers confirmed conversion events from
-    # the Stripe webhook (subscription_activated). Empty key = emitter no-ops,
-    # so nothing leaks from environments without a configured project key.
+    # Optional PostHog fan-out for server-confirmed Stripe conversions.
+    # First-party structured product-event logs are emitted regardless; an
+    # empty key only disables the external vendor rail.
     POSTHOG_KEY  = var.posthog_key
     POSTHOG_HOST = var.posthog_host
   }
@@ -815,6 +819,12 @@ locals {
 
     # --- health (unauthenticated liveness probe for synthetic monitoring) ---
     "GET /health" = { group = "api", auth = "none" }
+
+    # --- first-party telemetry ---
+    # Browser failures must be reportable before login; product events use
+    # JWT identity so actor/household cannot be forged in the request body.
+    "POST /telemetry/frontend" = { group = "api", auth = "none" }
+    "POST /telemetry/product"  = { group = "api", auth = "jwt" }
 
     # --- public API v1 (authenticated by API key inside the handler) ---
     "GET /api/v1/me"          = { group = "api", auth = "none" }

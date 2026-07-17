@@ -176,6 +176,45 @@ describe('auth handler', () => {
     });
   });
 
+  describe('email confirmation', () => {
+    it('records the trusted signup conversion without email or code', async () => {
+      const { cognito } = await import('../../../src/utils/cognito.js');
+      const { logger } = await import('../../../src/utils/logger.js');
+      const requestInfo = vi.fn();
+      const childSpy = vi.spyOn(logger, 'child').mockReturnValue({
+        info: requestInfo,
+        error: vi.fn(),
+      } as never);
+      vi.mocked(cognito.send).mockResolvedValueOnce({} as never);
+
+      try {
+        const { confirmEmail } = await import('../../../src/handlers/auth/handler.js');
+        const res = (await confirmEmail(
+          buildEvent({
+            path: '/auth/confirm',
+            body: JSON.stringify({ email: 'new@example.com', code: '123456' }),
+          }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+
+        expect(res.statusCode).toBe(200);
+        expect(requestInfo).toHaveBeenCalledWith(
+          {
+            msg: 'product_event',
+            productEvent: 'signup_completed',
+            source: 'auth_confirmation',
+          },
+          'product_event'
+        );
+        expect(JSON.stringify(requestInfo.mock.calls)).not.toContain('new@example.com');
+        expect(JSON.stringify(requestInfo.mock.calls)).not.toContain('123456');
+      } finally {
+        childSpy.mockRestore();
+      }
+    });
+  });
+
   describe('login', () => {
     it('returns user + tokens on success', async () => {
       const { cognito } = await import('../../../src/utils/cognito.js');

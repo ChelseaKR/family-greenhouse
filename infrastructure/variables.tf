@@ -184,6 +184,39 @@ variable "sms_notifications_enabled" {
   }
 }
 
+# --- Observability and optional analytics fan-out ---
+variable "git_sha" {
+  description = "Git SHA deployed by CI. Added to structured logs and optional Sentry releases."
+  type        = string
+  default     = ""
+}
+
+variable "sentry_dsn" {
+  description = "Optional backend Sentry DSN. Blank keeps the first-party CloudWatch baseline only."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "sentry_traces_sample_rate" {
+  description = "Optional backend Sentry trace sample rate, for example 0.1."
+  type        = string
+  default     = ""
+}
+
+variable "posthog_key" {
+  description = "Optional PostHog project key for server-side conversion fan-out."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "posthog_host" {
+  description = "Optional PostHog capture host."
+  type        = string
+  default     = "https://us.i.posthog.com"
+}
+
 # --- Stripe ---
 # Mirrors modules/api/variables.tf. These MUST be declared here too: Terraform
 # only warns (and silently drops the value) on an undeclared variable passed

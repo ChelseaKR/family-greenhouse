@@ -8,8 +8,23 @@ variable "project_name" {
   type        = string
 }
 
-variable "api_gateway_name" {
-  description = "API Gateway name"
+variable "api_gateway_id" {
+  description = "HTTP API Gateway ID used by CloudWatch's ApiId dimension"
+  type        = string
+}
+
+variable "api_access_log_group_name" {
+  description = "CloudWatch log group containing structured HTTP API access logs"
+  type        = string
+}
+
+variable "api_lambda_log_group_name" {
+  description = "CloudWatch log group for the API/telemetry Lambda"
+  type        = string
+}
+
+variable "auth_lambda_log_group_name" {
+  description = "CloudWatch log group for the authentication Lambda"
   type        = string
 }
 

@@ -45,6 +45,7 @@ import {
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
+import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
@@ -678,6 +679,24 @@ app.get('/health', (req, res) => {
       mail: { status: 'ok' },
     },
   });
+});
+
+app.post('/telemetry/frontend', validateBody(frontendTelemetrySchema), (req, res) => {
+  console.info(JSON.stringify({ ...(req as any).validatedBody, msg: 'frontend_telemetry' }));
+  res.status(204).end();
+});
+
+app.post('/telemetry/product', authMiddleware, validateBody(productTelemetrySchema), (req, res) => {
+  const user = (req as any).user;
+  console.info(
+    JSON.stringify({
+      ...(req as any).validatedBody,
+      msg: 'product_event',
+      actorId: user.userId,
+      householdId: user.householdId ?? undefined,
+    })
+  );
+  res.status(204).end();
 });
 
 // ============ AUTH ROUTES ============
@@ -3474,7 +3493,10 @@ const unregisterDeviceSchema = z.object({
 
 app.get('/notifications/prefs', authMiddleware, (req, res) => {
   const user = (req as any).user;
-  res.json(db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId));
+  res.json({
+    ...(db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId)),
+    smsAvailable: true,
+  });
 });
 
 app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req, res) => {
@@ -3508,7 +3530,7 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     updatedAt: new Date().toISOString(),
   };
   db.notificationPrefs.set(user.userId, updated);
-  res.json(updated);
+  res.json({ ...updated, smsAvailable: true });
 });
 
 app.post(
@@ -3561,7 +3583,7 @@ app.post(
       updatedAt: new Date().toISOString(),
     };
     db.notificationPrefs.set(user.userId, updated);
-    res.json(updated);
+    res.json({ ...updated, smsAvailable: true });
   }
 );
 

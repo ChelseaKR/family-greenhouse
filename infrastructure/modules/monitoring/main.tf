@@ -100,25 +100,10 @@ resource "aws_ce_anomaly_subscription" "alerts" {
   }
 }
 
-# CloudWatch Dashboard
-#
-# Layout (24-col grid):
-#
-#   ┌─────────────────┬─────────────────┐
-#   │ API requests    │ API 4XX/5XX rate│   ← traffic + error health
-#   ├─────────────────┼─────────────────┤
-#   │ Lambda p95      │ DDB throttles   │   ← latency + capacity
-#   ├─────────────────┼─────────────────┤
-#   │ Lambda errors   │ Perenual budget │   ← failure + integration
-#   └─────────────────┴─────────────────┘
-#
-# The four highest-value panels per the quality audit are:
-#   1. Error rate (5XX/4XX)
-#   2. p95 latency
-#   3. Perenual daily budget consumed
-#   4. DDB throttle count
-# Lambda errors stay on as a backstop because surfaces with no API Gateway
-# face (cron jobs, async handlers) only show up there.
+# User-facing service-level signals come from the structured API access log.
+# Native API Gateway metrics remain as a platform backstop, but application
+# request/error panels deliberately exclude GET /health so the 30-second
+# synthetic probe cannot swamp the two real users' traffic or error rate.
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-${var.environment}"
 
@@ -134,7 +119,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title  = "API Gateway Requests"
           region = data.aws_region.current.name
           metrics = [
-            ["AWS/ApiGateway", "Count", "ApiId", var.api_gateway_name]
+            ["AWS/ApiGateway", "Count", "ApiId", var.api_gateway_id]
           ]
           period = 300
           stat   = "Sum"
@@ -147,13 +132,13 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          title  = "API Gateway error rate (4XX + 5XX)"
+          title  = "API Gateway errors (4xx + 5xx)"
           region = data.aws_region.current.name
           # Two stacked series so 4XX (client) and 5XX (server) are
           # distinguishable at a glance — they imply very different actions.
           metrics = [
-            ["AWS/ApiGateway", "5XXError", "ApiId", var.api_gateway_name, { stat = "Sum" }],
-            [".", "4XXError", ".", ".", { stat = "Sum" }]
+            ["AWS/ApiGateway", "5xx", "ApiId", var.api_gateway_id, { stat = "Sum" }],
+            [".", "4xx", ".", ".", { stat = "Sum" }]
           ]
           period  = 300
           view    = "timeSeries"
@@ -161,39 +146,29 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
       {
-        type   = "metric"
+        type   = "log"
         x      = 0
         y      = 6
         width  = 12
         height = 6
         properties = {
-          title  = "Lambda p95 duration (ms)"
+          title  = "Application p95 latency by route (health excluded)"
           region = data.aws_region.current.name
-          # p95 is what users actually feel — averages hide tail problems.
-          metrics = [
-            for name in var.lambda_function_names : ["AWS/Lambda", "Duration", "FunctionName", name]
-          ]
-          period = 300
-          stat   = "p95"
+          query  = "SOURCE '${var.api_access_log_group_name}' | filter routeKey != 'GET /health' | stats pct(responseLatency, 95) as p95_ms by routeKey"
+          view   = "bar"
         }
       },
       {
-        type   = "metric"
+        type   = "log"
         x      = 12
         y      = 6
         width  = 12
         height = 6
         properties = {
-          title  = "DynamoDB throttled requests"
+          title  = "Application 5xx by route (health excluded)"
           region = data.aws_region.current.name
-          # Read + write throttles on the single table. Any non-zero value
-          # is a capacity issue worth investigating.
-          metrics = var.dynamodb_table_name == "" ? [] : [
-            ["AWS/DynamoDB", "ReadThrottleEvents", "TableName", var.dynamodb_table_name],
-            [".", "WriteThrottleEvents", ".", "."]
-          ]
-          period = 300
-          stat   = "Sum"
+          query  = "SOURCE '${var.api_access_log_group_name}' | filter routeKey != 'GET /health' and status >= 500 | stats count(*) as errors by routeKey, bin(5m)"
+          view   = "timeSeries"
         }
       },
       {
@@ -203,7 +178,24 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 12
         height = 6
         properties = {
-          title  = "Lambda Errors"
+          title  = "Application requests + 5xx (health excluded)"
+          region = data.aws_region.current.name
+          metrics = [
+            ["FamilyGreenhouse/API/${var.environment}", "ApplicationRequests", { label = "requests", stat = "Sum" }],
+            [".", "Application5xx", { label = "5xx", stat = "Sum" }]
+          ]
+          period = 300
+          stat   = "Sum"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 12
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Lambda errors"
           region = data.aws_region.current.name
           metrics = [
             for name in var.lambda_function_names : ["AWS/Lambda", "Errors", "FunctionName", name]
@@ -214,18 +206,60 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "log"
-        x      = 12
-        y      = 12
+        x      = 0
+        y      = 18
         width  = 12
         height = 6
         properties = {
-          title  = "Perenual daily budget consumed"
+          title  = "Browser errors"
           region = data.aws_region.current.name
-          # Counts budget-exhausted events from the structured log emitted by
-          # services/enrichment.ts. Spike = consider raising the daily budget
-          # or moving to the paid Perenual tier.
-          query = "SOURCE '/aws/lambda/${var.project_name}-${var.environment}' | filter msg = 'perenual.budget_exhausted' | stats count() by bin(5m)"
-          view  = "timeSeries"
+          query  = "SOURCE '${var.api_lambda_log_group_name}' | filter msg = 'frontend_telemetry' and kind = 'error' | stats count(*) as errors by route, bin(5m)"
+          view   = "timeSeries"
+        }
+      },
+      {
+        type   = "log"
+        x      = 12
+        y      = 18
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Core Web Vitals p75 (selected range)"
+          region = data.aws_region.current.name
+          # LCP/INP are milliseconds while CLS is unitless; a table avoids a
+          # misleading shared axis that would visually flatten CLS to zero.
+          query = "SOURCE '${var.api_lambda_log_group_name}' | filter msg = 'frontend_telemetry' and kind = 'vital' | stats pct(value, 75) as p75, count(*) as samples by metric"
+          view  = "table"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 24
+        width  = 12
+        height = 6
+        properties = {
+          title  = "DynamoDB throttled requests"
+          region = data.aws_region.current.name
+          metrics = var.dynamodb_table_name == "" ? [] : [
+            ["AWS/DynamoDB", "ReadThrottleEvents", "TableName", var.dynamodb_table_name],
+            [".", "WriteThrottleEvents", ".", "."]
+          ]
+          period = 300
+          stat   = "Sum"
+        }
+      },
+      {
+        type   = "log"
+        x      = 12
+        y      = 24
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Perenual budget exhaustions (species routes)"
+          region = data.aws_region.current.name
+          query  = "SOURCE '/aws/lambda/${var.project_name}-species-${var.environment}' | filter msg = 'perenual.budget_exhausted' | stats count(*) by bin(5m)"
+          view   = "timeSeries"
         }
       }
     ]
@@ -233,6 +267,61 @@ resource "aws_cloudwatch_dashboard" "main" {
 }
 
 data "aws_region" "current" {}
+
+# Health-excluded RED metrics derived from the structured access log. These
+# are the SLO source of truth; the native AWS/ApiGateway Count metric includes
+# the high-frequency synthetic health check and is therefore not user traffic.
+resource "aws_cloudwatch_log_metric_filter" "application_requests" {
+  name           = "${var.project_name}-application-requests-${var.environment}"
+  log_group_name = var.api_access_log_group_name
+  pattern        = "{ $.routeKey != \"GET /health\" }"
+
+  metric_transformation {
+    name          = "ApplicationRequests"
+    namespace     = "FamilyGreenhouse/API/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "application_5xx" {
+  name           = "${var.project_name}-application-5xx-${var.environment}"
+  log_group_name = var.api_access_log_group_name
+  pattern        = "{ $.routeKey != \"GET /health\" && $.status = 5* }"
+
+  metric_transformation {
+    name          = "Application5xx"
+    namespace     = "FamilyGreenhouse/API/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "application_latency" {
+  name           = "${var.project_name}-application-latency-${var.environment}"
+  log_group_name = var.api_access_log_group_name
+  pattern        = "{ $.routeKey != \"GET /health\" && $.responseLatency = * }"
+
+  metric_transformation {
+    name      = "ApplicationLatency"
+    namespace = "FamilyGreenhouse/API/${var.environment}"
+    value     = "$.responseLatency"
+    unit      = "Milliseconds"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "frontend_errors" {
+  name           = "${var.project_name}-frontend-errors-${var.environment}"
+  log_group_name = var.api_lambda_log_group_name
+  pattern        = "{ $.msg = \"frontend_telemetry\" && $.kind = \"error\" }"
+
+  metric_transformation {
+    name          = "FrontendErrors"
+    namespace     = "FamilyGreenhouse/Frontend/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
 
 # CloudWatch Alarms
 #
@@ -383,28 +472,188 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttle" {
   }
 }
 
+resource "aws_cloudwatch_metric_alarm" "dynamodb_write_throttle" {
+  count = var.dynamodb_table_name == "" ? 0 : 1
+
+  alarm_name          = "${var.project_name}-ddb-write-throttle-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "WriteThrottleEvents"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "DynamoDB write throttling — capacity issue or hot partition"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    TableName = var.dynamodb_table_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-ddb-write-throttle-alarm-${var.environment}"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "api_5xx" {
   alarm_name          = "${var.project_name}-api-5xx-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name         = "5XXError"
+  metric_name         = "5xx"
   namespace           = "AWS/ApiGateway"
   period              = 300
   statistic           = "Sum"
-  threshold           = 10
-  alarm_description   = "API Gateway 5XX errors exceeded threshold"
+  threshold           = 2
+  alarm_description   = "HTTP API platform 5xx errors exceeded threshold (includes synthetic health traffic)"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
   # No 5XX metric published in a quiet window = no server errors = OK.
   treat_missing_data = "notBreaching"
 
   dimensions = {
-    ApiId = var.api_gateway_name
+    ApiId = var.api_gateway_id
   }
 
   tags = {
     Name = "${var.project_name}-api-5xx-alarm-${var.environment}"
   }
+}
+
+# Immediate user-impact signal. A single non-health 5xx is actionable at the
+# current traffic level and must page even when Lambda itself returns a shaped
+# 5xx response (which does not increment the Lambda Errors metric).
+resource "aws_cloudwatch_metric_alarm" "application_5xx" {
+  alarm_name          = "${var.project_name}-application-5xx-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Application5xx"
+  namespace           = "FamilyGreenhouse/API/${var.environment}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "A user-facing API route returned 5xx; GET /health is excluded"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+}
+
+resource "aws_cloudwatch_metric_alarm" "application_latency_p95" {
+  alarm_name          = "${var.project_name}-application-latency-p95-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 2
+  metric_name         = "ApplicationLatency"
+  namespace           = "FamilyGreenhouse/API/${var.environment}"
+  period              = 300
+  extended_statistic  = "p95"
+  threshold           = 500
+  alarm_description   = "Application p95 response latency exceeded the 500ms SLO in two of three periods; GET /health is excluded"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+}
+
+# 99.5% availability SLO, 28-day window. The fast alarm detects a 14.4x burn
+# (7.2% errors) sustained across most of one hour; the slow alarm detects a 6x
+# burn (3% errors) sustained across most of six hours. Both use the same
+# health-excluded application request/error metrics as the dashboard.
+resource "aws_cloudwatch_metric_alarm" "availability_fast_burn" {
+  alarm_name          = "${var.project_name}-availability-fast-burn-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 12
+  datapoints_to_alarm = 10
+  threshold           = 7.2
+  alarm_description   = "99.5% availability SLO fast burn: >7.2% application 5xx over most of an hour"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  metric_query {
+    id          = "requests"
+    return_data = false
+    metric {
+      metric_name = "ApplicationRequests"
+      namespace   = "FamilyGreenhouse/API/${var.environment}"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+
+  metric_query {
+    id          = "errors"
+    return_data = false
+    metric {
+      metric_name = "Application5xx"
+      namespace   = "FamilyGreenhouse/API/${var.environment}"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+
+  metric_query {
+    id          = "error_rate"
+    expression  = "IF(requests > 0, 100 * errors / requests, 0)"
+    label       = "Application 5xx percentage"
+    return_data = true
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "availability_slow_burn" {
+  alarm_name          = "${var.project_name}-availability-slow-burn-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 12
+  datapoints_to_alarm = 10
+  threshold           = 3
+  alarm_description   = "99.5% availability SLO slow burn: >3% application 5xx over most of six hours"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  metric_query {
+    id          = "requests"
+    return_data = false
+    metric {
+      metric_name = "ApplicationRequests"
+      namespace   = "FamilyGreenhouse/API/${var.environment}"
+      period      = 1800
+      stat        = "Sum"
+    }
+  }
+
+  metric_query {
+    id          = "errors"
+    return_data = false
+    metric {
+      metric_name = "Application5xx"
+      namespace   = "FamilyGreenhouse/API/${var.environment}"
+      period      = 1800
+      stat        = "Sum"
+    }
+  }
+
+  metric_query {
+    id          = "error_rate"
+    expression  = "IF(requests > 0, 100 * errors / requests, 0)"
+    label       = "Application 5xx percentage"
+    return_data = true
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
+  alarm_name          = "${var.project_name}-frontend-errors-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "FrontendErrors"
+  namespace           = "FamilyGreenhouse/Frontend/${var.environment}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 2
+  alarm_description   = "Three or more sanitized browser errors arrived within five minutes"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
 }
 
 # --- Synthetic uptime monitor ---
@@ -522,12 +771,12 @@ resource "aws_cloudwatch_metric_alarm" "email_forwarder_dlq_depth" {
 # must exist (the auth fn has run in prod) for the filter to apply.
 resource "aws_cloudwatch_log_metric_filter" "auth_login_failure" {
   name           = "${var.project_name}-auth-login-failure-${var.environment}"
-  log_group_name = "/aws/lambda/${var.project_name}-auth-${var.environment}"
+  log_group_name = var.auth_lambda_log_group_name
   pattern        = "{ $.event = \"auth.login.failure\" }"
 
   metric_transformation {
     name          = "AuthLoginFailures"
-    namespace     = "FamilyGreenhouse/Audit"
+    namespace     = "FamilyGreenhouse/Audit/${var.environment}"
     value         = "1"
     default_value = "0"
   }
@@ -538,7 +787,7 @@ resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = aws_cloudwatch_log_metric_filter.auth_login_failure.metric_transformation[0].name
-  namespace           = "FamilyGreenhouse/Audit"
+  namespace           = "FamilyGreenhouse/Audit/${var.environment}"
   period              = 300
   statistic           = "Sum"
   threshold           = 10

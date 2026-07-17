@@ -23,6 +23,36 @@ paths:
       security: []
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /telemetry/frontend:
+    post:
+      summary: Record a sanitized browser error or Core Web Vital
+      tags: [System]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontendTelemetryEvent'
+      responses:
+        '204': { description: Recorded }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { description: Rate limited }
+  /telemetry/product:
+    post:
+      summary: Record an authenticated, typed product event
+      tags: [System]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductTelemetryEvent'
+      responses:
+        '204': { description: Recorded }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { description: Rate limited }
   /auth/signup:
     post:
       summary: Register a new user (paused during the commercial hold)
@@ -1254,6 +1284,123 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    FrontendTelemetryEvent:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, sessionId, route, name, message, fingerprint]
+          properties:
+            kind: { type: string, enum: [error] }
+            sessionId: { type: string, format: uuid }
+            route:
+              type: string
+              maxLength: 180
+              pattern: '^/(?:[A-Za-z0-9_.:-]+/?)*$'
+            name:
+              type: string
+              enum:
+                [
+                  ChunkLoadError,
+                  Error,
+                  EvalError,
+                  NetworkError,
+                  RangeError,
+                  ReferenceError,
+                  SyntaxError,
+                  TypeError,
+                  URIError,
+                ]
+            message:
+              type: string
+              enum:
+                - Application update or chunk load failed
+                - Network request failed
+                - ChunkLoadError in browser
+                - Error in browser
+                - EvalError in browser
+                - NetworkError in browser
+                - RangeError in browser
+                - ReferenceError in browser
+                - SyntaxError in browser
+                - TypeError in browser
+                - URIError in browser
+            fingerprint: { type: string, pattern: '^[a-f0-9]{8,64}$' }
+            release: { type: string, pattern: '^[A-Za-z0-9._-]{1,80}$' }
+        - type: object
+          additionalProperties: false
+          required: [kind, sessionId, route, metric, value, rating]
+          properties:
+            kind: { type: string, enum: [vital] }
+            sessionId: { type: string, format: uuid }
+            route:
+              type: string
+              maxLength: 180
+              pattern: '^/(?:[A-Za-z0-9_.:-]+/?)*$'
+            metric: { type: string, enum: [LCP, CLS, INP] }
+            value: { type: number, minimum: 0, maximum: 100000 }
+            rating: { type: string, enum: [good, needs-improvement, poor] }
+            release: { type: string, pattern: '^[A-Za-z0-9._-]{1,80}$' }
+
+    ProductTelemetryEvent:
+      type: object
+      additionalProperties: false
+      required: [event]
+      properties:
+        event:
+          type: string
+          enum:
+            - signup_completed
+            - household_created
+            - household_joined
+            - invite_sent
+            - invite_accepted
+            - plant_added
+            - plant_lifecycle_changed
+            - plants_imported
+            - plants_moved
+            - task_created
+            - task_completed
+            - task_snoozed
+            - photo_uploaded
+            - subscription_upgraded
+            - subscription_canceled
+            - data_exported
+            - plant_identified
+            - leaf_health_checked
+            - plant_shared
+            - plant_share_accepted
+            - cutting_graft_started
+            - household_switched
+            - shared_care_pulse_action
+            - climate_location_set
+            - experiment_viewed
+        properties:
+          type: object
+          description: Enum-like event discriminators only; never user-entered text.
+          additionalProperties: false
+          properties:
+            plan: { type: string, enum: [seedling, garden, greenhouse] }
+            ordinal: { type: string, enum: [first, subsequent] }
+            taskType: { type: string, enum: [water, fertilize, prune, repot, custom] }
+            memberCount: { type: string, enum: ['1', '2-5', '6+'] }
+            upgradeTo: { type: string, enum: [garden, greenhouse] }
+            interval: { type: string, enum: [month, year, lifetime] }
+            context:
+              type: string
+              pattern: '^(?:[a-z][a-z0-9_-]{0,31}|\d{1,6})$'
+            experiment:
+              type: string
+              pattern: '^[a-z][a-z0-9_-]{0,47}$'
+            variant: { type: string, enum: [A, B] }
+        superProperties:
+          type: object
+          maxProperties: 10
+          propertyNames:
+            pattern: '^[a-z][a-z0-9_-]{0,47}$'
+          additionalProperties:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,48}$'
+
     SignupRequest:
       type: object
       required: [email, password, name]

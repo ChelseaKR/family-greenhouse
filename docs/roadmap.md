@@ -32,10 +32,11 @@ The collaborative loop has to feel obvious before any expansion makes sense.
 - ✅ **Plant photo timeline** — `appendPlantPhoto` + `getPlantPhotos` + `PhotoTimeline` component. Atomic transact-write keeps the primary `imageUrl` and the timeline in sync.
 - ✅ **Watering log with notes** — completion records carry `notes`; complete-task endpoint accepts notes
 - ✅ **Tap-to-snooze options** — `<details>` popover with 1d/3d/1w/skip-cycle; skip-cycle uses task's frequency
-- ⏸ **Sentry project live / ✅ dashboards as code** — code-side stubs honor
-  `SENTRY_DSN`; creating the hosted Sentry project remains external. The
-  six-panel CloudWatch dashboard and alarms are already committed in
-  `infrastructure/modules/monitoring` and only require the environment apply.
+- ✅ **First-party production observability / ⏸ optional Sentry project** —
+  health-excluded per-route RED signals, a 28-day SLO contract, fast/slow
+  burn-rate alarms, browser errors, Core Web Vitals, release correlation, and
+  product events land in CloudWatch. Code-side Sentry stubs remain available;
+  creating the hosted project is optional rather than a baseline blind spot.
 
 ### Y1Q3 — Growth + retention ✅
 

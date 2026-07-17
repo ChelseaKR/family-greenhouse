@@ -86,10 +86,12 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ['tasks', householdId, 'upcoming'],
     queryFn: taskService.getUpcomingTasks,
+    enabled: Boolean(householdId),
   });
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
+    enabled: Boolean(householdId),
   });
   const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
 
@@ -100,6 +102,7 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
+    enabled: Boolean(householdId),
   });
 
   useOverdueAlerts(upcomingTasks, householdId);

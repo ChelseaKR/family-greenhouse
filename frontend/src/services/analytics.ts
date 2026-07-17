@@ -1,14 +1,15 @@
 /**
- * Frontend analytics shim. Posts product events to PostHog's `/capture/`
- * endpoint directly — no SDK, no extra bundle. Strongly typed so adding a
+ * Frontend analytics shim. Authenticated product events always go to our
+ * first-party `/telemetry/product` endpoint and can optionally fan out to
+ * PostHog/GTM when those integrations are configured. Strongly typed so adding a
  * new event means adding a member to the `EventName` union; misspellings
  * fail at compile time instead of becoming a forever-orphan event in the
  * PostHog UI.
  *
- * Activation: set `VITE_POSTHOG_KEY` (project API key) and optionally
- * `VITE_POSTHOG_HOST` (defaults to https://us.i.posthog.com). With the key
- * unset, every method short-circuits to a no-op. That's the dev/local
- * default — no events leak to PostHog from local development.
+ * Optional vendor activation: set `VITE_POSTHOG_KEY` (project API key) and
+ * optionally `VITE_POSTHOG_HOST` (defaults to https://us.i.posthog.com).
+ * With the key unset, only the PostHog rail is skipped; authenticated
+ * first-party events still reach our API.
  *
  * Why not posthog-js: it's ~50KB gzipped and we don't need session replay,
  * autocapture, or feature flags yet. A 30-line fetch shim covers the
@@ -34,6 +35,7 @@
 
 const HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
 const KEY = import.meta.env.VITE_POSTHOG_KEY;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 /**
  * Google Tag Manager container ID — e.g. "GTM-XXXXXX". When set, every
@@ -88,7 +90,7 @@ function pushToDataLayer(event: string, properties: Record<string, unknown>): vo
  * to answer with it.
  */
 export type EventName =
-  | 'signup_completed' // User confirmed their email and got their first JWT.
+  | 'signup_completed' // User confirmed their email; the backend records the trusted first-party event.
   | 'household_created' // First or additional household.
   | 'household_joined' // Joined an existing household via an invite link.
   | 'invite_sent' // Admin generated an invite link.
@@ -101,7 +103,7 @@ export type EventName =
   | 'task_completed' // Includes `completionNumber` so we can chart "first task completed" funnel.
   | 'task_snoozed'
   | 'photo_uploaded'
-  | 'subscription_upgraded' // Stripe checkout completed.
+  | 'subscription_upgraded' // Stripe checkout started (currently dormant during the commercial hold).
   | 'subscription_canceled' // User clicked through to cancel in the Stripe portal.
   | 'data_exported' // CSV download triggered.
   | 'plant_identified' // Plant.id flow completed and a suggestion was accepted.
@@ -137,13 +139,20 @@ export interface EventProps {
 
 /** Ambient distinct id — set by `identify`, cleared by `reset`. */
 let distinctId: string | null = null;
+let telemetryToken: string | null = null;
+
+/** Keep the first-party rail authenticated without importing the axios
+ * singleton (which would create an analytics → authStore → analytics cycle). */
+export function setTelemetryAuthToken(token: string | null): void {
+  telemetryToken = token;
+}
 
 /**
  * Super-properties: a small bag of enum-like values merged onto every
  * captured event, and `$set` onto the person on `identify`. Used to carry
  * an A/B experiment assignment from the anonymous landing page through to
- * the post-signup `signup_completed` event, so conversion can be sliced by
- * variant. Keep this to discriminators only — never user-supplied strings.
+ * authenticated post-signup events, so conversion after login can be sliced
+ * by variant. Keep this to discriminators only — never user-supplied strings.
  *
  * Removal: drop `registerSuperProperties` + the `...superProps` merges
  * below and this whole block goes away cleanly.
@@ -215,6 +224,7 @@ function isEnabled(): boolean {
 }
 
 async function send(event: EventName, properties: Record<string, unknown>): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return;
   const withSuper = { ...superProps, ...properties };
   // The household group key rides on both rails: `$groups.household` for
   // PostHog group analytics, and a plain `household` field on the GTM
@@ -225,6 +235,25 @@ async function send(event: EventName, properties: Record<string, unknown>): Prom
   // GTM dataLayer push runs whether or not PostHog is configured — they're
   // independent rails. The DNT check is inside pushToDataLayer.
   pushToDataLayer(event, dataLayerProps);
+
+  // First-party product analytics is the default rail. Identity and household
+  // come from the verified JWT server-side; neither is accepted in this body.
+  if (distinctId && telemetryToken) {
+    void fetch(`${API_URL}/telemetry/product`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${telemetryToken}`,
+        ...(activeHouseholdId ? { 'X-Household-Id': activeHouseholdId } : {}),
+      },
+      body: JSON.stringify({
+        event,
+        properties,
+        superProperties: superProps,
+      }),
+      keepalive: true,
+    }).catch(() => {});
+  }
   if (!isEnabled() || !distinctId) return;
   try {
     await fetch(`${HOST}/capture/`, {
@@ -292,6 +321,7 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
  *  experiment assignment from localStorage on the next visit. */
 export function reset(): void {
   distinctId = null;
+  telemetryToken = null;
   superProps = {};
   activeHouseholdId = null;
   // Allow a re-login to re-`$groupidentify`; cheap and keeps logout total.

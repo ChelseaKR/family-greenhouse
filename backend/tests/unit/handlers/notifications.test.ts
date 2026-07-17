@@ -63,6 +63,7 @@ const ctx = {} as Context;
 describe('notifications runReminders', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.env.SMS_NOTIFICATIONS_ENABLED = '1';
     const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
     __resetMembershipCacheForTests();
     const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
@@ -206,6 +207,7 @@ describe('notifications runYearRecap', () => {
 describe('notifications phone verification routes', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.env.SMS_NOTIFICATIONS_ENABLED = '1';
     const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
     __resetMembershipCacheForTests();
     const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
@@ -254,6 +256,75 @@ describe('notifications phone verification routes', () => {
     expect(prefs.startPhoneVerification).not.toHaveBeenCalled();
   });
 
+  it('fails fast without writing verification state when SMS delivery is unavailable', async () => {
+    process.env.SMS_NOTIFICATIONS_ENABLED = '';
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { startPhoneVerification } =
+      await import('../../../src/handlers/notifications/handler.js');
+    const res = (await startPhoneVerification(
+      buildEvent({
+        path: '/notifications/phone/start-verification',
+        body: JSON.stringify({ phone: '+15551234567' }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body).message).toMatch(/not available/i);
+    expect(prefs.startPhoneVerification).not.toHaveBeenCalled();
+  });
+
+  it('publishes SMS capability and blocks a new opt-in while delivery is disabled', async () => {
+    process.env.SMS_NOTIFICATIONS_ENABLED = '';
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValue({
+      userId: 'user-1',
+      browser: false,
+      email: true,
+      sms: false,
+      phone: '+15551234567',
+      dndStart: '',
+      dndEnd: '',
+      timezone: 'UTC',
+      pestAlerts: false,
+      weeklyDigest: true,
+      phoneVerified: true,
+      updatedAt: '2026-07-16T00:00:00.000Z',
+    });
+    const { getPrefs, updatePrefs } =
+      await import('../../../src/handlers/notifications/handler.js');
+
+    const read = (await getPrefs(
+      buildEvent({ httpMethod: 'GET', path: '/notifications/prefs' }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(JSON.parse(read.body).smsAvailable).toBe(false);
+
+    const update = (await updatePrefs(
+      buildEvent({
+        httpMethod: 'PUT',
+        path: '/notifications/prefs',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          browser: false,
+          email: true,
+          sms: true,
+          phone: '+15551234567',
+          dndStart: '',
+          dndEnd: '',
+          timezone: 'UTC',
+          pestAlerts: false,
+          weeklyDigest: true,
+        }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(update.statusCode).toBe(503);
+    expect(prefs.setPreferences).not.toHaveBeenCalled();
+  });
+
   it('confirm-verification returns the updated (verified) prefs', async () => {
     const prefs = await import('../../../src/services/notificationPrefs.js');
     const { confirmPhoneVerification } =
@@ -267,7 +338,11 @@ describe('notifications phone verification routes', () => {
       () => {}
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toMatchObject({ phoneVerified: true, phone: '+15551234567' });
+    expect(JSON.parse(res.body)).toMatchObject({
+      phoneVerified: true,
+      phone: '+15551234567',
+      smsAvailable: true,
+    });
     expect(prefs.confirmPhoneVerification).toHaveBeenCalledWith('user-1', '123456');
   });
 

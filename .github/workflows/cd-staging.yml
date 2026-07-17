@@ -53,6 +53,7 @@ jobs:
           VITE_COGNITO_USER_POOL_ID: ${{ vars.STAGING_COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ vars.STAGING_COGNITO_CLIENT_ID }}
           VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
+          VITE_GIT_SHA: ${{ github.sha }}
         run: npm run build
 
       - name: Build backend
@@ -106,6 +107,8 @@ jobs:
         run: terraform init -backend-config="key=staging/terraform.tfstate"
 
       - name: Terraform Plan
+        env:
+          TF_VAR_git_sha: ${{ github.sha }}
         run: terraform plan -var-file=environments/staging/terraform.tfvars -out=tfplan
 
       - name: Terraform Apply
@@ -202,10 +205,12 @@ jobs:
 
       - name: Smoke test (public route proves routing + dispatch are live)
         run: |
-          url="${{ vars.STAGING_API_URL }}/billing/plans"
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
-          echo "GET /billing/plans -> $code"
+          url="${{ vars.STAGING_API_URL }}/health"
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$url")
+          echo "GET /health -> $code"
+          cat /tmp/health.json
           test "$code" = "200" || { echo "Smoke test failed"; exit 1; }
+          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.components?.database!=='ok') process.exit(1)"
 
   e2e-tests:
     name: E2E Tests

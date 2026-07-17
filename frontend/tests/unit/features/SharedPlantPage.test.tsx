@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SharedPlantPage } from '@/features/plants/SharedPlantPage';
 import { plantService } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
+import * as analytics from '@/services/analytics';
 
 vi.mock('@/services/plantService', () => ({
   plantService: {
@@ -114,6 +116,28 @@ describe('SharedPlantPage', () => {
     expect(
       screen.queryByRole('button', { name: /grow your own cutting/i })
     ).not.toBeInTheDocument();
+  });
+
+  it('records graft intent before accepting a shared cutting', async () => {
+    vi.mocked(plantService.getSharedPlant).mockResolvedValueOnce(PREVIEW);
+    vi.mocked(plantService.acceptSharedPlant).mockResolvedValueOnce({ id: 'p2' } as never);
+    const trackSpy = vi.spyOn(analytics, 'track');
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 'u1',
+        email: 'me@example.com',
+        name: 'Me',
+        householdId: 'hh-1',
+        householdRole: 'admin',
+      } as never,
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add to my greenhouse' }));
+
+    expect(trackSpy).toHaveBeenCalledWith('cutting_graft_started');
+    expect(plantService.acceptSharedPlant).toHaveBeenCalledWith('abc123');
   });
 
   it('shows the invalid/expired state on a 404', async () => {

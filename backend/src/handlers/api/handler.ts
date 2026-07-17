@@ -13,16 +13,24 @@ import createHttpError from 'http-errors';
 import { z } from 'zod';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
+import { authMiddleware } from '../../middleware/auth.js';
 import { apiKeyMiddleware, requireApiScope, type ApiKeyEvent } from '../../middleware/apiKey.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { validateBody, type ValidatedEvent } from '../../middleware/validation.js';
 import type { AuthenticatedEvent } from '../../middleware/auth.js';
+import type { LoggedEvent } from '../../middleware/logging.js';
 import * as plantService from '../../services/plantService.js';
 import * as taskService from '../../services/taskService.js';
 import { recordActivity } from '../../services/activity.js';
 import { audit } from '../../utils/auditLog.js';
 import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
-import { successResponse } from '../../utils/response.js';
+import { noContentResponse, successResponse } from '../../utils/response.js';
+import {
+  frontendTelemetrySchema,
+  productTelemetrySchema,
+  type FrontendTelemetryInput,
+  type ProductTelemetryInput,
+} from '../../models/telemetry.js';
 
 // Two-layer rate limit on the public API:
 //
@@ -223,6 +231,51 @@ export const snoozeTask = createHandler(
   .use(requireApiScope('write:tasks'))
   .use(validateBody(apiSnoozeTaskSchema));
 
+// POST /telemetry/frontend
+// Public because browser failures can happen before authentication. Payloads
+// are small, strictly typed, stripped of stack traces and user identifiers,
+// and IP-rate-limited before they are written to structured CloudWatch logs.
+export const frontendTelemetry = createHandler(
+  (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { validatedBody } = event as ValidatedEvent<FrontendTelemetryInput>;
+    const log = (event as LoggedEvent).log;
+    log.info({ ...validatedBody, msg: 'frontend_telemetry' }, 'frontend_telemetry');
+    return Promise.resolve(noContentResponse());
+  },
+  { maxBodyBytes: 4096 }
+)
+  .use(rateLimit({ perWindowMs: 60_000, max: 60 }))
+  .use(validateBody(frontendTelemetrySchema));
+
+// POST /telemetry/product
+// Authentication supplies actor/household identity; the browser body cannot
+// forge either. Only enumerated funnel events and discriminator properties
+// are accepted, so plant names, emails, addresses, and other free text never
+// enter the analytics log stream.
+export const productTelemetry = createHandler(
+  (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { validatedBody } = event as ValidatedEvent<ProductTelemetryInput>;
+    const { user } = event as AuthenticatedEvent;
+    const log = (event as LoggedEvent).log;
+    log.info(
+      {
+        msg: 'product_event',
+        productEvent: validatedBody.event,
+        properties: validatedBody.properties,
+        superProperties: validatedBody.superProperties,
+        actorId: user.userId,
+        householdId: user.householdId ?? undefined,
+      },
+      'product_event'
+    );
+    return Promise.resolve(noContentResponse());
+  },
+  { maxBodyBytes: 4096 }
+)
+  .use(authMiddleware())
+  .use(userRateLimit({ perWindowMs: 60_000, max: 120 }))
+  .use(validateBody(productTelemetrySchema));
+
 // GET /health
 // Unauthenticated liveness probe: proves the Lambda boots, the router
 // dispatches end-to-end, and the data plane is reachable. Returns the build
@@ -265,6 +318,8 @@ export const health = createHandler(async (): Promise<APIGatewayProxyResult> => 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'OPTIONS /{proxy+}': preflight,
+  'POST /telemetry/frontend': frontendTelemetry,
+  'POST /telemetry/product': productTelemetry,
   'GET /health': health,
   'GET /api/v1/me': me,
   'GET /api/v1/plants': listPlants,

@@ -90,6 +90,7 @@ export function TasksPage() {
   } = useQuery({
     queryKey: ['tasks', householdId],
     queryFn: () => taskService.getTasks(),
+    enabled: Boolean(householdId),
   });
 
   // Existing household climate query (shared key with the dashboard's
@@ -113,6 +114,7 @@ export function TasksPage() {
   } = useQuery({
     queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
+    enabled: Boolean(householdId),
   });
   const {
     data: spaces = [],
@@ -121,6 +123,7 @@ export function TasksPage() {
   } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
+    enabled: Boolean(householdId),
   });
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
   const spacesById = useMemo(() => spaceMap(spaces), [spaces]);

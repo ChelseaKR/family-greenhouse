@@ -478,4 +478,84 @@ describe('public API v1 handler', () => {
       expect(body.components.database.status).toBe('error');
     });
   });
+
+  describe('first-party telemetry', () => {
+    it('accepts a sanitized public browser error and rejects unknown fields', async () => {
+      const { frontendTelemetry } = await import('../../../src/handlers/api/handler.js');
+      const payload = {
+        kind: 'error',
+        sessionId: '123e4567-e89b-42d3-a456-426614174000',
+        route: '/plants/:id',
+        name: 'ChunkLoadError',
+        message: 'Application update or chunk load failed',
+        fingerprint: 'deadbeef',
+      };
+      const accepted = await invoke(
+        frontendTelemetry,
+        buildEvent({
+          httpMethod: 'POST',
+          path: '/telemetry/frontend',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      );
+      expect(accepted.statusCode).toBe(204);
+
+      const rejected = await invoke(
+        frontendTelemetry,
+        buildEvent({
+          httpMethod: 'POST',
+          path: '/telemetry/frontend',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...payload, stack: 'secret stack' }),
+        })
+      );
+      expect(rejected.statusCode).toBe(400);
+
+      const rawMessage = await invoke(
+        frontendTelemetry,
+        buildEvent({
+          httpMethod: 'POST',
+          path: '/telemetry/frontend',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...payload, message: 'person@example.com failed to load' }),
+        })
+      );
+      expect(rawMessage.statusCode).toBe(400);
+    });
+
+    it('requires JWT auth for typed product events and ignores body identity entirely', async () => {
+      const { productTelemetry } = await import('../../../src/handlers/api/handler.js');
+      const base = buildEvent({
+        httpMethod: 'POST',
+        path: '/telemetry/product',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          event: 'plant_added',
+          properties: { ordinal: 'first' },
+          superProperties: { hero_variant: 'A' },
+        }),
+      });
+
+      const unauthorized = await invoke(productTelemetry, base);
+      expect(unauthorized.statusCode).toBe(401);
+
+      const authorized = await invoke(
+        productTelemetry,
+        buildEvent({
+          ...base,
+          body: JSON.stringify({
+            event: 'plant_added',
+            properties: { ordinal: 'first' },
+            superProperties: { hero_variant: 'A' },
+          }),
+          requestContext: {
+            ...base.requestContext,
+            authorizer: { jwt: { claims: { sub: 'user-1', email: 'a@example.com' } } },
+          } as APIGatewayProxyEvent['requestContext'],
+        })
+      );
+      expect(authorized.statusCode).toBe(204);
+    });
+  });
 });

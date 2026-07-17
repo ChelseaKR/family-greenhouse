@@ -35,6 +35,7 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
     browser: false,
     email: true,
     sms: false,
+    smsAvailable: true,
     phone: '',
     dndStart: '',
     dndEnd: '',
@@ -152,6 +153,14 @@ describe('NotificationSettings', () => {
     const smsToggle = screen.getByRole('checkbox', { name: 'SMS notifications' });
     expect(smsToggle).toBeChecked();
     expect(smsToggle).toBeEnabled(); // can always turn OFF
+  });
+
+  it('explains unavailable SMS and hides phone verification controls', async () => {
+    await renderSettings(prefs({ smsAvailable: false }));
+    expect(screen.getByText('SMS reminders are temporarily unavailable.')).toBeInTheDocument();
+    expect(screen.getByText(/SMS delivery is not enabled right now/u)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Phone number')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'SMS notifications' })).toBeDisabled();
   });
 
   it('does not submit an unsaved quiet-hours draft when an unrelated toggle is flipped', async () => {

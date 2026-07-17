@@ -10,6 +10,9 @@ export interface NotificationPreferences {
   browser: boolean;
   email: boolean;
   sms: boolean;
+  /** Server-side delivery capability. False when the SMS provider/feature is
+   * unavailable, so the UI never offers a verification flow that will 503. */
+  smsAvailable: boolean;
   phone: string;
   /** "HH:MM" 24-hour pair in the user's IANA timezone. Both empty = no DND. */
   dndStart: string;
