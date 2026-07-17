@@ -8,6 +8,22 @@ software-development artifact. Nothing in this repository or its demo is a
 current paid offer, launch campaign, customer solicitation, statement of paid
 adoption, or representation that revenue is being earned.
 
+## Repository visibility
+
+The source repository and its Git history are public portfolio artifacts.
+Historical commits and retained design documents may contain superseded
+pricing, launch, or customer-acquisition hypotheses; they are not current
+offers and must be read with this dated status record. Repository visibility
+does not change production authorization, expose household data, or relax any
+commercial-hold control.
+
+Before restoring public visibility on July 16, 2026, the complete Git history
+was scanned for secrets, archived Lambda bundles were inspected separately,
+and GitHub secret scanning plus push protection were verified active. Public
+browser configuration such as the API endpoint and Cognito client identifiers
+remains intentionally reproducible; credentials and customer data do not
+belong in this repository.
+
 ## Controls currently in place
 
 - [`commercial-status.json`](../commercial-status.json) is the single shared
