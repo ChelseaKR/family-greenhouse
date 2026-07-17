@@ -7,13 +7,12 @@ and this project uses [Semantic Versioning](https://semver.org/) once it
 reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 `docs/RESPONSIBLE-TECH-AUDITS.md` for the REL-05 pre-1.0 policy statement).
 
-> **Note on history:** this file starts 2026-07-05, backfilled for the
-> current release (`v0.13.1`) only. Releases `v0.2.0`–`v0.13.0` predate this
-> changelog; their content is reconstructable from `git log` / GitHub
-> Releases if ever needed, but is not being retroactively reconstructed here
-> (REL-10/REL-12 — fix forward from this point rather than spend a full pass
-> reconstructing thirteen releases of history). Every release from here
-> forward gets a dated entry as part of the release PR.
+> **Note on history:** this file was introduced 2026-07-05 with the
+> `v0.13.1` release. Entries for `v0.2.0`–`v0.12.3` were backfilled on
+> 2026-07-16 from `git log`, dated by tag date — best-effort summaries of
+> each release's main changes, not exhaustive commit lists (see
+> `git log <prev>..<tag>` for those). Every release from `v0.13.1` forward
+> gets a dated entry as part of the release PR.
 
 ## [Unreleased]
 
@@ -385,3 +384,139 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 ## [0.13.0] - 2026-07-05
 
 Tag cut prior to this changelog's introduction — see `git log v0.12.3..v0.13.0` for the full commit list.
+
+## [0.12.3] - 2026-07-05
+
+### Fixed
+
+- Geocode space-separated "city country/state" climate queries (#172).
+
+## [0.12.2] - 2026-07-04
+
+### Fixed
+
+- Swept the Perenual integration for the remaining missing-data-reported-as-a-false-answer bugs (#171).
+
+## [0.12.1] - 2026-07-04
+
+### Fixed
+
+- Stop claiming "no watering needed" when Perenual species data is simply missing (#170).
+
+## [0.12.0] - 2026-07-04
+
+### Added
+
+- Unified the whole app on the garden-journal design system (#168).
+
+### Fixed
+
+- Removed members are locked out only on member-scoped routes, plant reactivation is cap-checked with stale seedling member counts corrected, and "asparagus fern" no longer gets a false non-toxic verdict (#163, #164, #165).
+
+### Changed
+
+- Landed 8 verified major dependency upgrades (Vite 8 among them); the Tailwind 4 and Express 5 bumps were held and reverted to keep `npm ci` green on main (#167, #169).
+- Lambdas moved to arm64 and a bare-marker CI gate was added (#166).
+
+## [0.11.1] - 2026-06-21
+
+### Added
+
+- Vendored the portfolio standards into `docs/standards/` and hardened the CI workflows (#137).
+
+### Fixed
+
+- Dead-domain canonicals/sitemap corrected and repo findability metadata enriched (#138).
+
+## [0.11.0] - 2026-06-21
+
+### Added
+
+- Chat turn idempotency and atomic budget reservation (#136).
+
+## [0.10.0] - 2026-06-21
+
+### Fixed
+
+- Chat billing records partial usage on failure, persists tool pairs atomically, and aborts abandoned streams (#135).
+- The last-admin guard is atomic against concurrent demote/remove, and admin UI is gated on the active household's role rather than the claim default (#130, #131).
+- Confirm-email routes to sign-in and preserves the invite redirect (#134).
+- The weekly digest claims its send slot only after a real send (#132).
+
+## [0.9.0] - 2026-06-21
+
+### Fixed
+
+- A reminder is counted delivered only on a real send (#124).
+- Tokens refresh after joining a household so the new household claim applies (#129).
+- Chat messages are ordered by an atomic per-conversation sequence (#128).
+- Billing resolves the plan from the live price and gates conversion on dedup (#125).
+
+## [0.8.0] - 2026-06-21
+
+### Added
+
+- Annual plans (Garden $39.99/yr, Greenhouse $79.99/yr) and a one-time lifetime Garden plan, with server-confirmed `subscription_activated` analytics carrying a household group key (#109, #112, #113, #116).
+- An honest notice when a species has no care data (#110).
+
+### Security
+
+- Hardened the mail forwarder, rate-limited the chat stream, tightened IAM/PITR/MFA, and patched the js-yaml DoS advisory via an npm override (#108, #118).
+
+## [0.7.0] - 2026-06-17
+
+### Added
+
+- No-account, time-boxed sitter links so a plant sitter can check off tasks (#100).
+- A free pet-safe plant checker page, a shareable cutting card, and six new care guides plus two blog posts (#96, #99, #101).
+- Welcome email and first-plant activation polish (#102).
+
+### Fixed
+
+- Per-function, DynamoDB, and api-5xx alarms treat missing data as not-breaching (#94).
+
+## [0.6.0] - 2026-06-16
+
+### Added
+
+- The free plan now covers the whole household, up to 6 members (#93).
+- A heads-up when adding a plant that's toxic to pets (#91).
+- Warmer reminder copy and a welcome for solo plant-keepers (#92).
+
+## [0.5.0] - 2026-06-16
+
+### Fixed
+
+- Code-review remediations across backend, frontend, and infrastructure: DND reminders, activity pagination, assignee validation, overdue scoping, gated prod apply, deploy-role deny, and more (#87, #88, #90).
+
+### Changed
+
+- React 18 → 19 (#86).
+
+## [0.4.0] - 2026-06-16
+
+### Added
+
+- The landing page now sells the full range of personas and capabilities (#82).
+
+### Fixed
+
+- The differentiators band uses a real list, not a definition list (#85).
+
+### Changed
+
+- Repo prepped for public release; Dependabot alerts cleared for vitest, vite, esbuild, and uuid (#83).
+
+## [0.3.0] - 2026-06-12
+
+### Added
+
+- Frontend design overhaul: asymmetric hero, botanical icons, humanized copy, responsive fixes, de-genericized UI (#63, #65).
+
+### Fixed
+
+- CD captures the published Lambda versions for rollback instead of the `latest` alias (#60).
+
+## [0.2.0] - 2026-06-11
+
+First tagged release: the initial React + Lambda/DynamoDB/Cognito app plus the hardening sweep that made it deployable — CI/CD OIDC deploys with archived-zip rollback, blocking gitleaks + Semgrep + Dependabot, DLQs and audit alarms, incident/runbook/compliance docs, plant lifecycle states, and ELv2 licensing with inbound mail forwarding (see `git log v0.2.0` for the full list).

@@ -31,7 +31,7 @@ Three tiers, all enforced:
 - **pre-push**: `npm run typecheck` + `npm test` (full suite).
 - **CI** (`.github/workflows/ci.yml`): lint, typecheck, frontend+backend tests, Semgrep SAST, gitleaks, `npm audit`, terraform validate, build, Lighthouse, bundle-size, Playwright e2e + a11y.
 
-Run locally before pushing: `npm run verify` — chains `format:check → lint → typecheck → test → npm audit (--omit=dev --audit-level=high) → bare-marker grep`, the same stages CI runs. `.husky/pre-push` already calls it.
+Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — chains `format:check → lint → typecheck → test → npm audit (--omit=dev --audit-level=high) → bare-marker grep`, the same stages CI runs. `.husky/pre-push` already calls it.
 
 This repo is onboarded to the portfolio's `docs/standards/` (vendored, pinned `v1.0.1`) — see the README `## Standards conformance` table for per-standard state and [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md) for the detail. A change that touches AI/chat, adds a new external API, or changes what PII the app collects should update the relevant declaration in the same PR.
 

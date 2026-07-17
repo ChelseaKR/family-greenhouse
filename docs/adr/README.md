@@ -16,7 +16,7 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 
 | #                                                    | Title                                      | Status   |
 | ---------------------------------------------------- | ------------------------------------------ | -------- |
-| [0001](0001-record-architecture-decisions.md)        | Record architecture decisions              | Accepted |
+| [0000](0000-record-architecture-decisions.md)        | Record architecture decisions              | Accepted |
 | [0002](0002-serverless-on-aws.md)                    | Serverless on AWS, single region           | Accepted |
 | [0003](0003-single-table-dynamodb.md)                | Single-table DynamoDB                      | Accepted |
 | [0004](0004-no-waf-on-http-api.md)                   | No WAF on the HTTP API (it's unsupported)  | Accepted |
