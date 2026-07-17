@@ -58,6 +58,9 @@ jobs:
       - name: Verify API spec covers every handler route
         run: node scripts/check-api-spec.mjs
 
+      - name: Verify observability and SLO contract
+        run: npm run observability:check
+
       - name: Validate commits
         if: github.event_name == 'pull_request'
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}

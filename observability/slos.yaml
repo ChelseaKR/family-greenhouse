@@ -1,0 +1,52 @@
+version: 1
+service: family-greenhouse
+owner: support@familygreenhouse.net
+window_days: 28
+
+slos:
+  availability:
+    target_percent: 99.5
+    indicator:
+      source: cloudwatch_metric_filters
+      namespace: FamilyGreenhouse/API/{environment}
+      good_events: ApplicationRequests - Application5xx
+      total_events: ApplicationRequests
+      exclude_routes:
+        - GET /health
+    burn_rate_alerts:
+      - name: fast
+        multiplier: 14.4
+        error_rate_percent: 7.2
+        window_minutes: 60
+      - name: slow
+        multiplier: 6
+        error_rate_percent: 3
+        window_minutes: 360
+
+  latency:
+    objective: p95 <= 500ms
+    indicator:
+      source: api_gateway_access_logs
+      field: responseLatency
+      exclude_routes:
+        - GET /health
+
+  saturation:
+    objective: zero throttled requests
+    indicators:
+      - AWS/Lambda Throttles
+      - AWS/DynamoDB ReadThrottleEvents
+      - AWS/DynamoDB WriteThrottleEvents
+
+  frontend_experience:
+    aggregation: p75
+    indicators:
+      LCP_ms: 2500
+      CLS: 0.1
+      INP_ms: 200
+    privacy: sanitized first-party telemetry; no stacks, user ids, query strings, or free text
+
+response:
+  alert_topic: family-greenhouse-alerts-production
+  runbook: docs/observability.md
+  rollback: docs/deployment.md

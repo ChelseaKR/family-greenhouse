@@ -472,7 +472,9 @@
     "phoneVerifyButton": "Verify",
     "phoneVerifiedBadge": "Verified",
     "phoneVerifySuccess": "Phone number verified. You can now enable SMS reminders.",
-    "phoneUnverifiedHint": "Verify your phone number to enable SMS reminders."
+    "phoneUnverifiedHint": "Verify your phone number to enable SMS reminders.",
+    "smsUnavailableShort": "SMS reminders are temporarily unavailable.",
+    "smsUnavailable": "SMS delivery is not enabled right now. Email and browser reminders still work; phone verification will return when delivery is available."
   },
   "mobile": {
     "accountPrompt": "Need to manage or delete this account?",

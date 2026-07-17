@@ -10,6 +10,7 @@ import type { ActivityEvent } from '@/services/householdService';
 import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { server } from '../../msw/server';
+import * as analytics from '@/services/analytics';
 
 const API = 'http://localhost:4000';
 const NOW = Date.parse('2026-07-16T12:00:00.000Z');
@@ -185,5 +186,24 @@ describe('SharedCarePulse', () => {
     expect(
       Date.parse(usePrefsStore.getState().sharedCarePulseDismissedUntil['hh-1'])
     ).toBeGreaterThan(Date.now());
+  });
+
+  it('records the final milestone with a schema-safe context value', async () => {
+    usePulseHandlers({
+      members: [
+        { userId: 'u1', name: 'Chelsea', role: 'admin', joinedAt: '' },
+        { userId: 'u2', name: 'Sam', role: 'member', joinedAt: '' },
+      ],
+      activity: [],
+    });
+    const trackSpy = vi.spyOn(analytics, 'track');
+    const user = userEvent.setup();
+    renderPulse();
+
+    await user.click(await screen.findByRole('link', { name: 'Open care tasks' }));
+
+    expect(trackSpy).toHaveBeenCalledWith('shared_care_pulse_action', {
+      context: 'shared_care',
+    });
   });
 });

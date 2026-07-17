@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { initSentry } from './sentry';
+import { initFrontendTelemetry } from './services/frontendTelemetry';
 import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
@@ -18,6 +19,7 @@ import './index.css';
 // Fire-and-forget: Sentry (when a DSN is configured) loads as a lazy chunk
 // after mount; errors before it loads are caught by the route error boundary.
 void initSentry();
+initFrontendTelemetry();
 
 // Apply persisted preferences before React mounts so we don't get the wrong
 // density / language direction on first paint.

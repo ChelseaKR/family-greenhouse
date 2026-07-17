@@ -202,7 +202,11 @@ export function SharedCarePulse() {
           </div>
           <Link
             to={milestoneRoutes[nextKey]}
-            onClick={() => track('shared_care_pulse_action', { context: nextKey })}
+            onClick={() =>
+              track('shared_care_pulse_action', {
+                context: nextKey === 'sharedCare' ? 'shared_care' : nextKey,
+              })
+            }
             className="inline-flex min-h-touch shrink-0 items-center justify-center rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
           >
             {t(`sharedCarePulse.milestones.${nextKey}.action`)}

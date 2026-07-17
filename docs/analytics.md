@@ -1,42 +1,62 @@
 # Funnel analytics
 
-We instrument lifecycle events with a tiny PostHog-compatible shim
-(`frontend/src/services/analytics.ts`). Activation:
+We instrument lifecycle events with a tiny first-party shim
+(`frontend/src/services/analytics.ts`). Authenticated events always post to
+`/telemetry/product`, where actor and household identity come from the verified
+JWT and structured events land in CloudWatch. Email confirmation is the one
+pre-auth exception: the trusted auth handler writes `signup_completed` directly
+after Cognito accepts the code, without logging the email. PostHog and GTM are
+optional fan-out rails:
 
 | Var                 | Required | Default                    | Notes                                                                |
 | ------------------- | -------- | -------------------------- | -------------------------------------------------------------------- |
-| `VITE_POSTHOG_KEY`  | No       | unset                      | When unset, every `track()` is a no-op.                              |
+| `VITE_POSTHOG_KEY`  | No       | unset                      | Enables the optional PostHog fan-out; first-party events still flow. |
 | `VITE_POSTHOG_HOST` | No       | `https://us.i.posthog.com` | Switch to `eu.i.posthog.com` for EU residency, or a self-hosted URL. |
 
-We do **not** install `posthog-js`. The shim posts directly to PostHog's `/capture/` endpoint via `fetch`, saving ~50KB of bundle weight. Trade-off: no autocapture, no session replay, no feature flags. We can add the SDK later when one of those becomes worth the bundle cost.
+We do **not** install `posthog-js`. The optional rail posts directly to PostHog's `/capture/` endpoint via `fetch`, saving ~50KB of bundle weight. The first-party rail likewise uses `fetch` and has no vendor account dependency. Trade-off: no autocapture, session replay, or hosted funnel UI until PostHog is configured.
 
 ## Event vocabulary
 
 The full set is the `EventName` union in `analytics.ts`. Each is a deliberate funnel step or product interaction; we do not capture page views or DOM clicks.
 
-| Event                     | Trigger                                       | Notes                                                                                                                                                    |
-| ------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signup_completed`        | Email confirmation succeeded                  | Fires once per user, immediately after the JWT lands.                                                                                                    |
-| `household_created`       | `POST /households` returned 201               | `ordinal: 'first' \| 'subsequent'` distinguishes onboarding vs. multi-household creation.                                                                |
-| `household_joined`        | `POST /households/join/:invite` returned 200  | Pairs with `invite_accepted`.                                                                                                                            |
-| `invite_sent`             | Admin generated an invite link                | Health metric: how many households actually try to add a co-member.                                                                                      |
-| `invite_accepted`         | A user joined via an invite link              | The conversion from `invite_sent`. Pair them in PostHog.                                                                                                 |
-| `plant_added`             | Plant successfully created                    | `ordinal: 'first' \| 'subsequent'` is the activation signal.                                                                                             |
-| `plant_lifecycle_changed` | Plant archived, restored, died, or given away | `context` carries the resulting status so retention and recovery behavior can be compared without recording plant details.                               |
-| `task_created`            | Task POST returned 200                        | `taskType` for breakdowns.                                                                                                                               |
-| `task_completed`          | Task complete POST returned 200               | The retention-defining event.                                                                                                                            |
-| `task_snoozed`            | Snooze POST returned 200                      | High snooze rate is a signal that schedules are too aggressive.                                                                                          |
-| `photo_uploaded`          | Image-confirm POST returned 200               | Engagement deepener.                                                                                                                                     |
-| `subscription_upgraded`   | Stripe checkout started                       | Client-side **intent** (checkout START), not confirmation. Its server-confirmed counterpart is `subscription_activated` — see "Server-confirmed events". |
-| `subscription_canceled`   | User opened the Stripe portal                 | Intent leading indicator only.                                                                                                                           |
-| `data_exported`           | CSV download started                          | Engaged-power-user signal.                                                                                                                               |
-| `plant_identified`        | AI identification suggestion accepted         | Validates the Plant.id integration's value.                                                                                                              |
-| `household_switched`      | Switcher activated a different household      | Multi-household engagement.                                                                                                                              |
-| `climate_location_set`    | Household location saved                      | Validates the OpenWeatherMap integration's reach.                                                                                                        |
+| Event                      | Trigger                                       | Notes                                                                                                                                                 |
+| -------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signup_completed`         | Email confirmation succeeded                  | First-party source is the trusted auth handler because confirmation does not return a JWT; no email is included.                                      |
+| `household_created`        | `POST /households` returned 201               | `ordinal: 'first' \| 'subsequent'` distinguishes onboarding vs. multi-household creation.                                                             |
+| `household_joined`         | `POST /households/join/:invite` returned 200  | Pairs with `invite_accepted`.                                                                                                                         |
+| `invite_sent`              | Admin generated an invite link                | Health metric: how many households actually try to add a co-member.                                                                                   |
+| `invite_accepted`          | A user joined via an invite link              | The conversion from `invite_sent`. Pair them in PostHog.                                                                                              |
+| `plant_added`              | Plant successfully created                    | `ordinal: 'first' \| 'subsequent'` is the activation signal.                                                                                          |
+| `plant_lifecycle_changed`  | Plant archived, restored, died, or given away | `context` carries the resulting status so retention and recovery behavior can be compared without recording plant details.                            |
+| `plants_imported`          | Bulk plant import completed                   | `context` is a bounded row count, never plant content.                                                                                                |
+| `plants_moved`             | Quick or bulk placement change completed      | `context` is a bounded plant count, never a space or plant name.                                                                                      |
+| `task_created`             | Task POST returned 200                        | `taskType` for breakdowns.                                                                                                                            |
+| `task_completed`           | Task complete POST returned 200               | The retention-defining event.                                                                                                                         |
+| `task_snoozed`             | Snooze POST returned 200                      | High snooze rate is a signal that schedules are too aggressive.                                                                                       |
+| `photo_uploaded`           | Image-confirm POST returned 200               | Engagement deepener.                                                                                                                                  |
+| `subscription_upgraded`    | Stripe checkout started                       | Client-side **intent**, currently dormant while the commercial hold removes checkout controls. Its confirmed counterpart is `subscription_activated`. |
+| `subscription_canceled`    | User opened the Stripe portal                 | Intent leading indicator, currently dormant while the commercial hold removes billing-management controls.                                            |
+| `data_exported`            | CSV download started                          | Engaged-power-user signal.                                                                                                                            |
+| `plant_identified`         | AI identification suggestion accepted         | Validates the Plant.id integration's value.                                                                                                           |
+| `leaf_health_checked`      | Leaf-health assessment submitted              | Measures use of the image assessment flow without recording the image or result text.                                                                 |
+| `plant_shared`             | Cutting-share link created                    | Intent from the household sharing a cutting.                                                                                                          |
+| `plant_share_accepted`     | Shared cutting copied into a household        | Confirmed collaboration loop completion.                                                                                                              |
+| `cutting_graft_started`    | Shared-cutting recipient starts acceptance    | Intent step immediately before the authenticated copy mutation.                                                                                       |
+| `household_switched`       | Switcher activated a different household      | Multi-household engagement.                                                                                                                           |
+| `shared_care_pulse_action` | Shared-care setup action or dismissal         | `context` is a fixed milestone key or `dismiss`.                                                                                                      |
+| `climate_location_set`     | Household location saved                      | Validates the OpenWeatherMap integration's reach.                                                                                                     |
+| `experiment_viewed`        | Landing experiment variant rendered           | Carries only the fixed experiment id and A/B variant.                                                                                                 |
 
 ## Server-confirmed events
 
-Every event above fires from the browser shim and records _intent_. Revenue, though, has to be **confirmed** from the trusted backend — a client `subscription_upgraded` only means the user reached Stripe checkout, not that money moved. So the Stripe webhook emits a confirmed counterpart through a separate server shim (`backend/src/utils/serverAnalytics.ts`, the `ServerEventName` union), gated on `POSTHOG_KEY` — a server/project key, **not** the `VITE_`-prefixed browser key.
+Most events above fire from the browser shim and record _intent_;
+`signup_completed` is written by the auth handler. Revenue also has to be
+**confirmed** from the trusted backend — a client `subscription_upgraded` only
+means the user reached Stripe checkout, not that money moved. The Stripe
+webhook therefore emits a confirmed counterpart through a separate server shim
+(`backend/src/utils/serverAnalytics.ts`, the `ServerEventName` union). It always
+writes the typed first-party event to CloudWatch; optional PostHog fan-out is
+gated on `POSTHOG_KEY`, a server/project key rather than the `VITE_` browser key.
 
 | Event                    | Trigger                                                                                                                                                                           | Notes                                                                                                                                                                       |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -46,13 +66,13 @@ Where the server event differs from the browser ones:
 
 - **Distinct id** is `household:<householdId>` (the webhook has no user session), carried with the same `$groups: { household }` key — so it lines up with the per-household funnels above.
 - **Fires once.** Only the one-time activation events (`checkout.session.completed`, `customer.subscription.created`) emit it. `customer.subscription.updated` — which also fires on every renewal, plan change, and metadata edit — is deliberately excluded, so renewals don't inflate the conversion count. (A checkout that opens in a trial arrives as `subscription.created` with status `trialing` and is skipped until it flips to `active`.)
-- **Best-effort.** `capture()` never throws and the webhook `void`s its promise, so a PostHog outage can never 5xx the webhook (which would make Stripe retry an already-applied delivery).
+- **Best-effort.** The first-party log is synchronous and local. PostHog fan-out never throws and the webhook `void`s its promise, so a vendor outage can never 5xx the webhook (which would make Stripe retry an already-applied delivery).
 
 ## Privacy & data
 
-- **Distinct id** is the Cognito `sub` (UUID). We do not send email, name, plant names, or any household-identifying free text.
-- **Household group key** is the household UUID (see "Household group analytics" below). Like the distinct id, it's an opaque identifier, not free text — it can't be reversed to a person, home, or address, so it carries the same negligible privacy weight as the distinct id. "No household-identifying free text" rules out names and addresses, not a UUID grouping key.
-- **Event properties** are restricted to enums and bucketed counts. The TypeScript type makes it impossible to slip a free-form string in.
+- **Identity** for first-party events is derived from the verified JWT on the server, never accepted in the body. The optional PostHog rail uses the Cognito `sub` (UUID). Neither rail sends email, name, plant names, or household-identifying free text.
+- **Household group key** is the household UUID (see "Household group analytics" below). It is an opaque pseudonymous identifier rather than a direct name or address, but we still treat it as personal data: access-controlled, retention-bounded, and never exposed in a public payload.
+- **Event properties** are restricted server-side to enums and bucketed counts. Unknown fields and free-form values are rejected before logging.
 - **Do Not Track** is honored — when `navigator.doNotTrack === '1'` every method short-circuits.
 - We use `fetch` with `keepalive: true` so events don't drop on navigation but also don't block the request that triggered them.
 
@@ -72,21 +92,23 @@ What this unlocks in PostHog:
 - **Per-household retention** — retention and stickiness computed over households, not just users, so a household where one member churns but another stays active reads as retained.
 - **Per-household cohorts** — slice any funnel by household size, plan, or members, to test the pricing-tier hypotheses in `docs/strategy-review.md`.
 
-Privacy: the group key is an opaque household UUID, exactly analogous to sending the Cognito sub as `distinct_id`. It is not PII and cannot be reversed to a person or address; see the Privacy & data bullet above.
+Privacy: the group key is an opaque household UUID, analogous to the Cognito sub used as `distinct_id`. It is not a direct identifier, but it is linkable pseudonymous personal data and is handled under the same controls described above.
 
 ## Funnels worth building in PostHog
 
-Once events flow, build these funnels in the PostHog UI:
+CloudWatch can measure the full activation funnel beginning with the trusted,
+pre-login `signup_completed` event. PostHog only receives identified browser
+events, so its per-user activation funnel begins after sign-in:
 
-1. **Activation funnel**: `signup_completed` → `household_created (first)` → `plant_added (first)` → `task_completed (first)`. The drop-off between any two steps is your highest-leverage UX problem.
+1. **Activation funnel**: in CloudWatch, `signup_completed` → `household_created (first)` → `plant_added (first)` → `task_completed (first)`; in PostHog, begin at `household_created`. The drop-off between any two steps is your highest-leverage UX problem.
 2. **Collaboration funnel**: `household_created` → `invite_sent` → `invite_accepted`, set to aggregate by the `household` group (see "Household group analytics") so the admin's `invite_sent` and the invitee's `invite_accepted` pair across users. Below 50% of households reaching `invite_sent` means the collaborative pitch isn't landing.
 3. **Climate adoption**: `household_created` → `climate_location_set`. If <10%, the dashboard nudge needs work.
 4. **Upgrade intent**: `subscription_upgraded` from each tier. Pair with cohorts (>10 plants, >2 members) to test the pricing-tier hypotheses in `docs/strategy-review.md`.
 5. **True conversion**: `subscription_upgraded` → `subscription_activated` (intent → confirmed), aggregated by the `household` group. The drop-off is checkout abandonment; the confirmed step is the only revenue-true number.
 
-## Why no admin dashboard
+## Optional hosted funnel UI
 
-PostHog already has an excellent funnel UI. Rebuilding it inside the app would mean another React surface to maintain plus a backend that's allowed to scan all users — exactly the kind of vector we don't want. Spend that engineering elsewhere; click through to PostHog when you need a chart.
+CloudWatch Logs Insights answers the baseline event-count questions without another vendor. If richer cohort/funnel exploration becomes necessary, configure PostHog and use its funnel UI instead of building an in-app admin surface with cross-user access.
 
 ## Adding a new event
 
@@ -95,4 +117,4 @@ PostHog already has an excellent funnel UI. Rebuilding it inside the app would m
 3. Call `track('your_event', { ... })` from the call site (preferably in the service layer so every UI path picks it up).
 4. Document the new event in this file.
 
-If you find yourself adding a 16th event that's just a click track, push back — we want a small set of meaningful funnel steps, not autocapture-via-typo.
+If a proposed event is merely a click track without a decision it will inform, push back — we want a small set of meaningful funnel steps, not autocapture-via-typo.

@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { reportFrontendError } from '@/services/frontendTelemetry';
 
 /**
  * Catches errors thrown while loading or rendering a lazy route. Suspense
@@ -28,6 +29,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error): void {
+    reportFrontendError(error);
     console.error('[route-boundary]', error);
   }
 

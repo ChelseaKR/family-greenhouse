@@ -73,6 +73,7 @@ export function NotificationSettings() {
     // Preferences are stored per household membership — scope by household.
     queryKey: ['notification-prefs', householdId],
     queryFn: notificationService.getPreferences,
+    enabled: Boolean(householdId),
   });
 
   useEffect(() => {
@@ -216,7 +217,7 @@ export function NotificationSettings() {
     );
   }
 
-  if (prefsQuery.isLoading) {
+  if (!householdId || prefsQuery.isLoading || !prefsQuery.data) {
     return (
       <div className="flex justify-center py-12">
         <LoadingSpinner size="lg" />
@@ -225,6 +226,7 @@ export function NotificationSettings() {
   }
 
   const prefs = prefsQuery.data!;
+  const smsAvailable = prefs.smsAvailable ?? false;
   const canEnableBrowser = permission !== 'denied';
   // Verified status applies to the SAVED number; editing the field to a
   // different number drops back to the unverified flow until confirmed.
@@ -325,9 +327,11 @@ export function NotificationSettings() {
             <div>
               <p className="text-sm font-medium text-gray-900">Text message</p>
               <p className="text-sm text-gray-600">
-                {phoneIsVerified || prefs.sms
-                  ? 'Short SMS reminders when tasks slip past due. Standard message rates may apply.'
-                  : t('notifications.phoneUnverifiedHint')}
+                {!smsAvailable
+                  ? t('notifications.smsUnavailableShort')
+                  : phoneIsVerified || prefs.sms
+                    ? 'Short SMS reminders when tasks slip past due. Standard message rates may apply.'
+                    : t('notifications.phoneUnverifiedHint')}
               </p>
             </div>
             <label className="inline-flex items-center cursor-pointer">
@@ -337,67 +341,75 @@ export function NotificationSettings() {
                 className="h-5 w-5 accent-primary-700"
                 checked={prefs.sms}
                 // Allow turning OFF anytime; turning ON requires a verified number.
-                disabled={prefs.sms ? false : !phoneIsVerified}
+                disabled={prefs.sms ? false : !smsAvailable || !phoneIsVerified}
                 onChange={(e) => save({ sms: e.target.checked, phone: prefs.phone })}
               />
             </label>
           </div>
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <Input
-                label="Phone number"
-                type="tel"
-                inputMode="tel"
-                placeholder="+15551234567"
-                helperText="E.164 format. Leading + and country code required."
-                value={phoneDraft}
-                onChange={(e) => {
-                  setPhoneDraft(e.target.value.trim());
-                  setCodeSent(false);
-                }}
-                error={
-                  phoneDraft && !E164.test(phoneDraft) ? 'Use the format +15551234567' : undefined
-                }
-              />
-            </div>
-            {phoneIsVerified ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800"
-                data-testid="phone-verified-badge"
-              >
-                ✓ {t('notifications.phoneVerifiedBadge')}
-              </span>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={() => sendCodeMutation.mutate()}
-                isLoading={sendCodeMutation.isPending}
-                disabled={!E164.test(phoneDraft)}
-              >
-                {t('notifications.phoneSendCode')}
-              </Button>
-            )}
-          </div>
-          {codeSent && !phoneIsVerified && (
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
-                <Input
-                  label={t('notifications.phoneCodeLabel')}
-                  inputMode="numeric"
-                  placeholder="123456"
-                  helperText={t('notifications.phoneCodeHelper')}
-                  value={codeDraft}
-                  onChange={(e) => setCodeDraft(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                />
+          {!smsAvailable ? (
+            <Alert variant="info">{t('notifications.smsUnavailable')}</Alert>
+          ) : (
+            <>
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <Input
+                    label="Phone number"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="+15551234567"
+                    helperText="E.164 format. Leading + and country code required."
+                    value={phoneDraft}
+                    onChange={(e) => {
+                      setPhoneDraft(e.target.value.trim());
+                      setCodeSent(false);
+                    }}
+                    error={
+                      phoneDraft && !E164.test(phoneDraft)
+                        ? 'Use the format +15551234567'
+                        : undefined
+                    }
+                  />
+                </div>
+                {phoneIsVerified ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800"
+                    data-testid="phone-verified-badge"
+                  >
+                    ✓ {t('notifications.phoneVerifiedBadge')}
+                  </span>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => sendCodeMutation.mutate()}
+                    isLoading={sendCodeMutation.isPending}
+                    disabled={!E164.test(phoneDraft)}
+                  >
+                    {t('notifications.phoneSendCode')}
+                  </Button>
+                )}
               </div>
-              <Button
-                onClick={() => verifyCodeMutation.mutate()}
-                isLoading={verifyCodeMutation.isPending}
-                disabled={codeDraft.length !== 6}
-              >
-                {t('notifications.phoneVerifyButton')}
-              </Button>
-            </div>
+              {codeSent && !phoneIsVerified && (
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Input
+                      label={t('notifications.phoneCodeLabel')}
+                      inputMode="numeric"
+                      placeholder="123456"
+                      helperText={t('notifications.phoneCodeHelper')}
+                      value={codeDraft}
+                      onChange={(e) => setCodeDraft(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    />
+                  </div>
+                  <Button
+                    onClick={() => verifyCodeMutation.mutate()}
+                    isLoading={verifyCodeMutation.isPending}
+                    disabled={codeDraft.length !== 6}
+                  >
+                    {t('notifications.phoneVerifyButton')}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
 

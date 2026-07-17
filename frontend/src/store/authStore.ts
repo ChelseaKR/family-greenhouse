@@ -19,7 +19,12 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
-import { identify, reset as resetAnalytics, setActiveHousehold } from '@/services/analytics';
+import {
+  identify,
+  reset as resetAnalytics,
+  setActiveHousehold,
+  setTelemetryAuthToken,
+} from '@/services/analytics';
 
 export interface User {
   id: string;
@@ -182,12 +187,14 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      setTokens: (idToken, accessToken, refreshToken) =>
+      setTokens: (idToken, accessToken, refreshToken) => {
+        setTelemetryAuthToken(idToken ?? accessToken);
         set({
           idToken,
           accessToken,
           refreshToken,
-        }),
+        });
+      },
 
       setHousehold: (householdId, role) => {
         set((state) => ({
@@ -247,6 +254,7 @@ export const useAuthStore = create<AuthState>()(
         // Prefer ID token (carries the household claims the backend reads).
         // Fall back to access token only to handle pre-fix persisted state.
         const authToken = idToken ?? accessToken;
+        setTelemetryAuthToken(authToken);
 
         // When this tab can't recover the session on its own (no refresh
         // token — it's sessionStorage-only, so e.g. a freshly-opened tab),
@@ -335,6 +343,7 @@ export const useAuthStore = create<AuthState>()(
         // the persisted active id (or the user's claim household) so events
         // captured before the user touches the switcher are still grouped.
         setActiveHousehold(get().activeHouseholdId ?? userData.householdId ?? null);
+        identify(userData.id);
         set({
           user: userData,
           isAuthenticated: true,

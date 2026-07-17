@@ -39,6 +39,7 @@ import { getUserName } from '../../services/cognitoUsers.js';
 import { successResponse, createdResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { publicRegistrationIsAvailable } from '../../config/commercialStatus.js';
+import type { LoggedEvent } from '../../middleware/logging.js';
 
 // POST /auth/signup
 export const signup = createHandler(
@@ -128,6 +129,20 @@ export const confirmEmail = createHandler(
           Username: validatedBody.email,
           ConfirmationCode: validatedBody.code,
         })
+      );
+
+      // Confirmation is the trustworthy signup conversion point. The browser
+      // is not authenticated yet (Cognito confirmation returns no JWT), so it
+      // cannot use /telemetry/product. Record the event here without the email
+      // or any other user-supplied value; Cognito remains the user-count source
+      // of truth and this log supplies the funnel timestamp.
+      (event as LoggedEvent).log.info(
+        {
+          msg: 'product_event',
+          productEvent: 'signup_completed',
+          source: 'auth_confirmation',
+        },
+        'product_event'
       );
 
       return successResponse({

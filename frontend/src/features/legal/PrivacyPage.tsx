@@ -60,13 +60,19 @@ export function PrivacyPage() {
         </li>
       </ul>
 
-      <p>If you opt in to product analytics, we also collect:</p>
+      <p>To understand service reliability and feature use, we also collect:</p>
       <ul>
         <li>
-          A pseudonymous &ldquo;distinct id&rdquo; (your Cognito user id, a UUID — not your email or
-          name) plus a small set of typed lifecycle events: signup, household created, plant added,
-          task completed, etc. We do not capture page views, autocapture clicks, or session
-          recordings. The full event list is in our repo at <code>docs/analytics.md</code>.
+          A small set of typed lifecycle events: signup, household created, plant added, task
+          completed, etc. Your verified session supplies a pseudonymous account and household UUID
+          server-side; the event body cannot supply identity. We do not capture page views,
+          autocapture clicks, or session recordings. The full event list is in our repo at{' '}
+          <code>docs/analytics.md</code>.
+        </li>
+        <li>
+          Sanitized browser error summaries and LCP, CLS, and INP performance measurements with an
+          anonymous session UUID, normalized route, and release id. We do not send stack traces,
+          query strings, account ids, email, phone, tokens, or plant and household names.
         </li>
       </ul>
       <p>

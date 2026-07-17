@@ -485,7 +485,9 @@
     "phoneVerifyButton": "Verificar",
     "phoneVerifiedBadge": "Verificado",
     "phoneVerifySuccess": "Número de teléfono verificado. Ya puedes activar los recordatorios por SMS.",
-    "phoneUnverifiedHint": "Verifica tu número de teléfono para activar los recordatorios por SMS."
+    "phoneUnverifiedHint": "Verifica tu número de teléfono para activar los recordatorios por SMS.",
+    "smsUnavailableShort": "Los recordatorios por SMS no están disponibles temporalmente.",
+    "smsUnavailable": "El envío por SMS no está activado en este momento. Los recordatorios por correo y navegador siguen funcionando; la verificación del teléfono volverá cuando el envío esté disponible."
   },
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",

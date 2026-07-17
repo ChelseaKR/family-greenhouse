@@ -95,12 +95,24 @@ const recapSchema = z
 
 type RecapInput = z.infer<typeof recapSchema>;
 
+function smsAvailable(): boolean {
+  return process.env.SMS_NOTIFICATIONS_ENABLED === '1';
+}
+
+function withNotificationCapabilities<T extends object>(
+  preferences: T
+): T & {
+  smsAvailable: boolean;
+} {
+  return { ...preferences, smsAvailable: smsAvailable() };
+}
+
 // GET /notifications/prefs
 export const getPrefs = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const prefs = await notificationPrefs.getPreferences(user.userId);
-    return successResponse(prefs);
+    return successResponse(withNotificationCapabilities(prefs));
   }
 ).use(authMiddleware());
 
@@ -111,6 +123,15 @@ export const updatePrefs = createHandler(
     const { validatedBody } = event as ValidatedEvent<PrefsInput>;
     if (validatedBody.sms && !validatedBody.phone) {
       throw createHttpError(400, 'A phone number is required to enable SMS reminders');
+    }
+    if (validatedBody.sms && !smsAvailable()) {
+      // Existing opt-ins may predate a provider outage. Let those users save
+      // unrelated preferences (and turn SMS off), but do not accept a new
+      // false→true opt-in while delivery is unavailable.
+      const current = await notificationPrefs.getPreferences(user.userId);
+      if (!current.sms) {
+        throw createHttpError(503, 'SMS reminders are not available right now', { expose: true });
+      }
     }
     const updated = await notificationPrefs.setPreferences({
       userId: user.userId,
@@ -124,7 +145,7 @@ export const updatePrefs = createHandler(
       pestAlerts: validatedBody.pestAlerts,
       weeklyDigest: validatedBody.weeklyDigest,
     });
-    return successResponse(updated);
+    return successResponse(withNotificationCapabilities(updated));
   }
 )
   .use(authMiddleware())
@@ -302,6 +323,9 @@ export const startPhoneVerification = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<StartVerificationInput>;
+    if (!smsAvailable()) {
+      throw createHttpError(503, 'SMS verification is not available right now', { expose: true });
+    }
     await notificationPrefs.startPhoneVerification(user.userId, validatedBody.phone);
     return successResponse({ sent: true });
   }
@@ -328,7 +352,7 @@ export const confirmPhoneVerification = createHandler(
       user.userId,
       validatedBody.code
     );
-    return successResponse(updated);
+    return successResponse(withNotificationCapabilities(updated));
   }
 )
   .use(authRateLimit())

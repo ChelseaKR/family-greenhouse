@@ -25,6 +25,12 @@ type CapturePayload = {
   properties?: Record<string, unknown>;
 };
 
+function firstPartyEvents(fetchMock: ReturnType<typeof vi.fn>): Array<Record<string, unknown>> {
+  return fetchMock.mock.calls
+    .filter(([url]) => typeof url === 'string' && url.includes('/telemetry/product'))
+    .map(([, init]) => JSON.parse((init as RequestInit).body as string) as Record<string, unknown>);
+}
+
 /** All JSON bodies POSTed to a PostHog `/capture/` URL this test. */
 function captures(fetchMock: ReturnType<typeof vi.fn>): CapturePayload[] {
   return fetchMock.mock.calls
@@ -57,6 +63,27 @@ afterEach(() => {
 });
 
 describe('household group analytics', () => {
+  it('sends authenticated product events to the first-party rail', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    mod.setActiveHousehold(HOUSEHOLD_A);
+    mod.track('plant_added', { ordinal: 'first' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toContainEqual({
+      event: 'plant_added',
+      properties: { ordinal: 'first' },
+      superProperties: {},
+    });
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/telemetry/product'));
+    expect((call?.[1] as RequestInit).headers).toMatchObject({
+      Authorization: 'Bearer jwt-token',
+      'X-Household-Id': HOUSEHOLD_A,
+    });
+  });
+
   it('omits $groups.household when no household is set', async () => {
     const { mod, fetchMock } = await loadShim();
     mod.identify(USER_A);

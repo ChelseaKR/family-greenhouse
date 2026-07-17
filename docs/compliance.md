@@ -71,9 +71,9 @@ Until #1–#3 are built, SMS stays off. Email + web push are unaffected (transac
 
 ---
 
-## 5. Sentry (error monitoring) — provisioning runbook
+## 5. Error monitoring and optional Sentry
 
-The plumbing is shipped (backend `SENTRY_DSN` Lambda env + `instrument()` router wrap; frontend `VITE_SENTRY_DSN` build-conditional lazy load). It's a **no-op until a DSN is provisioned** — errors currently reach CloudWatch only. To turn it on:
+Baseline monitoring is first-party: backend errors, sanitized frontend errors, and Core Web Vitals reach CloudWatch, with the data-minimizing contract documented in [`observability.md`](observability.md). Sentry is an optional secondary rail. Its plumbing is shipped (backend `SENTRY_DSN` Lambda env + `instrument()` router wrap; frontend `VITE_SENTRY_DSN` build-conditional lazy load) and remains a no-op until a DSN is provisioned. To turn it on:
 
 1. Create a Sentry project (one for the React frontend, optionally one for the Node Lambdas).
 2. **Backend:** set `var.sentry_dsn` (+ `sentry_traces_sample_rate`) in `environments/production/terraform.tfvars`, `terraform apply`. The router-level `instrument()` then reports unhandled Lambda exceptions.

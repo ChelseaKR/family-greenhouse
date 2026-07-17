@@ -16,6 +16,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { toast } from '@/store/toastStore';
 import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { track } from '@/services/analytics';
 
 /**
  * PUBLIC landing page for a shared cutting link (/shared/:code).
@@ -225,6 +226,7 @@ export function SharedPlantPage() {
                     className="w-full"
                     onClick={() => {
                       setAcceptError(null);
+                      track('cutting_graft_started');
                       acceptMutation.mutate();
                     }}
                     isLoading={acceptMutation.isPending}

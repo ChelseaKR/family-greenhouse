@@ -67,12 +67,13 @@ The Lambdas read everything from environment variables that Terraform sets at de
 
 ### Optional but recommended
 
-| Variable                    | Effect                                      |
-| --------------------------- | ------------------------------------------- |
-| `SENTRY_DSN`                | Backend Sentry. No-op without it.           |
-| `SENTRY_TRACES_SAMPLE_RATE` | Default `0.1`                               |
-| `GIT_SHA`                   | Sentry release tag                          |
-| `LOG_LEVEL`                 | `info` default; `debug` if you need verbose |
+| Variable                    | Effect                                       |
+| --------------------------- | -------------------------------------------- |
+| `SENTRY_DSN`                | Backend Sentry. No-op without it.            |
+| `SENTRY_TRACES_SAMPLE_RATE` | Default `0.1`                                |
+| `GIT_SHA`                   | Release correlation in logs and Sentry       |
+| `POSTHOG_KEY`               | Optional confirmed-conversion vendor fan-out |
+| `LOG_LEVEL`                 | `info` default; `debug` if you need verbose  |
 
 ### Notification channels
 

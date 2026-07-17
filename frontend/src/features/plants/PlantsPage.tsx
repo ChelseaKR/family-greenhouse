@@ -59,11 +59,13 @@ export function PlantsPage() {
   } = useQuery({
     queryKey: view === 'active' ? ['plants', householdId] : ['plants', householdId, 'past'],
     queryFn: () => plantService.getPlants(view),
+    enabled: Boolean(householdId),
   });
 
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
+    enabled: Boolean(householdId),
   });
   const shouldLoadSpaceOverview = viewMode === 'spaces' && view === 'active';
   const {
@@ -73,7 +75,7 @@ export function PlantsPage() {
   } = useQuery({
     queryKey: ['tasks', householdId],
     queryFn: () => taskService.getTasks(),
-    enabled: shouldLoadSpaceOverview,
+    enabled: shouldLoadSpaceOverview && Boolean(householdId),
   });
   const { data: overviewHousehold } = useQuery({
     queryKey: ['household', householdId],

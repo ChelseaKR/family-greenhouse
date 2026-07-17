@@ -4,7 +4,7 @@ vi.mock('@/services/api', () => ({
   api: { get: vi.fn(), post: vi.fn() },
 }));
 
-vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
+vi.mock('@/services/analytics', () => ({ track: vi.fn(), setTelemetryAuthToken: vi.fn() }));
 
 import { api } from '@/services/api';
 import { billingService } from '@/services/billingService';

@@ -13,6 +13,7 @@ vi.mock('@/services/analytics', () => ({
   // authStore.setActiveHouseholdId now pins the analytics household group.
   setActiveHousehold: vi.fn(),
   identify: vi.fn(),
+  setTelemetryAuthToken: vi.fn(),
   reset: vi.fn(),
 }));
 

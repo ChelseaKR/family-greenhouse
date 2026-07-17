@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      commit_sha: ${{ steps.source.outputs.sha }}
     steps:
       - name: Determine version
         id: version
@@ -65,6 +66,10 @@ jobs:
         with:
           ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
+
+      - name: Resolve tagged commit
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Tag <-> package.json version consistency (REL-02/REL-03)
         # Closes the exact gap the 2026-07-05 audit flagged: tags advanced to
@@ -142,6 +147,7 @@ jobs:
           VITE_COGNITO_USER_POOL_ID: ${{ vars.PRODUCTION_COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ vars.PRODUCTION_COGNITO_CLIENT_ID }}
           VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
+          VITE_GIT_SHA: ${{ needs.validate.outputs.commit_sha }}
           # Streaming chat feature flag: set the PRODUCTION_CHAT_STREAM_URL
           # repo variable to the `chat_stream_url` terraform output to turn
           # SSE streaming on; leave it unset (empty → falsy) to keep the
@@ -215,6 +221,7 @@ jobs:
         env:
           TF_VAR_stripe_secret_key: ${{ secrets.STRIPE_SECRET_KEY }}
           TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_git_sha: ${{ needs.validate.outputs.commit_sha }}
         run: terraform plan -var-file=environments/production/terraform.tfvars -out=tfplan
 
       - name: Terraform Apply
@@ -371,13 +378,12 @@ jobs:
 
       - name: Smoke test (public route proves routing + dispatch are live)
         run: |
-          # /health doesn't exist on the deployed API (no such route in any
-          # handler group). /billing/plans is the canonical public route
-          # that proves Lambda boots + the per-route dispatcher works.
-          url="${{ vars.PRODUCTION_API_URL }}/billing/plans"
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
-          echo "GET /billing/plans -> $code"
+          url="${{ vars.PRODUCTION_API_URL }}/health"
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$url")
+          echo "GET /health -> $code"
+          cat /tmp/health.json
           test "$code" = "200" || { echo "Smoke test failed"; exit 1; }
+          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.components?.database!=='ok') process.exit(1)"
 
   smoke-tests:
     name: Post-deploy smoke (Playwright e2e against prod)

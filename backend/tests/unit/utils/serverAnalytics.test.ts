@@ -19,10 +19,22 @@ describe('serverAnalytics.capture', () => {
     else process.env.POSTHOG_HOST = originalHost;
   });
 
-  it('no-ops (no fetch) when POSTHOG_KEY is unset', async () => {
+  it('records first-party analytics but does not fetch when POSTHOG_KEY is unset', async () => {
     delete process.env.POSTHOG_KEY;
     const { capture } = await import('../../../src/utils/serverAnalytics.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const logSpy = vi.spyOn(logger, 'info');
     await capture('hh-1', 'subscription_activated', { plan: 'garden', interval: 'year' });
+    expect(logSpy).toHaveBeenCalledWith(
+      {
+        msg: 'product_event',
+        productEvent: 'subscription_activated',
+        properties: { plan: 'garden', interval: 'year' },
+        householdId: 'hh-1',
+        source: 'stripe_webhook',
+      },
+      'product_event'
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
