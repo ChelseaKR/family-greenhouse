@@ -15,6 +15,13 @@ on:
     # changes (branch protection, token permissions), not just commits.
     - cron: '30 6 * * 1'
 
+# Cancel superseded runs (CI-CD-STANDARD §11c): a rapid series of pushes to
+# main only needs the newest Scorecard analysis — earlier queued/in-flight
+# runs are stale the moment a newer commit lands.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:

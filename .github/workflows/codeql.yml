@@ -3,8 +3,11 @@ name: CodeQL
 # Family Greenhouse is a public repository, so CodeQL uploads findings to the
 # repository's code-scanning view without requiring GitHub Advanced Security.
 on:
-  push:
-    branches: [main]
+  # No `push: main` trigger (CI-CD-STANDARD §11e): every commit reaching main
+  # goes through a PR, so the pull_request run already analyzed it, and the
+  # weekly schedule (running on main) keeps default-branch code-scanning
+  # results fresh against new query packs. A push:main run would re-spend the
+  # multi-minute CodeQL analysis on code the PR run just covered.
   pull_request:
     branches: [main]
   schedule:
