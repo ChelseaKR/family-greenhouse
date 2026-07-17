@@ -1,11 +1,33 @@
 import { z } from 'zod';
 
+function isTelemetryRoute(value: string): boolean {
+  if (!value.startsWith('/')) return false;
+
+  let previousWasSlash = true;
+  for (let index = 1; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === '/') {
+      if (previousWasSlash) return false;
+      previousWasSlash = true;
+      continue;
+    }
+
+    const code = character.charCodeAt(0);
+    const isAsciiLetter = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    const isDigit = code >= 48 && code <= 57;
+    if (!isAsciiLetter && !isDigit && !'_.:-'.includes(character)) return false;
+    previousWasSlash = false;
+  }
+
+  return true;
+}
+
 const telemetryRoute = z
   .string()
   .trim()
   .min(1)
   .max(180)
-  .regex(/^\/(?:[A-Za-z0-9_.:-]+\/?)*$/u);
+  .refine(isTelemetryRoute, 'Route must be a normalized application path');
 const browserErrorNames = [
   'ChunkLoadError',
   'Error',
