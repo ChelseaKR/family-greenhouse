@@ -17,6 +17,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-16
+
 ### Added
 
 - The dashboard now shows a bilingual Shared-care pulse until the household
