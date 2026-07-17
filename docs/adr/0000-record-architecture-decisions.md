@@ -1,4 +1,4 @@
-# 0001 — Record architecture decisions
+# 0000 — Record architecture decisions
 
 **Status:** Accepted (2026-06-10)
 

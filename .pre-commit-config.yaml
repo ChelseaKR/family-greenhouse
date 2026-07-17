@@ -1,0 +1,22 @@
+# Pre-commit-framework mirror of the hooks this repo already enforces via
+# husky + lint-staged (.husky/pre-commit) — same tools, same scope, so either
+# entry point gives identical results. Local hooks run through the repo's own
+# node_modules, so versions come from package-lock.json and match CI exactly.
+# Install with: pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint --fix (workspace sources)
+        entry: npx eslint --fix
+        language: system
+        files: ^(backend|frontend)/src/.*\.(ts|tsx)$
+      - id: prettier
+        name: prettier --write
+        entry: npx prettier --write
+        language: system
+        types_or: [ts, tsx, json, markdown, yaml]
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
