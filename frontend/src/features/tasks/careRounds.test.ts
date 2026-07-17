@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Plant, PlantSpace, Task } from '@/services/plantService';
-import { buildCareRoundGroups } from './careRounds';
+import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
 
 const spaces: PlantSpace[] = [
   {
@@ -65,5 +65,33 @@ describe('buildCareRoundGroups', () => {
       'unplaced:Unplaced',
     ]);
     expect(result[0].tasks.map((item) => item.id)).toEqual(['inside-1', 'inside-2']);
+  });
+});
+
+describe('filterTasksForSpace', () => {
+  const tasks = [
+    task('inside', 'p1'),
+    task('outside', 'p2'),
+    task('none', 'p3'),
+    task('stale', 'p4'),
+  ];
+  const plants = [
+    plant('p1', 'kitchen'),
+    plant('p2', 'patio'),
+    plant('p3'),
+    plant('p4', 'deleted-space'),
+  ];
+
+  it('returns only work in the requested current space', () => {
+    expect(filterTasksForSpace(tasks, plants, spaces, 'kitchen').map((item) => item.id)).toEqual([
+      'inside',
+    ]);
+  });
+
+  it('treats missing and deleted space references as unplaced', () => {
+    expect(filterTasksForSpace(tasks, plants, spaces, 'unplaced').map((item) => item.id)).toEqual([
+      'none',
+      'stale',
+    ]);
   });
 });
