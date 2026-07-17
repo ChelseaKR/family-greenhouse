@@ -17,6 +17,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- The dashboard now shows a bilingual Shared-care pulse until the household
+  has a plant, an active care task, a second member, and a recent task
+  completion by someone else. The ordered care-vine links directly to the
+  next missing step and can be hidden on the current device for 30 days.
+- Shared-care pulse actions emit a privacy-preserving, household-grouped
+  analytics event so the collaboration activation hypothesis can be measured
+  without sending plant, household, or member names.
+
 ## [0.19.0] - 2026-07-16
 
 ### Added

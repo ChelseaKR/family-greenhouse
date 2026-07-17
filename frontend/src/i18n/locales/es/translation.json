@@ -137,6 +137,43 @@
     "title": "Tu ruta de cuidado",
     "summary": "Tareas pendientes: {{tasks}} · Espacios por visitar: {{spaces}}"
   },
+  "sharedCarePulse": {
+    "eyebrow": "Configuración del cuidado compartido",
+    "title": "Haz que el cuidado sea cosa de todo el hogar",
+    "description": "Una comprobación rápida de que los recordatorios ya forman una rutina que otra persona puede asumir.",
+    "progress": "{{completed}} de {{total}} pasos listos",
+    "notNow": "Ahora no",
+    "dismissAria": "Ocultar la configuración del cuidado compartido durante 30 días",
+    "completeStatus": "Completado",
+    "currentStatus": "Siguiente paso",
+    "upcomingStatus": "Próximamente",
+    "milestones": {
+      "plant": {
+        "title": "Añade una planta",
+        "nextTitle": "Empieza con una planta",
+        "description": "Dale al hogar algo real que cuidar. Después podrás añadir su calendario.",
+        "action": "Añadir una planta"
+      },
+      "task": {
+        "title": "Planifica el cuidado",
+        "nextTitle": "Añade un calendario de cuidado",
+        "description": "Abre una planta y añade una tarea periódica para que el trabajo adecuado aparezca en el momento adecuado.",
+        "action": "Elegir una planta"
+      },
+      "teammate": {
+        "title": "Invita a alguien",
+        "nextTitle": "Suma a otra persona cuidadora",
+        "description": "Comparte una invitación con alguien de confianza. El cuidado también funciona perfectamente en solitario.",
+        "action": "Invitar a alguien"
+      },
+      "sharedCare": {
+        "title": "Comparte el relevo",
+        "nextTitle": "Deja una tarea a tu compañero o compañera",
+        "description": "Cuando otra persona completa una tarea, todo el hogar puede ver que el relevo funciona.",
+        "action": "Abrir tareas de cuidado"
+      }
+    }
+  },
   "nav": {
     "dashboard": "Panel",
     "plants": "Plantas",

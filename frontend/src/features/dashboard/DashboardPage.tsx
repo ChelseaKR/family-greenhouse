@@ -25,6 +25,7 @@ import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
+import { SharedCarePulse } from './SharedCarePulse';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
@@ -185,6 +186,8 @@ export function DashboardPage() {
           emphasis={overdueCount && overdueCount > 0 ? 'alert' : undefined}
         />
       </dl>
+
+      <SharedCarePulse />
 
       {/* Upcoming Tasks */}
       <Card variant="paper" padding="none">

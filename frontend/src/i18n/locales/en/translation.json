@@ -128,6 +128,43 @@
     "title": "Your care route",
     "summary": "Tasks remaining: {{tasks}} · Spaces to visit: {{spaces}}"
   },
+  "sharedCarePulse": {
+    "eyebrow": "Shared-care setup",
+    "title": "Make care something the household shares",
+    "description": "A quick check that reminders have become a routine another person can actually pick up.",
+    "progress": "{{completed}} of {{total}} steps ready",
+    "notNow": "Not now",
+    "dismissAria": "Hide shared-care setup for 30 days",
+    "completeStatus": "Complete",
+    "currentStatus": "Next step",
+    "upcomingStatus": "Upcoming",
+    "milestones": {
+      "plant": {
+        "title": "Add a plant",
+        "nextTitle": "Start with one plant",
+        "description": "Give the household something real to care for. You can add its schedule next.",
+        "action": "Add a plant"
+      },
+      "task": {
+        "title": "Plan the care",
+        "nextTitle": "Add a care schedule",
+        "description": "Open a plant and add a recurring task so the right work appears at the right time.",
+        "action": "Choose a plant"
+      },
+      "teammate": {
+        "title": "Invite someone",
+        "nextTitle": "Bring in another caregiver",
+        "description": "Share an invite with someone you trust. Plant care still works perfectly well solo, too.",
+        "action": "Invite someone"
+      },
+      "sharedCare": {
+        "title": "Share the handoff",
+        "nextTitle": "Let your teammate take one",
+        "description": "When another member completes a task, everyone can see that the care handoff works.",
+        "action": "Open care tasks"
+      }
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "plants": "Plants",

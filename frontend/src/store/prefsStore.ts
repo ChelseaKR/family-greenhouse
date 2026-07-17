@@ -30,10 +30,16 @@ interface PrefsState {
    *  timezone. Empty strings mean "no quiet hours." */
   dndStart: string;
   dndEnd: string;
+  /** Per-household snooze for the dashboard shared-care setup prompt. The
+   *  prompt is intentionally gentle for people who care for plants solo; a
+   *  dismissal hides it on this device for 30 days without changing any
+   *  household data or another member's experience. */
+  sharedCarePulseDismissedUntil: Record<string, string>;
   setDensity: (d: Density) => void;
   setLanguage: (l: LangCode) => void;
   setWelcomeSeen: (v: boolean) => void;
   setDnd: (start: string, end: string) => void;
+  dismissSharedCarePulse: (householdId: string, until: string) => void;
 }
 
 export const usePrefsStore = create<PrefsState>()(
@@ -46,6 +52,7 @@ export const usePrefsStore = create<PrefsState>()(
       welcomeSeen: false,
       dndStart: '',
       dndEnd: '',
+      sharedCarePulseDismissedUntil: {},
       setDensity: (density) => set({ density }),
       setLanguage: (language) => {
         i18n.changeLanguage(language);
@@ -53,6 +60,13 @@ export const usePrefsStore = create<PrefsState>()(
       },
       setWelcomeSeen: (welcomeSeen) => set({ welcomeSeen }),
       setDnd: (dndStart, dndEnd) => set({ dndStart, dndEnd }),
+      dismissSharedCarePulse: (householdId, until) =>
+        set((state) => ({
+          sharedCarePulseDismissedUntil: {
+            ...state.sharedCarePulseDismissedUntil,
+            [householdId]: until,
+          },
+        })),
     }),
     {
       name: 'fg.prefs',
