@@ -32,12 +32,38 @@ export interface SmsMessage {
  * `false` so the reminder fan-out doesn't treat an unconfigured channel as a
  * delivery and burn the day's slot.
  */
+/**
+ * Truncate `text` to at most `maxBytes` UTF-8 bytes without splitting a
+ * multi-byte code point. `String.prototype.slice` counts UTF-16 code units, so
+ * accented Spanish text or the app's own emoji can exceed the byte cap the SMS
+ * segment contract promises (and slice can even bisect an emoji surrogate pair).
+ * Iterating with `for...of` yields whole code points, so a truncated body is
+ * always valid UTF-8 and never over budget.
+ */
+export function truncateToBytes(text: string, maxBytes: number): string {
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) {
+    return text;
+  }
+  let sliceEnd = 0;
+  let bytes = 0;
+  for (const ch of text) {
+    const chBytes = Buffer.byteLength(ch, 'utf8');
+    if (bytes + chBytes > maxBytes) {
+      break;
+    }
+    bytes += chBytes;
+    sliceEnd += ch.length; // 2 for an astral code point (surrogate pair)
+  }
+  return text.slice(0, sliceEnd);
+}
+
 export async function sendSms(msg: SmsMessage): Promise<boolean> {
   if (!E164.test(msg.to)) {
     throw new Error(`Phone number must be E.164 format, got: ${msg.to}`);
   }
-  // SMS messages are billed per ~140-byte segment; trim to keep it to one.
-  const text = msg.text.slice(0, 140);
+  // SMS messages are billed per ~140-byte segment; trim to keep it to one,
+  // counting UTF-8 bytes (not UTF-16 units) and never splitting a code point.
+  const text = truncateToBytes(msg.text, 140);
 
   if (process.env.SMS_NOTIFICATIONS_ENABLED !== '1') {
     // Never log destinations or message bodies here. Verification messages
