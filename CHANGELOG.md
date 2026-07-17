@@ -17,6 +17,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-16
+
 ### Added
 
 - First-party, privacy-bounded browser RUM now captures sanitized errors and
