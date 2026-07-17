@@ -17,6 +17,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-16
+
+### Added
+
+- The active Spaces view is now an operational care route, ordered inside to
+  outside to unplaced, with each stop showing plant count, overdue or due-today
+  work, next care, recorded conditions, usual caregiver, and current seasonal
+  move suggestions.
+- Every space card links to a URL-addressable scoped care round that preserves
+  the existing task filters, claiming, vacation coverage, climate advice, and
+  completion controls.
+- Focused browser coverage now verifies the complete space-to-task flow across
+  the CI browser matrix and includes a WCAG 2.2 AA scan of the populated view.
+
+### Changed
+
+- Operational space summaries are composed from existing household-scoped
+  projections only when the active Spaces view is open, adding no migration,
+  summary row, background job, or backend authorization surface.
+
 ## [0.18.0] - 2026-07-16
 
 ### Added
