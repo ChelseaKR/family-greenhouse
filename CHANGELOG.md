@@ -16,6 +16,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- SMS reminder bodies are now trimmed to the promised 140-byte budget by
+  UTF-8 bytes rather than UTF-16 code units, so accented Spanish text or the
+  streak emoji can no longer blow past the byte budget or split an emoji
+  surrogate pair mid-code-point.
+
 ## [0.21.0] - 2026-07-16
 
 ### Added
