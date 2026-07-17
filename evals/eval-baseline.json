@@ -1,8 +1,15 @@
 {
-  "generatedAt": "2026-07-05",
-  "questionCount": 22,
+  "generatedAt": "2026-07-17",
+  "questionCount": 134,
+  "classCounts": {
+    "corpus": 102,
+    "should-refuse": 12,
+    "out-of-corpus": 10,
+    "household-data": 10
+  },
+  "perArticleFloor": 8,
   "recallAt3": 1.0,
   "ownChunkTop1Rate": 1.0,
-  "method": "Each benchmark item's anchor-chunk embedding (its own precomputed Titan vector) is used as the query vector into searchCorpusWithEmbedding(topK=3). recallAt3 = fraction of questions where the expected source article appears anywhere in the top 3 results; ownChunkTop1Rate = fraction where the anchor chunk itself ranks #1 (expected to be ~1.0 by construction, since cosine(x, x) = 1 is the maximum possible score — this is a sanity floor on the ranking algorithm and corpus integrity, not a measure of live query-embedding quality).",
-  "regressionPolicy": "backend/tests/eval/ragRetrieval.eval.test.ts fails the build if a measured value drops below the corresponding field here, or if the benchmark shrinks below questionCount. Regenerate this file (by hand, reviewed) whenever the benchmark grows or the corpus changes in a way that legitimately moves these numbers — never lower a threshold to make a red build green without recording why in the same PR."
+  "method": "Retrieval metrics cover the 102 corpus-class items only. Each corpus item's anchor-chunk embedding (its own precomputed Titan vector) is used as the query vector into searchCorpusWithEmbedding(topK=3). recallAt3 = fraction of corpus questions where the expected source article appears anywhere in the top 3 results; ownChunkTop1Rate = fraction where the anchor chunk itself ranks #1 (expected to be ~1.0 by construction, since cosine(x, x) = 1 is the maximum possible score — this is a sanity floor on the ranking algorithm and corpus integrity, not a measure of live query-embedding quality). The three adversarial classes (should-refuse / out-of-corpus / household-data) are schema-validated and count-gated but NOT behaviorally scored — grading refusal/abstention/tool-use correctness requires the live generation-layer eval job, which does not exist yet.",
+  "regressionPolicy": "backend/tests/eval/ragRetrieval.eval.test.ts fails the build if a measured value drops below the corresponding field here, if the benchmark shrinks below questionCount, if any class shrinks below its classCounts floor, or if any corpus article falls below perArticleFloor corpus questions. Regenerate this file (by hand, reviewed) whenever the benchmark grows or the corpus changes in a way that legitimately moves these numbers — never lower a threshold to make a red build green without recording why in the same PR."
 }

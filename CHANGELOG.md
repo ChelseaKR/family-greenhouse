@@ -16,6 +16,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- AI-eval benchmark expanded from 22 to 134 items across four labeled
+  behavior classes (102 corpus-anchored real-user questions at 8–10 per
+  article, 12 should-refuse, 10 out-of-corpus/abstain, 10
+  household-data/tool-use), with new CI gates: schema validation,
+  per-article and per-class count floors, and `expectedTools` checked
+  against the live tool registry. Retrieval metrics still use the anchor-
+  chunk-embedding proxy; the adversarial labels are data for the future
+  generation-layer eval and are not yet scored against live model output.
+
 ## [0.22.0] - 2026-07-19
 
 ### Added
