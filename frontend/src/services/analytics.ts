@@ -110,6 +110,7 @@ export type EventName =
   | 'plant_share_accepted' // A shared cutting card was copied into a household.
   | 'cutting_graft_started' // Visitor tapped the graft CTA on a public cutting card.
   | 'household_switched' // User changed active household via the switcher.
+  | 'shared_care_pulse_action' // Dashboard setup action or 30-day dismissal; `context` names the step.
   | 'climate_location_set'
   | 'experiment_viewed'; // A bucketed A/B variant was rendered to the visitor.
 

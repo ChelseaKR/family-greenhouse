@@ -90,7 +90,28 @@ describe('Dashboard integration', () => {
           frequency: 7,
         });
       }),
+      http.get(`${API}/tasks`, () =>
+        HttpResponse.json([
+          {
+            id: 't1',
+            plantId: 'p1',
+            plantName: 'Monstera',
+            type: 'water',
+            nextDue: new Date().toISOString(),
+            frequency: 7,
+          },
+        ])
+      ),
       http.get(`${API}/plants`, () => HttpResponse.json([])),
+      http.get(`${API}/households/hh-1`, () =>
+        HttpResponse.json({
+          id: 'hh-1',
+          name: 'Home',
+          createdAt: '',
+          createdBy: 'u1',
+          members: [{ userId: 'u1', name: 'Chelsea', role: 'admin', joinedAt: '' }],
+        })
+      ),
       http.get(`${API}/households/hh-1/activity`, () => HttpResponse.json([])),
       http.get(`${API}/households/hh-1/climate`, () =>
         HttpResponse.json({ status: 'no_location' })

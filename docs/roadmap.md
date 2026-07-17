@@ -148,6 +148,11 @@ honest record:
   fallback without Bedrock access), surfaced as a dialog on the plant page.
   Cosmetic-grade only, never diagnostic — exactly the line the Y3 theme
   drew.
+- ✅ **Shared-care pulse** — the dashboard now derives four real collaboration
+  milestones (plant, scheduled care, teammate joined, recent care by someone
+  else), points to the next missing action, and gives solo caregivers a gentle
+  30-day device-local dismissal. This is deliberately an activation test for
+  the active-members north-star metric, not another permanent dashboard.
 
 > **Deliberately still OFF:** the beta/monetization flip. Identification
 > metering enforcement, billing enforcement beyond the existing plan caps,
