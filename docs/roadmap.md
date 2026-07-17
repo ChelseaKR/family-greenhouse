@@ -187,9 +187,9 @@ Per `STANDARDS/CI-CD-STANDARD.md` CICD-29, this ledger declares the optional CI 
 | 6: build                                         | Applies (core) | Green, required                                                                                                                                   |
 | 7: Lighthouse (perf + a11y)                      | Applies        | Green, required — now runs automatically whenever `frontend/**` changes (the `skip-lighthouse` label bypass was closed 2026-07-05; see CHANGELOG) |
 | 8: bundle-size, e2e+a11y (Playwright)            | Applies        | Green, required                                                                                                                                   |
-| zizmor (workflow SAST)                           | Applies        | Shipped — `.github/workflows/zizmor.yml`, results upload to code scanning                                                                         |
-| CodeQL                                           | Applies        | Shipped (2026-07-05, PR #177) — `.github/workflows/codeql.yml`; repo is public so this is free                                                    |
-| OpenSSF Scorecard                                | Applies        | Shipped — `.github/workflows/scorecard.yml`, publishes to the public Scorecard API + code scanning                                                |
+| zizmor (workflow SAST)                           | Applies        | Shipped — `.github/workflows/zizmor.yml`, public-repository results upload to code scanning                                                       |
+| CodeQL                                           | Applies        | Shipped (2026-07-05, PR #177) — public-repository uploads restored 2026-07-16 after the temporary private hold                                    |
+| OpenSSF Scorecard                                | Applies        | Shipped — `.github/workflows/scorecard.yml`, public Scorecard publishing resumed with public visibility                                           |
 
 ```
 AI-Evaluation-Standard: APPLIES (tiers: tool-use + RAG, citation/grounding guard, model-card)

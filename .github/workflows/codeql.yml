@@ -1,9 +1,7 @@
 name: CodeQL
 
-# This repository is private and does not have GitHub Advanced Security.
-# CodeQL still runs and preserves its SARIF as a workflow artifact; uploading
-# to the code-scanning API is intentionally disabled because GitHub rejects it
-# without GHAS. Re-enable `upload: always` if GHAS is enabled later.
+# Family Greenhouse is a public repository, so CodeQL uploads findings to the
+# repository's code-scanning view without requiring GitHub Advanced Security.
 on:
   push:
     branches: [main]
@@ -26,8 +24,11 @@ jobs:
     name: CodeQL analysis (javascript-typescript, actions)
     runs-on: ubuntu-latest
     permissions:
+      # Analyze Actions workflows alongside JavaScript/TypeScript sources.
       actions: read
       contents: read
+      # Publish SARIF findings to the public repository's code-scanning view.
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -43,14 +44,4 @@ jobs:
           build-mode: none
 
       - name: Perform CodeQL analysis
-        id: analyze
         uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
-        with:
-          upload: never
-
-      - name: Preserve CodeQL results
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: codeql-sarif
-          path: ${{ steps.analyze.outputs.sarif-output }}
-          retention-days: 14

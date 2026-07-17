@@ -37,6 +37,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   projections only when the active Spaces view is open, adding no migration,
   summary row, background job, or backend authorization surface.
 
+### Security
+
+- Public repository visibility is restored after a clean full-history Gitleaks
+  scan and separate inspection of archived Lambda bundles. GitHub secret
+  scanning, push protection, and private vulnerability reporting are active
+  with no open secret alerts.
+- CodeQL and zizmor again publish findings to the public repository's code
+  scanning view, and OpenSSF Scorecard public publishing resumes. The
+  commercial hold and every runtime signup/payment control remain unchanged.
+
 ## [0.18.0] - 2026-07-16
 
 ### Added

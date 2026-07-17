@@ -196,10 +196,9 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
       - name: Run Gitleaks (license-free CLI, blocking)
-        # The gitleaks-action@v2 wrapper needs a paid GITLEAKS_LICENSE for
-        # private repos. The gitleaks BINARY is MIT-licensed and free, so we
-        # run it directly and let a non-zero exit (leaks found) gate the
-        # build. `--redact` keeps any match out of the public log.
+        # Run the MIT-licensed binary directly so the gate stays independent
+        # of repository visibility and action-wrapper licensing. A non-zero
+        # exit blocks the build; `--redact` keeps any match out of the log.
         env:
           GITLEAKS_VERSION: 8.30.1
         run: |
