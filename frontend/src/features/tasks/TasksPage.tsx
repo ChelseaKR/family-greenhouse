@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CalendarDaysIcon, CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -29,7 +29,7 @@ import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { spaceService } from '@/services/spaceService';
-import { buildCareRoundGroups } from './careRounds';
+import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
 import { TaskLocation } from '@/components/TaskLocation';
 import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 
@@ -76,13 +76,17 @@ export function TasksPage() {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSpaceFilter = searchParams.get('space');
   const [filter, setFilter] = useState<FilterType>('all');
-  const [displayMode, setDisplayMode] = useState<'schedule' | 'round'>('schedule');
+  const [displayMode, setDisplayMode] = useState<'schedule' | 'round'>(() =>
+    requestedSpaceFilter ? 'round' : 'schedule'
+  );
 
   const {
     data: tasks,
-    isLoading,
-    error,
+    isLoading: tasksLoading,
+    error: tasksError,
   } = useQuery({
     queryKey: ['tasks', householdId],
     queryFn: () => taskService.getTasks(),
@@ -102,16 +106,42 @@ export function TasksPage() {
 
   // Plant placement makes rain/frost suggestions specific to where the plant
   // actually lives, rather than relying on a free-form "outdoor" tag.
-  const { data: plants } = useQuery({
+  const {
+    data: plants,
+    isLoading: plantsLoading,
+    error: plantsError,
+  } = useQuery({
     queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
   });
-  const { data: spaces = [] } = useQuery({
+  const {
+    data: spaces = [],
+    isLoading: spacesLoading,
+    error: spacesError,
+  } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
   });
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
   const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+  const activeSpaceFilter =
+    requestedSpaceFilter === 'unplaced' ||
+    (requestedSpaceFilter != null && spacesById.has(requestedSpaceFilter))
+      ? requestedSpaceFilter
+      : null;
+  const activeSpaceName =
+    activeSpaceFilter === 'unplaced'
+      ? t('spaces.unplaced')
+      : activeSpaceFilter
+        ? (spacesById.get(activeSpaceFilter)?.name ?? null)
+        : null;
+  const spaceScopedTasks = useMemo(
+    () => filterTasksForSpace(tasks ?? [], plants ?? [], spaces, activeSpaceFilter),
+    [activeSpaceFilter, plants, spaces, tasks]
+  );
+  const isLoading =
+    tasksLoading || (Boolean(requestedSpaceFilter) && (plantsLoading || spacesLoading));
+  const error = tasksError || (requestedSpaceFilter ? (plantsError ?? spacesError) : null);
 
   const completeTaskMutation = useCompleteTaskMutation(householdId);
 
@@ -137,7 +167,7 @@ export function TasksPage() {
     skipPending: skipMutation.isPending,
   };
 
-  const filteredTasks = tasks?.filter((task) => {
+  const filteredTasks = spaceScopedTasks.filter((task) => {
     switch (filter) {
       case 'mine':
         // Covers vacation hand-off: a task whose assignee is away still
@@ -179,6 +209,38 @@ export function TasksPage() {
         title="Tasks"
         description="Manage your plant care tasks."
       />
+
+      {activeSpaceName && (
+        <Card
+          variant="paper"
+          padding="sm"
+          className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-800">
+              <MapPinIcon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink">
+                {t('spaces.taskFilterTitle', { space: activeSpaceName })}
+              </p>
+              <p className="text-xs text-gray-600">{t('spaces.taskFilterDescription')}</p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.delete('space');
+              setSearchParams(nextParams, { replace: true });
+            }}
+          >
+            {t('spaces.showAllTaskSpaces')}
+          </Button>
+        </Card>
+      )}
 
       <div
         className="inline-flex rounded-lg border border-primary-200/70 bg-paper p-1"
@@ -237,9 +299,9 @@ export function TasksPage() {
             aria-pressed={filter === f.id}
           >
             {f.label}
-            {f.id === 'overdue' && tasks && (
+            {f.id === 'overdue' && (
               <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-accent-100 text-accent-800">
-                {tasks.filter((t) => isOverdue(t.nextDue)).length}
+                {spaceScopedTasks.filter((t) => isOverdue(t.nextDue)).length}
               </span>
             )}
           </button>

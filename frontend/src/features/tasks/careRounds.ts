@@ -46,3 +46,25 @@ export function buildCareRoundGroups(
       a.name.localeCompare(b.name)
   );
 }
+
+/** Scope a task list to one current household space. Missing/deleted space
+ * references intentionally join the explicit Unplaced bucket. */
+export function filterTasksForSpace(
+  tasks: TaskWithCoverage[],
+  plants: Plant[],
+  spaces: PlantSpace[],
+  spaceId: string | null
+): TaskWithCoverage[] {
+  if (!spaceId) return tasks;
+
+  const plantById = new Map(plants.map((plant) => [plant.id, plant]));
+  const knownSpaceIds = new Set(spaces.map((space) => space.id));
+
+  return tasks.filter((task) => {
+    const plantSpaceId = plantById.get(task.plantId)?.spaceId;
+    if (spaceId === 'unplaced') {
+      return !plantSpaceId || !knownSpaceIds.has(plantSpaceId);
+    }
+    return plantSpaceId === spaceId && knownSpaceIds.has(spaceId);
+  });
+}

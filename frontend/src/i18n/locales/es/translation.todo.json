@@ -8,5 +8,5 @@
     "importPlants.submit_many",
     "plants.lineage.childrenCount_many"
   ],
-  "intentionallyEqual": ["common.no", "publicShell.blog"]
+  "intentionallyEqual": ["common.no", "publicShell.blog", "spaces.seasonalMoveSummary"]
 }

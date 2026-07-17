@@ -29,6 +29,7 @@ export interface ProvisionedAccount {
   password: string;
   name: string;
   householdId: string;
+  spaceId?: string;
   plantId?: string;
   taskId?: string;
 }
@@ -41,6 +42,13 @@ export async function provisionAccount(opts: {
   /** Display name; defaults to the seed account's "Test User". */
   name?: string;
   householdName?: string;
+  space?: {
+    name: string;
+    environment: 'inside' | 'outside';
+    rainExposure?: 'exposed' | 'sheltered';
+    lightLevel?: 'low' | 'medium' | 'bright';
+    petAccess?: boolean;
+  };
   plant?: { name: string; species?: string; location?: string; notes?: string };
   /** Requires `plant`. `nextDue` defaults to "now" (today bucket). */
   waterTask?: { frequency?: number; nextDue?: string };
@@ -76,8 +84,17 @@ export async function provisionAccount(opts: {
       householdId: household.id,
     };
 
+    if (opts.space) {
+      res = await api.post(`${API_URL}/spaces`, { headers, data: opts.space });
+      expect(res.status(), 'space creation should succeed').toBe(201);
+      account.spaceId = ((await res.json()) as { id: string }).id;
+    }
+
     if (opts.plant) {
-      res = await api.post(`${API_URL}/plants`, { headers, data: opts.plant });
+      res = await api.post(`${API_URL}/plants`, {
+        headers,
+        data: { ...opts.plant, ...(account.spaceId ? { spaceId: account.spaceId } : {}) },
+      });
       expect(res.status(), 'plant creation should succeed').toBe(201);
       const plant = (await res.json()) as { id: string };
       account.plantId = plant.id;

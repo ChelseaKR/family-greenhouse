@@ -47,6 +47,24 @@ The Tasks page offers two organizations over the same due-work query:
 The route respects the active task filter, so “My tasks” plus “Care round” becomes a personal route
 through the household.
 
+## Operational space overview
+
+The active collection's Spaces view is the household's location-aware care overview. It joins the
+already-fetched plant, space, task, household-member, and latitude projections in the client to show:
+
+- a stable walking order (inside spaces alphabetically, outside spaces alphabetically, then
+  Unplaced);
+- overdue and due-today task counts plus the next care date;
+- recorded light, rain exposure, pet reachability, and usual caregiver context;
+- explicit seasonal-home suggestions for plants that are currently in a different space.
+
+Each card links to `/tasks?space={id}` (or `space=unplaced`). The Tasks page validates the requested
+space against the active household's fetched spaces and filters by each plant's current placement;
+deleted or missing space references join Unplaced. The URL filter composes with the existing task
+filters, completion/claim controls, and care-round organization. The overview adds no summary rows,
+background jobs, or backend authorization surface, and a task-query failure leaves the plant gallery
+usable.
+
 ## Task location visibility
 
 The dashboard and both Tasks organizations resolve each task's plant to its current space at read

@@ -28,6 +28,8 @@ import { BulkApplyTemplateDialog } from './BulkApplyTemplateDialog';
 import { PlantImage } from '@/components/PlantImage';
 import { PlantStatusBadge } from './PlantLineageCard';
 import { spaceService } from '@/services/spaceService';
+import { taskService } from '@/services/taskService';
+import { householdService } from '@/services/householdService';
 import { SpaceBrowseView } from './SpaceBrowseView';
 import { SpaceManagerPanel } from './SpaceManagerPanel';
 import { MovePlantsDialog } from './MovePlantsDialog';
@@ -62,6 +64,21 @@ export function PlantsPage() {
   const { data: spaces = [] } = useQuery({
     queryKey: ['spaces', householdId],
     queryFn: spaceService.getSpaces,
+  });
+  const shouldLoadSpaceOverview = viewMode === 'spaces' && view === 'active';
+  const {
+    data: spaceTasks = [],
+    isLoading: spaceTasksLoading,
+    isError: spaceTasksError,
+  } = useQuery({
+    queryKey: ['tasks', householdId],
+    queryFn: () => taskService.getTasks(),
+    enabled: shouldLoadSpaceOverview,
+  });
+  const { data: overviewHousehold } = useQuery({
+    queryKey: ['household', householdId],
+    queryFn: () => householdService.getHousehold(householdId!),
+    enabled: shouldLoadSpaceOverview && Boolean(householdId),
   });
   const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
 
@@ -327,7 +344,16 @@ export function PlantsPage() {
           ))}
         </div>
       ) : viewMode === 'spaces' ? (
-        <SpaceBrowseView plants={filteredPlants} spaces={spaces} />
+        <SpaceBrowseView
+          plants={filteredPlants}
+          spaces={spaces}
+          tasks={spaceTasks}
+          members={overviewHousehold?.members}
+          latitude={overviewHousehold?.location?.lat}
+          tasksLoading={spaceTasksLoading}
+          tasksError={spaceTasksError}
+          showCareOverview={view === 'active'}
+        />
       ) : (
         <Card variant="paper" padding="none">
           <ul className="divide-y divide-primary-100/60">
