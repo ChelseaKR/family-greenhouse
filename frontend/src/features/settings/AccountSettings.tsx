@@ -134,7 +134,12 @@ export function AccountSettings() {
   });
 
   const passwordMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
-  const canSubmit = !!oldPassword && newPassword.length >= 8 && newPassword === confirmPassword;
+  const passwordMeetsPolicy =
+    newPassword.length >= 12 &&
+    /[A-Z]/.test(newPassword) &&
+    /[a-z]/.test(newPassword) &&
+    /[0-9]/.test(newPassword);
+  const canSubmit = !!oldPassword && passwordMeetsPolicy && newPassword === confirmPassword;
 
   return (
     <div className="space-y-6">
@@ -229,16 +234,17 @@ export function AccountSettings() {
             type="password"
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={12}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            helperText="Minimum 8 characters."
+            helperText="At least 12 characters with uppercase, lowercase, and number."
           />
           <Input
             label="Confirm new password"
             type="password"
             autoComplete="new-password"
             required
+            minLength={12}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             error={passwordMismatch ? 'Passwords do not match.' : undefined}

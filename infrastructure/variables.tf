@@ -20,6 +20,12 @@ variable "project_name" {
   default     = "family-greenhouse"
 }
 
+variable "public_registration_enabled" {
+  description = "Permit Cognito self-signup. Keep false by default; reviewed environment tfvars must opt in explicitly."
+  type        = bool
+  default     = false
+}
+
 variable "domain_name" {
   description = "Email/organizational domain. Also used as the legacy application domain when application_domain is blank."
   type        = string

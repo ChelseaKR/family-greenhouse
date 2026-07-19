@@ -8,6 +8,12 @@ variable "project_name" {
   type        = string
 }
 
+variable "public_registration_enabled" {
+  description = "Permit public Cognito SignUp calls. Defaults closed so every environment must opt in deliberately."
+  type        = bool
+  default     = false
+}
+
 variable "email_identity_arn" {
   description = "SES domain identity ARN. When set, Cognito sends from SES (DEVELOPER mode) instead of the default service mailbox."
   type        = string

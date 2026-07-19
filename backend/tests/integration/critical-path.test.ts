@@ -1,5 +1,5 @@
 /**
- * Critical-path integration test: provisioned user → household → first plant
+ * Critical-path integration test: signup → household → first plant
  * → first task → completion.
  *
  * Asserts the WHOLE flow a new signup walks through. This is the test that
@@ -30,17 +30,19 @@ afterEach(() => {
   console.log = originalLog;
 });
 
-describe('critical path: provision → household → plant → task → complete', () => {
-  it('walks a provisioned user through the whole first-session flow', async () => {
-    // Public signup is closed during the commercial hold. A direct local-only
-    // fixture mirrors Cognito AdminCreateUser used by the deployed smoke test.
-    provisionLocalUserFixture({
-      email: NEW_EMAIL,
-      password: NEW_PASSWORD,
-      name: NEW_NAME,
-    });
+describe('critical path: signup → household → plant → task → complete', () => {
+  it('walks a new user through the whole first-session flow', async () => {
+    const signup = await request(app)
+      .post('/auth/signup')
+      .send({ email: NEW_EMAIL, password: NEW_PASSWORD, name: NEW_NAME });
+    expect(signup.status).toBe(201);
 
-    // 1. Login — user is confirmed but has no household yet.
+    const confirmation = await request(app)
+      .post('/auth/confirm')
+      .send({ email: NEW_EMAIL, code: '123456' });
+    expect(confirmation.status).toBe(200);
+
+    // 1. Login — the confirmed user has no household yet.
     const login = await request(app)
       .post('/auth/login')
       .send({ email: NEW_EMAIL, password: NEW_PASSWORD });

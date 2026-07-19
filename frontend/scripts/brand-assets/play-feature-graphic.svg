@@ -11,7 +11,7 @@
   <circle cx="914" cy="82" r="112" fill="#639922" opacity=".17"/>
 
   <text x="76" y="102" font-family="Instrument Sans, Arial, sans-serif" font-size="19" font-weight="600" letter-spacing="4.5" fill="#97C459">FAMILY GREENHOUSE</text>
-  <text x="74" y="200" font-family="Gloock, Georgia, serif" font-size="62" font-weight="400" fill="#F7F8F2">
+  <text x="74" y="200" font-family="Bitter Variable" font-size="62" font-weight="400" fill="#F7F8F2">
     <tspan x="74" dy="0">Plant care,</tspan>
     <tspan x="74" dy="68">shared.</tspan>
   </text>

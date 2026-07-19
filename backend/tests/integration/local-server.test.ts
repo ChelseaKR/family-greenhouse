@@ -22,7 +22,7 @@ async function loginAsSeed(): Promise<string> {
   return res.body.accessToken as string;
 }
 
-// Direct local fixture → login. Public signup remains closed during the hold.
+// Direct local fixture → login for tests that do not exercise confirmation.
 async function createConfirmedUser(
   email: string,
   password = 'password-123',
@@ -83,21 +83,50 @@ describe('GET /health', () => {
 
 describe('auth routes', () => {
   describe('POST /auth/signup', () => {
-    it('fails closed without creating a user or pending confirmation', async () => {
+    it('creates a pending user without exposing its id', async () => {
       const res = await request(app)
         .post('/auth/signup')
-        .send({ email: 'new@example.com', password: 'password-123', name: 'New User' });
-      expect(res.status).toBe(503);
-      expect(res.body.message).toMatch(/registration.*paused/i);
+        .send({ email: 'new@example.com', password: 'Password1234', name: 'New User' });
+      expect(res.status).toBe(201);
+      expect(res.body.userId).toBeUndefined();
+      expect(typeof res.body.message).toBe('string');
       const created = [...db.users.values()].find((u) => u.email === 'new@example.com');
-      expect(created).toBeUndefined();
-      expect(db.pendingConfirmations.has('new@example.com')).toBe(false);
+      expect(created?.confirmed).toBe(false);
+      expect(db.pendingConfirmations.get('new@example.com')).toBe('123456');
     });
 
-    it('returns the hold response even for malformed acquisition attempts', async () => {
+    it('rejects missing fields with the validation contract', async () => {
       const res = await request(app).post('/auth/signup').send({ email: 'a@b.com' });
-      expect(res.status).toBe(503);
-      expect(res.body.message).toMatch(/registration.*paused/i);
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Validation failed');
+      expect(res.body.details).toHaveProperty('password');
+      expect(res.body.details).toHaveProperty('name');
+    });
+
+    it('rejects passwords below the Cognito 12-character minimum', async () => {
+      const res = await request(app)
+        .post('/auth/signup')
+        .send({ email: 'short@example.com', password: 'Password123', name: 'Shorty' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Validation failed');
+      expect(res.body.details).toHaveProperty('password');
+    });
+
+    it('rejects passwords that do not meet Cognito composition requirements', async () => {
+      const res = await request(app)
+        .post('/auth/signup')
+        .send({ email: 'weak@example.com', password: 'password-123', name: 'Weak Password' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Validation failed');
+      expect(res.body.details).toHaveProperty('password');
+    });
+
+    it('rejects a duplicate email', async () => {
+      const res = await request(app)
+        .post('/auth/signup')
+        .send({ email: SEED_EMAIL, password: 'Password1234', name: 'Duplicate' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('An account with this email already exists');
     });
   });
 
@@ -1442,7 +1471,7 @@ describe('account', () => {
     const res = await request(app)
       .post('/auth/change-password')
       .set('Authorization', `Bearer ${token}`)
-      .send({ oldPassword: 'wrong', newPassword: 'longenoughnewpw' });
+      .send({ oldPassword: 'wrong', newPassword: 'WrongPassword123' });
     expect(res.status).toBe(401);
   });
 

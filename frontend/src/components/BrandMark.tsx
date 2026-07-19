@@ -43,7 +43,7 @@ const SIZE_CLASSES: Record<
  *
  * Brand assets live in `/public/brand/`. The lockup is composed in JSX
  * rather than baked into a single SVG so the type can pick up the
- * Gloock display font and the tagline can use the small-caps
+ * Bitter Variable display font and the tagline can use the small-caps
  * letter-spacing without us shipping a webfont inside the SVG.
  */
 export function BrandMark({

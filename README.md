@@ -10,14 +10,13 @@
 
 **A shared plant-care journal for the whole household** — a collaborative houseplant tracker with per-plant watering schedules, recurring care tasks (water, fertilize, prune…), and reminders that find the right person across browser, email, and SMS, so nobody has to ask "did you water the Monstera?" ever again.
 
-🌿 **Technical demo (no purchases):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
+🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
-> **Commercial activity hold — July 14, 2026.** Family Greenhouse remains a
-> portfolio and technical-demonstration project. It is not currently accepting
-> new account registrations or payments, offering paid plans, conducting launch
-> or customer outreach, or generating revenue. Existing account holders can
-> still sign in. Pricing, billing, launch, and marketing material is kept only
-> as historical product-design documentation. See
+> **Paid activity hold — July 14, 2026; free registration reopened July 19, 2026.**
+> Family Greenhouse accepts free accounts for households with up to 10 plants.
+> It is not currently accepting payments, offering paid plans, or generating
+> revenue. Pricing and billing material is retained as historical product-design
+> documentation. See
 > [`docs/COMMERCIAL-STATUS.md`](docs/COMMERCIAL-STATUS.md).
 
 Built with React + TypeScript on the frontend and AWS Lambda + DynamoDB (single-table) + Cognito on the backend, plus a local Express dev server that mirrors the API surface so you can develop entirely offline — no AWS account or third-party keys required to run it locally.
@@ -116,7 +115,7 @@ This repo is onboarded to the portfolio's `STANDARDS/` (vendored at `docs/standa
 | [Internationalization](docs/standards/INTERNATIONALIZATION-STANDARD.md)         | Applies (opted in — EN/ES)                                                      | Partial — `docs/i18n.md`, EN/ES key/placeholder/plural/TODO gates, UTF-8 validation, and a hardcoded-string ratchet exist; native-speaker sign-off, pseudolocale overflow, RTL logical-property lint, and remaining literal migration remain                              |
 | [AI Evaluation](docs/standards/AI-EVALUATION-STANDARD.md)                       | **Applies** — production Bedrock chat (tool-use + RAG) + leaf-health vision     | **Dated waiver** (expires 2026-10-05) — starter benchmark + live quantitative grounding block + model card; full RAGAS-class metric suite and red-team scan not yet built. Judge calibration remains N/A (no LLM-as-judge is used). See `docs/RESPONSIBLE-TECH-AUDITS.md` |
 | [Documentation](docs/standards/DOCUMENTATION-STANDARD.md)                       | Applies                                                                         | Met for current scope — README declaration, DoD, CHANGELOG, citation metadata, ADRs, API contracts, operational runbooks, and dated audit artifacts are committed and drift-gated where mechanical                                                                        |
-| [Release & Versioning](docs/standards/RELEASE-AND-VERSIONING-STANDARD.md)       | Applies — tagged releases drive prod deploys                                    | Partial — root/workspace versions are aligned at 0.21.0; tag/version and CHANGELOG gates run at the tagged ref. Release SBOM/provenance and blocking signed-tag verification remain open                                                                                  |
+| [Release & Versioning](docs/standards/RELEASE-AND-VERSIONING-STANDARD.md)       | Applies — tagged releases drive prod deploys                                    | Partial — root/workspace versions are aligned at 0.22.0; tag/version and CHANGELOG gates run at the tagged ref. Release SBOM/provenance and blocking signed-tag verification remain open                                                                                  |
 | [Responsible-Tech Framework](docs/standards/RESPONSIBLE-TECH-FRAMEWORK.md)      | Applies (PII + AI)                                                              | Partial — §A–F audit, dated DPIA, AI risk register, model card, EU classification, disclosure, and live grounding/privacy controls are committed; ISO 42001 SoA and a published ACR/VPAT remain gaps                                                                      |
 
 **On partial rows:** the unresolved work is either protected by the dated AI-evaluation waiver, tied to an external production/account/hardware gate, or named in the corresponding audit with a re-open trigger. Historical remediation notes do not override this current declaration.

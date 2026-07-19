@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "Family Greenhouse web app — React + TypeScript + Vite PWA for collaborative household plant care.",
   "license": "Elastic-2.0",
   "type": "module",
@@ -31,6 +31,7 @@
   },
   "_size-limit-note": "Budgets are REGRESSION GATES set ~8% above the current measured size (brotli), not aspirational targets — the old values (40/60/230/10) were below what the app has ever shipped, so the check was permanently red and gated nothing. Trimming the bundle further (the index chunk and Tailwind CSS are the candidates) is tracked as future work for when real-device Lighthouse data shows it matters. Keep these tight: lower them whenever a real reduction lands. Measured with @size-limit/file (brotli) only — the preset-app 'time' plugin ran headless Chrome to estimate JS execution time, gated nothing (no time budgets), and broke CI+local runs with puppeteer navigation timeouts. Vendor budget raised 51 → 64 kB for the React 18 → 19 upgrade: react-dom 19 is ~12 kB (brotli) larger than 18, putting the React runtime chunk at ~59.5 kB measured — a sanctioned, unavoidable dependency increase, not regression drift; 64 kB keeps the usual ~8% headroom. All-JS-combined budget raised 312 → 320 kB when the care-guide content surface grew (six new species pages + two blog posts): the prose lands in the lazy careGuides/BlogPost chunks, so the Initial JS and Vendor budgets are untouched — only the combined aggregate moved, to ~312.4 kB measured. This is sanctioned content growth, not regression drift; 320 kB keeps a tight ~2.5% cushion. All-JS-combined budget raised 320 → 330 kB for the v0.8.0 feature backlog (annual + lifetime billing UI, the no-care-data notice, server-confirmed analytics): the additions land in the lazy billing/settings and feature chunks, so the Initial JS (~60.4 kB) and Vendor budgets keep healthy headroom and only the aggregate moved, to ~320.1 kB measured — sanctioned growth, not regression drift; 330 kB restores a tight ~3% cushion. The v0.15.0 name nursery plus the already-merged React Router 7 runtime moved the measured aggregate to 331 kB while keeping initial JS at 47.3 kB; 340 kB restores a tight 2.7% regression cushion. All-JS-combined raised 340 → 348 kB for the Capacitor mobile shells: the @capacitor/core + push-notifications runtime lands in a lazy chunk that is dynamically imported ONLY inside the iOS/Android apps (web platform detection reads the injected window.Capacitor global precisely so web visitors never fetch it — see src/lib/platform.ts), moving the aggregate to ~337.7 kB measured while Initial JS (48.7 kB) and Vendor budgets are untouched; 348 kB keeps a tight ~3% cushion.",
   "_size-limit-note-0-17": "All-JS-combined raised 348 → 360 kB for the location-aware plant move workflow: the 349.39 kB measured aggregate includes the new 2.71 kB-gzip MovePlantsDialog lazy chunk, while Initial JS (11.88 kB), Vendor (61.32 kB), and CSS (14.59 kB) remain within their existing budgets. The 360 kB limit restores a tight ~3% regression cushion without relaxing any critical-path budget.",
+  "_size-limit-note-0-21": "All-JS-combined raised 360 → 374 kB when free-account registration reopened: the 362.74 kB measured aggregate includes the restored lazy signup flow, confirmation recovery, and localized public acquisition copy. Initial JS (13.61 kB), Vendor (61.26 kB), and CSS (10.04 kB) remain within their existing budgets; only the aggregate moved. The 374 kB limit restores a tight ~3% regression cushion without relaxing a critical-path budget.",
   "size-limit": [
     {
       "name": "Initial JS (brotli)",
@@ -47,7 +48,7 @@
     {
       "name": "All JS combined (brotli)",
       "path": "dist/assets/*.js",
-      "limit": "360 kB",
+      "limit": "374 kB",
       "brotli": true
     },
     {
@@ -62,8 +63,8 @@
     "@capacitor/core": "^8.4.1",
     "@capacitor/ios": "^8.4.1",
     "@capacitor/push-notifications": "^8.1.1",
+    "@fontsource-variable/bitter": "^5.3.0",
     "@fontsource-variable/instrument-sans": "^5.0.10",
-    "@fontsource/gloock": "^5.0.10",
     "@headlessui/react": "^2.0.3",
     "@heroicons/react": "^2.1.3",
     "@sentry/react": "^10.50.0",

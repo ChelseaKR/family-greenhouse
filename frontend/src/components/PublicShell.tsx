@@ -101,7 +101,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
                 </div>
               </details>
               <Link
-                to={PUBLIC_REGISTRATION_AVAILABLE ? '/' : '/login'}
+                to={PUBLIC_REGISTRATION_AVAILABLE ? '/register' : '/login'}
                 className="text-sm font-semibold text-primary-700 hover:text-primary-800 whitespace-nowrap"
               >
                 {PUBLIC_REGISTRATION_AVAILABLE ? t('publicShell.tryApp') : t('auth.signIn')} →
@@ -130,12 +130,9 @@ interface PageIntroProps {
 }
 
 /**
- * Title treatment for public content pages: eyebrow, Gloock serif title
+ * Title treatment for public content pages: eyebrow, Bitter serif title
  * in ink, hand-drawn underline. Mirrors the landing page's SectionHeading
  * and the app's PageHeader so every surface opens the same way.
- *
- * No font-semibold on the title: Gloock ships a single 400 weight, and a
- * bold utility only buys synthetic emboldening that muddies the serifs.
  */
 export function PageIntro({ eyebrow, title, lede, align = 'left' }: PageIntroProps) {
   const centered = align === 'center';

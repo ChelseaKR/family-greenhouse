@@ -102,9 +102,8 @@ export default function RememberingToWater() {
         We built <a href="/">Family Greenhouse</a> because every other plant-care app we tried was
         built for one person, and most plant care happens in households. It does the feedback-loop
         thing (completing a task pushes the next due date forward from now, not from the original
-        schedule), and it lets multiple people see and act on the same plant list. The hosted site
-        is currently a technical demonstration with new account registration paused; the spreadsheet
-        still beats the sticky note.
+        schedule), and it lets multiple people see and act on the same plant list. It is free for
+        households with up to 10 plants; the spreadsheet still beats the sticky note.
       </p>
     </article>
   );

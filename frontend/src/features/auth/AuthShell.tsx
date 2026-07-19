@@ -13,7 +13,7 @@ interface AuthShellProps {
 /**
  * Shared chrome for sign-in / register / forgot-password / reset /
  * confirm pages. Replaces the prior `bg-gray-50` + bold sans-serif title
- * pattern with the warm paper background, Gloock serif title, and
+ * pattern with the warm paper background, Bitter serif title, and
  * hand-drawn underline that matches the rest of the journal aesthetic.
  *
  * The botanical sprigs anchor the page corners on desktop and fade on

@@ -13,10 +13,10 @@ import { AuthShell } from './AuthShell';
 
 const resetPasswordSchema = z
   .object({
-    code: z.string().length(6, 'Reset code must be 6 digits'),
+    code: z.string().regex(/^\d{6}$/, 'Reset code must be 6 digits'),
     newPassword: z
       .string()
-      .min(8, 'Password must be at least 8 characters')
+      .min(12, 'Password must be at least 12 characters')
       .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
       .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
       .regex(/[0-9]/, 'Password must contain at least one number'),
@@ -125,9 +125,10 @@ export function ResetPasswordPage() {
           label="New password"
           type="password"
           autoComplete="new-password"
+          minLength={12}
           required
           error={errors.newPassword?.message}
-          helperText="At least 8 characters with uppercase, lowercase, and number"
+          helperText="At least 12 characters with uppercase, lowercase, and number"
           {...register('newPassword')}
         />
 
@@ -135,6 +136,7 @@ export function ResetPasswordPage() {
           label="Confirm new password"
           type="password"
           autoComplete="new-password"
+          minLength={12}
           required
           error={errors.confirmPassword?.message}
           {...register('confirmPassword')}

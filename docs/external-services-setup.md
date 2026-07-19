@@ -58,7 +58,10 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
 
 **What we use it for:** `POST /billing/checkout` for plan upgrades, `POST /billing/webhook` for subscription state updates, `POST /billing/portal` for self-service management.
 
-**Currently:** the entire payment surface is hidden by the `VITE_BETA_MODE=true` flag (see `frontend/src/lib/betaMode.ts`). Pricing cards say "Free during beta" and the upgrade buttons are disabled. Wire Stripe before you flip beta mode off, OR users will see live pricing buttons that 500 on click.
+**Currently:** paid activity is disabled by the shared commercial-status hold,
+the absence of `PAYMENTS_ENABLED=1`, blank production price IDs, and hidden paid
+controls. `VITE_BETA_MODE` is presentation-only and is not a commerce safety
+gate. See `docs/COMMERCIAL-STATUS.md` before changing any of these controls.
 
 ### Setup (test mode first)
 
@@ -93,7 +96,10 @@ When you're ready to actually charge:
 
 1. Repeat steps 3–5 in Stripe **live mode** (different products + webhook URL + secrets).
 2. Swap the tfvars to the live keys.
-3. Flip `VITE_BETA_MODE=false` in the production frontend build env. The pricing UI un-hides.
+3. Complete the separately approved paid-hold exit in
+   `docs/COMMERCIAL-STATUS.md`: update the dated status, wire the exact runtime
+   gate, confirm live-mode prices, restore paid controls, and deploy through a
+   reviewed non-production test first.
 4. **Tax**: configure registrations in Stripe Tax, assign the appropriate SaaS tax code to each product, then set `stripe_automatic_tax_enabled = "1"`. Checkout will collect the minimum billing-address fields required and save refreshed addresses for returning customers. Do not flip this flag before the Stripe-side tax setup is complete.
 
 ### Checkout reliability and webhook checks

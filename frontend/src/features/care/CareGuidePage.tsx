@@ -1,7 +1,7 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { buttonStyles } from '@/components/buttonStyles';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
 import { SunGlowIcon } from '@/components/icons/SunGlowIcon';
 import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
@@ -9,6 +9,7 @@ import { MistLeafIcon } from '@/components/icons/MistLeafIcon';
 import { PawLeafIcon } from '@/components/icons/PawLeafIcon';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
 
 const SITE = SITE_URL;
@@ -191,7 +192,21 @@ export function CareGuidePage() {
         </dl>
       </article>
 
-      <CommercialHoldNotice compact className="mt-16" />
+      {PUBLIC_REGISTRATION_AVAILABLE && (
+        <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
+          <p className="font-serif text-xl text-ink">Stop guessing when you watered it</p>
+          <p className="mt-2 text-sm text-gray-600">
+            Family Greenhouse tracks your {guide.commonName.toLowerCase()}’s schedule and reminds
+            the right person — so “I thought you watered it” stops being a thing. Free for up to 10
+            plants, no card.
+          </p>
+          <div className="mt-4">
+            <Link to="/register" className={buttonStyles()}>
+              Add your {guide.commonName.toLowerCase()}
+            </Link>
+          </div>
+        </aside>
+      )}
 
       {related.length > 0 && (
         <section className="mt-16">

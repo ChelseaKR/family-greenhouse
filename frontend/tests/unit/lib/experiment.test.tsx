@@ -69,8 +69,8 @@ describe('LandingPage renders both hero variants', () => {
     localStorage.setItem(KEY, '0.2');
     renderLanding();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('I thought');
-    expect(document.querySelector('a[href^="/register"]')).toBeNull();
-    expect(screen.getAllByText(/new account registration.*paused/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /sign up free/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/ask the care assistant/i)).not.toBeInTheDocument();
   });
 
   it('renders the solo-first (B) hero', () => {
@@ -78,7 +78,6 @@ describe('LandingPage renders both hero variants', () => {
     renderLanding();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Keep');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('plant alive');
-    expect(document.querySelector('a[href^="/register"]')).toBeNull();
-    expect(screen.getAllByText(/new account registration.*paused/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /sign up free/i }).length).toBeGreaterThan(0);
   });
 });

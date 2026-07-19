@@ -19,11 +19,22 @@ function renderLogin(entry = '/login') {
 }
 
 describe('LoginPage', () => {
-  it('keeps existing-account login while exposing no registration link', () => {
+  it('keeps existing-account login and links to free registration', () => {
     renderLogin();
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
-    expect(document.querySelector('a[href^="/register"]')).toBeNull();
-    expect(screen.getByRole('link', { name: /demo status/i })).toHaveAttribute('href', '/pricing');
+    expect(screen.getByRole('link', { name: /sign up free/i })).toHaveAttribute(
+      'href',
+      '/register'
+    );
+  });
+
+  it('keeps deep-link intent when switching from login to registration', () => {
+    renderLogin('/login?redirect=/join/code-1');
+
+    expect(screen.getByRole('link', { name: /sign up free/i })).toHaveAttribute(
+      'href',
+      '/register?redirect=%2Fjoin%2Fcode-1'
+    );
   });
 
   it('rejects invalid emails before submission', async () => {
@@ -61,17 +72,19 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Shared Cutting Page')).toBeInTheDocument();
   });
 
-  it('ignores an off-origin ?redirect (open-redirect guard)', async () => {
-    server.use(handlers.authLoginOk);
-    const user = userEvent.setup();
-    renderLogin('/login?redirect=//evil.example.com');
-    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-    await user.type(screen.getByLabelText(/password/i), 'password123');
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
+  it.each(['//evil.example.com', '/%5Cevil.example.com', '/%255Cevil.example.com'])(
+    'ignores an off-origin or backslash ?redirect: %s',
+    async (redirect) => {
+      server.use(handlers.authLoginOk);
+      const user = userEvent.setup();
+      renderLogin(`/login?redirect=${redirect}`);
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-    // Falls back to the dashboard rather than honoring the protocol-relative URL.
-    expect(await screen.findByText('Dashboard Page')).toBeInTheDocument();
-  });
+      expect(await screen.findByText('Dashboard Page')).toBeInTheDocument();
+    }
+  );
 
   it('shows error message on bad credentials', async () => {
     server.use(handlers.authLoginOk);

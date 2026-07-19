@@ -8,7 +8,7 @@ interface CommercialHoldNoticeProps {
   compact?: boolean;
 }
 
-/** Neutral, shared public status notice used in place of acquisition controls. */
+/** Neutral status notice used where paid-plan controls would otherwise appear. */
 export function CommercialHoldNotice({ className, compact = false }: CommercialHoldNoticeProps) {
   const { t } = useTranslation();
   const titleId = useId();

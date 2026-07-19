@@ -176,14 +176,14 @@
   "publicShell": {
     "careGuides": "Care guides",
     "blog": "Blog",
-    "pricing": "Demo status",
+    "pricing": "Plans",
     "openMenu": "Open site menu",
     "tryApp": "Try the app"
   },
   "commercialHold": {
-    "statusLabel": "Technical demo status",
-    "headline": "New registration and commercial activity are paused",
-    "message": "Commercial activity, new account registration, and payment collection are paused. This remains a technical demonstration; new signups, paid plans, purchases, and plan changes are unavailable. Existing account holders can still sign in.",
+    "statusLabel": "Commercial status",
+    "headline": "Paid plans are paused",
+    "message": "Free account registration is open. Paid plans, payment collection, purchases, upgrades, and plan changes remain unavailable.",
     "effectiveDate": "Commercial hold effective {{date}}."
   },
   "auth": {
@@ -194,7 +194,59 @@
     "password": "Password",
     "forgotPassword": "Forgot your password?",
     "invalidEmail": "Please enter a valid email address",
-    "passwordRequired": "Password is required"
+    "passwordRequired": "Password is required",
+    "signUpFree": "Sign up free",
+    "createAccount": "Create account",
+    "goToRegistration": "Go to registration",
+    "signUpTitle": "Sign up",
+    "registerTitle": "Start your greenhouse",
+    "registerSubtitle": "Free for up to 10 plants and 6 household members. No credit card.",
+    "fullName": "Full name",
+    "confirmPassword": "Confirm password",
+    "nameMin": "Name must be at least 2 characters",
+    "nameMax": "Name must be 100 characters or fewer",
+    "passwordMin": "Password must be at least 12 characters",
+    "passwordUppercase": "Password must contain at least one uppercase letter",
+    "passwordLowercase": "Password must contain at least one lowercase letter",
+    "passwordNumber": "Password must contain at least one number",
+    "passwordMismatch": "Passwords don't match",
+    "passwordHelper": "At least 12 characters with uppercase, lowercase, and number",
+    "noAccount": "Don’t have an account?",
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to tend to your greenhouse.",
+    "emailConfirmed": "Email confirmed — sign in to finish setting up your greenhouse.",
+    "registrationPausedTitle": "New account registration is paused",
+    "registrationPausedSubtitle": "Existing account holders can still sign in.",
+    "registrationPausedMessage": "Free account registration is currently paused. Existing account holders can still sign in.",
+    "confirmRecoveryTitle": "Continue email confirmation",
+    "confirmRecoverySubtitle": "Enter your signup email and we’ll send a fresh confirmation code.",
+    "resendConfirmation": "Send confirmation code",
+    "confirmDocumentTitle": "Confirm email",
+    "confirmTitle": "Confirm your email",
+    "confirmSentTo": "We sent a confirmation code to",
+    "confirmationCode": "Confirmation code",
+    "confirmationCodeLength": "Confirmation code must be 6 digits",
+    "confirmationCodeHelper": "Enter the 6-digit code from your email",
+    "confirmEmailButton": "Confirm email",
+    "resendPrompt": "Didn’t receive the code?",
+    "resendCode": "Resend code",
+    "confirmationResent": "A new confirmation code was sent. Check your email.",
+    "sending": "Sending…"
+  },
+  "joinInvite": {
+    "signInOrCreate": "Please sign in or create an account to accept this invitation.",
+    "signInExisting": "Please sign in with an existing account to accept this invitation."
+  },
+  "pricingStatus": {
+    "freeAccountQuestion": "Can I create an account?",
+    "freeAccountAnswer": "Yes. Free accounts support up to 10 plants and 6 household members without a credit card."
+  },
+  "petSafeSignup": {
+    "title": "Keeping a pet-safe home is easier when everyone’s on the same page",
+    "body": "Family Greenhouse keeps your plants, their care, and who’s looking after what in one shared place — so the whole household knows which plants to keep out of reach. Free to start, no card needed.",
+    "cta": "Get started",
+    "browsePrompt": "Just browsing? Read our",
+    "careGuides": "plant care guides"
   },
   "plants": {
     "title": "Plants",
@@ -330,6 +382,8 @@
       "added": "{{name}} added to your greenhouse",
       "graftHeading": "Start its next chapter",
       "graftBody": "Grow your own cutting from {{name}} and keep its story going in your greenhouse.",
+      "graftCta": "Grow your own cutting",
+      "signInPrompt": "Already have an account?",
       "signIn": "Sign in",
       "needHousehold": "Create or join a household first to grow this cutting.",
       "goToOnboarding": "Set up my household",
@@ -377,7 +431,7 @@
       "skipped_one": "1 row skipped",
       "skippedRowsTitle": "Skipped rows",
       "skippedRowLabel": "Row {{row}} — {{name}}",
-      "planLimit": "You reached your current demo plan’s plant limit, so the remaining rows were skipped. Plan changes are paused.",
+      "planLimit": "You reached your current plan’s plant limit, so the remaining rows were skipped. Paid plan changes are paused.",
       "viewPlants": "View my plants"
     }
   },

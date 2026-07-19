@@ -229,7 +229,11 @@ curl -fsSL https://api.family-greenhouse.example.com/health
 # {"status":"ok"}
 ```
 
-CI runs Playwright e2e against staging on every staging deploy. There is no equivalent against production by design — we don't want test users polluting the real database.
+CI runs Playwright e2e against staging and a focused smoke suite after every
+production deploy. The production suite creates unique disposable Cognito users,
+verifies public signup reaches the confirmation-ready state, exercises the
+authenticated critical path with a separate confirmed fixture, and deletes the
+users plus smoke-created household rows during teardown.
 
 ## Costs roughly
 

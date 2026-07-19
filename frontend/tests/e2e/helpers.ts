@@ -12,8 +12,8 @@ import { expect, request as playwrightRequest, Page } from '@playwright/test';
  *    completing the seeded water task in one project breaks another
  *    project's "task is due today" assertion. `provisionAccount` gives a
  *    spec its own directly provisioned local-only user + household (+ optional
- *    plant and water task) so mutations stay isolated without reopening the
- *    public signup route during the commercial hold.
+ *    plant and water task) so mutations stay isolated without repeating the
+ *    email-confirmation flow in every unrelated spec.
  *
  * 2. **Mobile navigation.** On mobile viewports the sidebar nav links sit
  *    behind the "Open sidebar" hamburger, so a bare
@@ -57,7 +57,7 @@ export async function provisionAccount(opts: {
     Math.random() * 1e6
   )}`;
   const email = `${opts.emailPrefix}-${unique}@example.com`;
-  const password = 'password123';
+  const password = 'Password1234';
   const name = opts.name ?? 'Test User';
 
   const api = await playwrightRequest.newContext();

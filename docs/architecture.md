@@ -41,7 +41,7 @@ The frontend never talks to AWS services directly — every read/write goes thro
 ```
 backend/src/
 ├── handlers/        # one folder per resource; each exports the Lambda entry points
-│   ├── auth/        held signup, login, confirm, refresh, forgot/reset password, resend code
+│   ├── auth/        free signup, login, confirm, refresh, forgot/reset password, resend code
 │   ├── households/  create/get, members, invites, role updates, activity
 │   ├── plants/      CRUD + image upload-url + confirm + identify
 │   ├── tasks/       CRUD + complete + snooze
@@ -112,8 +112,9 @@ Service-level guarantees:
 
 ## Auth flow
 
-1. During the commercial hold, public signup returns `503` before Cognito and
-   the pool independently permits administrator-created users only.
+1. Public signup is open only when the shared status explicitly enables it;
+   Cognito self-signup is enabled for free accounts and the API remains
+   independently rate-limited.
 2. An already-pending user can still confirm email through Cognito
    `ConfirmSignUpCommand`; existing users continue through login/recovery.
 3. User logs in → Cognito `InitiateAuthCommand` returns access + refresh + ID tokens

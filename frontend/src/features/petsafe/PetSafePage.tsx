@@ -6,7 +6,9 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { useDebounce } from '@/hooks/useDebounce';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
  * Free, no-signup "Is this plant safe for pets?" checker. A top-of-funnel
@@ -19,6 +21,7 @@ import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
  * No PII, no auth, read-only.
  */
 export function PetSafePage() {
+  const { t } = useTranslation();
   useMetaTags({
     title: 'Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker',
     description:
@@ -139,7 +142,27 @@ export function PetSafePage() {
         </p>
       </aside>
 
-      <CommercialHoldNotice compact className="mt-16" />
+      {PUBLIC_REGISTRATION_AVAILABLE && (
+        <section className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
+          <h2 className="font-serif text-xl text-ink">{t('petSafeSignup.title')}</h2>
+          <p className="mt-2 text-sm text-gray-600">{t('petSafeSignup.body')}</p>
+          <div className="mt-4">
+            <Link
+              to="/register"
+              className="inline-flex items-center rounded-md bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 min-h-touch"
+            >
+              {t('petSafeSignup.cta')}
+            </Link>
+            <p className="mt-3 text-xs text-gray-600">
+              {t('petSafeSignup.browsePrompt')}{' '}
+              <Link to="/care" className="text-primary-700 underline hover:text-primary-800">
+                {t('petSafeSignup.careGuides')}
+              </Link>
+              .
+            </p>
+          </div>
+        </section>
+      )}
     </PublicShell>
   );
 }

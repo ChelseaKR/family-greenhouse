@@ -33,6 +33,29 @@ const CATEGORY_STYLES: Record<Category, string> = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-07-19',
+    category: 'Feature',
+    title: 'Free accounts are open again',
+    body: (
+      <>
+        New households can sign up for the free Seedling plan again: up to 10 plants and 6 members,
+        with no credit card. Paid plans, purchases, upgrades, and plan changes remain paused.
+      </>
+    ),
+  },
+  {
+    date: '2026-07-19',
+    category: 'Design',
+    title: 'A new serif and a quieter landing page',
+    body: (
+      <>
+        Bitter now carries headlines and the wordmark across the site and exported brand artwork.
+        The landing page also loses its illustrated background and decorative sprig dividers for a
+        calmer, flatter presentation.
+      </>
+    ),
+  },
+  {
     date: '2026-07-04',
     category: 'Design',
     title: 'The reading room joins the greenhouse',

@@ -9,13 +9,13 @@ export const COMMERCIAL_HOLD_ACTIVE = status.commercialHoldActive === true;
 export const COMMERCIAL_HOLD_EFFECTIVE_DATE = status.effectiveDate;
 export const COMMERCIAL_HOLD_MESSAGE = status.publicMessage;
 
-/** Public self-registration is allowed only after an explicit inactive hold. */
-export function isPublicRegistrationAllowed(commercialHoldActive: unknown): boolean {
-  return commercialHoldActive === false;
+/** Public self-registration is fail-closed and requires an exact boolean true. */
+export function isPublicRegistrationAllowed(publicRegistrationAvailable: unknown): boolean {
+  return publicRegistrationAvailable === true;
 }
 
 export function publicRegistrationIsAvailable(): boolean {
-  return isPublicRegistrationAllowed(status.commercialHoldActive);
+  return isPublicRegistrationAllowed(status.publicRegistrationAvailable);
 }
 
 /**

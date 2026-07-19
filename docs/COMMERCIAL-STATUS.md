@@ -1,80 +1,60 @@
 # Commercial status
 
-**Effective date:** July 14, 2026
-**Status:** New account registration, commercial activity, and payment collection paused
+**Paid-activity hold effective:** July 14, 2026
 
-Family Greenhouse remains available as a portfolio project, technical demo, and
-software-development artifact. Nothing in this repository or its demo is a
-current paid offer, launch campaign, customer solicitation, statement of paid
-adoption, or representation that revenue is being earned.
+**Free registration reopened:** July 19, 2026
+**Status:** Free accounts open; paid plans and payment collection paused
 
-## Repository visibility
+Family Greenhouse accepts free accounts for households with up to 10 plants.
+No credit card is required. The hosted app does not currently offer paid plans,
+collect payments, create purchases, process upgrades, or allow plan changes.
 
-The source repository and its Git history are public portfolio artifacts.
-Historical commits and retained design documents may contain superseded
-pricing, launch, or customer-acquisition hypotheses; they are not current
-offers and must be read with this dated status record. Repository visibility
-does not change production authorization, expose household data, or relax any
-commercial-hold control.
+The source repository and its history remain public portfolio artifacts.
+Historical pricing, launch, and customer-acquisition documents are design
+hypotheses, not current offers or evidence of revenue.
 
-Before restoring public visibility on July 16, 2026, the complete Git history
-was scanned for secrets, archived Lambda bundles were inspected separately,
-and GitHub secret scanning plus push protection were verified active. Public
-browser configuration such as the API endpoint and Cognito client identifiers
-remains intentionally reproducible; credentials and customer data do not
-belong in this repository.
+## Current controls
 
-## Controls currently in place
+- [`commercial-status.json`](../commercial-status.json) is the shared status
+  source imported by the frontend and backend. Registration is available only
+  when `publicRegistrationAvailable` is exactly `true`; the paid-activity hold
+  remains independently active.
+- The `/register` route and public acquisition links offer the Seedling free
+  account. `POST /auth/signup` validates the 12-character Cognito password
+  policy (uppercase, lowercase, and digit), is rate-limited, and creates an
+  unconfirmed user who must verify their email.
+- Cognito explicitly permits public self-signup
+  (`allow_admin_create_user_only = false`). This is an in-place user-pool policy
+  change, not a pool replacement.
+- Public plan surfaces expose no paid prices, billing intervals, purchase or
+  upgrade controls, or customer-portal controls while the hold is active.
+- `GET /billing/plans` reports `paymentsAvailable: false` and omits monthly,
+  annual, and lifetime price fields.
+- Checkout and customer-portal creation fail before configuration, database,
+  or Stripe access unless the paid hold is inactive **and** the runtime
+  `PAYMENTS_ENABLED` value is exactly `1`. Repository infrastructure does not
+  provide that variable, production price IDs remain blank, and
+  `stripe_price_ids_are_live` remains false.
+- The paid hold does not gate Stripe webhook verification for already-originated
+  events such as subscription cancellation; it cannot originate a new Checkout
+  or portal session.
 
-- [`commercial-status.json`](../commercial-status.json) is the single shared
-  status source imported by the frontend and backend. It keeps the commercial
-  hold active and gives this notice its effective date.
-- Public plan surfaces contain no pricing amounts, billing intervals, purchase
-  buttons, paid-plan registration links, upgrade controls, or customer-portal
-  controls while the hold is active.
-- Public landing, blog, care, pet-safety, invite, shared-plant, login, and
-  confirmation surfaces contain no new-account acquisition controls. The
-  stable `/register` route renders the shared status notice and an
-  existing-account sign-in link, with no form or mutation.
-- `POST /auth/signup` returns `503` before any Cognito request. The local server
-  has the same public behavior; deterministic browser fixtures use a separate,
-  exact-opt-in, non-deployed test endpoint rather than weakening that route.
-- Cognito sets `allow_admin_create_user_only = true`, so direct `SignUp` calls
-  are rejected at the identity boundary. Existing login, token refresh,
-  password recovery, confirmation/resend for already-pending accounts, and
-  administrator-created smoke-test users remain available.
-- `GET /billing/plans` explicitly reports `paymentsAvailable: false` and omits
-  monthly, annual, and lifetime price fields.
-- Checkout and customer-portal session creation both fail before configuration,
-  database, or Stripe access unless the shared hold is inactive **and** the
-  runtime `PAYMENTS_ENABLED` value is exactly `1`. Repository infrastructure
-  intentionally does not supply that variable.
-- The commercial hold does not gate Stripe webhook code. In an environment
-  with valid signature-verification configuration, it may process only
-  already-originated events, including subscription cancellation state; it
-  cannot create a new Checkout or customer-portal session.
-- Evidence snapshot verified July 14, 2026: repository and `production`
-  environment secret listings contained no `STRIPE_*` secret names; committed
-  production price IDs were blank; and `stripe_price_ids_are_live` was false.
-  Re-verify external secret/configuration state before every deployment rather
-  than treating this dated observation as permanent.
-- Stripe secrets, if used in future test work, must remain outside Git and must
-  never be live-mode credentials while this hold is active.
+## Closing registration again
 
-The customer-acquisition steps, launch calendar, pricing, plan economics, and
-billing setup in other documents are historical design hypotheses. Do not use
-them for outreach, accept payment, provision a paid account, quote a price,
-create a live Stripe product, or claim customers, subscriptions, sales, or
-revenue.
+Set `publicRegistrationAvailable` to `false`, deploy the backend before removing
+public signup controls, and set Terraform's `public_registration_enabled` to
+`false` so Cognito applies `allow_admin_create_user_only = true`. Keeping an
+application gate and an identity-boundary gate makes a future pause deliberate
+and fail-closed. The Cognito app-client ID is necessarily public, so direct
+Cognito `SignUp` calls bypass the hosted API gate and its per-container limiter
+while pool self-signup is open; the Terraform policy is the authoritative
+emergency-stop control.
 
-## Ending the hold
+## Ending the paid-activity hold
 
-Removing this notice does not enable payments. A future reactivation requires a
-new dated written status decision, review of ownership and outside-activity
-constraints, privacy/security and tax review, an explicit change to
-`commercial-status.json`, reviewed restoration of registration and public
-purchase UI, removal of the backend signup gate, a reviewed in-place Cognito
-policy update with **no user-pool replacement**, explicit infrastructure wiring
-for `PAYMENTS_ENABLED`, new price configuration, fresh non-production tests,
-and a separately approved production deployment. Live secrets must remain in a
-secret store and must never be committed.
+Free registration does not enable payments. Restoring paid activity requires a
+new dated status decision, ownership/outside-activity review, privacy/security
+and tax review, explicit `PAYMENTS_ENABLED` infrastructure wiring, reviewed
+price configuration, fresh non-production tests, restored paid-plan UI, and a
+separately approved production deployment. Live secrets must remain in a secret
+store and must never be committed.

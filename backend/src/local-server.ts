@@ -23,6 +23,7 @@ import {
   forgotPasswordSchema,
   resendCodeSchema,
   resetPasswordSchema,
+  cognitoPasswordSchema,
   refreshTokenSchema,
   createHouseholdSchema,
   updateMemberRoleSchema,
@@ -50,6 +51,7 @@ import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
   paymentsAreAvailable,
+  publicRegistrationIsAvailable,
 } from './config/commercialStatus.js';
 
 // Hard refusal to boot in production — this server has no real auth, no
@@ -475,9 +477,8 @@ function findUserByEmail(email: string): User | undefined {
 }
 
 /**
- * Direct local fixture helper. Public `/auth/signup` remains closed during the
- * commercial hold; integration tests use this in-process helper, and browser
- * tests use the explicitly enabled `__test__` endpoint below.
+ * Direct local fixture helper. Integration tests use this in-process helper,
+ * and browser tests use the explicitly enabled `__test__` endpoint below.
  */
 export function provisionLocalUserFixture({
   email,
@@ -701,8 +702,28 @@ app.post('/telemetry/product', authMiddleware, validateBody(productTelemetrySche
 
 // ============ AUTH ROUTES ============
 
-app.post('/auth/signup', (_req, res) => {
-  res.status(503).json({ message: 'New account registration is currently paused.' });
+app.post('/auth/signup', validateBody(signupSchema), (req, res) => {
+  if (!publicRegistrationIsAvailable()) {
+    return res.status(503).json({ message: 'New account registration is currently paused.' });
+  }
+
+  const { email, password, name } = (req as any).validatedBody;
+
+  try {
+    provisionLocalUserFixture({ email, password, name, confirmed: false });
+  } catch (error) {
+    return res.status(400).json({ message: (error as Error).message });
+  }
+
+  console.log('\n========================================');
+  console.log('NEW USER SIGNUP');
+  console.log(`Email: ${email}`);
+  console.log('Confirmation Code: 123456');
+  console.log('========================================\n');
+
+  return res.status(201).json({
+    message: 'User created. Please check your email for confirmation code.',
+  });
 });
 
 // Browser-test fixture provisioning is intentionally separate from the public
@@ -1028,7 +1049,7 @@ app.patch('/auth/me', authMiddleware, validateBody(updateProfileSchema), (req, r
 // Mirrors changePasswordSchema in handlers/auth/handler.ts.
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(1),
-  newPassword: z.string().min(8),
+  newPassword: cognitoPasswordSchema,
 });
 
 app.post(
@@ -1668,7 +1689,7 @@ app.post(
     );
     if (existing.length >= plan.maxPlants) {
       return res.status(402).json({
-        message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`,
+        message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`,
       });
     }
 
@@ -1788,7 +1809,7 @@ app.post(
 
     const h = db.households.get(user.householdId);
     const plan = PLANS[h?.planId ?? 'seedling'];
-    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to import more.`;
+    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive existing plants before importing more.`;
 
     const results: Array<{
       index: number;
@@ -2477,7 +2498,7 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
   );
   if (existing.length >= plan.maxPlants) {
     return res.status(402).json({
-      message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`,
+      message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`,
     });
   }
 

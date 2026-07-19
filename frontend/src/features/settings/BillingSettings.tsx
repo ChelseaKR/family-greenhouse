@@ -49,7 +49,7 @@ export function BillingSettings() {
       <Alert variant="info" className="flex items-start gap-3">
         <SparklesIcon className="h-5 w-5 flex-shrink-0 mt-0.5 text-primary-700" />
         <div>
-          <p className="font-semibold">Technical demo — plan changes paused</p>
+          <p className="font-semibold">Paid plan changes are paused</p>
           <p className="mt-1 text-sm">{t('commercialHold.message')}</p>
           {COMMERCIAL_HOLD_ACTIVE && (
             <p className="mt-1 text-xs text-gray-600">
@@ -59,7 +59,7 @@ export function BillingSettings() {
         </div>
       </Alert>
       <Card>
-        <CardHeader title="Plan status" description="View your household's current demo limits." />
+        <CardHeader title="Plan status" description="View your household's current plan limits." />
         {overLimit && (
           <Alert variant="warning" title={t('settings.billing.overLimitTitle')} className="mb-4">
             <p>{t('settings.billing.overLimitBody')}</p>
@@ -79,7 +79,7 @@ export function BillingSettings() {
         )}
         {!paymentsAvailable && (
           <p className="mt-4 text-sm text-gray-600">
-            No purchase, upgrade, or billing-management action is available from this demo.
+            No purchase, upgrade, or billing-management action is currently available.
           </p>
         )}
       </Card>

@@ -12,7 +12,9 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { AuthShell } from './AuthShell';
+import { safeAppRedirect } from './safeRedirect';
 
 // Built per-render from the active locale so validation messages are
 // translated (zod resolves the message at schema-construction time, so the
@@ -27,8 +29,8 @@ const makeLoginSchema = (t: TFunction) =>
 type LoginFormData = z.infer<ReturnType<typeof makeLoginSchema>>;
 
 export function LoginPage() {
-  useDocumentTitle('Sign in');
   const { t } = useTranslation();
+  useDocumentTitle(t('auth.signInButton'));
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -40,11 +42,12 @@ export function LoginPage() {
   // ProtectedRoute's saved location, then the dashboard. Only same-origin
   // app paths are honored — guard against open-redirects.
   const redirectParam = searchParams.get('redirect');
-  const safeRedirect = redirectParam?.startsWith('/') && !redirectParam.startsWith('//');
-  const from =
-    (safeRedirect ? redirectParam : null) ??
-    (location.state as { from?: { pathname: string } })?.from?.pathname ??
-    '/dashboard';
+  const safeRedirect = safeAppRedirect(redirectParam);
+  const stateFrom = (location.state as { from?: { pathname?: string } })?.from?.pathname;
+  const safeStateFrom = safeAppRedirect(stateFrom);
+  const from = safeRedirect ?? safeStateFrom ?? '/dashboard';
+  const signupHref =
+    from !== '/dashboard' ? `/register?redirect=${encodeURIComponent(from)}` : '/register';
   const loginSchema = useMemo(() => makeLoginSchema(t), [t]);
 
   // After email confirmation the confirm page sends the user here with their
@@ -79,15 +82,19 @@ export function LoginPage() {
 
   return (
     <AuthShell
-      title="Welcome back"
-      subtitle="Sign in to tend to your greenhouse."
+      title={t('auth.loginTitle')}
+      subtitle={t('auth.loginSubtitle')}
       footer={
-        <>
-          New account registration is paused.{' '}
-          <Link to="/pricing" className="font-medium text-primary-700 hover:text-primary-600">
-            View demo status
-          </Link>
-        </>
+        PUBLIC_REGISTRATION_AVAILABLE ? (
+          <>
+            {t('auth.noAccount')}{' '}
+            <Link to={signupHref} className="font-medium text-primary-700 hover:text-primary-600">
+              {t('auth.signUpFree')}
+            </Link>
+          </>
+        ) : (
+          <>{t('auth.registrationPausedMessage')}</>
+        )
       }
     >
       {error && (
@@ -97,13 +104,13 @@ export function LoginPage() {
       )}
       {confirmState?.justConfirmed && !error && (
         <Alert variant="success" className="mb-6">
-          Email confirmed — sign in to finish setting up your greenhouse.
+          {t('auth.emailConfirmed')}
         </Alert>
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         <Input
-          label="Email address"
+          label={t('auth.email')}
           type="email"
           autoComplete="email"
           required
@@ -112,7 +119,7 @@ export function LoginPage() {
         />
 
         <Input
-          label="Password"
+          label={t('auth.password')}
           type="password"
           autoComplete="current-password"
           required
@@ -125,12 +132,12 @@ export function LoginPage() {
             to="/forgot-password"
             className="text-sm font-medium text-primary-700 hover:text-primary-600"
           >
-            Forgot your password?
+            {t('auth.forgotPassword')}
           </Link>
         </div>
 
         <Button type="submit" className="w-full" isLoading={isLoading}>
-          Sign in
+          {t('auth.signInButton')}
         </Button>
       </form>
     </AuthShell>

@@ -51,7 +51,7 @@ function ensureDir() {
 
 async function capture(page: Page, name: string, viewport: keyof typeof VIEWPORTS) {
   // Pause for fonts + lazy-loaded illustrations to settle. The dashboard
-  // header art and Gloock serif need a beat or the first frame ships with
+  // header art and Bitter serif need a beat or the first frame ships with
   // fallback fonts that misreport the layout.
   await page.waitForLoadState('networkidle').catch(() => {
     /* networkidle can hang on long-polled streams; the timeout is fine */
