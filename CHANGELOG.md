@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-19
+
 ### Added
 
 - Free Seedling account registration is open again for households with up to

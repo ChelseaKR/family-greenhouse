@@ -243,7 +243,7 @@ jobs:
           echo "GET /health -> $code"
           cat /tmp/health.json
           test "$code" = "200" || { echo "Smoke test failed"; exit 1; }
-          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.components?.database!=='ok') process.exit(1)"
+          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.components?.database?.status!=='ok') process.exit(1)"
 
   e2e-tests:
     name: Post-deploy smoke (Playwright e2e against staging)

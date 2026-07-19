@@ -83,7 +83,7 @@ const checks = [
     'production smoke uses component health',
     /API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url \}\}/u.test(productionDeployBackend) &&
       /url="\$\{API_URL\}\/health"/u.test(productionDeployBackend) &&
-      /components\?\.database\s*!==\s*'ok'/u.test(productionDeployBackend),
+      /components\?\.database\?\.status\s*!==\s*'ok'/u.test(productionDeployBackend),
   ],
 ];
 

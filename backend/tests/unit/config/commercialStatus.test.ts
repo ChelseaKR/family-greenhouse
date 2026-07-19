@@ -140,6 +140,7 @@ describe('production IaC commercial-hold invariants', () => {
     expect(deployBackend).toMatch(/lambda wait function-updated-v2/);
     expect(deployBackend).toMatch(/API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url }}/);
     expect(deployBackend).toMatch(/url="\$\{API_URL\}\/health"/);
+    expect(deployBackend).toMatch(/components\?\.database\?\.status\s*!==\s*'ok'/);
     expect(deployBackend).not.toMatch(/vars\.PRODUCTION_API_URL/);
     expect(smoke).toMatch(/needs:\s*\[[^\]]*terraform[^\]]*\]/);
     expect(smoke).toMatch(/E2E_BASE_URL:\s*\$\{\{ needs\.terraform\.outputs\.site_url }}/);
@@ -251,6 +252,7 @@ describe('production IaC commercial-hold invariants', () => {
     expect(deployBackend).toMatch(/lambda wait function-updated-v2/);
     expect(deployBackend).toMatch(/API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url }}/);
     expect(deployBackend).toMatch(/url="\$\{API_URL\}\/health"/);
+    expect(deployBackend).toMatch(/components\?\.database\?\.status\s*!==\s*'ok'/);
     expect(deployBackend).not.toMatch(/STAGING_API_URL/);
     expect(smoke).toMatch(/needs:\s*\[[^\]]*terraform[^\]]*\]/);
     expect(smoke).toMatch(/E2E_BASE_URL:\s*\$\{\{ needs\.terraform\.outputs\.site_url }}/);
