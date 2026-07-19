@@ -348,10 +348,12 @@ jobs:
           aws s3api head-object \
             --bucket "$ARTIFACT_BUCKET" \
             --key "${FRONTEND_SNAPSHOT_PREFIX}/index.html" > /dev/null
+          SNAPSHOT_MARKER="${RUNNER_TEMP}/snapshot-complete"
+          : > "$SNAPSHOT_MARKER"
           aws s3api put-object \
             --bucket "$ARTIFACT_BUCKET" \
             --key "${FRONTEND_SNAPSHOT_PREFIX}/snapshot-complete" \
-            --body /dev/null > /dev/null
+            --body "$SNAPSHOT_MARKER" > /dev/null
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Sync to S3
