@@ -167,7 +167,17 @@ describe('production IaC commercial-hold invariants', () => {
     expect(productionWorkflow).not.toMatch(/FRONTEND_SNAPSHOT_PREFIX:.*run_attempt/);
     expect(deployFrontend).toMatch(/Snapshot current frontend for rollback/);
     expect(deployFrontend).toMatch(/snapshot-complete/);
+    expect(deployFrontend).toMatch(/SNAPSHOT_MARKER="\$\{RUNNER_TEMP\}\/snapshot-complete"/);
+    expect(deployFrontend).toMatch(/--body "\$SNAPSHOT_MARKER"/);
+    expect(deployFrontend).not.toMatch(/--body \/dev\/null/);
     expect(deployFrontend).toMatch(/cloudfront wait invalidation-completed/);
+    expect(deployBackend.indexOf('Capture previous Lambda versions and packages')).toBeLessThan(
+      deployBackend.indexOf('Mark Lambda rollback snapshot ready')
+    );
+    expect(deployBackend).toMatch(/aws lambda get-function[\s\S]*?--qualifier "\$ver"/);
+    expect(deployBackend).toMatch(/Code\.Location/);
+    expect(deployBackend).toMatch(/snapshot_size=.*aws s3api head-object/);
+    expect(deployBackend).toMatch(/rollback package was not stored correctly/);
     expect(deployBackend).toMatch(/lambda wait function-updated-v2/);
     expect(deployBackend).toMatch(/API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url }}/);
     expect(deployBackend).toMatch(/url="\$\{API_URL\}\/health"/);
