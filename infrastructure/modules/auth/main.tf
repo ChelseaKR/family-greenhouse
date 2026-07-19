@@ -61,7 +61,7 @@ resource "aws_cognito_user_pool" "main" {
     email_sending_account  = var.email_identity_arn == "" ? "COGNITO_DEFAULT" : "DEVELOPER"
     source_arn             = var.email_identity_arn == "" ? null : var.email_identity_arn
     from_email_address     = var.email_from_address == "" ? null : var.email_from_address
-    reply_to_email_address = coalesce(var.email_reply_to, var.email_from_address, "") == "" ? null : coalesce(var.email_reply_to, var.email_from_address)
+    reply_to_email_address = var.email_reply_to != "" ? var.email_reply_to : (var.email_from_address != "" ? var.email_from_address : null)
   }
 
   verification_message_template {
