@@ -10,12 +10,11 @@ resource "aws_cognito_user_pool" "main" {
   # grows past a few thousand.
   user_pool_tier = "PLUS"
 
-  # Commercial-hold backstop: Cognito rejects public SignUp calls while
-  # preserving existing-user authentication and administrator-created users.
-  # Keep this literal and review-visible; reactivation requires a deliberate
-  # source change plus an in-place production plan (never a pool replacement).
+  # Public free-account registration is an explicit, fail-closed environment
+  # policy. Production snapshots this value before deploys and restores that
+  # exact prior state on rollback; changing it is an in-place pool update.
   admin_create_user_config {
-    allow_admin_create_user_only = true
+    allow_admin_create_user_only = !var.public_registration_enabled
   }
 
   # Cognito's "Advanced Security" (Threat Protection) — risk-based adaptive
@@ -27,10 +26,8 @@ resource "aws_cognito_user_pool" "main" {
   }
 
   password_policy {
-    # 12-char floor: with Threat Protection's compromised-credential checks
-    # already on, length is the cheapest remaining win against offline/guessing
-    # attacks. Still no required symbols — NIST 800-63B guidance favours length
-    # over composition rules, and the leaked-password check covers the weak ones.
+    # Exact account-creation contract: 12+ characters with uppercase,
+    # lowercase, and a digit. Symbols are accepted but not required.
     minimum_length    = 12
     require_lowercase = true
     require_numbers   = true

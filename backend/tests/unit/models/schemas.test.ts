@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   signupSchema,
+  confirmEmailSchema,
+  resetPasswordSchema,
   loginSchema,
   createPlantSchema,
   createTaskSchema,
@@ -15,7 +17,7 @@ describe('Validation Schemas', () => {
     it('validates correct input', () => {
       const input = {
         email: 'test@example.com',
-        password: 'Password123',
+        password: 'Password1234',
         name: 'Test User',
       };
 
@@ -26,7 +28,7 @@ describe('Validation Schemas', () => {
     it('rejects invalid email', () => {
       const input = {
         email: 'invalid-email',
-        password: 'Password123',
+        password: 'Password1234',
         name: 'Test User',
       };
 
@@ -45,15 +47,95 @@ describe('Validation Schemas', () => {
       expect(result.success).toBe(false);
     });
 
+    it('rejects an 11-character password below the Cognito minimum', () => {
+      const result = signupSchema.safeParse({
+        email: 'test@example.com',
+        password: 'Password123',
+        name: 'Test User',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it.each([
+      ['an uppercase letter', 'password1234'],
+      ['a lowercase letter', 'PASSWORD1234'],
+      ['a number', 'PasswordOnly'],
+    ])('rejects a password without %s', (_requirement, password) => {
+      const result = signupSchema.safeParse({
+        email: 'test@example.com',
+        password,
+        name: 'Test User',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
     it('rejects short name', () => {
       const input = {
         email: 'test@example.com',
-        password: 'Password123',
+        password: 'Password1234',
         name: 'T',
       };
 
       const result = signupSchema.safeParse(input);
       expect(result.success).toBe(false);
+    });
+
+    it('trims a valid display name', () => {
+      const result = signupSchema.parse({
+        email: 'test@example.com',
+        password: 'Password1234',
+        name: '  Test User  ',
+      });
+
+      expect(result.name).toBe('Test User');
+    });
+
+    it.each(['   ', 'a'.repeat(101)])('rejects an invalid bounded name: %s', (name) => {
+      const result = signupSchema.safeParse({
+        email: 'test@example.com',
+        password: 'Password1234',
+        name,
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('confirmEmailSchema', () => {
+    it('accepts a six-digit confirmation code', () => {
+      expect(
+        confirmEmailSchema.safeParse({ email: 'test@example.com', code: '123456' }).success
+      ).toBe(true);
+    });
+
+    it.each(['12345', '1234567', '12ab56'])('rejects a malformed confirmation code: %s', (code) => {
+      expect(confirmEmailSchema.safeParse({ email: 'test@example.com', code }).success).toBe(false);
+    });
+  });
+
+  describe('resetPasswordSchema', () => {
+    it('accepts the Cognito password policy and a numeric reset code', () => {
+      expect(
+        resetPasswordSchema.safeParse({
+          email: 'test@example.com',
+          code: '123456',
+          newPassword: 'Password1234',
+        }).success
+      ).toBe(true);
+    });
+
+    it.each([
+      ['an 11-character password', 'Password123', '123456'],
+      ['a password without uppercase', 'password1234', '123456'],
+      ['a password without lowercase', 'PASSWORD1234', '123456'],
+      ['a password without a number', 'PasswordOnly', '123456'],
+      ['a nonnumeric reset code', 'Password1234', '12ab56'],
+    ])('rejects %s', (_case, newPassword, code) => {
+      expect(
+        resetPasswordSchema.safeParse({ email: 'test@example.com', code, newPassword }).success
+      ).toBe(false);
     });
   });
 

@@ -1,10 +1,17 @@
 import { z } from 'zod';
 
 // Auth schemas
+export const cognitoPasswordSchema = z
+  .string()
+  .min(12)
+  .regex(/[a-z]/)
+  .regex(/[A-Z]/)
+  .regex(/[0-9]/);
+
 export const signupSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(2).max(100),
+  password: cognitoPasswordSchema,
+  name: z.string().trim().min(2).max(100),
 });
 
 export const loginSchema = z.object({
@@ -14,7 +21,7 @@ export const loginSchema = z.object({
 
 export const confirmEmailSchema = z.object({
   email: z.string().email(),
-  code: z.string().length(6),
+  code: z.string().regex(/^\d{6}$/),
 });
 
 export const forgotPasswordSchema = z.object({
@@ -27,8 +34,8 @@ export const resendCodeSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   email: z.string().email(),
-  code: z.string().length(6),
-  newPassword: z.string().min(8),
+  code: z.string().regex(/^\d{6}$/),
+  newPassword: cognitoPasswordSchema,
 });
 
 export const refreshTokenSchema = z.object({

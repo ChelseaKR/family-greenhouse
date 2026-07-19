@@ -77,16 +77,23 @@ export default {
           'Roboto',
           'sans-serif',
         ],
-        // Display font per brand guidelines: Gloock (single 400 weight,
-        // self-hosted). High-contrast didone-feeling serif — used on the
-        // wordmark and major headlines.
+        // Display font per brand guidelines: Bitter Variable (100–900,
+        // self-hosted). Used on the wordmark and major headlines.
         //
-        // We mount Gloock as `font-serif` rather than a custom
+        // We mount Bitter Variable as `font-serif` rather than a custom
         // `font-display` key on purpose: `font-display` collides with the
         // CSS `font-display` keyword and Tailwind's `@apply` engine
         // rejects it. Using the built-in `serif` slot avoids the clash
-        // and is also semantically accurate — Gloock is a serif.
-        serif: ['Gloock', 'Georgia', 'Cambria', '"Times New Roman"', 'Times', 'serif'],
+        // and is also semantically accurate.
+        serif: [
+          '"Bitter Variable"',
+          'Bitter',
+          'Georgia',
+          'Cambria',
+          '"Times New Roman"',
+          'Times',
+          'serif',
+        ],
       },
       spacing: {
         18: '4.5rem',
@@ -124,19 +131,9 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        // Gentle side-to-side rock for the decorative hero sprigs, as if
-        // a draft moved through the greenhouse. Pair with `origin-bottom`
-        // so the stems pivot from the soil line, not their center. The
-        // global prefers-reduced-motion rule in index.css zeroes
-        // animation-duration on *, so this is reduced-motion safe.
-        sway: {
-          '0%, 100%': { transform: 'rotate(-1deg)' },
-          '50%': { transform: 'rotate(1deg)' },
-        },
       },
       animation: {
         'fade-in': 'fade-in 200ms ease-out both',
-        sway: 'sway 6s ease-in-out infinite',
       },
     },
   },

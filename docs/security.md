@@ -19,7 +19,9 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 
 **Mitigated.**
 
-- Passwords never touch our code — Cognito stores the verifier (PBKDF2-HMAC-SHA256, configurable iteration count).
+- Signup and password-change requests pass through application validation and
+  are transmitted to Cognito, but the app never persists or logs passwords.
+  Cognito is the credential store.
 - Access + refresh tokens are JWT-signed by Cognito with the rotating user-pool RS256 key; signature verification is done by API Gateway, not by us.
 - All traffic is HTTPS-only in production via CloudFront. The `is-on-https` Lighthouse audit is disabled only for the local `vite preview` server.
 - TLS-aware S3 bucket policy denies `aws:SecureTransport: false` (set up in Terraform; verify the actual bucket policy in `infrastructure/modules/frontend`).
@@ -41,14 +43,18 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 
 **Partially mitigated.**
 
-- **Rate limiting**: app-level limiter at `middleware/rateLimit.ts` (10 attempts/minute per IP per route, scoped tightly to `/auth/*`) plus API Gateway stage throttling (100 burst / 50 requests per second). Cognito Threat Protection provides the identity-layer backstop.
+- **Rate limiting**: app-level limiter at `middleware/rateLimit.ts` (10 attempts/minute per IP per route, per warm Lambda container, scoped tightly to `/auth/*`) plus API Gateway stage throttling (100 burst / 50 requests per second). Direct Cognito `SignUp` calls do not pass through the application limiter; Cognito service throttling and Threat Protection are the identity-layer backstops.
 - **Password policy**: Terraform enforces 12+ characters, mixed case, and digits. Cognito Threat Protection is `ENFORCED`, adding compromised-credential and risk-based checks; symbols are deliberately not required.
 - **MFA**: optional software-token TOTP is enabled in the Cognito pool. The enrollment/settings UI remains a separately scoped product feature; SMS MFA is deliberately off.
 - **Account-takeover via email change**: Cognito requires re-verification of new email addresses before they replace the existing one.
-- **Commercial-hold registration backstop**: the public signup handler returns
-  `503` before Cognito, and the Cognito pool independently requires
-  administrator-created users. Existing login, refresh, recovery, and pending
-  confirmation/resend flows remain enabled.
+- **Registration controls**: the hosted API requires an explicit shared-status
+  boolean, validates the 12-character mixed-case-and-digit policy before
+  dispatch, and is independently rate-limited. Because Cognito app-client IDs
+  are public, callers can invoke Cognito `SignUp` directly while pool self-signup
+  is enabled. A complete pause therefore requires both
+  `publicRegistrationAvailable=false` and Terraform
+  `public_registration_enabled=false`; the latter is the identity-boundary
+  control.
 
 **Residual:** the pool's enforced Threat Protection and Cognito's managed
 progressive lockout cover automated takeover attempts. A user-visible
@@ -95,10 +101,9 @@ or support signal.
 - Session validation on app load (`authStore.verifySession`) calls `/auth/me`
   with the ID token and now attempts the same refresh flow on a 401 before
   ending the session.
-- Public self-registration is disabled in both application code and Cognito
-  pool policy during the commercial hold; deployed smoke coverage asserts the
-  admin-only pool setting before proving an administrator-created user can log
-  in normally.
+- Public self-registration is enabled for free accounts. The application keeps
+  a fail-closed registration flag separate from the paid-activity hold, and
+  deployed smoke coverage asserts Cognito&rsquo;s self-signup policy explicitly.
 
 **Deferred product option:** WebAuthn/passkeys would be a stronger alternative
 to passwords, but no account-takeover signal currently justifies adding a

@@ -10,14 +10,13 @@
 
 **A shared plant-care journal for the whole household** — a collaborative houseplant tracker with per-plant watering schedules, recurring care tasks (water, fertilize, prune…), and reminders that find the right person across browser, email, and SMS, so nobody has to ask "did you water the Monstera?" ever again.
 
-🌿 **Technical demo (no purchases):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
+🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
-> **Commercial activity hold — July 14, 2026.** Family Greenhouse remains a
-> portfolio and technical-demonstration project. It is not currently accepting
-> new account registrations or payments, offering paid plans, conducting launch
-> or customer outreach, or generating revenue. Existing account holders can
-> still sign in. Pricing, billing, launch, and marketing material is kept only
-> as historical product-design documentation. See
+> **Paid activity hold — July 14, 2026; free registration reopened July 19, 2026.**
+> Family Greenhouse accepts free accounts for households with up to 10 plants.
+> It is not currently accepting payments, offering paid plans, or generating
+> revenue. Pricing and billing material is retained as historical product-design
+> documentation. See
 > [`docs/COMMERCIAL-STATUS.md`](docs/COMMERCIAL-STATUS.md).
 
 Built with React + TypeScript on the frontend and AWS Lambda + DynamoDB (single-table) + Cognito on the backend, plus a local Express dev server that mirrors the API surface so you can develop entirely offline — no AWS account or third-party keys required to run it locally.

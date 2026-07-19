@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   // The marketing feature grid uses the custom botanical icons below.
   // These Heroicons serve the AppMockup chrome plus the secondary
@@ -13,17 +14,15 @@ import {
   Cog6ToothIcon,
   BriefcaseIcon,
   SparklesIcon,
-  ChatBubbleLeftRightIcon,
   CloudIcon,
   CameraIcon,
   BellAlertIcon,
 } from '@heroicons/react/24/outline';
+import { buttonStyles } from '@/components/buttonStyles';
 import { BrandMark } from '@/components/BrandMark';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { PricingGrid } from '@/features/pricing/PricingGrid';
 import { IS_BETA, BETA_BADGE } from '@/lib/betaMode';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
-import { SprigDivider } from '@/components/brand/SprigDivider';
 import { MemorialFrame } from '@/components/brand/MemorialFrame';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
@@ -39,6 +38,7 @@ import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment'
 import { track, registerSuperProperties } from '@/services/analytics';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL, siteUrl } from '@/config/site';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import clsx from 'clsx';
 
 // Hero copy for the two framings under test. Variant A (control) is the
@@ -166,8 +166,8 @@ const featureCardVariants = [
   },
 ];
 
-// The stable pricing anchor currently renders the repository-level commercial
-// hold rather than plan or purchase content.
+// The stable pricing anchor keeps paid activity on hold while free Seedling
+// registration remains available.
 
 // Product facts the landing page can stand behind without lying about
 // users we don't yet have. The earlier "50,000+ Happy Plants / 99.2%
@@ -175,10 +175,12 @@ const featureCardVariants = [
 // auditable claims about the app itself. When real adoption metrics
 // exist, they belong in this list — sourced from analytics, not vibes.
 const productFacts = [
-  { value: 'Demo', label: 'New account registration is paused' },
-  { value: 'Multi-user', label: 'Share care across the whole household' },
-  { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
-  { value: 'Open APIs', label: 'Export your data any time' },
+  PUBLIC_REGISTRATION_AVAILABLE
+    ? { value: 'Free', label: 'Up to 10 plants — no credit card' }
+    : { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
+  { value: '6 people', label: 'Share care across the household' },
+  { value: '5 minutes', label: 'From signup to first task' },
+  { value: 'Portable', label: 'Export your data any time' },
 ];
 
 // Testimonials were removed outright (not just gated): the quotes were
@@ -200,7 +202,7 @@ const personas = [
   {
     icon: GrowthRingsIcon,
     label: 'A growing collection',
-    body: 'Ten plants turned into forty. Import the spreadsheet you have been keeping, and let one dashboard hold every due date.',
+    body: 'A few plants turned into ten. Import the spreadsheet you have been keeping, and let one dashboard hold every due date.',
     href: '#pricing',
   },
   {
@@ -219,14 +221,8 @@ const personas = [
 
 // "Beyond the basics" band. The feature grid covers the shared-schedule
 // core; these are the parts that show up once you have more than a
-// couple of plants, and the ones competitors mostly don't have. Paid
-// gates are stated plainly rather than hidden.
+// couple of plants, and the ones competitors mostly don't have.
 const differentiators = [
-  {
-    icon: ChatBubbleLeftRightIcon,
-    label: 'Ask the care assistant',
-    body: 'Why are the leaves dropping? Ask in plain words and get an answer that can see your plants. Garden plan and up.',
-  },
   {
     icon: CloudIcon,
     label: 'Weather-aware nudges',
@@ -235,7 +231,7 @@ const differentiators = [
   {
     icon: CameraIcon,
     label: 'Check a leaf from a photo',
-    body: 'Upload a struggling leaf and get a read on what might be going wrong. Garden plan and up.',
+    body: 'Upload a struggling leaf and get a read on what might be going wrong.',
   },
   {
     icon: PruneIcon,
@@ -270,7 +266,7 @@ const featuredGuides = [
  *  - Browser chrome (traffic lights + URL bar) on top.
  *  - Dark green sidebar with the brand lockup + main nav, "Dashboard"
  *    pinned active.
- *  - Content area styled "garden journal" — paper background, Gloock
+ *  - Content area styled "garden journal" — paper background, Bitter
  *    serif welcome with hand-drawn underline, `DashboardHeaderArt` to
  *    the right, an inline metadata row (replaces the old KPI tile
  *    grid), a paper-variant Tasks card with botanical task-type icons,
@@ -501,48 +497,6 @@ function Metric({ label, value }: MetricProps) {
   );
 }
 
-/**
- * Decorative cluster of botanical sprigs behind the hero copy, at low
- * opacity so the hero reads as a hand-illustrated garden page rather
- * than a default-Tailwind landing. (Formerly mirrored on the right too;
- * the asymmetric hero's bleeding app mockup now owns that side.)
- * Stroke is `currentColor` so opacity tints come from the caller.
- */
-function HeroSprigs({
-  className,
-  ...rest
-}: React.SVGProps<SVGSVGElement> & { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 240 320"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...rest}
-    >
-      {/* Tall stem with alternating leaves */}
-      <path d="M 60 320 Q 58 220 70 120 Q 72 80 70 40" />
-      <path d="M 70 100 Q 30 90 18 110 Q 50 118 70 102 Z" fill="currentColor" opacity="0.7" />
-      <path d="M 70 160 Q 110 150 122 170 Q 90 178 70 162 Z" fill="currentColor" opacity="0.7" />
-      <path d="M 70 220 Q 30 212 22 230 Q 50 240 70 222 Z" fill="currentColor" opacity="0.7" />
-      <circle cx="70" cy="40" r="3" fill="currentColor" />
-
-      {/* Short companion sprig */}
-      <path d="M 140 320 Q 142 260 150 210" />
-      <path d="M 150 230 Q 180 224 188 238 Q 168 244 150 232 Z" fill="currentColor" opacity="0.7" />
-      <path d="M 148 270 Q 120 264 114 280 Q 138 288 150 272 Z" fill="currentColor" opacity="0.7" />
-      <circle cx="150" cy="210" r="2.4" fill="currentColor" />
-
-      {/* Small ground tuft */}
-      <path d="M 30 318 Q 28 304 32 292" opacity="0.6" />
-      <path d="M 30 302 Q 18 296 16 308 Q 26 312 30 302 Z" fill="currentColor" opacity="0.55" />
-    </svg>
-  );
-}
-
 /** Inline leaf icon used in the mockup nav + KPI tile so it lines up with
  *  the in-app Plants nav item without dragging a new heroicon import. */
 function SidebarLeafIcon({ className }: { className?: string }) {
@@ -567,14 +521,16 @@ function SidebarLeafIcon({ className }: { className?: string }) {
 }
 
 export function LandingPage() {
+  const { t } = useTranslation();
   // A/B test of the hero framing (control vs solo-first). Bucketing is
   // stable per browser; see lib/experiment.ts.
   const variant = useHeroVariant();
 
   useMetaTags({
     title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
-    description:
-      'A technical demonstration of shared plant watering schedules, reminders, care logs, and household tasks. New account registration is paused.',
+    description: PUBLIC_REGISTRATION_AVAILABLE
+      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for up to 10 plants and 6 members.'
+      : 'A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in.',
     canonical: siteUrl('/'),
     ogType: 'website',
     ogImage: siteUrl('/brand/og-image.png'),
@@ -604,6 +560,16 @@ export function LandingPage() {
           description:
             'A collaborative plant care app for household watering schedules, reminders, tasks, and care logs.',
           url: SITE_URL,
+          ...(PUBLIC_REGISTRATION_AVAILABLE
+            ? {
+                offers: {
+                  '@type': 'Offer',
+                  price: '0',
+                  priceCurrency: 'USD',
+                  description: 'Free for up to 10 plants and 6 household members',
+                },
+              }
+            : {}),
           publisher: { '@id': `${SITE_URL}/#organization` },
         },
       ],
@@ -644,7 +610,7 @@ export function LandingPage() {
               href="#pricing"
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
             >
-              Demo status
+              Plans
             </a>
           </div>
           <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
@@ -654,24 +620,21 @@ export function LandingPage() {
             >
               Log in
             </Link>
+            {PUBLIC_REGISTRATION_AVAILABLE && (
+              <Link to="/register" className={buttonStyles()}>
+                {t('auth.signUpFree')}
+              </Link>
+            )}
           </div>
         </nav>
       </header>
 
-      {/* Hero Section — botanical wash on paper, no clip-path blurs. At
+      {/* Hero Section — plain paper keeps the product preview in focus. At
           lg the hero goes asymmetric: copy left-aligned in the left
           column, the app mockup bleeding off the right edge (the
           overflow-hidden wrapper crops it). Below lg it stays the
           stacked, centered layout. */}
-      <div className="greenhouse-grid relative isolate overflow-hidden bg-paper pt-14">
-        {/* Botanical wash behind the hero copy. `origin-bottom
-            animate-sway` rocks the sprigs from the soil line; the
-            global prefers-reduced-motion rule freezes it. */}
-        <HeroSprigs
-          className="pointer-events-none absolute left-0 top-24 -z-10 hidden md:block w-64 h-auto text-primary-300/25 origin-bottom animate-sway"
-          aria-hidden="true"
-        />
-
+      <div className="overflow-hidden bg-paper pt-14">
         <div className="py-24 sm:py-32 lg:py-36">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
@@ -690,11 +653,15 @@ export function LandingPage() {
                   <TitleUnderline className="h-4 w-56 text-primary-600" />
                 </div>
                 <p className="mt-6 text-lg leading-8 text-gray-700">{heroCopy[variant].subhead}</p>
-                <div className="mt-10 space-y-4">
-                  <CommercialHoldNotice compact />
+                <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
+                  {PUBLIC_REGISTRATION_AVAILABLE && (
+                    <Link to="/register" className={buttonStyles({ size: 'lg' })}>
+                      {t('auth.signUpFree')}
+                    </Link>
+                  )}
                   <a
                     href="#features"
-                    className="inline-flex text-sm font-semibold leading-6 text-ink items-center gap-1 hover:text-primary-700 transition-colors"
+                    className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
                   >
                     See how it works <span aria-hidden="true">→</span>
                   </a>
@@ -703,7 +670,7 @@ export function LandingPage() {
 
               {/* App Preview — a faithful mock of the real product chrome
                   styled to match the redesigned dashboard (paper bg,
-                  botanical task icons, inline metadata row, Gloock serif
+                  botanical task icons, inline metadata row, Bitter serif
                   welcome). The visual is the product. At lg it renders at
                   a readable fixed width and bleeds off the right edge of
                   the viewport rather than squeezing into the column. */}
@@ -714,13 +681,8 @@ export function LandingPage() {
       </div>
 
       {/* Product facts band — kept on the dark-green brand surface so it
-          punches between the paper hero and the paper features section.
-          Sprig dividers above + below give it the journal frame. */}
-      <div className="bg-primary-900 py-16 relative">
-        <SprigDivider
-          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-paper"
-          aria-hidden="true"
-        />
+          punches between the paper hero and the paper features section. */}
+      <div className="bg-primary-900 py-16">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
             {productFacts.map((fact) => (
@@ -733,16 +695,10 @@ export function LandingPage() {
             ))}
           </div>
         </div>
-        <SprigDivider
-          className="absolute left-1/2 -bottom-3 h-6 w-40 -translate-x-1/2 -scale-y-100 text-paper"
-          aria-hidden="true"
-        />
       </div>
 
-      {/* Who it's for — persona on-ramp. The facts band's bottom sprig
-          already straddles the green → parchment seam above. Each card
-          is a link into the part of the page (or the care guides) that
-          speaks to that persona. */}
+      {/* Who it's for — persona on-ramp. Each card is a link into the part
+          of the page (or the care guides) that speaks to that persona. */}
       <div className="py-20 sm:py-28 bg-parchment">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
@@ -826,15 +782,10 @@ export function LandingPage() {
       </div>
 
       {/* Beyond the basics — the differentiators that show up past a
-          couple of plants. A sprig straddles the paper → parchment seam.
-          Lighter weight than the feature grid: a small line icon + label
+          couple of plants. Lighter weight than the feature grid: a small line icon + label
           + one line, so it reads as "and also" rather than a second
           headline act. */}
-      <div className="py-20 sm:py-28 bg-parchment relative">
-        <SprigDivider
-          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
-          aria-hidden="true"
-        />
+      <div className="py-20 sm:py-28 bg-parchment">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
             eyebrow="Beyond the basics"
@@ -863,13 +814,8 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* How It Works Section — now on paper, between two parchment
-          bands; the sprig marks the seam. */}
-      <div className="py-20 sm:py-28 bg-paper relative">
-        <SprigDivider
-          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
-          aria-hidden="true"
-        />
+      {/* How It Works Section — on paper between two parchment bands. */}
+      <div className="py-20 sm:py-28 bg-paper">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading eyebrow="Setup" title="Three steps, about five minutes" />
           <div className="mx-auto mt-12 sm:mt-16 max-w-5xl">
@@ -910,19 +856,15 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Before you buy — the care-guide library doubles as a reason to
+      {/* Before you bring a plant home — the care-guide library doubles as a reason to
           trust the app and a stop for pet owners and nervous beginners.
           Two columns: the honest pitch, then a few guides by name. */}
-      <div className="py-20 sm:py-28 bg-parchment relative">
-        <SprigDivider
-          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
-          aria-hidden="true"
-        />
+      <div className="py-20 sm:py-28 bg-parchment">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
-                Before you buy
+                Before you bring one home
               </p>
               <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight">
                 Know what you&rsquo;re getting into
@@ -962,24 +904,28 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Stable plan-status anchor. Commercial pricing and purchase content is
-          absent while the repository-level hold remains active. */}
-      <div id="pricing" className="py-20 sm:py-28 bg-paper relative">
-        <SprigDivider
-          className="absolute left-1/2 -top-3 h-6 w-40 -translate-x-1/2 text-primary-600/80"
-          aria-hidden="true"
-        />
+      {/* Free registration stays open while paid pricing and purchase content
+          remain behind the repository-level commercial hold. */}
+      <div id="pricing" className="py-20 sm:py-28 bg-paper">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
-            eyebrow="Demo status"
-            title="Commercial activity is paused"
-            description="Family Greenhouse remains available as a technical demonstration. New account registration, paid plans, purchases, and plan changes are unavailable."
+            eyebrow="Plans"
+            title={
+              PUBLIC_REGISTRATION_AVAILABLE
+                ? 'Start free; paid plans are paused'
+                : 'New accounts and paid plans are paused'
+            }
+            description={
+              PUBLIC_REGISTRATION_AVAILABLE
+                ? 'Free accounts include up to 10 plants and 6 household members, with no credit card. Paid plans, purchases, and plan changes remain unavailable.'
+                : 'Existing account holders can still sign in. New accounts, paid plans, purchases, and plan changes remain unavailable.'
+            }
           />
           <PricingGrid />
           <p className="mt-12 text-center text-sm text-gray-700">
             Read the full{' '}
             <Link to="/pricing" className="font-medium text-primary-700 hover:underline">
-              demo-status notice
+              plan-status notice
             </Link>
             .
           </p>
@@ -1008,7 +954,7 @@ export function LandingPage() {
                 </li>
                 <li>
                   <a href="#pricing" className="text-sm text-primary-200 hover:text-white">
-                    Demo status
+                    Plans
                   </a>
                 </li>
                 <li>
@@ -1102,7 +1048,7 @@ interface SectionHeadingProps {
 }
 
 /** Section title pattern shared by the marketing sections (Who it's
- *  for, Features, Beyond the basics, Setup, Pricing). The Gloock title
+ *  for, Features, Beyond the basics, Setup, Pricing). The Bitter title
  *  sits over a TitleUnderline to match the in-app `PageHeader` rhythm. */
 function SectionHeading({ eyebrow, title, description }: SectionHeadingProps) {
   return (

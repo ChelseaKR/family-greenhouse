@@ -7,14 +7,17 @@ import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { track } from '@/services/analytics';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { useTranslation } from 'react-i18next';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 export function JoinHouseholdPage() {
+  const { t } = useTranslation();
   useDocumentTitle('Join household');
   const { inviteCode } = useParams<{ inviteCode: string }>();
   const navigate = useNavigate();
@@ -104,12 +107,12 @@ export function JoinHouseholdPage() {
                 Please ask for a new invite link from a household admin.
               </p>
               {isAuthenticated ? (
-                <Link to="/onboarding">
-                  <Button variant="secondary">Go to onboarding</Button>
+                <Link to="/onboarding" className={buttonStyles({ variant: 'secondary' })}>
+                  Go to onboarding
                 </Link>
               ) : (
-                <Link to="/login">
-                  <Button variant="secondary">Sign in</Button>
+                <Link to="/login" className={buttonStyles({ variant: 'secondary' })}>
+                  Sign in
                 </Link>
               )}
             </div>
@@ -118,8 +121,8 @@ export function JoinHouseholdPage() {
               <Alert variant="info">
                 You&rsquo;re already a member of <strong>{inviteData?.household.name}</strong>.
               </Alert>
-              <Link to="/">
-                <Button variant="secondary">Go to your household</Button>
+              <Link to="/" className={buttonStyles({ variant: 'secondary' })}>
+                Go to your household
               </Link>
             </div>
           ) : !isAuthenticated ? (
@@ -128,14 +131,22 @@ export function JoinHouseholdPage() {
                 You've been invited to join <strong>{inviteData?.household.name}</strong>
               </p>
               <p className="text-sm text-gray-500">
-                Sign in with an existing account to accept this invitation. New account registration
-                is paused.
+                {PUBLIC_REGISTRATION_AVAILABLE
+                  ? t('joinInvite.signInOrCreate')
+                  : t('joinInvite.signInExisting')}
               </p>
-              <CommercialHoldNotice compact />
-              <div className="flex justify-center">
-                <Link to={`/login?redirect=/join/${inviteCode}`}>
-                  <Button>Sign in</Button>
+              <div className="flex gap-3 justify-center">
+                <Link to={`/login?redirect=/join/${inviteCode}`} className={buttonStyles()}>
+                  Sign in
                 </Link>
+                {PUBLIC_REGISTRATION_AVAILABLE && (
+                  <Link
+                    to={`/register?redirect=/join/${inviteCode}`}
+                    className={buttonStyles({ variant: 'secondary' })}
+                  >
+                    {t('auth.createAccount')}
+                  </Link>
+                )}
               </div>
             </div>
           ) : (
@@ -146,8 +157,8 @@ export function JoinHouseholdPage() {
               <p className="text-xl font-semibold text-gray-900">{inviteData?.household.name}</p>
 
               <div className="flex gap-3 justify-center">
-                <Link to="/onboarding">
-                  <Button variant="secondary">Cancel</Button>
+                <Link to="/onboarding" className={buttonStyles({ variant: 'secondary' })}>
+                  Cancel
                 </Link>
                 <Button onClick={() => joinMutation.mutate()} isLoading={joinMutation.isPending}>
                   Join household

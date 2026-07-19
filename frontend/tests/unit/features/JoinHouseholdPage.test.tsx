@@ -41,7 +41,7 @@ describe('JoinHouseholdPage', () => {
     } as never);
   });
 
-  it('offers logged-out invitees existing-account sign-in only', async () => {
+  it('offers logged-out invitees sign-in or free account creation', async () => {
     useAuthStore.setState({ isAuthenticated: false, user: null } as never);
     server.use(
       http.get(`${API}/households/invites/code-public`, () =>
@@ -56,13 +56,10 @@ describe('JoinHouseholdPage', () => {
       'href',
       '/login?redirect=/join/code-public'
     );
-    expect(screen.queryByRole('button', { name: /create account/i })).not.toBeInTheDocument();
-    expect(document.querySelector('a[href^="/register"]')).toBeNull();
-    expect(
-      screen.getByRole('heading', {
-        name: /new registration and commercial activity are paused/i,
-      })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /create account/i })).toHaveAttribute(
+      'href',
+      '/register?redirect=/join/code-public'
+    );
   });
 
   it('refreshes the token after joining so the new household claim lands (the add-plant 403 fix)', async () => {

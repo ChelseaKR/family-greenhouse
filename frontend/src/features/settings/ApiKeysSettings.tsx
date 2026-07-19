@@ -107,7 +107,7 @@ export function ApiKeysSettings() {
       <Card>
         <CardHeader
           title="API keys"
-          description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Availability depends on the household’s existing demo entitlement; plan changes are paused."
+          description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Availability depends on the household’s existing API-key entitlement; paid plan changes are paused."
         />
 
         {createdPlaintext && (

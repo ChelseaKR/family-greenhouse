@@ -4,7 +4,11 @@ The creative rules and voice live in [brand.md](brand.md). This file documents e
 
 ## Logo
 
-The Family Greenhouse mark shows two plants growing inside one glasshouse. The stacked wordmark uses Gloock 400; “GROW TOGETHER” uses tracked Instrument Sans.
+The Family Greenhouse mark shows two plants growing inside one glasshouse. The stacked wordmark uses Bitter Variable 400; “GROW TOGETHER” uses tracked Instrument Sans.
+
+The deterministic raster-asset build vendors Bitter Regular from
+`@fontsource-variable/bitter`; its SIL Open Font License is stored beside the
+font in `frontend/scripts/brand-assets/fonts/OFL.txt`.
 
 ### Clear space and minimum size
 
@@ -32,7 +36,7 @@ The Family Greenhouse mark shows two plants growing inside one glasshouse. The s
 
 | Role           | Font                     | Weight            |
 | -------------- | ------------------------ | ----------------- |
-| Display / logo | Gloock                   | 400 only          |
+| Display / logo | Bitter Variable          | 400–600           |
 | Body / UI      | Instrument Sans Variable | 400–600           |
 | Utility labels | Instrument Sans Variable | 600 with tracking |
 

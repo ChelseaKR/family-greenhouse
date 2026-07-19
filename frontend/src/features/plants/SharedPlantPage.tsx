@@ -6,6 +6,7 @@ import { plantService } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card } from '@/components/Card';
 import { BrandMark } from '@/components/BrandMark';
 import { PlantPlaceholder } from '@/components/PlantImage';
@@ -15,8 +16,9 @@ import { getErrorMessage } from '@/services/api';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { toast } from '@/store/toastStore';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { track } from '@/services/analytics';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { setPendingShareCode } from './pendingShareCode';
 
 /**
  * PUBLIC landing page for a shared cutting link (/shared/:code).
@@ -24,13 +26,13 @@ import { track } from '@/services/analytics';
  * This is the share-worthy face of the propagation loop: a logged-out visitor
  * who's been passed a cutting sees a warm, brand-styled card that leads with
  * the plant and its provenance ("a cutting of …, grown by …"), then a clear
- * "grow your own cutting" action for existing account holders. Logged-out
- * visitors can still see provenance and sign in, but public registration is
- * not offered while the commercial hold is active.
+ * "grow your own cutting" call to action that pulls them into signup and back
+ * here to graft it into their own greenhouse — so the lineage continues across
+ * people.
  *
  * Works logged-out: the preview endpoint requires no auth (mirroring invite
  * previews), so a recipient sees the plant card before having an account.
- *   - logged out         → card + status notice + existing-account sign-in
+ *   - logged out         → card + graft CTA into register (share code carried)
  *   - logged in, no household → card + onboarding CTA
  *   - logged in + household   → card + "Add to my greenhouse"
  *
@@ -93,6 +95,14 @@ export function SharedPlantPage() {
     onError: (err) => setAcceptError(getErrorMessage(err)),
   });
 
+  // Keep the share code across register → confirm-email → onboarding, whose
+  // route transitions otherwise drop the original query string.
+  const startGraft = () => {
+    if (code) setPendingShareCode(code);
+    track('cutting_graft_started');
+    navigate(`/register?redirect=/shared/${code}`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-paper">
@@ -112,10 +122,11 @@ export function SharedPlantPage() {
             <div className="space-y-4 text-center">
               <Alert variant="error">{t('plants.shared.invalid')}</Alert>
               <p className="text-sm text-gray-500">{t('plants.shared.askForNew')}</p>
-              <Link to={isAuthenticated ? '/plants' : '/'}>
-                <Button variant="secondary">
-                  {isAuthenticated ? t('plants.backToPlants') : 'Family Greenhouse'}
-                </Button>
+              <Link
+                to={isAuthenticated ? '/plants' : '/'}
+                className={buttonStyles({ variant: 'secondary' })}
+              >
+                {isAuthenticated ? t('plants.backToPlants') : 'Family Greenhouse'}
               </Link>
             </div>
           </Card>
@@ -201,10 +212,16 @@ export function SharedPlantPage() {
               </p>
 
               {!isAuthenticated ? (
-                <div className="mt-4 space-y-3">
-                  <CommercialHoldNotice compact />
+                <div className="mt-4 space-y-2">
+                  {PUBLIC_REGISTRATION_AVAILABLE && (
+                    <Button className="w-full" onClick={startGraft}>
+                      🌱 {t('plants.shared.graftCta')}
+                    </Button>
+                  )}
                   <p className="text-center text-xs text-gray-600">
-                    {t('auth.existingAccount')}{' '}
+                    {PUBLIC_REGISTRATION_AVAILABLE
+                      ? t('plants.shared.signInPrompt')
+                      : t('auth.registrationPausedMessage')}{' '}
                     <Link
                       to={`/login?redirect=/shared/${code}`}
                       className="font-medium text-primary-700 hover:text-primary-600"
@@ -216,8 +233,8 @@ export function SharedPlantPage() {
               ) : !householdId ? (
                 <div className="mt-4 space-y-2 text-center">
                   <p className="text-sm text-gray-500">{t('plants.shared.needHousehold')}</p>
-                  <Link to="/onboarding">
-                    <Button className="w-full">{t('plants.shared.goToOnboarding')}</Button>
+                  <Link to="/onboarding" className={buttonStyles({ className: 'w-full' })}>
+                    {t('plants.shared.goToOnboarding')}
                   </Link>
                 </div>
               ) : (

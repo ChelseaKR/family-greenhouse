@@ -67,11 +67,12 @@ module "email" {
 module "auth" {
   source = "./modules/auth"
 
-  environment        = var.environment
-  project_name       = var.project_name
-  email_identity_arn = var.domain_name == "" ? "" : module.email[0].identity_arn
-  email_from_address = var.email_from_address
-  email_reply_to     = var.email_reply_to
+  environment                 = var.environment
+  project_name                = var.project_name
+  public_registration_enabled = var.public_registration_enabled
+  email_identity_arn          = var.domain_name == "" ? "" : module.email[0].identity_arn
+  email_from_address          = var.email_from_address
+  email_reply_to              = var.email_reply_to
 
   depends_on = [module.email]
 }

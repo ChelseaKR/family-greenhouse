@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { TitleUnderline } from './brand/TitleUnderline';
 
 /**
- * Authenticated-page header. The Gloock serif title gets a hand-drawn
+ * Authenticated-page header. The Bitter serif title gets a hand-drawn
  * underline underneath; an optional eyebrow line floats above; an optional
  * piece of illustration art tucks into the top-right.
  *
@@ -14,7 +14,7 @@ import { TitleUnderline } from './brand/TitleUnderline';
 interface PageHeaderProps {
   /** Small label above the title, e.g. "Your household". */
   eyebrow?: string;
-  /** The page title — rendered in Gloock serif. */
+  /** The page title — rendered in Bitter serif. */
   title: string;
   /** Secondary line below the title. */
   description?: ReactNode;

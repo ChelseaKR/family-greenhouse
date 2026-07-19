@@ -185,14 +185,14 @@
   "publicShell": {
     "careGuides": "Guías de cuidado",
     "blog": "Blog",
-    "pricing": "Estado de la demostración",
+    "pricing": "Planes",
     "openMenu": "Abrir menú del sitio",
     "tryApp": "Probar la aplicación"
   },
   "commercialHold": {
-    "statusLabel": "Estado de la demostración técnica",
-    "headline": "El registro nuevo y la actividad comercial están en pausa",
-    "message": "La actividad comercial, el registro de cuentas nuevas y el cobro de pagos están en pausa. Este sitio sigue siendo una demostración técnica; las inscripciones nuevas, los planes de pago, las compras y los cambios de plan no están disponibles. Las personas con una cuenta existente aún pueden iniciar sesión.",
+    "statusLabel": "Estado comercial",
+    "headline": "Los planes de pago están en pausa",
+    "message": "El registro de cuentas gratuitas está abierto. Los planes de pago, el cobro de pagos, las compras, las mejoras y los cambios de plan siguen sin estar disponibles.",
     "effectiveDate": "Pausa comercial vigente desde {{date}}."
   },
   "auth": {
@@ -203,7 +203,59 @@
     "password": "Contraseña",
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "invalidEmail": "Introduce un correo válido",
-    "passwordRequired": "La contraseña es obligatoria"
+    "passwordRequired": "La contraseña es obligatoria",
+    "signUpFree": "Crear una cuenta gratis",
+    "createAccount": "Crear una cuenta",
+    "goToRegistration": "Ir al registro",
+    "signUpTitle": "Crear una cuenta",
+    "registerTitle": "Empieza tu invernadero",
+    "registerSubtitle": "Gratis para hasta 10 plantas y 6 miembros del hogar. Sin tarjeta de crédito.",
+    "fullName": "Nombre completo",
+    "confirmPassword": "Confirmar contraseña",
+    "nameMin": "El nombre debe tener al menos 2 caracteres",
+    "nameMax": "El nombre debe tener 100 caracteres o menos",
+    "passwordMin": "La contraseña debe tener al menos 12 caracteres",
+    "passwordUppercase": "La contraseña debe contener al menos una letra mayúscula",
+    "passwordLowercase": "La contraseña debe contener al menos una letra minúscula",
+    "passwordNumber": "La contraseña debe contener al menos un número",
+    "passwordMismatch": "Las contraseñas no coinciden",
+    "passwordHelper": "Al menos 12 caracteres con mayúsculas, minúsculas y un número",
+    "noAccount": "¿No tienes una cuenta?",
+    "loginTitle": "Te damos la bienvenida",
+    "loginSubtitle": "Inicia sesión para cuidar tu invernadero.",
+    "emailConfirmed": "Correo confirmado. Inicia sesión para terminar de configurar tu invernadero.",
+    "registrationPausedTitle": "El registro de cuentas nuevas está en pausa",
+    "registrationPausedSubtitle": "Las personas con una cuenta existente aún pueden iniciar sesión.",
+    "registrationPausedMessage": "El registro de cuentas gratuitas está en pausa. Las personas con una cuenta existente aún pueden iniciar sesión.",
+    "confirmRecoveryTitle": "Continúa la confirmación del correo",
+    "confirmRecoverySubtitle": "Introduce el correo con el que te registraste y enviaremos un código nuevo.",
+    "resendConfirmation": "Enviar código de confirmación",
+    "confirmDocumentTitle": "Confirmar correo",
+    "confirmTitle": "Confirma tu correo",
+    "confirmSentTo": "Enviamos un código de confirmación a",
+    "confirmationCode": "Código de confirmación",
+    "confirmationCodeLength": "El código de confirmación debe tener 6 dígitos",
+    "confirmationCodeHelper": "Introduce el código de 6 dígitos que enviamos a tu correo",
+    "confirmEmailButton": "Confirmar correo",
+    "resendPrompt": "¿No recibiste el código?",
+    "resendCode": "Reenviar código",
+    "confirmationResent": "Enviamos un código de confirmación nuevo. Revisa tu correo.",
+    "sending": "Enviando…"
+  },
+  "joinInvite": {
+    "signInOrCreate": "Inicia sesión o crea una cuenta para aceptar esta invitación.",
+    "signInExisting": "Inicia sesión con una cuenta existente para aceptar esta invitación."
+  },
+  "pricingStatus": {
+    "freeAccountQuestion": "¿Puedo crear una cuenta?",
+    "freeAccountAnswer": "Sí. Las cuentas gratuitas permiten hasta 10 plantas y 6 miembros del hogar sin tarjeta de crédito."
+  },
+  "petSafeSignup": {
+    "title": "Mantener un hogar seguro para las mascotas es más fácil cuando todos están coordinados",
+    "body": "Family Greenhouse reúne tus plantas, sus cuidados y quién se encarga de cada tarea para que todo el hogar sepa cuáles deben quedar fuera de alcance. Puedes empezar gratis y sin tarjeta.",
+    "cta": "Empezar",
+    "browsePrompt": "¿Solo estás mirando? Lee nuestras",
+    "careGuides": "guías de cuidado de plantas"
   },
   "plants": {
     "title": "Plantas",
@@ -340,6 +392,8 @@
       "added": "{{name}} añadida a tu invernadero",
       "graftHeading": "Empieza su próximo capítulo",
       "graftBody": "Cultiva tu propio esqueje de {{name}} y continúa su historia en tu invernadero.",
+      "graftCta": "Cultiva tu propio esqueje",
+      "signInPrompt": "¿Ya tienes una cuenta?",
       "signIn": "Iniciar sesión",
       "needHousehold": "Crea o únete a un hogar primero para cultivar este esqueje.",
       "goToOnboarding": "Configurar mi hogar",
@@ -390,7 +444,7 @@
       "skipped_one": "1 fila omitida",
       "skippedRowsTitle": "Filas omitidas",
       "skippedRowLabel": "Fila {{row}} — {{name}}",
-      "planLimit": "Alcanzaste el límite de plantas de tu plan de demostración actual, así que las filas restantes se omitieron. Los cambios de plan están en pausa.",
+      "planLimit": "Alcanzaste el límite de plantas de tu plan actual, así que las filas restantes se omitieron. Los cambios de planes de pago están en pausa.",
       "viewPlants": "Ver mis plantas"
     }
   },

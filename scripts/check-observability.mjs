@@ -15,6 +15,10 @@ const main = read('frontend/src/main.tsx');
 const boundary = read('frontend/src/components/RouteErrorBoundary.tsx');
 const production = read('.github/workflows/cd-production.yml');
 const rootInfrastructure = read('infrastructure/main.tf');
+const productionDeployBackend = production.slice(
+  production.indexOf('  deploy-backend:'),
+  production.indexOf('\n  smoke-tests:')
+);
 
 const frontendEventBlock = frontendAnalytics.slice(
   frontendAnalytics.indexOf('export type EventName ='),
@@ -75,7 +79,12 @@ const checks = [
     'release SHA reaches Lambda configuration',
     /git_sha\s*=\s*var\.git_sha/u.test(rootInfrastructure),
   ],
-  ['production smoke uses component health', /PRODUCTION_API_URL \}\}\/health/u.test(production)],
+  [
+    'production smoke uses component health',
+    /API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url \}\}/u.test(productionDeployBackend) &&
+      /url="\$\{API_URL\}\/health"/u.test(productionDeployBackend) &&
+      /components\?\.database\s*!==\s*'ok'/u.test(productionDeployBackend),
+  ],
 ];
 
 const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);

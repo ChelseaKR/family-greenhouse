@@ -39,10 +39,11 @@ In **Settings → Secrets and variables → Actions**:
 
 ### Repository **secrets**
 
-| Name                      | Value                                                                  |
-| ------------------------- | ---------------------------------------------------------------------- |
-| `AWS_PRODUCTION_ROLE_ARN` | the `terraform output` value from step 2                               |
-| `AWS_DEPLOY_ROLE_ARN`     | same value (used by `cd-staging.yml` until you split the staging role) |
+| Name                               | Value                                                                                                                                                                                              |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AWS_PRODUCTION_ROLE_ARN`          | the `terraform output` value from step 2                                                                                                                                                           |
+| `AWS_DEPLOY_ROLE_ARN`              | same value (used by `cd-staging.yml` until you split the staging role)                                                                                                                             |
+| `E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE` | a plus-address template at a monitored, deliverable inbox; keep the literal `{tag}` placeholder (for example, `fg-smoke+{tag}@familygreenhouse.net` only when that domain accepts those addresses) |
 
 ### Repository **variables**
 
@@ -52,10 +53,11 @@ In **Settings → Secrets and variables → Actions**:
 | `PRODUCTION_URL`                  | `https://familygreenhouse.net`                                    |
 | `PRODUCTION_COGNITO_USER_POOL_ID` | `us-east-1_XXXXXXXXX`                                             |
 | `PRODUCTION_COGNITO_CLIENT_ID`    | `<cognito-client-id>`                                             |
-| `STAGING_API_URL`                 | (defer until staging is provisioned)                              |
-| `STAGING_URL`                     | (defer)                                                           |
-| `STAGING_COGNITO_USER_POOL_ID`    | (defer)                                                           |
-| `STAGING_COGNITO_CLIENT_ID`       | (defer)                                                           |
+
+Staging does not require duplicate URL or Cognito repository variables. Its
+workflow builds the deployable frontend after Terraform applies, then passes
+the stack's `api_url`, `site_url`, user-pool id, and table name outputs directly
+to the frontend build, health check, and deployed smoke test.
 
 The current values can also be re-pulled at any time with `terraform -chdir=infrastructure output`.
 
@@ -83,8 +85,8 @@ This kicks off `cd-production.yml`. Walk through:
 3. **terraform** job — `terraform apply` against prod tfvars.
 4. **deploy-backend** + **deploy-frontend** jobs — gated on `production` environment approval.
    - Click **Review deployments** → Approve.
-5. **smoke-tests** job — runs the post-deploy Playwright smoke against `https://familygreenhouse.net`.
-6. On smoke failure, **rollback** job runs and re-publishes the previous Lambda code where archived.
+5. **smoke-tests** job — runs the post-deploy Playwright smoke against `https://familygreenhouse.net`, including a real public signup through the unconfirmed/confirmation-ready state and a separate admin-created authenticated fixture. Both disposable Cognito users are deleted.
+6. On a deploy or smoke failure, **rollback** restores Cognito's pre-deploy signup policy, restores the pre-deploy frontend snapshot + CloudFront cache, and re-publishes the archived previous Lambda code. After either a successful smoke or a verified rollback, the run-scoped frontend snapshot prefix is permanently purged, including every S3 object version and delete marker.
 
 ## Notes
 

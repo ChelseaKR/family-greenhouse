@@ -8,11 +8,12 @@ import { initFrontendTelemetry } from './services/frontendTelemetry';
 import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
-// Self-hosted brand fonts. Gloock is the display face used in the wordmark
-// and major headlines; Instrument Sans is the body face. Both are loaded
+// Self-hosted brand fonts. Bitter Variable is the display face used in the
+// wordmark and major headlines; Instrument Sans is the body face. Both are loaded
 // at app boot from /node_modules so the page renders in-brand on first
 // paint without a third-party request to Google Fonts.
-import '@fontsource/gloock/400.css';
+import '@fontsource-variable/bitter/index.css';
+import '@fontsource-variable/bitter/wght-italic.css';
 import '@fontsource-variable/instrument-sans/index.css';
 import './index.css';
 

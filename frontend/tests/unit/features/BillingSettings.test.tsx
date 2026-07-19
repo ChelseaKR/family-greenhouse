@@ -153,7 +153,8 @@ describe('BillingSettings', () => {
 
   it('shows only current plan status on the web, with no commercial controls or amounts', async () => {
     await renderBilling({ planId: 'seedling' });
-    expect(screen.getByText(/technical demo — plan changes paused/i)).toBeInTheDocument();
+    expect(screen.getByText(/paid plan changes are paused/i)).toBeInTheDocument();
+    expect(screen.getByText(/current plan limits/i)).toBeInTheDocument();
     expect(screen.queryByRole('radiogroup', { name: 'Billing interval' })).not.toBeInTheDocument();
     expect(screen.queryByText('Greenhouse')).not.toBeInTheDocument();
     expect(

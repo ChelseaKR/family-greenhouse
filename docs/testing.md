@@ -83,8 +83,8 @@ The seed data is reset between tests via `resetDb()` from `local-server.ts`. Use
 
 - Wiring tests (does the route exist? does middleware fire in the right order?)
 - Cross-resource flows (direct test fixture → login → create household → add plant)
-- Commercial-hold controls (`/auth/signup` 503/no mutation, status-only
-  `/register`, and Cognito administrator-only self-signup policy)
+- Split commercial-status controls (free `/auth/signup`, paid activity disabled,
+  `/register`, and Cognito self-signup policy)
 - Regression tests for bugs we've previously hit (the JWT-uuid bug, the upcomingTasks shape mismatch)
 
 ## Frontend unit tests
@@ -132,6 +132,13 @@ We run a small set of golden-path tests across Chromium, Firefox, WebKit, Mobile
 - Bad credentials shows an error and stays on `/login`
 
 This isn't a comprehensive UI suite. The goal is "did we break the boot path?" — RTL tests cover behaviour, Playwright covers cross-browser rendering.
+
+The production workflow also runs `post-deploy-smoke.spec.ts` with one Chromium
+worker. One disposable account goes through the live `/register` form and real
+`POST /auth/signup` endpoint until Cognito reports it `UNCONFIRMED`; a separate
+admin-created confirmed account exercises login, onboarding, and the dashboard.
+Teardown deletes both Cognito users and the authenticated fixture's household
+rows, so the public-signup check is not bypassed by the admin fixture.
 
 ## Date / timezone tests
 

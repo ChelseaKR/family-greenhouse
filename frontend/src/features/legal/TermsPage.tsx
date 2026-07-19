@@ -16,7 +16,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title="Terms of Service" effectiveDate="July 14, 2026">
+    <LegalShell title="Terms of Service" effectiveDate="July 19, 2026">
       <p className="lead">
         These terms govern your use of Family Greenhouse. We&rsquo;ve kept them readable. If
         anything is unclear, email{' '}
@@ -58,9 +58,9 @@ export function TermsPage() {
           continuously.
         </li>
         <li>
-          <strong>No current registration or payment collection.</strong> Family Greenhouse is
-          operating as a technical demonstration. It does not currently accept new account
-          registrations, offer paid plans, or create new Checkout or billing-portal sessions.
+          <strong>Free registration, no payment collection.</strong> Family Greenhouse currently
+          accepts free accounts for up to 10 plants. It does not offer paid plans or create new
+          Checkout or billing-portal sessions.
         </li>
       </ul>
 
@@ -93,11 +93,10 @@ export function TermsPage() {
 
       <h2>Plan status</h2>
       <p>
-        New account registration, paid-plan offers, purchases, upgrades, and plan changes are
-        paused. Historical tier and billing code remains in the project as implementation
-        documentation, but it is not a current offer. Existing account holders can still sign in. If
-        you believe an earlier test or billing event affected you, email us so it can be
-        investigated and resolved directly.
+        Free account registration is open. Paid-plan offers, purchases, upgrades, and plan changes
+        are paused. Historical tier and billing code remains in the project as implementation
+        documentation, but it is not a current offer. If you believe an earlier test or billing
+        event affected you, email us so it can be investigated and resolved directly.
       </p>
 
       <h2>Limitations</h2>
@@ -105,7 +104,7 @@ export function TermsPage() {
         The service is provided &ldquo;as is.&rdquo; We aim for high availability but do not promise
         zero downtime, zero data loss, or that every feature will work in every browser at every
         moment. Our liability is limited to the amount you&rsquo;ve paid us in the previous 12
-        months; the current demonstration does not accept payments.
+        months; paid activity is paused, so the hosted service currently accepts no payments.
       </p>
       <p>
         We don&rsquo;t give plant-care advice as a regulated service — the suggestions come from

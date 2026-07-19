@@ -3,9 +3,9 @@ import { COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 
 /**
  * Public plan-status surface. Pricing, interval selectors, purchase links, and
- * registration CTAs are intentionally absent while the repository-level
- * commercial hold is active. Reactivation requires restoring a reviewed UI in
- * addition to changing the shared status and backend deployment controls.
+ * paid-plan CTAs are intentionally absent while the repository-level
+ * commercial hold is active. Free-registration controls live in the parent
+ * page and are governed by their separate fail-closed status flag.
  */
 export function PricingGrid() {
   if (!COMMERCIAL_HOLD_ACTIVE) {

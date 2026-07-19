@@ -21,7 +21,7 @@
     <path d="M352 404V270M352 308c33-2 51-21 54-51-33 0-53 18-54 51Zm0 44c-37-2-58-22-62-57 37 1 59 20 62 57Z" fill="#97C459" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <text x="546" y="138" font-family="Instrument Sans, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="5" fill="#97C459">FAMILY GREENHOUSE</text>
-  <text x="546" y="226" font-family="Gloock, Georgia, serif" font-size="62" font-weight="400" fill="#F7F8F2">
+  <text x="546" y="226" font-family="Bitter Variable" font-size="62" font-weight="400" fill="#F7F8F2">
     <tspan x="546" dy="0">Every plant.</tspan>
     <tspan x="546" dy="70">Every person.</tspan>
     <tspan x="546" dy="70">One care log.</tspan>

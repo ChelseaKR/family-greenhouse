@@ -47,11 +47,11 @@ Terracotta is not a second primary color. Use it to direct attention once, not o
 
 ## Typography
 
-- **Display and wordmark:** Gloock, weight 400 only.
+- **Display and wordmark:** Bitter Variable, usually 400–600.
 - **Body and interface:** Instrument Sans Variable, usually 400–600.
 - **Utility labels:** Instrument Sans, small uppercase with deliberate tracking.
 
-Do not apply `font-semibold` or `font-bold` to Gloock. The package contains one weight; browsers synthesize heavier strokes and muddy its contrast.
+Use Bitter's variable weight range deliberately: keep the wordmark and editorial headings at 400, and reserve heavier weights for hierarchy rather than decoration.
 
 ## Mark system
 
@@ -110,5 +110,5 @@ The script requires `rsvg-convert` and `ffmpeg`, and updates web/PWA exports plu
 - No fabricated testimonials or adoption numbers.
 - No filler claims such as “amazing,” “powerful,” or “revolutionary.”
 - No alternate leaf, heart, or third-party placeholder marks.
-- No synthetic bold Gloock.
+- No synthetic serif styles; use Bitter Variable's loaded weights and true italic.
 - No busy pattern behind copy.

@@ -1,34 +1,64 @@
 import { test, expect } from '@playwright/test';
 
-/** Commercial-hold regression coverage for registration and confirmation entry points. */
-test.describe('Registration hold', () => {
-  test('direct /register navigation exposes no form and sends no signup request', async ({
-    page,
-  }) => {
-    let signupRequests = 0;
-    page.on('request', (request) => {
-      if (request.url().includes('/auth/signup')) signupRequests += 1;
+/** Full free-account registration and email-confirmation flow. */
+test.describe('Register flow', () => {
+  test('register → confirm → sign in → land on onboarding', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('pageerror', (err) => consoleErrors.push(String(err)));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    await page.goto('/register');
+    const email = `new-user-${Date.now()}@example.com`;
+    const password = 'Password1234';
 
-    await expect(
-      page.getByRole('heading', { name: /new account registration is paused/i })
-    ).toBeVisible();
-    await expect(page.getByText(/new signups.*unavailable/i)).toBeVisible();
-    await expect(page.locator('form')).toHaveCount(0);
-    await expect(page.locator('input')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /create account/i })).toHaveCount(0);
-    await expect(page.locator('a[href^="/register"]')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
-    expect(signupRequests).toBe(0);
+    await page.goto('/register');
+    await page.getByLabel(/full name/i).fill('Test Newcomer');
+    await page.getByLabel(/email/i).fill(email);
+    await page.locator('input[autocomplete="new-password"]').first().fill(password);
+    await page.locator('input[autocomplete="new-password"]').nth(1).fill(password);
+    await page.getByRole('button', { name: /create account/i }).click();
+
+    await expect(page).toHaveURL(/\/confirm-email/);
+    await expect(page.getByText(email)).toBeVisible();
+
+    await page.getByLabel(/confirmation code/i).fill('123456');
+    await page.getByRole('button', { name: /confirm email/i }).click();
+
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByText(/email confirmed/i)).toBeVisible();
+    await expect(page.getByLabel(/email address/i)).toHaveValue(email);
+
+    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await expect(page).toHaveURL(/\/onboarding/);
+    expect(consoleErrors).toEqual([]);
   });
 
-  test('confirm-email without pending state points existing users to login', async ({ page }) => {
+  test('wrong confirmation code shows an error and stays on confirm', async ({ page }) => {
+    const email = `bad-code-${Date.now()}@example.com`;
+    const password = 'Password1234';
+
+    await page.goto('/register');
+    await page.getByLabel(/full name/i).fill('Bad Code User');
+    await page.getByLabel(/email/i).fill(email);
+    await page.locator('input[autocomplete="new-password"]').first().fill(password);
+    await page.locator('input[autocomplete="new-password"]').nth(1).fill(password);
+    await page.getByRole('button', { name: /create account/i }).click();
+
+    await expect(page).toHaveURL(/\/confirm-email/);
+    await page.getByLabel(/confirmation code/i).fill('000000');
+    await page.getByRole('button', { name: /confirm email/i }).click();
+
+    await expect(page.getByRole('alert')).toContainText(/invalid confirmation code/i);
+    await expect(page).toHaveURL(/\/confirm-email/);
+  });
+
+  test('confirm-email without pending state offers confirmation recovery', async ({ page }) => {
     await page.goto('/confirm-email');
 
-    await expect(page.getByText(/no email address provided/i)).toBeVisible();
-    await expect(page.locator('a[href^="/register"]')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
+    await expect(page.getByRole('heading', { name: /continue email confirmation/i })).toBeVisible();
+    await expect(page.getByLabel(/email address/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /send confirmation code/i })).toBeEnabled();
   });
 });

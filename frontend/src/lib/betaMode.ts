@@ -1,7 +1,7 @@
 /**
  * Legacy beta badge flag. It is presentation-only and cannot enable pricing,
- * registration, Checkout, or billing controls. Those remain governed by the
- * repository commercial status plus server and infrastructure backstops.
+ * Checkout or billing controls. Registration and paid activity are governed by
+ * separate repository status flags plus server and infrastructure backstops.
  */
 
 const RAW = (import.meta.env.VITE_BETA_MODE ?? 'true').toString().toLowerCase();

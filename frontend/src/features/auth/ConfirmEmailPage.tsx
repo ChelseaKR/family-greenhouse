@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,26 +11,41 @@ import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { AuthShell } from './AuthShell';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import {
+  clearPendingConfirmation,
+  getPendingConfirmation,
+  setPendingConfirmation,
+} from './pendingConfirmation';
+import { safeAppRedirect } from './safeRedirect';
 
-const confirmSchema = z.object({
-  code: z.string().length(6, 'Confirmation code must be 6 digits'),
-});
+const makeConfirmSchema = (t: TFunction) =>
+  z.object({
+    code: z.string().regex(/^\d{6}$/, t('auth.confirmationCodeLength')),
+  });
 
-type ConfirmFormData = z.infer<typeof confirmSchema>;
+type ConfirmFormData = z.infer<ReturnType<typeof makeConfirmSchema>>;
 
 export function ConfirmEmailPage() {
   const { t } = useTranslation();
-  useDocumentTitle('Confirm email');
+  useDocumentTitle(t('auth.confirmDocumentTitle'));
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
 
-  const { email, redirect } = (location.state as { email?: string; redirect?: string }) ?? {};
+  const state = (location.state as { email?: string; redirect?: string }) ?? {};
+  const pending = getPendingConfirmation();
+  const email = state.email ?? pending?.email;
+  const redirect = state.redirect ?? pending?.redirect ?? undefined;
+  const safeRedirect = safeAppRedirect(redirect);
+  const loginHref = safeRedirect ? `/login?redirect=${encodeURIComponent(safeRedirect)}` : '/login';
+  const confirmSchema = useMemo(() => makeConfirmSchema(t), [t]);
 
   const {
     register,
@@ -40,17 +55,80 @@ export function ConfirmEmailPage() {
     resolver: zodResolver(confirmSchema),
   });
 
+  const resendConfirmation = async (targetEmail: string) => {
+    setError(null);
+    setInfo(null);
+    setIsResending(true);
+    try {
+      await authService.resendConfirmationCode(targetEmail);
+      setPendingConfirmation({
+        email: targetEmail,
+        redirect: targetEmail === email ? safeRedirect : null,
+      });
+      setInfo(t('auth.confirmationResent'));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   if (!email) {
     return (
-      <AuthShell title="No confirmation in progress" subtitle={t('commercialHold.headline')}>
-        <p className="text-center text-gray-700">No email address provided.</p>
-        <CommercialHoldNotice compact className="mt-4" />
+      <AuthShell
+        title={t('auth.confirmRecoveryTitle')}
+        subtitle={t('auth.confirmRecoverySubtitle')}
+      >
+        {error && (
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
+        )}
+        {info && (
+          <Alert variant="success" className="mb-4">
+            {info}
+          </Alert>
+        )}
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void resendConfirmation(recoveryEmail.trim());
+          }}
+        >
+          <Input
+            key="confirmation-recovery-email"
+            label={t('auth.email')}
+            type="email"
+            autoComplete="email"
+            required
+            value={recoveryEmail}
+            onChange={(event) => setRecoveryEmail(event.target.value)}
+          />
+          <Button type="submit" className="w-full" isLoading={isResending}>
+            {t('auth.resendConfirmation')}
+          </Button>
+        </form>
         <div className="mt-4 text-center text-sm text-gray-700">
           {t('auth.existingAccount')}{' '}
-          <Link to="/login" className="text-sm font-medium text-primary-700 hover:text-primary-600">
+          <Link to={loginHref} className="font-medium text-primary-700 hover:text-primary-600">
             {t('auth.signInButton')}
           </Link>
         </div>
+        {PUBLIC_REGISTRATION_AVAILABLE ? (
+          <div className="mt-3 text-center">
+            <Link
+              to="/register"
+              className="text-sm font-medium text-primary-700 hover:text-primary-600"
+            >
+              {t('auth.goToRegistration')}
+            </Link>
+          </div>
+        ) : (
+          <Alert variant="info" className="mt-4">
+            {t('auth.registrationPausedMessage')}
+          </Alert>
+        )}
       </AuthShell>
     );
   }
@@ -68,9 +146,8 @@ export function ConfirmEmailPage() {
       // email prefilled, carrying any post-auth redirect (e.g. /join/CODE) so
       // an invite-accept flow resumes after they sign in.
       await authService.confirmEmail({ email, code: data.code });
+      clearPendingConfirmation();
       track('signup_completed');
-      const safeRedirect =
-        redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : null;
       navigate(safeRedirect ? `/login?redirect=${encodeURIComponent(safeRedirect)}` : '/login', {
         state: { email, justConfirmed: true },
       });
@@ -82,37 +159,27 @@ export function ConfirmEmailPage() {
   };
 
   const handleResend = async () => {
-    setError(null);
-    setInfo(null);
-    setIsResending(true);
-    try {
-      const result = await authService.resendConfirmationCode(email);
-      setInfo(result.message);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsResending(false);
-    }
+    await resendConfirmation(email);
   };
 
   return (
     <AuthShell
-      title="Confirm your email"
+      title={t('auth.confirmTitle')}
       subtitle={
         <>
-          We sent a confirmation code to <strong>{email}</strong>
+          {t('auth.confirmSentTo')} <strong>{email}</strong>
         </>
       }
       footer={
         <>
-          Didn't receive the code?{' '}
+          {t('auth.resendPrompt')}{' '}
           <button
             type="button"
             className="font-medium text-primary-700 hover:text-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleResend}
             disabled={isResending}
           >
-            {isResending ? 'Sending…' : 'Resend code'}
+            {isResending ? t('auth.sending') : t('auth.resendCode')}
           </button>
         </>
       }
@@ -130,7 +197,8 @@ export function ConfirmEmailPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         <Input
-          label="Confirmation code"
+          key="confirmation-code"
+          label={t('auth.confirmationCode')}
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
@@ -138,12 +206,12 @@ export function ConfirmEmailPage() {
           autoComplete="one-time-code"
           required
           error={errors.code?.message}
-          helperText="Enter the 6-digit code from your email"
+          helperText={t('auth.confirmationCodeHelper')}
           {...register('code')}
         />
 
         <Button type="submit" className="w-full" isLoading={isLoading}>
-          Confirm email
+          {t('auth.confirmEmailButton')}
         </Button>
       </form>
     </AuthShell>

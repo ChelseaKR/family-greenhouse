@@ -109,4 +109,23 @@ describe('AccountSettings — CSV export', () => {
     expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument();
     expect(screen.queryByText('Calendar feed')).not.toBeInTheDocument();
   });
+
+  it('requires the Cognito password policy before enabling a password change', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.type(screen.getByLabelText(/current password/i), 'old-password');
+    await user.type(screen.getByLabelText(/^new password/i), 'password1234');
+    await user.type(screen.getByLabelText(/confirm new password/i), 'password1234');
+
+    expect(screen.getByRole('button', { name: /update password/i })).toBeDisabled();
+    expect(screen.getByText(/at least 12 characters with uppercase/i)).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/^new password/i));
+    await user.clear(screen.getByLabelText(/confirm new password/i));
+    await user.type(screen.getByLabelText(/^new password/i), 'Password1234');
+    await user.type(screen.getByLabelText(/confirm new password/i), 'Password1234');
+
+    expect(screen.getByRole('button', { name: /update password/i })).toBeEnabled();
+  });
 });

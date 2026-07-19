@@ -27,7 +27,7 @@
   <text x="274" y="503" text-anchor="middle" font-family="Instrument Sans, Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="4" fill="#3B6D11">GROW TOGETHER</text>
 
   <text x="548" y="136" font-family="Instrument Sans, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="5" fill="#97C459">FAMILY GREENHOUSE</text>
-  <text x="548" y="238" font-family="Gloock, Georgia, serif" font-size="72" font-weight="400" fill="#F7F8F2">
+  <text x="548" y="238" font-family="Bitter Variable" font-size="72" font-weight="400" fill="#F7F8F2">
     <tspan x="548" dy="0">Plant care,</tspan>
     <tspan x="548" dy="78">shared.</tspan>
   </text>
@@ -36,5 +36,5 @@
     <tspan x="552" dy="42">for the whole household.</tspan>
   </text>
   <rect x="548" y="478" width="334" height="54" rx="27" fill="#DC6C1F"/>
-  <text x="715" y="513" text-anchor="middle" font-family="Instrument Sans, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="#FFFFFF">TECHNICAL DEMONSTRATION</text>
+  <text x="715" y="513" text-anchor="middle" font-family="Instrument Sans, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="#FFFFFF">FREE FOR UP TO 10 PLANTS</text>
 </svg>

@@ -18,7 +18,7 @@
     <path d="M160 404V276M160 316c-33-2-51-21-54-51 33 0 53 18 54 51Zm0 40c37-2 58-22 62-57-37 1-59 20-62 57Z" fill="#639922" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M352 404V270M352 308c33-2 51-21 54-51-33 0-53 18-54 51Zm0 44c-37-2-58-22-62-57 37 1 59 20 62 57Z" fill="#97C459" stroke="#27500A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <text x="500" y="735" text-anchor="middle" font-family="Gloock, Georgia, serif" font-size="62" font-weight="400" fill="#EAF3DE">Family</text>
-  <text x="500" y="802" text-anchor="middle" font-family="Gloock, Georgia, serif" font-size="62" font-weight="400" fill="#EAF3DE">Greenhouse</text>
+  <text x="500" y="735" text-anchor="middle" font-family="Bitter Variable" font-size="62" font-weight="400" fill="#EAF3DE">Family</text>
+  <text x="500" y="802" text-anchor="middle" font-family="Bitter Variable" font-size="62" font-weight="400" fill="#EAF3DE">Greenhouse</text>
   <text x="500" y="864" text-anchor="middle" font-family="Instrument Sans, Arial, sans-serif" font-size="20" font-weight="600" letter-spacing="8" fill="#97C459">GROW TOGETHER</text>
 </svg>

@@ -20,6 +20,9 @@ env:
   ENVIRONMENT: production
   # Bucket holding per-version Lambda zips that auto-rollback restores from.
   ARTIFACT_BUCKET: family-greenhouse-tfstate-014248889144
+  # Stable across retries: a completed pre-deploy snapshot is reused rather
+  # than overwritten with assets from a failed first attempt.
+  FRONTEND_SNAPSHOT_PREFIX: frontend-snapshots/${{ github.run_id }}
 
 # Least-privilege default: read-only token. Jobs that assume an AWS role via
 # OIDC (aws-actions/configure-aws-credentials) grant `id-token: write` at the
@@ -44,9 +47,9 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [ "$GITHUB_EVENT_NAME" == "push" ]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Validate version format
@@ -55,6 +58,16 @@ jobs:
         run: |
           if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid version format: $VERSION"
+            exit 1
+          fi
+
+      - name: Require main for manual production dispatch
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          if [ "$DISPATCH_REF" != "refs/heads/main" ]; then
+            echo "::error::Manual production deploys must be dispatched from main (received ${DISPATCH_REF})."
             exit 1
           fi
 
@@ -194,6 +207,14 @@ jobs:
     outputs:
       frontend_bucket: ${{ steps.outputs.outputs.frontend_bucket }}
       cloudfront_id: ${{ steps.outputs.outputs.cloudfront_id }}
+      site_url: ${{ steps.outputs.outputs.site_url }}
+      api_url: ${{ steps.outputs.outputs.api_url }}
+      cognito_user_pool_id: ${{ steps.outputs.outputs.cognito_user_pool_id }}
+      dynamodb_table_name: ${{ steps.outputs.outputs.dynamodb_table_name }}
+      registration_snapshot_ready: ${{ steps.registration_snapshot.outputs.ready }}
+      cognito_user_pool_id_before: ${{ steps.registration_snapshot.outputs.user_pool_id }}
+      public_registration_enabled_before: ${{ steps.registration_snapshot.outputs.public_registration_enabled }}
+      admin_create_user_only_before: ${{ steps.registration_snapshot.outputs.admin_create_user_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -215,6 +236,32 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      - name: Snapshot Cognito registration policy
+        id: registration_snapshot
+        run: |
+          set -euo pipefail
+          USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)
+          ADMIN_ONLY=$(aws cognito-idp describe-user-pool \
+            --user-pool-id "$USER_POOL_ID" \
+            --query 'UserPool.AdminCreateUserConfig.AllowAdminCreateUserOnly' \
+            --output text)
+
+          case "$ADMIN_ONLY" in
+            True) REGISTRATION_ENABLED=false ;;
+            False) REGISTRATION_ENABLED=true ;;
+            *)
+              echo "::error::Unexpected Cognito AllowAdminCreateUserOnly value: ${ADMIN_ONLY}"
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "user_pool_id=${USER_POOL_ID}"
+            echo "public_registration_enabled=${REGISTRATION_ENABLED}"
+            echo "admin_create_user_only=${ADMIN_ONLY}"
+            echo "ready=true"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Terraform Plan
         # Stripe secrets are injected as TF_VARs from GitHub Actions secrets so
         # the sensitive values never land in the committed tfvars. Unset secrets
@@ -234,13 +281,24 @@ jobs:
       - name: Get outputs
         id: outputs
         run: |
-          echo "frontend_bucket=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
-          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          {
+            echo "frontend_bucket=$(terraform output -raw frontend_bucket_name)"
+            echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)"
+            echo "site_url=$(terraform output -raw site_url)"
+            echo "api_url=$(terraform output -raw api_url)"
+            echo "cognito_user_pool_id=$(terraform output -raw cognito_user_pool_id)"
+            echo "dynamodb_table_name=$(terraform output -raw dynamodb_table_name)"
+          } >> "$GITHUB_OUTPUT"
 
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
-    needs: [validate, terraform]
+    # Registration rollout order: Terraform opens Cognito first, then the API,
+    # then the public form. This prevents a live signup CTA from reaching a
+    # still-closed backend during a rolling release.
+    needs: [validate, terraform, deploy-backend]
+    outputs:
+      rollback_snapshot_ready: ${{ steps.rollback_snapshot.outputs.ready }}
     # OIDC: assumes AWS_PRODUCTION_ROLE_ARN via configure-aws-credentials.
     permissions:
       id-token: write
@@ -262,6 +320,40 @@ jobs:
           name: frontend-dist-${{ needs.validate.outputs.version }}
           path: dist
 
+      - name: Snapshot current frontend for rollback
+        id: rollback_snapshot
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
+        run: |
+          set -euo pipefail
+          # A completed snapshot is immutable across both failed-job retries
+          # and full workflow reruns. If no completion marker exists, the live
+          # frontend has not yet been mutated by this job, so a partial copy can
+          # safely be replaced before retrying.
+          if aws s3api head-object \
+            --bucket "$ARTIFACT_BUCKET" \
+            --key "${FRONTEND_SNAPSHOT_PREFIX}/snapshot-complete" > /dev/null 2>&1; then
+            aws s3api head-object \
+              --bucket "$ARTIFACT_BUCKET" \
+              --key "${FRONTEND_SNAPSHOT_PREFIX}/index.html" > /dev/null
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          aws s3 rm "s3://${ARTIFACT_BUCKET}/${FRONTEND_SNAPSHOT_PREFIX}/" \
+            --recursive --only-show-errors
+          aws s3 cp "s3://${FRONTEND_BUCKET}/" \
+            "s3://${ARTIFACT_BUCKET}/${FRONTEND_SNAPSHOT_PREFIX}/" \
+            --recursive --copy-props default --only-show-errors
+          aws s3api head-object \
+            --bucket "$ARTIFACT_BUCKET" \
+            --key "${FRONTEND_SNAPSHOT_PREFIX}/index.html" > /dev/null
+          aws s3api put-object \
+            --bucket "$ARTIFACT_BUCKET" \
+            --key "${FRONTEND_SNAPSHOT_PREFIX}/snapshot-complete" \
+            --body /dev/null > /dev/null
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
       - name: Sync to S3
         run: |
           aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
@@ -274,19 +366,23 @@ jobs:
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
       - name: Invalidate CloudFront
+        env:
+          CLOUDFRONT_ID: ${{ needs.terraform.outputs.cloudfront_id }}
         run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ needs.terraform.outputs.cloudfront_id }} \
-            --paths "/*"
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_ID" \
+            --paths "/*" \
+            --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_ID" \
+            --id "$INVALIDATION_ID"
 
   deploy-backend:
     name: Deploy Backend
     runs-on: ubuntu-latest
-    # The commercial-hold release changes GET /billing/plans from a legacy
-    # array to a status-bearing object. Deploy the backward-compatible frontend
-    # first so no old bundle can observe the new contract and render stale
-    # pricing controls during a rolling release.
-    needs: [validate, terraform, deploy-frontend]
+    needs: [validate, terraform]
+    outputs:
+      rollback_snapshot_ready: ${{ steps.rollback_snapshot.outputs.ready }}
     # OIDC: assumes AWS_PRODUCTION_ROLE_ARN via configure-aws-credentials.
     permissions:
       id-token: write
@@ -326,12 +422,14 @@ jobs:
             # which broke rollback (it looked for "<handler>-v\$LATEST.zip"
             # artifacts that can never exist — observed in the v0.2.0 run).
             # The newest PUBLISHED version number is what deploys archive.
+            # $LATEST is a literal Lambda qualifier in the JMESPath expression.
+            # shellcheck disable=SC2016
             ver=$(aws lambda list-versions-by-function --function-name "$FUNCTION_NAME" \
               --query 'max_by(Versions[?Version!=`$LATEST`], &to_number(Version)).Version' \
               --output text)
             versions="${versions}${handler}=${ver}\n"
           done
-          printf "$versions" > prev-versions.txt
+          printf '%b' "$versions" > prev-versions.txt
           cat prev-versions.txt
 
       - name: Upload prev-versions artifact (for rollback)
@@ -339,6 +437,10 @@ jobs:
         with:
           name: prev-versions-${{ needs.validate.outputs.version }}
           path: prev-versions.txt
+
+      - name: Mark Lambda rollback snapshot ready
+        id: rollback_snapshot
+        run: echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Lambda functions
         run: |
@@ -367,6 +469,7 @@ jobs:
               --function-name "$FUNCTION_NAME" \
               --zip-file "fileb:///tmp/${handler}.zip" \
               --publish --query 'Version' --output text)
+            aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
             echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})"
 
             # Archive this version's zip keyed by the version number we just
@@ -381,8 +484,10 @@ jobs:
           done
 
       - name: Smoke test (public route proves routing + dispatch are live)
+        env:
+          API_URL: ${{ needs.terraform.outputs.api_url }}
         run: |
-          url="${{ vars.PRODUCTION_API_URL }}/health"
+          url="${API_URL}/health"
           code=$(curl -sS -o /tmp/health.json -w "%{http_code}" "$url")
           echo "GET /health -> $code"
           cat /tmp/health.json
@@ -392,7 +497,7 @@ jobs:
   smoke-tests:
     name: Post-deploy smoke (Playwright e2e against prod)
     runs-on: ubuntu-latest
-    needs: [validate, deploy-frontend, deploy-backend]
+    needs: [validate, terraform, deploy-frontend, deploy-backend]
     # OIDC: assumes AWS_PRODUCTION_ROLE_ARN for Cognito test-user create+delete.
     permissions:
       id-token: write
@@ -430,15 +535,20 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Frontend HTTP reachability
+        env:
+          SITE_URL: ${{ needs.terraform.outputs.site_url }}
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }})
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$SITE_URL")
           test "$code" = "200" || { echo "Frontend HTTP $code"; exit 1; }
 
       - name: Critical-path e2e (post-deploy-smoke)
         working-directory: frontend
         env:
-          E2E_BASE_URL: ${{ vars.PRODUCTION_URL }}
-          E2E_USER_POOL_ID: ${{ vars.PRODUCTION_COGNITO_USER_POOL_ID }}
+          E2E_BASE_URL: ${{ needs.terraform.outputs.site_url }}
+          E2E_API_URL: ${{ needs.terraform.outputs.api_url }}
+          E2E_USER_POOL_ID: ${{ needs.terraform.outputs.cognito_user_pool_id }}
+          E2E_TABLE_NAME: ${{ needs.terraform.outputs.dynamodb_table_name }}
+          E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE: ${{ secrets.E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE }}
         run: npx playwright test --config tests/e2e/playwright.smoke.config.ts
 
       - name: Upload Playwright report
@@ -449,32 +559,163 @@ jobs:
           path: frontend/playwright-report
           if-no-files-found: ignore
 
-  rollback:
-    name: Auto-rollback Lambda on smoke failure
+  cleanup-success-snapshot:
+    name: Purge successful release rollback snapshot
     runs-on: ubuntu-latest
-    needs: [validate, deploy-backend, smoke-tests]
-    if: failure() && needs.deploy-backend.result == 'success'
-    # OIDC: assumes AWS_PRODUCTION_ROLE_ARN via configure-aws-credentials.
+    needs: smoke-tests
+    # Keep retention cleanup separate from smoke-tests: if deletion fails after
+    # partially draining the versioned prefix, it must not turn a good deploy
+    # into a rollback that now depends on that partially deleted snapshot.
+    if: ${{ needs.smoke-tests.result == 'success' }}
     permissions:
       id-token: write
       contents: read
-    # SCOPE: this auto-rollback reverts Lambda *code* ONLY. The `terraform
-    # apply` that ran earlier in this deploy (Cognito/DDB/CloudFront/IAM/etc.)
-    # is NOT auto-rolled-back — if a bad infra change is what broke smoke,
-    # revert the tfvars/module change and run a corrective deploy by hand.
     steps:
+      - name: Checkout workflow cleanup helper
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Purge all frontend snapshot versions and delete markers
+        run: bash .github/scripts/purge-frontend-snapshot-versions.sh "$ARTIFACT_BUCKET" "$FRONTEND_SNAPSHOT_PREFIX"
+
+  rollback:
+    name: Auto-rollback production release
+    runs-on: ubuntu-latest
+    # Direct dependencies are required here because GitHub Actions does not
+    # expose outputs/results through transitive `needs` relationships.
+    needs: [validate, terraform, deploy-backend, deploy-frontend, smoke-tests]
+    # The policy snapshot is taken before Terraform plans or applies. If any
+    # later stage fails, restore that exact pre-deploy state (open or closed).
+    if: ${{ always() && needs.terraform.outputs.registration_snapshot_ready == 'true' && needs.smoke-tests.result != 'success' }}
+    # OIDC: assumes AWS_PRODUCTION_ROLE_ARN via configure-aws-credentials.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout tagged ref
+        id: checkout
+        # allow-silenced-gate: independent rollback branches continue; the final outcome verifier re-fails incomplete recovery
+        continue-on-error: true
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Configure AWS credentials
+        id: aws_credentials
+        # allow-silenced-gate: independent rollback branches continue; the final outcome verifier re-fails incomplete recovery
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        id: terraform_setup
+        # allow-silenced-gate: frontend and Lambda recovery do not depend on Terraform; the final verifier checks Cognito recovery
+        continue-on-error: true
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.5.7
+          terraform_wrapper: false
+
+      - name: Restore Cognito registration policy
+        id: restore_registration
+        if: ${{ always() && steps.checkout.outcome == 'success' && steps.aws_credentials.outcome == 'success' && steps.terraform_setup.outcome == 'success' }}
+        # allow-silenced-gate: other recovery branches must still run; the final outcome verifier re-fails this job
+        continue-on-error: true
+        working-directory: infrastructure
+        env:
+          TF_VAR_stripe_secret_key: ${{ secrets.STRIPE_SECRET_KEY }}
+          TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_git_sha: ${{ needs.validate.outputs.commit_sha }}
+          REGISTRATION_ENABLED_BEFORE: ${{ needs.terraform.outputs.public_registration_enabled_before }}
+          ADMIN_ONLY_BEFORE: ${{ needs.terraform.outputs.admin_create_user_only_before }}
+          USER_POOL_ID_BEFORE: ${{ needs.terraform.outputs.cognito_user_pool_id_before }}
+        run: |
+          set -euo pipefail
+          case "$REGISTRATION_ENABLED_BEFORE:$ADMIN_ONLY_BEFORE" in
+            false:True|true:False) ;;
+            *)
+              echo "::error::Invalid pre-deploy Cognito policy snapshot"
+              exit 1
+              ;;
+          esac
+          test -n "$USER_POOL_ID_BEFORE" || {
+            echo "::error::Pre-deploy Cognito user-pool snapshot is empty"
+            exit 1
+          }
+
+          terraform init -input=false
+          terraform plan -input=false \
+            -var-file=environments/production/terraform.tfvars \
+            -var="public_registration_enabled=${REGISTRATION_ENABLED_BEFORE}" \
+            -target=module.auth.aws_cognito_user_pool.main \
+            -out=rollback-auth.tfplan
+          terraform apply -input=false -auto-approve rollback-auth.tfplan
+
+          USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)
+          test "$USER_POOL_ID" = "$USER_POOL_ID_BEFORE" || {
+            echo "::error::Cognito user pool changed during deploy; targeted policy rollback is insufficient"
+            exit 1
+          }
+          POLICY=$(aws cognito-idp describe-user-pool \
+            --user-pool-id "$USER_POOL_ID_BEFORE" \
+            --query 'UserPool.AdminCreateUserConfig.AllowAdminCreateUserOnly' \
+            --output text)
+          test "$POLICY" = "$ADMIN_ONLY_BEFORE" || {
+            echo "::error::Cognito registration policy was not restored to ${ADMIN_ONLY_BEFORE}"
+            exit 1
+          }
+
+      - name: Restore previous frontend
+        id: restore_frontend
+        if: ${{ always() && needs.deploy-frontend.outputs.rollback_snapshot_ready == 'true' && steps.aws_credentials.outcome == 'success' }}
+        # allow-silenced-gate: Lambda and Cognito recovery must still run; the final outcome verifier re-fails this job
+        continue-on-error: true
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
+          CLOUDFRONT_ID: ${{ needs.terraform.outputs.cloudfront_id }}
+        run: |
+          set -euo pipefail
+          # `cp` forces older snapshot objects over same-size newer objects;
+          # the following sync removes assets introduced by the failed deploy.
+          aws s3 cp "s3://${ARTIFACT_BUCKET}/${FRONTEND_SNAPSHOT_PREFIX}/" \
+            "s3://${FRONTEND_BUCKET}/" \
+            --recursive --exclude "snapshot-complete" --copy-props default --only-show-errors
+          aws s3 sync "s3://${ARTIFACT_BUCKET}/${FRONTEND_SNAPSHOT_PREFIX}/" \
+            "s3://${FRONTEND_BUCKET}/" \
+            --delete --exclude "snapshot-complete" --copy-props default --only-show-errors
+
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_ID" \
+            --id "$INVALIDATION_ID"
+
       - name: Download previous versions
+        id: download_versions
+        if: ${{ always() && needs.deploy-backend.outputs.rollback_snapshot_ready == 'true' }}
+        # allow-silenced-gate: frontend and Cognito recovery remain independent; the final verifier checks this artifact
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: prev-versions-${{ needs.validate.outputs.version }}
 
       - name: Restore previous Lambda versions
+        id: restore_backend
+        if: ${{ always() && needs.deploy-backend.outputs.rollback_snapshot_ready == 'true' && steps.aws_credentials.outcome == 'success' && steps.download_versions.outcome == 'success' }}
+        # allow-silenced-gate: frontend and Cognito recovery remain independent; the final outcome verifier re-fails this job
+        continue-on-error: true
         run: |
           set -euo pipefail
           while IFS='=' read -r handler ver; do
@@ -491,12 +732,15 @@ jobs:
             # leaves a broken deploy live while the workflow looks "rolled
             # back". Track every failure and exit non-zero at the end so the
             # operator is paged to finish the rollback by hand.
-            if ! aws lambda update-function-code \
+            if aws lambda update-function-code \
               --function-name "$FUNCTION_NAME" \
               --s3-bucket "$ARTIFACT_BUCKET" \
               --s3-key "lambda-versions/${handler}-v${ver}.zip" \
-              --publish > /dev/null 2>&1; then
-              echo "::error::${FUNCTION_NAME}: no prior-version artifact (lambda-versions/${handler}-v${ver}.zip) — NOT rolled back, manual intervention required"
+              --publish > /dev/null 2>&1 && \
+              aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"; then
+              echo "  ✓ ${FUNCTION_NAME} restored"
+            else
+              echo "::error::${FUNCTION_NAME}: prior-version restore failed (lambda-versions/${handler}-v${ver}.zip) — manual intervention required"
               rollback_failed=1
             fi
           done < prev-versions.txt
@@ -506,23 +750,75 @@ jobs:
             exit 1
           fi
 
-      - name: Notify (rollback)
+      - name: Verify rollback outcome
+        id: verify_rollback
+        if: always()
+        env:
+          REGISTRATION_OUTCOME: ${{ steps.restore_registration.outcome }}
+          FRONTEND_EXPECTED: ${{ needs.deploy-frontend.outputs.rollback_snapshot_ready }}
+          FRONTEND_OUTCOME: ${{ steps.restore_frontend.outcome }}
+          BACKEND_EXPECTED: ${{ needs.deploy-backend.outputs.rollback_snapshot_ready }}
+          DOWNLOAD_OUTCOME: ${{ steps.download_versions.outcome }}
+          BACKEND_OUTCOME: ${{ steps.restore_backend.outcome }}
         run: |
-          echo "::error::Production deploy of ${{ needs.validate.outputs.version }} failed smoke. Lambda code rolled back where possible. Investigate CloudWatch + the playwright-smoke report artifact."
-          exit 1
+          set -euo pipefail
+          failed=0
+
+          if [ "$REGISTRATION_OUTCOME" != "success" ]; then
+            echo "::error::Cognito registration policy restore outcome: ${REGISTRATION_OUTCOME}"
+            failed=1
+          fi
+          if [ "$FRONTEND_EXPECTED" = "true" ] && [ "$FRONTEND_OUTCOME" != "success" ]; then
+            echo "::error::Frontend restore outcome: ${FRONTEND_OUTCOME}"
+            failed=1
+          fi
+          if [ "$BACKEND_EXPECTED" = "true" ] && { [ "$DOWNLOAD_OUTCOME" != "success" ] || [ "$BACKEND_OUTCOME" != "success" ]; }; then
+            echo "::error::Backend restore outcomes: download=${DOWNLOAD_OUTCOME}, restore=${BACKEND_OUTCOME}"
+            failed=1
+          fi
+
+          test "$failed" = "0"
+
+      - name: Checkout workflow cleanup helper
+        if: ${{ success() && steps.verify_rollback.outcome == 'success' }}
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: cleanup-workflow-source
+          persist-credentials: false
+
+      - name: Purge completed rollback frontend snapshot versions and delete markers
+        if: ${{ success() && steps.verify_rollback.outcome == 'success' }}
+        run: bash cleanup-workflow-source/.github/scripts/purge-frontend-snapshot-versions.sh "$ARTIFACT_BUCKET" "$FRONTEND_SNAPSHOT_PREFIX"
+
+      - name: Report successful rollback
+        if: ${{ success() && steps.verify_rollback.outcome == 'success' }}
+        run: |
+          echo "::warning::Production deploy of ${{ needs.validate.outputs.version }} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
 
   notify:
     name: Notify
     runs-on: ubuntu-latest
-    needs: [validate, deploy-frontend, deploy-backend, smoke-tests]
+    needs:
+      [validate, deploy-frontend, deploy-backend, smoke-tests, cleanup-success-snapshot, rollback]
     if: always()
     steps:
       - name: Deployment notification
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          SMOKE_RESULT: ${{ needs.smoke-tests.result }}
+          CLEANUP_RESULT: ${{ needs.cleanup-success-snapshot.result }}
+          ROLLBACK_RESULT: ${{ needs.rollback.result }}
         run: |
-          VERSION="${{ needs.validate.outputs.version }}"
-          if [ "${{ needs.smoke-tests.result }}" == "success" ]; then
+          if [ "$SMOKE_RESULT" == "success" ] && [ "$CLEANUP_RESULT" == "success" ]; then
             echo "Production deployment of $VERSION successful!"
+          elif [ "$SMOKE_RESULT" == "success" ]; then
+            echo "Production deployment of $VERSION succeeded, but rollback-snapshot retention cleanup failed!"
+            exit 1
+          elif [ "$ROLLBACK_RESULT" == "success" ]; then
+            echo "Production deployment of $VERSION failed and was rolled back."
+            exit 1
           else
-            echo "Production deployment of $VERSION failed!"
+            echo "Production deployment of $VERSION failed and rollback was incomplete or unavailable!"
             exit 1
           fi

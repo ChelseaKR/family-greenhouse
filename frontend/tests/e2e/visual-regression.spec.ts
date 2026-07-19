@@ -38,7 +38,7 @@ const MOBILE = { width: 390, height: 844 } as const;
 async function settle(page: Page) {
   // Wait for fonts + lazy-loaded illustrations to paint before the
   // snapshot fires. Without this, the first frame ships with fallback
-  // fonts and the Gloock-vs-Georgia metric difference is enough to fail
+  // fonts and the Bitter-vs-Georgia metric difference is enough to fail
   // the pixel diff every run.
   await page.waitForLoadState('networkidle').catch(() => {
     /* networkidle can hang on long-poll endpoints; the timeout is fine */
@@ -48,7 +48,7 @@ async function settle(page: Page) {
 }
 
 // Threshold tuned to absorb a few pixels of antialiasing drift around
-// Gloock characters + the hand-drawn SVG strokes without giving real
+// Bitter characters + the hand-drawn SVG strokes without giving real
 // layout shifts a free pass. 0.02 = 2% of pixels may differ.
 const screenshotOptions = {
   maxDiffPixelRatio: 0.02,

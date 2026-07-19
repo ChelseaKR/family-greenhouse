@@ -16,6 +16,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- Free Seedling account registration is open again for households with up to
+  10 plants and 6 members; paid plans and every payment path remain disabled.
+
+### Changed
+
+- Bitter Variable replaces Gloock across the site and generated brand assets.
+- The landing page no longer uses its greenhouse-grid background, animated
+  hero sprigs, or decorative section-divider artwork.
+
 ### Fixed
 
 - SMS reminder bodies are now trimmed to the promised 140-byte budget by

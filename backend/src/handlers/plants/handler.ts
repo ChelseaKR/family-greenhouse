@@ -215,7 +215,7 @@ export const createPlant = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`
+          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -416,7 +416,7 @@ export const updatePlant = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`
+          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -827,7 +827,7 @@ export const acceptSharedPlant = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to add more.`
+          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;

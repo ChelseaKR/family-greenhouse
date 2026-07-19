@@ -62,7 +62,7 @@ export const importPlants = createHandler(
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
     const plan = getPlan(sub.planId);
-    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Upgrade to import more.`;
+    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive existing plants before importing more.`;
 
     const results: ImportRowResult[] = [];
     let created = 0;

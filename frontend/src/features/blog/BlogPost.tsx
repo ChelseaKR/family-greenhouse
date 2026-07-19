@@ -1,10 +1,11 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
-import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
+import { buttonStyles } from '@/components/buttonStyles';
 import { findPost, POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
+import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
  * Single-post page. The post itself is a self-contained TSX component;
@@ -96,7 +97,19 @@ export function BlogPost() {
 
       <Body />
 
-      <CommercialHoldNotice compact className="mt-16" />
+      {PUBLIC_REGISTRATION_AVAILABLE && (
+        <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
+          <p className="font-serif text-xl text-ink">Try Family Greenhouse</p>
+          <p className="mt-2 text-sm text-gray-600">
+            Free for up to 10 plants and 6 household members. No credit card.
+          </p>
+          <div className="mt-4">
+            <Link to="/register" className={buttonStyles()}>
+              Get started
+            </Link>
+          </div>
+        </aside>
+      )}
 
       {otherPosts.length > 0 && (
         <section className="mt-16">

@@ -10,7 +10,13 @@ Assumed context: single region **us-east-1**, serverless stack (API Gateway HTTP
 
 **Symptom:** errors/latency spiked right after a deploy or `v*` tag.
 
-**Auto path:** a failing post-deploy smoke test already triggers the `rollback` job in `cd-production.yml`, which restores each Lambda's previous published version from `s3://<artifact-bucket>/lambda-versions/`. Confirm it fired (Actions run → `rollback` job).
+**Auto path:** a failed backend/frontend deploy or post-deploy smoke test triggers
+the `rollback` job in `cd-production.yml`. It restores the exact pre-deploy
+Cognito self-signup policy with a targeted Terraform apply, restores the
+pre-deploy frontend snapshot and
+invalidates CloudFront, then restores each Lambda's previous published version
+from `s3://<artifact-bucket>/lambda-versions/`. Confirm the whole job completed;
+a red rollback job means production may be only partially restored.
 
 **Manual path:** if you need to roll back without a smoke failure:
 
@@ -23,7 +29,12 @@ aws lambda update-function-code --function-name family-greenhouse-<group>-produc
   --s3-bucket <artifact-bucket> --s3-key lambda-versions/<group>-v<N>.zip --publish
 ```
 
-Then re-run `GET /health` and the smoke check. **Frontend** rollback = re-sync the previous `dist/` to the S3 bucket and invalidate CloudFront.
+Then re-run `GET /health` and the smoke check. If the release changed public
+registration, restore the known pre-deploy value with Terraform's
+`public_registration_enabled=<true|false>` override; do not issue a partial
+`update-user-pool` command because omitted Cognito settings can reset to service
+defaults. **Frontend** rollback = re-sync the previous `dist/` to the S3 bucket
+and wait for CloudFront invalidation before restoring the previous Lambda code.
 
 ---
 

@@ -119,9 +119,8 @@
   .prose-fg p {
     @apply mt-4;
   }
-  /* Prose headings sit in brand ink, not near-black, and skip the bold
-     utility: Gloock ships a single 400 weight, so font-semibold only
-     buys synthetic emboldening that muddies the serifs. */
+  /* Prose headings sit in brand ink, not near-black. Bitter Variable keeps
+     these editorial headings at its calm default weight. */
   .prose-fg h2 {
     @apply mt-10 font-serif text-2xl tracking-tight text-ink;
   }

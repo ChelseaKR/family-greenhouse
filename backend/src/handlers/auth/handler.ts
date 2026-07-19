@@ -24,6 +24,7 @@ import {
   confirmEmailSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  cognitoPasswordSchema,
   refreshTokenSchema,
   resendCodeSchema,
   SignupInput,
@@ -352,7 +353,7 @@ export const resetPassword = createHandler(
 // directly — the JWT-validated `event.user` doesn't carry it.
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(1),
-  newPassword: z.string().min(8),
+  newPassword: cognitoPasswordSchema,
 });
 type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 

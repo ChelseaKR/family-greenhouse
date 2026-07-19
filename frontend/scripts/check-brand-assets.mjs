@@ -68,11 +68,81 @@ function pngDimensions(path) {
 }
 
 const problems = [];
+const sha256 = (contents) => createHash('sha256').update(contents).digest('hex');
+
+// Public logo SVGs are also consumed outside the app, where the bundled web
+// fonts are unavailable. Keep the serif wordmark as reviewed vector outlines
+// and bind each SVG to its generated PNG export(s). This prevents a future
+// text-based wordmark from silently falling back during raw SVG rasterization.
+const reviewedLogoExports = [
+  {
+    label: 'light logo',
+    source: 'public/brand/logo.svg',
+    sourceHash: '5e8ce1f007c757141fb7ebc5c655432b19ac4335087cc797ffb0a8c6981722ef',
+    rasters: [
+      {
+        path: 'public/brand/logo-light.png',
+        hash: '6eb4a717fcc9a12962aabdce16fd136f765d45da31960fd058c53a3aef7596be',
+      },
+      {
+        path: 'public/brand/logo-on-white.png',
+        hash: 'd6b5eb21052d1891db90b64709ecdd4a4d781e8dbe4774df56a7e6e9055b749a',
+      },
+    ],
+  },
+  {
+    label: 'dark logo',
+    source: 'public/brand/logo-dark.svg',
+    sourceHash: '90952b4e1bb043f218c3ff3904eef42b6f7f9f78498ed20a5c44f12c7fb4e76b',
+    rasters: [
+      {
+        path: 'public/brand/logo-dark.png',
+        hash: '488396951be1bdd1f5708702b0fd5cd11eb824af68c1515975e7ac24e23098a7',
+      },
+    ],
+  },
+];
+
+for (const logo of reviewedLogoExports) {
+  const sourcePath = resolve(root, logo.source);
+  const source = readFileSync(sourcePath, 'utf8');
+  const outlinedWordmarks = source.match(
+    /<path\b[^>]*\bid="bitter-wordmark-outline"[^>]*\bdata-font-family="Bitter"[^>]*>/g
+  );
+
+  if (outlinedWordmarks?.length !== 1) {
+    problems.push(`${logo.source}: expected one reviewed Bitter wordmark outline`);
+  }
+  if (
+    /<text\b[^>]*>\s*Family Greenhouse\s*<\/text>/i.test(source) ||
+    /class="wordmark"/i.test(source)
+  ) {
+    problems.push(`${logo.source}: serif wordmark must be paths, not font-dependent SVG text`);
+  }
+  if (sha256(readFileSync(sourcePath)) !== logo.sourceHash) {
+    problems.push(
+      `${logo.label} source hash is unreviewed; regenerate its PNG export(s) and update the reviewed source+raster hashes`
+    );
+  }
+
+  for (const raster of logo.rasters) {
+    if (sha256(readFileSync(resolve(root, raster.path))) !== raster.hash) {
+      problems.push(
+        `${raster.path} hash is unreviewed; regenerate it and update the reviewed source+raster hashes`
+      );
+    }
+  }
+}
+
 const socialSourcePath = resolve(root, 'scripts/brand-assets/og-image.svg');
 const socialRasterPath = resolve(root, 'public/brand/og-image.png');
 const socialSource = readFileSync(socialSourcePath, 'utf8');
-if (/free for up to|sign up|get started|no (?:credit )?card/i.test(socialSource)) {
-  problems.push('scripts/brand-assets/og-image.svg contains commercial acquisition copy');
+if (
+  /\b(?:buy now|subscribe(?: now)?|upgrade(?: now)?|start (?:a |your )?paid plan)\b/i.test(
+    socialSource
+  )
+) {
+  problems.push('scripts/brand-assets/og-image.svg contains paid-conversion copy');
 }
 
 // The PNG is checked into source control and can otherwise drift from its SVG
@@ -80,10 +150,9 @@ if (/free for up to|sign up|get started|no (?:credit )?card/i.test(socialSource)
 // a deliberate social-card edit must regenerate the raster and update both
 // values in the same change.
 const reviewedSocialCardHashes = {
-  source: '0f0693e20c089636f0ca64f708bf54f9d340fe3eb6c790b3e9cf29d784bf9904',
-  raster: '5669f2c05c0e96892ca89435fcab039820730cd8e9b572347b9fdedddb97ced4',
+  source: 'e9cc7b7955977c4c8cd6a75eea8fab9b776f00ea7347ae9a8df58b753dfef10f',
+  raster: 'be98c2cd7dba8c54814cd60b2fd21efb305efb5b029aeb8ac0a0003567938989',
 };
-const sha256 = (contents) => createHash('sha256').update(contents).digest('hex');
 const actualSocialCardHashes = {
   source: sha256(readFileSync(socialSourcePath)),
   raster: sha256(readFileSync(socialRasterPath)),

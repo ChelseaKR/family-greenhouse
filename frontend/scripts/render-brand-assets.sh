@@ -16,6 +16,10 @@ cd "$FRONTEND_DIR"
 mkdir -p "$STORE/google-play" "$STORE/app-store"
 export FONTCONFIG_FILE="$SOURCES/fonts.conf"
 export XDG_CACHE_HOME="$TMP/font-cache"
+# Homebrew Pango defaults to CoreText on macOS, which cannot see the fonts
+# declared in fonts.conf. Force the Fontconfig backend for deterministic
+# cross-platform text rendering.
+export PANGOCAIRO_BACKEND=fc
 
 for command in rsvg-convert ffmpeg; do
   if ! command -v "$command" >/dev/null 2>&1; then

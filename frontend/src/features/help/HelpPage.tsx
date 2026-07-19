@@ -97,7 +97,7 @@ watering task Perenual cadence frequent average minimum manually add task plant 
             Go to <strong>Household</strong> in the sidebar, then{' '}
             <strong>Generate invite link</strong>. Send the link to anyone you want to add.
             They&rsquo;ll create their own login and join your household automatically. The Seedling
-            plan supports up to 2 members, Garden 6, Greenhouse 50.
+            plan supports up to 6 members, Garden 6, Greenhouse 50.
           </>
         ),
         searchText: md`
@@ -409,7 +409,7 @@ Spanish language translation i18n English picker hidden gated
   {
     id: 'billing',
     title: 'Plan status',
-    description: 'Current demo limits and the commercial hold.',
+    description: 'Free-account limits and the paid-activity hold.',
     articles: [
       {
         q: 'Can I buy or change a plan?',
@@ -428,12 +428,13 @@ commercial hold paid plan purchase upgrade billing portal unavailable contact su
         q: 'Can I create a new account?',
         a: (
           <>
-            No. New account registration is paused while Family Greenhouse remains a technical
-            demonstration. Existing account holders can continue to sign in and use recovery tools.
+            Yes. Free accounts are open for households with up to 10 plants and 6 members, and no
+            credit card is required. Paid plans, purchases, upgrades, and plan changes remain
+            paused.
           </>
         ),
         searchText: md`
-new account registration paused technical demonstration existing sign in recovery
+new account registration free signup ten plants no credit card paid plans paused
         `,
       },
       {
