@@ -411,10 +411,12 @@ jobs:
           name: backend-dist-${{ needs.validate.outputs.version }}
           path: dist
 
-      - name: Capture previous Lambda versions for rollback
+      - name: Capture previous Lambda versions and packages for rollback
         id: prev
         run: |
           set -euo pipefail
+          rollback_dir=$(mktemp -d)
+          trap 'rm -rf "$rollback_dir"' EXIT
           versions=""
           # Keep this list in sync with the deploy loop below (and with
           # esbuild's dist/*.js bundles + the terraform function names).
@@ -429,6 +431,48 @@ jobs:
             ver=$(aws lambda list-versions-by-function --function-name "$FUNCTION_NAME" \
               --query 'max_by(Versions[?Version!=`$LATEST`], &to_number(Version)).Version' \
               --output text)
+            if [ -z "$ver" ] || [ "$ver" = "None" ]; then
+              echo "::error::${FUNCTION_NAME}: no published version is available for rollback"
+              exit 1
+            fi
+
+            # Materialize the captured package before mutating any function.
+            # A version number alone is insufficient: versions published by a
+            # prior rollback might not yet have a matching artifact in our S3
+            # archive. Lambda's immutable version remains the source of truth.
+            code_location=$(aws lambda get-function \
+              --function-name "$FUNCTION_NAME" \
+              --qualifier "$ver" \
+              --query 'Code.Location' \
+              --output text)
+            if [ -z "$code_location" ] || [ "$code_location" = "None" ]; then
+              echo "::error::${FUNCTION_NAME}: version ${ver} has no downloadable code package"
+              exit 1
+            fi
+
+            snapshot_file="${rollback_dir}/${handler}-v${ver}.zip"
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors \
+              "$code_location" \
+              --output "$snapshot_file"
+            test -s "$snapshot_file" || {
+              echo "::error::${FUNCTION_NAME}: downloaded rollback package is empty"
+              exit 1
+            }
+            snapshot_key="lambda-versions/${handler}-v${ver}.zip"
+            aws s3 cp "$snapshot_file" \
+              "s3://${ARTIFACT_BUCKET}/${snapshot_key}" \
+              --only-show-errors
+            snapshot_size=$(aws s3api head-object \
+              --bucket "$ARTIFACT_BUCKET" \
+              --key "$snapshot_key" \
+              --query 'ContentLength' \
+              --output text)
+            if ! [[ "$snapshot_size" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::${FUNCTION_NAME}: rollback package was not stored correctly"
+              exit 1
+            fi
+            echo "  ✓ ${FUNCTION_NAME} rollback package v${ver} (${snapshot_size} bytes)"
             versions="${versions}${handler}=${ver}\n"
           done
           printf '%b' "$versions" > prev-versions.txt
