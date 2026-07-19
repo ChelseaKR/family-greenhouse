@@ -8,14 +8,14 @@
  * client with a DDB cache and a daily-budget circuit breaker.
  *
  * API key resolution (in priority order):
- *   1. `PERENUAL_API_KEY_SECRET_ID` env → fetched once per warm container
- *      from AWS Secrets Manager. Production path. The Lambda role needs
- *      `secretsmanager:GetSecretValue` on the secret ARN.
+ *   1. `PERENUAL_API_KEY_PARAMETER_NAME` env → fetched once per warm
+ *      container from SSM Parameter Store. Production path. The Lambda role
+ *      needs `ssm:GetParameter` on the parameter ARN.
  *   2. `PERENUAL_API_KEY` env → literal value. Dev/local fallback.
  *   3. Neither set → every method short-circuits to null. The integration
  *      is feature-gated by the presence of a key, not by an explicit flag.
  */
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import AWSXRay from 'aws-xray-sdk-core';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -69,30 +69,35 @@ export interface PerenualPestSummary {
 // On a rotation, the operator forces a Lambda redeploy and new containers
 // pick up the new value.
 let resolvedKey: string | undefined;
-let resolvedAt: 'env' | 'secrets' | 'unset' | undefined;
+let resolvedAt: 'env' | 'parameter' | 'unset' | undefined;
 
-const secretsClient = AWSXRay.captureAWSv3Client(
-  new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-east-1' })
+const ssmClient = AWSXRay.captureAWSv3Client(
+  new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' })
 );
 
 async function resolveApiKey(): Promise<string | undefined> {
   if (resolvedAt !== undefined) return resolvedKey;
-  const secretId = optionalEnv('PERENUAL_API_KEY_SECRET_ID');
-  if (secretId) {
+  const parameterName = optionalEnv('PERENUAL_API_KEY_PARAMETER_NAME');
+  if (parameterName) {
     try {
-      const out = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
-      const value = out.SecretString?.trim();
+      const out = await ssmClient.send(
+        new GetParameterCommand({ Name: parameterName, WithDecryption: true })
+      );
+      const value = out.Parameter?.Value?.trim();
       if (value) {
         resolvedKey = value;
-        resolvedAt = 'secrets';
+        resolvedAt = 'parameter';
         return resolvedKey;
       }
-      // Genuinely empty secret: fall through to the literal/unset path below
-      // — caching 'unset' is correct for a deliberately blank secret.
-      logger.warn({ secretId }, 'perenual.secret_empty');
+      // Genuinely empty parameter: fall through to the literal/unset path
+      // below — caching 'unset' is correct for a deliberately blank value.
+      logger.warn({ parameterName }, 'perenual.parameter_empty');
     } catch (err) {
-      logger.warn({ err: (err as Error).message, secretId }, 'perenual.secret_fetch_failed');
-      // Transient Secrets Manager failure (throttle, network, IAM blip):
+      logger.warn(
+        { err: (err as Error).message, parameterName },
+        'perenual.parameter_fetch_failed'
+      );
+      // Transient Parameter Store failure (throttle, network, IAM blip):
       // do NOT cache the 'unset' sentinel — leave resolvedAt undefined so
       // the next call retries instead of disabling the integration for the
       // container lifetime. Still honor a literal env fallback if present.

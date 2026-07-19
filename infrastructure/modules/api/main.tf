@@ -209,18 +209,15 @@ resource "aws_iam_role_policy" "lambda" {
         ]
       },
       {
-        # Read-only access to Secrets Manager values under the
+        # Read-only access to encrypted Parameter Store values under the
         # `family-greenhouse/*` prefix. Used by services that fetch
-        # credentials at Lambda cold start (Perenual today; Stripe + VAPID
-        # + Sentry will migrate the same way). The trailing `-??????` on
-        # the ARN matches the 6-character suffix Secrets Manager appends
-        # at creation.
+        # credentials at Lambda cold start.
         Effect = "Allow"
         Action = [
-          "secretsmanager:GetSecretValue",
+          "ssm:GetParameter",
         ]
         Resource = [
-          "arn:aws:secretsmanager:*:*:secret:family-greenhouse/*",
+          "arn:aws:ssm:*:*:parameter/family-greenhouse/*",
         ]
       }
     ]
@@ -331,10 +328,10 @@ locals {
     # disable in prod — so it must be wired here, not left to drift.
     OPENWEATHER_API_KEY      = var.openweather_api_key
     OPENWEATHER_DAILY_BUDGET = var.openweather_daily_budget
-    # Perenual key is held in Secrets Manager (runtime fetch). Pass the
-    # SECRET NAME, not the value — the value never reaches Terraform state.
-    PERENUAL_API_KEY_SECRET_ID = var.perenual_api_key_secret_id
-    PERENUAL_DAILY_BUDGET      = var.perenual_daily_budget
+    # Perenual key is held in SSM Parameter Store (runtime fetch). Pass the
+    # parameter name, not the value — the value never reaches Terraform state.
+    PERENUAL_API_KEY_PARAMETER_NAME = var.perenual_api_key_parameter_name
+    PERENUAL_DAILY_BUDGET           = var.perenual_daily_budget
     # Bedrock embedding model for the chat RAG corpus. Empty lets the code
     # default to amazon.titan-embed-text-v2:0.
     BEDROCK_EMBED_MODEL_ID       = var.bedrock_embed_model_id
