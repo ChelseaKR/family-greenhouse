@@ -13,8 +13,8 @@ import { uiLogin } from './helpers';
  *     targeted was removed outright by the 0.14.1 mobile-first rework;
  *     the skeleton pulse is the remaining `motion-safe:` surface.)
  *  2. A global rule in `src/index.css` freezes anything that animates
- *     unconditionally (e.g. the landing hero's `animate-sway` sprigs)
- *     by forcing `animation-duration: 0.01ms` / one iteration.
+ *     unconditionally (e.g. the `animate-spin` loading indicator) by
+ *     forcing `animation-duration: 0.01ms` / one iteration.
  *
  * Both layers were previously verified only by the manual checklist in
  * docs/accessibility.md; these tests pin them in CI. Each preference is
@@ -29,6 +29,16 @@ import { uiLogin } from './helpers';
 // The Tailwind class name contains a colon (`motion-safe:animate-pulse`),
 // so match on the substring rather than fighting CSS escaping.
 const PULSING_SKELETON = '[class*="animate-pulse"]';
+const ALWAYS_ON_ANIMATION_PROBE = '[data-testid="always-on-animation-probe"]';
+
+async function appendAlwaysOnAnimationProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.className = 'animate-spin';
+    probe.dataset.testid = 'always-on-animation-probe';
+    document.body.append(probe);
+  });
+}
 
 /**
  * Hold every plants-list API response (backend on :4000; the glob's final
@@ -84,16 +94,13 @@ test.describe('Reduced motion', () => {
     expect(animationName).toBe('pulse');
   });
 
-  test('always-on decorative animation is frozen by the global reduce rule', async ({ page }) => {
+  test('always-on animation is frozen by the global reduce rule', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
-    // The hero sprigs sway unconditionally (`animate-sway`, 6s infinite)
-    // and rely on the global @media rule to freeze — duration collapses
-    // to 0.01ms and the infinite loop is cut to a single iteration.
-    const sprig = page.locator('.animate-sway').first();
-    await sprig.waitFor({ state: 'attached', timeout: 15000 });
+    await appendAlwaysOnAnimationProbe(page);
+    const probe = page.locator(ALWAYS_ON_ANIMATION_PROBE);
 
-    const style = await sprig.evaluate((el) => {
+    const style = await probe.evaluate((el) => {
       const s = getComputedStyle(el);
       return { duration: s.animationDuration, iterations: s.animationIterationCount };
     });
@@ -101,17 +108,17 @@ test.describe('Reduced motion', () => {
     expect(style.iterations).toBe('1');
   });
 
-  test('always-on decorative animation sways under no-preference', async ({ page }) => {
+  test('always-on animation spins under no-preference', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/');
-    const sprig = page.locator('.animate-sway').first();
-    await sprig.waitFor({ state: 'attached', timeout: 15000 });
+    await appendAlwaysOnAnimationProbe(page);
+    const probe = page.locator(ALWAYS_ON_ANIMATION_PROBE);
 
-    const style = await sprig.evaluate((el) => {
+    const style = await probe.evaluate((el) => {
       const s = getComputedStyle(el);
       return { duration: s.animationDuration, iterations: s.animationIterationCount };
     });
-    expect(durationMs(style.duration)).toBe(6000);
+    expect(durationMs(style.duration)).toBe(1000);
     expect(style.iterations).toBe('infinite');
   });
 });
