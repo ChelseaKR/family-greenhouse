@@ -87,6 +87,13 @@ describe('production IaC commercial-hold invariants', () => {
     expect(productionVars).toMatch(/^public_registration_enabled\s*=\s*true\s*$/m);
   });
 
+  it('keeps Cognito default email configuration valid when SES addresses are blank', () => {
+    expect(authModule).toMatch(
+      /reply_to_email_address\s*=\s*var\.email_reply_to != "" \? var\.email_reply_to : \(var\.email_from_address != "" \? var\.email_from_address : null\)/
+    );
+    expect(authModule).not.toMatch(/reply_to_email_address\s*=\s*coalesce\(/);
+  });
+
   it('deploys the registration API before exposing the public frontend form', () => {
     const deployFrontend = productionWorkflow.slice(
       productionWorkflow.indexOf('  deploy-frontend:'),
