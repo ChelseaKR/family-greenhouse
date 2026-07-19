@@ -8,6 +8,12 @@ variable "project_name" {
   type        = string
 }
 
+variable "enable_cost_anomaly_monitor" {
+  description = "Create the account-global Cost Explorer service anomaly monitor. Enable in only one stack per AWS account."
+  type        = bool
+  default     = true
+}
+
 variable "api_gateway_id" {
   description = "HTTP API Gateway ID used by CloudWatch's ApiId dimension"
   type        = string

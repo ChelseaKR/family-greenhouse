@@ -46,6 +46,11 @@ describe('production IaC commercial-hold invariants', () => {
   const root = new URL('../../../../', import.meta.url);
   const apiModule = readFileSync(new URL('infrastructure/modules/api/main.tf', root), 'utf8');
   const authModule = readFileSync(new URL('infrastructure/modules/auth/main.tf', root), 'utf8');
+  const monitoringModule = readFileSync(
+    new URL('infrastructure/modules/monitoring/main.tf', root),
+    'utf8'
+  );
+  const rootModule = readFileSync(new URL('infrastructure/main.tf', root), 'utf8');
   const rootVariables = readFileSync(new URL('infrastructure/variables.tf', root), 'utf8');
   const productionVars = readFileSync(
     new URL('infrastructure/environments/production/terraform.tfvars', root),
@@ -92,6 +97,25 @@ describe('production IaC commercial-hold invariants', () => {
       /reply_to_email_address\s*=\s*var\.email_reply_to != "" \? var\.email_reply_to : \(var\.email_from_address != "" \? var\.email_from_address : null\)/
     );
     expect(authModule).not.toMatch(/reply_to_email_address\s*=\s*coalesce\(/);
+  });
+
+  it('creates the account-global Cost Explorer anomaly monitor only in production', () => {
+    expect(rootModule).toMatch(
+      /enable_cost_anomaly_monitor\s*=\s*var\.environment == "production"/
+    );
+    expect(monitoringModule).toMatch(
+      /resource "aws_ce_anomaly_monitor" "services"\s*{[\s\S]*?count\s*=\s*var\.enable_cost_anomaly_monitor \? 1 : 0/
+    );
+    expect(monitoringModule).toMatch(/to\s*=\s*aws_ce_anomaly_monitor\.services\[0\]/);
+    expect(monitoringModule).toMatch(
+      /monitor_arn_list\s*=\s*\[aws_ce_anomaly_monitor\.services\[0\]\.arn\]/
+    );
+  });
+
+  it('serializes first-time Lambda function URL policy updates', () => {
+    expect(apiModule).toMatch(
+      /resource "aws_lambda_permission" "chat_stream_url"\s*{[\s\S]*?depends_on\s*=\s*\[aws_lambda_function_url\.chat_stream\]/
+    );
   });
 
   it('deploys the registration API before exposing the public frontend form', () => {
