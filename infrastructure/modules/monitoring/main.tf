@@ -71,18 +71,27 @@ resource "aws_budgets_budget" "monthly_cost" {
 # *shape*. Free. Cost Explorer is a us-east-1-global service (this stack's
 # region), so it lives in the default provider.
 resource "aws_ce_anomaly_monitor" "services" {
+  count = var.enable_cost_anomaly_monitor ? 1 : 0
+
   name              = "${var.project_name}-anomaly-${var.environment}"
   monitor_type      = "DIMENSIONAL"
   monitor_dimension = "SERVICE"
 }
 
+# Preserve the existing production monitor while making this account-global
+# resource optional for secondary stacks such as staging.
+moved {
+  from = aws_ce_anomaly_monitor.services
+  to   = aws_ce_anomaly_monitor.services[0]
+}
+
 resource "aws_ce_anomaly_subscription" "alerts" {
-  count = var.alert_email == "" ? 0 : 1
+  count = var.enable_cost_anomaly_monitor && var.alert_email != "" ? 1 : 0
   name  = "${var.project_name}-anomaly-sub-${var.environment}"
   # EMAIL subscribers only support DAILY/WEEKLY (IMMEDIATE needs an SNS topic).
   # DAILY = one digest email of the day's anomalies.
   frequency        = "DAILY"
-  monitor_arn_list = [aws_ce_anomaly_monitor.services.arn]
+  monitor_arn_list = [aws_ce_anomaly_monitor.services[0].arn]
 
   subscriber {
     type    = "EMAIL"

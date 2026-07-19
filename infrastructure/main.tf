@@ -167,18 +167,19 @@ module "frontend" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  environment                = var.environment
-  project_name               = var.project_name
-  api_gateway_id             = module.api.api_gateway_id
-  api_access_log_group_name  = module.api.api_access_log_group_name
-  api_lambda_log_group_name  = module.api.api_lambda_log_group_name
-  auth_lambda_log_group_name = module.api.auth_lambda_log_group_name
-  lambda_function_names      = module.api.lambda_function_names
-  alert_email                = var.alert_email
-  alert_sms_number           = var.alert_sms_number
-  dynamodb_table_name        = module.database.table_name
-  monthly_budget_usd         = var.monthly_budget_usd
-  lambda_dlq_name            = module.api.lambda_dlq_name
+  environment                 = var.environment
+  project_name                = var.project_name
+  enable_cost_anomaly_monitor = var.environment == "production"
+  api_gateway_id              = module.api.api_gateway_id
+  api_access_log_group_name   = module.api.api_access_log_group_name
+  api_lambda_log_group_name   = module.api.api_lambda_log_group_name
+  auth_lambda_log_group_name  = module.api.auth_lambda_log_group_name
+  lambda_function_names       = module.api.lambda_function_names
+  alert_email                 = var.alert_email
+  alert_sms_number            = var.alert_sms_number
+  dynamodb_table_name         = module.database.table_name
+  monthly_budget_usd          = var.monthly_budget_usd
+  lambda_dlq_name             = module.api.lambda_dlq_name
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.

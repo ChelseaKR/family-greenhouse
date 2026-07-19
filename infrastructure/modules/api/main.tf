@@ -610,6 +610,11 @@ resource "aws_lambda_permission" "chat_stream_url" {
   function_name          = aws_lambda_function.chat_stream.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+
+  # Function URL creation also updates the Lambda resource policy. Serialize
+  # this explicit statement so first-time stacks do not race two AddPermission
+  # calls and fail with ResourceConflictException.
+  depends_on = [aws_lambda_function_url.chat_stream]
 }
 
 # Since the October 2025 Lambda policy change, NONE-auth Function URLs reject
