@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Controllable Secrets Manager so we can exercise the resolveApiKey caching
+// Controllable Parameter Store so we can exercise the resolveApiKey caching
 // semantics (transient failure must NOT cache the 'unset' sentinel).
-const secretsSend = vi.hoisted(() => vi.fn());
-vi.mock('@aws-sdk/client-secrets-manager', () => ({
-  SecretsManagerClient: vi.fn(function () {
-    return { send: secretsSend };
+const ssmSend = vi.hoisted(() => vi.fn());
+vi.mock('@aws-sdk/client-ssm', () => ({
+  SSMClient: vi.fn(function () {
+    return { send: ssmSend };
   }),
-  GetSecretValueCommand: vi.fn(function (input: unknown) {
+  GetParameterCommand: vi.fn(function (input: unknown) {
     return input;
   }),
 }));
@@ -22,7 +22,7 @@ beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   vi.resetModules();
-  secretsSend.mockReset();
+  ssmSend.mockReset();
 });
 
 afterEach(() => {
@@ -31,10 +31,10 @@ afterEach(() => {
 });
 
 describe('perenual client', () => {
-  it('returns null from every method when neither env nor secret is set', async () => {
+  it('returns null from every method when neither env nor parameter is set', async () => {
     process.env = { ...ORIGINAL };
     delete process.env.PERENUAL_API_KEY;
-    delete process.env.PERENUAL_API_KEY_SECRET_ID;
+    delete process.env.PERENUAL_API_KEY_PARAMETER_NAME;
     const perenual = await import('../../../src/services/perenual.js');
     perenual.__resetApiKeyForTests();
     expect(await perenual.isConfigured()).toBe(false);
@@ -85,48 +85,48 @@ describe('perenual client', () => {
     expect(await perenual.getSpecies(99)).toBeNull();
   });
 
-  it('retries secret resolution after a transient Secrets Manager failure', async () => {
-    process.env = { ...ORIGINAL, PERENUAL_API_KEY_SECRET_ID: 'arn:aws:sm:secret' };
+  it('retries parameter resolution after a transient Parameter Store failure', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY_PARAMETER_NAME: '/app/perenual-key' };
     delete process.env.PERENUAL_API_KEY;
     const perenual = await import('../../../src/services/perenual.js');
     perenual.__resetApiKeyForTests();
 
-    // First call: Secrets Manager throttles. The integration must degrade
+    // First call: Parameter Store throttles. The integration must degrade
     // for THIS call only — not cache 'unset' for the container lifetime.
-    secretsSend.mockRejectedValueOnce(new Error('ThrottlingException'));
+    ssmSend.mockRejectedValueOnce(new Error('ThrottlingException'));
     expect(await perenual.isConfigured()).toBe(false);
 
     // Next call (same warm container, NO test reset): fetch succeeds and
     // the integration comes back.
-    secretsSend.mockResolvedValueOnce({ SecretString: 'real-key' });
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: 'real-key' } });
     expect(await perenual.isConfigured()).toBe(true);
-    expect(secretsSend).toHaveBeenCalledTimes(2);
+    expect(ssmSend).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to the env literal when the secret fetch fails transiently', async () => {
+  it('falls back to the env literal when the parameter fetch fails transiently', async () => {
     process.env = {
       ...ORIGINAL,
-      PERENUAL_API_KEY_SECRET_ID: 'arn:aws:sm:secret',
+      PERENUAL_API_KEY_PARAMETER_NAME: '/app/perenual-key',
       PERENUAL_API_KEY: 'literal-key',
     };
     const perenual = await import('../../../src/services/perenual.js');
     perenual.__resetApiKeyForTests();
 
-    secretsSend.mockRejectedValueOnce(new Error('network'));
+    ssmSend.mockRejectedValueOnce(new Error('network'));
     expect(await perenual.isConfigured()).toBe(true);
   });
 
-  it('caches the unset sentinel only for a genuinely empty secret', async () => {
-    process.env = { ...ORIGINAL, PERENUAL_API_KEY_SECRET_ID: 'arn:aws:sm:secret' };
+  it('caches the unset sentinel only for a genuinely empty parameter', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY_PARAMETER_NAME: '/app/perenual-key' };
     delete process.env.PERENUAL_API_KEY;
     const perenual = await import('../../../src/services/perenual.js');
     perenual.__resetApiKeyForTests();
 
-    // Deliberately blank secret: cache 'unset' and don't re-fetch.
-    secretsSend.mockResolvedValue({ SecretString: '   ' });
+    // Deliberately blank parameter: cache 'unset' and don't re-fetch.
+    ssmSend.mockResolvedValue({ Parameter: { Value: '   ' } });
     expect(await perenual.isConfigured()).toBe(false);
     expect(await perenual.isConfigured()).toBe(false);
-    expect(secretsSend).toHaveBeenCalledTimes(1);
+    expect(ssmSend).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes species detail watering enum and pet toxicity', async () => {

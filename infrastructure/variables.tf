@@ -94,13 +94,13 @@ variable "github_repo" {
 
 # --- External integrations referenced from the api module ---
 #
-# Pattern: each external service (Perenual, Stripe, Sentry, etc.) is held
-# in AWS Secrets Manager. Terraform only carries the SECRET NAME, never the
-# value — so a leak of state files doesn't leak the credential. Lambda
-# fetches the value at cold start (see backend/src/services/perenual.ts).
+# Pattern: static credentials are held in SSM SecureString parameters.
+# Terraform only carries the parameter name, never the value, so a leak of
+# state files doesn't leak the credential. Lambda fetches the value at cold
+# start (see backend/src/services/perenual.ts).
 
-variable "perenual_api_key_secret_id" {
-  description = "Secrets Manager secret name holding the Perenual API key (e.g. 'family-greenhouse/perenual-api-key'). Leave blank to disable Perenual integration."
+variable "perenual_api_key_parameter_name" {
+  description = "SSM SecureString parameter name holding the Perenual API key (e.g. '/family-greenhouse/perenual-api-key'). Leave blank to disable Perenual integration."
   type        = string
   default     = ""
 }

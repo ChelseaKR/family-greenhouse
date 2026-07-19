@@ -103,24 +103,24 @@ module "api" {
 
   # External integrations. Empty defaults disable the corresponding feature
   # — set via tfvars when you have credentials.
-  # Perenual uses the Secrets-Manager-ID indirection so the API key never
+  # Perenual uses Parameter Store indirection so the API key never
   # touches Terraform state (see modules/api/main.tf IAM block).
-  perenual_api_key_secret_id   = var.perenual_api_key_secret_id
-  perenual_daily_budget        = var.perenual_daily_budget
-  openweather_api_key          = var.openweather_api_key
-  openweather_daily_budget     = var.openweather_daily_budget
-  bedrock_embed_model_id       = var.bedrock_embed_model_id
-  chat_enabled                 = var.chat_enabled
-  sprout_integration_enabled   = var.sprout_integration_enabled
-  sprout_api_url               = var.sprout_api_url
-  sprout_integration_secret_id = var.sprout_integration_secret_id
-  identify_metering_enabled    = var.identify_metering_enabled
-  sms_notifications_enabled    = var.sms_notifications_enabled
-  git_sha                      = var.git_sha
-  sentry_dsn                   = var.sentry_dsn
-  sentry_traces_sample_rate    = var.sentry_traces_sample_rate
-  posthog_key                  = var.posthog_key
-  posthog_host                 = var.posthog_host
+  perenual_api_key_parameter_name = var.perenual_api_key_parameter_name
+  perenual_daily_budget           = var.perenual_daily_budget
+  openweather_api_key             = var.openweather_api_key
+  openweather_daily_budget        = var.openweather_daily_budget
+  bedrock_embed_model_id          = var.bedrock_embed_model_id
+  chat_enabled                    = var.chat_enabled
+  sprout_integration_enabled      = var.sprout_integration_enabled
+  sprout_api_url                  = var.sprout_api_url
+  sprout_integration_secret_id    = var.sprout_integration_secret_id
+  identify_metering_enabled       = var.identify_metering_enabled
+  sms_notifications_enabled       = var.sms_notifications_enabled
+  git_sha                         = var.git_sha
+  sentry_dsn                      = var.sentry_dsn
+  sentry_traces_sample_rate       = var.sentry_traces_sample_rate
+  posthog_key                     = var.posthog_key
+  posthog_host                    = var.posthog_host
 
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
@@ -176,7 +176,6 @@ module "monitoring" {
   alert_email                = var.alert_email
   alert_sms_number           = var.alert_sms_number
   dynamodb_table_name        = module.database.table_name
-  api_endpoint               = module.api.api_gateway_endpoint
   monthly_budget_usd         = var.monthly_budget_usd
   lambda_dlq_name            = module.api.lambda_dlq_name
   # Wired only when the email module is provisioned (domain set). No cycle:

@@ -11,8 +11,8 @@ email_reply_to                 = "support@familygreenhouse.net"
 dmarc_rua_email                = "dmarc@familygreenhouse.net"
 
 # Perenual: only the secret NAME goes through Terraform. The actual API key
-# was put into Secrets Manager via the AWS CLI and is never tracked by IAC.
-perenual_api_key_secret_id = "family-greenhouse/perenual-api-key"
+# was put into SSM Parameter Store via the AWS CLI and is never tracked by IAC.
+perenual_api_key_parameter_name = "/family-greenhouse/perenual-api-key"
 
 # CI/CD: provisions the GitHub OIDC provider + deploy role (modules/cicd).
 # The role ARN goes into the AWS_DEPLOY_ROLE_ARN + AWS_PRODUCTION_ROLE_ARN

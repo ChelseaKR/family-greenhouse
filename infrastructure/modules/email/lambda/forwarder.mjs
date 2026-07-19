@@ -8,7 +8,7 @@
  * and From becomes the forwarder address; Return-Path/Sender/DKIM-Signature
  * are stripped so the new send doesn't carry a broken signature.
  *
- * FORWARD_TO comes from Secrets Manager via Terraform (data source -> env
+ * FORWARD_TO comes from SSM Parameter Store via Terraform (data source -> env
  * var) so the personal destination address never lives in the repo.
  */
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';

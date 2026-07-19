@@ -195,8 +195,8 @@ variable "identify_metering_enabled" {
   default     = ""
 }
 
-variable "perenual_api_key_secret_id" {
-  description = "Secrets Manager secret name (e.g. 'family-greenhouse/perenual-api-key') holding the Perenual API key. The Lambda fetches the value at cold start; the secret material never lands in Terraform state. Empty disables Perenual integration."
+variable "perenual_api_key_parameter_name" {
+  description = "SSM SecureString parameter name (e.g. '/family-greenhouse/perenual-api-key') holding the Perenual API key. The Lambda fetches the value at cold start; the secret material never lands in Terraform state. Empty disables Perenual integration."
   type        = string
   default     = ""
 }

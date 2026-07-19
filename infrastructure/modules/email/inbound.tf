@@ -3,8 +3,8 @@
 # security@ / hello@ / dmarc@ were advertised (tfvars, SECURITY.md, DMARC rua)
 # but were black holes — the domain had no MX record at all.
 #
-# The forward DESTINATION deliberately lives in Secrets Manager
-# (family-greenhouse/inbound-forward-address, created via the AWS CLI — same
+# The forward DESTINATION deliberately lives in SSM Parameter Store
+# (/family-greenhouse/inbound-forward-address, created via the AWS CLI — same
 # convention as the Perenual key) so a personal address never appears in git.
 #
 # SES inbound is only offered in a few regions; us-east-1 (this stack's
@@ -14,8 +14,9 @@
 # (data.aws_caller_identity.current is declared in main.tf)
 data "aws_region" "current" {}
 
-data "aws_secretsmanager_secret_version" "inbound_forward" {
-  secret_id = "family-greenhouse/inbound-forward-address"
+data "aws_ssm_parameter" "inbound_forward" {
+  name            = "/family-greenhouse/inbound-forward-address"
+  with_decryption = true
 }
 
 locals {
@@ -190,7 +191,7 @@ resource "aws_lambda_function" "forwarder" {
     variables = {
       MAIL_BUCKET  = aws_s3_bucket.inbound_mail.bucket
       MAIL_PREFIX  = "inbox/"
-      FORWARD_TO   = data.aws_secretsmanager_secret_version.inbound_forward.secret_string
+      FORWARD_TO   = data.aws_ssm_parameter.inbound_forward.value
       FROM_ADDRESS = local.forwarder_from
     }
   }
