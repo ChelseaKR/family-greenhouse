@@ -85,10 +85,6 @@ The Joyce dedication in the footer, the "in loving memory" line, the gentle copy
 
 Every "what should we do next" decision is being made without telemetry. The roadmap is opinionated, but it's opinion based on craft instincts, not signal. The first 50 active households will reorder the priority list more than any internal review can.
 
-### The free tier is generous to the point of customer-hostile to ourselves
-
-10 plants free with no card on file is unusually generous. That's a deliberate growth bet, but it should be tested — does dropping to 5 plants change conversion? Does requiring a card at signup (with a no-charge first month) reduce signups by 20% or 70%? We don't know. **The pricing page is a guess.**
-
 ### Marketing surface is thin
 
 Landing page is competent and the first set of care articles is live, but the
@@ -135,32 +131,17 @@ People who need this app don't know they need it until their second dead plant. 
 
 Honest priorities, ranked.
 
-### 1. Get to 100 active households (Quarter 1)
-
-Nothing else matters more. This is product-market-fit signal, not vanity. We need real telemetry on:
-
-- Where users churn in the funnel
-- Whether the collaborative loop actually triggers (do households end up with >1 active member?)
-- Which pricing tier actually converts
-- What features users use vs. which we built and they ignore
-
-The product is ready enough. The marketing isn't. **Spend Q1 on content + SEO + a small paid-acquisition experiment, not on more features.**
-
-### 2. Pick one external integration and double down (Q2)
+### 1. Pick one external integration and double down (Q2)
 
 Perenual is the obvious one. The integration is shipped; deepen it: real-time pest pressure (not just seasonal), region-specific watering modifiers (combine climate + species), a "compare your care to species recommendations" report. Don't add a fourth integration — sharpen the one that matters.
 
-### 3. Mobile (Q2/Q3)
+### 2. Mobile (Q2/Q3)
 
 Capacitor wrapper around the SPA is the cheapest path. The PWA already works on mobile browsers. Native is a discoverability play (App Store presence) more than a UX one. Budget: 4 weeks of engineering + 2 weeks of App Store / Play Store administrivia.
 
-### 4. The notification dispatcher needs real-world battle testing (Q1, in parallel)
+### 3. The notification dispatcher needs real-world battle testing (Q1, in parallel)
 
 Not a feature — quality work. End-to-end test the full pipeline at varied user counts, varied DND windows, varied timezones. Add chaos: what happens when SES is rate-limited mid-batch? Today we don't know.
-
-### 5. Honest pricing experiment (Q2)
-
-We will not know if the current pricing tiers are right until we A/B test them. Even a small experiment ("require card at signup, no charge for 14 days" vs. "fully free up to 10") will move our understanding of the funnel more than another month of polish.
 
 ---
 
@@ -180,11 +161,10 @@ The product strategy implicitly assumes:
 
 - Households of 2–4 people are willing to install a shared app for plant care. (Plausible. Untested.)
 - The "right person reminded at the right time" is the differentiator, not the species database. (Likely true. The smart layer is a moat-deepener, not the moat.)
-- Free → paid conversion at the 10-plant boundary is real. (Genuinely unknown. **Highest-priority empirical question.**)
 - The audience that searches for plant care is reachable via SEO + organic content. (Probably true. Test in Q1.)
 - Customer support volume stays low because the product is mostly self-serve. (Possible if we keep the surface area honest.)
 
-If any of these turns out to be false, the strategy needs to flex. Especially #3 — if the 10-plant free tier is _too_ generous, the company doesn't survive. If it's _not generous enough_, the funnel chokes. We don't currently know which.
+If any of these turns out to be false, the strategy needs to flex.
 
 ---
 

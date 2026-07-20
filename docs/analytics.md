@@ -90,7 +90,7 @@ What this unlocks in PostHog:
 
 - **Collaboration activation** — `invite_sent` → `invite_accepted` paired _at the household level_, and "households with ≥2 active members". This is the product's core differentiator and was previously impossible to chart.
 - **Per-household retention** — retention and stickiness computed over households, not just users, so a household where one member churns but another stays active reads as retained.
-- **Per-household cohorts** — slice any funnel by household size, plan, or members, to test the pricing-tier hypotheses in `docs/strategy-review.md`.
+- **Per-household cohorts** — slice any funnel by household size, plan, or members.
 
 Privacy: the group key is an opaque household UUID, analogous to the Cognito sub used as `distinct_id`. It is not a direct identifier, but it is linkable pseudonymous personal data and is handled under the same controls described above.
 
@@ -103,7 +103,7 @@ events, so its per-user activation funnel begins after sign-in:
 1. **Activation funnel**: in CloudWatch, `signup_completed` → `household_created (first)` → `plant_added (first)` → `task_completed (first)`; in PostHog, begin at `household_created`. The drop-off between any two steps is your highest-leverage UX problem.
 2. **Collaboration funnel**: `household_created` → `invite_sent` → `invite_accepted`, set to aggregate by the `household` group (see "Household group analytics") so the admin's `invite_sent` and the invitee's `invite_accepted` pair across users. Below 50% of households reaching `invite_sent` means the collaborative pitch isn't landing.
 3. **Climate adoption**: `household_created` → `climate_location_set`. If <10%, the dashboard nudge needs work.
-4. **Upgrade intent**: `subscription_upgraded` from each tier. Pair with cohorts (>10 plants, >2 members) to test the pricing-tier hypotheses in `docs/strategy-review.md`.
+4. **Upgrade intent**: `subscription_upgraded` from each tier. Pair with cohorts (>10 plants, >2 members).
 5. **True conversion**: `subscription_upgraded` → `subscription_activated` (intent → confirmed), aggregated by the `household` group. The drop-off is checkout abandonment; the confirmed step is the only revenue-true number.
 
 ## Optional hosted funnel UI

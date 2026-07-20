@@ -167,7 +167,7 @@ Far enough out that quarter-level commitments are imaginary. The themes:
 - **Plant identification accuracy**: build our own model fine-tuned on customer photos (with explicit consent), instead of paying per Plant.id call.
 - **Computer vision health detection**: from a photo, flag yellowing / overwatering / pests. Cosmetic-grade only, never diagnostic. _First slice shipped early (2026-06-11) as the leaf-health check — see "Also shipped in this wave" above; the theme's remaining scope is breadth (whole-plant, trends over the photo timeline), not a first proof._
 - **Marketplace + community**: not Reddit-replacement, but lightweight sharing of "what's growing in your house?" and trading cuttings within trusted networks. _The cutting-share link shipped as the smallest proof of the trading half._
-- **B2B**: greenhouses + nurseries selling plants ship them with a pre-filled care plan that imports into the buyer's Family Greenhouse household. _Design worked out in [`docs/b2b-greenhouse-mode.md`](b2b-greenhouse-mode.md) — explicitly pilot-gated: no code until a real nursery signs._
+- **B2B**: greenhouses + nurseries selling plants ship them with a pre-filled care plan that imports into the buyer's Family Greenhouse household. _Gated: no code until a real nursery signs on._
 - **Sustainability angle**: rough water/energy footprint per plant; trade tips on low-water care.
 
 ---
