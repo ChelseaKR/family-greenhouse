@@ -215,8 +215,8 @@ jobs:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
     # Semgrep OSS is free and tokenless — kept as a fast, always-on first pass.
-    # (This comment previously claimed "CodeQL would need GitHub Advanced
-    # Security, which isn't available on this private repo's plan" — that was
+    # (This comment previously claimed CodeQL would need a GitHub Advanced
+    # Security plan under the repo's old pre-public visibility — that was
     # wrong: this repo is public, and CodeQL is free for public repos. Fixed
     # 2026-07-05; CodeQL now runs separately in codeql.yml, see SEC-08.)
     # Runs the community rulesets relevant to our stack and gates on
