@@ -1,6 +1,6 @@
 # Research synthesis
 
-Your strategy doc's #1 priority is real telemetry from the first users. This turns raw signup replies (the "what made you sign up?" email) into a prioritized, decision-ready summary — the highest-leverage use of Claude in the whole plan, because it directly reorders the roadmap.
+Real telemetry from the first users is the highest-value input the roadmap can get. This turns raw signup replies (the "what made you sign up?" email) into a prioritized, decision-ready summary — the highest-leverage use of Claude here, because it directly reorders the roadmap.
 
 ---
 
