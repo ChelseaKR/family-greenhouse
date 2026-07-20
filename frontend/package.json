@@ -82,7 +82,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1090.0",
     "@aws-sdk/client-dynamodb": "^3.1063.0",
     "@axe-core/playwright": "^4.12.1",
     "@axe-core/react": "^4.12.1",
