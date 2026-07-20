@@ -18,6 +18,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- Red-team injection corpus for the chat tool layer
+  (`evals/redteam/injection-corpus.json`, 9 payloads mapped to OWASP LLM01/02/06)
+  and a CI-gated test asserting prompt-injection strings stored in
+  user-controlled fields cannot widen a tool's household scope, leak PII to the
+  model, or coerce a write past the confirm-card validation. Dated report in
+  `docs/audits/red-team-2026-07-17.md`. This is the offline/data-layer slice of
+  the AI-eval standard's §2 red-team requirement; live-model refusal scoring,
+  Promptfoo, and Garak remain waived and not built.
 - AI-eval benchmark expanded from 22 to 134 items across four labeled
   behavior classes (102 corpus-anchored real-user questions at 8–10 per
   article, 12 should-refuse, 10 out-of-corpus/abstain, 10
