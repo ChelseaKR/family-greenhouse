@@ -16,6 +16,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- Removed superseded repository-visibility language from the CI workflow; its
+  comments now describe the active public CodeQL path directly.
+
 ### Added
 
 - Red-team injection corpus for the chat tool layer
