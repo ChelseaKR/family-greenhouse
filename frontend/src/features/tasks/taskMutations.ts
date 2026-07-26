@@ -87,8 +87,9 @@ export function useCompleteTaskMutation(householdId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (taskId: string) => taskService.completeTask(taskId),
-    onMutate: async (taskId: string) => {
+    mutationFn: ({ taskId, expectedNextDue }: { taskId: string; expectedNextDue: string }) =>
+      taskService.completeTask(taskId, { expectedNextDue }),
+    onMutate: async ({ taskId }: { taskId: string; expectedNextDue: string }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['tasks', householdId] }),
         queryClient.cancelQueries({ queryKey: ['plants', householdId] }),
@@ -128,7 +129,7 @@ export function useCompleteTaskMutation(householdId: string | null) {
       );
       toast.success('Task completed');
     },
-    onError: (err, _taskId, context) => {
+    onError: (err, _variables, context) => {
       context?.previousTasks.forEach(([key, value]) => queryClient.setQueryData(key, value));
       context?.previousPlants.forEach(([key, value]) => queryClient.setQueryData(key, value));
       toast.error(getErrorMessage(err));
@@ -225,7 +226,10 @@ export function useSkipCycleMutation(householdId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ task, reason }: { task: Task; reason: SnoozeReason }) =>
-      taskService.snoozeTask(task.id, task.frequency, { reason }),
+      taskService.snoozeTask(task.id, task.frequency, {
+        reason,
+        expectedNextDue: task.nextDue,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(t('tasks.skippedToast'));

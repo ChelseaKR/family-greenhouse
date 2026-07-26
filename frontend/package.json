@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Family Greenhouse web app — React + TypeScript + Vite PWA for collaborative household plant care.",
   "license": "Elastic-2.0",
   "type": "module",
@@ -77,13 +77,14 @@
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.51.2",
     "react-i18next": "^17.0.4",
-    "react-router-dom": "^7.18.1",
+    "react-router": "8.3.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
     "@aws-sdk/client-dynamodb": "^3.1063.0",
+    "@aws-sdk/client-s3": "^3.1085.0",
     "@axe-core/playwright": "^4.12.1",
     "@axe-core/react": "^4.12.1",
     "@capacitor/cli": "^8.4.1",

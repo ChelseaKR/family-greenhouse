@@ -301,14 +301,16 @@ describe('public API v1 handler', () => {
         't1',
         'apikey:key-1',
         'integration',
+        undefined,
         undefined
       );
     });
 
-    it('passes optional notes from the body through to the service', async () => {
+    it('passes optional notes and retry occurrence from the body through to the service', async () => {
       vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue(writeKey);
       vi.mocked(taskService.completeTask).mockResolvedValue(taskShape as never);
       const { completeTask } = await import('../../../src/handlers/api/handler.js');
+      const expectedNextDue = '2026-07-25T12:00:00.000Z';
       const res = await invoke(
         completeTask,
         buildEvent({
@@ -316,7 +318,7 @@ describe('public API v1 handler', () => {
           path: '/api/v1/tasks/t1/complete',
           pathParameters: { id: 't1' },
           headers: { authorization: 'Bearer fg_testkey', 'content-type': 'application/json' },
-          body: JSON.stringify({ notes: 'watered via webhook' }),
+          body: JSON.stringify({ notes: 'watered via webhook', expectedNextDue }),
         })
       );
       expect(res.statusCode).toBe(200);
@@ -325,7 +327,8 @@ describe('public API v1 handler', () => {
         't1',
         'apikey:key-1',
         'integration',
-        'watered via webhook'
+        'watered via webhook',
+        expectedNextDue
       );
     });
 
@@ -370,7 +373,10 @@ describe('public API v1 handler', () => {
     it('snoozes by the explicit number of days from the body', async () => {
       vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue(writeKey);
       vi.mocked(taskService.getTask).mockResolvedValue(taskShape as never);
-      vi.mocked(taskService.snoozeTask).mockResolvedValue(taskShape as never);
+      vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValue({
+        task: taskShape,
+        changed: true,
+      } as never);
       const { snoozeTask } = await import('../../../src/handlers/api/handler.js');
       const res = await invoke(
         snoozeTask,
@@ -383,7 +389,7 @@ describe('public API v1 handler', () => {
         })
       );
       expect(res.statusCode).toBe(200);
-      expect(taskService.snoozeTask).toHaveBeenCalledWith('hh-1', 't1', 3);
+      expect(taskService.snoozeTaskWithOutcome).toHaveBeenCalledWith('hh-1', 't1', 3, undefined);
       // Writes via the API land in the activity feed attributed to the key.
       expect(recordActivity).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -398,7 +404,10 @@ describe('public API v1 handler', () => {
     it('defaults omitted days to the task frequency (skip one cycle)', async () => {
       vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue(writeKey);
       vi.mocked(taskService.getTask).mockResolvedValue(taskShape as never);
-      vi.mocked(taskService.snoozeTask).mockResolvedValue(taskShape as never);
+      vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValue({
+        task: taskShape,
+        changed: true,
+      } as never);
       const { snoozeTask } = await import('../../../src/handlers/api/handler.js');
       const res = await invoke(
         snoozeTask,
@@ -409,7 +418,40 @@ describe('public API v1 handler', () => {
         })
       );
       expect(res.statusCode).toBe(200);
-      expect(taskService.snoozeTask).toHaveBeenCalledWith('hh-1', 't1', 7);
+      expect(taskService.snoozeTaskWithOutcome).toHaveBeenCalledWith('hh-1', 't1', 7, undefined);
+    });
+
+    it('passes the occurrence token and does not duplicate activity for an idempotent retry', async () => {
+      vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue(writeKey);
+      const expectedNextDue = '2026-07-25T12:00:00.000Z';
+      const current = { ...taskShape, nextDue: '2026-08-01T12:00:00.000Z' };
+      vi.mocked(taskService.getTask).mockResolvedValue(current as never);
+      vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValue({
+        task: current,
+        changed: false,
+      } as never);
+      const { snoozeTask } = await import('../../../src/handlers/api/handler.js');
+
+      const res = await invoke(
+        snoozeTask,
+        buildEvent({
+          httpMethod: 'POST',
+          path: '/api/v1/tasks/t1/snooze',
+          pathParameters: { id: 't1' },
+          headers: { authorization: 'Bearer fg_testkey', 'content-type': 'application/json' },
+          body: JSON.stringify({ days: 3, expectedNextDue }),
+        })
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).nextDue).toBe(current.nextDue);
+      expect(taskService.snoozeTaskWithOutcome).toHaveBeenCalledWith(
+        'hh-1',
+        't1',
+        3,
+        expectedNextDue
+      );
+      expect(recordActivity).not.toHaveBeenCalled();
     });
 
     it('404s for an unknown task and rejects out-of-range days', async () => {
@@ -437,7 +479,7 @@ describe('public API v1 handler', () => {
         })
       );
       expect(invalid.statusCode).toBe(400);
-      expect(taskService.snoozeTask).not.toHaveBeenCalled();
+      expect(taskService.snoozeTaskWithOutcome).not.toHaveBeenCalled();
     });
 
     it('is gated on write:tasks', async () => {
@@ -452,7 +494,7 @@ describe('public API v1 handler', () => {
         })
       );
       expect(res.statusCode).toBe(403);
-      expect(taskService.snoozeTask).not.toHaveBeenCalled();
+      expect(taskService.snoozeTaskWithOutcome).not.toHaveBeenCalled();
     });
   });
 

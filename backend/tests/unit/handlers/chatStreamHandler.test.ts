@@ -30,7 +30,7 @@ import {
   __resetChatStreamRateLimitForTests,
 } from '../../../src/handlers/chat/streamHandler.js';
 import { getMemberByUserId } from '../../../src/services/householdService.js';
-import { streamChatTurn } from '../../../src/services/chat/index.js';
+import { runChatTurn, streamChatTurn } from '../../../src/services/chat/index.js';
 
 /** Capture stream standing in for awslambda's responseStream. */
 function makeStream() {
@@ -323,6 +323,42 @@ describe('streamHandler auth (in-handler JWT verification)', () => {
     expect(stream.end).toHaveBeenCalled();
   });
 
+  it('redacts unexpected membership failures before the stream starts', async () => {
+    mockVerify.mockResolvedValue(validClaims);
+    vi.mocked(getMemberByUserId).mockRejectedValue(
+      new Error('DynamoDB table secret-internal-name is unavailable')
+    );
+    const stream = makeStream();
+
+    await streamRequestToSse(makeEvent(), stream);
+
+    expect(metadataCalls[0]?.statusCode).toBe(500);
+    expect(JSON.parse(stream.chunks.join(''))).toEqual({ message: 'Chat request failed' });
+    expect(stream.chunks.join('')).not.toContain('secret-internal-name');
+  });
+
+  it('redacts unexpected model failures in a terminal SSE error event', async () => {
+    mockVerify.mockResolvedValue(validClaims);
+    vi.mocked(getMemberByUserId).mockResolvedValue({
+      userId: 'user-1',
+      role: 'member',
+    } as Awaited<ReturnType<typeof getMemberByUserId>>);
+    vi.mocked(streamChatTurn).mockImplementation(async function* () {
+      throw new Error('bedrock secret upstream payload');
+    } as unknown as typeof streamChatTurn);
+    const stream = makeStream();
+
+    await streamRequestToSse(makeEvent(), stream);
+
+    const event = JSON.parse(stream.chunks[0].slice('data: '.length));
+    expect(event).toEqual({
+      type: 'error',
+      statusCode: 500,
+      message: 'Chat stream failed',
+    });
+    expect(stream.chunks.join('')).not.toContain('secret upstream');
+  });
+
   it('429s once the per-IP rate limit is exceeded, before verifying or streaming', async () => {
     mockVerify.mockResolvedValue(validClaims);
     vi.mocked(getMemberByUserId).mockResolvedValue({
@@ -359,6 +395,24 @@ describe('streamHandler auth (in-handler JWT verification)', () => {
     };
     expect(result.statusCode).toBe(401);
     expect(JSON.parse(result.body)).toEqual({ message: 'Unauthorized' });
+  });
+
+  it('buffered fallback redacts unexpected chat-turn failure details', async () => {
+    mockVerify.mockResolvedValue(validClaims);
+    vi.mocked(getMemberByUserId).mockResolvedValue({
+      userId: 'user-1',
+      role: 'member',
+    } as Awaited<ReturnType<typeof getMemberByUserId>>);
+    vi.mocked(runChatTurn).mockRejectedValue(new Error('secret provider diagnostic'));
+
+    const result = (await (handler as (e: unknown) => Promise<unknown>)(makeEvent())) as {
+      statusCode: number;
+      body: string;
+    };
+
+    expect(result.statusCode).toBe(500);
+    expect(JSON.parse(result.body)).toEqual({ message: 'Chat request failed' });
+    expect(result.body).not.toContain('secret provider diagnostic');
   });
 
   it('buffered fallback handler rejects non-POST methods', async () => {

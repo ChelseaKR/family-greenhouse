@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router';
 import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import { ConfirmEmailPage } from '@/features/auth/ConfirmEmailPage';

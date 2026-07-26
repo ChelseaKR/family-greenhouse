@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { householdService } from '@/services/householdService';
 import { taskService } from '@/services/taskService';

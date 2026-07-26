@@ -56,10 +56,14 @@ export const sitterService = {
     return (await response.json()) as SitterView;
   },
 
-  async completeTask(token: string, taskId: string): Promise<SitterTask> {
+  async completeTask(token: string, taskId: string, expectedNextDue: string): Promise<SitterTask> {
     const response = await fetch(
       `${API_URL}/sitter/${encodeURIComponent(token)}/tasks/${encodeURIComponent(taskId)}/complete`,
-      { method: 'POST', headers: { Accept: 'application/json' } }
+      {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedNextDue }),
+      }
     );
     if (response.status === 404 || response.status === 410) {
       throw new SitterLinkInactiveError();

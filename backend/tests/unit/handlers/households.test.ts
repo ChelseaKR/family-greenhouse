@@ -5,6 +5,7 @@ vi.mock('../../../src/services/householdService.js');
 vi.mock('../../../src/services/welcomeEmail.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
+vi.mock('../../../src/services/accountCleanup.js');
 vi.mock('../../../src/services/cognitoUsers.js');
 vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
@@ -57,6 +58,10 @@ describe('households handler', () => {
     // resolved promise so callers can keep chaining.
     const activity = await import('../../../src/services/activity.js');
     vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
+    vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([]);
     // authMiddleware now validates the claim household against the
     // membership table. Pre-warm the cache for the default admin caller so
     // per-test `getMemberByUserId` Once-mocks stay reserved for the
@@ -181,6 +186,97 @@ describe('households handler', () => {
     expect(welcomeEmail.sendWelcomeEmail).not.toHaveBeenCalled();
   });
 
+  it('repairs a missing default claim from membership state without creating a duplicate', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const welcomeEmail = await import('../../../src/services/welcomeEmail.js');
+    const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+      { householdId: 'hh-first', role: 'admin', name: 'Alice', joinedAt: '' },
+    ]);
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-first',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'user-1',
+    });
+    vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+    vi.mocked(welcomeEmail.sendWelcomeEmail).mockResolvedValueOnce(false);
+
+    const res = (await createHousehold(
+      buildEvent(
+        { sub: 'user-1', email: 'a@b.com' },
+        {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'Vacation' }),
+          headers: { 'content-type': 'application/json' },
+        }
+      ),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body)).toMatchObject({ id: 'hh-first', name: 'Home' });
+    expect(householdService.createHousehold).not.toHaveBeenCalled();
+    expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-1', 'hh-first', 'admin');
+    expect(welcomeEmail.sendWelcomeEmail).toHaveBeenCalledOnce();
+  });
+
+  it('retries claim repair after a partial first-household write without creating twice', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const welcomeEmail = await import('../../../src/services/welcomeEmail.js');
+    const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValue('Alice');
+    vi.mocked(householdService.getMembershipsByUser)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          householdId: 'hh-first',
+          role: 'admin',
+          name: 'Alice',
+          joinedAt: '2026-07-25T12:00:00Z',
+        },
+      ]);
+    vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+      id: 'hh-first',
+      name: 'Home',
+      createdAt: '2026-07-25T12:00:00Z',
+      createdBy: 'user-1',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-first',
+      name: 'Home',
+      createdAt: '2026-07-25T12:00:00Z',
+      createdBy: 'user-1',
+    });
+    vi.mocked(cognitoUsers.setHouseholdClaims)
+      .mockRejectedValueOnce(new Error('Cognito timeout after DynamoDB commit'))
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(welcomeEmail.sendWelcomeEmail).mockResolvedValueOnce(true);
+    const event = () =>
+      buildEvent(
+        { sub: 'user-1', email: 'a@b.com' },
+        {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'Home' }),
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+
+    const first = (await createHousehold(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    const retry = (await createHousehold(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+
+    expect(first.statusCode).toBe(500);
+    expect(retry.statusCode).toBe(201);
+    expect(JSON.parse(retry.body).id).toBe('hh-first');
+    expect(householdService.createHousehold).toHaveBeenCalledOnce();
+    expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledTimes(2);
+    expect(welcomeEmail.sendWelcomeEmail).toHaveBeenCalledOnce();
+  });
+
   it('createHousehold still succeeds (non-blocking) when the welcome email fails', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
@@ -194,9 +290,9 @@ describe('households handler', () => {
       createdBy: 'user-1',
     });
     vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
-    // Simulate the worst case: the welcome send rejects. Onboarding must not
-    // observe it — the handler fires it without awaiting and the service
-    // swallows its own errors, so the 201 still comes back.
+    // Simulate the worst case: the welcome send rejects despite the service's
+    // best-effort contract. The handler awaits it for Lambda reliability but
+    // still isolates the failure, so the 201 comes back.
     vi.mocked(welcomeEmail.sendWelcomeEmail).mockRejectedValueOnce(new Error('SES down'));
     const event = buildEvent(
       { sub: 'user-1', email: 'a@b.com' },
@@ -356,6 +452,7 @@ describe('households handler', () => {
   it('removeMember clears claims when removed from the claim household with no other memberships', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
     const { removeMember } = await import('../../../src/handlers/households/handler.js');
     vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
       householdId: 'hh-1',
@@ -379,6 +476,7 @@ describe('households handler', () => {
     });
     const res = (await removeMember(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(204);
+    expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-1', 'user-2');
     expect(cognitoUsers.clearHouseholdClaims).toHaveBeenCalledWith('user-2');
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
@@ -667,5 +765,56 @@ describe('households handler', () => {
     expect(householdService.addMember).toHaveBeenCalledWith('hh-9', 'user-2', 'Bob', 'b@b.com', 6);
     expect(householdService.getHouseholdMembers).not.toHaveBeenCalled();
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-9', 'member');
+  });
+
+  it('joinHousehold repairs Cognito claims on retry after the member write committed', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    const invite = {
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'admin',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    };
+    const household = {
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    };
+    const member = {
+      householdId: 'hh-9',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member' as const,
+      joinedAt: '',
+    };
+    vi.mocked(householdService.getInvite).mockResolvedValue(invite);
+    vi.mocked(householdService.getHousehold).mockResolvedValue(household);
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValue('Bob');
+    vi.mocked(householdService.getMemberByUserId)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(member);
+    vi.mocked(householdService.addMember).mockResolvedValueOnce(member);
+    vi.mocked(cognitoUsers.setHouseholdClaims)
+      .mockRejectedValueOnce(new Error('Cognito timeout after DynamoDB commit'))
+      .mockResolvedValueOnce(undefined);
+    const event = () =>
+      buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+
+    const first = (await joinHousehold(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    const retry = (await joinHousehold(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+
+    expect(first.statusCode).toBe(500);
+    expect(retry.statusCode).toBe(200);
+    expect(JSON.parse(retry.body)).toMatchObject({ id: 'hh-9', name: 'Home' });
+    expect(householdService.addMember).toHaveBeenCalledOnce();
+    expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledTimes(2);
   });
 });

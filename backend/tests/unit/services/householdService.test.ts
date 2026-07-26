@@ -375,6 +375,42 @@ describe('householdService', () => {
     expect(await getMemberByUserId('hh', 'u')).toBeNull();
   });
 
+  it('getMembershipsByUser follows every GSI page beyond the former 25-row cap', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getMembershipsByUser } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: Array.from({ length: 25 }, (_, index) => ({
+          householdId: `hh-${index}`,
+          role: 'member',
+          name: `Member ${index}`,
+          joinedAt: `2026-01-${String(index + 1).padStart(2, '0')}`,
+        })),
+        LastEvaluatedKey: { GSI1PK: 'USER#u', GSI1SK: 'HOUSEHOLD#hh-24' },
+      })
+      .mockResolvedValueOnce({
+        Items: [
+          {
+            householdId: 'hh-25',
+            role: 'admin',
+            name: 'Member 25',
+            joinedAt: '2026-02-01',
+          },
+        ],
+      });
+
+    const memberships = await getMembershipsByUser('u');
+    expect(memberships).toHaveLength(26);
+    expect(memberships.at(-1)).toMatchObject({ householdId: 'hh-25', role: 'admin' });
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey: Record<string, string> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({
+      GSI1PK: 'USER#u',
+      GSI1SK: 'HOUSEHOLD#hh-24',
+    });
+  });
+
   // --- Service-layer last-admin guard (L1) ---
 
   it('removeMember throws LastAdminError when removing the lone admin of a multi-member household', async () => {

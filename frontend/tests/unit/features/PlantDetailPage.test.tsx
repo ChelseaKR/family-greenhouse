@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PlantDetailPage } from '@/features/plants/PlantDetailPage';
 import { useAuthStore } from '@/store/authStore';
@@ -9,13 +9,13 @@ import { server } from '../../msw/server';
 
 const API = 'http://localhost:4000';
 
-function renderDetail(plantId: string) {
+function renderDetail(plantId: string, state?: unknown) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/plants/${plantId}`]}>
+      <MemoryRouter initialEntries={[{ pathname: `/plants/${plantId}`, state }]}>
         <Routes>
           <Route path="/plants/:plantId" element={<PlantDetailPage />} />
           <Route path="/plants" element={<div>Plants Index</div>} />
@@ -147,5 +147,34 @@ describe('PlantDetailPage', () => {
     );
     renderDetail('p1');
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('honestly explains how to recover when creation saved without its photo', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json({
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Saved Fern',
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+          upcomingTasks: [],
+          recentCompletions: [],
+        })
+      )
+    );
+
+    renderDetail('p1', { photoUploadFailed: true });
+
+    const recovery = await screen.findByRole('alert');
+    expect(recovery).toHaveTextContent('Plant saved; photo not uploaded');
+    expect(recovery).toHaveTextContent('Choose the photo again below to retry');
+    expect(screen.getByLabelText(/upload photo/i)).toBeEnabled();
   });
 });

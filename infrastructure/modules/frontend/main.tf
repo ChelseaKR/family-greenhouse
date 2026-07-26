@@ -437,11 +437,13 @@ resource "aws_cloudfront_response_headers_policy" "security" {
       #
       # script-src + connect-src + img-src include Google Tag Manager and
       # GA4 endpoints — required when VITE_GTM_ID is set at build time.
-      # Removing GTM should also tighten these back to project hosts only.
+      # connect-src also permits the two documented PostHog cloud regions and
+      # Sentry ingestion; otherwise supported VITE_* settings build cleanly
+      # but the edge policy silently prevents them from reporting.
       #
       # The broad `connect-src` AWS allowance is the existing trade for
       # AWS-SDK-in-browser calls (Cognito refresh, presigned-URL S3 PUTs).
-      content_security_policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+      content_security_policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://us.i.posthog.com https://eu.i.posthog.com https://*.sentry.io; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
       override                = true
     }
   }

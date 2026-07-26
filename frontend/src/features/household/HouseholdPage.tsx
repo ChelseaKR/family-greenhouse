@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { ClipboardDocumentIcon, UserPlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { householdService } from '@/services/householdService';
@@ -23,6 +24,7 @@ import { SitterLinksCard } from './SitterLinksCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   // Operate on the ACTIVE household (multi-household users can switch);
   // user.householdId is only the Cognito-claim default.
@@ -94,6 +96,12 @@ export function HouseholdPage() {
   // Role of the ACTIVE household (not the stale Cognito-claim default role),
   // so a multi-household user sees the correct admin controls after a switch.
   const isAdmin = useIsHouseholdAdmin();
+  const climateQuery = useQuery({
+    queryKey: ['household', householdId, 'climate'],
+    queryFn: () => climateService.getClimate(householdId!),
+    enabled: isAdmin && Boolean(householdId),
+    staleTime: 30 * 60 * 1000,
+  });
 
   // Vacation windows (care handoff) — one query for all member rows.
   const { data: vacationWindows } = useVacationWindows(householdId);
@@ -195,7 +203,34 @@ export function HouseholdPage() {
             title="Location"
             description="Used for climate-aware care tips (humidity warnings, freeze alerts, etc.)."
           />
-          {household.location ? (
+          {climateQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-gray-600" role="status">
+              <LoadingSpinner size="sm" />
+              {t('household.climateChecking')}
+            </div>
+          ) : climateQuery.isError || !climateQuery.data ? (
+            <Alert variant="warning">{t('household.climateCheckFailed')}</Alert>
+          ) : !climateQuery.data.configured ? (
+            <div className="space-y-3">
+              <Alert variant="info">{t('household.climateUnavailable')}</Alert>
+              {household.location && (
+                <>
+                  <p className="text-sm">
+                    {t('household.climateSavedLocation', {
+                      city: household.location.city,
+                    })}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setLocationMutation.mutate(null)}
+                    isLoading={setLocationMutation.isPending}
+                  >
+                    {t('household.clearSavedLocation')}
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : household.location ? (
             <div className="space-y-3">
               <p className="text-sm">
                 Currently set to{' '}

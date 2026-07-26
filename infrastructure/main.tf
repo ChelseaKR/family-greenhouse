@@ -100,7 +100,11 @@ module "api" {
   allowed_origin       = module.frontend.site_url
   # Scopes the Lambda role's SES send grant to the verified domain identity
   # (instead of Resource "*") when the email module is provisioned.
-  ses_identity_arn = var.domain_name == "" ? "" : module.email[0].identity_arn
+  ses_identity_arn           = var.domain_name == "" ? "" : module.email[0].identity_arn
+  ses_from_email             = var.email_from_address
+  web_push_vapid_public_key  = var.web_push_vapid_public_key
+  web_push_vapid_private_key = var.web_push_vapid_private_key
+  web_push_vapid_subject     = var.web_push_vapid_subject
 
   # External integrations. Empty defaults disable the corresponding feature
   # — set via tfvars when you have credentials.
@@ -108,6 +112,7 @@ module "api" {
   # touches Terraform state (see modules/api/main.tf IAM block).
   perenual_api_key_parameter_name = var.perenual_api_key_parameter_name
   perenual_daily_budget           = var.perenual_daily_budget
+  plant_id_api_key                = var.plant_id_api_key
   openweather_api_key             = var.openweather_api_key
   openweather_daily_budget        = var.openweather_daily_budget
   bedrock_embed_model_id          = var.bedrock_embed_model_id
@@ -144,6 +149,21 @@ check "stripe_price_mode_confirmed" {
   assert {
     condition     = !startswith(var.stripe_secret_key, "sk_live_") || var.stripe_price_ids_are_live
     error_message = "STRIPE_SECRET_KEY looks like a live key (sk_live_...) but stripe_price_ids_are_live is still false. Stripe price ids don't encode test/live mode, so Terraform can't detect a mismatch on its own — manually confirm every stripe_price_id_* was created in Stripe LIVE mode, then set stripe_price_ids_are_live = true."
+  }
+}
+
+check "web_push_vapid_configuration_complete" {
+  assert {
+    condition = (
+      var.web_push_vapid_public_key == "" &&
+      var.web_push_vapid_private_key == "" &&
+      var.web_push_vapid_subject == ""
+      ) || (
+      var.web_push_vapid_public_key != "" &&
+      var.web_push_vapid_private_key != "" &&
+      var.web_push_vapid_subject != ""
+    )
+    error_message = "Configure all three web_push_vapid_* values together, or leave all three blank to disable background web push."
   }
 }
 

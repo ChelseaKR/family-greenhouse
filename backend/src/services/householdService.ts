@@ -608,19 +608,27 @@ export async function getMembershipsByUser(
 ): Promise<
   Array<{ householdId: string; role: 'admin' | 'member'; name: string; joinedAt: string }>
 > {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk AND begins_with(GSI1SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `USER#${userId}`,
-        ':sk': 'HOUSEHOLD#',
-      },
-      Limit: 25,
-    })
-  );
-  return (result.Items ?? []).map((item) => ({
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk AND begins_with(GSI1SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `USER#${userId}`,
+          ':sk': 'HOUSEHOLD#',
+        },
+        Limit: 100,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((result.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+
+  return items.map((item) => ({
     householdId: item.householdId as string,
     role: item.role as 'admin' | 'member',
     name: (item.name as string) ?? '',

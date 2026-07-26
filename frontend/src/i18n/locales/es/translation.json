@@ -267,6 +267,19 @@
     "locationLabel": "Ubicación",
     "notesLabel": "Notas",
     "photoLabel": "Foto (opcional)",
+    "photoRecovery": {
+      "toast": "La planta se guardó, pero no se pudo subir la foto. Inténtalo de nuevo abajo.",
+      "title": "Planta guardada; foto no subida",
+      "description": "Tu planta está a salvo. Vuelve a elegir la foto abajo para reintentar la subida."
+    },
+    "petToxicity": {
+      "toxicTitle": "Tóxica para las mascotas",
+      "toxicBody": "Es tóxica para gatos y perros si la mastican; mantenla fuera de su alcance. Puedes añadirla de todos modos; esto es solo un aviso.",
+      "unknownTitle": "Toxicidad para mascotas desconocida",
+      "unknownBody": "No hay un resultado fiable sobre la toxicidad de esta especie para las mascotas. Trátala como potencialmente peligrosa y mantenla fuera de su alcance hasta que puedas consultar la lista de plantas de la ASPCA o preguntar a tu veterinario.",
+      "unavailableTitle": "No se pudo comprobar la toxicidad para mascotas",
+      "unavailableBody": "No pudimos verificar ahora mismo los datos de seguridad para mascotas de esta especie. Hasta que puedas consultar una fuente fiable como la lista de plantas de la ASPCA, mantenla fuera del alcance de gatos y perros."
+    },
     "backToPlants": "Volver a plantas",
     "deleteConfirm": "¿Seguro que quieres eliminar \"{{name}}\"?",
     "generateName": "✨ Genera un nombre divertido",
@@ -476,6 +489,11 @@
     "skippedToast": "Saltado al próximo ciclo"
   },
   "household": {
+    "climateChecking": "Comprobando la disponibilidad del clima…",
+    "climateCheckFailed": "No se pudo comprobar la disponibilidad del clima. Los cambios de ubicación están pausados; inténtalo más tarde.",
+    "climateUnavailable": "Los consejos según el clima no están disponibles ahora. La configuración de ubicación volverá cuando se active la integración meteorológica.",
+    "climateSavedLocation": "Tu ubicación guardada es {{city}}.",
+    "clearSavedLocation": "Borrar ubicación guardada",
     "vacation": {
       "setVacation": "Programar vacaciones",
       "onVacationUntil": "Fuera hasta el {{date}}",
@@ -541,7 +559,25 @@
     "phoneVerifySuccess": "Número de teléfono verificado. Ya puedes activar los recordatorios por SMS.",
     "phoneUnverifiedHint": "Verifica tu número de teléfono para activar los recordatorios por SMS.",
     "smsUnavailableShort": "Los recordatorios por SMS no están disponibles temporalmente.",
-    "smsUnavailable": "El envío por SMS no está activado en este momento. Los recordatorios por correo y navegador siguen funcionando; la verificación del teléfono volverá cuando el envío esté disponible."
+    "smsUnavailable": "El envío por SMS no está activado en este momento. Los recordatorios por correo y navegador siguen funcionando; la verificación del teléfono volverá cuando el envío esté disponible.",
+    "preferencesUnavailable": "Las preferencias de notificaciones aún no están disponibles.",
+    "householdRequired": "Únete a un hogar o crea uno para configurar los recordatorios.",
+    "loadFailed": "No se pudieron cargar las preferencias de notificaciones.",
+    "preferencesSaved": "Preferencias guardadas.",
+    "browserDisabled": "Las notificaciones del navegador están desactivadas en este dispositivo.",
+    "browserUnsupportedError": "Este navegador no admite notificaciones.",
+    "browserDeniedError": "Se denegó el permiso de notificaciones. Actualiza la configuración del navegador para activarlo.",
+    "browserDismissedError": "Las notificaciones no se activaron porque se cerró la solicitud de permiso.",
+    "browserEnabledBackground": "Los recordatorios del navegador están activados, incluso cuando la aplicación está en segundo plano.",
+    "browserEnabledForegroundFailed": "Los recordatorios del navegador están activados mientras la aplicación está abierta. No se pudo configurar la entrega en segundo plano en este dispositivo.",
+    "browserEnabledForegroundUnavailable": "Los recordatorios del navegador están activados mientras la aplicación está abierta. La entrega en segundo plano no está disponible en este dispositivo.",
+    "browserUnsupportedDevice": "Este dispositivo no admite los recordatorios del navegador. Las preferencias de correo y mensajes de texto siguen disponibles abajo."
+  },
+  "statusPage": {
+    "notActivelyChecked": "No se comprueba activamente",
+    "coreApiOperational": "API principal operativa",
+    "checkingTitle": "Comprobando el estado del sistema…",
+    "checkingBody": "Esperando una respuesta reciente del punto de estado de producción."
   },
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
@@ -559,6 +595,13 @@
     "tooManyTags": "Demasiadas etiquetas"
   },
   "chat": {
+    "availabilityChecking": "Comprobando la disponibilidad del chat…",
+    "availabilityCheckFailed": "No se pudo comprobar la disponibilidad del chat. Inténtalo de nuevo en unos instantes.",
+    "seedlingUnavailableTitle": "El chat de cuidado no está disponible en Seedling",
+    "seedlingUnavailableDescription": "Tus plantas, tareas, recordatorios, análisis y guías de cuidado siguen disponibles.",
+    "seedlingUnavailablePaused": "El chat está incluido para los hogares Garden y Greenhouse existentes. Los cambios de plan están pausados, así que no se puede activar ahora.",
+    "seedlingUnavailableUpgrade": "El chat de cuidado está incluido en los hogares Garden y Greenhouse.",
+    "viewPlanStatus": "Ver estado del plan",
     "report": {
       "success": "Respuesta denunciada. Gracias.",
       "open": "Denunciar respuesta",

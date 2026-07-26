@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { BrandMark } from '@/components/BrandMark';

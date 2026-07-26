@@ -143,11 +143,22 @@ export const listActivity = createHandler(
 // integration case), so the schemas accept a null/absent body. Handlers read
 // fields with `?.` instead of relying on a transform, keeping the schemas'
 // input and output types identical (what `validateBody`'s generic expects).
-const apiCompleteTaskSchema = z.object({ notes: z.string().max(500).optional() }).nullish();
+const apiCompleteTaskSchema = z
+  .object({
+    notes: z.string().max(500).optional(),
+    // Optional occurrence token for retry-safe automations. Integrations
+    // should echo the task.nextDue they read; a replay after that occurrence
+    // already completed becomes a no-op instead of advancing another cycle.
+    expectedNextDue: z.string().datetime().optional(),
+  })
+  .nullish();
 type ApiCompleteTaskInput = z.infer<typeof apiCompleteTaskSchema>;
 
 const apiSnoozeTaskSchema = z
-  .object({ days: z.number().int().min(1).max(365).optional() })
+  .object({
+    days: z.number().int().min(1).max(365).optional(),
+    expectedNextDue: z.string().datetime().optional(),
+  })
   .nullish();
 type ApiSnoozeTaskInput = z.infer<typeof apiSnoozeTaskSchema>;
 
@@ -164,7 +175,8 @@ export const completeTask = createHandler(
       taskId,
       user.userId, // "apikey:{keyId}" — explicit machine actor
       apiKey?.label ?? 'API',
-      validatedBody?.notes
+      validatedBody?.notes,
+      validatedBody?.expectedNextDue
     );
     if (!task) throw createHttpError(404, 'Task not found');
 
@@ -196,32 +208,40 @@ export const snoozeTask = createHandler(
     if (!existing) throw createHttpError(404, 'Task not found');
     const days = validatedBody?.days ?? existing.frequency;
 
-    const task = await taskService.snoozeTask(user.householdId!, taskId, days);
-    if (!task) throw createHttpError(404, 'Task not found');
+    const outcome = await taskService.snoozeTaskWithOutcome(
+      user.householdId!,
+      taskId,
+      days,
+      validatedBody?.expectedNextDue
+    );
+    if (!outcome) throw createHttpError(404, 'Task not found');
+    const { task } = outcome;
 
-    // Same activity-feed entry the app's snooze writes (recordActivity
-    // logs-and-continues on failure, so this can't fail the request).
-    await recordActivity({
-      type: 'task.snoozed',
-      householdId: user.householdId!,
-      actorId: user.userId,
-      actorName: apiKey?.label ?? 'API',
-      payload: {
-        taskId,
-        plantId: task.plantId,
-        plantName: task.plantName,
-        taskType: task.customType || task.type,
-        days,
-        reason: null,
-        note: null,
-      },
-    });
+    if (outcome.changed) {
+      // Same activity-feed entry the app's snooze writes (recordActivity
+      // logs-and-continues on failure, so this can't fail the request).
+      await recordActivity({
+        type: 'task.snoozed',
+        householdId: user.householdId!,
+        actorId: user.userId,
+        actorName: apiKey?.label ?? 'API',
+        payload: {
+          taskId,
+          plantId: task.plantId,
+          plantName: task.plantName,
+          taskType: task.customType || task.type,
+          days,
+          reason: null,
+          note: null,
+        },
+      });
 
-    audit('api.task_snoozed', {
-      actorId: user.userId,
-      householdId: user.householdId ?? undefined,
-      metadata: { taskId, keyId: apiKey?.id, days },
-    });
+      audit('api.task_snoozed', {
+        actorId: user.userId,
+        householdId: user.householdId ?? undefined,
+        metadata: { taskId, keyId: apiKey?.id, days },
+      });
+    }
     return successResponse(task);
   }
 )
@@ -287,8 +307,9 @@ export const productTelemetry = createHandler(
 // Shape matches the local-server mock + the /status page contract:
 //   { status, version, checkedAt, components: { database, auth, mail } }
 // `database` is a real reachability probe (a cheap GetItem on a sentinel
-// key). `auth`/`mail` are reported passively for now — they're not actively
-// probed, so they stay 'ok' until a dedicated check is added.
+// key). `auth`/`mail` are not actively probed yet, so report them as
+// `unknown`. Claiming they are healthy without exercising them gives the
+// public status page false confidence during a provider-specific outage.
 export const health = createHandler(async (): Promise<APIGatewayProxyResult> => {
   let database: 'ok' | 'error' = 'ok';
   try {
@@ -309,8 +330,8 @@ export const health = createHandler(async (): Promise<APIGatewayProxyResult> => 
     checkedAt: new Date().toISOString(),
     components: {
       database: { status: database },
-      auth: { status: 'ok' },
-      mail: { status: 'ok' },
+      auth: { status: 'unknown' },
+      mail: { status: 'unknown' },
     },
   });
 });

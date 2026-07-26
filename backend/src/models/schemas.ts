@@ -187,6 +187,9 @@ export const importPlantsSchema = z.object({
 
 export const completeTaskSchema = z.object({
   notes: z.string().max(500).optional(),
+  // Occurrence token used by the app and integrations to make a retry after
+  // a lost response a no-op instead of completing the next recurrence too.
+  expectedNextDue: z.string().datetime().optional(),
 });
 
 // Why the task was snoozed — feeds the activity feed ("snoozed (rain
@@ -197,6 +200,9 @@ export const snoozeTaskSchema = z.object({
   days: z.number().int().min(1).max(365),
   reason: snoozeReasonEnum.optional(),
   note: z.string().max(200).optional(),
+  // Echo the occurrence's due date so a retry after a lost response cannot
+  // snooze the newly scheduled occurrence a second time.
+  expectedNextDue: z.string().datetime().optional(),
 });
 
 // Vacation window (care handoff). userId defaults to the caller; setting it

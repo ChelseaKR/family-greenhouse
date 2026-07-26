@@ -1,7 +1,8 @@
 /**
- * Raw Perenual HTTP client. Speaks JSON over fetch; never throws — every
- * method returns null on any failure (network error, non-2xx, missing API
- * key, malformed JSON, timeout) so callers can degrade cleanly.
+ * Raw Perenual HTTP client. Speaks JSON over fetch and never throws.
+ * Most methods return null on failure so callers can degrade cleanly.
+ * Species detail additionally exposes a discriminated lookup so callers can
+ * distinguish a real 404 from a temporary inability to check.
  *
  * This module is intentionally dumb: no caching, no rate-limit accounting,
  * no retries. Those concerns live in `enrichment.ts`, which wraps this
@@ -12,7 +13,7 @@
  *      container from SSM Parameter Store. Production path. The Lambda role
  *      needs `ssm:GetParameter` on the parameter ARN.
  *   2. `PERENUAL_API_KEY` env → literal value. Dev/local fallback.
- *   3. Neither set → every method short-circuits to null. The integration
+ *   3. Neither set → nullable methods short-circuit to null. The integration
  *      is feature-gated by the presence of a key, not by an explicit flag.
  */
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
@@ -44,6 +45,15 @@ export interface PerenualSpeciesDetail extends PerenualSpeciesSummary {
   poisonousToPets: boolean | null;
   defaultImageUrl: string | null;
 }
+
+export type PerenualSpeciesLookupResult =
+  | { status: 'found'; result: PerenualSpeciesDetail }
+  | { status: 'not_found'; result: null }
+  | {
+      status: 'unavailable';
+      reason: 'unconfigured' | 'upstream_error';
+      result: null;
+    };
 
 export interface PerenualCareGuideSection {
   type: 'watering' | 'sunlight' | 'pruning';
@@ -130,9 +140,19 @@ export function __resetApiKeyForTests(): void {
   resolvedAt = undefined;
 }
 
-async function fetchJson<T>(path: string, query: Record<string, string> = {}): Promise<T | null> {
+type FetchJsonResult<T> =
+  { ok: true; value: T } | { ok: false; reason: 'unconfigured' | 'not_found' | 'upstream_error' };
+
+/**
+ * Lower-level result used by species detail, where an upstream 404 is a real
+ * answer and must not be collapsed into the same null as a timeout or 5xx.
+ */
+async function fetchJsonResult<T>(
+  path: string,
+  query: Record<string, string> = {}
+): Promise<FetchJsonResult<T>> {
   const key = await resolveApiKey();
-  if (!key) return null;
+  if (!key) return { ok: false, reason: 'unconfigured' };
 
   const params = new URLSearchParams({ key, ...query });
   const url = `${BASE_URL}${path}?${params.toString()}`;
@@ -143,15 +163,23 @@ async function fetchJson<T>(path: string, query: Record<string, string> = {}): P
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) {
       logger.warn({ status: res.status, path }, 'perenual.non_2xx');
-      return null;
+      return {
+        ok: false,
+        reason: res.status === 404 ? 'not_found' : 'upstream_error',
+      };
     }
-    return (await res.json()) as T;
+    return { ok: true, value: (await res.json()) as T };
   } catch (err) {
     logger.warn({ err: (err as Error).message, path }, 'perenual.fetch_failed');
-    return null;
+    return { ok: false, reason: 'upstream_error' };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function fetchJson<T>(path: string, query: Record<string, string> = {}): Promise<T | null> {
+  const result = await fetchJsonResult<T>(path, query);
+  return result.ok ? result.value : null;
 }
 
 interface RawSpeciesListItem {
@@ -230,25 +258,51 @@ export async function searchSpecies(query: string): Promise<PerenualSpeciesSumma
   return raw.data.slice(0, 12).map(summarize);
 }
 
-export async function getSpecies(id: number): Promise<PerenualSpeciesDetail | null> {
-  const raw = await fetchJson<RawSpeciesDetail>(`/species/details/${id}`);
-  if (!raw) return null;
+export async function lookupSpecies(id: number): Promise<PerenualSpeciesLookupResult> {
+  const lookup = await fetchJsonResult<RawSpeciesDetail>(`/species/details/${id}`);
+  if (!lookup.ok) {
+    if (lookup.reason === 'not_found') return { status: 'not_found', result: null };
+    return { status: 'unavailable', reason: lookup.reason, result: null };
+  }
+
+  const raw = lookup.value;
+  // Treat malformed/mismatched success payloads as upstream failures. They
+  // are not evidence that the requested species does not exist, and caching
+  // them as a no-result would suppress a later successful retry.
+  if (!raw || !Number.isInteger(raw.id) || raw.id !== id) {
+    logger.warn({ requestedId: id, responseId: raw?.id }, 'perenual.invalid_species_detail');
+    return { status: 'unavailable', reason: 'upstream_error', result: null };
+  }
+
   const summary = summarize(raw);
   return {
-    ...summary,
-    family: raw.family ?? null,
-    cycle: raw.cycle ?? null,
-    watering: watering(raw.watering),
-    sunlight: Array.isArray(raw.sunlight) ? raw.sunlight : [],
-    hardinessZone:
-      raw.hardiness && raw.hardiness.min && raw.hardiness.max
-        ? `${raw.hardiness.min}-${raw.hardiness.max}`
-        : null,
-    indoor: raw.indoor === true,
-    edible: raw.edible_fruit === true,
-    poisonousToPets: poisonousToPets(raw.poisonous_to_pets),
-    defaultImageUrl: raw.default_image?.original_url ?? null,
+    status: 'found',
+    result: {
+      ...summary,
+      family: raw.family ?? null,
+      cycle: raw.cycle ?? null,
+      watering: watering(raw.watering),
+      sunlight: Array.isArray(raw.sunlight) ? raw.sunlight : [],
+      hardinessZone:
+        raw.hardiness && raw.hardiness.min && raw.hardiness.max
+          ? `${raw.hardiness.min}-${raw.hardiness.max}`
+          : null,
+      indoor: raw.indoor === true,
+      edible: raw.edible_fruit === true,
+      poisonousToPets: poisonousToPets(raw.poisonous_to_pets),
+      defaultImageUrl: raw.default_image?.original_url ?? null,
+    },
   };
+}
+
+/**
+ * Backward-compatible nullable projection for non-user-facing callers.
+ * User-facing code should use lookupSpecies so "not found" and "couldn't
+ * check" cannot be mistaken for each other.
+ */
+export async function getSpecies(id: number): Promise<PerenualSpeciesDetail | null> {
+  const lookup = await lookupSpecies(id);
+  return lookup.status === 'found' ? lookup.result : null;
 }
 
 export async function getCareGuide(speciesId: number): Promise<PerenualCareGuide | null> {

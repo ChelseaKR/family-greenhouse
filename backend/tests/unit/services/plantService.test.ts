@@ -31,8 +31,8 @@ vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: vi.fn(function () {
     return { send: s3Send };
   }),
-  ListObjectsV2Command: vi.fn(function (input) {
-    return { input, kind: 'ListObjectsV2' };
+  ListObjectVersionsCommand: vi.fn(function (input) {
+    return { input, kind: 'ListObjectVersions' };
   }),
   DeleteObjectsCommand: vi.fn(function (input) {
     return { input, kind: 'DeleteObjects' };
@@ -292,7 +292,8 @@ describe('plantService', () => {
       const result = await getPlant('household-123', 'plant-123');
 
       // Service hydrates a `tags` array (defaulting to []), a
-      // perenualSpeciesId (defaulting to null), the lifecycle status
+      // perenualSpeciesId + server-trusted canonical species (defaulting to
+      // null), the lifecycle status
       // (legacy rows with no status hydrate to 'active'), and the
       // propagation parent link (defaulting to null) so the response
       // shape stays stable for clients that always expect the fields.
@@ -300,6 +301,7 @@ describe('plantService', () => {
         ...mockPlant,
         tags: [],
         perenualSpeciesId: null,
+        canonicalSpecies: null,
         status: 'active',
         statusChangedAt: null,
         parentPlantId: null,
@@ -323,7 +325,7 @@ describe('plantService', () => {
   });
 
   describe('deletePlant', () => {
-    it('cascades to dependent tasks and completions', async () => {
+    it('cascades to dependent tasks, completions, and photo metadata', async () => {
       const { dynamodb } = await import('../../../src/utils/dynamodb');
       const { deletePlant } = await import('../../../src/services/plantService');
 
@@ -342,16 +344,20 @@ describe('plantService', () => {
           },
         ],
       });
-      // 2nd send: completion query for this plant.
+      // 2nd send: the complete per-plant partition (completion + photo).
       vi.mocked(dynamodb.send).mockResolvedValueOnce({
         Items: [
           {
             PK: 'HOUSEHOLD#hh#PLANT#p1',
             SK: 'COMPLETION#2025#abc',
           },
+          {
+            PK: 'HOUSEHOLD#hh#PLANT#p1',
+            SK: 'PHOTO#2025#xyz',
+          },
         ],
       });
-      // 3rd send: BatchWrite (cascade tasks + completions).
+      // 3rd send: BatchWrite (cascade tasks + per-plant rows).
       vi.mocked(dynamodb.send).mockResolvedValueOnce({});
       // 4th send: DeleteCommand for the plant row itself, ALL_OLD returns
       // the deleted attributes so the handler can use them for audit.
@@ -390,9 +396,10 @@ describe('plantService', () => {
       };
       const tableName = Object.keys(batch.input.RequestItems)[0];
       const sks = batch.input.RequestItems[tableName].map((r) => r.DeleteRequest.Key.SK);
-      // task t1 (matching plant) and the completion ride in the batch.
+      // task t1 (matching plant), completion, and photo ride in the batch.
       expect(sks).toContain('TASK#t1');
       expect(sks).toContain('COMPLETION#2025#abc');
+      expect(sks).toContain('PHOTO#2025#xyz');
       // The plant row itself is no longer in the batch — it gets a separate
       // conditional Delete so we can detect "didn't exist" atomically.
       expect(sks).not.toContain('PLANT#p1');
@@ -509,9 +516,14 @@ describe('plantService', () => {
             updatedAt: '',
           },
         }); // plant row delete
-        // S3: one page listing one object, then the delete call.
+        // S3: one page listing the current + historical versions and a delete
+        // marker, then a permanent version-aware delete call.
         s3Send.mockResolvedValueOnce({
-          Contents: [{ Key: 'plants/hh/p1/photo.jpg' }],
+          Versions: [
+            { Key: 'plants/hh/p1/photo.jpg', VersionId: 'current' },
+            { Key: 'plants/hh/p1/photo.jpg', VersionId: 'historical' },
+          ],
+          DeleteMarkers: [{ Key: 'plants/hh/p1/old.jpg', VersionId: 'marker' }],
           IsTruncated: false,
         });
         s3Send.mockResolvedValueOnce({});
@@ -519,7 +531,7 @@ describe('plantService', () => {
         await deletePlant('hh', 'p1');
 
         const listCall = s3Send.mock.calls.find(
-          (c) => (c[0] as { kind: string }).kind === 'ListObjectsV2'
+          (c) => (c[0] as { kind: string }).kind === 'ListObjectVersions'
         );
         expect((listCall![0] as { input: { Prefix: string; Bucket: string } }).input).toMatchObject(
           {
@@ -533,7 +545,11 @@ describe('plantService', () => {
         expect(
           (delCall![0] as { input: { Delete: { Objects: { Key: string }[] } } }).input.Delete
             .Objects
-        ).toEqual([{ Key: 'plants/hh/p1/photo.jpg' }]);
+        ).toEqual([
+          { Key: 'plants/hh/p1/photo.jpg', VersionId: 'current' },
+          { Key: 'plants/hh/p1/photo.jpg', VersionId: 'historical' },
+          { Key: 'plants/hh/p1/old.jpg', VersionId: 'marker' },
+        ]);
       } finally {
         delete process.env.IMAGES_BUCKET;
       }
@@ -858,6 +874,22 @@ describe('plantService', () => {
         input: { ExclusiveStartKey: Record<string, string> };
       };
       expect(second.input.ExclusiveStartKey).toEqual({ PK: 'HOUSEHOLD#h', SK: 'PLANT#p199' });
+    });
+
+    it('continues beyond ten short DynamoDB pages for paid-tier collections', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlants } = await import('../../../src/services/plantService');
+      for (let page = 0; page < 11; page += 1) {
+        vi.mocked(dynamodb.send).mockResolvedValueOnce({
+          Items: [{ id: `p${page}`, name: `Plant ${page}`, householdId: 'h' }],
+          ...(page < 10 ? { LastEvaluatedKey: { PK: 'HOUSEHOLD#h', SK: `PLANT#p${page}` } } : {}),
+        });
+      }
+
+      const result = await getPlants('h');
+
+      expect(result).toHaveLength(11);
+      expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(11);
     });
 
     it('filters by lifecycle status (legacy rows count as active)', async () => {

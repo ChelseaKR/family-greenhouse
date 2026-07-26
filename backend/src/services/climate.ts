@@ -36,6 +36,20 @@ interface BudgetState {
   used: number;
   limit: number;
   blocked: boolean;
+  available: boolean;
+}
+
+export type ClimateUnavailableReason =
+  'not_configured' | 'budget_exhausted' | 'budget_check_failed' | 'provider';
+
+/** Typed operational failure so HTTP handlers can distinguish "bad city"
+ * (a valid empty geocode result) from a retryable integration failure. */
+export class ClimateUnavailableError extends Error {
+  override readonly name = 'ClimateUnavailableError';
+
+  constructor(readonly reason: ClimateUnavailableReason) {
+    super(`Climate integration unavailable: ${reason}`);
+  }
 }
 
 async function checkAndIncrementBudget(): Promise<BudgetState> {
@@ -56,10 +70,12 @@ async function checkAndIncrementBudget(): Promise<BudgetState> {
       })
     );
     const used = (result.Attributes?.used as number) ?? 1;
-    return { used, limit, blocked: used > limit };
+    return { used, limit, blocked: used > limit, available: true };
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'weather.budget_check_failed');
-    return { used: 0, limit, blocked: false };
+    // Fail closed. If the shared counter cannot be read atomically, calling
+    // upstream anyway defeats the spend cap and can amplify an outage.
+    return { used: 0, limit, blocked: false, available: false };
   }
 }
 
@@ -116,7 +132,7 @@ function quantize(coord: number): string {
 }
 
 export async function geocodeCached(query: string): Promise<GeocodeResult | null> {
-  if (!weather.isConfigured()) return null;
+  if (!weather.isConfigured()) throw new ClimateUnavailableError('not_configured');
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return null;
 
@@ -125,29 +141,47 @@ export async function geocodeCached(query: string): Promise<GeocodeResult | null
   if (cached) return cached;
 
   const budget = await checkAndIncrementBudget();
-  if (budget.blocked) return null;
+  if (!budget.available) throw new ClimateUnavailableError('budget_check_failed');
+  if (budget.blocked) {
+    logger.warn({ used: budget.used, limit: budget.limit }, 'weather.budget_exhausted');
+    throw new ClimateUnavailableError('budget_exhausted');
+  }
 
-  const fresh = await weather.geocode(trimmed);
-  if (fresh) await writeCache('WEATHER#CACHE', sk, fresh, GEOCODE_TTL_SECONDS);
-  return fresh;
+  const fresh = await weather.geocodeDetailed(trimmed);
+  if (fresh.status === 'unavailable') {
+    throw new ClimateUnavailableError(
+      fresh.reason === 'not_configured' ? 'not_configured' : 'provider'
+    );
+  }
+  if (fresh.status === 'not_found') return null;
+  await writeCache('WEATHER#CACHE', sk, fresh.value, GEOCODE_TTL_SECONDS);
+  return fresh.value;
 }
 
 export async function getWeatherCached(lat: number, lon: number): Promise<WeatherSnapshot | null> {
-  if (!weather.isConfigured()) return null;
+  if (!weather.isConfigured()) throw new ClimateUnavailableError('not_configured');
 
   const sk = `WEATHER#${quantize(lat)},${quantize(lon)}`;
   const cached = await readCache<WeatherSnapshot>('WEATHER#CACHE', sk);
   if (cached) return cached;
 
   const budget = await checkAndIncrementBudget();
+  if (!budget.available) throw new ClimateUnavailableError('budget_check_failed');
   if (budget.blocked) {
     logger.warn({ used: budget.used, limit: budget.limit }, 'weather.budget_exhausted');
-    return null;
+    throw new ClimateUnavailableError('budget_exhausted');
   }
 
-  const fresh = await weather.getWeather(lat, lon);
-  if (fresh) await writeCache('WEATHER#CACHE', sk, fresh, WEATHER_TTL_SECONDS);
-  return fresh;
+  const fresh = await weather.getWeatherDetailed(lat, lon);
+  if (fresh.status !== 'ok') {
+    throw new ClimateUnavailableError(
+      fresh.status === 'unavailable' && fresh.reason === 'not_configured'
+        ? 'not_configured'
+        : 'provider'
+    );
+  }
+  await writeCache('WEATHER#CACHE', sk, fresh.value, WEATHER_TTL_SECONDS);
+  return fresh.value;
 }
 
 /**

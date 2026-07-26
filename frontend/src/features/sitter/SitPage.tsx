@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import { PublicShell } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
@@ -86,7 +86,9 @@ export function SitPage() {
       // Optimistic: mark pending immediately; revert on failure.
       setPending((p) => new Set(p).add(taskId));
       try {
-        await sitterService.completeTask(token, taskId);
+        const task = tasks.find((candidate) => candidate.taskId === taskId);
+        if (!task) return;
+        await sitterService.completeTask(token, taskId, task.dueDate);
         setDone((d) => new Set(d).add(taskId));
       } catch (err) {
         if (err instanceof SitterLinkInactiveError) {
@@ -104,7 +106,7 @@ export function SitPage() {
         });
       }
     },
-    [token]
+    [tasks, token]
   );
 
   const now = Date.now();

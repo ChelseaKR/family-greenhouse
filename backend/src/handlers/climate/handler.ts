@@ -1,8 +1,8 @@
 /**
- * Climate read endpoints. Backed by the OpenWeatherMap cache; degrades to
- * an empty payload when the integration is unconfigured or budget is
- * exhausted, mirroring the species/Perenual pattern so the frontend can
- * suppress climate UI without distinguishing the failure mode.
+ * Climate read endpoints. Backed by the OpenWeatherMap cache. An intentionally
+ * unconfigured integration is exposed as a disabled capability; operational
+ * provider/budget failures are retryable 503s rather than misleading empty
+ * weather or "city not found" responses.
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
@@ -18,9 +18,8 @@ import * as householdService from '../../services/householdService.js';
 
 // GET /households/:id/climate
 // Current weather + derived care tips for the household's saved location.
-// Returns an empty `tips` array (and `weather: null`) when no location is
-// set, the integration is disabled, or the daily budget is exhausted —
-// all three look the same to the client by design.
+// Returns an empty `tips` array (and `weather: null`) when no location is set
+// or the integration is intentionally disabled. Operational failures are 503.
 export const getClimate = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -37,20 +36,39 @@ export const getClimate = createHandler(
     const household = await householdService.getHousehold(householdId);
     if (!household) throw createHttpError(404, 'Household not found');
 
-    if (!household.location) {
+    const configured = isConfigured();
+    if (!household.location || !configured) {
       return successResponse({
-        configured: isConfigured(),
+        configured,
+        location: household.location ?? null,
         weather: null,
         tips: [],
       });
     }
 
-    const snapshot = await climate.getWeatherCached(household.location.lat, household.location.lon);
+    let snapshot;
+    try {
+      snapshot = await climate.getWeatherCached(household.location.lat, household.location.lon);
+    } catch (err) {
+      if (err instanceof climate.ClimateUnavailableError) {
+        throw createHttpError(
+          503,
+          'Climate data is temporarily unavailable. Please try again later.',
+          { expose: true }
+        );
+      }
+      throw err;
+    }
     const tips = snapshot ? climate.deriveClimateTips(snapshot) : [];
 
     return cacheableResponse(
       {
-        configured: isConfigured(),
+        configured,
+        // The dashboard card needs the saved city to distinguish "set a
+        // location" from "weather is temporarily unavailable". Omitting this
+        // field made every configured household look unconfigured even while
+        // weather/tips were present.
+        location: household.location,
         weather: snapshot,
         tips,
       },
@@ -96,7 +114,27 @@ export const setLocation = createHandler(
       return successResponse(updated);
     }
 
-    const geo = await climate.geocodeCached(validatedBody.city);
+    if (!isConfigured()) {
+      throw createHttpError(
+        503,
+        'Climate location search is temporarily unavailable. Please try again later.',
+        { expose: true }
+      );
+    }
+
+    let geo;
+    try {
+      geo = await climate.geocodeCached(validatedBody.city);
+    } catch (err) {
+      if (err instanceof climate.ClimateUnavailableError) {
+        throw createHttpError(
+          503,
+          'Climate location search is temporarily unavailable. Please try again later.',
+          { expose: true }
+        );
+      }
+      throw err;
+    }
     if (!geo) {
       throw createHttpError(
         400,

@@ -104,6 +104,23 @@ class HttpishError extends Error {
   }
 }
 
+type HttpishFailure = Error & { statusCode?: unknown; expose?: unknown };
+
+function safeFailure(err: unknown, fallback: string): { statusCode: number; message: string } {
+  const failure = err as HttpishFailure;
+  const candidate = typeof failure?.statusCode === 'number' ? Math.trunc(failure.statusCode) : 500;
+  const statusCode = candidate >= 400 && candidate <= 599 ? candidate : 500;
+  // Match the normal API's jsonErrorHandler contract: 4xx messages are
+  // client-actionable, and an intentional 5xx is shown only when explicitly
+  // marked expose:true. Plain exceptions never leak provider details, secret
+  // names, stack hints, or internal state through the Function URL.
+  const exposable = statusCode < 500 || failure?.expose === true;
+  return {
+    statusCode,
+    message: exposable && failure?.message ? failure.message : fallback,
+  };
+}
+
 function applicationCorsEnabled(): boolean {
   return process.env.APPLICATION_CORS_ENABLED === 'true';
 }
@@ -314,10 +331,7 @@ export async function streamRequestToSse(
     user = await resolveUser(event);
     body = parseBody(event);
   } catch (err) {
-    const statusCode =
-      err instanceof HttpishError
-        ? err.statusCode
-        : ((err as { statusCode?: number }).statusCode ?? 500);
+    const { statusCode, message } = safeFailure(err, 'Chat request failed');
     logger.error({ err }, 'chat_stream_rejected');
     const out = httpResponseStream
       ? httpResponseStream.from(responseStream, {
@@ -325,7 +339,7 @@ export async function streamRequestToSse(
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         })
       : responseStream;
-    out.write(JSON.stringify({ message: (err as Error).message || 'Chat request failed' }));
+    out.write(JSON.stringify({ message }));
     out.end();
     return;
   }
@@ -356,13 +370,13 @@ export async function streamRequestToSse(
   } catch (err) {
     // http-errors thrown by the service layer (e.g. the 429 budget gate)
     // carry statusCode too; surface it for the client's fallback logic.
-    const svcStatus = (err as { statusCode?: number }).statusCode;
+    const failure = safeFailure(err, 'Chat stream failed');
     logger.error({ err }, 'chat_stream_error');
     out.write(
       sseEvent({
         type: 'error',
-        statusCode: svcStatus ?? 500,
-        message: (err as Error).message || 'Chat stream failed',
+        statusCode: failure.statusCode,
+        message: failure.message,
       })
     );
   } finally {
@@ -401,14 +415,11 @@ async function bufferedHandler(
       body: JSON.stringify(result),
     };
   } catch (err) {
-    const statusCode =
-      err instanceof HttpishError
-        ? err.statusCode
-        : ((err as { statusCode?: number }).statusCode ?? 500);
+    const { statusCode, message } = safeFailure(err, 'Chat request failed');
     return {
       statusCode,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ message: (err as Error).message || 'Chat request failed' }),
+      body: JSON.stringify({ message }),
     };
   }
 }

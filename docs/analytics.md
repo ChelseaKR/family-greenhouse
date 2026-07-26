@@ -8,10 +8,16 @@ pre-auth exception: the trusted auth handler writes `signup_completed` directly
 after Cognito accepts the code, without logging the email. PostHog and GTM are
 optional fan-out rails:
 
-| Var                 | Required | Default                    | Notes                                                                |
-| ------------------- | -------- | -------------------------- | -------------------------------------------------------------------- |
-| `VITE_POSTHOG_KEY`  | No       | unset                      | Enables the optional PostHog fan-out; first-party events still flow. |
-| `VITE_POSTHOG_HOST` | No       | `https://us.i.posthog.com` | Switch to `eu.i.posthog.com` for EU residency, or a self-hosted URL. |
+| Var                 | Required | Default                    | Notes                                                                                    |
+| ------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `VITE_POSTHOG_KEY`  | No       | unset                      | Enables the optional PostHog fan-out; first-party events still flow.                     |
+| `VITE_POSTHOG_HOST` | No       | `https://us.i.posthog.com` | `us.i.posthog.com` or `eu.i.posthog.com`; custom hosts also need an explicit CSP change. |
+
+Production/staging deploys read the project key from the
+`PRODUCTION_POSTHOG_KEY` / `STAGING_POSTHOG_KEY` GitHub Actions secrets and the
+cloud host from the corresponding `*_POSTHOG_HOST` repository variable. The
+same values reach the browser build and backend fan-out, and CloudFront's CSP
+permits both documented PostHog cloud regions.
 
 We do **not** install `posthog-js`. The optional rail posts directly to PostHog's `/capture/` endpoint via `fetch`, saving ~50KB of bundle weight. The first-party rail likewise uses `fetch` and has no vendor account dependency. Trade-off: no autocapture, session replay, or hosted funnel UI until PostHog is configured.
 

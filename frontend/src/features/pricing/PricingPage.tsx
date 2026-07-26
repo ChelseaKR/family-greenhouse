@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { buttonStyles } from '@/components/buttonStyles';
 import { useMetaTags } from '@/hooks/useMetaTags';

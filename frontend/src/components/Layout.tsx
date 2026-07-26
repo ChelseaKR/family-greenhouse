@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
-import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, Transition } from '@headlessui/react';
 import {
   Bars3Icon,
@@ -18,6 +19,8 @@ import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { CommandPalette } from './CommandPalette';
 import { SidebarPattern } from './brand/SidebarPattern';
 import { MemorialFrame } from './brand/MemorialFrame';
+import { billingService } from '@/services/billingService';
+import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import clsx from 'clsx';
 
 const navigation = [
@@ -60,7 +63,18 @@ export function Layout() {
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const location = useLocation();
-  const isChatRoute = location.pathname === '/chat';
+  const householdId = useActiveHouseholdId();
+  const { data: subscription } = useQuery({
+    queryKey: ['subscription', householdId],
+    queryFn: billingService.getCurrentSubscription,
+    enabled: Boolean(householdId),
+    staleTime: 60_000,
+  });
+  // The backend rejects Seedling chat turns with 402. Hide the navigation
+  // until the household is proven to hold an existing chat entitlement so a
+  // free user never lands on a working-looking composer that cannot send.
+  const chatAvailable = subscription?.planId === 'garden' || subscription?.planId === 'greenhouse';
+  const isChatRoute = location.pathname === '/chat' && chatAvailable;
 
   const handleLogout = () => {
     logout();
@@ -119,6 +133,7 @@ export function Layout() {
 
                 <SidebarContent
                   user={user}
+                  chatAvailable={chatAvailable}
                   onLogout={handleLogout}
                   onNavigate={() => setSidebarOpen(false)}
                 />
@@ -130,7 +145,12 @@ export function Layout() {
 
       {/* Desktop sidebar — no drawer to close, so navigation is a no-op. */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
-        <SidebarContent user={user} onLogout={handleLogout} onNavigate={() => {}} />
+        <SidebarContent
+          user={user}
+          chatAvailable={chatAvailable}
+          onLogout={handleLogout}
+          onNavigate={() => {}}
+        />
       </div>
 
       {/* Main content */}
@@ -185,13 +205,14 @@ export function Layout() {
 
 interface SidebarContentProps {
   user: { name: string; email: string } | null;
+  chatAvailable: boolean;
   onLogout: () => void;
   /** Called when a nav item is tapped. The mobile drawer instance closes
    *  itself; the desktop instance passes a no-op. */
   onNavigate: () => void;
 }
 
-function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
+function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarContentProps) {
   return (
     <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 px-6 pb-4">
       {/* Pane lines + a climbing vine turn the rail into the edge of the
@@ -210,25 +231,27 @@ function SidebarContent({ user, onLogout, onNavigate }: SidebarContentProps) {
         <ul className="flex flex-1 flex-col gap-y-7">
           <li>
             <ul className="-mx-2 space-y-1">
-              {navigation.map((item) => (
-                <li key={item.name}>
-                  <NavLink
-                    to={item.href}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      clsx(
-                        'group flex min-h-touch items-center gap-x-3 rounded-lg border-l-2 p-2 text-sm font-semibold leading-6 transition-colors',
-                        isActive
-                          ? 'border-accent-400 bg-white/10 text-white shadow-sm ring-1 ring-white/10'
-                          : 'border-transparent text-primary-100/90 hover:bg-white/[0.07] hover:text-white'
-                      )
-                    }
-                  >
-                    <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                    {item.name}
-                  </NavLink>
-                </li>
-              ))}
+              {navigation
+                .filter((item) => item.href !== '/chat' || chatAvailable)
+                .map((item) => (
+                  <li key={item.name}>
+                    <NavLink
+                      to={item.href}
+                      onClick={onNavigate}
+                      className={({ isActive }) =>
+                        clsx(
+                          'group flex min-h-touch items-center gap-x-3 rounded-lg border-l-2 p-2 text-sm font-semibold leading-6 transition-colors',
+                          isActive
+                            ? 'border-accent-400 bg-white/10 text-white shadow-sm ring-1 ring-white/10'
+                            : 'border-transparent text-primary-100/90 hover:bg-white/[0.07] hover:text-white'
+                        )
+                      }
+                    >
+                      <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                      {item.name}
+                    </NavLink>
+                  </li>
+                ))}
             </ul>
           </li>
 

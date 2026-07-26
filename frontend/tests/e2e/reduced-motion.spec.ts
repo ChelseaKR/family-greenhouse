@@ -66,6 +66,12 @@ function durationMs(value: string): number {
 }
 
 test.describe('Reduced motion', () => {
+  // The production bundle registers Workbox. A controlled page can send API
+  // fetches through that worker, and Playwright routing cannot intercept
+  // service-worker-owned requests. Worker activation is covered separately;
+  // block it here because these two tests deliberately hold the plants API.
+  test.use({ serviceWorkers: 'block' });
+
   test('motion-safe skeleton pulse does not run under reduce', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await uiLogin(page);

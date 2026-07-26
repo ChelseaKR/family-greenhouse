@@ -3,9 +3,9 @@
  * cache so we never expose raw Perenual responses or our API key to the
  * client.
  *
- * The endpoints return null/empty arrays gracefully when Perenual is not
- * configured or the daily budget is exhausted — the frontend falls back to
- * its static catalog in that case, so users never see an outright failure.
+ * The endpoints degrade gracefully when Perenual is unavailable. Detail
+ * lookups preserve whether a species was genuinely not found or could not be
+ * checked, because pet-safety UI must not interpret an outage as a safe result.
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { createHandler } from '../../middleware/handler.js';
@@ -71,18 +71,45 @@ export const detail = createHandler(
     // 200. Collapsing them into the same response (as this used to do) makes
     // a real Perenual outage indistinguishable from a typo'd URL.
     if (id === null) throw createHttpError(400, 'Invalid species id');
-    const detail = await enrichment.getSpeciesCached(id);
+    const lookup = await enrichment.lookupSpeciesCached(id);
+    if (lookup.status === 'unavailable') {
+      const response = successResponse({
+        status: 'unavailable',
+        reason: lookup.reason,
+        result: null,
+      });
+      // Budget/config/upstream failures may recover on the next request.
+      // Never let a browser or shared edge cache replay this as a stable null.
+      response.headers = {
+        ...response.headers,
+        'Cache-Control': 'private, no-store',
+      };
+      return response;
+    }
+
+    if (lookup.status === 'not_found') {
+      return cacheableResponse(
+        { status: 'not_found', result: null },
+        { maxAgeSeconds: 3600, visibility: 'public' }
+      );
+    }
+
+    const speciesDetail = lookup.result;
     // Surface `thumbnailUrl` directly (allowlist-sanitized, same policy as
     // the /thumbnail redirect) so clients can render the image without the
     // extra redirect hop. A poisoned upstream URL is nulled rather than
     // handed to the client.
-    const result = detail
-      ? {
-          ...detail,
-          thumbnailUrl: pickAllowedThumbnailUrl(detail.thumbnailUrl, detail.defaultImageUrl),
-        }
-      : null;
-    return cacheableResponse({ result }, { maxAgeSeconds: 3600, visibility: 'public' });
+    const result = {
+      ...speciesDetail,
+      thumbnailUrl: pickAllowedThumbnailUrl(
+        speciesDetail.thumbnailUrl,
+        speciesDetail.defaultImageUrl
+      ),
+    };
+    return cacheableResponse(
+      { status: 'found', result },
+      { maxAgeSeconds: 3600, visibility: 'public' }
+    );
   }
 )
   .use(authMiddleware())

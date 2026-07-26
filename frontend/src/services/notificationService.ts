@@ -40,8 +40,12 @@ export const notificationService = {
     await api.post('/notifications/subscribe', payload);
   },
 
-  async unsubscribe(endpoint: string): Promise<void> {
-    await api.post('/notifications/unsubscribe', { endpoint });
+  async unsubscribe(endpoint: string): Promise<{ ok: true; remainingSubscriptions: number }> {
+    const response = await api.post<{ ok: true; remainingSubscriptions: number }>(
+      '/notifications/unsubscribe',
+      { endpoint }
+    );
+    return response.data;
   },
 
   async runReminders(): Promise<{ sent: number }> {

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
+import { useTranslation } from 'react-i18next';
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -8,7 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { healthService, type ComponentStatus } from '@/services/healthService';
+import { healthService, type ComponentStatus, type OverallStatus } from '@/services/healthService';
 
 /**
  * Public status page. Pulls /health every 60s and surfaces component-by-
@@ -38,6 +39,8 @@ const COMPONENT_LABELS: Record<string, string> = {
 };
 
 function StatusPill({ status }: { status: ComponentStatus }) {
+  const { t } = useTranslation();
+
   if (status === 'ok') {
     // Healthy state renders in the brand green, not stock Tailwind green —
     // "operational" is the page's default mood and should look like us.
@@ -45,6 +48,14 @@ function StatusPill({ status }: { status: ComponentStatus }) {
       <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-800">
         <CheckCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />
         Operational
+      </span>
+    );
+  }
+  if (status === 'unknown') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-parchment px-2.5 py-0.5 text-xs font-medium text-gray-700">
+        <QuestionMarkCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        {t('statusPage.notActivelyChecked')}
       </span>
     );
   }
@@ -65,6 +76,8 @@ function StatusPill({ status }: { status: ComponentStatus }) {
 }
 
 export function StatusPage() {
+  const { t } = useTranslation();
+
   useMetaTags({
     title: 'Status — Family Greenhouse',
     description: 'Current operational status of Family Greenhouse and recent incidents.',
@@ -84,7 +97,10 @@ export function StatusPage() {
   // an outage we have no evidence for.
   const serverErrored = isError && isAxiosError(error) && error.response != null;
   const unreachable = isError && !serverErrored;
-  const overallStatus: ComponentStatus = serverErrored ? 'down' : (data?.status ?? 'ok');
+  const checking = isLoading && !data;
+  // The healthy state requires a successful response. Never paint the page
+  // green during the initial request just because no error has arrived yet.
+  const overallStatus: OverallStatus = serverErrored ? 'down' : (data?.status ?? 'down');
 
   return (
     <PublicShell>
@@ -95,7 +111,15 @@ export function StatusPage() {
       />
 
       {/* Overall banner */}
-      {unreachable ? (
+      {checking ? (
+        <div className="mt-8 rounded-lg border border-primary-100 bg-white p-5" role="status">
+          <div className="flex items-center gap-3">
+            <QuestionMarkCircleIcon className="h-6 w-6 text-gray-500" aria-hidden="true" />
+            <p className="font-serif text-xl text-ink">{t('statusPage.checkingTitle')}</p>
+          </div>
+          <p className="mt-2 text-sm text-gray-600">{t('statusPage.checkingBody')}</p>
+        </div>
+      ) : unreachable ? (
         <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-5">
           <div className="flex items-center gap-3">
             <QuestionMarkCircleIcon className="h-6 w-6 text-amber-600" aria-hidden="true" />
@@ -143,7 +167,7 @@ export function StatusPage() {
                     : 'text-red-900'
               }`}
             >
-              {overallStatus === 'ok' && 'All systems operational'}
+              {overallStatus === 'ok' && t('statusPage.coreApiOperational')}
               {overallStatus === 'degraded' && 'Some systems degraded'}
               {overallStatus === 'down' && 'We are investigating an issue'}
             </p>

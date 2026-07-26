@@ -42,6 +42,13 @@ export function monthlyCap(): number {
   return n;
 }
 
+export class LeafHealthBudgetExceededError extends Error {
+  constructor() {
+    super('Monthly leaf-health allowance exhausted');
+    this.name = 'LeafHealthBudgetExceededError';
+  }
+}
+
 /** UTC calendar month, e.g. "2026-06". Exported for tests (rollover). */
 export function monthKey(d: Date = new Date()): string {
   const yyyy = d.getUTCFullYear();
@@ -119,5 +126,74 @@ export async function incrementUsage(
       'leaf_health.budget_increment_failed'
     );
     return null;
+  }
+}
+
+/**
+ * Atomically reserve one Bedrock invocation while enforcing the monthly cap.
+ *
+ * The former read-then-invoke-then-increment sequence allowed concurrent
+ * requests to all observe the same below-cap total and overspend the limit.
+ * A conditional ADD makes the DynamoDB write the authoritative gate.
+ */
+export async function reserveUsage(
+  householdId: string,
+  cap: number,
+  now: Date = new Date()
+): Promise<number> {
+  try {
+    const result = await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: budgetKey(householdId, now),
+        UpdateExpression:
+          'ADD #used :one SET #ttl = if_not_exists(#ttl, :ttl), entityType = if_not_exists(entityType, :etype)',
+        ConditionExpression: 'attribute_not_exists(#used) OR #used < :cap',
+        ExpressionAttributeNames: { '#used': 'used', '#ttl': 'ttl' },
+        ExpressionAttributeValues: {
+          ':one': 1,
+          ':cap': cap,
+          ':ttl': Math.floor(now.getTime() / 1000) + BUDGET_TTL_SECONDS,
+          ':etype': 'LeafHealthBudget',
+        },
+        ReturnValues: 'UPDATED_NEW',
+      })
+    );
+    const used: unknown = result.Attributes?.used;
+    if (typeof used !== 'number') {
+      throw new Error('Leaf-health reservation returned no usage total');
+    }
+    return used;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      throw new LeafHealthBudgetExceededError();
+    }
+    logger.error({ err: (err as Error).message, householdId }, 'leaf_health.budget_reserve_failed');
+    throw err;
+  }
+}
+
+/**
+ * Give back a reservation when Bedrock was not actually available and the
+ * service returned its explicit demo response. Cleanup is best-effort; a
+ * failed rollback must not hide the otherwise useful demo result.
+ */
+export async function releaseUsage(householdId: string, now: Date = new Date()): Promise<void> {
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: budgetKey(householdId, now),
+        UpdateExpression: 'ADD #used :minusOne',
+        ConditionExpression: 'attribute_exists(#used) AND #used > :zero',
+        ExpressionAttributeNames: { '#used': 'used' },
+        ExpressionAttributeValues: {
+          ':minusOne': -1,
+          ':zero': 0,
+        },
+      })
+    );
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, householdId }, 'leaf_health.budget_release_failed');
   }
 }

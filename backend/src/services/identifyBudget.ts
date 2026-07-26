@@ -49,6 +49,13 @@ export function meteringEnabled(): boolean {
   return process.env.IDENTIFY_METERING_ENABLED === '1';
 }
 
+export class IdentifyBudgetExceededError extends Error {
+  constructor() {
+    super('Monthly plant-identification allowance exhausted');
+    this.name = 'IdentifyBudgetExceededError';
+  }
+}
+
 const BUDGET_TTL_SECONDS = 95 * 24 * 60 * 60;
 
 /** UTC calendar month, e.g. "2026-06". Exported for tests (rollover). */
@@ -115,5 +122,56 @@ export async function incrementUsage(
   } catch (err) {
     logger.warn({ err: (err as Error).message, bucketId }, 'identify.budget_increment_failed');
     return null;
+  }
+}
+
+/**
+ * Atomically reserve one paid Plant.id attempt while enforcing `allowance`.
+ *
+ * This is deliberately separate from the fail-soft post-success tracker
+ * above. Production enables enforcement, so a read-then-call-then-increment
+ * sequence would let concurrent requests all spend a Plant.id credit before
+ * any one of them observed the cap. DynamoDB's conditional UPDATE is the
+ * cost gate: exactly `allowance` callers can win for a bucket/month.
+ *
+ * The reservation remains consumed when the upstream times out or errors,
+ * because the request may already have reached Plant.id and spent a credit.
+ * Infrastructure failures fail closed by propagating; callers map them to a
+ * retryable 503 rather than sending an unmetered paid request.
+ */
+export async function reserveUsage(
+  bucketId: string,
+  allowance: number,
+  now: Date = new Date()
+): Promise<number> {
+  try {
+    const result = await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: budgetKey(bucketId, now),
+        UpdateExpression:
+          'ADD #used :one SET #ttl = if_not_exists(#ttl, :ttl), entityType = if_not_exists(entityType, :etype)',
+        ConditionExpression: 'attribute_not_exists(#used) OR #used < :allowance',
+        ExpressionAttributeNames: { '#used': 'used', '#ttl': 'ttl' },
+        ExpressionAttributeValues: {
+          ':one': 1,
+          ':allowance': allowance,
+          ':ttl': Math.floor(now.getTime() / 1000) + BUDGET_TTL_SECONDS,
+          ':etype': 'IdentifyBudget',
+        },
+        ReturnValues: 'UPDATED_NEW',
+      })
+    );
+    const used: unknown = result.Attributes?.used;
+    if (typeof used !== 'number') {
+      throw new Error('Identification reservation returned no usage total');
+    }
+    return used;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      throw new IdentifyBudgetExceededError();
+    }
+    logger.error({ err: (err as Error).message, bucketId }, 'identify.budget_reserve_failed');
+    throw err;
   }
 }

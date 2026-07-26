@@ -1,8 +1,21 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { navigateTo, provisionAccount, uiLogin, type ProvisionedAccount } from './helpers';
 
 const ENFORCED_A11Y_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+const LOCAL_API_URL = 'http://localhost:4000';
+const PUBLIC_BOUNDARY_URLS = {
+  invite: `${LOCAL_API_URL}/households/invites/not-a-real-invite`,
+  sharedPlant: `${LOCAL_API_URL}/plants/shared/not-a-real-share`,
+  sitter: `${LOCAL_API_URL}/sitter/not-a-real-sitter-token`,
+  health: `${LOCAL_API_URL}/health`,
+} as const;
+
+const EXPECTED_PUBLIC_MISS_URLS = [
+  PUBLIC_BOUNDARY_URLS.sharedPlant,
+  PUBLIC_BOUNDARY_URLS.sitter,
+] as const;
 
 const NARROW_PUBLIC_ROUTES = [
   '/',
@@ -21,6 +34,8 @@ const NARROW_PUBLIC_ROUTES = [
   '/pet-safe',
   '/changelog',
   '/legal/privacy',
+  '/account-deletion',
+  '/support',
   '/legal/terms',
   '/status',
   '/pricing',
@@ -31,7 +46,6 @@ const AUTH_ROUTES = [
   { link: /^dashboard$/i, path: /\/dashboard$/ },
   { link: /^plants$/i, path: /\/plants$/ },
   { link: /^tasks$/i, path: /\/tasks$/ },
-  { link: /^chat$/i, path: /\/chat$/ },
   { link: /^analytics$/i, path: /\/analytics$/ },
   { link: /^household$/i, path: /\/household$/ },
   { link: /^settings$/i, path: /\/settings$/ },
@@ -119,18 +133,57 @@ function captureBrowserErrors(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'error') {
+      const sourceUrl = message.location().url;
+      errors.push(sourceUrl ? `${message.text()} [${sourceUrl}]` : message.text());
+    }
   });
   return errors;
 }
 
+function waitForGetResponse(page: Page, url: string): Promise<Response> {
+  return page.waitForResponse(
+    (response) => response.url() === url && response.request().method() === 'GET'
+  );
+}
+
+function expectLocalCors(response: Response) {
+  expect(
+    response.headers()['access-control-allow-origin'],
+    `${response.url()} must be readable by the browser`
+  ).toBe('*');
+}
+
+function isExpectedPublicMissError(error: string) {
+  return (
+    EXPECTED_PUBLIC_MISS_URLS.some((url) => error.includes(url)) &&
+    /404|access control checks/i.test(error)
+  );
+}
+
 async function expectNoA11yViolations(page: Page, label: string) {
   await page.evaluate(async () => {
-    const animations = document.getAnimations().filter((animation) => {
+    const finite = (animation: Animation) => {
       const timing = animation.effect?.getComputedTiming();
-      return animation.playState === 'running' && timing?.endTime !== Infinity;
-    });
-    await Promise.allSettled(animations.map((animation) => animation.finished));
+      return !!timing && timing.endTime !== Infinity;
+    };
+    const deadline = Date.now() + 3000;
+    let calmFrames = 0;
+    // Headless UI applies enterTo after a double requestAnimationFrame. Wait
+    // for two calm samples so a not-yet-registered opacity transition cannot
+    // begin between the animation snapshot and axe's contrast calculation.
+    while (Date.now() < deadline && calmFrames < 2) {
+      const running = document
+        .getAnimations()
+        .filter((animation) => animation.playState === 'running' && finite(animation));
+      if (running.length === 0) {
+        calmFrames += 1;
+      } else {
+        calmFrames = 0;
+        await Promise.allSettled(running.map((animation) => animation.finished));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   });
   const results = await new AxeBuilder({ page }).withTags(ENFORCED_A11Y_TAGS).analyze();
   expect(
@@ -160,12 +213,45 @@ test.describe('Mobile-first UX correctness', () => {
     await page.setViewportSize({ width: 320, height: 700 });
 
     for (const route of NARROW_PUBLIC_ROUTES) {
+      const boundaryResponse =
+        route === '/join/not-a-real-invite'
+          ? waitForGetResponse(page, PUBLIC_BOUNDARY_URLS.invite)
+          : route === '/shared/not-a-real-share'
+            ? waitForGetResponse(page, PUBLIC_BOUNDARY_URLS.sharedPlant)
+            : route === '/sit/not-a-real-sitter-token'
+              ? waitForGetResponse(page, PUBLIC_BOUNDARY_URLS.sitter)
+              : route === '/status'
+                ? waitForGetResponse(page, PUBLIC_BOUNDARY_URLS.health)
+                : undefined;
+
       await page.goto(route);
       await page.locator('body').waitFor({ state: 'visible' });
+
+      if (boundaryResponse) {
+        const response = await boundaryResponse;
+        expectLocalCors(response);
+
+        if (route === '/join/not-a-real-invite') {
+          expect(response.status()).toBe(200);
+          expect(await response.json()).toEqual({ valid: false });
+          await expect(page.getByText('This invite link is invalid or has expired.')).toBeVisible();
+        } else if (route === '/shared/not-a-real-share') {
+          expect(response.status()).toBe(404);
+          await expect(page.getByText('This share link is invalid or has expired.')).toBeVisible();
+        } else if (route === '/sit/not-a-real-sitter-token') {
+          expect(response.status()).toBe(404);
+          await expect(page.getByText('This plant-sitting link is no longer active')).toBeVisible();
+        } else {
+          expect(response.status()).toBe(200);
+          await expect(page.getByText('Core API operational')).toBeVisible();
+        }
+      }
+
       await expectNoDocumentOverflow(page, route);
       await expectMinimumControlTargets(page, route);
     }
-    expect(browserErrors).toEqual([]);
+
+    expect(browserErrors.filter((error) => !isExpectedPublicMissError(error))).toEqual([]);
   });
 
   for (const viewport of [
@@ -191,7 +277,13 @@ test.describe('Mobile-first UX correctness', () => {
       }
 
       if (viewport.width === 320) {
-        for (const route of ['/plants/new', '/plants/import', '/welcome', '/onboarding?mode=add']) {
+        for (const route of [
+          '/plants/new',
+          '/plants/import',
+          '/welcome',
+          '/onboarding?mode=add',
+          '/account',
+        ]) {
           await page.goto(route);
           await page.locator('body').waitFor({ state: 'visible' });
           await expectNoDocumentOverflow(page, `${viewport.name} ${route}`);
@@ -202,9 +294,7 @@ test.describe('Mobile-first UX correctness', () => {
     });
   }
 
-  test('mobile plants header, task actions, settings navigation, and chat composer do not collide', async ({
-    page,
-  }) => {
+  test('mobile plants, settings, and unavailable chat states do not collide', async ({ page }) => {
     test.slow();
     await page.setViewportSize({ width: 320, height: 700 });
     await uiLogin(page, account.email, account.password);
@@ -330,17 +420,12 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoDocumentOverflow(page, 'mobile account settings');
     await expectMinimumControlTargets(page, 'mobile account settings');
 
-    await navigateTo(page, /^chat$/i, /\/chat$/);
-    const composer = page.getByLabel(/chat message/i);
-    const disclaimer = page.getByText(/AI-generated/i);
-    await expect(composer).toBeVisible();
-    await expect(disclaimer).toBeVisible();
-    await expect(page.getByText(/In loving memory/i)).toHaveCount(0);
-    const bottomEdge = await disclaimer.evaluate(
-      (element) => element.getBoundingClientRect().bottom
-    );
-    expect(bottomEdge).toBeLessThanOrEqual(700);
-    await expectNoDocumentOverflow(page, 'chat');
+    await page.goto('/chat');
+    await expect(
+      page.getByRole('heading', { name: /chat isn’t available on seedling/i })
+    ).toBeVisible();
+    await expect(page.getByLabel(/chat message/i)).toHaveCount(0);
+    await expectNoDocumentOverflow(page, 'unavailable chat');
   });
 
   test('desktop settings tabs support arrow-key navigation and deep links', async ({ page }) => {

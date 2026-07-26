@@ -20,6 +20,7 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     newConversationId: vi.fn(() => 'conv-1'),
     appendMessage: vi.fn(async () => undefined),
     appendMessagePair: vi.fn(async () => undefined),
+    appendTurnUserMessage: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
     getBudget: vi.fn(async () => ({
       householdId: 'hh-1',
@@ -40,8 +41,15 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
       })
     ),
     incrementBudget: vi.fn(async () => undefined),
-    claimTurn: vi.fn(async () => ({ status: 'claimed' as const })),
+    reconcileTurnBudget: vi.fn(async () => undefined),
+    claimTurn: vi.fn(async () => ({
+      status: 'claimed' as const,
+      conversationId: 'conv-1',
+      userMessagePersisted: false,
+      attemptId: 'attempt-1',
+    })),
     finalizeTurn: vi.fn(async () => undefined),
+    markTurnRetryable: vi.fn(async () => undefined),
     releaseTurn: vi.fn(async () => undefined),
   };
 });
@@ -70,10 +78,13 @@ import { invokeChatModel, type BedrockMessage } from '../../../src/services/chat
 import {
   appendMessage,
   appendMessagePair,
+  appendTurnUserMessage,
   claimTurn,
   finalizeTurn,
   getConversation,
   incrementBudget,
+  markTurnRetryable,
+  reconcileTurnBudget,
   releaseTurn,
   reserveBudget,
   ChatBudgetExceededError,
@@ -172,8 +183,9 @@ describe('runChatTurn', () => {
     });
     expect(invokeChatModel).not.toHaveBeenCalled();
     expect(reserveBudget).not.toHaveBeenCalled();
-    expect(appendMessage).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(appendMessage).mock.calls[1][1].content[1]).toMatchObject({
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(appendMessagePair).toHaveBeenCalledOnce();
+    expect(vi.mocked(appendMessagePair).mock.calls[0][2].content[1]).toMatchObject({
       type: 'citation',
       source: 'pothos.md',
     });
@@ -588,6 +600,23 @@ describe('runChatTurn', () => {
     expect(vi.mocked(incrementBudget)).not.toHaveBeenCalled();
   });
 
+  it('releases a claimed turn when budget reservation infrastructure fails', async () => {
+    vi.mocked(reserveBudget).mockRejectedValueOnce(new Error('DynamoDB unavailable'));
+
+    await expect(
+      runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        message: 'hello',
+        turnId: 'turn-reserve-failed',
+      })
+    ).rejects.toThrow('DynamoDB unavailable');
+
+    expect(releaseTurn).toHaveBeenCalledWith('hh-1', 'turn-reserve-failed');
+    expect(incrementBudget).not.toHaveBeenCalled();
+    expect(invokeChatModel).not.toHaveBeenCalled();
+  });
+
   it('rejects with 402 for a free (Seedling) household, before any budget reservation or Bedrock call', async () => {
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
 
@@ -877,6 +906,87 @@ describe('runChatTurn', () => {
     });
   });
 
+  it('persists and reconciles the reservation when initial persistence fails', async () => {
+    vi.mocked(appendTurnUserMessage).mockRejectedValueOnce(new Error('message write failed'));
+
+    await expect(
+      runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        message: 'hi',
+        turnId: 'turn-message-failed',
+      })
+    ).rejects.toThrow('message write failed');
+
+    expect(invokeChatModel).not.toHaveBeenCalled();
+    const pending = {
+      reconciliationId: 'attempt-1',
+      yearMonth: '2026-05',
+      inputTokens: -RESERVE_INPUT_TOKENS,
+      outputTokens: -RESERVE_OUTPUT_TOKENS,
+      costUsd: 0,
+      status: 'pending',
+    } as const;
+    expect(markTurnRetryable).toHaveBeenCalledWith(
+      'hh-1',
+      'turn-message-failed',
+      'attempt-1',
+      pending
+    );
+    expect(reconcileTurnBudget).toHaveBeenCalledWith('hh-1', 'turn-message-failed', pending);
+    expect(releaseTurn).not.toHaveBeenCalled();
+  });
+
+  it('persists a failed reconciliation and repairs it on cached replay without another model call', async () => {
+    vi.mocked(invokeChatModel).mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Your fern looks good.' }],
+      stopReason: 'end_turn',
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.0001,
+    });
+    vi.mocked(reconcileTurnBudget)
+      .mockRejectedValueOnce(new Error('budget write failed'))
+      .mockResolvedValueOnce(undefined);
+
+    const input = {
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'How is my fern?',
+      turnId: 'turn-reconcile-failed',
+    };
+    const firstResult = await runChatTurn(input);
+    expect(firstResult).toMatchObject({ assistantText: 'Your fern looks good.' });
+
+    const pending = {
+      reconciliationId: 'attempt-1',
+      yearMonth: '2026-05',
+      inputTokens: 10 - RESERVE_INPUT_TOKENS,
+      outputTokens: 5 - RESERVE_OUTPUT_TOKENS,
+      costUsd: 0.0001,
+      status: 'pending',
+    } as const;
+    expect(finalizeTurn).toHaveBeenCalledWith(
+      'hh-1',
+      'turn-reconcile-failed',
+      'attempt-1',
+      expect.objectContaining({ assistantText: 'Your fern looks good.' }),
+      pending
+    );
+
+    vi.mocked(claimTurn).mockResolvedValueOnce({
+      status: 'done',
+      result: firstResult as unknown as Record<string, unknown>,
+      budgetReconciliation: pending,
+    });
+    await expect(runChatTurn(input)).resolves.toEqual(firstResult);
+
+    expect(invokeChatModel).toHaveBeenCalledOnce();
+    expect(reserveBudget).toHaveBeenCalledOnce();
+    expect(finalizeTurn).toHaveBeenCalledOnce();
+    expect(reconcileTurnBudget).toHaveBeenCalledTimes(2);
+  });
+
   // --- Turn idempotency (#3) ---
 
   it('replays a completed turn (idempotency hit) without running or charging again', async () => {
@@ -901,6 +1011,43 @@ describe('runChatTurn', () => {
     expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
     expect(vi.mocked(appendMessage)).not.toHaveBeenCalled();
     expect(vi.mocked(incrementBudget)).not.toHaveBeenCalled();
+    expect(vi.mocked(reconcileTurnBudget)).not.toHaveBeenCalled();
+  });
+
+  it('still replays a completed answer when its pending reconciliation retry fails', async () => {
+    const stored = {
+      conversationId: 'conv-prior',
+      assistantText: 'Already answered.',
+      proposals: [],
+      budgetRemaining: { inputTokens: 123, outputTokens: 45 },
+    };
+    const pending = {
+      reconciliationId: 'attempt-prior',
+      yearMonth: '2026-05',
+      inputTokens: -7990,
+      outputTokens: -2043,
+      costUsd: 0.0001,
+      status: 'pending' as const,
+    };
+    vi.mocked(claimTurn).mockResolvedValueOnce({
+      status: 'done',
+      result: stored,
+      budgetReconciliation: pending,
+    });
+    vi.mocked(reconcileTurnBudget).mockRejectedValueOnce(new Error('DynamoDB unavailable'));
+
+    await expect(
+      runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        message: 'hi',
+        turnId: 'turn-pending-done',
+      })
+    ).resolves.toEqual(stored);
+
+    expect(reconcileTurnBudget).toHaveBeenCalledWith('hh-1', 'turn-pending-done', pending);
+    expect(invokeChatModel).not.toHaveBeenCalled();
+    expect(reserveBudget).not.toHaveBeenCalled();
   });
 
   it('rejects with 409 when a prior attempt for the same turnId is still running', async () => {
@@ -924,18 +1071,125 @@ describe('runChatTurn', () => {
     expect(vi.mocked(finalizeTurn)).toHaveBeenCalledWith(
       'hh-1',
       'turn-3',
-      expect.objectContaining({ assistantText: 'ok' })
+      'attempt-1',
+      expect.objectContaining({ assistantText: 'ok' }),
+      expect.objectContaining({
+        reconciliationId: 'attempt-1',
+        status: 'pending',
+      })
     );
     expect(vi.mocked(releaseTurn)).not.toHaveBeenCalled();
   });
 
-  it('releases the turn claim when the turn fails (so the fallback can retry)', async () => {
+  it('keeps a completed claim closed when finalization fails so a retry cannot duplicate/charge', async () => {
+    vi.mocked(invokeChatModel).mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'ok' }],
+      stopReason: 'end_turn',
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.0001,
+    });
+    vi.mocked(finalizeTurn).mockRejectedValueOnce(new Error('turn write failed'));
+
+    await expect(
+      runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        message: 'hi',
+        turnId: 'turn-finalize-failed',
+      })
+    ).resolves.toMatchObject({ assistantText: 'ok' });
+
+    expect(releaseTurn).not.toHaveBeenCalled();
+    expect(markTurnRetryable).not.toHaveBeenCalled();
+  });
+
+  it('marks a failed turn retryable while retaining its persisted user message', async () => {
     vi.mocked(invokeChatModel).mockRejectedValueOnce(new Error('boom'));
     await expect(
       runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hi', turnId: 'turn-4' })
     ).rejects.toThrow('boom');
-    expect(vi.mocked(releaseTurn)).toHaveBeenCalledWith('hh-1', 'turn-4');
+    expect(vi.mocked(appendTurnUserMessage)).toHaveBeenCalledOnce();
+    expect(vi.mocked(markTurnRetryable)).toHaveBeenCalledWith(
+      'hh-1',
+      'turn-4',
+      'attempt-1',
+      expect.objectContaining({
+        reconciliationId: 'attempt-1',
+        status: 'pending',
+      })
+    );
+    expect(vi.mocked(releaseTurn)).not.toHaveBeenCalled();
     expect(vi.mocked(finalizeTurn)).not.toHaveBeenCalled();
+  });
+
+  it('does not reserve or invoke the model while a failed attempt reconciliation is pending', async () => {
+    const pending = {
+      reconciliationId: 'prior-attempt',
+      yearMonth: '2026-05',
+      inputTokens: -RESERVE_INPUT_TOKENS,
+      outputTokens: -RESERVE_OUTPUT_TOKENS,
+      costUsd: 0,
+      status: 'pending' as const,
+    };
+    vi.mocked(claimTurn).mockResolvedValueOnce({
+      status: 'claimed',
+      conversationId: 'conv-existing',
+      userMessagePersisted: true,
+      attemptId: 'attempt-2',
+      budgetReconciliation: pending,
+    });
+    vi.mocked(reconcileTurnBudget).mockRejectedValueOnce(new Error('DynamoDB unavailable'));
+
+    await expect(
+      runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        message: 'How is my fern?',
+        turnId: 'turn-pending',
+      })
+    ).rejects.toMatchObject({ statusCode: 503 });
+
+    expect(reconcileTurnBudget).toHaveBeenCalledWith('hh-1', 'turn-pending', pending);
+    expect(markTurnRetryable).toHaveBeenCalledWith('hh-1', 'turn-pending', 'attempt-2', undefined);
+    expect(reserveBudget).not.toHaveBeenCalled();
+    expect(invokeChatModel).not.toHaveBeenCalled();
+  });
+
+  it('retries from the stored user message without appending it a second time', async () => {
+    vi.mocked(claimTurn).mockResolvedValueOnce({
+      status: 'claimed',
+      conversationId: 'conv-existing',
+      userMessagePersisted: true,
+      attemptId: 'attempt-2',
+    });
+    vi.mocked(getConversation).mockResolvedValueOnce([
+      {
+        conversationId: 'conv-existing',
+        timestamp: '2026-07-25T12:00:00Z',
+        role: 'user',
+        content: [{ type: 'text', text: 'How is my fern?' }],
+      },
+    ]);
+    vi.mocked(invokeChatModel).mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Your fern looks good.' }],
+      stopReason: 'end_turn',
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.0001,
+    });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'How is my fern?',
+      turnId: 'turn-retry',
+    });
+
+    expect(result.conversationId).toBe('conv-existing');
+    expect(appendTurnUserMessage).not.toHaveBeenCalled();
+    expect(appendMessage).toHaveBeenCalledOnce();
+    expect(vi.mocked(appendMessage).mock.calls[0][1].role).toBe('assistant');
   });
 
   it('exposes propose_reminder_task with the confirm-card contract in the system prompt, and collects validated proposals', async () => {

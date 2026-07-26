@@ -80,15 +80,21 @@ Base URL: `https://<your-api-domain>/api/v1`
 
 ### Write endpoints
 
-`POST /tasks/{id}/complete` — body optional: `{ "notes": "…" }` (≤500 chars).
-Marks the task done now and advances `nextDue` by the task's frequency,
-exactly like completing it in the app.
+`POST /tasks/{id}/complete` — body optional:
+`{ "notes": "…", "expectedNextDue": "2026-07-25T12:00:00.000Z" }`.
+`notes` is limited to 500 characters. Marks the task done now and advances
+`nextDue` by the task's frequency, exactly like completing it in the app.
+Automations should echo the `nextDue` value returned by `GET /tasks` as
+`expectedNextDue`; if a response is lost, retrying that same occurrence then
+becomes a no-op instead of advancing the recurring task twice.
 
-`POST /tasks/{id}/snooze` — body optional: `{ "days": N }` (1–365). When
-`days` is omitted, the snooze defaults to the task's own frequency — i.e.
-"skip one cycle", the same semantics as the app's skip suggestions. The new
-due date is based on `max(now, current nextDue)` so an overdue task always
-lands in the future.
+`POST /tasks/{id}/snooze` — body optional:
+`{ "days": N, "expectedNextDue": "2026-07-25T12:00:00.000Z" }` (`days` is
+1–365). When `days` is omitted, the snooze defaults to the task's own
+frequency — i.e. "skip one cycle", the same semantics as the app's skip
+suggestions. The new due date is based on `max(now, current nextDue)` so an
+overdue task always lands in the future. Automations should echo the current
+`nextDue` as `expectedNextDue`; retrying the same occurrence is then a no-op.
 
 **Attribution:** API keys act as the household, not as a person. Mutations
 made with a key are recorded with the actor id `apikey:{keyId}` and the key's
@@ -104,7 +110,7 @@ curl -H "Authorization: Bearer $FG_KEY" https://api.example.com/api/v1/plants
 # Complete a task from an automation (requires write:tasks):
 curl -X POST -H "Authorization: Bearer $FG_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"notes":"auto-watered by irrigation controller"}' \
+  -d '{"notes":"auto-watered by irrigation controller","expectedNextDue":"2026-07-25T12:00:00.000Z"}' \
   https://api.example.com/api/v1/tasks/TASK_ID/complete
 ```
 

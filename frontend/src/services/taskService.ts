@@ -23,6 +23,8 @@ export interface UpdateTaskData {
 
 export interface CompleteTaskData {
   notes?: string;
+  /** Echo the occurrence's nextDue to make transport retries idempotent. */
+  expectedNextDue?: string;
 }
 
 export interface TaskFilters {
@@ -141,11 +143,12 @@ export const taskService = {
   async snoozeTask(
     id: string,
     days: number,
-    opts?: { reason?: SnoozeReason; note?: string }
+    opts?: { reason?: SnoozeReason; note?: string; expectedNextDue?: string }
   ): Promise<Task> {
     const body: Record<string, unknown> = { days };
     if (opts?.reason) body.reason = opts.reason;
     if (opts?.note) body.note = opts.note;
+    if (opts?.expectedNextDue) body.expectedNextDue = opts.expectedNextDue;
     const response = await api.post<Task>(`/tasks/${id}/snooze`, body);
     track('task_snoozed');
     return response.data;

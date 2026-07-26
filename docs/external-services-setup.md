@@ -16,14 +16,21 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
 
 1. Sign up at https://perenual.com/docs/api. The Hobby tier is free for 100 requests/day, which is plenty for low-traffic prod.
 2. Copy your API key from the dashboard.
-3. Put it in your tfvars (DON'T commit a real key — see "Production secrets" at the bottom of this doc for the recommended Secrets Manager path):
+3. Store it as an SSM `SecureString`; only its parameter name belongs in
+   Terraform:
 
-   ```hcl
-   # infrastructure/environments/production/terraform.tfvars
-   perenual_api_key = "pe-XXXXXXXXXXXXXXXXXX"
+   ```bash
+   aws ssm put-parameter \
+     --name /family-greenhouse/perenual-api-key \
+     --type SecureString \
+     --value 'pe-XXXXXXXXXXXXXXXXXX' \
+     --overwrite
    ```
 
-4. `terraform apply -var-file=environments/production/terraform.tfvars`. The 13 Lambdas get the env var updated in place.
+4. Set `perenual_api_key_parameter_name =
+"/family-greenhouse/perenual-api-key"` in the environment tfvars and apply.
+   The species/reminder Lambdas receive only the parameter name and fetch the
+   secret at cold start.
 5. Verify: hit `GET /species/search?q=monstera` with a valid auth token; expect a JSON array of matches.
 
 ### Quotas + cost
@@ -44,13 +51,40 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
 
 1. Sign up at https://web.plant.id/. The free tier is 100 identifications/month.
 2. From the dashboard, copy your API key.
-3. Add to tfvars:
+3. For automated deploys, add the key as the GitHub Actions secret
+   `PRODUCTION_PLANT_ID_API_KEY` (and a separate
+   `STAGING_PLANT_ID_API_KEY` if staging should call the provider). For a
+   one-off local Terraform apply, pass it without committing it:
 
-   ```hcl
-   plant_id_api_key = "XXXXXXXXXXXXXXXXXXXXX"
+   ```bash
+   export TF_VAR_plant_id_api_key='XXXXXXXXXXXXXXXXXXXXX'
    ```
 
 4. `terraform apply`. Verify with the Add Plant → photo flow in the UI.
+
+---
+
+## OpenWeather — climate-aware care
+
+**What we use it for:** household city lookup, current conditions, forecasts,
+and rain/freeze/heat care suggestions.
+
+**Without it:** climate endpoints return `configured: false`; saving a location
+is unavailable and the dashboard suppresses weather tips.
+
+### Setup
+
+1. Create an OpenWeather API key.
+2. Add it as `PRODUCTION_OPENWEATHER_API_KEY` in GitHub Actions secrets. Use
+   `STAGING_OPENWEATHER_API_KEY` for an isolated staging key.
+3. For a local Terraform apply, pass it only through the environment:
+
+   ```bash
+   export TF_VAR_openweather_api_key='...'
+   ```
+
+4. Deploy, save a household city, and verify that
+   `GET /households/{id}/climate` returns `configured: true` with weather.
 
 ---
 
@@ -115,23 +149,19 @@ When you're ready to actually charge:
 
 **What we use it for:** Cognito-sent confirmation + password reset emails (now branded as `hello@familygreenhouse.net` via the SES domain identity), and reminder delivery via the EventBridge-invoked reminders Lambda.
 
-**Currently:** domain identity verified, DKIM live, but **SES is still in the AWS sandbox** — only verified recipient addresses can receive mail.
+**Current live status (verified 2026-07-25):** SES production access is granted
+in `us-east-1`, sending is enabled and healthy, the
+`familygreenhouse.net` identity is verified, and DKIM is successful. Cognito
+uses that identity in `DEVELOPER` mode with public self-signup enabled.
 
-### Sandbox exit (the only thing left to do)
+Re-check before changing registration policy:
 
-1. AWS Console → Support → Create case → Service quota increase
-2. **Service**: SES
-3. **Region**: us-east-1
-4. **Quota**: Sending limits (move out of sandbox)
-5. **Use case description** — paste:
-
-   > Family Greenhouse is a personal-scale plant-care SaaS at familygreenhouse.net.
-   > Transactional emails: Cognito signup confirmations, password resets,
-   > plant-care reminders. Recipients are users who explicitly opted in via
-   > account signup. We honor unsubscribe via the user-controlled notification
-   > preferences page. Daily volume estimate at GA: <500 emails.
-
-6. AWS usually approves in 24–48 hours for low-volume transactional cases.
+```bash
+aws sesv2 get-account --region us-east-1
+aws sesv2 get-email-identity \
+  --email-identity familygreenhouse.net \
+  --region us-east-1
+```
 
 ---
 
@@ -143,16 +173,15 @@ When you're ready to actually charge:
 
 1. Sign up at https://sentry.io/, create a project for "Node.js (AWS Lambda)" and another for "React".
 2. Copy each project's DSN.
-3. tfvars:
-
-   ```hcl
-   sentry_dsn                = "https://<backend-dsn>@sentry.io/<id>"
-   sentry_traces_sample_rate = "0.1"
-   git_sha                   = "" # CI sets this; leave blank locally
-   ```
-
-4. For frontend: set `VITE_SENTRY_DSN` in the production frontend build env (or the CD workflow).
-5. `terraform apply`. Existing Lambda containers pick up the new env var on next invocation (~5 min for full rollout).
+3. Add the backend DSN as the GitHub Actions secret
+   `PRODUCTION_BACKEND_SENTRY_DSN` and the React DSN as
+   `PRODUCTION_FRONTEND_SENTRY_DSN` (use the corresponding `STAGING_*`
+   secrets for staging). Set `PRODUCTION_SENTRY_TRACES_SAMPLE_RATE` to `0.1`.
+   The deploy workflow passes the backend DSN through Terraform and bakes the
+   frontend DSN into the Vite build.
+4. The production CSP already permits Sentry ingestion. Deploy, then verify
+   one controlled frontend exception and one Lambda exception in the two
+   Sentry projects before relying on the rail for alerting.
 
 ### Verify
 
@@ -173,16 +202,25 @@ When you're ready to actually charge:
    npx web-push generate-vapid-keys
    ```
 
-2. tfvars:
+2. For a local/manual Terraform apply, export the three root variables (the
+   private key should not be committed to a tfvars file):
 
-   ```hcl
-   web_push_vapid_public_key  = "BAAAA..."
-   web_push_vapid_private_key = "AAAA..."
-   web_push_vapid_subject     = "mailto:hello@familygreenhouse.net"
+   ```bash
+   export TF_VAR_web_push_vapid_public_key="BAAAA..."
+   export TF_VAR_web_push_vapid_private_key="AAAA..."
+   export TF_VAR_web_push_vapid_subject="mailto:hello@familygreenhouse.net"
    ```
 
-3. Also set `VITE_VAPID_PUBLIC_KEY` in the frontend build env to the same public key — the browser subscription flow uses it.
-4. `terraform apply`. Frontend rebuild.
+   In GitHub Actions, use the `PRODUCTION_WEB_PUSH_VAPID_*` or
+   `STAGING_WEB_PUSH_VAPID_*` secret/variables documented in
+   `docs/cicd-setup.md`. The workflows pass the private value only to
+   Terraform and the matching public value to both Terraform and the frontend
+   build.
+
+3. `terraform apply`. The manual deploy script reads the public-key Terraform
+   output into `VITE_VAPID_PUBLIC_KEY`; CI does the equivalent automatically.
+   Configure all three values together or leave all three blank to keep push
+   deliberately disabled.
 
 ---
 
@@ -206,11 +244,9 @@ When you're ready to actually charge:
    - Tags → New → Tag Type "Google Analytics: GA4 Event" → Event Name `{{Event}}` (built-in variable) → Trigger "Custom Event" with regex `.*`. This forwards every event we push to `dataLayer` as a GA4 event with the same name.
    - **Publish** the container (top-right "Submit").
 
-4. **Frontend env**:
-
-   ```bash
-   VITE_GTM_ID=GTM-XXXXXXX  # set in production frontend build env
-   ```
+4. Set the `PRODUCTION_GTM_ID` GitHub Actions repository variable to the
+   container id (and `STAGING_GTM_ID` for staging). The deploy workflow maps it
+   to `VITE_GTM_ID` in the frontend build.
 
 5. CloudFront's CSP already allows `googletagmanager.com` + `google-analytics.com` endpoints. If you ever tighten CSP later, keep these script-src + connect-src + img-src allowances.
 

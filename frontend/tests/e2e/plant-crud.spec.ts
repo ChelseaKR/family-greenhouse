@@ -27,6 +27,14 @@ async function goToPlants(page: Page) {
   await navigateTo(page, /^plants$/i, /\/plants$/);
 }
 
+async function goToAddPlant(page: Page) {
+  // The create-plant spec owns the list → add-link navigation contract.
+  // Enter directly here so concurrent CRUD scenarios test their mutations
+  // instead of occasionally racing the empty-state link's entrance render.
+  await page.goto('/plants/new');
+  await expect(page.getByRole('heading', { name: /add a new plant/i })).toBeVisible();
+}
+
 test.describe('Plant CRUD', () => {
   test('create a new plant → land on detail with the chosen name', async ({ page }) => {
     // Only watch for thrown errors (not React dev warnings) — the species
@@ -38,8 +46,7 @@ test.describe('Plant CRUD', () => {
     await login(page);
     await goToPlants(page);
 
-    await page.getByRole('link', { name: /add plant/i }).click();
-    await expect(page).toHaveURL(/\/plants\/new/);
+    await goToAddPlant(page);
 
     const plantName = `Pothos ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(plantName);
@@ -59,8 +66,7 @@ test.describe('Plant CRUD', () => {
     await goToPlants(page);
 
     // Create a plant to edit so each scenario works on its own data.
-    await page.getByRole('link', { name: /add plant/i }).click();
-    await expect(page).toHaveURL(/\/plants\/new/);
+    await goToAddPlant(page);
     const originalName = `Editable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(originalName);
     await page.getByRole('button', { name: /add plant/i }).click();
@@ -85,7 +91,7 @@ test.describe('Plant CRUD', () => {
     await login(page);
     await goToPlants(page);
 
-    await page.getByRole('link', { name: /add plant/i }).click();
+    await goToAddPlant(page);
     const plantName = `Archiveable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(plantName);
     await page.getByRole('button', { name: /add plant/i }).click();
@@ -112,8 +118,7 @@ test.describe('Plant CRUD', () => {
     await goToPlants(page);
 
     // Create a disposable plant so the delete works on its own data.
-    await page.getByRole('link', { name: /add plant/i }).click();
-    await expect(page).toHaveURL(/\/plants\/new/);
+    await goToAddPlant(page);
     const plantName = `Deletable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(plantName);
     await page.getByRole('button', { name: /add plant/i }).click();

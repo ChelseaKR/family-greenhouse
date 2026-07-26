@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { getVariant, useHeroVariant, HERO_EXPERIMENT } from '@/lib/experiment';
 import { LandingPage } from '@/features/landing/LandingPage';
 

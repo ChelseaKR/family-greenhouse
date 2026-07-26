@@ -74,8 +74,8 @@ describe('GET /health', () => {
     // Subsystem reachability surface used by the marketing /status page.
     expect(res.body.components).toMatchObject({
       database: { status: 'ok' },
-      auth: { status: 'ok' },
-      mail: { status: 'ok' },
+      auth: { status: 'unknown' },
+      mail: { status: 'unknown' },
     });
     expect(typeof res.body.checkedAt).toBe('string');
   });
@@ -696,15 +696,27 @@ describe('tasks routes', () => {
   it('completes a task and rolls nextDue forward by frequency', async () => {
     const token = await loginAsSeed();
     const before = db.tasks.get(seedTaskId)!;
+    const expectedNextDue = before.nextDue;
+    const completionsBefore = db.completions.size;
     const res = await request(app)
       .post(`/tasks/${seedTaskId}/complete`)
       .set('Authorization', `Bearer ${token}`)
-      .send({});
+      .send({ expectedNextDue });
     expect(res.status).toBe(200);
     expect(res.body.lastCompleted).toBeTruthy();
     const newDue = new Date(res.body.nextDue).getTime();
     const expected = Date.now() + before.frequency * 24 * 60 * 60 * 1000;
     expect(Math.abs(newDue - expected)).toBeLessThan(60 * 1000);
+
+    // Simulate a lost first response. Replaying the same occurrence token
+    // acknowledges the current state without advancing or logging it twice.
+    const retry = await request(app)
+      .post(`/tasks/${seedTaskId}/complete`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expectedNextDue });
+    expect(retry.status).toBe(200);
+    expect(retry.body.nextDue).toBe(res.body.nextDue);
+    expect(db.completions.size).toBe(completionsBefore + 1);
   });
 
   it('updates a task', async () => {
@@ -776,6 +788,22 @@ describe('PUT /households/:id/members/:userId/role', () => {
 describe('DELETE /households/:householdId/members/:userId', () => {
   it('lets an admin remove a member and clears their default-household claim', async () => {
     seedMember('member-r', 'removeme@example.com', 'member');
+    const task = db.tasks.get(seedTaskId)!;
+    task.assignedTo = 'member-r';
+    task.assignedToName = 'User member-r';
+    task.assignmentSource = 'space_default';
+    const space = [...db.spaces.values()][0];
+    space.defaultCaregiverId = 'member-r';
+    db.vacations.set(`${seedHouseholdId}|member-r`, {
+      householdId: seedHouseholdId,
+      userId: 'member-r',
+      coveredBy: seedUserId,
+      coveredByName: 'Test User',
+      startDate: new Date(Date.now() - 60_000).toISOString(),
+      endDate: new Date(Date.now() + 60_000).toISOString(),
+      createdBy: seedUserId,
+      createdAt: new Date().toISOString(),
+    });
     const token = await loginAsSeed();
     const res = await request(app)
       .delete(`/households/${seedHouseholdId}/members/member-r`)
@@ -786,6 +814,11 @@ describe('DELETE /households/:householdId/members/:userId', () => {
     // Claim semantics: this was their default household → cleared.
     expect(removed.householdId).toBeNull();
     expect(removed.householdRole).toBeNull();
+    expect(task.assignedTo).toBeNull();
+    expect(task.assignedToName).toBeNull();
+    expect(task.assignmentSource).toBeNull();
+    expect(space.defaultCaregiverId).toBeNull();
+    expect(db.vacations.has(`${seedHouseholdId}|member-r`)).toBe(false);
     // …and the removed member is locked out on their next request.
     const login = await request(app)
       .post('/auth/login')
@@ -915,12 +948,52 @@ describe('DELETE /me', () => {
 
   it('deletes the user and wipes their solo household', async () => {
     const token = await loginAsSeed();
+    const sitter = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() });
+    expect(sitter.status).toBe(201);
+    db.plants.get(seedPlantId)!.status = 'died';
+    db.completions.set('completion-delete', {
+      id: 'completion-delete',
+      householdId: seedHouseholdId,
+      plantId: seedPlantId,
+      taskId: seedTaskId,
+      taskType: 'water',
+      completedBy: seedUserId,
+      completedByName: 'Test User',
+      completedAt: new Date().toISOString(),
+      notes: null,
+    });
+    db.vacations.set(`${seedHouseholdId}|${seedUserId}`, {
+      householdId: seedHouseholdId,
+      userId: seedUserId,
+      coveredBy: seedUserId,
+      coveredByName: 'Test User',
+      startDate: new Date(Date.now() - 60_000).toISOString(),
+      endDate: new Date(Date.now() + 60_000).toISOString(),
+      createdBy: seedUserId,
+      createdAt: new Date().toISOString(),
+    });
+
     const res = await request(app).delete('/me').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(204);
     expect(db.users.has(seedUserId)).toBe(false);
     expect(db.households.has(seedHouseholdId)).toBe(false);
-    for (const p of db.plants.values()) {
-      expect(p.householdId).not.toBe(seedHouseholdId);
+    for (const collection of [
+      db.plants,
+      db.spaces,
+      db.tasks,
+      db.completions,
+      db.photos,
+      db.apiKeys,
+      db.activity,
+      db.vacations,
+      db.sitterLinks,
+    ]) {
+      for (const item of collection.values()) {
+        expect(item.householdId).not.toBe(seedHouseholdId);
+      }
     }
   });
 });
@@ -1012,6 +1085,36 @@ describe('invite + join flow', () => {
     expect(again.body.message).toBe('You are already a member of this household');
   });
 
+  it('repairs a missing default claim when retrying a committed join', async () => {
+    const adminToken = await loginAsSeed();
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const joinerToken = await createConfirmedUser('retry-join@example.com');
+    const joiner = [...db.users.values()].find((user) => user.email === 'retry-join@example.com')!;
+    joiner.memberships.push({
+      householdId: seedHouseholdId,
+      role: 'member',
+      joinedAt: new Date().toISOString(),
+    });
+    // Fill the household to its plan cap. Recovery must still win over the
+    // cap check because it does not add another member.
+    for (let index = 0; index < 4; index += 1) {
+      seedMember(`retry-cap-${index}`, `retry-cap-${index}@example.com`, 'member');
+    }
+
+    const retry = await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+
+    expect(retry.status).toBe(200);
+    expect(joiner.householdId).toBe(seedHouseholdId);
+    expect(joiner.householdRole).toBe('member');
+    expect(
+      joiner.memberships.filter((membership) => membership.householdId === seedHouseholdId)
+    ).toHaveLength(1);
+  });
+
   it('GET /households/invites/:code validates publicly (no auth)', async () => {
     const adminToken = await loginAsSeed();
     const invite = await request(app)
@@ -1050,6 +1153,7 @@ describe('POST /plants/:id/image', () => {
     expect(dflt.status).toBe(200);
     expect(dflt.body.imageUrl).toMatch(/\.jpg$/);
     expect(dflt.body.imageUrl).toContain(`/plants/${seedHouseholdId}/${seedPlantId}/`);
+    expect(dflt.body.uploadUrl).toMatch(/^http:\/\/localhost:4000\/mock-upload\/[^/]+$/);
 
     const webp = await request(app)
       .post(`/plants/${seedPlantId}/image`)
@@ -1071,18 +1175,48 @@ describe('POST /plants/:id/image', () => {
 });
 
 describe('POST /plants/:id/image/confirm', () => {
-  it('accepts the imageUrl returned by the upload-url endpoint', async () => {
+  it('accepts and serves the imageUrl only after the signed PUT lands', async () => {
     const token = await loginAsSeed();
     const sign = await request(app)
       .post(`/plants/${seedPlantId}/image`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentType: 'image/png' });
     expect(sign.status).toBe(200);
+    const bytes = Buffer.from('real-local-image-bytes');
+    const upload = await request(app)
+      .put(new URL(sign.body.uploadUrl).pathname)
+      .set('Content-Type', 'image/png')
+      .send(bytes);
+    expect(upload.status).toBe(200);
+
     const confirm = await request(app)
       .post(`/plants/${seedPlantId}/image/confirm`)
       .set('Authorization', `Bearer ${token}`)
       .send({ imageUrl: sign.body.imageUrl });
     expect(confirm.status).toBe(200);
     expect(db.plants.get(seedPlantId)?.imageUrl).toBe(sign.body.imageUrl);
+
+    const served = await request(app).get(new URL(sign.body.imageUrl).pathname);
+    expect(served.status).toBe(200);
+    expect(served.headers['content-type']).toMatch(/^image\/png/);
+    expect(Buffer.from(served.body)).toEqual(bytes);
+  });
+
+  it('rejects confirmation when the signed PUT never happened', async () => {
+    const token = await loginAsSeed();
+    const sign = await request(app)
+      .post(`/plants/${seedPlantId}/image`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentType: 'image/jpeg' });
+
+    const confirm = await request(app)
+      .post(`/plants/${seedPlantId}/image/confirm`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ imageUrl: sign.body.imageUrl });
+
+    expect(confirm.status).toBe(400);
+    expect(confirm.body.message).toMatch(/upload it before confirming/i);
+    expect(db.plants.get(seedPlantId)?.imageUrl).toBeNull();
   });
 
   it("rejects an imageUrl that doesn't reference this plant", async () => {
@@ -1129,6 +1263,51 @@ describe('notification preferences', () => {
       weeklyDigest: true, // default-on because email defaults on
       phoneVerified: false,
     });
+  });
+
+  it('accepts every production browser push provider and unsubscribe revokes the exact endpoint', async () => {
+    const token = await loginAsSeed();
+    const endpoints = [
+      'https://android.googleapis.com/gcm/send/legacy-chrome',
+      'https://fcm.googleapis.com/fcm/send/chrome',
+      'https://updates.push.services.mozilla.com/wpush/v2/firefox',
+      'https://web.push.apple.com/QP/safari',
+      'https://wns2-am3p.notify.windows.com/w/?token=edge',
+      'https://edge.wns.windows.com/w/?token=edge-new',
+    ];
+    for (const endpoint of endpoints) {
+      const subscribed = await request(app)
+        .post('/notifications/subscribe')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ endpoint, keys: { p256dh: 'p256dh-key', auth: 'auth-key' } });
+      expect(subscribed.status, endpoint).toBe(200);
+      expect(db.pushSubscriptions.has(`${seedUserId}|${endpoint}`)).toBe(true);
+    }
+
+    const endpoint = endpoints[0];
+    const removed = await request(app)
+      .post('/notifications/unsubscribe')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ endpoint });
+    expect(removed.status).toBe(200);
+    expect(removed.body).toEqual({ ok: true, remainingSubscriptions: endpoints.length - 1 });
+    expect(db.pushSubscriptions.has(`${seedUserId}|${endpoint}`)).toBe(false);
+  });
+
+  it('rejects push-provider lookalikes with the same allowlist as production', async () => {
+    const token = await loginAsSeed();
+    for (const endpoint of [
+      'https://notify.windows.com.attacker.example/w/fake',
+      'https://wns.windows.com.attacker.example/w/fake',
+      'https://fcm.googleapis.com.attacker.example/fcm/send/fake',
+    ]) {
+      const res = await request(app)
+        .post('/notifications/subscribe')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ endpoint, keys: { p256dh: 'p256dh-key', auth: 'auth-key' } });
+      expect(res.status, endpoint).toBe(400);
+    }
+    expect(db.pushSubscriptions.size).toBe(0);
   });
 
   it('PUT /notifications/prefs persists toggles (verified phone) and weeklyDigest opt-out', async () => {
@@ -1220,6 +1399,183 @@ describe('notification preferences', () => {
   });
 });
 
+describe('manual reminder dispatch mirrors production behavior', () => {
+  it('dedupes a delivered roll-up per user, household, and local day', async () => {
+    const token = await loginAsSeed();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(Date.now() - 60_000).toISOString();
+
+    const first = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+    const second = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(first.body).toEqual({
+      sent: 0,
+      simulated: 1,
+      simulatedByChannel: { browser: 0, email: 1, sms: 0 },
+    });
+    expect(second.body).toEqual({
+      sent: 0,
+      simulated: 0,
+      simulatedByChannel: { browser: 0, email: 0, sms: 0 },
+    });
+    expect(db.reminderSent.size).toBe(1);
+  });
+
+  it('rolls unassigned care to every reachable household member', async () => {
+    const token = await loginAsSeed();
+    seedMember('member-2', 'member2@example.com', 'member');
+    const task = db.tasks.get(seedTaskId)!;
+    task.assignedTo = null;
+    task.assignedToName = null;
+    task.nextDue = new Date(Date.now() - 60_000).toISOString();
+
+    const result = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(result.body).toEqual({
+      sent: 0,
+      simulated: 2,
+      simulatedByChannel: { browser: 0, email: 2, sms: 0 },
+    });
+  });
+
+  it('routes an away member’s care to their active vacation cover', async () => {
+    const token = await loginAsSeed();
+    seedMember('cover-2', 'cover@example.com', 'member');
+    const now = Date.now();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(now - 60_000).toISOString();
+    db.vacations.set(`${seedHouseholdId}|${seedUserId}`, {
+      householdId: seedHouseholdId,
+      userId: seedUserId,
+      coveredBy: 'cover-2',
+      coveredByName: 'User cover-2',
+      startDate: new Date(now - 60_000).toISOString(),
+      endDate: new Date(now + 60_000).toISOString(),
+      createdBy: seedUserId,
+      createdAt: new Date(now - 60_000).toISOString(),
+    });
+
+    const result = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(result.body).toEqual({
+      sent: 0,
+      simulated: 1,
+      simulatedByChannel: { browser: 0, email: 1, sms: 0 },
+    });
+    expect([...db.reminderSent][0]).toContain('cover-2');
+  });
+
+  it('does not count DND-suppressed or channel-less dry-runs as deliveries', async () => {
+    const token = await loginAsSeed();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(Date.now() - 60_000).toISOString();
+    const now = new Date();
+    const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const hhmm = (minutes: number) =>
+      `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    db.notificationPrefs.set(seedUserId, {
+      userId: seedUserId,
+      browser: false,
+      email: true,
+      sms: false,
+      phone: '',
+      dndStart: hhmm((minuteOfDay + 24 * 60 - 1) % (24 * 60)),
+      dndEnd: hhmm((minuteOfDay + 2) % (24 * 60)),
+      timezone: 'UTC',
+      pestAlerts: false,
+      weeklyDigest: true,
+      phoneVerified: false,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const result = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(result.body).toEqual({
+      sent: 0,
+      simulated: 0,
+      simulatedByChannel: { browser: 0, email: 0, sms: 0 },
+    });
+    expect(db.reminderSent.size).toBe(0);
+  });
+
+  it('reports and dedupes simulated delivery independently by channel', async () => {
+    const token = await loginAsSeed();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(Date.now() - 60_000).toISOString();
+    db.notificationPrefs.set(seedUserId, {
+      userId: seedUserId,
+      browser: true,
+      email: true,
+      sms: false,
+      phone: '',
+      dndStart: '',
+      dndEnd: '',
+      timezone: 'UTC',
+      pestAlerts: false,
+      weeklyDigest: true,
+      phoneVerified: false,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // No browser subscription yet: email succeeds without consuming push.
+    const emailOnly = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+    expect(emailOnly.body).toEqual({
+      sent: 0,
+      simulated: 1,
+      simulatedByChannel: { browser: 0, email: 1, sms: 0 },
+    });
+
+    db.pushSubscriptions.set(`${seedUserId}|https://fcm.googleapis.com/fcm/send/local`, {
+      userId: seedUserId,
+      endpoint: 'https://fcm.googleapis.com/fcm/send/local',
+      keys: { p256dh: 'p256dh-key', auth: 'auth-key' },
+      createdAt: new Date().toISOString(),
+    });
+    const pushRetry = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+    expect(pushRetry.body).toEqual({
+      sent: 0,
+      simulated: 1,
+      simulatedByChannel: { browser: 1, email: 0, sms: 0 },
+    });
+
+    const deduped = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+    expect(deduped.body).toEqual({
+      sent: 0,
+      simulated: 0,
+      simulatedByChannel: { browser: 0, email: 0, sms: 0 },
+    });
+    expect(db.reminderSent.size).toBe(2);
+  });
+
+  it('never reminds for an archived plant', async () => {
+    const token = await loginAsSeed();
+    db.tasks.get(seedTaskId)!.nextDue = new Date(Date.now() - 60_000).toISOString();
+    db.plants.get(seedPlantId)!.status = 'archived';
+
+    const result = await request(app)
+      .post('/notifications/run-reminders')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(result.body).toEqual({
+      sent: 0,
+      simulated: 0,
+      simulatedByChannel: { browser: 0, email: 0, sms: 0 },
+    });
+  });
+});
+
 describe('weekly digest + year recap manual triggers', () => {
   it('POST /notifications/run-digests counts digest-enabled members when plants are overdue', async () => {
     const token = await loginAsSeed();
@@ -1231,7 +1587,7 @@ describe('weekly digest + year recap manual triggers', () => {
       .post('/notifications/run-digests')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.sent).toBe(1); // seed admin has email + weeklyDigest defaults
+    expect(res.body).toEqual({ sent: 0, simulated: 1 }); // local provider is a dry-run
   });
 
   it('POST /notifications/run-digests skips households with nothing overdue', async () => {
@@ -1241,7 +1597,7 @@ describe('weekly digest + year recap manual triggers', () => {
       .post('/notifications/run-digests')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.sent).toBe(0);
+    expect(res.body).toEqual({ sent: 0, simulated: 0 });
   });
 
   it('POST /notifications/run-digests skips members who opted out of the digest', async () => {
@@ -1254,7 +1610,7 @@ describe('weekly digest + year recap manual triggers', () => {
     const res = await request(app)
       .post('/notifications/run-digests')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.body.sent).toBe(0);
+    expect(res.body).toEqual({ sent: 0, simulated: 0 });
   });
 
   it('POST /notifications/run-digests requires admin', async () => {
@@ -1268,7 +1624,7 @@ describe('weekly digest + year recap manual triggers', () => {
     expect(res.status).toBe(403);
   });
 
-  it('POST /notifications/run-year-recap sends once per household per year', async () => {
+  it('POST /notifications/run-year-recap sends once per recipient per year', async () => {
     const token = await loginAsSeed();
     const year = new Date().getUTCFullYear() - 1;
     // One completion inside the recap year.
@@ -1288,13 +1644,13 @@ describe('weekly digest + year recap manual triggers', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ year });
     expect(first.status).toBe(200);
-    expect(first.body).toEqual({ sent: 1, year });
+    expect(first.body).toEqual({ sent: 0, simulated: 1, year });
     // Retried run: once-per-year marker makes it a no-op.
     const second = await request(app)
       .post('/notifications/run-year-recap')
       .set('Authorization', `Bearer ${token}`)
       .send({ year });
-    expect(second.body).toEqual({ sent: 0, year });
+    expect(second.body).toEqual({ sent: 0, simulated: 0, year });
   });
 
   it('POST /notifications/run-year-recap with no completions that year sends nothing', async () => {
@@ -1304,7 +1660,7 @@ describe('weekly digest + year recap manual triggers', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ year: 2001 });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ sent: 0, year: 2001 });
+    expect(res.body).toEqual({ sent: 0, simulated: 0, year: 2001 });
   });
 });
 
@@ -1370,6 +1726,64 @@ describe('public API + API keys', () => {
     expect(
       (await request(app).get('/api/v1/activity').set('Authorization', `Bearer ${key}`)).status
     ).toBe(403);
+  });
+
+  it('API-key task completion is retry-safe when expectedNextDue is echoed', async () => {
+    const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
+    const create = await request(app)
+      .post('/api-keys')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ label: 'irrigation', scopes: ['write:tasks'] });
+    expect(create.status).toBe(201);
+    const key = create.body.plaintext as string;
+    const expectedNextDue = db.tasks.get(seedTaskId)!.nextDue;
+    const completionsBefore = db.completions.size;
+
+    const first = await request(app)
+      .post(`/api/v1/tasks/${seedTaskId}/complete`)
+      .set('Authorization', `Bearer ${key}`)
+      .send({ expectedNextDue });
+    const retry = await request(app)
+      .post(`/api/v1/tasks/${seedTaskId}/complete`)
+      .set('Authorization', `Bearer ${key}`)
+      .send({ expectedNextDue });
+
+    expect(first.status).toBe(200);
+    expect(retry.status).toBe(200);
+    expect(retry.body.nextDue).toBe(first.body.nextDue);
+    expect(db.completions.size).toBe(completionsBefore + 1);
+  });
+
+  it('API-key task snooze is retry-safe when expectedNextDue is echoed', async () => {
+    const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
+    const create = await request(app)
+      .post('/api-keys')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ label: 'irrigation', scopes: ['write:tasks'] });
+    expect(create.status).toBe(201);
+    const key = create.body.plaintext as string;
+    const expectedNextDue = db.tasks.get(seedTaskId)!.nextDue;
+    const snoozesBefore = [...db.activity.values()].filter(
+      (event) => event.type === 'task.snoozed'
+    ).length;
+
+    const first = await request(app)
+      .post(`/api/v1/tasks/${seedTaskId}/snooze`)
+      .set('Authorization', `Bearer ${key}`)
+      .send({ days: 3, expectedNextDue });
+    const retry = await request(app)
+      .post(`/api/v1/tasks/${seedTaskId}/snooze`)
+      .set('Authorization', `Bearer ${key}`)
+      .send({ days: 3, expectedNextDue });
+
+    expect(first.status).toBe(200);
+    expect(retry.status).toBe(200);
+    expect(retry.body.nextDue).toBe(first.body.nextDue);
+    expect([...db.activity.values()].filter((event) => event.type === 'task.snoozed')).toHaveLength(
+      snoozesBefore + 1
+    );
   });
 
   it('rejects an unknown scope at key creation', async () => {
@@ -1617,7 +2031,7 @@ describe('climate', () => {
     expect(res.body).toMatchObject({ configured: false, weather: null, tips: [] });
   });
 
-  it('saves a household location (climate reads never echo it — production contract)', async () => {
+  it('saves and returns a household location with the climate response', async () => {
     const token = await loginAsSeed();
     const set = await request(app)
       .put(`/households/${seedHouseholdId}/location`)
@@ -1626,14 +2040,14 @@ describe('climate', () => {
     expect(set.status).toBe(200);
     expect(set.body.location.city).toBe('Austin, US');
 
-    // Production getClimate returns exactly { configured, weather, tips } —
-    // the mock used to add a `location` field production never returns.
+    // The dashboard needs the saved city even when weather is unavailable,
+    // otherwise it renders the misleading "set a location" empty state.
     const climate = await request(app)
       .get(`/households/${seedHouseholdId}/climate`)
       .set('Authorization', `Bearer ${token}`);
     expect(climate.status).toBe(200);
-    expect(climate.body.location).toBeUndefined();
-    expect(Object.keys(climate.body).sort()).toEqual(['configured', 'tips', 'weather']);
+    expect(climate.body.location).toMatchObject({ city: 'Austin, US' });
+    expect(Object.keys(climate.body).sort()).toEqual(['configured', 'location', 'tips', 'weather']);
   });
 
   it('403s climate reads for a household the caller does not belong to', async () => {
@@ -1780,6 +2194,19 @@ describe('GET /me/export', () => {
 });
 
 describe('production contract details', () => {
+  it('GET /species/:id reports local Perenual unavailability without caching it as no-result', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app).get('/species/123').set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      status: 'unavailable',
+      reason: 'unconfigured',
+      result: null,
+    });
+    expect(res.headers['cache-control']).toBe('private, no-store');
+  });
+
   it('GET /species/:id/thumbnail is unauthenticated (served to anonymous <img> tags)', async () => {
     const res = await request(app).get('/species/123/thumbnail');
     // No enrichment locally → 404, but crucially NOT 401.

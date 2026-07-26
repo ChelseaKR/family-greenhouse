@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { AccountSettings } from './AccountSettings';
 import { BrandMark } from '@/components/BrandMark';
 import { PageHeader } from '@/components/PageHeader';

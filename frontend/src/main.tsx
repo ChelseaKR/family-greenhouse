@@ -1,10 +1,12 @@
+import '@/lib/zodConfig';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { initSentry } from './sentry';
 import { initFrontendTelemetry } from './services/frontendTelemetry';
+import { initPwaRegistration } from './services/pwaRegistration';
 import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
@@ -21,6 +23,7 @@ import './index.css';
 // after mount; errors before it loads are caught by the route error boundary.
 void initSentry();
 initFrontendTelemetry();
+initPwaRegistration();
 
 // Apply persisted preferences before React mounts so we don't get the wrong
 // density / language direction on first paint.

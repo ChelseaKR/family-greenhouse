@@ -664,6 +664,22 @@ paths:
       summary: Snooze a task by N days (or skip a cycle)
       tags: [Tasks]
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [days]
+              properties:
+                days: { type: integer, minimum: 1, maximum: 365 }
+                reason: { type: string, enum: [rain, frost, heat, other] }
+                note: { type: string, maxLength: 200 }
+                expectedNextDue:
+                  type: string
+                  format: date-time
+                  description: Echo the task's current nextDue value to make retries idempotent.
       responses:
         '200': { $ref: '#/components/responses/Ok' }
 
@@ -745,6 +761,7 @@ paths:
       parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+        '503': { description: Weather provider or daily usage gate is temporarily unavailable }
   /households/{id}/location:
     put:
       summary: Save (or clear with `null`) the household's location for climate features
@@ -765,6 +782,7 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { description: Geocoding provider or daily usage gate is temporarily unavailable }
   /households/{householdId}/members/{userId}:
     delete:
       summary: Remove a member from a household (admin only)
@@ -1001,7 +1019,7 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
   /species/{id}:
     get:
-      summary: Species detail
+      summary: Species detail with distinct found, not-found, and retryable-unavailable states
       tags: [Species]
       parameters: [{ $ref: '#/components/parameters/SpeciesId' }]
       responses:
@@ -1170,6 +1188,12 @@ paths:
       parameters: [{ $ref: '#/components/parameters/PlantId' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+        '429':
+          description: Monthly leaf-health allowance exhausted
+        '502':
+          description: Bedrock could not analyze the image
+        '503':
+          description: The atomic usage gate is temporarily unavailable
   /notifications/run-digests:
     post:
       summary: Manually trigger the weekly plants-at-risk digest (admin, rate-limited)
@@ -1200,6 +1224,19 @@ paths:
       tags: [Public API]
       security: [{ apiKeyAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                notes: { type: string, maxLength: 500 }
+                expectedNextDue:
+                  type: string
+                  format: date-time
+                  description: Echo the task's current nextDue value to make retries idempotent.
       responses:
         '200': { $ref: '#/components/responses/Ok' }
   /api/v1/tasks/{id}/snooze:
@@ -1208,6 +1245,19 @@ paths:
       tags: [Public API]
       security: [{ apiKeyAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                days: { type: integer, minimum: 1, maximum: 365 }
+                expectedNextDue:
+                  type: string
+                  format: date-time
+                  description: Echo the task's current nextDue value to make retries idempotent.
       responses:
         '200': { $ref: '#/components/responses/Ok' }
 

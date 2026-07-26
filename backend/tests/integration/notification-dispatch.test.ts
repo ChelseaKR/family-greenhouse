@@ -1,5 +1,5 @@
 /**
- * End-to-end integration test for the notification dispatcher.
+ * In-process integration test for the notification dispatcher.
  *
  * WHY THIS EXISTS
  * ---------------
@@ -13,9 +13,11 @@
  * AWS SDK / web-push boundary faked (exactly how the channel unit tests stub
  * `@aws-sdk/client-ses` / `client-sns`).
  *
- * This closes the gap flagged in the test strategy doc: "no real end-to-end
- * test of the full notification dispatcher running over varied user prefs"
- * (DND windows, per-channel opt-in, timezones, failure isolation).
+ * This covers the full application dispatch path over varied user prefs (DND
+ * windows, per-channel opt-in, timezones, failure isolation). It deliberately
+ * does NOT establish provider or device receipt: SES, SNS and web-push stop at
+ * captured SDK calls. Live provider readiness/receipt is a separate deployment
+ * check with controlled destinations.
  *
  * SETUP
  * -----
@@ -240,7 +242,7 @@ describe('notification dispatch (end-to-end) — channel opt-in matrix', () => {
     seedPrefs(emailOnly.userId, { email: true });
     seedPrefs(smsOnly.userId, { sms: true, phone: '+15550000001', phoneVerified: true });
     seedPrefs(pushOnly.userId, { browser: true });
-    seedPushSub(pushOnly.userId, householdId, 'https://push.example/push-only');
+    seedPushSub(pushOnly.userId, householdId, 'https://fcm.googleapis.com/fcm/send/push-only');
     seedPrefs(allOn.userId, {
       email: true,
       sms: true,
@@ -248,7 +250,7 @@ describe('notification dispatch (end-to-end) — channel opt-in matrix', () => {
       phoneVerified: true,
       browser: true,
     });
-    seedPushSub(allOn.userId, householdId, 'https://push.example/all-on');
+    seedPushSub(allOn.userId, householdId, 'https://fcm.googleapis.com/fcm/send/all-on');
     seedPrefs(noneOn.userId, { email: false, sms: false, browser: false });
     // The admin is the household creator and also a recipient of the
     // unassigned task; give it an explicit email-only pref row.
@@ -266,8 +268,14 @@ describe('notification dispatch (end-to-end) — channel opt-in matrix', () => {
     expect(smsRecipients().sort()).toEqual(['+15550000001', '+15550000002'].sort());
     // Push goes to the push-only user and the all-channels user.
     expect(pushRecipientEndpoints().sort()).toEqual(
-      ['https://push.example/all-on', 'https://push.example/push-only'].sort()
+      [
+        'https://fcm.googleapis.com/fcm/send/all-on',
+        'https://fcm.googleapis.com/fcm/send/push-only',
+      ].sort()
     );
+    for (const call of webpushSendMock.mock.calls) {
+      expect(call[2]).toEqual({ timeout: 5_000 });
+    }
     // The "none" user received nothing on any channel.
     expect(emailRecipients()).not.toContain('none@x.com');
     // Five reachable members got a reminder (everyone but `noneOn`).
@@ -383,7 +391,95 @@ describe('notification dispatch (end-to-end) — timezone-aware DND', () => {
   });
 });
 
+describe('notification dispatch (end-to-end) — channel-scoped retry and dedupe', () => {
+  it('retries a failed SMS without duplicating the email that already succeeded', async () => {
+    const user = { userId: 'u-partial', email: 'partial@x.com', name: 'Partial' };
+    const householdId = await seedDueReminderHousehold([user]);
+    seedPrefs(ADMIN.userId, { email: false });
+    seedPrefs(user.userId, {
+      email: true,
+      sms: true,
+      phone: '+15550000006',
+      phoneVerified: true,
+    });
+
+    snsSendMock.mockRejectedValueOnce(
+      Object.assign(new Error('SNS unavailable'), { name: 'InternalError' })
+    );
+    const reminders = await import('../../src/services/reminders.js');
+    vi.setSystemTime(new Date('2026-04-25T14:00:00Z'));
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T14:00:00Z'))).toBe(1);
+    expect(emailRecipients()).toEqual(['partial@x.com']);
+    expect(snsSendMock).toHaveBeenCalledTimes(1);
+
+    // Same local day: the email marker is complete, while the failed SMS
+    // reservation was released. Only SMS is eligible for the retry.
+    snsSendMock.mockResolvedValue({});
+    vi.setSystemTime(new Date('2026-04-25T15:00:00Z'));
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T15:00:00Z'))).toBe(1);
+    expect(emailRecipients()).toEqual(['partial@x.com']);
+    expect(snsSendMock).toHaveBeenCalledTimes(2);
+    expect(smsRecipients()).toEqual(['+15550000006', '+15550000006']);
+
+    vi.setSystemTime(new Date('2026-04-25T16:00:00Z'));
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T16:00:00Z'))).toBe(0);
+    expect(sesSendMock).toHaveBeenCalledTimes(1);
+    expect(snsSendMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends browser push during DND, then only email/SMS after DND ends', async () => {
+    const user = { userId: 'u-dnd-mixed', email: 'dnd-mixed@x.com', name: 'Dnd Mixed' };
+    const householdId = await seedDueReminderHousehold([user]);
+    seedPrefs(ADMIN.userId, { email: false });
+    seedPrefs(user.userId, {
+      browser: true,
+      email: true,
+      sms: true,
+      phone: '+15550000007',
+      phoneVerified: true,
+      dndStart: '13:00',
+      dndEnd: '15:00',
+      timezone: 'UTC',
+    });
+    seedPushSub(user.userId, householdId, 'https://fcm.googleapis.com/fcm/send/dnd-channel-retry');
+
+    const reminders = await import('../../src/services/reminders.js');
+    vi.setSystemTime(new Date('2026-04-25T14:00:00Z'));
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T14:00:00Z'))).toBe(1);
+    expect(pushRecipientEndpoints()).toEqual([
+      'https://fcm.googleapis.com/fcm/send/dnd-channel-retry',
+    ]);
+    expect(emailRecipients()).toHaveLength(0);
+    expect(smsRecipients()).toHaveLength(0);
+
+    // DND is half-open. At 15:00 the loud channels are eligible, while the
+    // completed browser marker keeps push from firing twice.
+    vi.setSystemTime(new Date('2026-04-25T15:00:00Z'));
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T15:00:00Z'))).toBe(1);
+    expect(pushRecipientEndpoints()).toEqual([
+      'https://fcm.googleapis.com/fcm/send/dnd-channel-retry',
+    ]);
+    expect(emailRecipients()).toEqual(['dnd-mixed@x.com']);
+    expect(smsRecipients()).toEqual(['+15550000007']);
+  });
+});
+
 describe('notification dispatch (end-to-end) — failure injection / chaos', () => {
+  it('never sends to an arbitrary endpoint already present in legacy storage', async () => {
+    const user = { userId: 'u-legacy-push', email: 'legacy@x.com', name: 'Legacy Push' };
+    const householdId = await seedDueReminderHousehold([user]);
+    seedPrefs(ADMIN.userId, { email: false });
+    seedPrefs(user.userId, { browser: true });
+    seedPushSub(user.userId, householdId, 'https://169.254.169.254/latest/meta-data');
+
+    const reminders = await import('../../src/services/reminders.js');
+    vi.setSystemTime(new Date('2026-04-25T14:00:00Z'));
+    const sent = await reminders.remindHousehold(householdId, new Date('2026-04-25T14:00:00Z'));
+
+    expect(webpushSendMock).not.toHaveBeenCalled();
+    expect(sent).toBe(0);
+  });
+
   it('keeps delivering other recipients/channels when one SES send throws mid-batch', async () => {
     // SES is rate-limited for the first recipient but fine afterwards. The
     // dispatcher must not abort the whole household's batch.
@@ -403,7 +499,7 @@ describe('notification dispatch (end-to-end) — failure injection / chaos', () 
       phoneVerified: true,
       browser: true,
     });
-    seedPushSub(c.userId, householdId, 'https://push.example/charlie');
+    seedPushSub(c.userId, householdId, 'https://fcm.googleapis.com/fcm/send/charlie');
 
     // First SES send throws (Throttling); every later send succeeds.
     sesSendMock.mockReset();
@@ -423,7 +519,7 @@ describe('notification dispatch (end-to-end) — failure injection / chaos', () 
     expect(sesSendMock).toHaveBeenCalledTimes(3);
     // Charlie's OTHER channels are unaffected by his failed email leg.
     expect(smsRecipients()).toEqual(['+15550000004']);
-    expect(pushRecipientEndpoints()).toEqual(['https://push.example/charlie']);
+    expect(pushRecipientEndpoints()).toEqual(['https://fcm.googleapis.com/fcm/send/charlie']);
     // Alpha's only channel (email) actually THREW, so he is NOT counted as
     // delivered — his slot stays open and the next run retries him. (This is
     // the corrected accounting: `delivered` tracks real sends, not attempts.)

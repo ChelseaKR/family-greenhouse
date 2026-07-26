@@ -7,6 +7,12 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: vi.fn(function (input) {
     return { input, kind: 'Get' };
   }),
+  DeleteCommand: vi.fn(function (input) {
+    return { input, kind: 'Delete' };
+  }),
+  UpdateCommand: vi.fn(function (input) {
+    return { input, kind: 'Update' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -25,6 +31,7 @@ vi.mock('../../../src/services/plantService.js', () => ({
 }));
 vi.mock('../../../src/services/notificationPrefs.js', () => ({
   getPreferences: vi.fn(),
+  isInDndWindow: vi.fn(() => false),
 }));
 vi.mock('../../../src/services/emailNotifier.js', () => ({
   // Resolves true = a real delivery (sendEmail returns false only on a dry-run).
@@ -70,15 +77,23 @@ async function mockConditionalMarkerStore() {
   const { dynamodb } = await import('../../../src/utils/dynamodb.js');
   const markers = new Set<string>();
   vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
-    const { input } = cmd as {
+    const { input, kind } = cmd as {
+      kind?: 'Put' | 'Get' | 'Delete' | 'Update';
       input: { Item?: { PK: string; SK: string }; Key?: { PK: string; SK: string } };
     };
     // GetCommand: the cheap "already digested this week?" pre-check read.
-    if (input.Key) {
+    if (kind === 'Get' && input.Key) {
       const key = `${input.Key.PK}|${input.Key.SK}`;
       return {
         Item: markers.has(key) ? { PK: input.Key.PK, SK: input.Key.SK } : undefined,
       } as never;
+    }
+    if (kind === 'Delete' && input.Key) {
+      markers.delete(`${input.Key.PK}|${input.Key.SK}`);
+      return {} as never;
+    }
+    if (kind === 'Update' && input.Key) {
+      return {} as never;
     }
     // PutCommand: the conditional slot claim — a second Put on the same PK|SK
     // throws ConditionalCheckFailed (what the dedupe relies on).
@@ -204,6 +219,32 @@ describe('digest service', () => {
       expect(vi.mocked(email.sendEmail).mock.calls[0][0].to).toBe('a@x.com');
     });
 
+    it('atomically reserves before SES so overlapping digest runs send once', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { digestHousehold } = await import('../../../src/services/digest.js');
+      await mockConditionalMarkerStore();
+      await setupOneOverduePlant();
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      await mockPrefs({ u1: {} });
+
+      let acceptDelivery!: () => void;
+      vi.mocked(email.sendEmail).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            acceptDelivery = () => resolve(true);
+          })
+      );
+      const first = digestHousehold('hh', NOW);
+      await vi.waitFor(() => expect(email.sendEmail).toHaveBeenCalledOnce());
+      const second = digestHousehold('hh', NOW);
+      await vi.waitFor(() => expect(household.getHouseholdMembers).toHaveBeenCalledTimes(2));
+      acceptDelivery();
+
+      expect(await Promise.all([first, second])).toEqual([1, 0]);
+      expect(email.sendEmail).toHaveBeenCalledOnce();
+    });
+
     it('skips members whose email channel is off even if weeklyDigest is on', async () => {
       const household = await import('../../../src/services/householdService.js');
       const email = await import('../../../src/services/emailNotifier.js');
@@ -215,6 +256,25 @@ describe('digest service', () => {
 
       expect(await digestHousehold('hh', NOW)).toBe(0);
       expect(email.sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('defers a weekly digest during quiet hours without burning its marker', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const prefs = await import('../../../src/services/notificationPrefs.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { digestHousehold } = await import('../../../src/services/digest.js');
+      const markers = await mockConditionalMarkerStore();
+      await setupOneOverduePlant();
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      await mockPrefs({ u1: {} });
+      vi.mocked(prefs.isInDndWindow).mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+      expect(await digestHousehold('hh', NOW)).toBe(0);
+      expect(markers.size).toBe(0);
+      expect(email.sendEmail).not.toHaveBeenCalled();
+
+      expect(await digestHousehold('hh', new Date(NOW.getTime() + 6 * 60 * 60 * 1000))).toBe(1);
+      expect(email.sendEmail).toHaveBeenCalledOnce();
     });
 
     it('skips households with nothing overdue without reading members', async () => {
@@ -229,7 +289,7 @@ describe('digest service', () => {
       expect(email.sendEmail).not.toHaveBeenCalled();
     });
 
-    it('dedupes per user per ISO week; a new week sends again', async () => {
+    it('dedupes per user and household per ISO week; a new week sends again', async () => {
       const household = await import('../../../src/services/householdService.js');
       const email = await import('../../../src/services/emailNotifier.js');
       const { digestHousehold } = await import('../../../src/services/digest.js');
@@ -240,7 +300,7 @@ describe('digest service', () => {
 
       // First run this week: sends and claims the W24 slot.
       expect(await digestHousehold('hh', NOW)).toBe(1);
-      expect(markers.has('USER#u1|DIGEST#2026-W24')).toBe(true);
+      expect(markers.has('USER#u1|DIGEST#2026-W24#HOUSEHOLD#hh')).toBe(true);
 
       // Retry two days later, same ISO week: deduped.
       expect(await digestHousehold('hh', new Date(NOW.getTime() + 2 * DAY))).toBe(0);
@@ -249,6 +309,24 @@ describe('digest service', () => {
       // Next week (NOW is Thursday; +7d lands in W25): sends again.
       expect(await digestHousehold('hh', new Date(NOW.getTime() + 7 * DAY))).toBe(1);
       expect(email.sendEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it('sends distinct weekly summaries for a user who belongs to two households', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { digestHousehold } = await import('../../../src/services/digest.js');
+      const markers = await mockConditionalMarkerStore();
+      await setupOneOverduePlant();
+      vi.mocked(household.getHouseholdMembers).mockImplementation(async (householdId: string) => [
+        { ...memberA, householdId },
+      ]);
+      await mockPrefs({ u1: {} });
+
+      expect(await digestHousehold('home', NOW)).toBe(1);
+      expect(await digestHousehold('cabin', NOW)).toBe(1);
+      expect(email.sendEmail).toHaveBeenCalledTimes(2);
+      expect(markers.has('USER#u1|DIGEST#2026-W24#HOUSEHOLD#home')).toBe(true);
+      expect(markers.has('USER#u1|DIGEST#2026-W24#HOUSEHOLD#cabin')).toBe(true);
     });
 
     it('runWeeklyDigests scans every household and survives one failing', async () => {
@@ -327,7 +405,7 @@ describe('digest service', () => {
       await mockPrefs({ u1: {}, u2: { email: false } });
 
       expect(await recapHousehold('hh', 2025, NOW)).toBe(1); // u2 has email off
-      expect(markers.has('HOUSEHOLD#hh|RECAP#2025')).toBe(true);
+      expect(markers.has('USER#u1|RECAP#2025#HOUSEHOLD#hh')).toBe(true);
 
       // Retry (e.g. the EventBridge run after a manual trigger): no double-send.
       expect(await recapHousehold('hh', 2025, NOW)).toBe(0);
@@ -336,6 +414,119 @@ describe('digest service', () => {
       // A different year is a fresh slot.
       vi.mocked(tasks.getYearInReview).mockResolvedValue({ ...REVIEW, year: 2026 } as never);
       expect(await recapHousehold('hh', 2026, NOW)).toBe(1);
+    });
+
+    it('atomically reserves before SES so overlapping recap runs send once', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { recapHousehold } = await import('../../../src/services/digest.js');
+      await mockConditionalMarkerStore();
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      vi.mocked(tasks.getYearInReview).mockResolvedValue(REVIEW as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      await mockPrefs({ u1: {} });
+
+      let acceptDelivery!: () => void;
+      vi.mocked(email.sendEmail).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            acceptDelivery = () => resolve(true);
+          })
+      );
+      const first = recapHousehold('hh', 2025, NOW);
+      await vi.waitFor(() => expect(email.sendEmail).toHaveBeenCalledOnce());
+      const second = recapHousehold('hh', 2025, NOW);
+      await vi.waitFor(() => expect(tasks.getYearInReview).toHaveBeenCalledTimes(2));
+      acceptDelivery();
+
+      expect(await Promise.all([first, second])).toEqual([1, 0]);
+      expect(email.sendEmail).toHaveBeenCalledOnce();
+    });
+
+    it('does not burn the annual slot on a dry-run and retries later', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { recapHousehold } = await import('../../../src/services/digest.js');
+      const markers = await mockConditionalMarkerStore();
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      vi.mocked(tasks.getYearInReview).mockResolvedValue(REVIEW as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      await mockPrefs({ u1: {} });
+      vi.mocked(email.sendEmail).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      expect(await recapHousehold('hh', 2025, NOW)).toBe(0);
+      expect(markers.has('USER#u1|RECAP#2025#HOUSEHOLD#hh')).toBe(false);
+      expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
+      expect(email.sendEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it('defers a recap during quiet hours without burning its annual marker', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const prefs = await import('../../../src/services/notificationPrefs.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { recapHousehold } = await import('../../../src/services/digest.js');
+      const markers = await mockConditionalMarkerStore();
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      vi.mocked(tasks.getYearInReview).mockResolvedValue(REVIEW as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      await mockPrefs({ u1: {} });
+      vi.mocked(prefs.isInDndWindow).mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+      expect(await recapHousehold('hh', 2025, NOW)).toBe(0);
+      expect(markers.size).toBe(0);
+      expect(email.sendEmail).not.toHaveBeenCalled();
+
+      expect(await recapHousehold('hh', 2025, new Date(NOW.getTime() + 6 * 60 * 60 * 1000))).toBe(
+        1
+      );
+      expect(email.sendEmail).toHaveBeenCalledOnce();
+    });
+
+    it('retries only the recipient whose recap send failed', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { recapHousehold } = await import('../../../src/services/digest.js');
+      await mockConditionalMarkerStore();
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      vi.mocked(tasks.getYearInReview).mockResolvedValue(REVIEW as never);
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA, memberB] as never);
+      await mockPrefs({ u1: {}, u2: {} });
+      vi.mocked(email.sendEmail)
+        .mockResolvedValueOnce(true)
+        .mockRejectedValueOnce(new Error('SES throttled'))
+        .mockResolvedValueOnce(true);
+
+      expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
+      expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
+      expect(vi.mocked(email.sendEmail).mock.calls.map(([message]) => message.to)).toEqual([
+        'a@x.com',
+        'b@x.com',
+        'b@x.com',
+      ]);
+    });
+
+    it('sends distinct annual recaps for a user who belongs to two households', async () => {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { recapHousehold } = await import('../../../src/services/digest.js');
+      const markers = await mockConditionalMarkerStore();
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      vi.mocked(tasks.getYearInReview).mockResolvedValue(REVIEW as never);
+      vi.mocked(household.getHouseholdMembers).mockImplementation(async (householdId: string) => [
+        { ...memberA, householdId },
+      ]);
+      await mockPrefs({ u1: {} });
+
+      expect(await recapHousehold('home', 2025, NOW)).toBe(1);
+      expect(await recapHousehold('cabin', 2025, NOW)).toBe(1);
+      expect(email.sendEmail).toHaveBeenCalledTimes(2);
+      expect(markers.has('USER#u1|RECAP#2025#HOUSEHOLD#home')).toBe(true);
+      expect(markers.has('USER#u1|RECAP#2025#HOUSEHOLD#cabin')).toBe(true);
     });
 
     it('skips households with zero completions BEFORE claiming the marker', async () => {

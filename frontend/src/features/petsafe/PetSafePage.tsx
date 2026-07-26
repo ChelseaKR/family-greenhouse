@@ -6,7 +6,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { useDebounce } from '@/hooks/useDebounce';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 

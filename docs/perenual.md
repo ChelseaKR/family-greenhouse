@@ -68,7 +68,7 @@ DynamoDB single-table, partitioned under `PK = PERENUAL#CACHE`:
 | SK                                   | Payload                           | TTL       |
 | ------------------------------------ | --------------------------------- | --------- |
 | `SEARCH#<lowercased query>`          | array of `PerenualSpeciesSummary` | 5 minutes |
-| `SPECIES#<id>`                       | `PerenualSpeciesDetail`           | 90 days   |
+| `SPECIES#<id>`                       | `PerenualSpeciesDetail \| null`   | 90 days   |
 | `GUIDE#<speciesId>`                  | `PerenualCareGuide`               | 90 days   |
 | `PESTS#<lowercased scientific name>` | array of `PerenualPestSummary`    | 90 days   |
 
@@ -90,7 +90,7 @@ SK = DAY#YYYY-MM-DD     (UTC date)
 attrs: { used: number, ttl: epoch+7d }
 ```
 
-Every uncached call to `enrichment.*` increments `used` via `UpdateCommand` (`ADD :one`). When `used > limit` (default 80, configurable via `PERENUAL_DAILY_BUDGET`), the breaker trips and that request returns `null` — same as if Perenual were unconfigured. The frontend handles this transparently because every code path already needs to handle a `null`/`disabled` response for the unconfigured case.
+Every uncached call to `enrichment.*` increments `used` via `UpdateCommand` (`ADD :one`). When `used > limit` (default 80, configurable via `PERENUAL_DAILY_BUDGET`), the breaker trips. User-facing species detail returns a discriminated `unavailable` result with reason `budget_exhausted`; it is never cached as a species no-result. Nullable compatibility paths still degrade to `null`.
 
 The free tier is 100/day. Defaulting to 80 leaves headroom for retries and clock-skew between when the counter increments and when the user-visible request resolves. The breaker resets at UTC midnight per Perenual's documented quota.
 
@@ -104,18 +104,30 @@ Auth required. Returns:
 
 ```json
 {
-  "source": "perenual" | "disabled",
+  "source": "perenual" | "disabled" | "unavailable",
   "results": [
     { "id": 7, "commonName": "Monstera", "scientificName": "Monstera deliciosa", "thumbnailUrl": "https://…" }
   ]
 }
 ```
 
-`source: "disabled"` means the integration is off (no key) or the budget is exhausted. Frontend falls back to the static catalog. Empty `q` or `q.length < 2` returns an empty list without spending budget.
+`source: "disabled"` means the integration is off (no key). `source: "unavailable"` means it is configured but the request could not be completed because the budget is exhausted or the upstream failed. Frontend falls back to the static catalog. Empty `q` or `q.length < 2` returns an empty list without spending budget.
 
 ### `GET /species/:id`
 
-Auth required. Returns `{ result: PerenualSpeciesDetail | null }`.
+Auth required. Returns one of:
+
+```json
+{ "status": "found", "result": "<PerenualSpeciesDetail>" }
+{ "status": "not_found", "result": null }
+{
+  "status": "unavailable",
+  "reason": "unconfigured | budget_exhausted | upstream_error",
+  "result": null
+}
+```
+
+`found` and a genuine provider 404 (`not_found`) are stable and cacheable. Configuration, budget, malformed-response, timeout, and other upstream failures return `unavailable` with `Cache-Control: private, no-store`, remain retryable, and are never written to the 90-day result cache. This distinction is safety-sensitive: the Add Plant pet-toxicity note shows a conservative warning for unavailable or unknown data and stays silent only for an explicit `poisonousToPets: false`.
 
 ### `GET /species/:id/thumbnail`
 
@@ -183,6 +195,7 @@ Auth required. Returns long-form care guide:
 | `components/PlantImage.tsx`                  | User photo → Perenual thumbnail → SVG placeholder cascade.                                                               |
 | `features/plants/SuggestedCareCard.tsx`      | Inline preview of derived care suggestion.                                                                               |
 | `features/plants/AddPlantPage.tsx`           | Captures `perenualSpeciesId` on species pick or AI identification, seeds a watering task post-save.                      |
+| `features/plants/PetToxicityNote.tsx`        | Distinguishes toxic, confirmed non-toxic, unknown, not-found, and temporarily unavailable pet-safety states.             |
 | `features/plants/CareGuideCard.tsx`          | Long-form care guide with prominent toxicity callout.                                                                    |
 | `features/settings/NotificationSettings.tsx` | Pest-alerts opt-in toggle (off by default).                                                                              |
 

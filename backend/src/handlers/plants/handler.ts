@@ -29,6 +29,7 @@ import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
+import * as enrichment from '../../services/enrichment.js';
 import { getPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
@@ -49,6 +50,22 @@ async function resolveActorName(householdId: string, userId: string): Promise<st
   } catch (err) {
     logger.warn({ err }, 'actor_name_lookup_failed');
     return 'Someone';
+  }
+}
+
+/**
+ * Resolve the integration-safe scientific name from the server-side species
+ * catalog. The adjacent user-editable `species` field is intentionally never
+ * trusted for outbound integrations.
+ */
+async function resolveCanonicalSpecies(perenualSpeciesId: number | null | undefined) {
+  if (!perenualSpeciesId) return null;
+  try {
+    const detail = await enrichment.getSpeciesCached(perenualSpeciesId);
+    return detail?.scientificName.trim() || null;
+  } catch (err) {
+    logger.warn({ err, perenualSpeciesId }, 'plant_canonical_species_lookup_failed');
+    return null;
   }
 }
 
@@ -203,8 +220,15 @@ export const createPlant = createHandler(
 
     let plant: Awaited<ReturnType<typeof plantService.createPlant>>;
     try {
+      const canonicalSpecies =
+        validatedBody.perenualSpeciesId === undefined
+          ? undefined
+          : await resolveCanonicalSpecies(validatedBody.perenualSpeciesId);
       plant = await plantService.createPlant(
-        validatedBody,
+        {
+          ...validatedBody,
+          ...(canonicalSpecies !== undefined ? { canonicalSpecies } : {}),
+        },
         user.householdId!,
         user.userId,
         plan.maxPlants
@@ -406,10 +430,16 @@ export const updatePlant = createHandler(
 
     let plant: Awaited<ReturnType<typeof plantService.updatePlant>>;
     try {
+      const canonicalSpecies =
+        validatedBody.perenualSpeciesId !== undefined
+          ? await resolveCanonicalSpecies(validatedBody.perenualSpeciesId)
+          : validatedBody.species !== undefined
+            ? null
+            : undefined;
       plant = await plantService.updatePlant(
         user.householdId!,
         plantId,
-        validatedBody,
+        { ...validatedBody, canonicalSpecies },
         plan.maxPlants
       );
     } catch (err) {
@@ -611,11 +641,14 @@ export const confirmImageUpload = createHandler(
     } catch {
       throw createHttpError(400, 'Uploaded image not found; upload it before confirming');
     }
-    if (contentLength === undefined || contentLength > MAX_IMAGE_BYTES) {
+    if (contentLength === undefined || contentLength === 0 || contentLength > MAX_IMAGE_BYTES) {
       s3.send(new DeleteObjectCommand({ Bucket: IMAGES_BUCKET, Key: key })).catch((err) => {
         logger.warn({ err, key }, 'oversized_image_delete_failed');
       });
-      throw createHttpError(400, 'Image exceeds the 5 MiB limit');
+      throw createHttpError(
+        400,
+        contentLength === 0 ? 'Uploaded image is empty' : 'Image exceeds the 5 MiB limit'
+      );
     }
     // The presigned PUT's Content-Type is client-claimed and NOT covered by
     // the S3 signature (Content-Type isn't a signable header), so the actual
@@ -711,13 +744,10 @@ export const sharePlant = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
 
-    const share = await plantService.createPlantShare(user.householdId!, plantId, user.userId);
-    if (!share) {
-      throw createHttpError(404, 'Plant not found');
-    }
-
     // Same base-URL policy as household invites: FRONTEND_URL, falling back
-    // to ALLOWED_ORIGIN; refuse to mint a placeholder URL.
+    // to ALLOWED_ORIGIN; validate it BEFORE persisting a live share
+    // credential. Otherwise a configuration error returns 500 after the row
+    // was created, and each user retry silently mints another public link.
     const baseUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
     if (!baseUrl) {
       // expose: true — intentional config-error message, safe to show.
@@ -726,6 +756,11 @@ export const sharePlant = createHandler(
         'FRONTEND_URL / ALLOWED_ORIGIN must be set to generate share URLs',
         { expose: true }
       );
+    }
+
+    const share = await plantService.createPlantShare(user.householdId!, plantId, user.userId);
+    if (!share) {
+      throw createHttpError(404, 'Plant not found');
     }
 
     return createdResponse({

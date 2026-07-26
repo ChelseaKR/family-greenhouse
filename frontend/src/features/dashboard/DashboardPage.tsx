@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
@@ -125,9 +125,12 @@ export function DashboardPage() {
 
   const completeTaskMutation = useCompleteTaskMutation(householdId);
 
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteTask = async (task: TaskWithCoverage) => {
     try {
-      await completeTaskMutation.mutateAsync(taskId);
+      await completeTaskMutation.mutateAsync({
+        taskId: task.id,
+        expectedNextDue: task.nextDue,
+      });
     } catch {
       // Error is handled by the mutation
     }
@@ -239,7 +242,8 @@ export function DashboardPage() {
                 }
                 onComplete={handleCompleteTask}
                 isCompleting={
-                  completeTaskMutation.isPending && completeTaskMutation.variables === task.id
+                  completeTaskMutation.isPending &&
+                  completeTaskMutation.variables?.taskId === task.id
                 }
                 skipReason={climateSkipSuggestion(task, placementForTask(task), climateSignals)}
                 onSkip={(t, reason) => skipMutation.mutate({ task: t, reason })}
@@ -517,7 +521,7 @@ function ActivityRow({ event }: ActivityRowProps) {
 interface TaskItemProps {
   task: TaskWithCoverage;
   locationLabel: string;
-  onComplete: (taskId: string) => void;
+  onComplete: (task: TaskWithCoverage) => void;
   isCompleting: boolean;
   skipReason: Extract<SnoozeReason, 'rain' | 'frost'> | null;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
@@ -596,7 +600,7 @@ function TaskItem({
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => onComplete(task.id)}
+          onClick={() => onComplete(task)}
           disabled={isCompleting}
           leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
         >

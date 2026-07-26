@@ -35,11 +35,6 @@ const MAX_DUE_WITHIN_DAYS = 365;
 // Vacation rows outlive their endDate by a buffer so a clock-skewed TTL
 // sweep can never delete a still-active window; reads filter by endDate.
 const VACATION_TTL_BUFFER_MS = 3 * 24 * 60 * 60 * 1000;
-// Hard ceiling on pagination: 10 pages × 200 items = 2,000 rows per query.
-// Paid plans allow thousands of plants/tasks, so a single 200-item page
-// silently truncated results; the ceiling keeps a runaway partition from
-// pinning Lambda memory while still covering every legitimate workload.
-const MAX_QUERY_PAGES = 10;
 
 /**
  * Raised when a task create/update/import would assign the task to a userId
@@ -58,23 +53,22 @@ export class AssigneeNotMemberError extends Error {
 }
 
 /**
- * Run a Query and follow LastEvaluatedKey up to MAX_QUERY_PAGES pages.
+ * Run a Query and follow LastEvaluatedKey to exhaustion.
  * DynamoDB applies `Limit` per page *before* filtering, so any single-page
- * query with Limit set risks silent truncation — use this for anything that
- * must see the whole result set.
+ * query with Limit set risks silent truncation. A fixed page ceiling is also
+ * unsafe: the 1 MB response-size limit can produce short pages, so ten pages
+ * did not guarantee the 5,000-plant paid tier's task population was visible.
  */
 async function queryAllPages(input: QueryCommandInput): Promise<Record<string, unknown>[]> {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
-  let pages = 0;
   do {
     const result = await dynamodb.send(
       new QueryCommand({ ...input, ExclusiveStartKey: exclusiveStartKey })
     );
     items.push(...((result.Items ?? []) as Record<string, unknown>[]));
     exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
-    pages += 1;
-  } while (exclusiveStartKey && pages < MAX_QUERY_PAGES);
+  } while (exclusiveStartKey);
   return items;
 }
 
@@ -507,11 +501,20 @@ export async function completeTask(
   taskId: string,
   userId: string,
   userName: string,
-  notes?: string
+  notes?: string,
+  expectedNextDue?: string
 ): Promise<Task | null> {
   const task = await getTask(householdId, taskId);
   if (!task) {
     return null;
+  }
+
+  // Retry token for one recurrence occurrence. Integrations that received a
+  // timeout after a successful completion can safely resend the due date they
+  // originally saw: if the schedule has already advanced, return its current
+  // state without advancing again or writing another completion row.
+  if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+    return task;
   }
 
   const now = new Date();
@@ -547,7 +550,7 @@ export async function completeTask(
         ExpressionAttributeValues: {
           ':lastCompleted': now.toISOString(),
           ':nextDue': nextDue.toISOString(),
-          ':expectedNextDue': task.nextDue,
+          ':expectedNextDue': expectedNextDue ?? task.nextDue,
         },
         ConditionExpression: 'attribute_exists(PK) AND #nextDue = :expectedNextDue',
         ReturnValues: 'ALL_NEW',
@@ -599,13 +602,24 @@ export async function completeTask(
   return itemToTask(result.Attributes);
 }
 
-export async function snoozeTask(
+export interface SnoozeTaskOutcome {
+  task: Task;
+  /** False when this occurrence was already snoozed by a retry/racing call. */
+  changed: boolean;
+}
+
+export async function snoozeTaskWithOutcome(
   householdId: string,
   taskId: string,
-  days: number
-): Promise<Task | null> {
+  days: number,
+  expectedNextDue?: string
+): Promise<SnoozeTaskOutcome | null> {
   const task = await getTask(householdId, taskId);
   if (!task) return null;
+
+  if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+    return { task, changed: false };
+  }
 
   // Base the snooze on max(now, current nextDue): snoozing a task that's
   // already overdue should push it N days into the *future* — basing on the
@@ -629,21 +643,39 @@ export async function snoozeTask(
         // GSI2SK mirrors nextDue (dangling-but-harmless on unassigned tasks).
         UpdateExpression: 'SET #nextDue = :nextDue, GSI1SK = :nextDue, GSI2SK = :nextDue',
         ExpressionAttributeNames: { '#nextDue': 'nextDue' },
-        ExpressionAttributeValues: { ':nextDue': next.toISOString() },
+        ExpressionAttributeValues: {
+          ':nextDue': next.toISOString(),
+          ':expectedNextDue': expectedNextDue ?? task.nextDue,
+        },
         ReturnValues: 'ALL_NEW',
-        ConditionExpression: 'attribute_exists(PK)',
+        ConditionExpression: 'attribute_exists(PK) AND #nextDue = :expectedNextDue',
       })
     );
   } catch (err) {
     if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
-      // Deleted between read and write — 404, not 500.
-      return null;
+      // A concurrent request already moved nextDue, or the task was deleted.
+      // Re-read so the loser returns the current schedule as a successful,
+      // idempotent no-op (null still maps a concurrent delete to 404).
+      const currentTask = await getTask(householdId, taskId);
+      return currentTask ? { task: currentTask, changed: false } : null;
     }
     throw err;
   }
 
   if (!result.Attributes) return null;
-  return itemToTask(result.Attributes);
+  return { task: itemToTask(result.Attributes), changed: true };
+}
+
+/** Backward-compatible task-only facade for internal callers that do not
+ * write an activity record and therefore do not need the changed flag. */
+export async function snoozeTask(
+  householdId: string,
+  taskId: string,
+  days: number,
+  expectedNextDue?: string
+): Promise<Task | null> {
+  const outcome = await snoozeTaskWithOutcome(householdId, taskId, days, expectedNextDue);
+  return outcome?.task ?? null;
 }
 
 export async function getTaskCompletions(
@@ -687,11 +719,9 @@ export async function getHouseholdActivity(
   // rows. DynamoDB applies `Limit` per page BEFORE our entityType filter, so a
   // single Limit-bounded page that happens to be mostly ActivityEvents returns
   // far fewer than `want` completions (M3). Page through newest-first,
-  // accumulating only completions, until we have enough or run out of pages
-  // (bounded by MAX_QUERY_PAGES — same ceiling as queryAllPages).
+  // accumulating only completions, until we have enough or run out of pages.
   const completions: TaskCompletion[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
-  let pages = 0;
   do {
     const result = await dynamodb.send(
       new QueryCommand({
@@ -722,8 +752,7 @@ export async function getHouseholdActivity(
       if (completions.length >= want) return completions;
     }
     exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
-    pages += 1;
-  } while (exclusiveStartKey && pages < MAX_QUERY_PAGES);
+  } while (exclusiveStartKey);
 
   return completions;
 }

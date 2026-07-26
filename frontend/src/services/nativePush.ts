@@ -41,28 +41,52 @@ export async function registerNativePush(): Promise<boolean> {
     throw new Error('Notification permission was denied. Update your device settings to enable.');
   }
 
-  const token = await new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error('Timed out waiting for a push registration token.')),
+  let resolveToken!: (token: string) => void;
+  let rejectToken!: (cause: Error) => void;
+  const tokenPromise = new Promise<string>((resolve, reject) => {
+    resolveToken = resolve;
+    rejectToken = reject;
+  });
+  const listenerHandles: Array<{ remove: () => Promise<void> }> = [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    // Capacitor's listener registration is asynchronous. Await both handles
+    // before calling register(); otherwise a fast APNs/FCM callback can fire
+    // before JavaScript has attached its receiver and leave the UI hanging
+    // until the timeout.
+    listenerHandles.push(
+      await PushNotifications.addListener('registration', (token) => {
+        if (timer) clearTimeout(timer);
+        resolveToken(token.value);
+      })
+    );
+    listenerHandles.push(
+      await PushNotifications.addListener('registrationError', (error) => {
+        if (timer) clearTimeout(timer);
+        rejectToken(new Error(error.error));
+      })
+    );
+    timer = setTimeout(
+      () => rejectToken(new Error('Timed out waiting for a push registration token.')),
       15_000
     );
-    void PushNotifications.addListener('registration', (t) => {
-      clearTimeout(timer);
-      resolve(t.value);
-    });
-    void PushNotifications.addListener('registrationError', (err) => {
-      clearTimeout(timer);
-      reject(new Error(err.error));
-    });
-    PushNotifications.register().catch((err: unknown) => {
-      clearTimeout(timer);
-      reject(err instanceof Error ? err : new Error(String(err)));
-    });
-  });
+    await PushNotifications.register();
+    const token = await tokenPromise;
 
-  await api.post('/notifications/devices', { platform: getNativePlatform(), token });
-  localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  return true;
+    await api.post('/notifications/devices', { platform: getNativePlatform(), token });
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    return true;
+  } finally {
+    if (timer) clearTimeout(timer);
+    await Promise.all(
+      listenerHandles.map((handle) =>
+        handle.remove().catch((cause) => {
+          console.warn('Native push listener cleanup failed', cause);
+        })
+      )
+    );
+  }
 }
 
 /** Remove this device's token from the backend and forget it locally. */

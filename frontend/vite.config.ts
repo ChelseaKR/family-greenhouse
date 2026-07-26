@@ -8,6 +8,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registration is imported from services/pwaRegistration so rejected
+      // browser registrations are handled instead of becoming page errors.
+      injectRegister: null,
       includeAssets: [
         'brand/favicon.ico',
         'brand/favicon-32x32.png',
@@ -41,6 +44,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Workbox owns the generated app-shell worker; keep push behavior in
+        // a small, independently testable classic worker that it imports.
+        importScripts: ['push-handler.js'],
         // Take over as soon as the new SW installs instead of waiting for
         // every tab to close. Without this, a deploy can leave users on a
         // stale bundle indefinitely — and a mismatched bundle vs persisted
@@ -82,6 +88,12 @@ export default defineConfig({
   },
   preview: {
     port: 3000,
+    proxy: {
+      '/mock-images': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     // Keep maps for web/Sentry diagnostics, but never package source into a
@@ -102,9 +114,7 @@ export default defineConfig({
           // stopped capturing all of react-dom's submodules under React 19,
           // which leaked the runtime into the entry chunk and ballooned it.
           // Matching on the resolved node_modules path is version-robust.
-          if (
-            /node_modules\/(react|react-dom|scheduler|react-router|react-router-dom)\//.test(id)
-          ) {
+          if (/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) {
             return 'vendor';
           }
           if (/node_modules\/@tanstack\/react-query\//.test(id)) {

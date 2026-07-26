@@ -12,13 +12,9 @@
  *    until the next UTC day. The ceiling is generous; the goal is to stop
  *    runaway usage, not to ration aggressively.
  *
- * Every method returns null for three DIFFERENT reasons: Perenual is
- * unconfigured (no API key), the daily budget is exhausted, or the upstream
- * call itself failed (network/non-2xx/timeout). Callers that need to tell
- * these apart (anything user-facing, or anything deciding whether to retry)
- * must not assume null always means "the integration is off" — check
- * `perenual.isConfigured()` separately, and watch the `perenual.*` warn logs
- * this module emits on every null-causing branch.
+ * Nullable compatibility methods still collapse unavailability into null.
+ * User-facing species detail and pest-alert evaluation use discriminated
+ * results so "confirmed no result" is never mistaken for "couldn't check."
  */
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
@@ -102,19 +98,31 @@ interface CacheRow<T> {
   ttl?: number;
 }
 
-async function readCache<T>(pk: string, sk: string): Promise<T | null> {
+type CacheReadResult<T> = { hit: true; value: T } | { hit: false };
+
+/**
+ * A hit wrapper is necessary because `null` can itself be a valid cached
+ * payload (a confirmed Perenual 404). Returning a bare T|null would make that
+ * row indistinguishable from a miss and spend provider budget again.
+ */
+async function readCacheEntry<T>(pk: string, sk: string): Promise<CacheReadResult<T>> {
   try {
     const result = await dynamodb.send(
       new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: sk } })
     );
     const row = result.Item as CacheRow<T> | undefined;
-    if (!row) return null;
-    if (row.ttl && row.ttl < Math.floor(Date.now() / 1000)) return null;
-    return row.payload;
+    if (!row || !Object.prototype.hasOwnProperty.call(row, 'payload')) return { hit: false };
+    if (row.ttl && row.ttl < Math.floor(Date.now() / 1000)) return { hit: false };
+    return { hit: true, value: row.payload };
   } catch (err) {
     logger.warn({ err: (err as Error).message, pk, sk }, 'perenual.cache_read_failed');
-    return null;
+    return { hit: false };
   }
+}
+
+async function readCache<T>(pk: string, sk: string): Promise<T | null> {
+  const result = await readCacheEntry<T>(pk, sk);
+  return result.hit ? result.value : null;
 }
 
 async function writeCache<T>(pk: string, sk: string, payload: T, ttlSec: number): Promise<void> {
@@ -159,23 +167,58 @@ export async function searchSpeciesCached(query: string): Promise<PerenualSpecie
   return fresh;
 }
 
-export async function getSpeciesCached(id: number): Promise<PerenualSpeciesDetail | null> {
-  if (!(await perenual.isConfigured())) return null;
+export type SpeciesLookupResult =
+  | { status: 'found'; result: PerenualSpeciesDetail }
+  | { status: 'not_found'; result: null }
+  | {
+      status: 'unavailable';
+      reason: 'unconfigured' | 'budget_exhausted' | 'upstream_error';
+      result: null;
+    };
+
+/**
+ * Species detail lookup with enough state for a safety-sensitive UI:
+ * - a provider 404 is a cacheable `not_found`;
+ * - configuration, budget, and upstream failures are retryable unavailable
+ *   states and are never written to the result cache.
+ */
+export async function lookupSpeciesCached(id: number): Promise<SpeciesLookupResult> {
+  if (!(await perenual.isConfigured())) {
+    return { status: 'unavailable', reason: 'unconfigured', result: null };
+  }
 
   const sk = `SPECIES#${id}`;
-  const cached = await readCache<PerenualSpeciesDetail>('PERENUAL#CACHE', sk);
-  if (cached) return cached;
+  const cached = await readCacheEntry<PerenualSpeciesDetail | null>('PERENUAL#CACHE', sk);
+  if (cached.hit) {
+    return cached.value === null
+      ? { status: 'not_found', result: null }
+      : { status: 'found', result: cached.value };
+  }
 
   const budget = await checkAndIncrementBudget();
   if (budget.blocked) {
     logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
-    return null;
+    return { status: 'unavailable', reason: 'budget_exhausted', result: null };
   }
 
-  const fresh = await perenual.getSpecies(id);
-  if (fresh)
-    await writeCache('PERENUAL#CACHE', sk, fresh, jitteredTtlSeconds(SPECIES_TTL_DAYS * 86400));
+  const fresh = await perenual.lookupSpecies(id);
+  if (fresh.status === 'unavailable') return fresh;
+
+  // Both a detail and a confirmed 404 are stable/cacheable provider answers.
+  // Only unavailability skips this write so the next request can retry.
+  await writeCache(
+    'PERENUAL#CACHE',
+    sk,
+    fresh.result,
+    jitteredTtlSeconds(SPECIES_TTL_DAYS * 86400)
+  );
   return fresh;
+}
+
+/** Nullable projection retained for thumbnails, plant validation, and guides. */
+export async function getSpeciesCached(id: number): Promise<PerenualSpeciesDetail | null> {
+  const lookup = await lookupSpeciesCached(id);
+  return lookup.status === 'found' ? lookup.result : null;
 }
 
 export async function getCareGuideCached(speciesId: number): Promise<PerenualCareGuide | null> {
@@ -228,4 +271,4 @@ export async function listPestsForSpeciesCached(scientificName: string): Promise
   return { ok: true, pests: fresh };
 }
 
-export const __testing = { checkAndIncrementBudget, readCache, writeCache };
+export const __testing = { checkAndIncrementBudget, readCache, readCacheEntry, writeCache };

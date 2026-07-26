@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -160,15 +160,17 @@ export function AddPlantPage() {
         return;
       }
       const result = await plantService.identifyPlant(dataUrl);
+      if (!result.configured) {
+        setSuggestions(null);
+        setIdentifyNotice(
+          'Photo identification is unavailable right now. You can still enter the species manually.'
+        );
+        return;
+      }
       if (!result.suggestions || result.suggestions.length === 0) {
         setIdentifyNotice('No suggestions came back — fill in the species manually.');
       } else {
         setSuggestions(result.suggestions);
-        if (!result.configured) {
-          setIdentifyNotice(
-            'Demo suggestions shown — configure PLANT_ID_API_KEY for real identification.'
-          );
-        }
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -245,20 +247,31 @@ export function AddPlantPage() {
         // Propagation mode: link the cutting to its parent.
         parentPlantId: parentPlantId || undefined,
       });
+      let photoUploadFailed = false;
       if (pickedFile) {
-        // Downscale client-side (max 1600px long edge, WebP ~0.8 / JPEG
-        // fallback); upload the original if the canvas pipeline fails. The
-        // presign contentType must match the PUT's Content-Type header.
-        const downscaled = await downscaleImage(pickedFile);
-        const blob: Blob =
-          downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : pickedFile;
-        if (blob.size > MAX_BYTES) {
-          throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+        try {
+          // Downscale client-side (max 1600px long edge, WebP ~0.8 / JPEG
+          // fallback); upload the original if the canvas pipeline fails. The
+          // presign contentType must match the PUT's Content-Type header.
+          const downscaled = await downscaleImage(pickedFile);
+          const blob: Blob =
+            downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : pickedFile;
+          if (blob.size > MAX_BYTES) {
+            throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+          }
+          const contentType = blob.type || pickedFile.type;
+          const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(
+            plant.id,
+            contentType
+          );
+          await plantService.uploadImage(uploadUrl, blob, contentType, setUploadProgress);
+          await plantService.confirmImageUpload(plant.id, imageUrl);
+        } catch {
+          // Plant creation already committed. Treat the photo as a recoverable
+          // partial failure so submitting this form again can never create a
+          // duplicate. The detail page owns the retry flow.
+          photoUploadFailed = true;
         }
-        const contentType = blob.type || pickedFile.type;
-        const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(plant.id, contentType);
-        await plantService.uploadImage(uploadUrl, blob, contentType, setUploadProgress);
-        await plantService.confirmImageUpload(plant.id, imageUrl);
       }
       // Best-effort: seed the visible, user-approved species care plan. A
       // curated bundle wins because it covers the whole routine; Perenual's
@@ -288,9 +301,9 @@ export function AddPlantPage() {
           taskSetupFailed = true;
         }
       }
-      return { plant, wasFirstPlant, tasksAdded, taskSetupFailed };
+      return { plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed };
     },
-    onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed }) => {
+    onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed }) => {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
@@ -302,7 +315,15 @@ export function AddPlantPage() {
       if (taskSetupFailed) {
         toast.info('The plant was saved, but its recommended tasks could not be added.');
       }
-      navigate(`/plants/${plant.id}`);
+      if (photoUploadFailed) {
+        toast.info(t('plants.photoRecovery.toast'));
+      }
+      navigate(`/plants/${plant.id}`, {
+        // Do not leave a submitted Add Plant form immediately behind the
+        // recovery screen: browser Back must not invite a duplicate create.
+        replace: photoUploadFailed,
+        state: photoUploadFailed ? { photoUploadFailed: true } : undefined,
+      });
     },
     onError: (err) => {
       setError(getErrorMessage(err));
@@ -311,6 +332,7 @@ export function AddPlantPage() {
 
   const onSubmit = (data: AddPlantFormData) => {
     setError(null);
+    setUploadProgress(0);
     mutation.mutate(data);
   };
 

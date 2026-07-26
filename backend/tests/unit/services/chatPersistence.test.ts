@@ -41,11 +41,15 @@ import { dynamodb } from '../../../src/utils/dynamodb.js';
 import {
   appendMessage,
   appendMessagePair,
+  appendTurnUserMessage,
   claimTurn,
   finalizeTurn,
   getConversation,
   reserveBudget,
+  markTurnRetryable,
+  reconcileTurnBudget,
   ChatBudgetExceededError,
+  type TurnBudgetReconciliation,
 } from '../../../src/services/chat/persistence.js';
 import type { ChatMessageRecord } from '../../../src/services/chat/types.js';
 
@@ -114,6 +118,31 @@ describe('chat message persistence', () => {
     expect(items[0].SK < items[1].SK).toBe(true);
   });
 
+  it('atomically records an idempotent user message and its turn pointer', async () => {
+    const message: ChatMessageRecord = {
+      conversationId: 'c1',
+      timestamp: '2026-06-11T12:00:00.000Z',
+      role: 'user',
+      content: [{ type: 'text', text: 'help my fern' }],
+    };
+    await appendTurnUserMessage('hh-1', '550e8400-e29b-41d4-a716-446655440000', message);
+
+    const tx = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        ([command]) =>
+          command as unknown as {
+            kind: string;
+            input: { ClientRequestToken?: string; TransactItems: unknown[] };
+          }
+      )
+      .find((command) => command.kind === 'TransactWrite');
+    expect(tx?.input.ClientRequestToken).toBe('550e8400-e29b-41d4-a716-446655440000');
+    expect(tx?.input.TransactItems).toHaveLength(2);
+    expect(tx?.input.TransactItems[0]).toHaveProperty('Put');
+    expect(tx?.input.TransactItems[1]).toHaveProperty('Update');
+  });
+
   it('reserveBudget gates via a conditional ADD at (cap - reserve), mapping a failed condition to ChatBudgetExceededError', async () => {
     const config = { maxInputTokensPerMonth: 250000, maxOutputTokensPerMonth: 50000 };
     // Success: returns the post-reservation committed totals.
@@ -145,7 +174,12 @@ describe('chat message persistence', () => {
   it('claimTurn wins with a conditional Put, then replays a prior done result on a lost claim', async () => {
     // Win: the attribute_not_exists Put succeeds.
     vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
-    expect(await claimTurn('hh-1', 't1')).toEqual({ status: 'claimed' });
+    expect(await claimTurn('hh-1', 't1', 'c1')).toEqual({
+      status: 'claimed',
+      conversationId: 'c1',
+      userMessagePersisted: false,
+      attemptId: expect.any(String),
+    });
     const put = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       kind: string;
       input: { ConditionExpression: string };
@@ -157,23 +191,182 @@ describe('chat message persistence', () => {
     vi.mocked(dynamodb.send).mockRejectedValueOnce(
       Object.assign(new Error('cond'), { name: 'ConditionalCheckFailedException' })
     );
+    const pending: TurnBudgetReconciliation = {
+      reconciliationId: 'attempt-prior',
+      yearMonth: '2026-07',
+      inputTokens: -7990,
+      outputTokens: -2043,
+      costUsd: 0.0001,
+      status: 'pending',
+    };
     vi.mocked(dynamodb.send).mockResolvedValueOnce({
-      Item: { status: 'done', result: { assistantText: 'cached' } },
+      Item: {
+        status: 'done',
+        result: { assistantText: 'cached' },
+        budgetReconciliation: pending,
+      },
     } as never);
-    const claim = await claimTurn('hh-1', 't1');
+    const claim = await claimTurn('hh-1', 't1', 'c1');
     expect(claim.status).toBe('done');
     expect(claim.result).toEqual({ assistantText: 'cached' });
+    expect(claim.budgetReconciliation).toEqual(pending);
   });
 
-  it('finalizeTurn records the completed result keyed by turnId', async () => {
+  it('reclaims a retryable turn while preserving its conversation/message pointer', async () => {
+    vi.mocked(dynamodb.send)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('cond'), { name: 'ConditionalCheckFailedException' })
+      )
+      .mockResolvedValueOnce({
+        Item: {
+          status: 'retryable',
+          conversationId: 'c-existing',
+          userMessagePersisted: true,
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        Attributes: {
+          status: 'in_progress',
+          conversationId: 'c-existing',
+          userMessagePersisted: true,
+        },
+      } as never);
+
+    await expect(claimTurn('hh-1', 't-retry', 'c-new')).resolves.toEqual({
+      status: 'claimed',
+      conversationId: 'c-existing',
+      userMessagePersisted: true,
+      attemptId: expect.any(String),
+    });
+  });
+
+  it('marks a failed persisted turn retryable instead of deleting its pointer', async () => {
     vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
-    await finalizeTurn('hh-1', 't9', { assistantText: 'done' });
-    const put = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
-      input: { Item: { SK: string; status: string; result: Record<string, unknown> } };
+    const reconciliation: TurnBudgetReconciliation = {
+      reconciliationId: 'attempt-1',
+      yearMonth: '2026-07',
+      inputTokens: -7900,
+      outputTokens: -2000,
+      costUsd: 0.0002,
+      status: 'pending',
     };
-    expect(put.input.Item.SK).toBe('CHATTURN#t9');
-    expect(put.input.Item.status).toBe('done');
-    expect(put.input.Item.result).toEqual({ assistantText: 'done' });
+    await markTurnRetryable('hh-1', 't-failed', 'attempt-1', reconciliation);
+    const command = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: {
+        UpdateExpression: string;
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, unknown>;
+      };
+    };
+    expect(command.kind).toBe('Update');
+    expect(command.input.UpdateExpression).toContain(':retryable');
+    expect(command.input.UpdateExpression).toContain('budgetReconciliation');
+    expect(command.input.ConditionExpression).toContain(':inProgress');
+    expect(command.input.ConditionExpression).toContain(':attemptId');
+    expect(command.input.ExpressionAttributeValues[':reconciliation']).toEqual(reconciliation);
+  });
+
+  it('finalizeTurn atomically records the result and pending reconciliation without replacing the turn row', async () => {
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    const reconciliation: TurnBudgetReconciliation = {
+      reconciliationId: 'attempt-9',
+      yearMonth: '2026-07',
+      inputTokens: -7990,
+      outputTokens: -2043,
+      costUsd: 0.0001,
+      status: 'pending',
+    };
+    await finalizeTurn('hh-1', 't9', 'attempt-9', { assistantText: 'done' }, reconciliation);
+    const update = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: {
+        Key: { SK: string };
+        UpdateExpression: string;
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, unknown>;
+      };
+    };
+    expect(update.kind).toBe('Update');
+    expect(update.input.Key.SK).toBe('CHATTURN#t9');
+    expect(update.input.UpdateExpression).toContain('budgetReconciliation');
+    expect(update.input.ConditionExpression).toContain('attemptId = :attemptId');
+    expect(update.input.ExpressionAttributeValues[':result']).toEqual({ assistantText: 'done' });
+    expect(update.input.ExpressionAttributeValues[':reconciliation']).toEqual(reconciliation);
+  });
+
+  it('reconciles a turn exactly once with a budget transaction and durable ledger marker', async () => {
+    const reconciliation: TurnBudgetReconciliation = {
+      reconciliationId: 'attempt-9',
+      yearMonth: '2026-06',
+      inputTokens: -7990,
+      outputTokens: -2043,
+      costUsd: 0.0001,
+      status: 'pending',
+    };
+    const committed = { inputTokens: 8000, outputTokens: 2048, costUsd: 0 };
+    let ledger: Record<string, unknown> | undefined;
+    vi.mocked(dynamodb.send).mockImplementation(async (rawCommand) => {
+      const command = rawCommand as unknown as {
+        kind: string;
+        input: {
+          TransactItems?: Array<{
+            Update?: { ExpressionAttributeValues: Record<string, number> };
+            Put?: { Item: Record<string, unknown> };
+          }>;
+        };
+      };
+      if (command.kind === 'TransactWrite') {
+        if (ledger) {
+          throw Object.assign(new Error('duplicate'), { name: 'TransactionCanceledException' });
+        }
+        const update = command.input.TransactItems?.[0].Update;
+        committed.inputTokens += update?.ExpressionAttributeValues[':in'] ?? 0;
+        committed.outputTokens += update?.ExpressionAttributeValues[':out'] ?? 0;
+        committed.costUsd += update?.ExpressionAttributeValues[':cost'] ?? 0;
+        ledger = command.input.TransactItems?.[1].Put?.Item;
+        return {} as never;
+      }
+      if (command.kind === 'Get') return { Item: ledger } as never;
+      // Turn-row pending → applied metadata update.
+      return {} as never;
+    });
+
+    await reconcileTurnBudget('hh-1', 't9', reconciliation);
+    await reconcileTurnBudget('hh-1', 't9', reconciliation);
+
+    // Starting from the reservation, the adjustment landed exactly once even
+    // though the same reconciliation was invoked twice.
+    expect(committed).toEqual({ inputTokens: 10, outputTokens: 5, costUsd: 0.0001 });
+    const transactions = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(([command]) => command as unknown as { kind: string; input: unknown })
+      .filter((command) => command.kind === 'TransactWrite') as Array<{
+      kind: string;
+      input: {
+        TransactItems: Array<{
+          Update?: {
+            Key: { SK: string };
+            ExpressionAttributeValues: Record<string, unknown>;
+          };
+          Put?: { Item: Record<string, unknown>; ConditionExpression: string };
+        }>;
+      };
+    }>;
+    expect(transactions).toHaveLength(2);
+    expect(transactions[0].input.TransactItems[0].Update?.Key.SK).toBe('CHATBUDGET#2026-06');
+    expect(transactions[0].input.TransactItems[0].Update?.ExpressionAttributeValues).toMatchObject({
+      ':in': -7990,
+      ':out': -2043,
+      ':cost': 0.0001,
+    });
+    expect(transactions[0].input.TransactItems[1].Put?.Item).toMatchObject({
+      SK: 'CHATBUDGETRECON#attempt-9',
+      reconciliationId: 'attempt-9',
+    });
+    expect(transactions[0].input.TransactItems[1].Put?.ConditionExpression).toBe(
+      'attribute_not_exists(PK)'
+    );
   });
 
   it('writes same-millisecond messages under distinct SKs that preserve write order', async () => {

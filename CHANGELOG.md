@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-25
+
 ### Added
 
 - Red-team injection corpus for the chat tool layer
@@ -34,6 +36,53 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   against the live tool registry. Retrieval metrics still use the anchor-
   chunk-embedding proxy; the adversarial labels are data for the future
   generation-layer eval and are not yet scored against live model output.
+- Production-bundle browser coverage for notification permissions, service
+  worker activation, foreground reminder timing, photo upload recovery,
+  account deletion, cutting grafts, sitter care, and public integration
+  boundaries across Chromium, Firefox, WebKit, Mobile Chrome, and Mobile
+  Safari.
+- Version-aware production smoke cleanup that removes the exact disposable
+  test object, every historical S3 version, and every delete marker even when
+  application-level account cleanup fails.
+
+### Changed
+
+- Notification delivery now records channel-scoped outcomes and leases so a
+  transient email, SMS, or push failure retries only that channel without
+  duplicating successful sibling deliveries.
+- Integration availability is reported conservatively: disabled or
+  unconfigured weather, identification, pet-safety, telemetry, chat, and
+  notification providers expose an actionable degraded state instead of
+  claiming success or inventing data.
+- Browser notification permission and foreground reminder state now
+  resynchronize on focus, visibility changes, and page restoration.
+
+### Fixed
+
+- Account deletion now removes the Cognito user, every household/global
+  DynamoDB record, memberships, assignments, history references, photo
+  objects, historical object versions, and delete markers.
+- The generated production service worker imports the background push handler,
+  ships both files with no-cache headers, cleans stale subscriptions, validates
+  push endpoints, and routes reminder deep links to the due queue.
+- Plant photo creation recovers from a failed upload without creating a
+  duplicate plant, then performs a real retry PUT, confirmation, byte fetch,
+  and decoded-image render.
+- Chat turns are idempotent under retries, stream configuration is deployed
+  consistently, external-provider budgets are atomic, and local HTTP behavior
+  matches the production route surface.
+- Quiet hours, per-channel delivery, welcome-email deduplication, reminder
+  aggregation, household switching, public invite/share/sitter boundaries,
+  keyboard focus, 320px reflow, reduced motion, and modal accessibility now
+  behave consistently across supported browser engines.
+
+### Security
+
+- Push endpoints are restricted to approved HTTPS provider origins with
+  request caps, timeouts, and stale-subscription cleanup.
+- Plant-identification uploads stay privacy-bounded, external API budgets fail
+  closed under concurrency, and deployment IAM now grants only the additional
+  Cognito/S3 version operations required for complete erasure.
 
 ## [0.22.0] - 2026-07-19
 

@@ -52,13 +52,27 @@ export const checkPlantHealth = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
-    // Monthly Bedrock spend cap (M1). Gate BEFORE the model call — cheaper to
-    // bail than to invoke. Mirrors the chat budget's 429 contract.
-    if (await leafHealthBudget.isOverCap(user.householdId!)) {
-      throw createHttpError(
-        429,
-        "You've used this month's leaf-health check allowance. It resets on the 1st of next month."
-      );
+    // Atomically reserve BEFORE the model call. A read-then-check gate lets
+    // concurrent requests all invoke Bedrock before any one increments the
+    // counter, so the conditional DynamoDB update is the real spend ceiling.
+    const cap = leafHealthBudget.monthlyCap();
+    const metered = cap > 0;
+    if (metered) {
+      try {
+        await leafHealthBudget.reserveUsage(user.householdId!, cap);
+      } catch (err) {
+        if ((err as { name?: string }).name === 'LeafHealthBudgetExceededError') {
+          throw createHttpError(
+            429,
+            "You've used this month's leaf-health check allowance. It resets on the 1st of next month."
+          );
+        }
+        throw createHttpError(
+          503,
+          'Leaf-health checks are temporarily unavailable. Please try again.',
+          { expose: true }
+        );
+      }
     }
 
     let assessment: leafHealth.LeafHealthAssessment;
@@ -80,10 +94,12 @@ export const checkPlantHealth = createHandler(
       });
     }
 
-    // Count real Bedrock invocations against the monthly cap. The demo
-    // fallback never reached Bedrock (no spend), so it isn't metered. Soft:
-    // a failed increment doesn't fail the request the user already got.
-    if (!assessment.demo) {
+    // The explicit demo fallback means Bedrock rejected the deployment before
+    // doing paid work, so return the reservation. Unlimited mode still tracks
+    // successful real invocations for observability without enforcing a cap.
+    if (assessment.demo && metered) {
+      await leafHealthBudget.releaseUsage(user.householdId!);
+    } else if (!assessment.demo && !metered) {
       await leafHealthBudget.incrementUsage(user.householdId!);
     }
 

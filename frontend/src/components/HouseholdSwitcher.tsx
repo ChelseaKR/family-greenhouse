@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ChevronUpDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { listMyHouseholds } from '@/services/householdService';
 import { useAuthStore } from '@/store/authStore';

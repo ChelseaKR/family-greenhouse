@@ -258,6 +258,19 @@
     "locationLabel": "Location",
     "notesLabel": "Notes",
     "photoLabel": "Photo (optional)",
+    "photoRecovery": {
+      "toast": "The plant was saved, but its photo could not be uploaded. Try again below.",
+      "title": "Plant saved; photo not uploaded",
+      "description": "Your plant is safe. Choose the photo again below to retry the upload."
+    },
+    "petToxicity": {
+      "toxicTitle": "Toxic to pets",
+      "toxicBody": "Toxic to cats and dogs if chewed — keep it out of reach. You can still add it; this is just a heads-up.",
+      "unknownTitle": "Pet toxicity unknown",
+      "unknownBody": "No reliable pet-toxicity result is available for this species. Treat it as potentially unsafe and keep it out of reach until you can check the ASPCA’s plant list or ask your veterinarian.",
+      "unavailableTitle": "Couldn’t check pet toxicity",
+      "unavailableBody": "We couldn’t verify pet-safety data for this species just now. Until you can check a trusted source such as the ASPCA’s plant list, keep it out of reach of cats and dogs."
+    },
     "backToPlants": "Back to plants",
     "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
     "generateName": "✨ Generate a fun name",
@@ -463,6 +476,11 @@
     "skippedToast": "Skipped to next cycle"
   },
   "household": {
+    "climateChecking": "Checking climate availability…",
+    "climateCheckFailed": "Climate availability could not be checked. Location changes are paused; try again later.",
+    "climateUnavailable": "Climate-aware tips are unavailable right now. Location setup will return when the weather integration is enabled.",
+    "climateSavedLocation": "Your saved location is {{city}}.",
+    "clearSavedLocation": "Clear saved location",
     "vacation": {
       "setVacation": "Set vacation",
       "onVacationUntil": "Away until {{date}}",
@@ -528,7 +546,25 @@
     "phoneVerifySuccess": "Phone number verified. You can now enable SMS reminders.",
     "phoneUnverifiedHint": "Verify your phone number to enable SMS reminders.",
     "smsUnavailableShort": "SMS reminders are temporarily unavailable.",
-    "smsUnavailable": "SMS delivery is not enabled right now. Email and browser reminders still work; phone verification will return when delivery is available."
+    "smsUnavailable": "SMS delivery is not enabled right now. Email and browser reminders still work; phone verification will return when delivery is available.",
+    "preferencesUnavailable": "Notification preferences are not available yet.",
+    "householdRequired": "Join or create a household to configure reminders.",
+    "loadFailed": "Notification preferences could not be loaded.",
+    "preferencesSaved": "Preferences saved.",
+    "browserDisabled": "Browser notifications disabled on this device.",
+    "browserUnsupportedError": "This browser does not support notifications.",
+    "browserDeniedError": "Notification permission was denied. Update your browser settings to enable it.",
+    "browserDismissedError": "Notifications were not enabled because the permission prompt was dismissed.",
+    "browserEnabledBackground": "Browser reminders enabled, including while the app is in the background.",
+    "browserEnabledForegroundFailed": "Browser reminders are enabled while the app is open. Background delivery could not be set up on this device.",
+    "browserEnabledForegroundUnavailable": "Browser reminders are enabled while the app is open. Background delivery is unavailable on this device.",
+    "browserUnsupportedDevice": "Browser reminders are not supported on this device. Email and text-message preferences are still available below."
+  },
+  "statusPage": {
+    "notActivelyChecked": "Not actively checked",
+    "coreApiOperational": "Core API operational",
+    "checkingTitle": "Checking live system status…",
+    "checkingBody": "Waiting for a fresh response from the production health endpoint."
   },
   "mobile": {
     "accountPrompt": "Need to manage or delete this account?",
@@ -546,6 +582,13 @@
     "tooManyTags": "Too many tags"
   },
   "chat": {
+    "availabilityChecking": "Checking chat availability…",
+    "availabilityCheckFailed": "Chat availability could not be checked. Try this page again in a moment.",
+    "seedlingUnavailableTitle": "Plant care chat isn’t available on Seedling",
+    "seedlingUnavailableDescription": "Your plants, tasks, reminders, analytics, and care guides remain available.",
+    "seedlingUnavailablePaused": "Plant care chat is included with existing Garden and Greenhouse households. Paid plan changes are paused, so it cannot be enabled right now.",
+    "seedlingUnavailableUpgrade": "Plant care chat is included with Garden and Greenhouse households.",
+    "viewPlanStatus": "View plan status",
     "report": {
       "success": "Response reported. Thank you.",
       "open": "Report response",

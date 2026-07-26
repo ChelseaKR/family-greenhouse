@@ -47,6 +47,7 @@ import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
+import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
@@ -331,6 +332,16 @@ interface Completion {
   notes: string | null;
 }
 
+interface MockUploadGrant {
+  key: string;
+  contentType: string;
+}
+
+interface MockImageObject {
+  body: Buffer;
+  contentType: string;
+}
+
 export const db = {
   users: new Map<string, User>(),
   households: new Map<string, Household>(),
@@ -351,9 +362,15 @@ export const db = {
   chatReports: new Map<string, ChatReportRecord>(),
   notificationPrefs: new Map<string, NotificationPrefsRecord>(),
   phoneVerifications: new Map<string, PhoneVerificationRecord>(), // userId -> pending code
-  recapSent: new Set<string>(), // `${householdId}|${year}` once-per-year markers
+  recapSent: new Set<string>(), // `${userId}|${householdId}|${year}` recipient markers
+  reminderSent: new Set<string>(), // `${userId}|${householdId}|${localDate}|${channel}` markers
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
   sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
+  // Tiny local object store used by the real browser upload flow. A presign
+  // creates a capability token, PUT stores the bytes, confirm verifies the
+  // object exists, and /mock-images serves the confirmed URL from this API.
+  mockUploadGrants: new Map<string, MockUploadGrant>(),
+  mockImages: new Map<string, MockImageObject>(),
 };
 
 export const seedHouseholdId = '550e8400-e29b-41d4-a716-446655440001';
@@ -380,8 +397,11 @@ export function resetDb(): void {
   db.notificationPrefs.clear();
   db.phoneVerifications.clear();
   db.recapSent.clear();
+  db.reminderSent.clear();
   db.pendingConfirmations.clear();
   db.sitterLinks.clear();
+  db.mockUploadGrants.clear();
+  db.mockImages.clear();
 
   const now = new Date().toISOString();
 
@@ -668,16 +688,16 @@ app.get('/health', (req, res) => {
   // page. We surface a small set of subsystem checks so the status page
   // can show component-by-component state rather than just a binary.
   // Local server is in-memory, so the values are deterministic; in
-  // production the same shape comes from real reachability probes
-  // (handlers/health/handler.ts, hits DDB + Cognito with a 1s timeout).
+  // production the same shape comes from a real DynamoDB reachability probe;
+  // providers without an active probe are explicitly reported as unknown.
   res.json({
     status: 'ok',
     version: process.env.APP_VERSION ?? 'dev',
     checkedAt: new Date().toISOString(),
     components: {
       database: { status: 'ok' },
-      auth: { status: 'ok' },
-      mail: { status: 'ok' },
+      auth: { status: 'unknown' },
+      mail: { status: 'unknown' },
     },
   });
 });
@@ -864,8 +884,32 @@ app.delete('/me', authMiddleware, (req, res) => {
       for (const [phid, ph] of db.photos.entries()) {
         if (ph.householdId === m.householdId) db.photos.delete(phid);
       }
+      for (const [sid, space] of db.spaces.entries()) {
+        if (space.householdId === m.householdId) db.spaces.delete(sid);
+      }
+      for (const [cid, completion] of db.completions.entries()) {
+        if (completion.householdId === m.householdId) db.completions.delete(cid);
+      }
+      for (const [eid, event] of db.activity.entries()) {
+        if (event.householdId === m.householdId) db.activity.delete(eid);
+      }
+      for (const [vid, vacation] of db.vacations.entries()) {
+        if (vacation.householdId === m.householdId) db.vacations.delete(vid);
+      }
       for (const [kid, k] of db.apiKeys.entries()) {
         if (k.householdId === m.householdId) db.apiKeys.delete(kid);
+      }
+      for (const [token, link] of db.sitterLinks.entries()) {
+        if (link.householdId === m.householdId) db.sitterLinks.delete(token);
+      }
+      for (const [code, invite] of db.invites.entries()) {
+        if (invite.householdId === m.householdId) db.invites.delete(code);
+      }
+      for (const [code, share] of db.shares.entries()) {
+        if (share.householdId === m.householdId) db.shares.delete(code);
+      }
+      for (const [rid, report] of db.chatReports.entries()) {
+        if (report.householdId === m.householdId) db.chatReports.delete(rid);
       }
       db.households.delete(m.householdId);
     }
@@ -885,6 +929,35 @@ app.delete('/me', authMiddleware, (req, res) => {
       if (task.assignedTo === dbUser.id) {
         task.assignedTo = null;
         task.assignedToName = null;
+        task.assignmentSource = null;
+      }
+    }
+    for (const space of db.spaces.values()) {
+      if (space.householdId !== m.householdId) continue;
+      if (space.createdBy === dbUser.id) space.createdBy = 'deleted-user';
+      if (space.defaultCaregiverId === dbUser.id) space.defaultCaregiverId = null;
+    }
+    for (const [key, vacation] of db.vacations.entries()) {
+      if (
+        vacation.householdId === m.householdId &&
+        (vacation.userId === dbUser.id || vacation.coveredBy === dbUser.id)
+      ) {
+        db.vacations.delete(key);
+      }
+    }
+    for (const photo of db.photos.values()) {
+      if (photo.householdId === m.householdId && photo.uploadedBy === dbUser.id) {
+        photo.uploadedBy = 'deleted-user';
+      }
+    }
+    for (const link of db.sitterLinks.values()) {
+      if (link.householdId === m.householdId && link.createdBy === dbUser.id) {
+        link.createdBy = 'deleted-user';
+      }
+    }
+    for (const report of db.chatReports.values()) {
+      if (report.householdId === m.householdId && report.userId === dbUser.id) {
+        report.userId = 'deleted-user';
       }
     }
     for (const completion of db.completions.values()) {
@@ -910,6 +983,14 @@ app.delete('/me', authMiddleware, (req, res) => {
     if (device.userId === dbUser.id) db.deviceTokens.delete(key);
   }
   db.notificationPrefs.delete(dbUser.id);
+  db.phoneVerifications.delete(dbUser.id);
+  for (const key of [...db.recapSent]) {
+    if (key.startsWith(`${dbUser.id}|`)) db.recapSent.delete(key);
+  }
+  for (const key of [...db.reminderSent]) {
+    if (key.startsWith(`${dbUser.id}|`)) db.reminderSent.delete(key);
+  }
+  db.pendingConfirmations.delete(dbUser.email.toLowerCase());
 
   db.users.delete(user.userId);
   res.status(204).send();
@@ -1152,9 +1233,10 @@ app.get('/households/:id', authMiddleware, requireHousehold, (req, res) => {
 
 // Climate endpoints. Local dev doesn't have an OpenWeatherMap key wired up;
 // `getClimate` reports `configured: false` with `weather: null` and an empty
-// tips array so the frontend exercises the disabled path (production returns
-// exactly these three fields — no `location`). `setLocation` performs a
-// no-op geocode that just stores the supplied city verbatim.
+// tips array so the frontend exercises the disabled path. The saved location
+// is still part of the response contract: the dashboard uses it to
+// distinguish "not set" from "weather temporarily unavailable".
+// `setLocation` performs a no-op geocode that stores the supplied city.
 app.get('/households/:id/climate', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
   if (req.params.id !== user.householdId) {
@@ -1164,6 +1246,7 @@ app.get('/households/:id/climate', authMiddleware, requireHousehold, (req, res) 
   if (!household) return res.status(404).json({ message: 'Household not found' });
   res.json({
     configured: false,
+    location: household.location ?? null,
     weather: null,
     tips: [],
   });
@@ -1395,16 +1478,24 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
     return res.status(400).json({ message: 'Household not found' });
   }
 
+  const existing = dbUser.memberships.find((m) => m.householdId === invite.householdId);
+  if (existing) {
+    // Mirror production's retry recovery: the membership may have committed
+    // immediately before writing the default Cognito claim failed.
+    if (!dbUser.householdId) {
+      dbUser.householdId = invite.householdId;
+      dbUser.householdRole = existing.role;
+      return res.json(household);
+    }
+    return res.status(400).json({ message: 'You are already a member of this household' });
+  }
+
   const plan = PLANS[household.planId ?? 'seedling'];
   const existingMembers = membersOf(invite.householdId);
   if (existingMembers.length >= plan.maxMembers) {
     return res.status(402).json({
       message: `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`,
     });
-  }
-
-  if (dbUser.memberships.some((m) => m.householdId === invite.householdId)) {
-    return res.status(400).json({ message: 'You are already a member of this household' });
   }
 
   dbUser.memberships.push({
@@ -1490,6 +1581,64 @@ app.delete(
       return res.status(404).json({ message: 'Member not found' });
     }
     target.memberships = target.memberships.filter((m) => m.householdId !== householdId);
+    // Clear every live reference to the departed member, matching
+    // accountCleanup.anonymizeUserInHousehold in production.
+    const household = db.households.get(householdId);
+    if (household?.createdBy === userId) household.createdBy = 'deleted-user';
+    for (const plant of db.plants.values()) {
+      if (plant.householdId === householdId && plant.createdBy === userId) {
+        plant.createdBy = 'deleted-user';
+      }
+    }
+    for (const task of db.tasks.values()) {
+      if (task.householdId !== householdId) continue;
+      if (task.createdBy === userId) task.createdBy = 'deleted-user';
+      if (task.assignedTo === userId) {
+        task.assignedTo = null;
+        task.assignedToName = null;
+        task.assignmentSource = null;
+      }
+    }
+    for (const space of db.spaces.values()) {
+      if (space.householdId !== householdId) continue;
+      if (space.createdBy === userId) space.createdBy = 'deleted-user';
+      if (space.defaultCaregiverId === userId) space.defaultCaregiverId = null;
+    }
+    for (const [key, vacation] of db.vacations.entries()) {
+      if (
+        vacation.householdId === householdId &&
+        (vacation.userId === userId || vacation.coveredBy === userId)
+      ) {
+        db.vacations.delete(key);
+      }
+    }
+    for (const completion of db.completions.values()) {
+      if (completion.householdId === householdId && completion.completedBy === userId) {
+        completion.completedBy = 'deleted-user';
+        completion.completedByName = 'Former member';
+      }
+    }
+    for (const event of db.activity.values()) {
+      if (event.householdId === householdId && event.actorId === userId) {
+        event.actorId = 'deleted-user';
+        event.actorName = 'Former member';
+      }
+    }
+    for (const photo of db.photos.values()) {
+      if (photo.householdId === householdId && photo.uploadedBy === userId) {
+        photo.uploadedBy = 'deleted-user';
+      }
+    }
+    for (const link of db.sitterLinks.values()) {
+      if (link.householdId === householdId && link.createdBy === userId) {
+        link.createdBy = 'deleted-user';
+      }
+    }
+    for (const report of db.chatReports.values()) {
+      if (report.householdId === householdId && report.userId === userId) {
+        report.userId = 'deleted-user';
+      }
+    }
     // Claims hygiene, mirroring production removeMember: only re-point the
     // default household when the removed one WAS the default; pick another
     // remaining membership or clear.
@@ -2196,14 +2345,15 @@ app.post(
 // Image upload contract (mirrors handlers/plants/handler.ts):
 //   POST /plants/:id/image           — optional { contentType } ∈ jpeg/png/webp
 //                                      (default jpeg); key extension matches.
+//   PUT  /mock-upload/:token          — local stand-in for the presigned S3 PUT.
 //   POST /plants/:id/image/confirm   — imageUrl must match a key we'd mint for
-//                                      this plant (either URL form); the mock
-//                                      skips the S3 HeadObject size check.
+//                                      this plant and the PUT must have landed.
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
 };
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 // Mirrors imageUploadRequestSchema in handlers/plants/handler.ts (body is
 // optional/nullable for legacy clients that POST with no body).
@@ -2215,11 +2365,15 @@ const imageUploadRequestSchema = z
 
 const IMAGES_BUCKET = process.env.IMAGES_BUCKET || 'family-greenhouse-images-local';
 
-/** Same base-URL policy as production publicImageUrl(). */
+/**
+ * The local server needs a URL the browser can actually display. Serve mock
+ * objects directly from the local API origin; the development CSP permits
+ * that exact host while the production edge policy remains HTTPS-only.
+ */
 function imageBaseUrl(): string {
   const base = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
   if (base) return base;
-  return `https://${IMAGES_BUCKET}.s3.amazonaws.com`;
+  return `http://localhost:${PORT}/mock-images`;
 }
 
 app.post(
@@ -2237,8 +2391,13 @@ app.post(
     const contentType = body?.contentType ?? 'image/jpeg';
     const ext = IMAGE_CONTENT_TYPES[contentType];
     const key = `plants/${user.householdId}/${String(req.params.id)}/${uuidv4()}.${ext}`;
+    const uploadToken = uuidv4();
+    db.mockUploadGrants.set(uploadToken, { key, contentType });
     res.json({
-      uploadUrl: `http://127.0.0.1:${PORT}/mock-upload`,
+      // The page CSP explicitly permits localhost:4000 for API connections.
+      // 127.0.0.1 is a different CSP origin and made the former URL fail
+      // before it ever reached Express.
+      uploadUrl: `http://localhost:${PORT}/mock-upload/${uploadToken}`,
       imageUrl: `${imageBaseUrl()}/${key}`,
     });
   }
@@ -2253,10 +2412,12 @@ app.post(
     const user = (req as any).user;
     const { imageUrl } = (req as any).validatedBody;
     const keyPrefix = `plants/${user.householdId}/${String(req.params.id)}/`;
-    // Accept whichever URL forms production can mint; both map to one S3 key.
-    const assetsBase = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
-    const expectedPrefixes = [`https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`];
-    if (assetsBase) expectedPrefixes.unshift(`${assetsBase}/${keyPrefix}`);
+    // Accept the local served form plus whichever URL forms production can
+    // mint; all map to the same object key.
+    const expectedPrefixes = [
+      `${imageBaseUrl()}/${keyPrefix}`,
+      `https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`,
+    ];
     const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
     if (!matchedPrefix) {
       return res
@@ -2271,12 +2432,30 @@ app.post(
         .status(400)
         .json({ message: 'imageUrl does not match a key issued for this plant' });
     }
+    const key = `${keyPrefix}${filename}`;
     const plant = db.plants.get(req.params.id);
     if (!plant || plant.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Plant not found' });
     }
-    // Production HeadObjects the key here and rejects objects > 5 MiB; the
-    // mock has no object store, so it accepts and skips the size check.
+    // Mirror production's HeadObject gate: never attach a URL until the PUT
+    // actually landed with non-empty, allowed image bytes.
+    const uploaded = db.mockImages.get(key);
+    if (!uploaded) {
+      return res
+        .status(400)
+        .json({ message: 'Uploaded image not found; upload it before confirming' });
+    }
+    if (uploaded.body.length === 0) {
+      return res.status(400).json({ message: 'Uploaded image is empty' });
+    }
+    if (uploaded.body.length > MAX_IMAGE_BYTES) {
+      db.mockImages.delete(key);
+      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
+    }
+    if (!(uploaded.contentType in IMAGE_CONTENT_TYPES)) {
+      db.mockImages.delete(key);
+      return res.status(400).json({ message: 'Uploaded file is not a valid image' });
+    }
     plant.imageUrl = imageUrl;
     plant.updatedAt = new Date().toISOString();
     const photoId = uuidv4();
@@ -2425,60 +2604,81 @@ app.get('/sitter/:token', (req, res) => {
   });
 });
 
+const sitterCompleteTaskSchema = z
+  .object({ expectedNextDue: z.string().datetime().optional() })
+  .nullish();
+
 // POST /sitter/:token/tasks/:taskId/complete
-app.post('/sitter/:token/tasks/:taskId/complete', (req, res) => {
-  const link = getActiveSitterLink(req.params.token);
-  if (!link) {
-    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
-  }
-  const task = db.tasks.get(req.params.taskId);
-  // Cross-household guard: the task must live in the token's household.
-  if (!task || task.householdId !== link.householdId) {
-    return res.status(404).json({ message: 'Task not found' });
-  }
+app.post(
+  '/sitter/:token/tasks/:taskId/complete',
+  validateBody(sitterCompleteTaskSchema),
+  (req, res) => {
+    const link = getActiveSitterLink(req.params.token);
+    if (!link) {
+      return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+    }
+    const task = db.tasks.get(req.params.taskId);
+    // Cross-household guard: the task must live in the token's household.
+    if (!task || task.householdId !== link.householdId) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
 
-  const now = new Date();
-  const nextDue = new Date(now);
-  nextDue.setDate(nextDue.getDate() + task.frequency);
-  task.lastCompleted = now.toISOString();
-  task.nextDue = nextDue.toISOString();
+    const expectedNextDue = (req as any).validatedBody?.expectedNextDue as string | undefined;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({
+        taskId: task.id,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        dueDate: task.nextDue,
+        spaceName: null,
+        placementNote: null,
+        overdue: false,
+      });
+    }
 
-  const completionId = uuidv4();
-  db.completions.set(completionId, {
-    id: completionId,
-    householdId: task.householdId,
-    plantId: task.plantId,
-    taskId: task.id,
-    taskType: task.customType || task.type,
-    completedBy: `sitter:${link.id}`,
-    completedByName: 'a plant sitter',
-    completedAt: now.toISOString(),
-    notes: null,
-  });
-  recordActivity({
-    type: 'task.completed',
-    householdId: task.householdId,
-    actorId: `sitter:${link.id}`,
-    actorName: 'a plant sitter',
-    payload: {
-      taskId: task.id,
+    const now = new Date();
+    const nextDue = new Date(now);
+    nextDue.setDate(nextDue.getDate() + task.frequency);
+    task.lastCompleted = now.toISOString();
+    task.nextDue = nextDue.toISOString();
+
+    const completionId = uuidv4();
+    db.completions.set(completionId, {
+      id: completionId,
+      householdId: task.householdId,
       plantId: task.plantId,
+      taskId: task.id,
+      taskType: task.customType || task.type,
+      completedBy: `sitter:${link.id}`,
+      completedByName: 'a plant sitter',
+      completedAt: now.toISOString(),
+      notes: null,
+    });
+    recordActivity({
+      type: 'task.completed',
+      householdId: task.householdId,
+      actorId: `sitter:${link.id}`,
+      actorName: 'a plant sitter',
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        viaSitter: true,
+      },
+    });
+
+    res.json({
+      taskId: task.id,
       plantName: task.plantName,
       taskType: task.customType || task.type,
-      viaSitter: true,
-    },
-  });
-
-  res.json({
-    taskId: task.id,
-    plantName: task.plantName,
-    taskType: task.customType || task.type,
-    dueDate: task.nextDue,
-    spaceName: null,
-    placementNote: null,
-    overdue: false,
-  });
-});
+      dueDate: task.nextDue,
+      spaceName: null,
+      placementNote: null,
+      overdue: false,
+    });
+  }
+);
 
 // POST /plants/shared/:code/accept — copy the card into the CALLER's
 // household via the normal create path (plan cap applies → 402). Accepting
@@ -2986,7 +3186,10 @@ app.post(
     if (!task || task.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Task not found' });
     }
-    const { days, reason, note } = (req as any).validatedBody;
+    const { days, reason, note, expectedNextDue } = (req as any).validatedBody;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
+    }
     // Mirror taskService.snoozeTask: base the snooze on max(now, current
     // nextDue) so snoozing an overdue task pushes it into the *future*.
     const current = new Date(task.nextDue);
@@ -3030,6 +3233,11 @@ app.post(
 
     if (!task || task.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const expectedNextDue = (req as any).validatedBody.expectedNextDue as string | undefined;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
     }
 
     // Mirror taskService.completeTask: advance the schedule from NOW (the
@@ -3207,9 +3415,11 @@ app.get('/species/toxicity', (req, res) => {
 });
 
 app.get('/species/:id', authMiddleware, (req, res) => {
-  // When enrichment exists, production also surfaces `thumbnailUrl` on the
-  // result; the mock has no enrichment cache, so result stays null.
-  res.json({ result: null });
+  // Local dev deliberately has no Perenual key. Mirror production's
+  // discriminated response so the real frontend exercises the conservative
+  // unavailable state instead of treating an ambiguous null as no result.
+  res.set('Cache-Control', 'private, no-store');
+  res.json({ status: 'unavailable', reason: 'unconfigured', result: null });
 });
 
 app.get('/species/:id/care-suggestions', authMiddleware, (req, res) => {
@@ -3458,21 +3668,38 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
 const TIME_HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 // Mirrors prefsSchema in handlers/notifications/handler.ts.
-const prefsSchema = z.object({
-  browser: z.boolean(),
-  email: z.boolean(),
-  sms: z.boolean(),
-  phone: z
-    .string()
-    .regex(/^\+[1-9]\d{6,14}$/u, 'Phone must be in E.164 format, e.g. +15551234567')
-    .or(z.literal(''))
-    .default(''),
-  dndStart: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
-  dndEnd: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
-  timezone: z.string().min(1).max(64).default('UTC'),
-  pestAlerts: z.boolean().default(false),
-  weeklyDigest: z.boolean().optional(),
-});
+const prefsSchema = z
+  .object({
+    browser: z.boolean(),
+    email: z.boolean(),
+    sms: z.boolean(),
+    phone: z
+      .string()
+      .regex(/^\+[1-9]\d{6,14}$/u, 'Phone must be in E.164 format, e.g. +15551234567')
+      .or(z.literal(''))
+      .default(''),
+    dndStart: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
+    dndEnd: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
+    timezone: z
+      .string()
+      .min(1)
+      .max(64)
+      .refine((timezone) => {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'Unknown timezone')
+      .default('UTC'),
+    pestAlerts: z.boolean().default(false),
+    weeklyDigest: z.boolean().optional(),
+  })
+  .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
+    message: 'Quiet hours require both a start and end time',
+    path: ['dndEnd'],
+  });
 
 // Mirrors startVerificationSchema / confirmVerificationSchema / recapSchema
 // in handlers/notifications/handler.ts.
@@ -3491,7 +3718,14 @@ const recapSchema = z
 
 // Mirrors subscribeSchema / unsubscribeSchema in handlers/notifications/handler.ts.
 const subscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z
+    .string()
+    .url()
+    .max(4096)
+    .refine(
+      isAllowedPushEndpoint,
+      'Push endpoint must be issued by a supported browser push service'
+    ),
   keys: z.object({
     p256dh: z.string().min(8),
     auth: z.string().min(8),
@@ -3499,7 +3733,7 @@ const subscribeSchema = z.object({
 });
 
 const unsubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().max(4096),
 });
 
 // Mirrors registerDeviceSchema / unregisterDeviceSchema (native Capacitor push).
@@ -3631,7 +3865,10 @@ app.post(
     const user = (req as any).user;
     const { endpoint } = (req as any).validatedBody;
     db.pushSubscriptions.delete(`${user.userId}|${endpoint}`);
-    res.status(204).send();
+    const remainingSubscriptions = [...db.pushSubscriptions.values()].filter(
+      (subscription) => subscription.userId === user.userId
+    ).length;
+    res.json({ ok: true, remainingSubscriptions });
   }
 );
 
@@ -3667,6 +3904,39 @@ app.post(
   }
 );
 
+function localReminderDate(now: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+function localInDndWindow(prefs: NotificationPrefsRecord, now: Date): boolean {
+  if (!prefs.dndStart || !prefs.dndEnd || prefs.dndStart === prefs.dndEnd) return false;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: prefs.timezone || 'UTC',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
+    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? 0);
+    const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? 0);
+    const current = hour * 60 + minute;
+    const [startHour, startMinute] = prefs.dndStart.split(':').map(Number);
+    const [endHour, endMinute] = prefs.dndEnd.split(':').map(Number);
+    const start = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    return start < end ? current >= start && current < end : current >= start || current < end;
+  } catch {
+    return false;
+  }
+}
+
 app.post(
   '/notifications/run-reminders',
   authMiddleware,
@@ -3675,34 +3945,83 @@ app.post(
   (req, res) => {
     const user = (req as any).user;
     const now = new Date();
+    const nowIso = now.toISOString();
     const cutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-    let sent = 0;
-    for (const member of db.users.values()) {
-      if (!member.memberships.some((m) => m.householdId === user.householdId)) continue;
-      const due = [...db.tasks.values()].filter(
-        (t) =>
-          t.householdId === user.householdId && t.assignedTo === member.id && t.nextDue <= cutoff
-      );
-      if (due.length === 0) continue;
+    const members = [...db.users.values()].filter((member) =>
+      member.memberships.some((membership) => membership.householdId === user.householdId)
+    );
+    const memberIds = new Set(members.map((member) => member.id));
+    const vacations = activeVacationMap(user.householdId, nowIso);
+    const due = [...db.tasks.values()].filter(
+      (task) =>
+        task.householdId === user.householdId &&
+        isActivePlant(task.plantId) &&
+        task.nextDue <= cutoff
+    );
+    const effectiveAssignee = (task: Task): string | null => {
+      if (!task.assignedTo) return null;
+      const vacation = vacations.get(task.assignedTo);
+      if (vacation && vacation.coveredBy !== task.assignedTo && memberIds.has(vacation.coveredBy)) {
+        return vacation.coveredBy;
+      }
+      return task.assignedTo;
+    };
+    const deliverable = (userId: string | null) =>
+      userId !== null && memberIds.has(userId) && !vacations.has(userId);
+    const unassigned = due.filter((task) => !deliverable(effectiveAssignee(task)));
+    let simulated = 0;
+    const simulatedByChannel = { browser: 0, email: 0, sms: 0 };
+    for (const member of members) {
+      if (vacations.has(member.id)) continue;
+      const mine = due.filter((task) => effectiveAssignee(task) === member.id);
+      const tasksForMember = [...mine, ...unassigned];
+      if (tasksForMember.length === 0) continue;
       const prefs = db.notificationPrefs.get(member.id) ?? defaultPrefs(member.id);
-      const headline = `${due.length} task${due.length === 1 ? '' : 's'} due`;
-      if (prefs.browser) {
+      const markerBase = `${member.id}|${user.householdId}|${localReminderDate(
+        now,
+        prefs.timezone || 'UTC'
+      )}`;
+      // Compatibility with the aggregate local marker shape used before
+      // channel-scoped dedupe. A live dev process may retain one across HMR.
+      if (db.reminderSent.has(markerBase)) continue;
+      const headline = `${tasksForMember.length} task${tasksForMember.length === 1 ? '' : 's'} due`;
+      const inDnd = localInDndWindow(prefs, now);
+      let memberSimulated = false;
+      const hasPushSubscription = [...db.pushSubscriptions.values()].some(
+        (subscription) => subscription.userId === member.id
+      );
+      const browserMarker = `${markerBase}|browser`;
+      if (prefs.browser && hasPushSubscription && !db.reminderSent.has(browserMarker)) {
         console.log(`[push dry-run] -> ${member.email}: ${headline}`);
+        db.reminderSent.add(browserMarker);
+        simulatedByChannel.browser += 1;
+        memberSimulated = true;
       }
-      if (prefs.email) {
+      const emailMarker = `${markerBase}|email`;
+      if (prefs.email && !inDnd && !db.reminderSent.has(emailMarker)) {
         console.log(`[email dry-run] -> ${member.email}: Plant care reminder — ${headline}`);
+        db.reminderSent.add(emailMarker);
+        simulatedByChannel.email += 1;
+        memberSimulated = true;
       }
-      if (prefs.sms && prefs.phone) {
+      const smsMarker = `${markerBase}|sms`;
+      if (prefs.sms && prefs.phone && !inDnd && !db.reminderSent.has(smsMarker)) {
         // Mirrors notifier.sendToUser: unverified numbers are skipped, never sent.
         if (prefs.phoneVerified) {
           console.log(`[sms dry-run] -> ${prefs.phone}: ${headline}`);
+          db.reminderSent.add(smsMarker);
+          simulatedByChannel.sms += 1;
+          memberSimulated = true;
         } else {
           console.log(`[sms skipped — unverified phone] -> ${member.email}`);
         }
       }
-      sent += 1;
+      if (memberSimulated) simulated += 1;
     }
-    res.json({ sent });
+    // No provider SDK runs in the local server. Keep the production `sent`
+    // metric truthful and expose simulated fan-out separately so a green
+    // local test is never mistaken for inbox/device receipt.
+    res.json({ sent: 0, simulated, simulatedByChannel });
   }
 );
 
@@ -3740,26 +4059,27 @@ app.post(
       .sort((a, b) => b.daysOverdue - a.daysOverdue)
       .slice(0, 5);
     if (atRisk.length === 0) {
-      return res.json({ sent: 0 });
+      return res.json({ sent: 0, simulated: 0 });
     }
-    let sent = 0;
+    let simulated = 0;
     for (const member of db.users.values()) {
       if (!member.memberships.some((m) => m.householdId === user.householdId)) continue;
       const prefs = db.notificationPrefs.get(member.id) ?? defaultPrefs(member.id);
       if (!prefs.email || !prefs.weeklyDigest) continue;
+      if (localInDndWindow(prefs, new Date(now))) continue;
       console.log(
         `[email dry-run] -> ${member.email}: Weekly digest — ${atRisk
           .map((p) => `${p.plantName} (${p.taskType}, ${p.daysOverdue}d overdue)`)
           .join(', ')}`
       );
-      sent += 1;
+      simulated += 1;
     }
-    res.json({ sent });
+    res.json({ sent: 0, simulated });
   }
 );
 
-// Mirrors recapHousehold in services/digest.ts, including the once-per-year
-// per-household marker (in-memory here, TTL'd DDB row in production).
+// Mirrors recapHousehold in services/digest.ts, including household-scoped,
+// once-per-year recipient markers (in-memory here, TTL'd DDB rows in prod).
 app.post(
   '/notifications/run-year-recap',
   authMiddleware,
@@ -3777,24 +4097,23 @@ app.post(
         c.completedAt < `${year + 1}-01-01`
     );
     if (completions.length === 0) {
-      return res.json({ sent: 0, year });
+      return res.json({ sent: 0, simulated: 0, year });
     }
-    const markerKey = `${user.householdId}|${year}`;
-    if (db.recapSent.has(markerKey)) {
-      return res.json({ sent: 0, year });
-    }
-    db.recapSent.add(markerKey);
-    let sent = 0;
+    let simulated = 0;
     for (const member of db.users.values()) {
       if (!member.memberships.some((m) => m.householdId === user.householdId)) continue;
       const prefs = db.notificationPrefs.get(member.id) ?? defaultPrefs(member.id);
       if (!prefs.email) continue;
+      if (localInDndWindow(prefs, new Date())) continue;
+      const markerKey = `${member.id}|${user.householdId}|${year}`;
+      if (db.recapSent.has(markerKey)) continue;
       console.log(
         `[email dry-run] -> ${member.email}: Your ${year} plant care year in review — ${completions.length} tasks completed`
       );
-      sent += 1;
+      db.recapSent.add(markerKey);
+      simulated += 1;
     }
-    res.json({ sent, year });
+    res.json({ sent: 0, simulated, year });
   }
 );
 
@@ -3951,9 +4270,17 @@ app.get('/api/v1/activity', apiKeyMiddleware, requireApiScope('read:activity'), 
 
 // Mirrors apiCompleteTaskSchema / apiSnoozeTaskSchema in handlers/api/handler.ts
 // (bodies are optional on the public write routes).
-const apiCompleteTaskSchema = z.object({ notes: z.string().max(500).optional() }).nullish();
+const apiCompleteTaskSchema = z
+  .object({
+    notes: z.string().max(500).optional(),
+    expectedNextDue: z.string().datetime().optional(),
+  })
+  .nullish();
 const apiSnoozeTaskSchema = z
-  .object({ days: z.number().int().min(1).max(365).optional() })
+  .object({
+    days: z.number().int().min(1).max(365).optional(),
+    expectedNextDue: z.string().datetime().optional(),
+  })
   .nullish();
 
 // POST /api/v1/tasks/:id/complete (scope: write:tasks)
@@ -3970,6 +4297,10 @@ app.post(
     const task = db.tasks.get(req.params.id);
     if (!task || task.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Task not found' });
+    }
+    const expectedNextDue = (req as any).validatedBody?.expectedNextDue as string | undefined;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
     }
     const now = new Date();
     const nextDue = new Date(now);
@@ -4004,9 +4335,14 @@ app.post(
   validateBody(apiSnoozeTaskSchema),
   (req, res) => {
     const user = (req as any).user;
+    const keyRecord = (req as any).apiKeyRecord as ApiKey | undefined;
     const task = db.tasks.get(req.params.id);
     if (!task || task.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Task not found' });
+    }
+    const expectedNextDue = (req as any).validatedBody?.expectedNextDue as string | undefined;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
     }
     const days = (req as any).validatedBody?.days ?? task.frequency;
     const current = new Date(task.nextDue);
@@ -4016,14 +4352,59 @@ app.post(
     const next = new Date(baseMs);
     next.setDate(next.getDate() + days);
     task.nextDue = next.toISOString();
+    recordActivity({
+      type: 'task.snoozed',
+      householdId: user.householdId,
+      actorId: user.userId,
+      actorName: keyRecord?.label ?? 'API',
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        days,
+        reason: null,
+        note: null,
+      },
+    });
     res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
   }
 );
 
-// ============ MOCK UPLOAD ENDPOINT ============
+// ============ MOCK IMAGE OBJECT STORE ============
 
-app.post('/mock-upload', (req, res) => {
-  res.json({ success: true });
+app.put(
+  '/mock-upload/:token',
+  express.raw({ type: () => true, limit: MAX_IMAGE_BYTES + 1 }),
+  (req, res) => {
+    const grant = db.mockUploadGrants.get(req.params.token);
+    if (!grant) {
+      return res.status(404).json({ message: 'Upload URL is invalid or expired' });
+    }
+    const contentType = (req.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+    if (!(contentType in IMAGE_CONTENT_TYPES) || contentType !== grant.contentType) {
+      return res
+        .status(400)
+        .json({ message: 'Upload Content-Type does not match the signed request' });
+    }
+    const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (body.length > MAX_IMAGE_BYTES) {
+      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
+    }
+    db.mockImages.set(grant.key, { body: Buffer.from(body), contentType });
+    res.status(200).end();
+  }
+);
+
+// Regex routing preserves the slash-delimited S3-style key as one capture.
+app.get(/^\/mock-images\/(.+)$/, (req, res) => {
+  const key = req.params[0];
+  const image = db.mockImages.get(key);
+  if (!image) return res.status(404).json({ message: 'Image not found' });
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.type(image.contentType);
+  res.send(image.body);
 });
 
 // ============ FALLBACKS ============
@@ -4039,6 +4420,12 @@ app.use((req, res) => {
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err?.type === 'entity.parse.failed' || err instanceof SyntaxError) {
     return res.status(400).json({ message: 'Invalid JSON body' });
+  }
+  // Browsers routinely cancel in-flight JSON requests during navigation.
+  // raw-body reports that as request.aborted/ECONNABORTED after the socket is
+  // already gone; it is neither a server failure nor something we can answer.
+  if (err?.type === 'request.aborted' || err?.code === 'ECONNABORTED' || _req.aborted) {
+    return;
   }
   console.error('[local-server] unhandled error:', err);
   res.status(500).json({ message: 'Internal Server Error' });

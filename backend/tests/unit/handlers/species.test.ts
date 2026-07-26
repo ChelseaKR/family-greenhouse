@@ -190,7 +190,10 @@ describe('species handler', () => {
     it('includes an allowlist-sanitized thumbnailUrl directly in the response', async () => {
       const enrichment = await import('../../../src/services/enrichment.js');
       const { detail } = await import('../../../src/handlers/species/handler.js');
-      vi.mocked(enrichment.getSpeciesCached).mockResolvedValueOnce(baseDetail);
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'found',
+        result: baseDetail,
+      });
 
       const res = (await detail(
         buildEvent({ path: '/species/7', pathParameters: { id: '7' } }),
@@ -200,16 +203,21 @@ describe('species handler', () => {
 
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
+      expect(body.status).toBe('found');
       expect(body.result.thumbnailUrl).toBe('https://perenual.com/storage/thumb.jpg');
+      expect(res.headers?.['Cache-Control']).toBe('public, max-age=3600');
     });
 
     it('nulls a poisoned (non-allowlisted) thumbnailUrl rather than passing it through', async () => {
       const enrichment = await import('../../../src/services/enrichment.js');
       const { detail } = await import('../../../src/handlers/species/handler.js');
-      vi.mocked(enrichment.getSpeciesCached).mockResolvedValueOnce({
-        ...baseDetail,
-        thumbnailUrl: 'https://evil.example.com/x.jpg',
-        defaultImageUrl: 'https://evil.example.com/y.jpg',
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'found',
+        result: {
+          ...baseDetail,
+          thumbnailUrl: 'https://evil.example.com/x.jpg',
+          defaultImageUrl: 'https://evil.example.com/y.jpg',
+        },
       });
 
       const res = (await detail(
@@ -219,6 +227,52 @@ describe('species handler', () => {
       )) as APIGatewayProxyResult;
 
       expect(JSON.parse(res.body).result.thumbnailUrl).toBeNull();
+    });
+
+    it.each(['unconfigured', 'budget_exhausted', 'upstream_error'] as const)(
+      'returns a no-store unavailable result for %s instead of a cacheable null',
+      async (reason) => {
+        const enrichment = await import('../../../src/services/enrichment.js');
+        const { detail } = await import('../../../src/handlers/species/handler.js');
+        vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+          status: 'unavailable',
+          reason,
+          result: null,
+        });
+
+        const res = (await detail(
+          buildEvent({ path: '/species/7', pathParameters: { id: '7' } }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({
+          status: 'unavailable',
+          reason,
+          result: null,
+        });
+        expect(res.headers?.['Cache-Control']).toBe('private, no-store');
+      }
+    );
+
+    it('returns a cacheable not_found result for a genuine provider no-result', async () => {
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { detail } = await import('../../../src/handlers/species/handler.js');
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'not_found',
+        result: null,
+      });
+
+      const res = (await detail(
+        buildEvent({ path: '/species/999999', pathParameters: { id: '999999' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ status: 'not_found', result: null });
+      expect(res.headers?.['Cache-Control']).toBe('public, max-age=3600');
     });
 
     it('requires authentication (unlike the thumbnail route)', async () => {
@@ -312,7 +366,7 @@ describe('species handler', () => {
           () => {}
         )) as APIGatewayProxyResult;
         expect(res.statusCode).toBe(400);
-        expect(enrichment.getSpeciesCached).not.toHaveBeenCalled();
+        expect(enrichment.lookupSpeciesCached).not.toHaveBeenCalled();
       }
     );
 
@@ -353,20 +407,6 @@ describe('species handler', () => {
       )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(404);
       expect(enrichment.getSpeciesCached).not.toHaveBeenCalled();
-    });
-
-    it('detail still returns 200 {result: null} for a valid but unknown/no-data id (distinct from a malformed one)', async () => {
-      const enrichment = await import('../../../src/services/enrichment.js');
-      vi.mocked(enrichment.getSpeciesCached).mockResolvedValueOnce(null);
-      const { detail } = await import('../../../src/handlers/species/handler.js');
-
-      const res = (await detail(
-        buildEvent({ path: '/species/999999', pathParameters: { id: '999999' } }),
-        ctx,
-        () => {}
-      )) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(200);
-      expect(JSON.parse(res.body).result).toBeNull();
     });
   });
 
