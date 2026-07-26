@@ -4375,7 +4375,7 @@ app.post(
 
 app.put(
   '/mock-upload/:token',
-  express.raw({ type: () => true, limit: MAX_IMAGE_BYTES + 1 }),
+  express.raw({ type: () => true, limit: MAX_IMAGE_BYTES }),
   (req, res) => {
     const grant = db.mockUploadGrants.get(req.params.token);
     if (!grant) {
@@ -4387,10 +4387,10 @@ app.put(
         .status(400)
         .json({ message: 'Upload Content-Type does not match the signed request' });
     }
-    const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    if (body.length > MAX_IMAGE_BYTES) {
-      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
+    if (!Buffer.isBuffer(req.body)) {
+      return res.status(400).json({ message: 'Upload body must contain image bytes' });
     }
+    const body = Buffer.from(req.body);
     db.mockImages.set(grant.key, { body: Buffer.from(body), contentType });
     res.status(200).end();
   }
@@ -4422,6 +4422,9 @@ app.use((req, res) => {
 // malformed JSON bodies are a client error; anything else unexpected is a
 // generic 500 that never leaks internals.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
+  }
   if (err?.type === 'entity.parse.failed' || err instanceof SyntaxError) {
     return res.status(400).json({ message: 'Invalid JSON body' });
   }

@@ -1175,6 +1175,22 @@ describe('POST /plants/:id/image', () => {
 });
 
 describe('POST /plants/:id/image/confirm', () => {
+  it('rejects a signed PUT that exceeds the 5 MiB image limit', async () => {
+    const token = await loginAsSeed();
+    const sign = await request(app)
+      .post(`/plants/${seedPlantId}/image`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentType: 'image/png' });
+
+    const upload = await request(app)
+      .put(new URL(sign.body.uploadUrl).pathname)
+      .set('Content-Type', 'image/png')
+      .send(Buffer.alloc(5 * 1024 * 1024 + 1));
+
+    expect(upload.status).toBe(400);
+    expect(upload.body.message).toBe('Image exceeds the 5 MiB limit');
+  });
+
   it('accepts and serves the imageUrl only after the signed PUT lands', async () => {
     const token = await loginAsSeed();
     const sign = await request(app)
