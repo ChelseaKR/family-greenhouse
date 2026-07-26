@@ -4398,7 +4398,11 @@ app.put(
 
 // Regex routing preserves the slash-delimited S3-style key as one capture.
 app.get(/^\/mock-images\/(.+)$/, (req, res) => {
-  const key = req.params[0];
+  const rawKey: unknown = req.params[0];
+  if (typeof rawKey !== 'string') {
+    return res.status(400).json({ message: 'Image key must be a string' });
+  }
+  const key = rawKey;
   const image = db.mockImages.get(key);
   if (!image) return res.status(404).json({ message: 'Image not found' });
   res.set('Cache-Control', 'no-store');

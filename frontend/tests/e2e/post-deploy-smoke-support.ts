@@ -117,12 +117,52 @@ export function safeResponseDiagnostic(rawUrl: string, status: number): SafeResp
   return { hostname, status };
 }
 
+const AMAZONAWS_HOST_SUFFIX = '.amazonaws.com';
+const S3_NON_DATA_LABELS = new Set(['control', 'object-lambda', 'outposts']);
+const S3_NON_DATA_SERVICE_PREFIXES = ['s3-control', 's3-object-lambda', 's3-outposts'];
+
+function isAsciiDnsLabel(label: string): boolean {
+  if (!label || label.length > 63 || label.startsWith('-') || label.endsWith('-')) return false;
+  for (const character of label) {
+    const code = character.charCodeAt(0);
+    const isLowercaseLetter = code >= 97 && code <= 122;
+    const isDigit = code >= 48 && code <= 57;
+    if (!isLowercaseLetter && !isDigit && character !== '-') return false;
+  }
+  return true;
+}
+
+function isS3ServiceLabel(label: string): boolean {
+  if (label === 's3') return true;
+  if (!label.startsWith('s3-') || label.length === 3) return false;
+  return !S3_NON_DATA_SERVICE_PREFIXES.some(
+    (prefix) => label === prefix || label.startsWith(`${prefix}-`)
+  );
+}
+
+/**
+ * Return the label where an S3 data endpoint begins. Scanning labels keeps
+ * validation linear-time and avoids backtracking on attacker-controlled hosts.
+ */
+function s3DataEndpointLabelIndex(hostname: string): number {
+  const normalized = hostname.toLowerCase();
+  if (!normalized.endsWith(AMAZONAWS_HOST_SUFFIX)) return -1;
+
+  const prefix = normalized.slice(0, -AMAZONAWS_HOST_SUFFIX.length);
+  const labels = prefix.split('.');
+  if (labels.some((label) => !isAsciiDnsLabel(label))) return -1;
+
+  for (let index = labels.length - 1; index >= 0; index -= 1) {
+    if (!isS3ServiceLabel(labels[index])) continue;
+    if (labels.slice(index + 1).some((label) => S3_NON_DATA_LABELS.has(label))) continue;
+    return index;
+  }
+  return -1;
+}
+
 /** Match the virtual-hosted and path-style Amazon S3 endpoints used by presigned PUTs. */
 export function isAmazonS3Hostname(hostname: string): boolean {
-  return (
-    hostname === 's3.amazonaws.com' ||
-    /(?:^|\.)s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com$/i.test(hostname)
-  );
+  return s3DataEndpointLabelIndex(hostname) >= 0;
 }
 
 export interface SmokeS3ObjectTarget {
@@ -130,14 +170,7 @@ export interface SmokeS3ObjectTarget {
   key: string;
 }
 
-const S3_DATA_ENDPOINT_PATTERN = /^s3(?:[.-][a-z0-9.-]+)?\.amazonaws\.com$/i;
-const S3_VIRTUAL_HOST_PATTERN = /^(.+)\.(s3(?:[.-][a-z0-9.-]+)?\.amazonaws\.com)$/i;
-const S3_NON_DATA_ENDPOINT_PATTERN = /(?:^|[.-])(control|object-lambda|outposts)(?:[.-]|$)/i;
 const S3_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
-
-function isS3DataEndpoint(hostname: string): boolean {
-  return S3_DATA_ENDPOINT_PATTERN.test(hostname) && !S3_NON_DATA_ENDPOINT_PATTERN.test(hostname);
-}
 
 function decodeS3Path(pathname: string): string {
   try {
@@ -185,7 +218,8 @@ export function s3ObjectTargetFromPresignedUrl(rawUrl: string): SmokeS3ObjectTar
 
   const hostname = url.hostname.toLowerCase();
   const decodedPath = decodeS3Path(url.pathname);
-  if (isS3DataEndpoint(hostname)) {
+  const endpointLabelIndex = s3DataEndpointLabelIndex(hostname);
+  if (endpointLabelIndex === 0) {
     const separator = decodedPath.indexOf('/');
     if (separator <= 0) {
       throw new Error('Path-style presigned S3 URL did not contain a bucket and key');
@@ -193,11 +227,12 @@ export function s3ObjectTargetFromPresignedUrl(rawUrl: string): SmokeS3ObjectTar
     return assertSafeS3Target(decodedPath.slice(0, separator), decodedPath.slice(separator + 1));
   }
 
-  const virtualHosted = S3_VIRTUAL_HOST_PATTERN.exec(hostname);
-  if (!virtualHosted || !isS3DataEndpoint(virtualHosted[2])) {
+  if (endpointLabelIndex < 1) {
     throw new Error('Presigned upload URL did not target an Amazon S3 data endpoint');
   }
-  return assertSafeS3Target(virtualHosted[1], decodedPath);
+  const hostPrefix = hostname.slice(0, -AMAZONAWS_HOST_SUFFIX.length);
+  const bucket = hostPrefix.split('.').slice(0, endpointLabelIndex).join('.');
+  return assertSafeS3Target(bucket, decodedPath);
 }
 
 export interface SmokeS3VersionIdentifier {

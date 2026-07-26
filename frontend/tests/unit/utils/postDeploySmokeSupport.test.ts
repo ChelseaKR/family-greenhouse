@@ -87,6 +87,8 @@ describe('post-deploy smoke support', () => {
       expect(isAmazonS3Hostname('family-greenhouse.s3.us-east-1.amazonaws.com')).toBe(true);
       expect(isAmazonS3Hostname('s3.amazonaws.com')).toBe(true);
       expect(isAmazonS3Hostname('s3.amazonaws.com.example.test')).toBe(false);
+      expect(isAmazonS3Hostname('bucket.s3-control.us-east-1.amazonaws.com')).toBe(false);
+      expect(isAmazonS3Hostname(`bucket.s3-${'--'.repeat(10_000)}.amazonaws.com`)).toBe(false);
     });
   });
 
@@ -117,6 +119,7 @@ describe('post-deploy smoke support', () => {
     it('rejects non-S3 and malformed targets without echoing their query strings', () => {
       for (const rawUrl of [
         'https://s3.amazonaws.com.example.test/bucket/key?X-Amz-Signature=do-not-log',
+        'https://bucket.s3-object-lambda.us-east-1.amazonaws.com/key?X-Amz-Signature=do-not-log',
         'not-a-url?X-Amz-Signature=do-not-log',
       ]) {
         try {
