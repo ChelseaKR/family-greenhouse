@@ -20,6 +20,19 @@ describe('production integration IAM invariants', () => {
     );
   });
 
+  it('lets user lifecycle flows batch-remove records and guard transactional writes', () => {
+    const fleetPolicy = apiModule.slice(
+      apiModule.indexOf('resource "aws_iam_role_policy" "lambda"'),
+      apiModule.indexOf('resource "aws_iam_role_policy" "chat_stream"')
+    );
+
+    expect(fleetPolicy).toContain('"dynamodb:BatchWriteItem"');
+    expect(fleetPolicy).toContain('"dynamodb:ConditionCheckItem"');
+    expect(fleetPolicy).toMatch(
+      /"dynamodb:BatchWriteItem"[\s\S]*?"dynamodb:ConditionCheckItem"[\s\S]*?Resource = \[[\s\S]*?var\.dynamodb_table_arn/
+    );
+  });
+
   it('lets both chat Lambda roles read only the configured Sprout secret', () => {
     expect(apiModule).toMatch(
       /sprout_secret_arn\s*=[\s\S]*?startswith\(var\.sprout_integration_secret_id, "arn:"\)/
