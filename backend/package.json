@@ -49,16 +49,16 @@
     "@types/express": "^5.0.6",
     "@types/http-errors": "^2.0.4",
     "@types/node": "^26.1.1",
-    "@types/supertest": "^7.2.0",
+    "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^4.1.10",
     "cors": "^2.8.5",
     "esbuild": "^0.28.1",
-    "eslint": "^10.6.0",
+    "eslint": "^10.8.0",
     "express": "^5.2.1",
     "supertest": "^7.2.2",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.63.0",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^4.0.0"
   }
 }

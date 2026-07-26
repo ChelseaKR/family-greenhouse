@@ -54,7 +54,7 @@
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.6.0",
+    "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-i18next": "^6.1.5",
     "eslint-plugin-jsx-a11y": "^6.10.2",
@@ -64,10 +64,10 @@
     "globals": "^17.7.0",
     "husky": "^9.0.11",
     "jsdom": "^29.1.1",
-    "lint-staged": "^17.0.8",
-    "prettier": "^3.9.4",
+    "lint-staged": "^17.2.0",
+    "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.65.0"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
