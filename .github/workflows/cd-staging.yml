@@ -74,6 +74,7 @@ jobs:
       api_url: ${{ steps.outputs.outputs.api_url }}
       cognito_user_pool_id: ${{ steps.outputs.outputs.cognito_user_pool_id }}
       dynamodb_table_name: ${{ steps.outputs.outputs.dynamodb_table_name }}
+      web_push_vapid_public_key: ${{ steps.outputs.outputs.web_push_vapid_public_key }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -97,6 +98,15 @@ jobs:
       - name: Terraform Plan
         env:
           TF_VAR_git_sha: ${{ github.sha }}
+          TF_VAR_web_push_vapid_public_key: ${{ vars.STAGING_WEB_PUSH_VAPID_PUBLIC_KEY }}
+          TF_VAR_web_push_vapid_private_key: ${{ secrets.STAGING_WEB_PUSH_VAPID_PRIVATE_KEY }}
+          TF_VAR_web_push_vapid_subject: ${{ vars.STAGING_WEB_PUSH_VAPID_SUBJECT }}
+          TF_VAR_plant_id_api_key: ${{ secrets.STAGING_PLANT_ID_API_KEY }}
+          TF_VAR_openweather_api_key: ${{ secrets.STAGING_OPENWEATHER_API_KEY }}
+          TF_VAR_sentry_dsn: ${{ secrets.STAGING_BACKEND_SENTRY_DSN }}
+          TF_VAR_sentry_traces_sample_rate: ${{ vars.STAGING_SENTRY_TRACES_SAMPLE_RATE || '0.1' }}
+          TF_VAR_posthog_key: ${{ secrets.STAGING_POSTHOG_KEY }}
+          TF_VAR_posthog_host: ${{ vars.STAGING_POSTHOG_HOST || 'https://us.i.posthog.com' }}
         run: terraform plan -var-file=environments/staging/terraform.tfvars -out=tfplan
 
       - name: Terraform Apply
@@ -112,6 +122,7 @@ jobs:
             echo "api_url=$(terraform output -raw api_url)"
             echo "cognito_user_pool_id=$(terraform output -raw cognito_user_pool_id)"
             echo "dynamodb_table_name=$(terraform output -raw dynamodb_table_name)"
+            echo "web_push_vapid_public_key=$(terraform output -raw web_push_vapid_public_key)"
           } >> "$GITHUB_OUTPUT"
 
   build-frontend:
@@ -135,6 +146,11 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ needs.terraform.outputs.api_url }}
+          VITE_VAPID_PUBLIC_KEY: ${{ needs.terraform.outputs.web_push_vapid_public_key }}
+          VITE_SENTRY_DSN: ${{ secrets.STAGING_FRONTEND_SENTRY_DSN }}
+          VITE_POSTHOG_KEY: ${{ secrets.STAGING_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.STAGING_POSTHOG_HOST || 'https://us.i.posthog.com' }}
+          VITE_GTM_ID: ${{ vars.STAGING_GTM_ID }}
           VITE_GIT_SHA: ${{ github.sha }}
         run: npm run build
 
@@ -171,9 +187,15 @@ jobs:
             --delete \
             --cache-control "max-age=31536000,public" \
             --exclude "index.html" \
+            --exclude "sw.js" \
+            --exclude "push-handler.js" \
             --exclude "*.json"
 
           aws s3 cp dist/index.html s3://${{ needs.terraform.outputs.frontend_bucket }}/index.html \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+          aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+          aws s3 cp dist/push-handler.js s3://${{ needs.terraform.outputs.frontend_bucket }}/push-handler.js \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
       - name: Invalidate CloudFront
@@ -217,7 +239,7 @@ jobs:
           set -euo pipefail
           # See cd-production.yml for the explanation of why we repackage
           # each bundle as `handler.mjs`.
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders; do
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-staging"
             SRC="dist/${handler}.js"
             test -f "$SRC" || { echo "Missing bundle: $SRC"; exit 1; }

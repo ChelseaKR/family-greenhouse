@@ -6,6 +6,8 @@
  *   - Messages: PK=HOUSEHOLD#<id>,
  *               SK=CHAT#<conversationId>#MSG#<isoTimestamp>#<seq><rand>
  *   - Budget:   PK=HOUSEHOLD#<id>, SK=CHATBUDGET#<YYYY-MM>
+ *   - Budget reconciliation ledger:
+ *               PK=HOUSEHOLD#<id>, SK=CHATBUDGETRECON#<attemptId>
  *
  * Both rows carry a `ttl` so they auto-expire (30 days for messages, ~95
  * days for budgets — long enough for forensics, short enough not to grow
@@ -27,7 +29,8 @@ const CONVERSATION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const BUDGET_TTL_SECONDS = 95 * 24 * 60 * 60;
 // A turn idempotency record outlives any realistic stream→sync fallback retry
 // window, then DynamoDB TTL sweeps it.
-const TURN_TTL_SECONDS = 10 * 60;
+const TURN_TTL_SECONDS = CONVERSATION_TTL_SECONDS;
+const TURN_LEASE_SECONDS = 2 * 60;
 
 /**
  * Thrown by reserveBudget when the household is at/over its monthly cap. Call
@@ -139,6 +142,42 @@ export async function appendMessagePair(
   );
 }
 
+/**
+ * Persist the first user message of an idempotent turn and stamp the turn row
+ * in the same transaction. If generation later fails, a retry can continue
+ * from history without appending the same user text twice.
+ */
+export async function appendTurnUserMessage(
+  householdId: string,
+  turnId: string,
+  message: ChatMessageRecord
+): Promise<void> {
+  const seq = await nextConversationSeq(householdId, message.conversationId);
+  await dynamodb.send(
+    new TransactWriteCommand({
+      ClientRequestToken: turnId,
+      TransactItems: [
+        {
+          Put: {
+            TableName: TABLE_NAME,
+            Item: messageItem(householdId, message, seq),
+          },
+        },
+        {
+          Update: {
+            TableName: TABLE_NAME,
+            Key: { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` },
+            UpdateExpression: 'SET userMessagePersisted = :yes',
+            ConditionExpression: '#status = :inProgress',
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: { ':yes': true, ':inProgress': 'in_progress' },
+          },
+        },
+      ],
+    })
+  );
+}
+
 // Follow-the-cursor page cap for getConversation. A Query returns at most
 // 1 MB per page; without following LastEvaluatedKey a long conversation
 // silently loses messages at the page boundary. Query newest-first so even if
@@ -240,6 +279,157 @@ export async function incrementBudget(
   );
 }
 
+/**
+ * Durable description of the adjustment that replaces a turn's up-front
+ * reservation with its actual usage. `reconciliationId` is unique per claimed
+ * attempt: a failed attempt can be retried under the same client turnId without
+ * making either attempt's metering ambiguous.
+ */
+export interface TurnBudgetReconciliation {
+  reconciliationId: string;
+  yearMonth: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  status: 'pending' | 'applied';
+}
+
+function reconciliationLedgerKey(householdId: string, reconciliationId: string) {
+  return {
+    PK: `HOUSEHOLD#${householdId}`,
+    SK: `CHATBUDGETRECON#${reconciliationId}`,
+  };
+}
+
+function sameReconciliation(
+  item: Record<string, unknown> | undefined,
+  turnId: string,
+  reconciliation: TurnBudgetReconciliation
+): boolean {
+  return (
+    item?.entityType === 'ChatBudgetReconciliation' &&
+    item.turnId === turnId &&
+    item.reconciliationId === reconciliation.reconciliationId &&
+    item.yearMonth === reconciliation.yearMonth &&
+    item.inputTokens === reconciliation.inputTokens &&
+    item.outputTokens === reconciliation.outputTokens &&
+    item.costUsd === reconciliation.costUsd
+  );
+}
+
+/**
+ * Apply a persisted reservation adjustment exactly once.
+ *
+ * The budget ADD and a unique reconciliation-ledger Put share one DynamoDB
+ * transaction. Concurrent/repeated calls therefore cannot double-apply the
+ * delta. If the client sees an ambiguous transport failure after DynamoDB
+ * committed, the ledger read proves the adjustment landed. The turn-row state
+ * is updated afterward; if that small bookkeeping write fails, a later replay
+ * sees `pending`, checks the ledger, and safely retries the state update.
+ */
+export async function reconcileTurnBudget(
+  householdId: string,
+  turnId: string,
+  reconciliation: TurnBudgetReconciliation
+): Promise<void> {
+  const ledgerKey = reconciliationLedgerKey(householdId, reconciliation.reconciliationId);
+  let applied = false;
+  try {
+    await dynamodb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              TableName: TABLE_NAME,
+              Key: {
+                PK: `HOUSEHOLD#${householdId}`,
+                SK: `CHATBUDGET#${reconciliation.yearMonth}`,
+              },
+              UpdateExpression:
+                'ADD inputTokens :in, outputTokens :out, costUsd :cost SET #t = if_not_exists(#t, :ttl), entityType = if_not_exists(entityType, :etype)',
+              ExpressionAttributeNames: { '#t': 'ttl' },
+              ExpressionAttributeValues: {
+                ':in': reconciliation.inputTokens,
+                ':out': reconciliation.outputTokens,
+                ':cost': reconciliation.costUsd,
+                ':ttl': Math.floor(Date.now() / 1000) + BUDGET_TTL_SECONDS,
+                ':etype': 'ChatBudget',
+              },
+            },
+          },
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: {
+                ...ledgerKey,
+                entityType: 'ChatBudgetReconciliation',
+                turnId,
+                reconciliationId: reconciliation.reconciliationId,
+                yearMonth: reconciliation.yearMonth,
+                inputTokens: reconciliation.inputTokens,
+                outputTokens: reconciliation.outputTokens,
+                costUsd: reconciliation.costUsd,
+                ttl: Math.floor(Date.now() / 1000) + BUDGET_TTL_SECONDS,
+              },
+              ConditionExpression: 'attribute_not_exists(PK)',
+            },
+          },
+        ],
+      })
+    );
+    applied = true;
+  } catch (err) {
+    // A canceled duplicate transaction and an ambiguous network failure after
+    // commit look different to the SDK but have the same safe recovery: trust
+    // only a matching durable ledger marker.
+    try {
+      const existing = await dynamodb.send(
+        new GetCommand({ TableName: TABLE_NAME, Key: ledgerKey })
+      );
+      applied = sameReconciliation(
+        existing.Item as Record<string, unknown> | undefined,
+        turnId,
+        reconciliation
+      );
+    } catch {
+      // Preserve the original transaction error; it best describes why the
+      // adjustment is still pending.
+    }
+    if (!applied) throw err;
+  }
+
+  const appliedReconciliation: TurnBudgetReconciliation = {
+    ...reconciliation,
+    status: 'applied',
+  };
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` },
+        UpdateExpression: 'SET #reconciliation = :applied',
+        ConditionExpression: '#reconciliation.#reconciliationId = :reconciliationId',
+        ExpressionAttributeNames: {
+          '#reconciliation': 'budgetReconciliation',
+          '#reconciliationId': 'reconciliationId',
+        },
+        ExpressionAttributeValues: {
+          ':applied': appliedReconciliation,
+          ':reconciliationId': reconciliation.reconciliationId,
+        },
+      })
+    );
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      // The attempt can have been superseded after its ledger entry committed.
+      // Its budget delta is already exactly-once, so stale turn metadata is not
+      // a reason to fail the caller.
+      return;
+    }
+    throw err;
+  }
+}
+
 export function isOverBudget(state: BudgetState, config: BudgetConfig): boolean {
   return (
     state.inputTokens >= config.maxInputTokensPerMonth ||
@@ -254,7 +444,8 @@ export function isOverBudget(state: BudgetState, config: BudgetConfig): boolean 
  * DynamoDB serializes it, so the second concurrent turn's condition fails and
  * it's rejected instead of overshooting. Returns the post-reservation committed
  * totals (UPDATED_NEW) so the caller can derive remaining; the reservation is
- * reconciled to ACTUAL usage by incrementBudget once the turn finishes.
+ * reconciled to ACTUAL usage once the turn finishes (with the per-attempt
+ * exactly-once ledger when a client turnId is available).
  *
  * The reserve is a modest representative-turn estimate (not worst case), so the
  * gate stays atomic for the common case without 429-ing users who still have
@@ -317,6 +508,10 @@ export async function reserveBudget(
 export interface TurnClaim {
   status: 'claimed' | 'done' | 'in_progress';
   result?: Record<string, unknown>;
+  conversationId?: string;
+  userMessagePersisted?: boolean;
+  attemptId?: string;
+  budgetReconciliation?: TurnBudgetReconciliation;
 }
 
 /**
@@ -326,8 +521,14 @@ export interface TurnClaim {
  * back to the sync endpoint) gets the stored result back instead of running —
  * and charging — a duplicate turn.
  */
-export async function claimTurn(householdId: string, turnId: string): Promise<TurnClaim> {
+export async function claimTurn(
+  householdId: string,
+  turnId: string,
+  conversationId: string
+): Promise<TurnClaim> {
   const key = { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` };
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const attemptId = uuid();
   try {
     await dynamodb.send(
       new PutCommand({
@@ -336,41 +537,145 @@ export async function claimTurn(householdId: string, turnId: string): Promise<Tu
           ...key,
           entityType: 'ChatTurn',
           status: 'in_progress',
-          ttl: Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS,
+          conversationId,
+          userMessagePersisted: false,
+          attemptId,
+          leaseExpiresAt: nowEpoch + TURN_LEASE_SECONDS,
+          ttl: nowEpoch + TURN_TTL_SECONDS,
         },
         ConditionExpression: 'attribute_not_exists(PK)',
       })
     );
-    return { status: 'claimed' };
+    return { status: 'claimed', conversationId, userMessagePersisted: false, attemptId };
   } catch (err) {
     if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') throw err;
     const existing = await dynamodb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
     if (existing.Item?.status === 'done') {
-      return { status: 'done', result: existing.Item.result as Record<string, unknown> };
+      return {
+        status: 'done',
+        result: existing.Item.result as Record<string, unknown>,
+        budgetReconciliation: existing.Item.budgetReconciliation as
+          TurnBudgetReconciliation | undefined,
+      };
+    }
+    const reclaimable =
+      existing.Item?.status === 'retryable' ||
+      (existing.Item?.status === 'in_progress' &&
+        Number(existing.Item.leaseExpiresAt ?? 0) <= nowEpoch);
+    if (reclaimable) {
+      try {
+        const reclaimed = await dynamodb.send(
+          new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: key,
+            UpdateExpression:
+              'SET #status = :inProgress, attemptId = :attemptId, leaseExpiresAt = :lease, #ttl = :ttl',
+            ConditionExpression:
+              '#status = :retryable OR (#status = :inProgress AND leaseExpiresAt <= :now)',
+            ExpressionAttributeNames: { '#status': 'status', '#ttl': 'ttl' },
+            ExpressionAttributeValues: {
+              ':retryable': 'retryable',
+              ':inProgress': 'in_progress',
+              ':attemptId': attemptId,
+              ':lease': nowEpoch + TURN_LEASE_SECONDS,
+              ':now': nowEpoch,
+              ':ttl': nowEpoch + TURN_TTL_SECONDS,
+            },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+        return {
+          status: 'claimed',
+          conversationId:
+            (reclaimed.Attributes?.conversationId as string | undefined) ?? conversationId,
+          userMessagePersisted: Boolean(reclaimed.Attributes?.userMessagePersisted),
+          attemptId,
+          budgetReconciliation: reclaimed.Attributes?.budgetReconciliation as
+            TurnBudgetReconciliation | undefined,
+        };
+      } catch (reclaimErr) {
+        if ((reclaimErr as { name?: string }).name !== 'ConditionalCheckFailedException') {
+          throw reclaimErr;
+        }
+      }
     }
     return { status: 'in_progress' };
   }
+}
+
+/** Keep the turn metadata/message pointer while allowing a safe retry. */
+export async function markTurnRetryable(
+  householdId: string,
+  turnId: string,
+  attemptId: string,
+  budgetReconciliation?: TurnBudgetReconciliation
+): Promise<void> {
+  const reconciliationUpdate = budgetReconciliation
+    ? ', budgetReconciliation = :reconciliation'
+    : '';
+  await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` },
+      UpdateExpression: `SET #status = :retryable${reconciliationUpdate} REMOVE leaseExpiresAt`,
+      ConditionExpression: '#status = :inProgress AND attemptId = :attemptId',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':retryable': 'retryable',
+        ':inProgress': 'in_progress',
+        ':attemptId': attemptId,
+        ...(budgetReconciliation ? { ':reconciliation': budgetReconciliation } : {}),
+      },
+    })
+  );
 }
 
 /** Record a completed turn's result so a same-turnId retry replays it. */
 export async function finalizeTurn(
   householdId: string,
   turnId: string,
-  result: Record<string, unknown>
+  attemptId: string,
+  result: Record<string, unknown>,
+  budgetReconciliation?: TurnBudgetReconciliation
 ): Promise<void> {
-  await dynamodb.send(
-    new PutCommand({
-      TableName: TABLE_NAME,
-      Item: {
-        PK: `HOUSEHOLD#${householdId}`,
-        SK: `CHATTURN#${turnId}`,
-        entityType: 'ChatTurn',
-        status: 'done',
-        result,
-        ttl: Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS,
-      },
-    })
-  );
+  const key = { PK: `HOUSEHOLD#${householdId}`, SK: `CHATTURN#${turnId}` };
+  const reconciliationUpdate = budgetReconciliation
+    ? ', budgetReconciliation = :reconciliation'
+    : '';
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: key,
+        UpdateExpression: `SET #status = :done, #result = :result, #ttl = :ttl${reconciliationUpdate} REMOVE leaseExpiresAt`,
+        ConditionExpression: '#status = :inProgress AND attemptId = :attemptId',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+          '#result': 'result',
+          '#ttl': 'ttl',
+        },
+        ExpressionAttributeValues: {
+          ':done': 'done',
+          ':inProgress': 'in_progress',
+          ':attemptId': attemptId,
+          ':result': result,
+          ':ttl': Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS,
+          ...(budgetReconciliation ? { ':reconciliation': budgetReconciliation } : {}),
+        },
+      })
+    );
+  } catch (err) {
+    // An SDK transport error can arrive after DynamoDB committed. Confirming
+    // the owned attempt is already done makes this operation idempotent and
+    // avoids treating a successfully cached answer as a finalization failure.
+    try {
+      const existing = await dynamodb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
+      if (existing.Item?.status === 'done' && existing.Item.attemptId === attemptId) return;
+    } catch {
+      // Preserve the original write error below.
+    }
+    throw err;
+  }
 }
 
 /** Release a claimed-but-failed turn so a legitimate retry can run it fresh. */

@@ -15,7 +15,8 @@ import {
   DeleteCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
+import { S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { Plant, PlantStatus, DynamoDBItem } from '../models/types.js';
@@ -49,7 +50,7 @@ function transactCancellationReasons(err: unknown): Array<{ Code?: string }> {
 }
 
 export async function createPlant(
-  input: CreatePlantInput,
+  input: CreatePlantInput & { canonicalSpecies?: string | null },
   householdId: string,
   userId: string,
   maxPlants: number
@@ -79,6 +80,7 @@ export async function createPlant(
     statusChangedAt: null,
     tags,
     perenualSpeciesId: input.perenualSpeciesId ?? null,
+    canonicalSpecies: input.canonicalSpecies ?? null,
     // Propagation lineage — caller (handler) has already validated that the
     // parent exists in the same household.
     parentPlantId: input.parentPlantId ?? null,
@@ -190,6 +192,7 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
     statusChangedAt: (result.Item.statusChangedAt as string | null | undefined) ?? null,
     tags: (result.Item.tags as string[] | undefined) ?? [],
     perenualSpeciesId: (result.Item.perenualSpeciesId as number | undefined) ?? null,
+    canonicalSpecies: (result.Item.canonicalSpecies as string | null | undefined) ?? null,
     parentPlantId: (result.Item.parentPlantId as string | null | undefined) ?? null,
     createdAt: result.Item.createdAt as string,
     createdBy: result.Item.createdBy as string,
@@ -212,35 +215,39 @@ export const MAX_QUERY_LIMIT = 200;
  */
 export type PlantFilter = 'active' | 'past' | 'all';
 
-// Hard ceiling on pagination: 10 pages × 200 = 2,000 plants. Paid plans
-// allow 500–5,000 plants, so the old single-page Limit:200 query silently
-// truncated larger collections; the page ceiling still bounds Lambda memory.
-const MAX_QUERY_PAGES = 10;
+/**
+ * Follow DynamoDB pagination to exhaustion. A page count is not an item
+ * count: DynamoDB can return a short page because of its 1 MB response limit,
+ * so the former ten-page ceiling could truncate well below the Greenhouse
+ * plan's supported 5,000 active plants (and below that again when historical
+ * plants were present).
+ */
+async function queryAllPages(input: QueryCommandInput): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({ ...input, ExclusiveStartKey: exclusiveStartKey })
+    );
+    items.push(...((result.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items;
+}
 
 export async function getPlants(
   householdId: string,
   filter: PlantFilter = 'active'
 ): Promise<Plant[]> {
-  const items: Record<string, unknown>[] = [];
-  let exclusiveStartKey: Record<string, unknown> | undefined;
-  let pages = 0;
-  do {
-    const result = await dynamodb.send(
-      new QueryCommand({
-        TableName: TABLE_NAME,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `HOUSEHOLD#${householdId}`,
-          ':sk': 'PLANT#',
-        },
-        Limit: MAX_QUERY_LIMIT,
-        ExclusiveStartKey: exclusiveStartKey,
-      })
-    );
-    items.push(...((result.Items ?? []) as Record<string, unknown>[]));
-    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
-    pages += 1;
-  } while (exclusiveStartKey && pages < MAX_QUERY_PAGES);
+  const items = await queryAllPages({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+    ExpressionAttributeValues: {
+      ':pk': `HOUSEHOLD#${householdId}`,
+      ':sk': 'PLANT#',
+    },
+    Limit: MAX_QUERY_LIMIT,
+  });
 
   return items
     .map((item) => ({
@@ -259,6 +266,7 @@ export async function getPlants(
       statusChangedAt: (item.statusChangedAt as string | null | undefined) ?? null,
       tags: (item.tags as string[] | undefined) ?? [],
       perenualSpeciesId: (item.perenualSpeciesId as number | undefined) ?? null,
+      canonicalSpecies: (item.canonicalSpecies as string | null | undefined) ?? null,
       parentPlantId: (item.parentPlantId as string | null | undefined) ?? null,
       createdAt: item.createdAt as string,
       createdBy: item.createdBy as string,
@@ -274,7 +282,7 @@ export async function getPlants(
 export async function updatePlant(
   householdId: string,
   plantId: string,
-  input: UpdatePlantInput,
+  input: UpdatePlantInput & { canonicalSpecies?: string | null },
   maxPlants: number
 ): Promise<Plant | null> {
   const updateExpressions: string[] = [];
@@ -343,6 +351,12 @@ export async function updatePlant(
     updateExpressions.push('#perenualSpeciesId = :perenualSpeciesId');
     expressionAttributeNames['#perenualSpeciesId'] = 'perenualSpeciesId';
     expressionAttributeValues[':perenualSpeciesId'] = input.perenualSpeciesId;
+  }
+
+  if (input.canonicalSpecies !== undefined) {
+    updateExpressions.push('#canonicalSpecies = :canonicalSpecies');
+    expressionAttributeNames['#canonicalSpecies'] = 'canonicalSpecies';
+    expressionAttributeValues[':canonicalSpecies'] = input.canonicalSpecies;
   }
 
   if (input.parentPlantId !== undefined) {
@@ -418,6 +432,7 @@ export async function updatePlant(
       statusChangedAt: (result.Attributes.statusChangedAt as string | null | undefined) ?? null,
       tags: (result.Attributes.tags as string[] | undefined) ?? [],
       perenualSpeciesId: (result.Attributes.perenualSpeciesId as number | undefined) ?? null,
+      canonicalSpecies: (result.Attributes.canonicalSpecies as string | null | undefined) ?? null,
       parentPlantId: (result.Attributes.parentPlantId as string | null | undefined) ?? null,
       createdAt: result.Attributes.createdAt as string,
       createdBy: result.Attributes.createdBy as string,
@@ -573,36 +588,37 @@ export async function deletePlant(householdId: string, plantId: string): Promise
   // ConditionExpression + ALL_OLD so we get a single atomic "did it exist?"
   // check + the deleted attributes back — saves the handler a GetItem
   // roundtrip and lets us return the plant data for audit logging.
-  const taskRows = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}`,
-        ':sk': 'TASK#',
-      },
-    })
-  );
-  const taskKeysForPlant = (taskRows.Items ?? [])
+  const taskRows = await queryAllPages({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+    ExpressionAttributeValues: {
+      ':pk': `HOUSEHOLD#${householdId}`,
+      ':sk': 'TASK#',
+    },
+    Limit: MAX_QUERY_LIMIT,
+  });
+  const taskKeysForPlant = taskRows
     .filter((t) => t.plantId === plantId)
     .map((t) => ({ PK: t.PK as string, SK: t.SK as string }));
 
-  const completionRows = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}#PLANT#${plantId}`,
-        ':sk': 'COMPLETION#',
-      },
-    })
-  );
-  const completionKeys = (completionRows.Items ?? []).map((c) => ({
-    PK: c.PK as string,
-    SK: c.SK as string,
+  // The plant-specific partition contains both completions and photo
+  // timeline rows. Delete the whole partition, not just COMPLETION# rows, so
+  // a hard delete (including solo-account erasure) cannot leave DDB photo
+  // metadata behind.
+  const plantPartitionRows = await queryAllPages({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: {
+      ':pk': `HOUSEHOLD#${householdId}#PLANT#${plantId}`,
+    },
+    Limit: MAX_QUERY_LIMIT,
+  });
+  const plantPartitionKeys = plantPartitionRows.map((item) => ({
+    PK: item.PK as string,
+    SK: item.SK as string,
   }));
 
-  const cascadeKeys = [...taskKeysForPlant, ...completionKeys];
+  const cascadeKeys = [...taskKeysForPlant, ...plantPartitionKeys];
   for (let i = 0; i < cascadeKeys.length; i += 25) {
     const chunk = cascadeKeys.slice(i, i + 25);
     await dynamodb.send(
@@ -642,6 +658,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
         statusChangedAt: (item.statusChangedAt as string | null | undefined) ?? null,
         tags: (item.tags as string[] | undefined) ?? [],
         perenualSpeciesId: (item.perenualSpeciesId as number | null | undefined) ?? null,
+        canonicalSpecies: (item.canonicalSpecies as string | null | undefined) ?? null,
         parentPlantId: (item.parentPlantId as string | null | undefined) ?? null,
         createdAt: item.createdAt as string,
         createdBy: item.createdBy as string,
@@ -706,7 +723,11 @@ async function decrementActivePlantCount(householdId: string): Promise<void> {
  * Best-effort removal of a plant's uploaded images from S3 when the plant is
  * deleted. Every object for a plant lives under the
  * `plants/{householdId}/{plantId}/` prefix (see `handlers/plants/handler.ts`),
- * so we list-and-delete that prefix, paging through results.
+ * so we list-and-delete that prefix, paging through every object version.
+ * Production enables bucket versioning: deleting only the current keys would
+ * create delete markers while retaining the users' photo bytes as noncurrent
+ * versions. Account and plant deletion are erasure operations, so versions
+ * and delete markers must both be removed permanently.
  *
  * Guarded on `IMAGES_BUCKET`: in local dev and tests the bucket isn't
  * configured, so this is a no-op. Failures are logged, never thrown — the
@@ -722,33 +743,47 @@ async function deletePlantImages(householdId: string, plantId: string): Promise<
   try {
     const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
     const prefix = `plants/${householdId}/${plantId}/`;
-    let continuationToken: string | undefined;
+    let keyMarker: string | undefined;
+    let versionIdMarker: string | undefined;
 
     do {
       const listed = await s3.send(
-        new ListObjectsV2Command({
+        new ListObjectVersionsCommand({
           Bucket: bucket,
           Prefix: prefix,
-          ContinuationToken: continuationToken,
+          KeyMarker: keyMarker,
+          VersionIdMarker: versionIdMarker,
         })
       );
-      const keys = (listed.Contents ?? [])
-        .map((o) => o.Key)
-        .filter((k): k is string => typeof k === 'string');
+      const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])].flatMap(
+        (object) => {
+          if (typeof object.Key !== 'string') return [];
+          return [
+            {
+              Key: object.Key,
+              ...(typeof object.VersionId === 'string' ? { VersionId: object.VersionId } : {}),
+            },
+          ];
+        }
+      );
 
-      // DeleteObjects accepts at most 1000 keys; ListObjectsV2 already pages at
-      // 1000, so one delete per page stays within the limit.
-      if (keys.length > 0) {
-        await s3.send(
+      // DeleteObjects accepts at most 1000 identifiers; ListObjectVersions
+      // already pages at 1000 combined versions/delete markers.
+      if (objects.length > 0) {
+        const deleted = await s3.send(
           new DeleteObjectsCommand({
             Bucket: bucket,
-            Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+            Delete: { Objects: objects, Quiet: true },
           })
         );
+        if (deleted.Errors?.length) {
+          throw new Error(`S3 rejected ${deleted.Errors.length} image version deletion(s)`);
+        }
       }
 
-      continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
-    } while (continuationToken);
+      keyMarker = listed.IsTruncated ? listed.NextKeyMarker : undefined;
+      versionIdMarker = listed.IsTruncated ? listed.NextVersionIdMarker : undefined;
+    } while (keyMarker || versionIdMarker);
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, householdId, plantId },
@@ -873,10 +908,10 @@ export interface PlantLineage {
  *
  * Children are found by filtering the household's full plant list for
  * `parentPlantId === plantId`. That's an O(household) read per detail view
- * rather than a GSI lookup — a deliberate tradeoff: households are capped
- * well under the paginated getPlants ceiling (2,000 rows), so one extra
- * query is cheap at current scale. If detail-page traffic or household
- * sizes ever make this hot, the scale fix is a sparse GSI on parentPlantId.
+ * rather than a GSI lookup — a deliberate tradeoff: active households are
+ * plan-capped and getPlants exhausts pagination, so one extra query is
+ * predictable at current scale. If detail-page traffic or household sizes
+ * ever make this hot, the scale fix is a sparse GSI on parentPlantId.
  */
 export async function getLineage(
   householdId: string,

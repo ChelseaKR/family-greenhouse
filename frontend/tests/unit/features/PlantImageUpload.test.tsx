@@ -18,11 +18,11 @@ vi.mock('@/utils/image', () => ({
   downscaleImage: vi.fn().mockResolvedValue(null),
 }));
 
-function renderUpload() {
+function renderUpload(onUploadSuccess?: () => void) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <PlantImageUpload plantId="plant-1" />
+      <PlantImageUpload plantId="plant-1" onUploadSuccess={onUploadSuccess} />
     </QueryClientProvider>
   );
 }
@@ -43,7 +43,8 @@ describe('PlantImageUpload', () => {
       .mockRejectedValueOnce(new Error('Upload connection failed'))
       .mockResolvedValueOnce(undefined);
     const user = userEvent.setup();
-    renderUpload();
+    const onUploadSuccess = vi.fn();
+    renderUpload(onUploadSuccess);
 
     const file = new File(['plant-photo'], 'monstera.jpg', { type: 'image/jpeg' });
     await user.upload(screen.getByLabelText(/upload photo/i), file);
@@ -55,5 +56,6 @@ describe('PlantImageUpload', () => {
     await waitFor(() => expect(plantService.confirmImageUpload).toHaveBeenCalledTimes(1));
     expect(vi.mocked(plantService.uploadImage).mock.calls[1][1]).toBe(file);
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    expect(onUploadSuccess).toHaveBeenCalledTimes(1);
   });
 });

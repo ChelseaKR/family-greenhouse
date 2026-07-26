@@ -13,16 +13,22 @@ Lambda runReminders
         ▼
 For each member of the household:
   1. Read prefs from DDB (USER#{id} / PREFS)
-  2. Look up their assigned tasks due in the next 24h
+  2. Roll up their assigned + unassigned tasks due in the next 24h
   3. Compose one payload {title, body, url, tag}
-  4. notifier.sendToUser(recipient, payload)
+  4. Reserve each eligible channel's daily delivery marker
+  5. notifier.sendToUser(recipient, payload, {channels})
         │
         ├─▶ if prefs.browser → web-push to all stored PushSubscriptions
         ├─▶ if prefs.email   → SES SendEmailCommand
         └─▶ if prefs.sms && prefs.phone → SNS Publish
 ```
 
-Failures in one channel never block the others — each call is wrapped in a per-channel try/catch that logs the failure and lets the other dispatches continue.
+Failures in one channel never block the others — each call is wrapped in a
+per-channel try/catch that logs the failure and lets the other dispatches
+continue. A provider-accepted channel finalizes only its own daily marker; a
+failed channel releases its lease for the next hourly retry. During DND,
+browser push remains eligible (the OS manages quiet hours) while email and SMS
+remain unmarked and are retried after the window ends.
 
 ## User-facing surface
 
@@ -30,7 +36,7 @@ Failures in one channel never block the others — each call is wrapped in a per
 
 - **Browser**: a single button that requests `Notification.permission` and registers a service-worker push subscription if VAPID is configured. The user's browser-permission state is captured + reflected (granted / denied / default).
 - **Email**: a checkbox. Defaults to **on** because we already have the user's email from Cognito; nothing extra needed.
-- **SMS**: a checkbox + phone-number input. The number must be E.164 (`+15551234567`); the form validates client-side and the backend re-validates. Disabling SMS also clears the stored phone number from DDB.
+- **SMS**: a checkbox + phone-number input. The number must be E.164 (`+15551234567`); the form validates client-side and the backend re-validates. Disabling SMS keeps the verified number so re-enabling it does not force another verification; changing or clearing the number clears verification.
 
 The dashboard also fires lightweight in-tab `Notification` pop-ups when a previously-fresh task slips into overdue while the user is on the page — see `frontend/src/hooks/useOverdueAlerts.ts`. These don't require web-push and work even without VAPID.
 
@@ -44,7 +50,8 @@ Stored under the user partition with `SK = "PREFS"`:
 PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
-userId, browser, email, sms, phone, updatedAt
+userId, browser, email, sms, phone, phoneVerified,
+dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, updatedAt
 ```
 
 One row per user. Read on every reminder fan-out; written when the user saves the settings page.
@@ -60,7 +67,28 @@ entityType: PushSubscription
 userId, householdId, endpoint, keys: { p256dh, auth }, createdAt
 ```
 
-Endpoint hash is a small djb2-style string hash. The point is to dedupe per device so re-registering doesn't duplicate. When the browser drops a subscription (404/410 from web-push), the notifier deletes the row.
+Endpoint hash is the first 64 bits of SHA-256. The point is to dedupe per
+device without putting a long provider URL in the sort key. When the browser
+drops a subscription (404/410 from web-push), the notifier deletes the row.
+
+### Reminder channel markers
+
+Each accepted reminder channel is stored independently:
+
+```
+PK: USER#{userId}
+SK: REMINDED#{localDate}#HOUSEHOLD#{householdId}#CHANNEL#{browser|email|sms}
+entityType: ReminderMarker
+channel, status, sentAt, ttl
+```
+
+Before a provider call, the row is conditionally written with
+`status = "sending"`, a five-minute lease, and a reservation ID. Success
+finalizes that channel; failure deletes only that reservation. This prevents
+overlapping manual/scheduled runs from duplicating a channel while allowing
+failed or DND-deferred siblings to retry. Older aggregate marker shapes remain
+authoritative until their TTL expires, so rolling deployment does not resend a
+reminder on deploy day.
 
 ## Channel-by-channel details
 
@@ -85,7 +113,11 @@ Set:
 - Backend: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT` (mailto: address that vendors can contact)
 - Frontend: `VITE_VAPID_PUBLIC_KEY` (same value as backend public key)
 
-The frontend service-worker (provided by `vite-plugin-pwa`) needs to register a `push` event handler that displays the message. Add to `frontend/public/sw.js` if you want richer UX than the default.
+The generated Workbox service worker imports the checked-in
+`frontend/public/push-handler.js`. It displays the server payload in the
+background, opens same-origin deep links on click, and rejects cross-origin
+notification URLs. The worker and push handler are deployed with `no-cache`
+headers so browsers see handler fixes promptly.
 
 Without these env vars, `notifier.sendBrowserPush` logs a `push_dry_run` line and returns — the rest of the fan-out is unaffected.
 
@@ -141,7 +173,13 @@ All channels degrade to structured `pino` log lines when their env vars aren't s
 {"level":"info","msg":"push_dry_run","userId":"user-1","count":2,"payload":{...}}
 ```
 
-The local Express server's `POST /notifications/run-reminders` does the same dry-run with `console.log` so you can observe the fan-out shape end-to-end without any AWS or VAPID setup. To trigger it manually:
+The local Express server's `POST /notifications/run-reminders` does the same
+dry-run with `console.log` so you can observe recipient routing without AWS or
+VAPID setup. It returns
+`{ "sent": 0, "simulated": N, "simulatedByChannel": { "browser": B, "email": E, "sms": S } }`.
+`sent` is deliberately zero because no provider accepted a message. The local
+dedupe markers are channel-scoped too, so adding a missing push subscription
+retries push without simulating email twice. To trigger it manually:
 
 ```bash
 curl -X POST http://localhost:4000/notifications/run-reminders \
@@ -151,5 +189,6 @@ curl -X POST http://localhost:4000/notifications/run-reminders \
 ## Testing
 
 - Unit tests for the prefs model, each notifier, and the fan-out logic in `notifier.ts`
-- Integration tests against the local-server cover the prefs CRUD + the run-reminders fan-out
+- Integration tests against the local server cover prefs CRUD and simulated
+  recipient routing; they do not claim provider receipt
 - The notifier's per-channel error paths are unit-tested by mocking SES/SNS/web-push to throw and asserting the other channels still execute

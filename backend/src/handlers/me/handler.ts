@@ -1,6 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
-import { DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware, AuthenticatedEvent } from '../../middleware/auth.js';
@@ -9,11 +8,8 @@ import * as plantService from '../../services/plantService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as taskService from '../../services/taskService.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
-import * as pushSubscriptions from '../../services/pushSubscriptions.js';
-import * as deviceTokens from '../../services/deviceTokens.js';
 import * as apiKeys from '../../services/apiKeys.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
-import { dynamodb, TABLE_NAME } from '../../utils/dynamodb.js';
 import { buildIcs } from '../../services/icsExport.js';
 import { noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
@@ -44,7 +40,7 @@ function refuseIfOnlyAdmin(
  */
 async function wipeSoloHouseholdPlants(householdId: string, members: unknown[]): Promise<void> {
   if (members.length !== 1) return;
-  const plants = await plantService.getPlants(householdId);
+  const plants = await plantService.getPlants(householdId, 'all');
   for (const p of plants) {
     await plantService.deletePlant(householdId, p.id);
   }
@@ -60,8 +56,8 @@ async function wipeSoloHouseholdPlants(householdId: string, members: unknown[]):
 //      household is being abandoned.
 //   3. Anonymize their identity in retained shared history and clear active
 //      task assignments, then remove their member row from each household.
-//   4. Delete user-scoped rows: notification prefs, browser subscriptions,
-//      and native APNs/FCM device tokens.
+//   4. Delete the complete user-scoped partition: notification prefs, phone
+//      challenges, browser/native credentials, and every delivery marker.
 //   5. Delete their Cognito user.
 // Shared completion/activity facts remain useful to the household, but the
 // deleted user's display name and stable id do not.
@@ -95,26 +91,18 @@ export const deleteMe = createHandler(
         for (const key of keys) {
           await apiKeys.revokeApiKey(m.householdId, key.id);
         }
+        // Remove household metadata, spaces, residual task/chat rows,
+        // activity, and every sitter credential. The sole member row is part
+        // of this generic partition sweep, so there is nothing left for
+        // removeMember to decrement.
+        await accountCleanup.deleteAbandonedHouseholdData(m.householdId);
+        continue;
       }
       await accountCleanup.anonymizeUserInHousehold(m.householdId, user.userId);
       await householdService.removeMember(m.householdId, user.userId);
     }
 
-    // User-scoped personal data. Push subscriptions go through the service's
-    // existing exports; notification prefs have no delete export (module is
-    // owned elsewhere), so delete the row inline with its documented key
-    // shape USER#{id}/PREFS.
-    const subs = await pushSubscriptions.getUserSubscriptions(user.userId);
-    for (const sub of subs) {
-      await pushSubscriptions.deleteSubscription(user.userId, sub.endpoint);
-    }
-    await deviceTokens.deleteUserDeviceTokens(user.userId);
-    await dynamodb.send(
-      new DeleteCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `USER#${user.userId}`, SK: 'PREFS' },
-      })
-    );
+    await accountCleanup.deleteUserScopedData(user.userId);
 
     await cognitoUsers.deleteUser(user.userId);
 

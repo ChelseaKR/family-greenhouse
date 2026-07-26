@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
+import { z } from 'zod';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
@@ -251,7 +252,8 @@ export const completeTask = createHandler(
       taskId,
       user.userId,
       userName,
-      validatedBody.notes
+      validatedBody.notes,
+      validatedBody.expectedNextDue
     );
 
     if (!task) {
@@ -386,32 +388,40 @@ export const snoozeTask = createHandler(
     if (!taskId) {
       throw createHttpError(400, 'Task ID is required');
     }
-    const task = await taskService.snoozeTask(user.householdId!, taskId, validatedBody.days);
-    if (!task) {
+    const outcome = await taskService.snoozeTaskWithOutcome(
+      user.householdId!,
+      taskId,
+      validatedBody.days,
+      validatedBody.expectedNextDue
+    );
+    if (!outcome) {
       throw createHttpError(404, 'Task not found');
     }
+    const { task } = outcome;
 
-    // Resolve the member's display name so the activity feed reads "Jane Smith
-    // snoozed…", matching the completion path, not the raw email local-part.
-    const actorName = await resolveCompleterName(user.householdId!, user.userId, user.email);
+    if (outcome.changed) {
+      // Resolve the member's display name so the activity feed reads "Jane
+      // Smith snoozed…", matching completion, not the email local-part.
+      const actorName = await resolveCompleterName(user.householdId!, user.userId, user.email);
 
-    // Activity feed entry, with the optional reason ("snoozed (rain
-    // expected)"). Best-effort — recordActivity logs-and-continues.
-    await recordActivity({
-      type: 'task.snoozed',
-      householdId: user.householdId!,
-      actorId: user.userId,
-      actorName,
-      payload: {
-        taskId,
-        plantId: task.plantId,
-        plantName: task.plantName,
-        taskType: task.customType || task.type,
-        days: validatedBody.days,
-        reason: validatedBody.reason ?? null,
-        note: validatedBody.note ?? null,
-      },
-    });
+      // Activity feed entry, with the optional reason ("snoozed (rain
+      // expected)"). Best-effort — recordActivity logs-and-continues.
+      await recordActivity({
+        type: 'task.snoozed',
+        householdId: user.householdId!,
+        actorId: user.userId,
+        actorName,
+        payload: {
+          taskId,
+          plantId: task.plantId,
+          plantName: task.plantName,
+          taskType: task.customType || task.type,
+          days: validatedBody.days,
+          reason: validatedBody.reason ?? null,
+          note: validatedBody.note ?? null,
+        },
+      });
+    }
 
     return successResponse(task);
   }
@@ -600,8 +610,19 @@ export const getSitterView = createHandler(
 // task belongs to THIS token's household before touching it — a sitter can
 // never reach across households even if they forge a taskId. Attributed as
 // "a plant sitter" (no real user). Idempotent via taskService.completeTask.
+const sitterCompleteTaskSchema = z
+  .object({
+    // Due date from the GET view. It identifies the recurrence occurrence so
+    // a timeout/lost response can be retried without completing the next
+    // cycle as well. Optional for backward compatibility with open links.
+    expectedNextDue: z.string().datetime().optional(),
+  })
+  .nullish();
+type SitterCompleteTaskInput = z.infer<typeof sitterCompleteTaskSchema>;
+
 export const completeSitterTask = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { validatedBody } = event as ValidatedEvent<SitterCompleteTaskInput>;
     const token = event.pathParameters?.token ?? '';
     const taskId = event.pathParameters?.taskId ?? '';
     if (!taskId) {
@@ -621,6 +642,23 @@ export const completeSitterTask = createHandler(
       throw createHttpError(404, 'Task not found');
     }
 
+    if (
+      validatedBody?.expectedNextDue !== undefined &&
+      existing.nextDue !== validatedBody.expectedNextDue
+    ) {
+      // The requested occurrence was already completed. Return the current
+      // acknowledgement shape without another completion/activity record.
+      return successResponse({
+        taskId: existing.id,
+        plantName: existing.plantName,
+        taskType: existing.customType || existing.type,
+        dueDate: existing.nextDue,
+        spaceName: null,
+        placementNote: null,
+        overdue: false,
+      });
+    }
+
     // Synthetic, non-user actor. `completedByName` shows up in the activity
     // feed / history exactly as the prompt asks ("a plant sitter"); actorId is
     // a traceable, non-PII marker tying the action to the specific link.
@@ -628,7 +666,9 @@ export const completeSitterTask = createHandler(
       link.householdId,
       taskId,
       `sitter:${link.id}`,
-      'a plant sitter'
+      'a plant sitter',
+      undefined,
+      validatedBody?.expectedNextDue
     );
     if (!task) {
       // Deleted between the read above and the write — treat as not found.
@@ -663,7 +703,9 @@ export const completeSitterTask = createHandler(
     });
   }
   // Anonymous; tighter than the read (write side). 30/min per IP.
-).use(rateLimit({ perWindowMs: 60_000, max: 30 }));
+)
+  .use(rateLimit({ perWindowMs: 60_000, max: 30 }))
+  .use(validateBody(sitterCompleteTaskSchema));
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({

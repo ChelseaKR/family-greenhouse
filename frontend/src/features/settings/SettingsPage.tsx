@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { NotificationSettings } from './NotificationSettings';
 import { BillingSettings } from './BillingSettings';
 import { PreferencesSettings } from './PreferencesSettings';

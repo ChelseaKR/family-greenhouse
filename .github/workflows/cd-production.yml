@@ -164,6 +164,11 @@ jobs:
           VITE_COGNITO_USER_POOL_ID: ${{ vars.PRODUCTION_COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ vars.PRODUCTION_COGNITO_CLIENT_ID }}
           VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.PRODUCTION_WEB_PUSH_VAPID_PUBLIC_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.PRODUCTION_FRONTEND_SENTRY_DSN }}
+          VITE_POSTHOG_KEY: ${{ secrets.PRODUCTION_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.PRODUCTION_POSTHOG_HOST || 'https://us.i.posthog.com' }}
+          VITE_GTM_ID: ${{ vars.PRODUCTION_GTM_ID }}
           VITE_GIT_SHA: ${{ needs.validate.outputs.commit_sha }}
           # Streaming chat feature flag: set the PRODUCTION_CHAT_STREAM_URL
           # repo variable to the `chat_stream_url` terraform output to turn
@@ -272,6 +277,15 @@ jobs:
         env:
           TF_VAR_stripe_secret_key: ${{ secrets.STRIPE_SECRET_KEY }}
           TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_web_push_vapid_public_key: ${{ vars.PRODUCTION_WEB_PUSH_VAPID_PUBLIC_KEY }}
+          TF_VAR_web_push_vapid_private_key: ${{ secrets.PRODUCTION_WEB_PUSH_VAPID_PRIVATE_KEY }}
+          TF_VAR_web_push_vapid_subject: ${{ vars.PRODUCTION_WEB_PUSH_VAPID_SUBJECT }}
+          TF_VAR_plant_id_api_key: ${{ secrets.PRODUCTION_PLANT_ID_API_KEY }}
+          TF_VAR_openweather_api_key: ${{ secrets.PRODUCTION_OPENWEATHER_API_KEY }}
+          TF_VAR_sentry_dsn: ${{ secrets.PRODUCTION_BACKEND_SENTRY_DSN }}
+          TF_VAR_sentry_traces_sample_rate: ${{ vars.PRODUCTION_SENTRY_TRACES_SAMPLE_RATE || '0.1' }}
+          TF_VAR_posthog_key: ${{ secrets.PRODUCTION_POSTHOG_KEY }}
+          TF_VAR_posthog_host: ${{ vars.PRODUCTION_POSTHOG_HOST || 'https://us.i.posthog.com' }}
           TF_VAR_git_sha: ${{ needs.validate.outputs.commit_sha }}
         run: terraform plan -var-file=environments/production/terraform.tfvars -out=tfplan
 
@@ -362,9 +376,15 @@ jobs:
             --delete \
             --cache-control "max-age=31536000,public" \
             --exclude "index.html" \
+            --exclude "sw.js" \
+            --exclude "push-handler.js" \
             --exclude "*.json"
 
           aws s3 cp dist/index.html s3://${{ needs.terraform.outputs.frontend_bucket }}/index.html \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+          aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+          aws s3 cp dist/push-handler.js s3://${{ needs.terraform.outputs.frontend_bucket }}/push-handler.js \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
       - name: Invalidate CloudFront
@@ -681,6 +701,15 @@ jobs:
         env:
           TF_VAR_stripe_secret_key: ${{ secrets.STRIPE_SECRET_KEY }}
           TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_web_push_vapid_public_key: ${{ vars.PRODUCTION_WEB_PUSH_VAPID_PUBLIC_KEY }}
+          TF_VAR_web_push_vapid_private_key: ${{ secrets.PRODUCTION_WEB_PUSH_VAPID_PRIVATE_KEY }}
+          TF_VAR_web_push_vapid_subject: ${{ vars.PRODUCTION_WEB_PUSH_VAPID_SUBJECT }}
+          TF_VAR_plant_id_api_key: ${{ secrets.PRODUCTION_PLANT_ID_API_KEY }}
+          TF_VAR_openweather_api_key: ${{ secrets.PRODUCTION_OPENWEATHER_API_KEY }}
+          TF_VAR_sentry_dsn: ${{ secrets.PRODUCTION_BACKEND_SENTRY_DSN }}
+          TF_VAR_sentry_traces_sample_rate: ${{ vars.PRODUCTION_SENTRY_TRACES_SAMPLE_RATE || '0.1' }}
+          TF_VAR_posthog_key: ${{ secrets.PRODUCTION_POSTHOG_KEY }}
+          TF_VAR_posthog_host: ${{ vars.PRODUCTION_POSTHOG_HOST || 'https://us.i.posthog.com' }}
           TF_VAR_git_sha: ${{ needs.validate.outputs.commit_sha }}
           REGISTRATION_ENABLED_BEFORE: ${{ needs.terraform.outputs.public_registration_enabled_before }}
           ADMIN_ONLY_BEFORE: ${{ needs.terraform.outputs.admin_create_user_only_before }}

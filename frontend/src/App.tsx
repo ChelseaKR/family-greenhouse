@@ -1,5 +1,5 @@
-import { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { Suspense, lazy, type MouseEvent } from 'react';
+import { Routes, Route, Navigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '@/store/authStore';
 import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -116,6 +116,23 @@ function RouteFallback() {
   );
 }
 
+function focusPrimaryContent(event: MouseEvent<HTMLAnchorElement>) {
+  const main = document.querySelector<HTMLElement>('main');
+  if (!main) return;
+
+  // The hash target wraps the router so it exists during lazy-route loading,
+  // but authenticated layouts render their repeated sidebar inside that
+  // wrapper. Native fragment focus would therefore resume Tab traversal in
+  // the navigation. Move focus to the page's actual main landmark instead.
+  event.preventDefault();
+  main.tabIndex = -1;
+  if (window.location.hash !== '#main-content') {
+    window.history.pushState(null, '', '#main-content');
+  }
+  main.focus();
+  main.scrollIntoView({ block: 'start' });
+}
+
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
@@ -125,9 +142,9 @@ function App() {
     <>
       {/* The skip link must point to a target that exists on every page,
           including unauthenticated routes that don't render the Layout. We
-          give the Suspense wrapper the id and tabindex so it's always
-          focusable from the link. */}
-      <a href="#main-content" className="skip-link">
+          keep the fragment target on the Suspense wrapper as a loading-state
+          fallback; activation moves focus to the rendered main landmark. */}
+      <a href="#main-content" className="skip-link" onClick={focusPrimaryContent}>
         Skip to main content
       </a>
       <Toaster />

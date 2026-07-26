@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';

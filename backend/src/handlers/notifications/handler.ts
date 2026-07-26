@@ -19,7 +19,14 @@ import { digestHousehold, recapHousehold, defaultRecapYear } from '../../service
 import { successResponse, noContentResponse } from '../../utils/response.js';
 
 const subscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z
+    .string()
+    .url()
+    .max(4096)
+    .refine(
+      pushSubscriptions.isAllowedPushEndpoint,
+      'Push endpoint must be issued by a supported browser push service'
+    ),
   keys: z.object({
     p256dh: z.string().min(8),
     auth: z.string().min(8),
@@ -29,7 +36,7 @@ const subscribeSchema = z.object({
 type SubscribeInput = z.infer<typeof subscribeSchema>;
 
 const unsubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().max(4096),
 });
 
 type UnsubscribeInput = z.infer<typeof unsubscribeSchema>;
@@ -51,26 +58,36 @@ type UnregisterDeviceInput = z.infer<typeof unregisterDeviceSchema>;
 
 const TIME_HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
-const prefsSchema = z.object({
-  browser: z.boolean(),
-  email: z.boolean(),
-  sms: z.boolean(),
-  phone: z
-    .string()
-    .regex(/^\+[1-9]\d{6,14}$/u, 'Phone must be in E.164 format, e.g. +15551234567')
-    .or(z.literal(''))
-    .default(''),
-  /** Optional do-not-disturb window: both empty or both filled. */
-  dndStart: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
-  dndEnd: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
-  /** IANA timezone — defaults to UTC if the client doesn't provide one. */
-  timezone: z.string().min(1).max(64).default('UTC'),
-  /** Opt-in seasonal pest pressure alerts. Defaults false. */
-  pestAlerts: z.boolean().default(false),
-  /** Weekly "plants at risk" digest. Optional so older clients that don't
-   *  send it keep the stored value (default-on when email is enabled). */
-  weeklyDigest: z.boolean().optional(),
-});
+const prefsSchema = z
+  .object({
+    browser: z.boolean(),
+    email: z.boolean(),
+    sms: z.boolean(),
+    phone: z
+      .string()
+      .regex(/^\+[1-9]\d{6,14}$/u, 'Phone must be in E.164 format, e.g. +15551234567')
+      .or(z.literal(''))
+      .default(''),
+    /** Optional do-not-disturb window: both empty or both filled. */
+    dndStart: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
+    dndEnd: z.string().regex(TIME_HHMM).or(z.literal('')).default(''),
+    /** IANA timezone — defaults to UTC if the client doesn't provide one. */
+    timezone: z
+      .string()
+      .min(1)
+      .max(64)
+      .refine(notificationPrefs.isValidTimeZone, 'Unknown timezone')
+      .default('UTC'),
+    /** Opt-in seasonal pest pressure alerts. Defaults false. */
+    pestAlerts: z.boolean().default(false),
+    /** Weekly "plants at risk" digest. Optional so older clients that don't
+     *  send it keep the stored value (default-on when email is enabled). */
+    weeklyDigest: z.boolean().optional(),
+  })
+  .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
+    message: 'Quiet hours require both a start and end time',
+    path: ['dndEnd'],
+  });
 
 type PrefsInput = z.infer<typeof prefsSchema>;
 
@@ -216,8 +233,11 @@ export const unsubscribe = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<UnsubscribeInput>;
-    await pushSubscriptions.deleteSubscription(user.userId, validatedBody.endpoint);
-    return noContentResponse();
+    const remainingSubscriptions = await pushSubscriptions.deleteSubscription(
+      user.userId,
+      validatedBody.endpoint
+    );
+    return successResponse({ ok: true, remainingSubscriptions });
   }
 )
   .use(authMiddleware())
@@ -230,10 +250,9 @@ export const unsubscribe = createHandler(
  * tasks (or all tasks for admins) due in the next 24 hours plus anything
  * already overdue, and sends a single roll-up push per user.
  *
- * In production, EventBridge invokes this hourly with an internal IAM
- * principal; while we don't have that wired up yet, the endpoint also accepts
- * an authenticated household admin so families can self-service "send
- * reminders now" if needed.
+ * In production, EventBridge invokes the dedicated reminders handler hourly.
+ * This HTTP endpoint also accepts an authenticated household admin as a
+ * tightly rate-limited break-glass trigger.
  */
 // POST /notifications/run-reminders
 export const runReminders = createHandler(
@@ -288,8 +307,9 @@ export const runDigests = createHandler(
  *
  * Manual trigger for the end-of-year recap, scoped to the caller's household.
  * Accepts an optional `{year}`; defaults to the previous calendar year (the
- * same default the yearly EventBridge run uses). The per-household yearly
- * marker makes retries a no-op.
+ * same default the yearly EventBridge run uses). Household-scoped,
+ * per-recipient yearly markers skip successful members while allowing failed
+ * deliveries to retry.
  */
 // POST /notifications/run-year-recap
 export const runYearRecap = createHandler(

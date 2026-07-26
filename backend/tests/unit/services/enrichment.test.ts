@@ -22,6 +22,7 @@ import { dynamodb } from '../../../src/utils/dynamodb.js';
 import {
   searchSpeciesCached,
   getSpeciesCached,
+  lookupSpeciesCached,
   getCareGuideCached,
   listPestsForSpeciesCached,
 } from '../../../src/services/enrichment.js';
@@ -82,6 +83,11 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
     vi.mocked(perenual.isConfigured).mockResolvedValue(false);
     expect(await searchSpeciesCached('monstera')).toBeNull();
     expect(await getSpeciesCached(7)).toBeNull();
+    expect(await lookupSpeciesCached(7)).toEqual({
+      status: 'unavailable',
+      reason: 'unconfigured',
+      result: null,
+    });
     expect(await getCareGuideCached(7)).toBeNull();
     expect(await listPestsForSpeciesCached('Monstera deliciosa')).toEqual({
       ok: false,
@@ -128,7 +134,10 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
   describe('cache miss', () => {
     it('spends budget, calls Perenual, and writes the result back with a TTL', async () => {
       stubDynamo({ cacheItem: null, budgetUsed: 5 });
-      vi.mocked(perenual.getSpecies).mockResolvedValue({ id: 7 } as never);
+      vi.mocked(perenual.lookupSpecies).mockResolvedValue({
+        status: 'found',
+        result: { id: 7 },
+      } as never);
 
       const out = await getSpeciesCached(7);
       expect(out).toEqual({ id: 7 });
@@ -178,7 +187,7 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
       stubDynamo({ cacheItem: null, budgetUsed: 81 });
 
       expect(await getSpeciesCached(7)).toBeNull();
-      expect(perenual.getSpecies).not.toHaveBeenCalled();
+      expect(perenual.lookupSpecies).not.toHaveBeenCalled();
     });
 
     it('FAILS OPEN when the budget counter itself errors: the call proceeds', async () => {
@@ -201,9 +210,73 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
 
     it('a cache-write failure still returns the fresh result', async () => {
       stubDynamo({ cacheItem: null, budgetUsed: 1, putRejects: true });
-      vi.mocked(perenual.getSpecies).mockResolvedValue({ id: 7 } as never);
+      vi.mocked(perenual.lookupSpecies).mockResolvedValue({
+        status: 'found',
+        result: { id: 7 },
+      } as never);
 
       expect(await getSpeciesCached(7)).toEqual({ id: 7 });
+    });
+  });
+
+  describe('lookupSpeciesCached (distinguishes no-result from unavailability)', () => {
+    it('returns and caches a genuine provider not-found result', async () => {
+      stubDynamo({ cacheItem: null, budgetUsed: 1 });
+      vi.mocked(perenual.lookupSpecies).mockResolvedValue({
+        status: 'not_found',
+        result: null,
+      });
+
+      expect(await lookupSpeciesCached(404)).toEqual({
+        status: 'not_found',
+        result: null,
+      });
+      expect(sentCommands().map((command) => command.kind)).toEqual(['Get', 'Update', 'Put']);
+      expect(sentCommands()[2].input.Item).toMatchObject({
+        PK: 'PERENUAL#CACHE',
+        SK: 'SPECIES#404',
+        payload: null,
+      });
+    });
+
+    it('recognizes a cached null as a hit without spending budget or calling Perenual', async () => {
+      stubDynamo({ cacheItem: { payload: null } });
+
+      expect(await lookupSpeciesCached(404)).toEqual({
+        status: 'not_found',
+        result: null,
+      });
+      expect(sentCommands().map((command) => command.kind)).toEqual(['Get']);
+      expect(perenual.lookupSpecies).not.toHaveBeenCalled();
+    });
+
+    it('does not cache an upstream failure as null so a later request can retry', async () => {
+      stubDynamo({ cacheItem: null, budgetUsed: 1 });
+      vi.mocked(perenual.lookupSpecies).mockResolvedValue({
+        status: 'unavailable',
+        reason: 'upstream_error',
+        result: null,
+      });
+
+      expect(await lookupSpeciesCached(7)).toEqual({
+        status: 'unavailable',
+        reason: 'upstream_error',
+        result: null,
+      });
+      expect(sentCommands().map((command) => command.kind)).toEqual(['Get', 'Update']);
+    });
+
+    it('reports budget exhaustion distinctly and never calls or caches the provider', async () => {
+      process.env.PERENUAL_DAILY_BUDGET = '10';
+      stubDynamo({ cacheItem: null, budgetUsed: 11 });
+
+      expect(await lookupSpeciesCached(7)).toEqual({
+        status: 'unavailable',
+        reason: 'budget_exhausted',
+        result: null,
+      });
+      expect(sentCommands().map((command) => command.kind)).toEqual(['Get', 'Update']);
+      expect(perenual.lookupSpecies).not.toHaveBeenCalled();
     });
   });
 

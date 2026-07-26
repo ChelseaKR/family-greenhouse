@@ -115,12 +115,12 @@ backend "production live" rather than "production-ready in code".
 ## TODOs that surfaced during the testing pass
 
 - ✅ **S3 object lifecycle**: `plantService.deletePlant` now sweeps the
-  deleted plant's images from S3 (`plants/{householdId}/{plantId}/` prefix,
-  via `ListObjectsV2` + `DeleteObjects`). Guarded on `IMAGES_BUCKET` so it's a
-  clean no-op in dev/tests, and best-effort (failures are logged, never thrown
-  — the DDB rows are already gone). A bucket **lifecycle rule** is still worth
-  adding as a backstop for objects orphaned by a failed sweep (see "S3 bucket
-  policy" above).
+  deleted plant's images from S3 (`plants/{householdId}/{plantId}/` prefix)
+  with `ListObjectVersions` and version-aware `DeleteObjects`. Current
+  versions, noncurrent versions, and delete markers are all removed rather
+  than leaving recoverable bytes in the versioned production bucket. Guarded
+  on `IMAGES_BUCKET` so it's a clean no-op in dev/tests; the bucket lifecycle
+  remains a 30-day backstop for a failed best-effort sweep.
 - ✅ **Cognito attribute propagation**: `HouseholdOnboarding` now calls
   `/auth/refresh` immediately after creating the first household, so the very
   first `/dashboard` request carries the freshly-minted `custom:household_id`

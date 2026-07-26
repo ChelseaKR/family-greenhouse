@@ -40,6 +40,11 @@ describe('perenual client', () => {
     expect(await perenual.isConfigured()).toBe(false);
     expect(await perenual.searchSpecies('monstera')).toBeNull();
     expect(await perenual.getSpecies(1)).toBeNull();
+    expect(await perenual.lookupSpecies(1)).toEqual({
+      status: 'unavailable',
+      reason: 'unconfigured',
+      result: null,
+    });
     expect(await perenual.getCareGuide(1)).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -83,6 +88,43 @@ describe('perenual client', () => {
     fetchMock.mockRejectedValueOnce(new Error('ETIMEDOUT'));
     const perenual = await import('../../../src/services/perenual.js');
     expect(await perenual.getSpecies(99)).toBeNull();
+  });
+
+  it('distinguishes a genuine species 404 from retryable upstream failures', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    const perenual = await import('../../../src/services/perenual.js');
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) });
+    await expect(perenual.lookupSpecies(404)).resolves.toEqual({
+      status: 'not_found',
+      result: null,
+    });
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    await expect(perenual.lookupSpecies(503)).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'upstream_error',
+      result: null,
+    });
+
+    fetchMock.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+    await expect(perenual.lookupSpecies(504)).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'upstream_error',
+      result: null,
+    });
+  });
+
+  it('treats a malformed or mismatched successful species payload as unavailable, not not-found', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
+    const perenual = await import('../../../src/services/perenual.js');
+
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 999 }) });
+    await expect(perenual.lookupSpecies(7)).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'upstream_error',
+      result: null,
+    });
   });
 
   it('retries parameter resolution after a transient Parameter Store failure', async () => {

@@ -38,7 +38,7 @@ describe('GET /health', () => {
     vi.resetAllMocks();
   });
 
-  it('returns ok with all components healthy when DDB is reachable', async () => {
+  it('reports the actively probed database as healthy without guessing at provider health', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
     const { health } = await import('../../../src/handlers/api/handler.js');
@@ -47,6 +47,8 @@ describe('GET /health', () => {
     const body = JSON.parse(res.body);
     expect(body.status).toBe('ok');
     expect(body.components.database.status).toBe('ok');
+    expect(body.components.auth.status).toBe('unknown');
+    expect(body.components.mail.status).toBe('unknown');
     expect(body.checkedAt).toBeTypeOf('string');
   });
 

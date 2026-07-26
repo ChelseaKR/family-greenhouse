@@ -31,6 +31,11 @@ export type IdentifyResponse = IdentificationResult | NotConfiguredResult;
 const PLANT_ID_ENDPOINT = 'https://plant.id/api/v3/identification';
 const TIMEOUT_MS = 5000;
 
+/** Whether this invocation would consume a paid Plant.id credit. */
+export function isPlantIdentificationConfigured(): boolean {
+  return Boolean(process.env.PLANT_ID_API_KEY);
+}
+
 interface PlantIdSuggestion {
   name?: string;
   probability?: number;

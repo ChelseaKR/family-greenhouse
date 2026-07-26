@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { EmptySearch } from './illustrations/EmptySearch';
 import { useMetaTags } from '@/hooks/useMetaTags';
 

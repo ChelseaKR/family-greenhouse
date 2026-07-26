@@ -77,4 +77,48 @@ describe('leafHealthBudget service (M1 — monthly Bedrock spend cap)', () => {
     vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('ddb down'));
     expect(await incrementUsage('hh')).toBeNull();
   });
+
+  it('atomically reserves a check only while usage is below the cap', async () => {
+    const { reserveUsage } = await import('../../../src/services/leafHealthBudget.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: { used: 3 } } as never);
+
+    await expect(reserveUsage('hh', 5, new Date('2026-06-15T00:00:00Z'))).resolves.toBe(3);
+
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: {
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, number>;
+      };
+    };
+    expect(cmd.input.ConditionExpression).toContain('#used < :cap');
+    expect(cmd.input.ExpressionAttributeValues[':cap']).toBe(5);
+  });
+
+  it('maps a failed reservation condition to the monthly-limit error', async () => {
+    const { LeafHealthBudgetExceededError, reserveUsage } =
+      await import('../../../src/services/leafHealthBudget.js');
+    const conditionFailure = new Error('at cap');
+    conditionFailure.name = 'ConditionalCheckFailedException';
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditionFailure);
+
+    await expect(reserveUsage('hh', 5)).rejects.toBeInstanceOf(LeafHealthBudgetExceededError);
+  });
+
+  it('best-effort releases a demo-mode reservation', async () => {
+    const { releaseUsage } = await import('../../../src/services/leafHealthBudget.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+
+    await expect(releaseUsage('hh')).resolves.toBeUndefined();
+
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: {
+        UpdateExpression: string;
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, number>;
+      };
+    };
+    expect(cmd.input.UpdateExpression).toBe('ADD #used :minusOne');
+    expect(cmd.input.ConditionExpression).toContain('#used > :zero');
+    expect(cmd.input.ExpressionAttributeValues[':minusOne']).toBe(-1);
+  });
 });

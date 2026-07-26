@@ -47,6 +47,9 @@ describe('plants identify handler', () => {
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(false);
     vi.mocked(identifyBudget.getUsage).mockResolvedValue(0);
     vi.mocked(identifyBudget.incrementUsage).mockResolvedValue(1);
+    vi.mocked(identifyBudget.reserveUsage).mockResolvedValue(1);
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValue(true);
     vi.mocked(identifyBudget.allowanceForPlan).mockImplementation(
       (planId) => ({ seedling: 3, garden: 30, greenhouse: 100 })[planId]
     );
@@ -101,6 +104,7 @@ describe('plants identify handler', () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
     vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({ configured: false });
+    vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValueOnce(false);
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
@@ -111,7 +115,9 @@ describe('plants identify handler', () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
-    vi.mocked(identifyBudget.getUsage).mockResolvedValue(3); // at the seedling cap
+    vi.mocked(identifyBudget.reserveUsage).mockRejectedValueOnce(
+      new identifyBudget.IdentifyBudgetExceededError()
+    );
 
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
@@ -141,6 +147,19 @@ describe('plants identify handler', () => {
     });
   });
 
+  it('fails closed before the paid upstream when the enforced reservation cannot be recorded', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
+    vi.mocked(identifyBudget.reserveUsage).mockRejectedValueOnce(new Error('DynamoDB unavailable'));
+
+    const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatch(/temporarily unavailable/i);
+    expect(plantIdentification.identifyPlant).not.toHaveBeenCalled();
+  });
+
   it('applies the per-plan allowance from the household subscription (garden → 30)', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
@@ -151,8 +170,7 @@ describe('plants identify handler', () => {
 
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
-    vi.mocked(identifyBudget.getUsage).mockResolvedValue(5); // over seedling, under garden
-    vi.mocked(identifyBudget.incrementUsage).mockResolvedValue(6);
+    vi.mocked(identifyBudget.reserveUsage).mockResolvedValue(6);
     vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
       configured: true,
       suggestions: [],
@@ -170,8 +188,9 @@ describe('plants identify handler', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).usage).toEqual({ used: 6, allowance: 30, meteringEnabled: true });
     // Household callers meter on the household bucket, not the user.
-    expect(identifyBudget.getUsage).toHaveBeenCalledWith('hh-1');
-    expect(identifyBudget.incrementUsage).toHaveBeenCalledWith('hh-1');
+    expect(identifyBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 30);
+    expect(identifyBudget.getUsage).not.toHaveBeenCalled();
+    expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });
 
   it('surfaces upstream failures as an exposed 502 message', async () => {

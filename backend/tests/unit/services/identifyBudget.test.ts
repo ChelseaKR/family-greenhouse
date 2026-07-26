@@ -101,4 +101,40 @@ describe('identifyBudget service', () => {
     const { incrementUsage } = await import('../../../src/services/identifyBudget.js');
     expect(await incrementUsage('hh-1')).toBeNull();
   });
+
+  it('reserves a paid attempt with one conditional atomic update', async () => {
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: { used: 3 } } as never);
+    const { reserveUsage } = await import('../../../src/services/identifyBudget.js');
+
+    await expect(reserveUsage('hh-1', 3, new Date('2026-06-11T12:00:00Z'))).resolves.toBe(3);
+
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: {
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, unknown>;
+      };
+    };
+    expect(cmd.input.ConditionExpression).toBe('attribute_not_exists(#used) OR #used < :allowance');
+    expect(cmd.input.ExpressionAttributeValues).toMatchObject({
+      ':one': 1,
+      ':allowance': 3,
+    });
+  });
+
+  it('rejects the caller that would exceed the monthly allowance', async () => {
+    const conditional = new Error('conditional');
+    conditional.name = 'ConditionalCheckFailedException';
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditional as never);
+    const { IdentifyBudgetExceededError, reserveUsage } =
+      await import('../../../src/services/identifyBudget.js');
+
+    await expect(reserveUsage('hh-1', 3)).rejects.toBeInstanceOf(IdentifyBudgetExceededError);
+  });
+
+  it('fails closed when an enforced reservation cannot be persisted', async () => {
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('throttled') as never);
+    const { reserveUsage } = await import('../../../src/services/identifyBudget.js');
+
+    await expect(reserveUsage('hh-1', 3)).rejects.toThrow('throttled');
+  });
 });

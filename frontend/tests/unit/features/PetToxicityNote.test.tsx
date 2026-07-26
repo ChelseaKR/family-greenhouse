@@ -6,11 +6,11 @@ import { speciesService, type PerenualSpeciesDetail } from '@/services/speciesSe
 
 vi.mock('@/services/speciesService', () => ({
   speciesService: {
-    detail: vi.fn(),
+    detailLookup: vi.fn(),
   },
 }));
 
-const detail = vi.mocked(speciesService.detail);
+const detailLookup = vi.mocked(speciesService.detailLookup);
 
 function makeDetail(overrides: Partial<PerenualSpeciesDetail>): PerenualSpeciesDetail {
   return {
@@ -48,7 +48,10 @@ describe('PetToxicityNote', () => {
   });
 
   it('shows the heads-up when the selected species is toxic to pets', async () => {
-    detail.mockResolvedValue(makeDetail({ id: 42, poisonousToPets: true }));
+    detailLookup.mockResolvedValue({
+      status: 'found',
+      result: makeDetail({ id: 42, poisonousToPets: true }),
+    });
     renderNote(42);
 
     expect(await screen.findByText(/keep it out of reach/i)).toBeInTheDocument();
@@ -56,35 +59,67 @@ describe('PetToxicityNote', () => {
   });
 
   it('renders nothing when the selected species is not toxic to pets', async () => {
-    detail.mockResolvedValue(makeDetail({ id: 7, poisonousToPets: false }));
+    detailLookup.mockResolvedValue({
+      status: 'found',
+      result: makeDetail({ id: 7, poisonousToPets: false }),
+    });
     renderNote(7);
 
     // Wait for the detail fetch to settle before asserting absence.
-    await waitFor(() => expect(detail).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(detailLookup).toHaveBeenCalledWith(7));
     expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
   });
 
-  it('renders nothing when Perenual has no toxicity data (never claims "safe")', async () => {
-    detail.mockResolvedValue(makeDetail({ id: 9, poisonousToPets: null }));
+  it('shows a conservative unknown warning when Perenual has no toxicity field', async () => {
+    detailLookup.mockResolvedValue({
+      status: 'found',
+      result: makeDetail({ id: 9, poisonousToPets: null }),
+    });
     renderNote(9);
 
-    await waitFor(() => expect(detail).toHaveBeenCalledWith(9));
-    expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/pet toxicity unknown/i)).toBeInTheDocument();
+    expect(screen.getByText(/treat it as potentially unsafe/i)).toBeInTheDocument();
+    expect(screen.getByText(/keep it out of reach/i)).toBeInTheDocument();
     expect(screen.queryByText(/couldn.?t check/i)).not.toBeInTheDocument();
   });
 
+  it('shows the same conservative unknown warning for a genuine species no-result', async () => {
+    detailLookup.mockResolvedValue({ status: 'not_found', result: null });
+    renderNote(10);
+
+    expect(await screen.findByText(/pet toxicity unknown/i)).toBeInTheDocument();
+    expect(screen.getByText(/keep it out of reach/i)).toBeInTheDocument();
+  });
+
+  it.each(['unconfigured', 'budget_exhausted', 'upstream_error'] as const)(
+    'shows an honest retryable notice when detail is unavailable because of %s',
+    async (reason) => {
+      detailLookup.mockResolvedValue({
+        status: 'unavailable',
+        reason,
+        result: null,
+      });
+      renderNote(11);
+
+      expect(await screen.findByText(/couldn.?t check pet toxicity/i)).toBeInTheDocument();
+      expect(screen.getByText(/keep it out of reach/i)).toBeInTheDocument();
+      expect(screen.queryByText(/pet toxicity unknown/i)).not.toBeInTheDocument();
+    }
+  );
+
   it('shows an honest "couldn\'t check" notice on a fetch failure, instead of looking like confirmed-safe', async () => {
-    detail.mockRejectedValue(new Error('network error'));
+    detailLookup.mockRejectedValue(new Error('network error'));
     renderNote(11);
 
     expect(await screen.findByText(/couldn.?t check pet toxicity/i)).toBeInTheDocument();
-    expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/keep it out of reach/i)).toBeInTheDocument();
+    expect(detailLookup).toHaveBeenCalledTimes(1);
   });
 
   it('does not fetch or render when no species is picked', () => {
     renderNote(null);
 
-    expect(detail).not.toHaveBeenCalled();
+    expect(detailLookup).not.toHaveBeenCalled();
     expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
   });
 });

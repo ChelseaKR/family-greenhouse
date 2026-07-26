@@ -22,6 +22,15 @@ export interface PerenualSpeciesDetail extends PerenualSpeciesSummary {
   defaultImageUrl: string | null;
 }
 
+export type SpeciesDetailLookupResponse =
+  | { status: 'found'; result: PerenualSpeciesDetail }
+  | { status: 'not_found'; result: null }
+  | {
+      status: 'unavailable';
+      reason: 'unconfigured' | 'budget_exhausted' | 'upstream_error';
+      result: null;
+    };
+
 export type SpeciesSearchResponse = {
   // 'disabled' = no Perenual API key configured. 'unavailable' = configured
   // but this request got no data (budget exhausted or a transient upstream
@@ -62,8 +71,18 @@ export const speciesService = {
   },
 
   async detail(id: number): Promise<PerenualSpeciesDetail | null> {
-    const response = await api.get<{ result: PerenualSpeciesDetail | null }>(`/species/${id}`);
+    const response = await api.get<SpeciesDetailLookupResponse>(`/species/${id}`);
     return response.data.result;
+  },
+
+  /**
+   * Safety-sensitive projection used by pet-toxicity UI. Unlike detail(),
+   * this preserves "not found" versus "couldn't check" so an outage never
+   * looks like a confirmed empty provider result.
+   */
+  async detailLookup(id: number): Promise<SpeciesDetailLookupResponse> {
+    const response = await api.get<SpeciesDetailLookupResponse>(`/species/${id}`);
+    return response.data;
   },
 
   async careSuggestions(id: number): Promise<CareSuggestion | null> {

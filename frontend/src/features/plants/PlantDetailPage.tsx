@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -67,6 +67,7 @@ export function PlantDetailPage() {
   const { t } = useTranslation();
   const { plantId } = useParams<{ plantId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
   const [showAddTask, setShowAddTask] = useState(false);
@@ -77,6 +78,8 @@ export function PlantDetailPage() {
   const [showLeafHealth, setShowLeafHealth] = useState(false);
   const [showMove, setShowMove] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const photoUploadNeedsRetry =
+    (location.state as { photoUploadFailed?: boolean } | null)?.photoUploadFailed === true;
 
   const {
     data: plant,
@@ -137,8 +140,15 @@ export function PlantDetailPage() {
   const completeTaskMutation = useCompleteTaskMutation(householdId);
 
   const snoozeTaskMutation = useMutation({
-    mutationFn: ({ taskId, days }: { taskId: string; days: number }) =>
-      taskService.snoozeTask(taskId, days),
+    mutationFn: ({
+      taskId,
+      days,
+      expectedNextDue,
+    }: {
+      taskId: string;
+      days: number;
+      expectedNextDue: string;
+    }) => taskService.snoozeTask(taskId, days, { expectedNextDue }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
@@ -195,13 +205,26 @@ export function PlantDetailPage() {
         Back to plants
       </Link>
 
+      {photoUploadNeedsRetry && (
+        <Alert variant="info" title={t('plants.photoRecovery.title')}>
+          {t('plants.photoRecovery.description')}
+        </Alert>
+      )}
+
       {/* Plant header */}
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="w-full sm:w-48 flex-shrink-0 space-y-3">
           <div className="h-48 rounded-lg bg-parchment overflow-hidden">
             <PlantImage plant={plant} width={192} height={192} />
           </div>
-          <PlantImageUpload plantId={plant.id} />
+          <PlantImageUpload
+            plantId={plant.id}
+            onUploadSuccess={() => {
+              if (photoUploadNeedsRetry) {
+                navigate(location.pathname, { replace: true, state: null });
+              }
+            }}
+          />
           <Button
             variant="secondary"
             size="sm"
@@ -436,11 +459,23 @@ export function PlantDetailPage() {
                 key={task.id}
                 task={task}
                 completions={plant.recentCompletions}
-                onComplete={() => completeTaskMutation.mutate(task.id)}
-                onSnooze={(days) => snoozeTaskMutation.mutate({ taskId: task.id, days })}
+                onComplete={() =>
+                  completeTaskMutation.mutate({
+                    taskId: task.id,
+                    expectedNextDue: task.nextDue,
+                  })
+                }
+                onSnooze={(days) =>
+                  snoozeTaskMutation.mutate({
+                    taskId: task.id,
+                    days,
+                    expectedNextDue: task.nextDue,
+                  })
+                }
                 onEdit={() => setEditingTask(task)}
                 isCompleting={
-                  completeTaskMutation.isPending && completeTaskMutation.variables === task.id
+                  completeTaskMutation.isPending &&
+                  completeTaskMutation.variables?.taskId === task.id
                 }
                 isSnoozing={snoozeTaskMutation.isPending}
                 isReadOnly={(plant.status ?? 'active') !== 'active'}

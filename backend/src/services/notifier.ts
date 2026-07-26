@@ -46,6 +46,31 @@ export interface NotificationRecipient {
   email: string;
 }
 
+export const NOTIFICATION_CHANNELS = ['browser', 'email', 'sms'] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+
+/**
+ * A channel result is explicit about why no provider call happened. Reminder
+ * delivery uses `delivered` vs every other state to finalize or release that
+ * channel's daily lease without conflating it with a successful sibling.
+ */
+export type ChannelDeliveryStatus = 'delivered' | 'failed' | 'suppressed' | 'disabled' | 'skipped';
+
+export interface SendOptions {
+  /**
+   * Limit this fan-out to channels whose delivery leases the caller owns.
+   * Omitted means the normal behavior: consider every channel.
+   */
+  channels?: readonly NotificationChannel[];
+  /** Stable clock for DND-sensitive scheduled work and deterministic tests. */
+  now?: Date;
+  /**
+   * A caller that already read preferences may pass the same snapshot used to
+   * choose channel leases, avoiding a second DynamoDB read and plan drift.
+   */
+  preferences?: notificationPrefs.NotificationPreferences;
+}
+
 /**
  * Returns whether at least one browser-push notification was ACTUALLY
  * delivered — a configured send that resolved without the browser dropping
@@ -66,17 +91,44 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
   let anyDelivered = false;
   await Promise.all(
     subs.map(async (sub) => {
+      // Defense in depth for rows written before endpoint validation shipped.
+      // Never make an outbound request to a user-controlled/unknown origin.
+      if (!pushSubscriptions.isAllowedPushEndpoint(sub.endpoint)) {
+        logger.warn(
+          { userId, endpointHost: safeEndpointHost(sub.endpoint) },
+          'push_invalid_endpoint_removed'
+        );
+        await pushSubscriptions.deleteSubscription(userId, sub.endpoint).catch((cleanupErr) => {
+          logger.warn(
+            { err: cleanupErr, userId, msg: 'push_invalid_cleanup_failed' },
+            'push_invalid_cleanup_failed'
+          );
+        });
+        return;
+      }
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: sub.keys },
-          JSON.stringify(payload)
+          JSON.stringify(payload),
+          // Bound provider/network stalls so one hostile or degraded endpoint
+          // cannot consume the whole reminder Lambda timeout.
+          { timeout: 5_000 }
         );
         anyDelivered = true;
       } catch (err) {
         const e = err as { statusCode?: number };
         // 404/410 means the browser dropped the subscription permanently.
         if (e.statusCode === 404 || e.statusCode === 410) {
-          await pushSubscriptions.deleteSubscription(userId, sub.endpoint);
+          // Cleanup is best-effort. A transient DynamoDB failure while
+          // deleting one stale endpoint must not reject the entire browser
+          // leg (and, before the fan-out isolation below, used to prevent the
+          // same user's healthy email/SMS channels from running at all).
+          await pushSubscriptions.deleteSubscription(userId, sub.endpoint).catch((cleanupErr) => {
+            logger.warn(
+              { err: cleanupErr, userId, msg: 'push_stale_cleanup_failed' },
+              'push_stale_cleanup_failed'
+            );
+          });
         } else {
           logger.warn({ err, userId, msg: 'push_failed' }, 'push_failed');
         }
@@ -86,10 +138,19 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
   return anyDelivered;
 }
 
+function safeEndpointHost(endpoint: string): string {
+  try {
+    return new URL(endpoint).hostname;
+  } catch {
+    return 'invalid';
+  }
+}
+
 /**
- * Outcome of a `sendToUser` fan-out. The reminder dedupe marker (see
- * `services/reminders.ts`) keys off this so it only "burns the day" when the
- * user was actually reachable:
+ * Outcome of a `sendToUser` fan-out. Reminder delivery (see
+ * `services/reminders.ts`) keys its per-channel markers off `channels` so one
+ * successful provider never suppresses a retry for a failed or deferred
+ * sibling:
  *
  *   - `delivered` — at least one channel ACTUALLY sent (a browser push that
  *     resolved, or an email/SMS that left the building). A dry-run on an
@@ -105,6 +166,7 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
 export interface SendResult {
   delivered: boolean;
   dndSuppressedOnly: boolean;
+  channels: Record<NotificationChannel, ChannelDeliveryStatus>;
 }
 
 /**
@@ -123,38 +185,62 @@ export interface SendResult {
  */
 export async function sendToUser(
   recipient: NotificationRecipient,
-  payload: NotificationPayload
+  payload: NotificationPayload,
+  options: SendOptions = {}
 ): Promise<SendResult> {
-  const prefs = await notificationPrefs.getPreferences(recipient.userId);
-  const inDnd = notificationPrefs.isInDndWindow(prefs);
+  const prefs = options.preferences ?? (await notificationPrefs.getPreferences(recipient.userId));
+  const inDnd = notificationPrefs.isInDndWindow(prefs, options.now);
+  const requested = new Set(options.channels ?? NOTIFICATION_CHANNELS);
+  const channels: Record<NotificationChannel, ChannelDeliveryStatus> = {
+    browser: requested.has('browser') ? 'disabled' : 'skipped',
+    email: requested.has('email') ? 'disabled' : 'skipped',
+    sms: requested.has('sms') ? 'disabled' : 'skipped',
+  };
 
-  // Browser push runs first and synchronously resolves whether the user has a
-  // subscription, so we can fold its actual delivery into `delivered`.
-  let delivered = false;
-  if (prefs.browser) {
-    delivered = (await sendBrowserPush(recipient.userId, payload)) || delivered;
+  // Start every enabled channel before awaiting any one of them. Browser
+  // subscription reads, VAPID configuration, and stale-subscription cleanup
+  // are all external failure points; none may prevent email/SMS from running.
+  const work: Promise<void>[] = [];
+  if (requested.has('browser') && prefs.browser) {
+    channels.browser = 'failed';
+    work.push(
+      sendBrowserPush(recipient.userId, payload)
+        .then((sent) => {
+          channels.browser = sent ? 'delivered' : 'failed';
+        })
+        .catch((err) => {
+          logger.warn({ err, userId: recipient.userId, msg: 'push_failed' }, 'push_failed');
+          channels.browser = 'failed';
+        })
+    );
   }
 
   // Each loud-channel send resolves to whether it ACTUALLY sent (false on a
   // dry-run / unconfigured channel), so an enabled-but-unprovisioned SES/SNS
   // never masquerades as a delivery.
-  const work: Promise<boolean>[] = [];
-
-  if (prefs.email && !inDnd) {
-    work.push(
-      emailNotifier
-        .sendEmail({
-          to: recipient.email,
-          subject: payload.title,
-          text: payload.url ? `${payload.body}\n\n${payload.url}` : payload.body,
-        })
-        .catch((err) => {
-          logger.warn({ err, userId: recipient.userId, msg: 'email_failed' }, 'email_failed');
-          return false;
-        })
-    );
+  if (requested.has('email') && prefs.email) {
+    if (inDnd) {
+      channels.email = 'suppressed';
+    } else {
+      channels.email = 'failed';
+      work.push(
+        emailNotifier
+          .sendEmail({
+            to: recipient.email,
+            subject: payload.title,
+            text: payload.url ? `${payload.body}\n\n${payload.url}` : payload.body,
+          })
+          .then((sent) => {
+            channels.email = sent ? 'delivered' : 'failed';
+          })
+          .catch((err) => {
+            logger.warn({ err, userId: recipient.userId, msg: 'email_failed' }, 'email_failed');
+            channels.email = 'failed';
+          })
+      );
+    }
   }
-  if (prefs.sms && prefs.phone && !inDnd) {
+  if (requested.has('sms') && prefs.sms && prefs.phone) {
     if (!prefs.phoneVerified) {
       // SMS only ever goes to numbers their owner has confirmed — an
       // unverified number (incl. rows that predate verification) is a
@@ -163,27 +249,33 @@ export async function sendToUser(
         { userId: recipient.userId, msg: 'sms_skipped_unverified' },
         'sms_skipped_unverified'
       );
+    } else if (inDnd) {
+      channels.sms = 'suppressed';
     } else {
+      channels.sms = 'failed';
       work.push(
         smsNotifier
           .sendSms({ to: prefs.phone, text: `${payload.title}: ${payload.body}` })
+          .then((sent) => {
+            channels.sms = sent ? 'delivered' : 'failed';
+          })
           .catch((err) => {
             logger.warn({ err, userId: recipient.userId, msg: 'sms_failed' }, 'sms_failed');
-            return false;
+            channels.sms = 'failed';
           })
       );
     }
   }
-  if (inDnd && (prefs.email || prefs.sms)) {
+  if (Object.values(channels).includes('suppressed')) {
     logger.info({ userId: recipient.userId, msg: 'dnd_skipped' }, 'dnd_skipped');
   }
 
-  const loudResults = await Promise.all(work);
-  if (loudResults.some(Boolean)) delivered = true;
+  await Promise.all(work);
+  const delivered = Object.values(channels).includes('delivered');
 
   // DND-suppressed-only: the user wants email/SMS, nothing actually went out,
   // and DND is the cause. (`delivered` already covers browser push delivering
   // during DND.)
-  const dndSuppressedOnly = !delivered && inDnd && (prefs.email || prefs.sms);
-  return { delivered, dndSuppressedOnly };
+  const dndSuppressedOnly = !delivered && Object.values(channels).includes('suppressed');
+  return { delivered, dndSuppressedOnly, channels };
 }

@@ -32,14 +32,18 @@ import { checkGrounding, type RetrievedSpan } from './groundingGuard.js';
 import {
   appendMessage,
   appendMessagePair,
+  appendTurnUserMessage,
   claimTurn,
   finalizeTurn,
   getBudget,
   getConversation,
   incrementBudget,
   newConversationId,
+  markTurnRetryable,
+  reconcileTurnBudget,
   releaseTurn,
   reserveBudget,
+  type TurnBudgetReconciliation,
 } from './persistence.js';
 import type {
   BudgetConfig,
@@ -295,6 +299,59 @@ function extractAssistantText(blocks: ContentBlock[]): string {
 }
 
 /**
+ * A failed attempt must never strand a client-supplied turn id in
+ * `in_progress`. Releasing is cleanup, so preserve the original result/error
+ * when DynamoDB itself is unavailable and make the failure observable.
+ */
+async function releaseTurnBestEffort(householdId: string, turnId: string): Promise<void> {
+  try {
+    await releaseTurn(householdId, turnId);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_release_failed');
+  }
+}
+
+async function markTurnRetryableBestEffort(
+  householdId: string,
+  turnId: string,
+  attemptId: string,
+  budgetReconciliation?: TurnBudgetReconciliation
+): Promise<void> {
+  try {
+    await markTurnRetryable(householdId, turnId, attemptId, budgetReconciliation);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_retryable_mark_failed');
+  }
+}
+
+/**
+ * Reconciliation is cleanup, never part of delivering a completed answer.
+ * Return whether it settled so a retryable (not completed) attempt can avoid
+ * reserving and invoking the model again while its prior reservation is still
+ * unresolved.
+ */
+async function reconcileTurnBudgetBestEffort(
+  householdId: string,
+  turnId: string,
+  reconciliation: TurnBudgetReconciliation
+): Promise<boolean> {
+  try {
+    await reconcileTurnBudget(householdId, turnId, reconciliation);
+    return true;
+  } catch (err) {
+    logger.warn(
+      {
+        err: (err as Error).message,
+        turnId,
+        reconciliationId: reconciliation.reconciliationId,
+      },
+      'chat_budget_reconcile_failed'
+    );
+    return false;
+  }
+}
+
+/**
  * Events yielded by the streaming turn generator. Deltas and tool events are
  * TRANSPORT-ONLY — persistence always happens on completed messages, so a
  * dropped stream never corrupts the conversation. The terminal `done` event
@@ -345,7 +402,9 @@ async function* turnEvents(
   opts: { streaming: boolean }
 ): AsyncGenerator<ChatStreamEvent, RunChatTurnResult> {
   const { userId, householdId, message, turnId } = input;
-  const conversationId = input.conversationId ?? newConversationId();
+  let conversationId = input.conversationId ?? newConversationId();
+  let turnUserMessagePersisted = false;
+  let turnAttemptId: string | undefined;
 
   // Deploy-time incident kill switch. Keep history/reporting routes readable,
   // but stop every new sync/stream model turn before plan, budget, persistence,
@@ -374,9 +433,14 @@ async function* turnEvents(
   // finishes server-side but whose client falls back to the sync endpoint with
   // the SAME turnId gets the stored result, not a second Bedrock turn.
   if (turnId) {
-    const claim = await claimTurn(householdId, turnId);
+    const claim = await claimTurn(householdId, turnId, conversationId);
     if (claim.status === 'done' && claim.result) {
       const stored = claim.result as unknown as RunChatTurnResult;
+      if (claim.budgetReconciliation?.status === 'pending') {
+        // The answer is already durable and must be replayed even if this
+        // cleanup retry also encounters a transient DynamoDB failure.
+        await reconcileTurnBudgetBestEffort(householdId, turnId, claim.budgetReconciliation);
+      }
       yield { type: 'start', conversationId: stored.conversationId };
       yield { type: 'done', result: stored };
       return stored;
@@ -384,6 +448,24 @@ async function* turnEvents(
     if (claim.status === 'in_progress') {
       // A prior attempt with this turnId is still running — don't run a second.
       throw createHttpError(409, 'This message is already being processed — hang tight.');
+    }
+    conversationId = claim.conversationId ?? conversationId;
+    turnUserMessagePersisted = Boolean(claim.userMessagePersisted);
+    turnAttemptId = claim.attemptId;
+    if (!turnAttemptId) {
+      throw new Error('Claimed chat turn is missing its attempt id');
+    }
+    if (
+      claim.budgetReconciliation?.status === 'pending' &&
+      !(await reconcileTurnBudgetBestEffort(householdId, turnId, claim.budgetReconciliation))
+    ) {
+      // Do not stack a second reservation/model call on top of an unresolved
+      // failed attempt. Keep the claim retryable with the prior pending delta.
+      await markTurnRetryableBestEffort(householdId, turnId, turnAttemptId);
+      throw createHttpError(
+        503,
+        'The care assistant is finishing your previous attempt. Please try again shortly.'
+      );
     }
     // 'claimed' → we own this turn; run it (and finalize/release below).
   }
@@ -416,9 +498,40 @@ async function* turnEvents(
           ...sprout.citations.map((citation) => ({ type: 'citation' as const, ...citation })),
         ],
       };
-      await appendMessage(householdId, userRecord);
-      await appendMessage(householdId, assistantRecord);
-      const budget = await getBudget(householdId);
+      try {
+        // A Sprout answer is one logical turn. Persist it atomically so a DDB
+        // failure cannot leave a user message with no answer (or vice versa).
+        if (turnId && turnUserMessagePersisted) {
+          await appendMessage(householdId, assistantRecord);
+        } else {
+          await appendMessagePair(householdId, userRecord, assistantRecord);
+        }
+      } catch (err) {
+        if (turnId) {
+          if (turnUserMessagePersisted && turnAttemptId) {
+            await markTurnRetryableBestEffort(householdId, turnId, turnAttemptId);
+          } else {
+            await releaseTurnBestEffort(householdId, turnId);
+          }
+        }
+        throw err;
+      }
+
+      let budget: BudgetState;
+      try {
+        budget = await getBudget(householdId);
+      } catch (err) {
+        // Sprout does not consume the Bedrock budget. A transient read failure
+        // must not turn an already-persisted answer into a retryable 5xx.
+        logger.warn({ err: (err as Error).message }, 'chat_budget_read_failed');
+        budget = {
+          householdId,
+          yearMonth: new Date().toISOString().slice(0, 7),
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+        };
+      }
       const result: RunChatTurnResult = {
         conversationId,
         assistantText: sprout.text,
@@ -430,11 +543,18 @@ async function* turnEvents(
           outputTokens: Math.max(0, BUDGET_CONFIG.maxOutputTokensPerMonth - budget.outputTokens),
         },
       };
-      if (turnId) {
+      if (turnId && turnAttemptId) {
         try {
-          await finalizeTurn(householdId, turnId, result as unknown as Record<string, unknown>);
+          await finalizeTurn(
+            householdId,
+            turnId,
+            turnAttemptId,
+            result as unknown as Record<string, unknown>
+          );
         } catch (err) {
           logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_finalize_failed');
+          // Messages and the answer are already persisted. Reopening this turn
+          // would append duplicates and charge the provider again.
         }
       }
       audit('chat.message_sent', {
@@ -470,31 +590,32 @@ async function* turnEvents(
   } catch (err) {
     if ((err as { name?: string }).name === 'ChatBudgetExceededError') {
       // Release the idempotency claim so a retry (e.g. next month) can re-run.
-      if (turnId) await releaseTurn(householdId, turnId);
+      if (turnId) {
+        if (turnUserMessagePersisted && turnAttemptId) {
+          await markTurnRetryableBestEffort(householdId, turnId, turnAttemptId);
+        } else {
+          await releaseTurnBestEffort(householdId, turnId);
+        }
+      }
       throw createHttpError(
         429,
         "You've used this month's chat allowance. The budget resets on the 1st of next month."
       );
     }
+    // Reservation infrastructure failed after we claimed the turn. Let the
+    // client's retry own a fresh claim instead of returning 409 for minutes.
+    if (turnId) {
+      if (turnUserMessagePersisted && turnAttemptId) {
+        await markTurnRetryableBestEffort(householdId, turnId, turnAttemptId);
+      } else {
+        await releaseTurnBestEffort(householdId, turnId);
+      }
+    }
     throw err;
   }
 
-  yield { type: 'start', conversationId };
-
-  const now = new Date();
-  const userMessageRecord: ChatMessageRecord = {
-    conversationId,
-    timestamp: now.toISOString(),
-    role: 'user',
-    content: [{ type: 'text', text: message }],
-  };
-  await appendMessage(householdId, userMessageRecord);
-
-  // Replay history + the just-appended user message.
-  const history = trimHistory([...(await getConversation(householdId, conversationId))]);
-
-  let messagesForModel: BedrockMessage[] = toBedrockMessages(history);
-  const retrievedSpans = collectHistoryRagSpans(history);
+  let messagesForModel: BedrockMessage[];
+  const retrievedSpans: RetrievedSpan[] = [];
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCost = 0;
@@ -511,7 +632,33 @@ async function* turnEvents(
   // Distinguishes a clean loop exit from a thrown one inside the finally, which
   // owns both the budget reconcile and the turn-claim resolution.
   let failed = true;
+  let budgetReconciliation: TurnBudgetReconciliation | undefined;
   try {
+    yield { type: 'start', conversationId };
+
+    const now = new Date();
+    const userMessageRecord: ChatMessageRecord = {
+      conversationId,
+      timestamp: now.toISOString(),
+      role: 'user',
+      content: [{ type: 'text', text: message }],
+    };
+    if (!turnUserMessagePersisted) {
+      if (turnId) {
+        await appendTurnUserMessage(householdId, turnId, userMessageRecord);
+        turnUserMessagePersisted = true;
+      } else {
+        await appendMessage(householdId, userMessageRecord);
+      }
+    }
+
+    // Replay history + the just-appended user message. This setup is inside
+    // the reservation try/finally: DDB failures here previously leaked both
+    // the reservation and the idempotency claim.
+    const history = trimHistory([...(await getConversation(householdId, conversationId))]);
+    messagesForModel = toBedrockMessages(history);
+    retrievedSpans.push(...collectHistoryRagSpans(history));
+
     for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
       const modelArgs = {
         system: SYSTEM_PROMPT,
@@ -742,19 +889,44 @@ async function* turnEvents(
     // total on the true usage — even if a mid-turn Bedrock call threw (the
     // deltas can be negative; DynamoDB's ADD handles that). This always runs,
     // so a failed turn still bills what it spent and frees the rest.
-    await incrementBudget(householdId, {
+    const budgetDelta = {
       inputTokens: totalInputTokens - RESERVE_INPUT_TOKENS,
       outputTokens: totalOutputTokens - RESERVE_OUTPUT_TOKENS,
       costUsd: totalCost,
-    });
-    // A claimed turn that FAILED must release its idempotency slot so a
-    // legitimate retry (the client's sync fallback) can run fresh. Success is
-    // finalized below, after the result is built.
-    if (turnId && failed) {
+    };
+    if (turnId && turnAttemptId) {
+      budgetReconciliation = {
+        reconciliationId: turnAttemptId,
+        yearMonth: budgetBefore.yearMonth,
+        ...budgetDelta,
+        status: 'pending',
+      };
+      if (failed) {
+        // Persist the unresolved delta before cleanup. A same-turn retry first
+        // settles it, and the reconciliation ledger makes concurrent/repeated
+        // cleanup exactly once.
+        await markTurnRetryableBestEffort(householdId, turnId, turnAttemptId, budgetReconciliation);
+        await reconcileTurnBudgetBestEffort(householdId, turnId, budgetReconciliation);
+      }
+    } else {
       try {
-        await releaseTurn(householdId, turnId);
+        // Turns without a client idempotency key have no durable replay slot,
+        // so retain the legacy one-shot adjustment.
+        await incrementBudget(householdId, budgetDelta);
       } catch (err) {
-        logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_release_failed');
+        // Metering cleanup must not mask the original Bedrock/DDB error or turn
+        // a fully persisted answer into a 5xx that invites a duplicate retry.
+        logger.warn({ err: (err as Error).message }, 'chat_budget_reconcile_failed');
+      }
+    }
+    // A claimed turn that failed before an attempt id was established cannot
+    // carry durable reconciliation state; retain the legacy cleanup fallback.
+    if (turnId && failed && !turnAttemptId) {
+      if (turnUserMessagePersisted) {
+        // This can only occur for a legacy/malformed claim.
+        logger.warn({ turnId }, 'chat_turn_attempt_id_missing');
+      } else {
+        await releaseTurnBestEffort(householdId, turnId);
       }
     }
   }
@@ -793,12 +965,24 @@ async function* turnEvents(
   // Record the completed result so a same-turnId retry replays it instead of
   // re-running. Best-effort: if this write fails the worst case is a retry
   // re-runs the turn (the pre-idempotency behavior), so never fail the turn.
-  if (turnId) {
+  if (turnId && turnAttemptId && budgetReconciliation) {
     try {
-      await finalizeTurn(householdId, turnId, result as unknown as Record<string, unknown>);
+      // Cache the answer AND pending adjustment first. Even if reconciliation
+      // fails, a same-turn retry can repair metering while replaying this
+      // result without another model invocation.
+      await finalizeTurn(
+        householdId,
+        turnId,
+        turnAttemptId,
+        result as unknown as Record<string, unknown>,
+        budgetReconciliation
+      );
     } catch (err) {
       logger.warn({ err: (err as Error).message, turnId }, 'chat_turn_finalize_failed');
+      // The answer and messages are already persisted. Keep the claim closed
+      // so a retry cannot append duplicate history or charge the model again.
     }
+    await reconcileTurnBudgetBestEffort(householdId, turnId, budgetReconciliation);
   }
 
   yield { type: 'done', result };

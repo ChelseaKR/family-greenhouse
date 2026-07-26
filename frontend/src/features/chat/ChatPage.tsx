@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import {
   PaperAirplaneIcon,
   SparklesIcon,
@@ -17,6 +19,12 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { ProposalCard } from './ProposalCard';
 import { historyToDisplayMessages, type DisplayMessage } from './chatHistory';
 import { ReportResponseControl } from './ReportResponseControl';
+import { billingService } from '@/services/billingService';
+import { COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
+import { Alert } from '@/components/Alert';
+import { Card, CardHeader } from '@/components/Card';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { buttonStyles } from '@/components/buttonStyles';
 
 /**
  * Plant care chat — Bedrock-backed Claude with read-only tool access to the
@@ -30,6 +38,7 @@ import { ReportResponseControl } from './ReportResponseControl';
  */
 export function ChatPage() {
   useDocumentTitle('Plant Care Chat');
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
@@ -45,11 +54,19 @@ export function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const householdId = useActiveHouseholdId();
   const streamUrl = getChatStreamUrl();
+  const subscriptionQuery = useQuery({
+    queryKey: ['subscription', householdId],
+    queryFn: billingService.getCurrentSubscription,
+    enabled: Boolean(householdId),
+    staleTime: 60_000,
+  });
+  const chatAvailable =
+    subscriptionQuery.data?.planId === 'garden' || subscriptionQuery.data?.planId === 'greenhouse';
 
   // Per-household, per-tab conversation continuity: remember the thread id in
   // sessionStorage and replay its history (including proposal cards) on
   // reload. A fresh tab still starts a fresh conversation.
-  const storageKey = householdId ? `chat:conversationId:${householdId}` : null;
+  const storageKey = chatAvailable && householdId ? `chat:conversationId:${householdId}` : null;
 
   useEffect(() => {
     if (!storageKey) return;
@@ -81,6 +98,7 @@ export function ChatPage() {
     // The chat budget is household-scoped.
     queryKey: ['chat-budget', householdId],
     queryFn: () => chatService.getBudget(),
+    enabled: chatAvailable,
     staleTime: 60_000,
   });
 
@@ -188,6 +206,43 @@ export function ChatPage() {
       ? Math.min(100, Math.round((budget.inputTokensUsed / budget.inputTokensCap) * 100))
       : 0;
   const lowBudget = budgetPct >= 80;
+
+  if (subscriptionQuery.isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center" role="status">
+        <LoadingSpinner size="lg" />
+        <span className="sr-only">{t('chat.availabilityChecking')}</span>
+      </div>
+    );
+  }
+
+  if (subscriptionQuery.isError) {
+    return (
+      <Card>
+        <CardHeader title="Plant care chat" description="Ask questions about your household." />
+        <Alert variant="warning">{t('chat.availabilityCheckFailed')}</Alert>
+      </Card>
+    );
+  }
+
+  if (!chatAvailable) {
+    return (
+      <Card>
+        <CardHeader
+          title={t('chat.seedlingUnavailableTitle')}
+          description={t('chat.seedlingUnavailableDescription')}
+        />
+        <Alert variant="info">
+          {COMMERCIAL_HOLD_ACTIVE
+            ? t('chat.seedlingUnavailablePaused')
+            : t('chat.seedlingUnavailableUpgrade')}
+        </Alert>
+        <Link to="/settings/billing" className={buttonStyles({ className: 'mt-4' })}>
+          {t('chat.viewPlanStatus')}
+        </Link>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col lg:h-dvh">

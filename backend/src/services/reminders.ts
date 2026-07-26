@@ -11,19 +11,22 @@
  * and degrades to a structured log line when a channel isn't configured.
  *
  * Spam control: the scan is hourly and the due window is 24h, so the same due
- * task is eligible on every run. A per-user, per-day dedupe marker (conditional
- * Put on USER#{id} / REMINDED#{yyyy-mm-dd}) caps delivery at one reminder per
- * user per UTC day — email/SMS are billed per send, so this matters. The marker
- * is claimed AFTER a channel actually delivers (see claimDailyReminderSlot):
- * claiming it up front silently dropped the day's reminder for DND users who
- * rely on email/SMS, since DND suppresses those channels (H1).
+ * task is eligible on every run. A per-user, per-household, per-day dedupe
+ * marker per delivery channel caps each channel at one reminder for each
+ * household per recipient-local calendar day. Each channel is atomically
+ * reserved BEFORE delivery, finalized only when that provider accepts the
+ * notification, and released after a failed/deferred attempt. That ordering
+ * prevents overlapping scheduler/manual runs from duplicating a successful
+ * channel without letting email success suppress an SMS retry (or browser
+ * push during DND suppress email/SMS once quiet hours end).
  *
  * Query shape: ONE GSI1 due-window query per household (the same pattern as
  * getUpcomingTasks), grouped by assignee in memory. The old shape was one GSI2
  * query per member, which both multiplied reads and silently dropped
  * unassigned tasks (they're in nobody's GSI2 partition).
  */
-import { GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { randomUUID } from 'node:crypto';
+import { GetCommand, PutCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import type { Task } from '../models/types.js';
@@ -37,62 +40,197 @@ import * as notifier from './notifier.js';
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Markers outlive their day by a comfortable margin; DynamoDB TTL sweeps them.
 const MARKER_TTL_SECONDS = 48 * 60 * 60;
+// Long enough for the notifier's provider calls, short enough that a killed
+// Lambda is retried during the next hourly scan rather than suppressing a day.
+const DELIVERY_LEASE_SECONDS = 5 * 60;
 
-function dateKey(now: Date): string {
-  return now.toISOString().slice(0, 10); // yyyy-mm-dd (UTC)
+export function localDateKey(now: Date, timeZone = 'UTC'): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function aggregateReminderMarkerKeys(
+  userId: string,
+  householdId: string,
+  now: Date,
+  timeZone: string
+): Array<{ PK: string; SK: string }> {
+  const localDate = localDateKey(now, timeZone);
+  return [
+    // Original production shape used the UTC date and one reminder for the
+    // user across every household. Keep it authoritative while it ages out.
+    { PK: `USER#${userId}`, SK: `REMINDED#${now.toISOString().slice(0, 10)}` },
+    // Intermediate shape: household-scoped, but still aggregate by channel.
+    {
+      PK: `USER#${userId}`,
+      SK: `REMINDED#${localDate}#HOUSEHOLD#${householdId}`,
+    },
+  ];
+}
+
+function markerStillBlocksDelivery(
+  item: Record<string, unknown> | undefined,
+  nowEpoch: number
+): boolean {
+  if (!item) return false;
+  const ttl = Number(item.ttl ?? 0);
+  if (ttl > 0 && ttl <= nowEpoch) return false;
+  if (item.status !== 'sending') return true;
+  return Number(item.leaseExpiresAt ?? 0) > nowEpoch;
 }
 
 /**
- * Has this user already been reminded today? A point read on the per-user,
- * per-day marker, used to skip a member up front on subsequent hourly runs
- * (before building/sending the roll-up). The authoritative dedupe is still
- * the conditional Put in `claimDailyReminderSlot`; this is the cheap pre-check.
+ * Deploy compatibility: aggregate markers written by either previous schema
+ * mean that day's reminder already went out on at least one channel. Treat
+ * them as all-channel completion until their TTL/lease expires, avoiding a
+ * deploy-day resend when channel-scoped markers first ship.
  */
-async function alreadyRemindedToday(userId: string, now: Date): Promise<boolean> {
-  const result = await dynamodb.send(
-    new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `USER#${userId}`, SK: `REMINDED#${dateKey(now)}` },
-    })
+async function hasAggregateReminderMarker(
+  userId: string,
+  householdId: string,
+  now: Date,
+  timeZone: string
+): Promise<boolean> {
+  const nowEpoch = Math.floor(now.getTime() / 1000);
+  const results = await Promise.all(
+    aggregateReminderMarkerKeys(userId, householdId, now, timeZone).map((Key) =>
+      dynamodb.send(new GetCommand({ TableName: TABLE_NAME, Key }))
+    )
   );
-  return Boolean(result.Item);
+  return results.some((result) =>
+    markerStillBlocksDelivery(result.Item as Record<string, unknown> | undefined, nowEpoch)
+  );
+}
+
+function reminderChannelMarkerKey(
+  userId: string,
+  householdId: string,
+  now: Date,
+  timeZone: string,
+  channel: notifier.NotificationChannel
+): { PK: string; SK: string } {
+  return {
+    PK: `USER#${userId}`,
+    SK: `REMINDED#${localDateKey(now, timeZone)}#HOUSEHOLD#${householdId}#CHANNEL#${channel}`,
+  };
 }
 
 /**
- * Conditionally claim the user's "reminded today" slot. Returns true when the
- * marker was absent (we own today's send), false when a previous run already
- * claimed it.
- *
- * Written AFTER a channel actually delivered (H1): the slot must reflect a
- * real send, not merely an attempt. The old order claimed the slot BEFORE
- * sending, which silently burned the day for DND users who rely on email/SMS —
- * DND suppresses those channels (only browser push survives), so a push-less
- * DND user got the marker written but no reminder, and every later hourly run
- * skipped them. We now claim only once `notifier.sendToUser` reports a
- * delivery, so a DND-suppressed user is retried on the next run instead.
+ * Conditionally reserve one channel's "reminded today" slot. A completed or
+ * live reservation returns null; an expired reservation is reclaimable.
  */
-async function claimDailyReminderSlot(userId: string, now: Date): Promise<boolean> {
+async function reserveDailyReminderChannel(
+  userId: string,
+  householdId: string,
+  now: Date,
+  timeZone: string,
+  channel: notifier.NotificationChannel
+): Promise<string | null> {
+  const reservationId = randomUUID();
+  const nowEpoch = Math.floor(now.getTime() / 1000);
   try {
     await dynamodb.send(
       new PutCommand({
         TableName: TABLE_NAME,
         Item: {
-          PK: `USER#${userId}`,
-          SK: `REMINDED#${dateKey(now)}`,
+          ...reminderChannelMarkerKey(userId, householdId, now, timeZone, channel),
           entityType: 'ReminderMarker',
-          sentAt: now.toISOString(),
-          ttl: Math.floor(now.getTime() / 1000) + MARKER_TTL_SECONDS,
+          channel,
+          status: 'sending',
+          reservationId,
+          leaseExpiresAt: nowEpoch + DELIVERY_LEASE_SECONDS,
+          ttl: nowEpoch + MARKER_TTL_SECONDS,
         },
-        ConditionExpression: 'attribute_not_exists(PK)',
+        ConditionExpression:
+          'attribute_not_exists(PK) OR (#status = :sending AND leaseExpiresAt <= :now)',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':sending': 'sending', ':now': nowEpoch },
       })
     );
-    return true;
+    return reservationId;
   } catch (err) {
     if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
-      return false;
+      return null;
     }
     throw err;
   }
+}
+
+async function releaseDailyReminderChannel(
+  userId: string,
+  householdId: string,
+  now: Date,
+  timeZone: string,
+  channel: notifier.NotificationChannel,
+  reservationId: string
+): Promise<void> {
+  await dynamodb.send(
+    new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: reminderChannelMarkerKey(userId, householdId, now, timeZone, channel),
+      ConditionExpression: 'reservationId = :reservationId',
+      ExpressionAttributeValues: { ':reservationId': reservationId },
+    })
+  );
+}
+
+async function finalizeDailyReminderChannel(
+  userId: string,
+  householdId: string,
+  now: Date,
+  timeZone: string,
+  channel: notifier.NotificationChannel,
+  reservationId: string
+): Promise<void> {
+  await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: reminderChannelMarkerKey(userId, householdId, now, timeZone, channel),
+      UpdateExpression:
+        'SET #status = :sent, sentAt = :sentAt REMOVE leaseExpiresAt, reservationId',
+      ConditionExpression: '#status = :sending AND reservationId = :reservationId',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':sent': 'sent',
+        ':sending': 'sending',
+        ':sentAt': now.toISOString(),
+        ':reservationId': reservationId,
+      },
+    })
+  );
+}
+
+function eligibleReminderChannels(
+  prefs: notificationPrefs.NotificationPreferences,
+  now: Date
+): {
+  eligible: notifier.NotificationChannel[];
+  dndDeferred: notifier.NotificationChannel[];
+} {
+  const eligible: notifier.NotificationChannel[] = [];
+  const dndDeferred: notifier.NotificationChannel[] = [];
+  const inDnd = notificationPrefs.isInDndWindow(prefs, now);
+
+  if (prefs.browser) eligible.push('browser');
+  if (prefs.email) {
+    (inDnd ? dndDeferred : eligible).push('email');
+  }
+  if (prefs.sms && prefs.phone && prefs.phoneVerified) {
+    (inDnd ? dndDeferred : eligible).push('sms');
+  }
+  return { eligible, dndDeferred };
+}
+
+function frontendUrl(path: string): string {
+  const base = process.env.FRONTEND_URL?.trim() || 'http://localhost:3000';
+  return new URL(path, base).toString();
 }
 
 /**
@@ -161,11 +299,43 @@ export async function remindHousehold(
       const tasksForMember = [...mine, ...unassigned];
       if (tasksForMember.length === 0) continue;
 
-      // Per-user daily dedupe — see claimDailyReminderSlot. Cheap pre-check
-      // up front so an already-reminded member skips the roll-up build + send
-      // entirely on later hourly runs. The slot is only CLAIMED below, after a
-      // channel actually delivered (H1).
-      if (await alreadyRemindedToday(member.userId, now)) continue;
+      // Keep aggregate markers written by earlier releases authoritative until
+      // they age out, then reserve only the still-pending eligible channels.
+      const memberPrefs = await notificationPrefs.getPreferences(member.userId);
+      const timeZone = memberPrefs.timezone || 'UTC';
+      if (await hasAggregateReminderMarker(member.userId, householdId, now, timeZone)) {
+        continue;
+      }
+      const channelPlan = eligibleReminderChannels(memberPrefs, now);
+      if (memberPrefs.sms && memberPrefs.phone && !memberPrefs.phoneVerified) {
+        logger.info(
+          { userId: member.userId, msg: 'sms_skipped_unverified' },
+          'sms_skipped_unverified'
+        );
+      }
+      if (channelPlan.dndDeferred.length > 0) {
+        logger.info(
+          {
+            householdId,
+            userId: member.userId,
+            channels: channelPlan.dndDeferred,
+          },
+          'reminders.dnd_deferred_retry_next_run'
+        );
+      }
+
+      const reservations = new Map<notifier.NotificationChannel, string>();
+      for (const channel of channelPlan.eligible) {
+        const reservationId = await reserveDailyReminderChannel(
+          member.userId,
+          householdId,
+          now,
+          timeZone,
+          channel
+        );
+        if (reservationId) reservations.set(channel, reservationId);
+      }
+      if (reservations.size === 0) continue;
 
       const overdue = tasksForMember.filter((t) => t.nextDue < nowIso).length;
       let body = overdue
@@ -189,25 +359,100 @@ export async function remindHousehold(
         body += ` (covering for ${coveringNames.join(', ')})`;
       }
 
-      const result = await notifier.sendToUser(
-        { userId: member.userId, email: member.email },
-        { title: 'Plant care reminder', body, tag: 'reminder' }
-      );
-
-      if (result.delivered) {
-        // Burn the day only on a real delivery, so a transient race can't
-        // double-claim either. The conditional Put is still authoritative.
-        if (await claimDailyReminderSlot(member.userId, now)) {
-          sent += 1;
-        }
-      } else if (result.dndSuppressedOnly) {
-        // Reachable only via DND-suppressed email/SMS: don't claim the slot —
-        // the next hourly run retries once the DND window lifts (H1).
-        logger.info(
-          { householdId, userId: member.userId },
-          'reminders.dnd_suppressed_retry_next_run'
+      let result: notifier.SendResult;
+      try {
+        result = await notifier.sendToUser(
+          { userId: member.userId, email: member.email },
+          {
+            title: 'Plant care reminder',
+            body,
+            tag: `reminder-${householdId}-${localDateKey(now, timeZone)}`,
+            url: frontendUrl('/tasks?filter=due'),
+          },
+          {
+            channels: [...reservations.keys()],
+            now,
+            preferences: memberPrefs,
+          }
         );
+      } catch (err) {
+        await Promise.all(
+          [...reservations].map(([channel, reservationId]) =>
+            releaseDailyReminderChannel(
+              member.userId,
+              householdId,
+              now,
+              timeZone,
+              channel,
+              reservationId
+            ).catch((cleanupErr) => {
+              logger.warn(
+                {
+                  err: (cleanupErr as Error).message,
+                  channel,
+                  householdId,
+                  userId: member.userId,
+                },
+                'reminders.reservation_cleanup_failed'
+              );
+            })
+          )
+        );
+        logger.warn(
+          { err: (err as Error).message, householdId, userId: member.userId },
+          'reminders.send_failed'
+        );
+        continue;
       }
+
+      let memberDelivered = false;
+      await Promise.all(
+        [...reservations].map(async ([channel, reservationId]) => {
+          if (result.channels[channel] === 'delivered') {
+            memberDelivered = true;
+            await finalizeDailyReminderChannel(
+              member.userId,
+              householdId,
+              now,
+              timeZone,
+              channel,
+              reservationId
+            ).catch((err) => {
+              // A provider accepted this channel. Never delete its marker on a
+              // finalize error: doing so would guarantee a duplicate next run.
+              logger.warn(
+                {
+                  err: (err as Error).message,
+                  channel,
+                  householdId,
+                  userId: member.userId,
+                },
+                'reminders.reservation_finalize_failed'
+              );
+            });
+            return;
+          }
+          await releaseDailyReminderChannel(
+            member.userId,
+            householdId,
+            now,
+            timeZone,
+            channel,
+            reservationId
+          ).catch((err) => {
+            logger.warn(
+              {
+                err: (err as Error).message,
+                channel,
+                householdId,
+                userId: member.userId,
+              },
+              'reminders.reservation_cleanup_failed'
+            );
+          });
+        })
+      );
+      if (memberDelivered) sent += 1;
     }
   }
 
@@ -253,7 +498,7 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
         TableName: TABLE_NAME,
         Item: {
           PK: `HOUSEHOLD#${householdId}`,
-          SK: `PEST_CHECK#${dateKey(now)}`,
+          SK: `PEST_CHECK#${now.toISOString().slice(0, 10)}`,
           entityType: 'PestCheckMarker',
           checkedAt: now.toISOString(),
           ttl: Math.floor(now.getTime() / 1000) + MARKER_TTL_SECONDS,
@@ -269,6 +514,12 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
   }
 
   let dataUnavailable = false;
+  // A channel/provider failure is retryable just like unavailable pest data.
+  // Without clearing the daily marker, a resolved `{ delivered: false }`
+  // result (dry-run, DND, or all providers failing) used to suppress the pest
+  // alert for the rest of the day and, worse, was treated as a successful
+  // delivery for the 90-day per-pest marker below.
+  let deliveryPending = false;
   // Only flips to true once the try block runs to completion (including the
   // "nobody opted in" early return). Any thrown exception along the way — a
   // member/prefs read failing, evaluatePestAlerts itself throwing, a
@@ -291,33 +542,45 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
     const result = await pestAlerts.evaluatePestAlerts(householdId, now);
     dataUnavailable = result.dataUnavailable;
     for (const alert of result.alerts) {
-      let delivered = false;
       for (const member of optedIn) {
+        if (await pestAlerts.wasAlerted(member.userId, alert.plantId, alert.pestId, now)) {
+          continue;
+        }
         try {
-          await notifier.sendToUser(
+          const sendResult = await notifier.sendToUser(
             { userId: member.userId, email: member.email },
-            { title: 'Pest season heads-up', body: alert.message, tag: 'pest-alert' }
+            {
+              title: 'Pest season heads-up',
+              body: alert.message,
+              tag: `pest-alert-${householdId}-${alert.plantId}-${alert.pestId}`,
+              url: frontendUrl(`/plants/${encodeURIComponent(alert.plantId)}`),
+            }
           );
-          delivered = true;
+          if (sendResult.delivered) {
+            await pestAlerts.markAlerted(member.userId, alert.plantId, alert.pestId, now);
+          } else {
+            deliveryPending = true;
+          }
         } catch (err) {
+          deliveryPending = true;
           logger.warn(
             { err: (err as Error).message, householdId, userId: member.userId },
             'reminders.pest_alert_send_failed'
           );
         }
       }
-      if (delivered) {
-        await pestAlerts.markAlerted(alert.plantId, alert.pestId);
-      }
     }
     completed = true;
   } finally {
-    if (dataUnavailable || !completed) {
+    if (dataUnavailable || deliveryPending || !completed) {
       await dynamodb
         .send(
           new DeleteCommand({
             TableName: TABLE_NAME,
-            Key: { PK: `HOUSEHOLD#${householdId}`, SK: `PEST_CHECK#${dateKey(now)}` },
+            Key: {
+              PK: `HOUSEHOLD#${householdId}`,
+              SK: `PEST_CHECK#${now.toISOString().slice(0, 10)}`,
+            },
           })
         )
         .catch((err) => {

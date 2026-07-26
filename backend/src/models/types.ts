@@ -111,6 +111,12 @@ export interface Plant {
    *  suggestion from the species autocomplete. Optional — free-text species
    *  names without a Perenual match leave this null. */
   perenualSpeciesId?: number | null;
+  /**
+   * Server-resolved canonical scientific name for external integrations.
+   * Unlike `species`, clients cannot set this directly: the backend derives it
+   * from the trusted Perenual record referenced by `perenualSpeciesId`.
+   */
+  canonicalSpecies?: string | null;
   /** Propagation lineage: the plant this one was cut from. Always within
    *  the same household; null/absent for plants that aren't cuttings. The
    *  parent may itself die or be given away — the link is history, not a

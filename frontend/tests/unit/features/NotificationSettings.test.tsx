@@ -5,6 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationSettings } from '@/features/settings/NotificationSettings';
 import type { NotificationPreferences } from '@/services/notificationService';
 
+const notificationApi = vi.hoisted(() => ({
+  supported: true,
+  enabledLocally: false,
+  permission: 'default' as NotificationPermission | 'unsupported',
+}));
+
 vi.mock('@/services/notificationService', () => ({
   notificationService: {
     getPreferences: vi.fn(),
@@ -18,10 +24,10 @@ vi.mock('@/services/notificationService', () => ({
 }));
 
 vi.mock('@/utils/notifications', () => ({
-  isSupported: () => true,
-  isEnabledLocally: () => false,
+  isSupported: () => notificationApi.supported,
+  isEnabledLocally: () => notificationApi.enabledLocally,
   disableLocally: vi.fn(),
-  getPermission: () => 'default' as const,
+  getPermission: () => notificationApi.permission,
   requestPermission: vi.fn(),
 }));
 
@@ -67,6 +73,9 @@ async function renderSettings(initial: NotificationPreferences) {
 describe('NotificationSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    notificationApi.supported = true;
+    notificationApi.enabledLocally = false;
+    notificationApi.permission = 'default';
   });
 
   it('shows the weekly digest toggle (checked by default) and saves an opt-out', async () => {
@@ -191,6 +200,228 @@ describe('NotificationSettings', () => {
       timezone: 'America/New_York',
       pestAlerts: true,
     });
+  });
+
+  it('persists the browser delivery preference when enabling reminders', async () => {
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs());
+    const { requestPermission } = await import('@/utils/notifications');
+    vi.mocked(requestPermission).mockImplementation(async () => {
+      notificationApi.permission = 'granted';
+      notificationApi.enabledLocally = true;
+      return 'granted';
+    });
+    vi.mocked(notificationService.updatePreferences).mockResolvedValue(prefs({ browser: true }));
+
+    await user.click(screen.getByRole('button', { name: 'Enable' }));
+
+    await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+    expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
+      browser: true,
+      email: true,
+    });
+    expect(
+      await screen.findByText(/Browser reminders are enabled while the app is open/u)
+    ).toBeInTheDocument();
+  });
+
+  it('does not enable browser delivery when the permission prompt is dismissed', async () => {
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs());
+    const { requestPermission } = await import('@/utils/notifications');
+    vi.mocked(requestPermission).mockResolvedValue('default');
+
+    await user.click(screen.getByRole('button', { name: 'Enable' }));
+
+    expect(await screen.findByText(/permission prompt was dismissed/i)).toBeInTheDocument();
+    expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+  });
+
+  it('refreshes browser permission when the user returns from site settings', async () => {
+    notificationApi.permission = 'denied';
+    notificationApi.enabledLocally = false;
+    await renderSettings(prefs({ browser: true }));
+
+    const deniedEnable = screen.getByRole('button', { name: 'Enable' });
+    expect(deniedEnable).toBeDisabled();
+    expect(
+      screen.getByText(/Permission denied — update your browser settings/u)
+    ).toBeInTheDocument();
+
+    // The user changes the site permission outside the app, then focuses this
+    // still-mounted page. It should become actionable without a full reload.
+    notificationApi.permission = 'default';
+    fireEvent(window, new Event('focus'));
+    await waitFor(() => expect(deniedEnable).toBeEnabled());
+    expect(
+      screen.getByText('Enable to be alerted when overdue tasks appear in the dashboard.')
+    ).toBeInTheDocument();
+
+    // A restored grant plus the existing local/server opt-ins should likewise
+    // restore the active state on visibility reconciliation.
+    notificationApi.permission = 'granted';
+    notificationApi.enabledLocally = true;
+    fireEvent(document, new Event('visibilitychange'));
+    expect(await screen.findByRole('button', { name: 'Turn off' })).toBeInTheDocument();
+  });
+
+  it('serializes browser and toggle writes and builds the queued write from fresh preferences', async () => {
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs());
+    const { requestPermission } = await import('@/utils/notifications');
+    vi.mocked(requestPermission).mockImplementation(async () => {
+      notificationApi.permission = 'granted';
+      notificationApi.enabledLocally = true;
+      return 'granted';
+    });
+
+    let finishBrowserWrite!: (value: NotificationPreferences) => void;
+    vi.mocked(notificationService.updatePreferences)
+      .mockImplementationOnce(
+        () =>
+          new Promise<NotificationPreferences>((resolve) => {
+            finishBrowserWrite = resolve;
+          })
+      )
+      .mockImplementationOnce(async (payload) =>
+        prefs({ ...payload, browser: true, email: false })
+      );
+
+    await user.click(screen.getByRole('button', { name: 'Enable' }));
+    await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledTimes(1));
+
+    // This control remains independently usable while browser setup is in
+    // flight. The shared mutation scope queues it behind the browser write.
+    await user.click(screen.getByRole('checkbox', { name: 'Email notifications' }));
+    expect(notificationService.updatePreferences).toHaveBeenCalledTimes(1);
+
+    finishBrowserWrite(prefs({ browser: true }));
+    await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(notificationService.updatePreferences).mock.calls[1][0]).toMatchObject({
+      browser: true,
+      email: false,
+    });
+  });
+
+  it('persists browser=false before reporting that reminders are disabled', async () => {
+    notificationApi.permission = 'granted';
+    notificationApi.enabledLocally = true;
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs({ browser: true }));
+    const { disableLocally } = await import('@/utils/notifications');
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: {
+            getSubscription: vi.fn().mockResolvedValue({
+              endpoint: 'https://fcm.googleapis.com/fcm/send/current-device',
+              unsubscribe: vi.fn().mockResolvedValue(true),
+            }),
+          },
+        }),
+      },
+    });
+    vi.mocked(notificationService.unsubscribe).mockResolvedValue({
+      ok: true,
+      remainingSubscriptions: 0,
+    });
+    vi.mocked(notificationService.updatePreferences).mockResolvedValue(prefs({ browser: false }));
+
+    try {
+      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+      expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
+        browser: false,
+      });
+      expect(disableLocally).toHaveBeenCalledOnce();
+      expect(
+        await screen.findByText('Browser notifications disabled on this device.')
+      ).toBeInTheDocument();
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+      } else {
+        delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
+      }
+    }
+  });
+
+  it('turns off only this browser while another subscription remains active', async () => {
+    notificationApi.permission = 'granted';
+    notificationApi.enabledLocally = true;
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs({ browser: true }));
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: {
+            getSubscription: vi.fn().mockResolvedValue({
+              endpoint: 'https://fcm.googleapis.com/fcm/send/current-device',
+              unsubscribe: vi.fn().mockResolvedValue(true),
+            }),
+          },
+        }),
+      },
+    });
+    vi.mocked(notificationService.unsubscribe).mockResolvedValue({
+      ok: true,
+      remainingSubscriptions: 1,
+    });
+
+    try {
+      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      expect(
+        await screen.findByText('Browser notifications disabled on this device.')
+      ).toBeInTheDocument();
+      expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+      } else {
+        delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
+      }
+    }
+  });
+
+  it('keeps email and SMS settings available when this browser lacks Notification API support', async () => {
+    notificationApi.supported = false;
+    notificationApi.permission = 'unsupported';
+
+    await renderSettings(prefs());
+
+    expect(
+      screen.getByText(/Browser reminders are not supported on this device/u)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enable' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Email notifications' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'SMS notifications' })).toBeInTheDocument();
+  });
+
+  it('shows a recoverable error instead of spinning forever when preferences fail to load', async () => {
+    const user = userEvent.setup();
+    const { notificationService } = await import('@/services/notificationService');
+    vi.mocked(notificationService.getPreferences).mockRejectedValueOnce(new Error('Network down'));
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NotificationSettings />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('Network down')).toBeInTheDocument();
+    vi.mocked(notificationService.getPreferences).mockResolvedValueOnce(prefs());
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(
+      await screen.findByRole('checkbox', { name: 'Weekly plant digest' })
+    ).toBeInTheDocument();
   });
 
   it('hides the nonfunctional device-push control in native shells', async () => {

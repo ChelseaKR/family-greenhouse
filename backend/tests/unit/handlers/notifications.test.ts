@@ -9,9 +9,29 @@ vi.mock('../../../src/services/digest.js', () => ({
   recapHousehold: vi.fn(async () => 4),
   defaultRecapYear: vi.fn(() => 2025),
 }));
+vi.mock('../../../src/services/pushSubscriptions.js', () => ({
+  isAllowedPushEndpoint: vi.fn((endpoint: string) => {
+    try {
+      const url = new URL(endpoint);
+      return url.protocol === 'https:' && url.hostname === 'fcm.googleapis.com';
+    } catch {
+      return false;
+    }
+  }),
+  saveSubscription: vi.fn(async () => undefined),
+  deleteSubscription: vi.fn(async () => 0),
+}));
 vi.mock('../../../src/services/notificationPrefs.js', () => ({
   getPreferences: vi.fn(),
   setPreferences: vi.fn(),
+  isValidTimeZone: vi.fn((timezone: string) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+      return true;
+    } catch {
+      return false;
+    }
+  }),
   startPhoneVerification: vi.fn(async () => undefined),
   confirmPhoneVerification: vi.fn(async () => ({
     userId: 'user-1',
@@ -59,6 +79,81 @@ function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayPr
 }
 
 const ctx = {} as Context;
+
+describe('notification browser subscription routes', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+  });
+
+  it('accepts a browser-issued HTTPS endpoint and persists it for this user', async () => {
+    const push = await import('../../../src/services/pushSubscriptions.js');
+    const { subscribe } = await import('../../../src/handlers/notifications/handler.js');
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/device-1';
+    const res = (await subscribe(
+      buildEvent({
+        path: '/notifications/subscribe',
+        body: JSON.stringify({
+          endpoint,
+          keys: { p256dh: 'p256dh-key', auth: 'auth-key' },
+        }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(push.saveSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', householdId: 'hh-1', endpoint })
+    );
+  });
+
+  it('rejects internal or arbitrary push endpoints before any outbound credential is stored', async () => {
+    const push = await import('../../../src/services/pushSubscriptions.js');
+    const { subscribe } = await import('../../../src/handlers/notifications/handler.js');
+
+    for (const endpoint of [
+      'https://169.254.169.254/latest/meta-data',
+      'http://fcm.googleapis.com/fcm/send/no-tls',
+      'https://attacker.example/slow',
+    ]) {
+      const res = (await subscribe(
+        buildEvent({
+          path: '/notifications/subscribe',
+          body: JSON.stringify({
+            endpoint,
+            keys: { p256dh: 'p256dh-key', auth: 'auth-key' },
+          }),
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+    }
+    expect(push.saveSubscription).not.toHaveBeenCalled();
+  });
+
+  it('returns the remaining device count after unsubscribing this endpoint', async () => {
+    const push = await import('../../../src/services/pushSubscriptions.js');
+    const { unsubscribe } = await import('../../../src/handlers/notifications/handler.js');
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/device-1';
+    vi.mocked(push.deleteSubscription).mockResolvedValueOnce(2);
+
+    const res = (await unsubscribe(
+      buildEvent({
+        path: '/notifications/unsubscribe',
+        body: JSON.stringify({ endpoint }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true, remainingSubscriptions: 2 });
+    expect(push.deleteSubscription).toHaveBeenCalledWith('user-1', endpoint);
+  });
+});
 
 describe('notifications runReminders', () => {
   beforeEach(async () => {
@@ -322,6 +417,63 @@ describe('notifications phone verification routes', () => {
       () => {}
     )) as APIGatewayProxyResult;
     expect(update.statusCode).toBe(503);
+    expect(prefs.setPreferences).not.toHaveBeenCalled();
+  });
+
+  it('rejects half-configured quiet hours before persisting preferences', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { updatePrefs } = await import('../../../src/handlers/notifications/handler.js');
+    const res = (await updatePrefs(
+      buildEvent({
+        httpMethod: 'PUT',
+        path: '/notifications/prefs',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          browser: false,
+          email: true,
+          sms: false,
+          phone: '',
+          dndStart: '22:00',
+          dndEnd: '',
+          timezone: 'UTC',
+          pestAlerts: false,
+          weeklyDigest: true,
+        }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(400);
+    expect(prefs.setPreferences).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown IANA timezone before persisting preferences', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { updatePrefs } = await import('../../../src/handlers/notifications/handler.js');
+    const res = (await updatePrefs(
+      buildEvent({
+        httpMethod: 'PUT',
+        path: '/notifications/prefs',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          browser: false,
+          email: true,
+          sms: false,
+          phone: '',
+          dndStart: '22:00',
+          dndEnd: '07:00',
+          timezone: 'Not/A_Timezone',
+          pestAlerts: false,
+          weeklyDigest: true,
+        }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toBe('Validation failed');
     expect(prefs.setPreferences).not.toHaveBeenCalled();
   });
 

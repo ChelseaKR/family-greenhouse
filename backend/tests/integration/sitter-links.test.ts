@@ -208,7 +208,11 @@ describe('public sitter completion (no auth)', () => {
 
   it('completes a task and attributes it to "a plant sitter"', async () => {
     const sitterToken = await createLink();
-    const res = await request(app).post(`/sitter/${sitterToken}/tasks/${seedTaskId}/complete`);
+    const expectedNextDue = db.tasks.get(seedTaskId)!.nextDue;
+    const completionsBefore = db.completions.size;
+    const res = await request(app)
+      .post(`/sitter/${sitterToken}/tasks/${seedTaskId}/complete`)
+      .send({ expectedNextDue });
     expect(res.status).toBe(200);
     expect(res.body.taskId).toBe(seedTaskId);
     expect(res.body.overdue).toBe(false);
@@ -217,6 +221,13 @@ describe('public sitter completion (no auth)', () => {
     const completion = [...db.completions.values()].find((c) => c.taskId === seedTaskId);
     expect(completion?.completedByName).toBe('a plant sitter');
     expect(completion?.completedBy).toMatch(/^sitter:/);
+
+    const retry = await request(app)
+      .post(`/sitter/${sitterToken}/tasks/${seedTaskId}/complete`)
+      .send({ expectedNextDue });
+    expect(retry.status).toBe(200);
+    expect(retry.body.dueDate).toBe(db.tasks.get(seedTaskId)!.nextDue);
+    expect(db.completions.size).toBe(completionsBefore + 1);
   });
 
   it('rejects completing a task from ANOTHER household (cross-household guard)', async () => {

@@ -316,6 +316,23 @@ describe('plants handler — propagation + shares', () => {
       const res = (await sharePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(404);
     });
+
+    it('does not mint a live share credential when link configuration is missing', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('FRONTEND_URL', '');
+      vi.stubEnv('ALLOWED_ORIGIN', '');
+      const plantService = await import('../../../src/services/plantService.js');
+      const { sharePlant } = await import('../../../src/handlers/plants/handler.js');
+      const event = buildEvent({
+        httpMethod: 'POST',
+        pathParameters: { id: PARENT_ID },
+      });
+
+      const res = (await sharePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(500);
+      expect(plantService.createPlantShare).not.toHaveBeenCalled();
+    });
   });
 
   describe('getSharedPlant (public)', () => {

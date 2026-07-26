@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isConfigured, geocode, getWeather } from '../../../src/services/weather.js';
+import {
+  isConfigured,
+  geocode,
+  geocodeDetailed,
+  getWeather,
+  getWeatherDetailed,
+} from '../../../src/services/weather.js';
 
 const ORIGINAL = process.env;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -58,6 +64,11 @@ describe('weather client (OpenWeatherMap)', () => {
     it('returns null when there are no candidates', async () => {
       fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
       expect(await geocode('xyzzy nowhere')).toBeNull();
+    });
+
+    it('classifies a valid empty candidate list as not_found', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [] });
+      expect(await geocodeDetailed('xyzzy nowhere')).toEqual({ status: 'not_found' });
     });
 
     describe('space-separated country/state qualifiers (the "davis us" / "davis ca" bug)', () => {
@@ -189,6 +200,20 @@ describe('weather client (OpenWeatherMap)', () => {
     it('returns null on non-2xx', async () => {
       fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
       expect(await geocode('Durham')).toBeNull();
+    });
+
+    it('classifies non-2xx and network failures as provider unavailability', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+      await expect(geocodeDetailed('Durham')).resolves.toEqual({
+        status: 'unavailable',
+        reason: 'provider',
+      });
+
+      fetchMock.mockRejectedValueOnce(new Error('ECONNRESET'));
+      await expect(getWeatherDetailed(1, 2)).resolves.toEqual({
+        status: 'unavailable',
+        reason: 'provider',
+      });
     });
 
     it('returns null when fetch rejects (DNS, reset, ...)', async () => {

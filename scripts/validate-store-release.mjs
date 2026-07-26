@@ -270,8 +270,13 @@ if (production) {
     }
   }
   if (process.env.VITE_API_URL) assertHttps(process.env.VITE_API_URL, 'VITE_API_URL');
+  // CapacitorHttp supports ordinary requests but not the incrementally
+  // readable browser stream the SSE client requires. Shipping a stream URL
+  // makes native chat select that unsupported path and fail before falling
+  // back. Keep store binaries on the tested synchronous endpoint until a
+  // native streaming transport exists.
   if (process.env.VITE_CHAT_STREAM_URL) {
-    assertHttps(process.env.VITE_CHAT_STREAM_URL, 'VITE_CHAT_STREAM_URL');
+    fail('VITE_CHAT_STREAM_URL must be unset for native store builds');
   }
   if (String(process.env.VITE_BETA_MODE).toLowerCase() !== 'false') {
     fail('VITE_BETA_MODE must be false for public store builds');

@@ -44,14 +44,30 @@ export const identify = createHandler(
       : getPlan('seedling');
     const allowance = identifyBudget.allowanceForPlan(plan.id);
     const meteringEnabled = identifyBudget.meteringEnabled();
-    const used = await identifyBudget.getUsage(bucketId);
+    const upstreamConfigured = plantIdentification.isPlantIdentificationConfigured();
+    let used: number;
 
-    if (meteringEnabled && used >= allowance) {
-      // Mirrors the plant-cap 402 contract: plan name + upgrade pointer.
-      throw createHttpError(
-        402,
-        `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`
-      );
+    if (meteringEnabled && upstreamConfigured) {
+      // Reserve BEFORE the paid call. A read-then-check gate lets concurrent
+      // requests all reach Plant.id before any one increments the counter.
+      try {
+        used = await identifyBudget.reserveUsage(bucketId, allowance);
+      } catch (err) {
+        if (err instanceof identifyBudget.IdentifyBudgetExceededError) {
+          throw createHttpError(
+            402,
+            `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`
+          );
+        }
+        throw createHttpError(
+          503,
+          'Plant identification is temporarily unavailable. Please try again.',
+          { expose: true }
+        );
+      }
+    } else {
+      // Tracking-only beta mode (or an unconfigured demo fallback).
+      used = await identifyBudget.getUsage(bucketId);
     }
 
     let result: plantIdentification.IdentifyResponse;
@@ -70,7 +86,7 @@ export const identify = createHandler(
     // the "not configured" fallback costs nothing upstream. The increment is
     // fail-soft (null on DDB error): the user already got their result.
     let finalUsed = used;
-    if (result.configured) {
+    if (result.configured && !meteringEnabled) {
       finalUsed = (await identifyBudget.incrementUsage(bucketId)) ?? used + 1;
     }
 

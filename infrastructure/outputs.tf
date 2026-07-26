@@ -13,6 +13,11 @@ output "api_url" {
   value       = module.api.api_url
 }
 
+output "web_push_vapid_public_key" {
+  description = "Public VAPID key to embed in the matching environment's frontend build"
+  value       = var.web_push_vapid_public_key
+}
+
 # Streaming chat is OFF by default in the frontend. To turn it on, set
 # VITE_CHAT_STREAM_URL to this value in the frontend CI build (GitHub repo
 # var PRODUCTION_CHAT_STREAM_URL feeds cd-production.yml); leaving it unset

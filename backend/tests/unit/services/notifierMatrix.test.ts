@@ -258,8 +258,8 @@ async function loadSendToUser(prefsOverride: PrefsOverride): Promise<{
 
   // Re-establish resolved-value behavior per-call. `vi.clearAllMocks` in
   // afterEach wipes call history; mock factories run once at module load.
-  emailMock.mockResolvedValue(undefined);
-  smsMock.mockResolvedValue(undefined);
+  emailMock.mockResolvedValue(true);
+  smsMock.mockResolvedValue(true);
 
   vi.mocked(prefsModule.getPreferences).mockResolvedValue(prefs(prefsOverride));
 
@@ -308,6 +308,7 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     expect(emailMock).toHaveBeenCalledTimes(1);
     expect(result.delivered).toBe(false);
     expect(result.dndSuppressedOnly).toBe(false);
+    expect(result.channels.email).toBe('failed');
   });
 
   it('email enabled and actually sent (sendEmail → true) → delivered', async () => {
@@ -315,6 +316,28 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     emailMock.mockResolvedValue(true);
     const result = await sendToUser(RECIPIENT, PAYLOAD);
     expect(result.delivered).toBe(true);
+    expect(result.channels.email).toBe('delivered');
+  });
+
+  it('still sends email when the browser subscription read fails', async () => {
+    const { sendToUser, emailMock } = await loadSendToUser({
+      browser: true,
+      email: true,
+    });
+    const dynamo = (await import('../../../src/utils/dynamodb.js')).dynamodb;
+    vi.mocked(dynamo.send).mockRejectedValueOnce(new Error('DynamoDB push query failed'));
+    emailMock.mockResolvedValue(true);
+
+    await expect(sendToUser(RECIPIENT, PAYLOAD)).resolves.toEqual({
+      delivered: true,
+      dndSuppressedOnly: false,
+      channels: {
+        browser: 'failed',
+        email: 'delivered',
+        sms: 'disabled',
+      },
+    });
+    expect(emailMock).toHaveBeenCalledOnce();
   });
 
   it('verified SMS that dry-runs (sendSms → false) → not delivered', async () => {
@@ -328,6 +351,7 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     const result = await sendToUser(RECIPIENT, PAYLOAD);
     expect(smsMock).toHaveBeenCalledTimes(1);
     expect(result.delivered).toBe(false);
+    expect(result.channels.sms).toBe('failed');
   });
 
   it('email-only user inside DND → dndSuppressedOnly (retry next run), not delivered', async () => {
@@ -339,5 +363,31 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     const result = await sendToUser(RECIPIENT, PAYLOAD);
     expect(result.delivered).toBe(false);
     expect(result.dndSuppressedOnly).toBe(true);
+    expect(result.channels.email).toBe('suppressed');
+  });
+
+  it('fans out only to channels whose caller-owned leases were selected', async () => {
+    const { sendToUser, emailMock, smsMock, pushAttempts } = await loadSendToUser({
+      browser: true,
+      email: true,
+      sms: true,
+      phone: '+15551234567',
+      phoneVerified: true,
+    });
+
+    const result = await sendToUser(RECIPIENT, PAYLOAD, { channels: ['sms'] });
+
+    expect(emailMock).not.toHaveBeenCalled();
+    expect(pushAttempts()).toBe(0);
+    expect(smsMock).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      delivered: true,
+      dndSuppressedOnly: false,
+      channels: {
+        browser: 'skipped',
+        email: 'skipped',
+        sms: 'delivered',
+      },
+    });
   });
 });

@@ -6,13 +6,16 @@ first-party API integration, not a code or data merge.
 
 ## Privacy boundary
 
-The backend sends only the user's question plus species, a coarse light category,
-task type, and relative days due/completed. Before transmission it replaces known
-plant nicknames with their species and redacts common email and phone patterns. It
-never sends stored notes, photos, household/member IDs, member records, free-form
-locations, coordinates, or exact task timestamps. Sprout rejects unknown payload
-fields and labels corpus answers and household observations separately. As with
-any free-text field, users should not put sensitive personal information in a chat question.
+The backend sends only the user's question plus a server-verified canonical
+species, a coarse light category, task type, and relative days due/completed.
+The user-editable species field is never forwarded. Before transmission it
+replaces known plant nicknames with the verified species (or “this plant” when
+none is verified) and redacts common email and phone patterns. It never sends
+stored notes, photos, household/member IDs, member records, free-form species or
+locations, coordinates, or exact task timestamps. Sprout rejects unknown
+payload fields and labels corpus answers and household observations separately.
+As with any free-text field, users should not put sensitive personal
+information in a chat question.
 
 ## Enablement
 
@@ -34,3 +37,8 @@ existing explicit confirmation flow.
 If Sprout is unavailable during the initial rollout, the existing assistant is
 used as a temporary fallback and a structured warning is emitted. Disable the
 feature immediately by clearing `sprout_integration_enabled`.
+
+`sprout_api_url` is intentionally restricted to the documented HTTPS host in
+both Terraform and the runtime client. This prevents a typo or compromised
+configuration from redirecting minimized household context or signed requests
+to an internal/arbitrary endpoint.

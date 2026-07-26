@@ -11,6 +11,7 @@ import {
   buildSproutContext,
   redactSproutQuestion,
   signSproutBody,
+  validatedSproutBaseUrl,
 } from '../../../src/services/sprout.js';
 
 describe('Sprout integration', () => {
@@ -29,6 +30,7 @@ describe('Sprout integration', () => {
         householdId: 'private-household',
         name: 'SENTINEL NICKNAME',
         species: 'Monstera deliciosa',
+        canonicalSpecies: 'Monstera deliciosa',
         location: 'SENTINEL ADDRESS',
         imageUrl: 'https://private/photo.jpg',
         notes: 'SENTINEL NOTES',
@@ -80,7 +82,7 @@ describe('Sprout integration', () => {
   it('redacts plant nicknames and common contact identifiers from questions', () => {
     const result = redactSproutQuestion(
       'Is Bertha okay? Email me@example.com or call +1 (530) 555-0100.',
-      [{ name: 'Bertha', species: 'Monstera deliciosa' }]
+      [{ name: 'Bertha', canonicalSpecies: 'Monstera deliciosa' }]
     );
     expect(result).toContain('Monstera deliciosa');
     expect(result).toContain('[email redacted]');
@@ -88,6 +90,52 @@ describe('Sprout integration', () => {
     expect(result).not.toContain('Bertha');
     expect(result).not.toContain('me@example.com');
     expect(result).not.toContain('555-0100');
+  });
+
+  it('never forwards user-controlled species text, even when it contains plausible PII', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([
+      {
+        id: 'p-private',
+        name: 'Bertha',
+        species: 'Chelsea R, 123 Private Street, +1 530 555 0100',
+        canonicalSpecies: null,
+      },
+    ] as never);
+    vi.mocked(taskService.getTasks).mockResolvedValueOnce([
+      {
+        id: 't-private',
+        plantId: 'p-private',
+        type: 'water',
+        nextDue: '2026-07-12T00:00:00Z',
+      },
+    ] as never);
+
+    const context = await buildSproutContext(
+      'private-household',
+      new Date('2026-07-12T00:00:00Z'),
+      'Does Bertha need water?'
+    );
+    const serialized = JSON.stringify(context);
+    expect(context.plants).toEqual([]);
+    expect(context.tasks).toEqual([]);
+    expect(context.sanitizedQuestion).toBe('Does this plant need water?');
+    expect(serialized).not.toContain('Chelsea');
+    expect(serialized).not.toContain('Private Street');
+    expect(serialized).not.toContain('555');
+  });
+
+  it('allows only the approved HTTPS Sprout origin', () => {
+    expect(validatedSproutBaseUrl('https://api.sprout.example/')).toBe(
+      'https://api.sprout.example'
+    );
+    for (const value of [
+      'http://api.sprout.chelseakr.com',
+      'https://169.254.169.254/latest/meta-data',
+      'https://api.sprout.chelseakr.com.attacker.example',
+      'https://user:secret@api.sprout.chelseakr.com',
+    ]) {
+      expect(() => validatedSproutBaseUrl(value)).toThrow(/approved|HTTPS/);
+    }
   });
 
   it('signs the request and rejects a response without the provenance contract', async () => {
@@ -123,6 +171,57 @@ describe('Sprout integration', () => {
     );
     await expect(askSprout({ householdId: 'hh', question: 'pothos care' })).rejects.toThrow(
       'invalid provenance'
+    );
+  });
+
+  it('rejects malformed answers and non-HTTPS citation links at the integration boundary', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    vi.mocked(taskService.getTasks).mockResolvedValue([]);
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          answer: {
+            display_text: 'Click this.',
+            citations: [
+              {
+                title: 'Unsafe source',
+                url: 'javascript:alert(document.domain)',
+                source: 'unsafe.md',
+                fetch_date: '2026-07-25',
+              },
+            ],
+            disclosure: '',
+            provenance: 'corpus',
+          },
+          household_observations: [],
+          context_policy: 'household-data-selects-corpus-facts',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    await expect(askSprout({ householdId: 'hh', question: 'pothos care' })).rejects.toThrow(
+      'invalid provenance or response contract'
+    );
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          answer: {
+            citations: [],
+            disclosure: '',
+            provenance: 'corpus',
+          },
+          household_observations: [],
+          context_policy: 'household-data-selects-corpus-facts',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    await expect(askSprout({ householdId: 'hh', question: 'pothos care' })).rejects.toThrow(
+      'invalid provenance or response contract'
     );
   });
 

@@ -238,6 +238,13 @@ variable "sprout_api_url" {
   description = "Base URL for the Sprout API."
   type        = string
   default     = ""
+  validation {
+    condition = (
+      var.sprout_api_url == "" ||
+      can(regex("^https://api\\.sprout\\.chelseakr\\.com/?$", var.sprout_api_url))
+    )
+    error_message = "sprout_api_url must be blank or https://api.sprout.chelseakr.com."
+  }
 }
 
 variable "sprout_integration_secret_id" {

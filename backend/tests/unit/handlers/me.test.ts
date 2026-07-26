@@ -69,19 +69,14 @@ describe('me handler', () => {
   });
 
   describe('deleteMe', () => {
-    // The deleteMe flow touches push subscriptions + notification prefs even
-    // when the user has no memberships; default those mocks to empty here so
-    // each test only declares what it cares about.
+    // The deleteMe flow erases the whole user partition even when the user has
+    // no memberships; default that mock here so each test declares only what
+    // it cares about.
     async function mockUserScopedCleanup() {
-      const pushSubscriptions = await import('../../../src/services/pushSubscriptions.js');
-      const deviceTokens = await import('../../../src/services/deviceTokens.js');
       const accountCleanup = await import('../../../src/services/accountCleanup.js');
-      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
-      vi.mocked(pushSubscriptions.getUserSubscriptions).mockResolvedValue([]);
-      vi.mocked(pushSubscriptions.deleteSubscription).mockResolvedValue(undefined);
-      vi.mocked(deviceTokens.deleteUserDeviceTokens).mockResolvedValue(undefined);
       vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
-      vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+      vi.mocked(accountCleanup.deleteAbandonedHouseholdData).mockResolvedValue(undefined);
+      vi.mocked(accountCleanup.deleteUserScopedData).mockResolvedValue(undefined);
     }
 
     it('returns 204 when the lone member deletes their account (cascades plant + key cleanup)', async () => {
@@ -89,6 +84,7 @@ describe('me handler', () => {
       const plantService = await import('../../../src/services/plantService.js');
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
       const apiKeys = await import('../../../src/services/apiKeys.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
       await mockUserScopedCleanup();
 
@@ -143,9 +139,11 @@ describe('me handler', () => {
       )) as APIGatewayProxyResult;
 
       expect(res.statusCode).toBe(204);
+      expect(plantService.getPlants).toHaveBeenCalledWith('hh-1', 'all');
       expect(plantService.deletePlant).toHaveBeenCalledWith('hh-1', 'p1');
       expect(apiKeys.revokeApiKey).toHaveBeenCalledWith('hh-1', 'key-1');
-      expect(householdService.removeMember).toHaveBeenCalledWith('hh-1', 'user-1');
+      expect(accountCleanup.deleteAbandonedHouseholdData).toHaveBeenCalledWith('hh-1');
+      expect(householdService.removeMember).not.toHaveBeenCalled();
       expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
     });
 
@@ -154,10 +152,7 @@ describe('me handler', () => {
       const plantService = await import('../../../src/services/plantService.js');
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
       const apiKeys = await import('../../../src/services/apiKeys.js');
-      const pushSubscriptions = await import('../../../src/services/pushSubscriptions.js');
-      const deviceTokens = await import('../../../src/services/deviceTokens.js');
       const accountCleanup = await import('../../../src/services/accountCleanup.js');
-      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
 
       // hh-1: solo household (full wipe). hh-2: multi-member household where
@@ -200,19 +195,8 @@ describe('me handler', () => {
       vi.mocked(plantService.getPlants).mockResolvedValue([]);
       vi.mocked(apiKeys.listApiKeys).mockResolvedValue([]);
       vi.mocked(householdService.removeMember).mockResolvedValue(undefined);
-      vi.mocked(pushSubscriptions.getUserSubscriptions).mockResolvedValueOnce([
-        {
-          userId: 'user-1',
-          householdId: 'hh-1',
-          endpoint: 'https://push.example/ep1',
-          keys: { p256dh: 'k', auth: 'a' },
-          createdAt: '',
-        },
-      ]);
-      vi.mocked(pushSubscriptions.deleteSubscription).mockResolvedValue(undefined);
-      vi.mocked(deviceTokens.deleteUserDeviceTokens).mockResolvedValue(undefined);
       vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
-      vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+      vi.mocked(accountCleanup.deleteUserScopedData).mockResolvedValue(undefined);
       vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
 
       const res = (await deleteMe(
@@ -222,26 +206,17 @@ describe('me handler', () => {
       )) as APIGatewayProxyResult;
 
       expect(res.statusCode).toBe(204);
-      // Member rows removed from BOTH households, not just the active claim one.
-      expect(householdService.removeMember).toHaveBeenCalledWith('hh-1', 'user-1');
+      // The solo household is swept as a whole; the retained household loses
+      // only this user's member row.
+      expect(householdService.removeMember).not.toHaveBeenCalledWith('hh-1', 'user-1');
       expect(householdService.removeMember).toHaveBeenCalledWith('hh-2', 'user-1');
       // Solo household hh-1 had its keys enumerated; multi-member hh-2 did not.
       expect(apiKeys.listApiKeys).toHaveBeenCalledWith('hh-1');
       expect(apiKeys.listApiKeys).not.toHaveBeenCalledWith('hh-2');
-      // Push subscription deleted via the service surface.
-      expect(pushSubscriptions.deleteSubscription).toHaveBeenCalledWith(
-        'user-1',
-        'https://push.example/ep1'
-      );
-      expect(deviceTokens.deleteUserDeviceTokens).toHaveBeenCalledWith('user-1');
-      expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-1', 'user-1');
+      expect(accountCleanup.deleteAbandonedHouseholdData).toHaveBeenCalledWith('hh-1');
+      expect(accountCleanup.anonymizeUserInHousehold).not.toHaveBeenCalledWith('hh-1', 'user-1');
       expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-2', 'user-1');
-      // Notification prefs row deleted inline (USER#{id}/PREFS).
-      const prefDelete = vi
-        .mocked(dynamodb.send)
-        .mock.calls.map((c) => c[0] as unknown as { input?: { Key?: Record<string, string> } })
-        .find((c) => c.input?.Key?.SK === 'PREFS');
-      expect(prefDelete?.input?.Key).toEqual({ PK: 'USER#user-1', SK: 'PREFS' });
+      expect(accountCleanup.deleteUserScopedData).toHaveBeenCalledWith('user-1');
       expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
     });
 
@@ -304,7 +279,7 @@ describe('me handler', () => {
     it('allows deletion before the user has created or joined a household', async () => {
       const householdService = await import('../../../src/services/householdService.js');
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
-      const deviceTokens = await import('../../../src/services/deviceTokens.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
       await mockUserScopedCleanup();
       vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([]);
@@ -317,7 +292,7 @@ describe('me handler', () => {
       const res = (await deleteMe(event, ctx, () => {})) as APIGatewayProxyResult;
 
       expect(res.statusCode).toBe(204);
-      expect(deviceTokens.deleteUserDeviceTokens).toHaveBeenCalledWith('user-1');
+      expect(accountCleanup.deleteUserScopedData).toHaveBeenCalledWith('user-1');
       expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
     });
   });

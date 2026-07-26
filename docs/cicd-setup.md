@@ -39,25 +39,49 @@ In **Settings → Secrets and variables → Actions**:
 
 ### Repository **secrets**
 
-| Name                               | Value                                                                                                                                                                                              |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AWS_PRODUCTION_ROLE_ARN`          | the `terraform output` value from step 2                                                                                                                                                           |
-| `AWS_DEPLOY_ROLE_ARN`              | same value (used by `cd-staging.yml` until you split the staging role)                                                                                                                             |
-| `E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE` | a plus-address template at a monitored, deliverable inbox; keep the literal `{tag}` placeholder (for example, `fg-smoke+{tag}@familygreenhouse.net` only when that domain accepts those addresses) |
+| Name                                    | Value                                                                                                                                                                                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AWS_PRODUCTION_ROLE_ARN`               | the `terraform output` value from step 2                                                                                                                                                           |
+| `AWS_DEPLOY_ROLE_ARN`                   | same value (used by `cd-staging.yml` until you split the staging role)                                                                                                                             |
+| `E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE`      | a plus-address template at a monitored, deliverable inbox; keep the literal `{tag}` placeholder (for example, `fg-smoke+{tag}@familygreenhouse.net` only when that domain accepts those addresses) |
+| `PRODUCTION_WEB_PUSH_VAPID_PRIVATE_KEY` | the production private key from `npx web-push generate-vapid-keys`; never expose this as a `VITE_*` value                                                                                          |
+| `STAGING_WEB_PUSH_VAPID_PRIVATE_KEY`    | the separate staging private key; may stay unset when staging background push is intentionally disabled                                                                                            |
+| `PRODUCTION_PLANT_ID_API_KEY`           | production Plant.id API key; blank disables real photo identification                                                                                                                              |
+| `STAGING_PLANT_ID_API_KEY`              | separate staging Plant.id key, or blank when staging identification is intentionally disabled                                                                                                      |
+| `PRODUCTION_OPENWEATHER_API_KEY`        | production OpenWeather key for geocoding and climate-aware care                                                                                                                                    |
+| `STAGING_OPENWEATHER_API_KEY`           | separate staging OpenWeather key, or blank when staging climate is intentionally disabled                                                                                                          |
+| `PRODUCTION_BACKEND_SENTRY_DSN`         | DSN for the production Node/AWS Lambda Sentry project; blank disables the optional rail                                                                                                            |
+| `PRODUCTION_FRONTEND_SENTRY_DSN`        | DSN for the production React Sentry project; blank disables the optional rail                                                                                                                      |
+| `STAGING_BACKEND_SENTRY_DSN`            | DSN for the staging Node/AWS Lambda Sentry project                                                                                                                                                 |
+| `STAGING_FRONTEND_SENTRY_DSN`           | DSN for the staging React Sentry project                                                                                                                                                           |
+| `PRODUCTION_POSTHOG_KEY`                | production PostHog project key; blank leaves vendor analytics disabled                                                                                                                             |
+| `STAGING_POSTHOG_KEY`                   | isolated staging PostHog project key                                                                                                                                                               |
 
 ### Repository **variables**
 
-| Name                              | Value                                                             |
-| --------------------------------- | ----------------------------------------------------------------- |
-| `PRODUCTION_API_URL`              | `https://<api-id>.execute-api.us-east-1.amazonaws.com/production` |
-| `PRODUCTION_URL`                  | `https://familygreenhouse.net`                                    |
-| `PRODUCTION_COGNITO_USER_POOL_ID` | `us-east-1_XXXXXXXXX`                                             |
-| `PRODUCTION_COGNITO_CLIENT_ID`    | `<cognito-client-id>`                                             |
+| Name                                   | Value                                                             |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `PRODUCTION_API_URL`                   | `https://<api-id>.execute-api.us-east-1.amazonaws.com/production` |
+| `PRODUCTION_URL`                       | `https://familygreenhouse.net`                                    |
+| `PRODUCTION_COGNITO_USER_POOL_ID`      | `us-east-1_XXXXXXXXX`                                             |
+| `PRODUCTION_COGNITO_CLIENT_ID`         | `<cognito-client-id>`                                             |
+| `PRODUCTION_WEB_PUSH_VAPID_PUBLIC_KEY` | the production public key from the same VAPID pair                |
+| `PRODUCTION_WEB_PUSH_VAPID_SUBJECT`    | a monitored contact URI, e.g. `mailto:hello@familygreenhouse.net` |
+| `STAGING_WEB_PUSH_VAPID_PUBLIC_KEY`    | the staging public key, or blank to disable staging push          |
+| `STAGING_WEB_PUSH_VAPID_SUBJECT`       | the staging contact URI, or blank with the other staging values   |
+| `PRODUCTION_POSTHOG_HOST`              | `https://us.i.posthog.com` or `https://eu.i.posthog.com`          |
+| `STAGING_POSTHOG_HOST`                 | staging PostHog cloud host                                        |
+| `PRODUCTION_SENTRY_TRACES_SAMPLE_RATE` | backend trace sample rate, normally `0.1`                         |
+| `STAGING_SENTRY_TRACES_SAMPLE_RATE`    | staging trace sample rate, normally `0.1`                         |
+| `PRODUCTION_GTM_ID`                    | optional production GTM container id                              |
+| `STAGING_GTM_ID`                       | optional staging GTM container id                                 |
 
 Staging does not require duplicate URL or Cognito repository variables. Its
 workflow builds the deployable frontend after Terraform applies, then passes
 the stack's `api_url`, `site_url`, user-pool id, and table name outputs directly
-to the frontend build, health check, and deployed smoke test.
+to the frontend build, health check, and deployed smoke test. VAPID is the
+exception because the same key pair must reach both Terraform/Lambda and the
+browser build; all three values must be supplied together, or all left blank.
 
 The current values can also be re-pulled at any time with `terraform -chdir=infrastructure output`.
 

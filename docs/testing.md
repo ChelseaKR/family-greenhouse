@@ -136,9 +136,19 @@ This isn't a comprehensive UI suite. The goal is "did we break the boot path?" â
 The production workflow also runs `post-deploy-smoke.spec.ts` with one Chromium
 worker. One disposable account goes through the live `/register` form and real
 `POST /auth/signup` endpoint until Cognito reports it `UNCONFIRMED`; a separate
-admin-created confirmed account exercises login, onboarding, and the dashboard.
-Teardown deletes both Cognito users and the authenticated fixture's household
-rows, so the public-signup check is not bypassed by the admin fixture.
+admin-created confirmed account exercises login, onboarding, the dashboard,
+plant creation, image presigning, a non-empty S3 PUT, image confirmation, and
+the rendered image response/decoded width. Authenticated teardown first calls
+the real `DELETE /me` path (which owns S3 photo cleanup), then runs idempotent
+Cognito/DynamoDB admin cleanup and verifies the fixture partitions are empty.
+A final independent fallback parses the exact bucket/key from the presign,
+paginates that one object&rsquo;s S3 Versions and DeleteMarkers, permanently
+deletes them, and re-lists to prove zero residue. Every cleanup branch is
+attempted even when an earlier one fails; flows that fail before presign make no
+S3 calls. Failure diagnostics retain only response hostname/status or a safe AWS
+error class so presigned URL credentials cannot be written to CI output or
+reports. The deployed-smoke config therefore disables Playwright network traces
+(which archive full URLs); failure screenshots and video remain enabled.
 
 ## Date / timezone tests
 

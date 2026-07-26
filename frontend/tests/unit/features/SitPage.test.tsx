@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { SitPage } from '@/features/sitter/SitPage';
 import {
   sitterService,
@@ -80,7 +80,7 @@ describe('SitPage', () => {
     await user.click(doneBtn);
 
     await waitFor(() => expect(screen.queryByText(/Water the Monstera/i)).not.toBeInTheDocument());
-    expect(completeTask).toHaveBeenCalledWith('a'.repeat(64), 't1');
+    expect(completeTask).toHaveBeenCalledWith('a'.repeat(64), 't1', waterTask.dueDate);
     expect(await screen.findByText(/all caught up/i)).toBeInTheDocument();
   });
 

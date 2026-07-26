@@ -16,6 +16,13 @@ locals {
     for origin in local.allowed_origins : origin
     if can(regex("^https?://", origin))
   ]
+  # The Sprout SDK accepts either a Secrets Manager name or a full ARN.
+  # Secret-name ARNs carry an AWS-generated suffix, so a name needs a trailing
+  # wildcard. When Sprout is disabled, point at a deliberately nonexistent
+  # secret instead of granting the role access to every secret in the account.
+  sprout_secret_arn = var.sprout_integration_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/sprout-disabled" : (
+    startswith(var.sprout_integration_secret_id, "arn:") ? var.sprout_integration_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.sprout_integration_secret_id}*"
+  )
 }
 
 # API Gateway
@@ -145,15 +152,39 @@ resource "aws_iam_role_policy" "lambda" {
         Effect = "Allow"
         Action = [
           "s3:PutObject",
-          "s3:GetObject"
+          "s3:GetObject",
+          "s3:DeleteObject",
+          # Production image buckets are versioned. Erasure must remove the
+          # underlying versions, not merely create another delete marker.
+          "s3:DeleteObjectVersion"
         ]
         Resource = "${var.images_bucket_arn}/*"
+      },
+      {
+        # Plant/account deletion enumerates every image below the plant prefix.
+        # ListBucket is a bucket-level action and cannot share the object ARN
+        # above; keep it constrained to the only prefix the API manages.
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:ListBucketVersions"
+        ]
+        Resource = var.images_bucket_arn
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["plants/*"]
+          }
+        }
       },
       {
         Effect = "Allow"
         Action = [
           "cognito-idp:AdminGetUser",
-          "cognito-idp:AdminUpdateUserAttributes"
+          "cognito-idp:AdminUpdateUserAttributes",
+          # DELETE /me removes the caller from Cognito after application data
+          # is erased. Without this grant the endpoint completes its DDB work
+          # and then returns 500, leaving the login identity behind.
+          "cognito-idp:AdminDeleteUser"
         ]
         Resource = "arn:aws:cognito-idp:*:*:userpool/${var.cognito_user_pool_id}"
       },
@@ -219,6 +250,14 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = [
           "arn:aws:ssm:*:*:parameter/family-greenhouse/*",
         ]
+      },
+      {
+        # HMAC credential for the optional first-party Sprout chat path.
+        # This action is required by services/sprout.ts when the configured
+        # SecretId is used instead of the local-development literal fallback.
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = local.sprout_secret_arn
       }
     ]
   })
@@ -262,10 +301,10 @@ locals {
   }
 }
 
-# Environment shared by EVERY backend Lambda — the for_each fleet below AND
-# the standalone chat_stream function (which must see the exact same config:
-# it runs the same chat service code, plus the Cognito vars its in-handler
-# JWT verification depends on). Function-specific switches are merged below.
+# Non-secret environment shared by every backend Lambda. Provider credentials
+# are added only to the handlers that use them below; in particular, the
+# public Function URL for chat streaming must never inherit Stripe, SES, SMS,
+# VAPID, Plant.id, or other unrelated credentials.
 locals {
   lambda_environment = {
     NODE_ENV             = var.environment
@@ -290,20 +329,16 @@ locals {
     # var-shaped contract so a future dedicated assets domain is a wiring
     # change only.
     ASSETS_BASE_URL = var.allowed_origin
-    # Bedrock chat model. Defaults set in code (Haiku 4.5); pin via
-    # tfvar to swap to Sonnet/Opus without a redeploy.
-    BEDROCK_CHAT_MODEL_ID       = var.bedrock_chat_model_id
-    BEDROCK_INPUT_USD_PER_MTOK  = var.bedrock_input_usd_per_mtok
-    BEDROCK_OUTPUT_USD_PER_MTOK = var.bedrock_output_usd_per_mtok
-    CHAT_ENABLED                = var.chat_enabled
     # Source maps in stack traces: esbuild already emits them; this flag
     # tells Node 20 to actually use them when printing CloudWatch errors.
     NODE_OPTIONS = "--enable-source-maps"
-    # Stripe + SES + VAPID + Plant.id + Sentry: declared here so the
-    # `terraform apply` surface is the single source of truth for what
-    # env reaches the Lambda. Empty strings let the code fall through to
-    # its baked-in default or fail-fast behavior. Migrate to Secrets
-    # Manager when first real credentials land.
+    # Sentry DSNs are intentionally non-secret client ingestion identifiers.
+    SENTRY_DSN                = var.sentry_dsn
+    SENTRY_TRACES_SAMPLE_RATE = var.sentry_traces_sample_rate
+    GIT_SHA                   = var.git_sha
+  }
+
+  stripe_environment = {
     STRIPE_SECRET_KEY                 = var.stripe_secret_key
     STRIPE_WEBHOOK_SECRET             = var.stripe_webhook_secret
     STRIPE_PRICE_ID_GARDEN            = var.stripe_price_id_garden
@@ -312,52 +347,83 @@ locals {
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
     STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
-    SES_FROM_EMAIL                    = var.ses_from_email
-    WEB_PUSH_VAPID_PUBLIC_KEY         = var.web_push_vapid_public_key
-    WEB_PUSH_VAPID_PRIVATE_KEY        = var.web_push_vapid_private_key
-    WEB_PUSH_VAPID_SUBJECT            = var.web_push_vapid_subject
-    SMS_NOTIFICATIONS_ENABLED         = var.sms_notifications_enabled
-    PLANT_ID_API_KEY                  = var.plant_id_api_key
-    # Plant.id identify monthly meter. "1" enforces the per-household monthly
-    # cap (blocks once exceeded); unset/"" only tracks usage (beta default).
-    # Set to "1" in production so the real per-call Plant.id credit can't be
-    # cost-amplified by concurrency.
+    POSTHOG_KEY                       = var.posthog_key
+    POSTHOG_HOST                      = var.posthog_host
+  }
+
+  email_environment = {
+    SES_FROM_EMAIL = var.ses_from_email
+  }
+
+  notification_environment = merge(local.email_environment, {
+    WEB_PUSH_VAPID_PUBLIC_KEY  = var.web_push_vapid_public_key
+    WEB_PUSH_VAPID_PRIVATE_KEY = var.web_push_vapid_private_key
+    WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
+    SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
+  })
+
+  plant_integration_environment = {
+    PLANT_ID_API_KEY          = var.plant_id_api_key
     IDENTIFY_METERING_ENABLED = var.identify_metering_enabled
-    # OpenWeather powers the climate/weather features. Without the key the
-    # weather service short-circuits to null and those features silently
-    # disable in prod — so it must be wired here, not left to drift.
+    # Leaf health uses the same Bedrock model selector as chat.
+    BEDROCK_CHAT_MODEL_ID = var.bedrock_chat_model_id
+  }
+
+  weather_environment = {
     OPENWEATHER_API_KEY      = var.openweather_api_key
     OPENWEATHER_DAILY_BUDGET = var.openweather_daily_budget
-    # Perenual key is held in SSM Parameter Store (runtime fetch). Pass the
-    # parameter name, not the value — the value never reaches Terraform state.
+  }
+
+  perenual_environment = {
     PERENUAL_API_KEY_PARAMETER_NAME = var.perenual_api_key_parameter_name
     PERENUAL_DAILY_BUDGET           = var.perenual_daily_budget
-    # Bedrock embedding model for the chat RAG corpus. Empty lets the code
-    # default to amazon.titan-embed-text-v2:0.
+  }
+
+  chat_environment = merge(local.weather_environment, {
+    BEDROCK_CHAT_MODEL_ID        = var.bedrock_chat_model_id
+    BEDROCK_INPUT_USD_PER_MTOK   = var.bedrock_input_usd_per_mtok
+    BEDROCK_OUTPUT_USD_PER_MTOK  = var.bedrock_output_usd_per_mtok
+    CHAT_ENABLED                 = var.chat_enabled
     BEDROCK_EMBED_MODEL_ID       = var.bedrock_embed_model_id
     SPROUT_INTEGRATION_ENABLED   = var.sprout_integration_enabled
     SPROUT_API_URL               = var.sprout_api_url
     SPROUT_INTEGRATION_SECRET_ID = var.sprout_integration_secret_id
-    SENTRY_DSN                   = var.sentry_dsn
-    SENTRY_TRACES_SAMPLE_RATE    = var.sentry_traces_sample_rate
-    GIT_SHA                      = var.git_sha
     CHAT_BUDGET_INPUT_TOKENS     = var.chat_budget_input_tokens
     CHAT_BUDGET_OUTPUT_TOKENS    = var.chat_budget_output_tokens
-    # Optional PostHog fan-out for server-confirmed Stripe conversions.
-    # First-party structured product-event logs are emitted regardless; an
-    # empty key only disables the external vendor rail.
-    POSTHOG_KEY  = var.posthog_key
-    POSTHOG_HOST = var.posthog_host
+  })
+
+  handler_integration_environment = {
+    auth          = {}
+    plants        = merge(local.plant_integration_environment, local.perenual_environment)
+    tasks         = {}
+    households    = local.email_environment
+    me            = {}
+    notifications = merge(local.notification_environment, local.perenual_environment)
+    billing       = local.stripe_environment
+    species       = local.perenual_environment
+    climate       = local.weather_environment
+    apiKeys       = {}
+    api           = {}
+    reminders     = merge(local.notification_environment, local.perenual_environment)
+    digests       = local.email_environment
+    chat          = local.chat_environment
   }
 
-  # Safety switch for the standalone streaming function only. Function URL
-  # managed CORS and handler-emitted CORS can duplicate response headers, so
-  # keep application CORS disabled while the URL's managed block is present.
-  # Native store builds leave streaming unconfigured and use the synchronous
-  # chat API through CapacitorHttp.
-  chat_stream_environment = merge(local.lambda_environment, {
-    APPLICATION_CORS_ENABLED = tostring(var.application_cors_enabled)
-  })
+  handler_environments = {
+    for handler in keys(local.lambda_handlers) :
+    handler => merge(
+      local.lambda_environment,
+      local.handler_integration_environment[handler]
+    )
+  }
+
+  # The streaming function runs the same chat service plus in-handler Cognito
+  # verification, but receives only chat/weather integration values.
+  chat_stream_environment = merge(
+    local.lambda_environment,
+    local.chat_environment,
+    { APPLICATION_CORS_ENABLED = tostring(var.application_cors_enabled) }
+  )
 }
 
 resource "aws_lambda_function" "handlers" {
@@ -393,7 +459,7 @@ resource "aws_lambda_function" "handlers" {
   source_code_hash = filebase64sha256("${path.module}/placeholder.zip")
 
   environment {
-    variables = local.lambda_environment
+    variables = local.handler_environments[each.key]
   }
 
   tracing_config {
@@ -511,6 +577,14 @@ resource "aws_iam_role_policy" "chat_stream" {
           "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-*",
           "arn:aws:bedrock:*:*:inference-profile/global.anthropic.claude-*",
         ]
+      },
+      {
+        # The streaming and synchronous chat entry points share turnEvents(),
+        # including its optional Sprout branch, so both roles need the same
+        # narrowly scoped HMAC-secret read.
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = local.sprout_secret_arn
       },
       {
         # dead_letter_config target for failed async invocations.
@@ -888,13 +962,13 @@ resource "aws_lambda_permission" "reminders_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.reminders.arn
 }
 
-# Weekly plants-at-risk digest: Monday 13:00 UTC. The constant input selects
-# the routine inside the digests handler; per-user weekly dedupe markers make
-# retries safe. See backend/src/services/digest.ts.
+# Weekly plants-at-risk digest: four Monday passes, six hours apart. Each pass
+# respects the recipient's local quiet hours and per-user weekly markers make
+# the first eligible delivery win without duplicates.
 resource "aws_cloudwatch_event_rule" "digests_weekly" {
   name                = "${var.project_name}-digests-weekly-${var.environment}"
   description         = "Weekly plants-at-risk digest emails"
-  schedule_expression = "cron(0 13 ? * MON *)"
+  schedule_expression = "cron(0 0,6,12,18 ? * MON *)"
 }
 
 resource "aws_cloudwatch_event_target" "digests_weekly" {
@@ -911,13 +985,13 @@ resource "aws_cloudwatch_event_target" "digests_weekly" {
   }
 }
 
-# Year-in-review recap: Jan 2, 13:00 UTC — recaps the PREVIOUS calendar year
-# (the service defaults the year). Per-household sent markers make retries and
-# manual re-runs safe.
+# Year-in-review recap: four passes on Jan 2, six hours apart — recaps the
+# PREVIOUS calendar year (the service defaults the year). Recipient-local DND
+# plus annual markers defer quiet-hour recipients without duplicates.
 resource "aws_cloudwatch_event_rule" "year_recap" {
   name                = "${var.project_name}-year-recap-${var.environment}"
   description         = "End-of-year recap emails (previous calendar year)"
-  schedule_expression = "cron(0 13 2 1 ? *)"
+  schedule_expression = "cron(0 0,6,12,18 2 1 ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "year_recap" {

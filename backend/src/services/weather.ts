@@ -1,8 +1,7 @@
 /**
- * OpenWeatherMap client. Same shape as services/perenual.ts: returns null
- * on every failure (network error, non-2xx, missing key, malformed JSON,
- * timeout). Never throws — callers degrade by hiding climate-aware tips
- * rather than surfacing an error.
+ * OpenWeatherMap client. Detailed methods distinguish a legitimate
+ * "no geocoding candidates" result from an unavailable provider; compatibility
+ * wrappers still collapse either outcome to null for non-HTTP consumers.
  *
  * When OPENWEATHER_API_KEY is unset every method short-circuits to null.
  * That's the dev/local default — climate awareness is feature-gated by
@@ -40,6 +39,11 @@ export interface GeocodeResult {
   country: string | null;
 }
 
+export type WeatherLookupResult<T> =
+  | { status: 'ok'; value: T }
+  | { status: 'not_found' }
+  | { status: 'unavailable'; reason: 'not_configured' | 'provider' };
+
 function apiKey(): string | undefined {
   return optionalEnv('OPENWEATHER_API_KEY');
 }
@@ -48,9 +52,12 @@ export function isConfigured(): boolean {
   return apiKey() !== undefined;
 }
 
-async function fetchJson<T>(path: string, query: Record<string, string>): Promise<T | null> {
+async function fetchJson<T>(
+  path: string,
+  query: Record<string, string>
+): Promise<Extract<WeatherLookupResult<T>, { status: 'ok' | 'unavailable' }>> {
   const key = apiKey();
-  if (!key) return null;
+  if (!key) return { status: 'unavailable', reason: 'not_configured' };
 
   const params = new URLSearchParams({ appid: key, ...query });
   const url = `${BASE_URL}${path}?${params.toString()}`;
@@ -61,12 +68,12 @@ async function fetchJson<T>(path: string, query: Record<string, string>): Promis
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) {
       logger.warn({ status: res.status, path }, 'weather.non_2xx');
-      return null;
+      return { status: 'unavailable', reason: 'provider' };
     }
-    return (await res.json()) as T;
+    return { status: 'ok', value: (await res.json()) as T };
   } catch (err) {
     logger.warn({ err: (err as Error).message, path }, 'weather.fetch_failed');
-    return null;
+    return { status: 'unavailable', reason: 'provider' };
   } finally {
     clearTimeout(timer);
   }
@@ -164,6 +171,17 @@ function toResult(best: RawGeocode): GeocodeResult {
   return { city: best.name, lat: best.lat, lon: best.lon, country: best.country ?? null };
 }
 
+function isRawGeocode(value: unknown): value is RawGeocode {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<RawGeocode>;
+  return (
+    typeof candidate.name === 'string' &&
+    Number.isFinite(candidate.lat) &&
+    Number.isFinite(candidate.lon) &&
+    (candidate.country === undefined || typeof candidate.country === 'string')
+  );
+}
+
 interface RawOneCall {
   current?: {
     dt: number;
@@ -183,10 +201,16 @@ interface RawOneCall {
  * lat/lon. Returns null if the upstream returns no candidates — caller is
  * responsible for prompting the user to refine.
  */
-export async function geocode(query: string): Promise<GeocodeResult | null> {
+export async function geocodeDetailed(query: string): Promise<WeatherLookupResult<GeocodeResult>> {
   const normalized = normalizeGeocodeQuery(query);
   const raw = await fetchJson<RawGeocode[]>('/geo/1.0/direct', { q: normalized, limit: '1' });
-  if (raw && raw.length > 0) return toResult(raw[0]);
+  if (raw.status === 'unavailable') return raw;
+  if (!Array.isArray(raw.value)) return { status: 'unavailable', reason: 'provider' };
+  if (raw.value.length > 0) {
+    return isRawGeocode(raw.value[0])
+      ? { status: 'ok', value: toResult(raw.value[0]) }
+      : { status: 'unavailable', reason: 'provider' };
+  }
 
   // The trailing code (if any) didn't resolve as an ISO country. Retry
   // assuming it's a US state abbreviation instead — see US_STATE_CODES.
@@ -198,32 +222,75 @@ export async function geocode(query: string): Promise<GeocodeResult | null> {
         q: `${city}, ${code.toUpperCase()}, US`,
         limit: '1',
       });
-      if (retry && retry.length > 0) return toResult(retry[0]);
+      if (retry.status === 'unavailable') return retry;
+      if (!Array.isArray(retry.value)) return { status: 'unavailable', reason: 'provider' };
+      if (retry.value.length > 0 && isRawGeocode(retry.value[0])) {
+        return { status: 'ok', value: toResult(retry.value[0]) };
+      }
+      if (retry.value.length > 0) return { status: 'unavailable', reason: 'provider' };
     }
   }
-  return null;
+  return { status: 'not_found' };
 }
 
-export async function getWeather(lat: number, lon: number): Promise<WeatherSnapshot | null> {
+export async function geocode(query: string): Promise<GeocodeResult | null> {
+  const result = await geocodeDetailed(query);
+  return result.status === 'ok' ? result.value : null;
+}
+
+export async function getWeatherDetailed(
+  lat: number,
+  lon: number
+): Promise<WeatherLookupResult<WeatherSnapshot>> {
   const raw = await fetchJson<RawOneCall>('/data/3.0/onecall', {
     lat: lat.toString(),
     lon: lon.toString(),
     units: 'metric',
     exclude: 'minutely,hourly,alerts',
   });
-  if (!raw?.current) return null;
-  const w = raw.current.weather?.[0];
+  if (raw.status === 'unavailable') return raw;
+  const current = raw.value?.current;
+  if (
+    !current ||
+    !Number.isFinite(current.dt) ||
+    !Number.isFinite(current.temp) ||
+    !Number.isFinite(current.humidity) ||
+    (raw.value.daily !== undefined &&
+      (!Array.isArray(raw.value.daily) ||
+        raw.value.daily
+          .slice(0, 3)
+          .some(
+            (day) =>
+              !day ||
+              !Number.isFinite(day.dt) ||
+              !day.temp ||
+              !Number.isFinite(day.temp.min) ||
+              !Number.isFinite(day.temp.max) ||
+              !Number.isFinite(day.humidity)
+          )))
+  ) {
+    return { status: 'unavailable', reason: 'provider' };
+  }
+  const w = current.weather?.[0];
   return {
-    observedAt: new Date(raw.current.dt * 1000).toISOString(),
-    tempC: raw.current.temp,
-    humidity: raw.current.humidity,
-    condition: w?.main ?? 'Unknown',
-    description: w?.description ?? '',
-    forecast: (raw.daily ?? []).slice(0, 3).map((d) => ({
-      date: new Date(d.dt * 1000).toISOString().slice(0, 10),
-      minC: d.temp.min,
-      maxC: d.temp.max,
-      humidity: d.humidity,
-    })),
+    status: 'ok',
+    value: {
+      observedAt: new Date(current.dt * 1000).toISOString(),
+      tempC: current.temp,
+      humidity: current.humidity,
+      condition: w?.main ?? 'Unknown',
+      description: w?.description ?? '',
+      forecast: (raw.value.daily ?? []).slice(0, 3).map((d) => ({
+        date: new Date(d.dt * 1000).toISOString().slice(0, 10),
+        minC: d.temp.min,
+        maxC: d.temp.max,
+        humidity: d.humidity,
+      })),
+    },
   };
+}
+
+export async function getWeather(lat: number, lon: number): Promise<WeatherSnapshot | null> {
+  const result = await getWeatherDetailed(lat, lon);
+  return result.status === 'ok' ? result.value : null;
 }

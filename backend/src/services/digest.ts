@@ -10,10 +10,10 @@
  *     `POST /notifications/run-year-recap` in handlers/notifications).
  *
  * Spam control mirrors services/reminders.ts: TTL'd conditional-Put dedupe
- * markers. The digest uses a per-user, per-ISO-week marker (one digest per
- * user per week no matter how many retries or manual triggers happen); the
- * recap uses a per-household, per-year marker held for ~60 days so a retried
- * yearly run can't double-send.
+ * markers. The digest uses a per-user, per-household, per-ISO-week marker; the
+ * recap uses a per-user, per-household, per-year marker held for ~60 days.
+ * That scope skips successful retries without hiding a second household's
+ * distinct summary.
  *
  * Both emails are plain text (see emailNotifier — no HTML email yet) and are
  * sent directly through `emailNotifier.sendEmail` rather than the
@@ -21,7 +21,8 @@
  * yearly summary shouldn't be silently rerouted to SMS or suppressed by a DND
  * window aimed at real-time pings.
  */
-import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { randomUUID } from 'node:crypto';
+import { PutCommand, GetCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import * as householdService from './householdService.js';
@@ -35,8 +36,11 @@ import type { YearInReview } from './taskService.js';
 const TOP_PLANTS = 5;
 // Weekly marker outlives its week by one day; DynamoDB TTL sweeps it.
 const DIGEST_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
-// Recap marker held ~60 days so January retries can't double-send.
+// Per-user + household recap marker held ~60 days so January retries can't
+// double-send members who already received that household's summary while
+// still retrying failed recipients.
 const RECAP_MARKER_TTL_SECONDS = 60 * 24 * 60 * 60;
+const DELIVERY_LEASE_SECONDS = 5 * 60;
 
 export interface PlantAtRisk {
   plantId: string;
@@ -135,45 +139,109 @@ export function isoWeekKey(d: Date): string {
  * ISO week never re-emails. The conditional claim below is still the
  * authoritative guard against a same-week race.
  */
-async function alreadyDigestedThisWeek(userId: string, now: Date): Promise<boolean> {
+async function alreadyDigestedThisWeek(
+  userId: string,
+  householdId: string,
+  now: Date
+): Promise<boolean> {
   const res = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `USER#${userId}`, SK: `DIGEST#${isoWeekKey(now)}` },
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `DIGEST#${isoWeekKey(now)}#HOUSEHOLD#${householdId}`,
+      },
     })
   );
-  return !!res.Item;
+  if (!res.Item) return false;
+  if (res.Item.status !== 'sending') return true;
+  return Number(res.Item.leaseExpiresAt ?? 0) > Math.floor(now.getTime() / 1000);
 }
 
 /**
- * Conditionally claim this user's digest slot for the current ISO week.
- * Claimed AFTER a real send (with `alreadyDigestedThisWeek` as the cheap
- * pre-check that prevents a same-week retry re-emailing): a failed send / a
- * dry-run no longer burns the week's slot, and the conditional Put still
- * de-dupes concurrent runs.
+ * Conditionally reserve this user's digest slot for one household this ISO
+ * week. The reservation happens before SES so overlapping scheduled/manual
+ * runs cannot both send. Observed failures and dry-runs release it for retry.
  */
-async function claimWeeklyDigestSlot(userId: string, now: Date): Promise<boolean> {
+async function reserveWeeklyDigestSlot(
+  userId: string,
+  householdId: string,
+  now: Date
+): Promise<string | null> {
+  const reservationId = randomUUID();
+  const nowEpoch = Math.floor(now.getTime() / 1000);
   try {
     await dynamodb.send(
       new PutCommand({
         TableName: TABLE_NAME,
         Item: {
           PK: `USER#${userId}`,
-          SK: `DIGEST#${isoWeekKey(now)}`,
+          SK: `DIGEST#${isoWeekKey(now)}#HOUSEHOLD#${householdId}`,
           entityType: 'DigestMarker',
-          sentAt: now.toISOString(),
-          ttl: Math.floor(now.getTime() / 1000) + DIGEST_MARKER_TTL_SECONDS,
+          status: 'sending',
+          reservationId,
+          leaseExpiresAt: nowEpoch + DELIVERY_LEASE_SECONDS,
+          ttl: nowEpoch + DIGEST_MARKER_TTL_SECONDS,
         },
-        ConditionExpression: 'attribute_not_exists(PK)',
+        ConditionExpression:
+          'attribute_not_exists(PK) OR (#status = :sending AND leaseExpiresAt <= :now)',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':sending': 'sending', ':now': nowEpoch },
       })
     );
-    return true;
+    return reservationId;
   } catch (err) {
     if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
-      return false;
+      return null;
     }
     throw err;
   }
+}
+
+async function releaseWeeklyDigestSlot(
+  userId: string,
+  householdId: string,
+  now: Date,
+  reservationId: string
+): Promise<void> {
+  await dynamodb.send(
+    new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `DIGEST#${isoWeekKey(now)}#HOUSEHOLD#${householdId}`,
+      },
+      ConditionExpression: 'reservationId = :reservationId',
+      ExpressionAttributeValues: { ':reservationId': reservationId },
+    })
+  );
+}
+
+async function finalizeWeeklyDigestSlot(
+  userId: string,
+  householdId: string,
+  now: Date,
+  reservationId: string
+): Promise<void> {
+  await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `DIGEST#${isoWeekKey(now)}#HOUSEHOLD#${householdId}`,
+      },
+      UpdateExpression:
+        'SET #status = :sent, sentAt = :sentAt REMOVE leaseExpiresAt, reservationId',
+      ConditionExpression: '#status = :sending AND reservationId = :reservationId',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':sent': 'sent',
+        ':sending': 'sending',
+        ':sentAt': new Date().toISOString(),
+        ':reservationId': reservationId,
+      },
+    })
+  );
 }
 
 /**
@@ -195,28 +263,53 @@ export async function digestHousehold(
   for (const member of members) {
     const prefs = await notificationPrefs.getPreferences(member.userId);
     if (!prefs.email || !prefs.weeklyDigest) continue;
+    // EventBridge retries at several UTC hours on Monday. Skip (without
+    // claiming the weekly slot) during this recipient's local quiet window;
+    // the next invocation can deliver once they are awake.
+    if (notificationPrefs.isInDndWindow(prefs, now)) continue;
     // Cheap pre-check skips an already-digested member so a same-week retry
     // never re-emails.
-    if (await alreadyDigestedThisWeek(member.userId, now)) continue;
-    // Send FIRST, then claim the once-a-week slot only on a REAL delivery, and
-    // isolate per-member failures. The old order claimed the slot before
-    // sending, so a transient SES error (or a dry-run on unconfigured SES)
-    // burned the member's weekly slot with no email sent — and the unguarded
-    // throw aborted every remaining member in the household. sendEmail returns
-    // false on a dry-run, so an unconfigured channel never claims the slot and
-    // the next weekly run retries.
+    if (await alreadyDigestedThisWeek(member.userId, householdId, now)) continue;
+    const reservationId = await reserveWeeklyDigestSlot(member.userId, householdId, now);
+    if (!reservationId) continue;
+
+    // Isolate each member's send. A false dry-run or provider exception
+    // releases the reservation, so the next run retries that recipient.
     let delivered: boolean;
     try {
       delivered = await emailNotifier.sendEmail({ to: member.email, subject, text });
     } catch (err) {
+      await releaseWeeklyDigestSlot(member.userId, householdId, now, reservationId).catch(
+        (cleanupErr) => {
+          logger.warn(
+            { err: (cleanupErr as Error).message, householdId, userId: member.userId },
+            'digest.reservation_cleanup_failed'
+          );
+        }
+      );
       logger.warn(
         { err: (err as Error).message, householdId, userId: member.userId },
         'digest.send_failed'
       );
       continue;
     }
-    if (delivered && (await claimWeeklyDigestSlot(member.userId, now))) {
+    if (delivered) {
       sent += 1;
+      await finalizeWeeklyDigestSlot(member.userId, householdId, now, reservationId).catch(
+        (err) => {
+          logger.warn(
+            { err: (err as Error).message, householdId, userId: member.userId },
+            'digest.reservation_finalize_failed'
+          );
+        }
+      );
+    } else {
+      await releaseWeeklyDigestSlot(member.userId, householdId, now, reservationId).catch((err) => {
+        logger.warn(
+          { err: (err as Error).message, householdId, userId: member.userId },
+          'digest.reservation_cleanup_failed'
+        );
+      });
     }
   }
   return sent;
@@ -294,39 +387,122 @@ export function composeRecapEmail(
 }
 
 /**
- * Claim the household's once-per-year recap slot. Per-household (not
- * per-user): the recap is one shared artifact, so a retried run skips the
- * whole household rather than re-deciding per member.
+ * Cheap point-read of one recipient's household-scoped annual recap marker.
+ * Per-recipient markers are required here: with the former shared marker, one
+ * dry-run or partial SES batch permanently suppressed every member's retry.
  */
-async function claimYearRecapSlot(householdId: string, year: number, now: Date): Promise<boolean> {
+async function alreadyRecappedThisYear(
+  userId: string,
+  householdId: string,
+  year: number,
+  now: Date
+): Promise<boolean> {
+  const result = await dynamodb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `RECAP#${year}#HOUSEHOLD#${householdId}`,
+      },
+    })
+  );
+  if (!result.Item) return false;
+  if (result.Item.status !== 'sending') return true;
+  return Number(result.Item.leaseExpiresAt ?? 0) > Math.floor(now.getTime() / 1000);
+}
+
+/**
+ * Reserve a recipient's once-per-household, once-per-year slot before
+ * delivery. Observed failures release it so only that recipient is retried.
+ */
+async function reserveYearRecapSlot(
+  userId: string,
+  householdId: string,
+  year: number,
+  now: Date
+): Promise<string | null> {
+  const reservationId = randomUUID();
+  const nowEpoch = Math.floor(now.getTime() / 1000);
   try {
     await dynamodb.send(
       new PutCommand({
         TableName: TABLE_NAME,
         Item: {
-          PK: `HOUSEHOLD#${householdId}`,
-          SK: `RECAP#${year}`,
+          PK: `USER#${userId}`,
+          SK: `RECAP#${year}#HOUSEHOLD#${householdId}`,
           entityType: 'RecapMarker',
-          sentAt: now.toISOString(),
-          ttl: Math.floor(now.getTime() / 1000) + RECAP_MARKER_TTL_SECONDS,
+          status: 'sending',
+          reservationId,
+          leaseExpiresAt: nowEpoch + DELIVERY_LEASE_SECONDS,
+          ttl: nowEpoch + RECAP_MARKER_TTL_SECONDS,
         },
-        ConditionExpression: 'attribute_not_exists(PK)',
+        ConditionExpression:
+          'attribute_not_exists(PK) OR (#status = :sending AND leaseExpiresAt <= :now)',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':sending': 'sending', ':now': nowEpoch },
       })
     );
-    return true;
+    return reservationId;
   } catch (err) {
     if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
-      return false;
+      return null;
     }
     throw err;
   }
 }
 
+async function releaseYearRecapSlot(
+  userId: string,
+  householdId: string,
+  year: number,
+  reservationId: string
+): Promise<void> {
+  await dynamodb.send(
+    new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `RECAP#${year}#HOUSEHOLD#${householdId}`,
+      },
+      ConditionExpression: 'reservationId = :reservationId',
+      ExpressionAttributeValues: { ':reservationId': reservationId },
+    })
+  );
+}
+
+async function finalizeYearRecapSlot(
+  userId: string,
+  householdId: string,
+  year: number,
+  reservationId: string
+): Promise<void> {
+  await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `RECAP#${year}#HOUSEHOLD#${householdId}`,
+      },
+      UpdateExpression:
+        'SET #status = :sent, sentAt = :sentAt REMOVE leaseExpiresAt, reservationId',
+      ConditionExpression: '#status = :sending AND reservationId = :reservationId',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':sent': 'sent',
+        ':sending': 'sending',
+        ':sentAt': new Date().toISOString(),
+        ':reservationId': reservationId,
+      },
+    })
+  );
+}
+
 /**
  * Send the year recap for ONE household to every member whose email channel
- * is enabled. Households with zero completions that year are skipped (before
- * the marker is claimed, so a quiet year doesn't burn the slot). Returns how
- * many recap emails went out.
+ * is enabled. Households with zero completions that year are skipped. Delivery
+ * and dedupe are tracked per recipient, so an unconfigured SES sender or one
+ * failed member never burns every household member's annual retry. Returns
+ * how many recap emails went out.
  */
 export async function recapHousehold(
   householdId: string,
@@ -335,7 +511,6 @@ export async function recapHousehold(
 ): Promise<number> {
   const review = await taskService.getYearInReview(householdId, year);
   if (review.totalCompletions === 0) return 0;
-  if (!(await claimYearRecapSlot(householdId, year, now))) return 0;
 
   // 'all' filter: a plant that died in December still earned its spot.
   const plantNames = new Map(
@@ -348,12 +523,45 @@ export async function recapHousehold(
   for (const member of members) {
     const prefs = await notificationPrefs.getPreferences(member.userId);
     if (!prefs.email) continue;
+    // The Jan 2 schedule is retried at several UTC hours for the same reason
+    // as the weekly digest: respect each recipient's local quiet hours without
+    // burning the annual marker.
+    if (notificationPrefs.isInDndWindow(prefs, now)) continue;
+    if (await alreadyRecappedThisYear(member.userId, householdId, year, now)) continue;
+    const reservationId = await reserveYearRecapSlot(member.userId, householdId, year, now);
+    if (!reservationId) continue;
     try {
       // Count only real deliveries; a dry-run (unconfigured SES) returns false.
-      if (await emailNotifier.sendEmail({ to: member.email, subject, text })) sent += 1;
+      const delivered = await emailNotifier.sendEmail({ to: member.email, subject, text });
+      if (delivered) {
+        sent += 1;
+        await finalizeYearRecapSlot(member.userId, householdId, year, reservationId).catch(
+          (err) => {
+            logger.warn(
+              { err: (err as Error).message, householdId, userId: member.userId },
+              'recap.reservation_finalize_failed'
+            );
+          }
+        );
+      } else {
+        await releaseYearRecapSlot(member.userId, householdId, year, reservationId).catch((err) => {
+          logger.warn(
+            { err: (err as Error).message, householdId, userId: member.userId },
+            'recap.reservation_cleanup_failed'
+          );
+        });
+      }
     } catch (err) {
-      // The household marker is already claimed; a partial failure shouldn't
-      // abort the remaining members' recaps.
+      await releaseYearRecapSlot(member.userId, householdId, year, reservationId).catch(
+        (cleanupErr) => {
+          logger.warn(
+            { err: (cleanupErr as Error).message, householdId, userId: member.userId },
+            'recap.reservation_cleanup_failed'
+          );
+        }
+      );
+      // A partial failure shouldn't abort the remaining members or burn this
+      // recipient's slot; the next scheduled/manual run retries only them.
       logger.warn(
         { err: (err as Error).message, householdId, userId: member.userId },
         'recap.send_failed'

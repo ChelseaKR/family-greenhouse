@@ -70,8 +70,10 @@ describe('plants health-check handler', () => {
 
     vi.mocked(plantService.getPlant).mockResolvedValue(PLANT);
     vi.mocked(leafHealth.assessLeafHealth).mockResolvedValue(ASSESSMENT);
-    // Spend cap (M1): under the cap by default; increment is a soft no-op.
-    vi.mocked(leafHealthBudget.isOverCap).mockResolvedValue(false);
+    // Spend cap (M1): atomically reserve one invocation by default.
+    vi.mocked(leafHealthBudget.monthlyCap).mockReturnValue(200);
+    vi.mocked(leafHealthBudget.reserveUsage).mockResolvedValue(1);
+    vi.mocked(leafHealthBudget.releaseUsage).mockResolvedValue(undefined);
     vi.mocked(leafHealthBudget.incrementUsage).mockResolvedValue(1);
     vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
     vi.mocked(householdService.getMemberByUserId).mockResolvedValue({
@@ -96,8 +98,9 @@ describe('plants health-check handler', () => {
         payload: { plantId: 'plant-1', plantName: 'Fernie', overall: 'monitor' },
       })
     );
-    // A real (non-demo) assessment is counted against the monthly cap.
-    expect(leafHealthBudget.incrementUsage).toHaveBeenCalledWith('hh-1');
+    // A real (non-demo) assessment was reserved before Bedrock ran.
+    expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 200);
+    expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
   });
 
   it('accepts a schema-in-spec image close to the 350,000-char cap (regression: bodySizeGuard used to reject these with a 413 before the schema ever ran)', async () => {
@@ -118,7 +121,9 @@ describe('plants health-check handler', () => {
   });
 
   it('429s and never calls Bedrock when the household is over its monthly cap (M1)', async () => {
-    vi.mocked(leafHealthBudget.isOverCap).mockResolvedValue(true);
+    const limitError = new Error('at cap');
+    limitError.name = 'LeafHealthBudgetExceededError';
+    vi.mocked(leafHealthBudget.reserveUsage).mockRejectedValue(limitError);
     const checkPlantHealth = await subject();
     const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(429);
@@ -126,12 +131,33 @@ describe('plants health-check handler', () => {
     expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
   });
 
-  it('does NOT count the demo fallback against the cap (no Bedrock spend)', async () => {
+  it('releases the reservation for the demo fallback (no Bedrock spend)', async () => {
     vi.mocked(leafHealth.assessLeafHealth).mockResolvedValue({ ...ASSESSMENT, demo: true });
     const checkPlantHealth = await subject();
     const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
+    expect(leafHealthBudget.releaseUsage).toHaveBeenCalledWith('hh-1');
     expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before Bedrock when the atomic reservation is unavailable', async () => {
+    vi.mocked(leafHealthBudget.reserveUsage).mockRejectedValue(new Error('ddb down'));
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatch(/temporarily unavailable/i);
+    expect(leafHealth.assessLeafHealth).not.toHaveBeenCalled();
+  });
+
+  it('still tracks real checks when the configured cap is unlimited', async () => {
+    vi.mocked(leafHealthBudget.monthlyCap).mockReturnValue(0);
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(leafHealthBudget.reserveUsage).not.toHaveBeenCalled();
+    expect(leafHealthBudget.incrementUsage).toHaveBeenCalledWith('hh-1');
   });
 
   it("404s when the plant is not in the caller's household (ownership)", async () => {

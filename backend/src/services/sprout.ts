@@ -1,6 +1,7 @@
 /** First-party Sprout client with a deliberately minimized household context. */
 import { createHash, createHmac } from 'node:crypto';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { z } from 'zod';
 import * as plantService from './plantService.js';
 import * as taskService from './taskService.js';
 
@@ -24,16 +25,40 @@ export interface SproutChatResult {
   disclosure: string;
 }
 
-interface SproutResponse {
-  answer: {
-    display_text: string;
-    citations: SproutCitation[];
-    disclosure: string;
-    provenance: 'corpus';
-  };
-  household_observations: SproutHouseholdObservation[];
-  context_policy: 'household-data-selects-corpus-facts';
-}
+const httpsUrl = z
+  .string()
+  .url()
+  .refine((value) => new URL(value).protocol === 'https:', {
+    message: 'Citation URLs must use HTTPS',
+  });
+
+const sproutResponseSchema = z.object({
+  answer: z.object({
+    display_text: z.string().min(1).max(20_000),
+    citations: z
+      .array(
+        z.object({
+          title: z.string().min(1).max(300),
+          url: httpsUrl,
+          source: z.string().min(1).max(300),
+          fetch_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+      )
+      .max(20),
+    disclosure: z.string().max(2_000),
+    provenance: z.literal('corpus'),
+  }),
+  household_observations: z
+    .array(
+      z.object({
+        kind: z.enum(['collection', 'tasks']),
+        value: z.record(z.string(), z.number().finite()),
+        provenance: z.literal('household'),
+      })
+    )
+    .max(20),
+  context_policy: z.literal('household-data-selects-corpus-facts'),
+});
 
 export function isSproutIntegrationEnabled(): boolean {
   return process.env.SPROUT_INTEGRATION_ENABLED === '1';
@@ -81,7 +106,7 @@ function escapeRegExp(value: string): string {
 /** Remove known local identifiers before a user's free-text question crosses services. */
 export function redactSproutQuestion(
   question: string,
-  plants: Array<{ name: string; species: string | null }>
+  plants: Array<{ name: string; canonicalSpecies?: string | null }>
 ): string {
   let redacted = question;
   const namedPlants = [...plants]
@@ -90,7 +115,7 @@ export function redactSproutQuestion(
   for (const plant of namedPlants) {
     redacted = redacted.replace(
       new RegExp(escapeRegExp(plant.name), 'giu'),
-      plant.species?.trim() || 'this plant'
+      plant.canonicalSpecies?.trim() || 'this plant'
     );
   }
   return redacted
@@ -103,8 +128,10 @@ function daysBetween(date: string, now: Date): number {
 }
 
 /**
- * Build the only payload permitted to cross into Sprout. No nickname, free-form
- * location, notes, images, member data, household id, or exact timestamps.
+ * Build the only payload permitted to cross into Sprout. `species` is the
+ * server-resolved canonical value, never the adjacent client-editable field.
+ * No nickname, free-form species/location, notes, images, member data,
+ * household id, or exact timestamps cross this boundary.
  */
 export async function buildSproutContext(householdId: string, now = new Date(), question?: string) {
   const [plants, tasks] = await Promise.all([
@@ -112,14 +139,19 @@ export async function buildSproutContext(householdId: string, now = new Date(), 
     taskService.getTasks(householdId),
   ]);
   const speciesByPlant = new Map(
-    plants.filter((plant) => plant.species).map((plant) => [plant.id, plant.species as string])
+    plants
+      .filter((plant) => plant.canonicalSpecies)
+      .map((plant) => [plant.id, plant.canonicalSpecies as string])
   );
   return {
     sanitizedQuestion: question === undefined ? undefined : redactSproutQuestion(question, plants),
     plants: plants
-      .filter((plant) => plant.species)
+      .filter((plant) => plant.canonicalSpecies)
       .slice(0, 100)
-      .map((plant) => ({ species: plant.species as string, light_profile: 'unknown' as const })),
+      .map((plant) => ({
+        species: plant.canonicalSpecies as string,
+        light_profile: 'unknown' as const,
+      })),
     tasks: tasks
       .flatMap((task) => {
         const species = speciesByPlant.get(task.plantId);
@@ -144,7 +176,7 @@ export async function askSprout(input: {
   question: string;
   language?: 'en' | 'es';
 }): Promise<SproutChatResult> {
-  const baseUrl = process.env.SPROUT_API_URL?.replace(/\/$/, '');
+  const baseUrl = validatedSproutBaseUrl(process.env.SPROUT_API_URL);
   const secret = await resolveSecret();
   if (!baseUrl || !secret) throw new Error('Sprout integration is enabled but not configured');
 
@@ -171,13 +203,14 @@ export async function askSprout(input: {
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`Sprout returned HTTP ${response.status}`);
-    const result = (await response.json()) as SproutResponse;
-    if (
-      result.answer?.provenance !== 'corpus' ||
-      result.context_policy !== 'household-data-selects-corpus-facts'
-    ) {
-      throw new Error('Sprout returned an invalid provenance contract');
+    const parsed = sproutResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      // Treat Sprout as untrusted at the service boundary. In particular,
+      // citations become clickable links in the chat UI, so a TypeScript cast
+      // alone cannot be allowed to pass a javascript: URL or malformed shape.
+      throw new Error('Sprout returned an invalid provenance or response contract');
     }
+    const result = parsed.data;
     return {
       text: result.answer.display_text,
       citations: result.answer.citations ?? [],
@@ -187,4 +220,30 @@ export async function askSprout(input: {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+const PRODUCTION_SPROUT_HOST = 'api.sprout.chelseakr.com';
+
+export function validatedSproutBaseUrl(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('SPROUT_API_URL must be a valid HTTPS URL');
+  }
+  const testHostAllowed =
+    process.env.NODE_ENV === 'test' &&
+    (url.hostname === 'sprout.example' || url.hostname.endsWith('.sprout.example'));
+  if (
+    url.protocol !== 'https:' ||
+    (url.port !== '' && url.port !== '443') ||
+    url.username !== '' ||
+    url.password !== '' ||
+    (url.hostname !== PRODUCTION_SPROUT_HOST && !testHostAllowed)
+  ) {
+    throw new Error(`SPROUT_API_URL must use HTTPS on the approved ${PRODUCTION_SPROUT_HOST} host`);
+  }
+  return url.toString().replace(/\/$/, '');
 }

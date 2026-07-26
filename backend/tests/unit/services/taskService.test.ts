@@ -306,6 +306,25 @@ describe('taskService', () => {
     });
   });
 
+  it('getTasks continues beyond ten short DynamoDB pages', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getTasks } = await import('../../../src/services/taskService.js');
+    for (let page = 0; page < 11; page += 1) {
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [{ ...baseTask, id: `t${page}` }],
+        ...(page < 10 ? { LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: `TASK#t${page}` } } : {}),
+      });
+    }
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Items: activePlantRows })
+      .mockResolvedValueOnce({ Items: [] });
+
+    const tasks = await getTasks('hh-1');
+
+    expect(tasks).toHaveLength(11);
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(13);
+  });
+
   it('getUpcomingTasks queries GSI1, filters non-task items and inactive plants', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { getUpcomingTasks } = await import('../../../src/services/taskService.js');
@@ -534,6 +553,32 @@ describe('taskService', () => {
     expect(kinds).toEqual(['Get', 'Update', 'Get']);
   });
 
+  it('does not advance a later occurrence when a timed-out integration retries the old due date', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    const alreadyAdvanced = {
+      ...baseTask,
+      lastCompleted: '2026-05-01T08:00:00.000Z',
+      nextDue: '2026-05-08T00:00:00.000Z',
+    };
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: alreadyAdvanced });
+
+    const result = await completeTask(
+      'hh-1',
+      't1',
+      'user-1',
+      'Irrigation integration',
+      undefined,
+      baseTask.nextDue
+    );
+
+    expect(result?.nextDue).toBe(alreadyAdvanced.nextDue);
+    const kinds = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => (c[0] as unknown as SentCommand).kind);
+    expect(kinds).toEqual(['Get']);
+  });
+
   it('completeTask on a concurrently-deleted task returns null and writes nothing', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { completeTask } = await import('../../../src/services/taskService.js');
@@ -564,6 +609,12 @@ describe('taskService', () => {
     await snoozeTask('hh-1', 't1', 3);
     const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as SentCommand;
     expect(update.input.ExpressionAttributeValues[':nextDue']).toBe('2026-05-04T00:00:00.000Z');
+    expect(update.input.ExpressionAttributeValues[':expectedNextDue']).toBe(
+      '2026-05-01T00:00:00.000Z'
+    );
+    expect(update.input.ConditionExpression).toBe(
+      'attribute_exists(PK) AND #nextDue = :expectedNextDue'
+    );
   });
 
   it('snoozeTask on an OVERDUE task bases the new due date on now (clears overdue)', async () => {
@@ -587,6 +638,40 @@ describe('taskService', () => {
     const { snoozeTask } = await import('../../../src/services/taskService.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
     expect(await snoozeTask('hh-1', 't1', 3)).toBeNull();
+  });
+
+  it('snoozeTask is a no-op when a retry echoes an occurrence that already moved', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { snoozeTaskWithOutcome } = await import('../../../src/services/taskService.js');
+    const current = { ...baseTask, nextDue: '2026-05-08T00:00:00.000Z' };
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: current });
+
+    await expect(
+      snoozeTaskWithOutcome('hh-1', 't1', 3, '2026-05-01T00:00:00.000Z')
+    ).resolves.toEqual({ task: expect.objectContaining(current), changed: false });
+    expect(
+      vi.mocked(dynamodb.send).mock.calls.map((c) => (c[0] as unknown as SentCommand).kind)
+    ).toEqual(['Get']);
+  });
+
+  it('snoozeTask makes the loser of a concurrent retry an idempotent no-op', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { snoozeTaskWithOutcome } = await import('../../../src/services/taskService.js');
+    const err = new Error('conditional');
+    err.name = 'ConditionalCheckFailedException';
+    const current = { ...baseTask, nextDue: '2026-05-04T00:00:00.000Z' };
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: baseTask })
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce({ Item: current });
+
+    await expect(snoozeTaskWithOutcome('hh-1', 't1', 3, baseTask.nextDue)).resolves.toEqual({
+      task: expect.objectContaining(current),
+      changed: false,
+    });
+    expect(
+      vi.mocked(dynamodb.send).mock.calls.map((c) => (c[0] as unknown as SentCommand).kind)
+    ).toEqual(['Get', 'Update', 'Get']);
   });
 
   it('getHouseholdActivity queries GSI1 newest-first', async () => {

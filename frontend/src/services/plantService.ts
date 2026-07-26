@@ -225,8 +225,11 @@ export const plantService = {
    * `planLimitHit` flags that the household's plan cap stopped the batch.
    */
   async importPlants(plants: ImportPlantData[]): Promise<ImportPlantsResponse> {
-    track('plants_imported', { context: String(plants.length) });
     const response = await api.post<ImportPlantsResponse>('/plants/import', { plants });
+    // This is a success event, not an attempt event: failed imports should not
+    // inflate activation telemetry. Use the server-confirmed created count
+    // because the import contract permits partial success.
+    track('plants_imported', { context: String(response.data.created) });
     return response.data;
   },
 
@@ -299,10 +302,10 @@ export const plantService = {
   },
 
   async confirmImageUpload(plantId: string, imageUrl: string): Promise<{ imageUrl: string }> {
-    track('photo_uploaded');
     const response = await api.post<{ imageUrl: string }>(`/plants/${plantId}/image/confirm`, {
       imageUrl,
     });
+    track('photo_uploaded');
     return response.data;
   },
 
@@ -329,17 +332,17 @@ export const plantService = {
    * cap as identify — downscale before calling, never the raw camera file.
    */
   async checkLeafHealth(plantId: string, imageBase64: string): Promise<LeafHealthResult> {
-    track('leaf_health_checked');
     const response = await api.post<LeafHealthResult>(`/plants/${plantId}/health-check`, {
       imageBase64,
     });
+    track('leaf_health_checked');
     return response.data;
   },
 
   /** Mint a 14-day share link for a plant card (any member may share). */
   async sharePlant(id: string): Promise<PlantShareLink> {
-    track('plant_shared');
     const response = await api.post<PlantShareLink>(`/plants/${id}/share`);
+    track('plant_shared');
     return response.data;
   },
 
@@ -351,8 +354,8 @@ export const plantService = {
 
   /** Copy a shared cutting card into the caller's household (plan cap → 402). */
   async acceptSharedPlant(code: string): Promise<Plant> {
-    track('plant_share_accepted');
     const response = await api.post<Plant>(`/plants/shared/${code}/accept`);
+    track('plant_share_accepted');
     return response.data;
   },
 };

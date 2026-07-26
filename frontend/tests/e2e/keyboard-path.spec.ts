@@ -81,6 +81,15 @@ test.describe('Keyboard-only paths', () => {
   }) => {
     const key = tabKey(browserName);
     await uiLogin(page, account.email, account.password);
+    // uiLogin completes through an in-document SPA transition. Chromium
+    // retains the sequential-focus starting point after the submitted login
+    // button is removed, so the next Tab correctly resumes after the global
+    // skip link. Reload to exercise the fresh-document order this test claims:
+    // the persisted session rehydrates, while Tab traversal starts at the top.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible({
+      timeout: 15000,
+    });
 
     // From a fresh load, the skip link must be reachable within the
     // first couple of tab stops (WCAG 2.4.1 Bypass Blocks). It is
@@ -91,16 +100,14 @@ test.describe('Keyboard-only paths', () => {
 
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main-content/);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('MAIN');
     // What a skip link is *for*: after activating it, the next Tab must
     // continue from inside the main content area, bypassing the nav.
-    // (#main-content carries tabIndex={-1} so the jump moves the
-    // sequential-focus point; engines differ on whether activeElement
-    // lands on the target itself — Chromium yes, Firefox/WebKit no — so
-    // assert the behavior, not the intermediate state.)
+    // The global hash target wraps the router, including Layout's sidebar;
+    // assert against the actual main landmark so repeated navigation cannot
+    // satisfy this check accidentally.
     await page.keyboard.press(key);
-    const focusInMain = await page.evaluate(
-      () => document.activeElement?.closest('#main-content') !== null
-    );
+    const focusInMain = await page.evaluate(() => document.activeElement?.closest('main') !== null);
     expect(focusInMain, 'Tab after the skip link must land inside main content').toBe(true);
   });
 

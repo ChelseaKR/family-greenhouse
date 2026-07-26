@@ -113,37 +113,32 @@ describe('evaluatePestAlerts', () => {
       ok: true,
       pests: [pest(null)],
     } as never);
-    // lastAlertedAt read → no previous alert.
-    vi.mocked(dynamodb.send).mockResolvedValue({ Item: undefined } as never);
-
     const result = await evaluatePestAlerts('hh', new Date('2026-06-01T00:00:00Z'));
     expect(result.alerts).toHaveLength(1);
     expect(result.alerts[0]).toMatchObject({ plantId: 'p1', pestId: 42, pestName: 'Spider mites' });
     expect(result.dataUnavailable).toBe(false);
 
-    // Only Get commands — the 90-day marker write moved to the caller
-    // (after successful delivery) via markAlerted().
-    const kinds = vi.mocked(dynamodb.send).mock.calls.map((c) => (c[0] as { kind: string }).kind);
-    expect(kinds).not.toContain('Put');
+    // Recipient suppression is checked by the caller around each actual send,
+    // so candidate evaluation never reads or writes a user marker.
+    expect(dynamodb.send).not.toHaveBeenCalled();
   });
 
-  it('suppresses pests alerted within the last quarter', async () => {
+  it('suppresses a delivered pest alert per recipient within the last quarter', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
-    const plants = await import('../../../src/services/plantService.js');
-    const enrichment = await import('../../../src/services/enrichment.js');
-    const { evaluatePestAlerts } = await import('../../../src/services/pestAlerts.js');
+    const { wasAlerted } = await import('../../../src/services/pestAlerts.js');
 
     const now = new Date('2026-06-01T00:00:00Z');
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
-    vi.mocked(plants.getPlants).mockResolvedValue([plant] as never);
-    vi.mocked(enrichment.listPestsForSpeciesCached).mockResolvedValue({
-      ok: true,
-      pests: [pest(null)],
-    } as never);
     vi.mocked(dynamodb.send).mockResolvedValue({ Item: { alertedAt: tenDaysAgo } } as never);
 
-    const result = await evaluatePestAlerts('hh', now);
-    expect(result.alerts).toHaveLength(0);
+    expect(await wasAlerted('u1', 'p1', 42, now)).toBe(true);
+    const command = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { Key: Record<string, string> };
+    };
+    expect(command.input.Key).toEqual({
+      PK: 'USER#u1',
+      SK: 'PEST_ALERT#p1#42',
+    });
   });
 
   it('does NOT treat "no pest data available" the same as "confirmed no pests" (the Cinnamomum-cassia-shaped bug)', async () => {
@@ -185,14 +180,16 @@ describe('evaluatePestAlerts', () => {
     const { markAlerted } = await import('../../../src/services/pestAlerts.js');
     vi.mocked(dynamodb.send).mockResolvedValue({} as never);
 
-    await markAlerted('p1', 42);
+    const now = new Date('2026-06-01T00:00:00Z');
+    await markAlerted('u1', 'p1', 42, now);
     const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       kind: string;
       input: { Item: Record<string, unknown> };
     };
     expect(cmd.kind).toBe('Put');
-    expect(cmd.input.Item.PK).toBe('PLANT#p1');
-    expect(cmd.input.Item.SK).toBe('PEST_ALERT#42');
+    expect(cmd.input.Item.PK).toBe('USER#u1');
+    expect(cmd.input.Item.SK).toBe('PEST_ALERT#p1#42');
+    expect(cmd.input.Item.alertedAt).toBe(now.toISOString());
     expect(typeof cmd.input.Item.ttl).toBe('number');
   });
 });

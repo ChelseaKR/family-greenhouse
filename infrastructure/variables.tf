@@ -117,6 +117,16 @@ variable "perenual_daily_budget" {
   default     = ""
 }
 
+# Plant.id powers photo identification. Passed to Terraform only through a
+# protected TF_VAR secret in deploy workflows; blank keeps the integration
+# disabled and the API reports that honestly.
+variable "plant_id_api_key" {
+  description = "Plant.id API key. Blank disables real photo identification."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # OpenWeather powers the climate/weather features. Without the key the weather
 # service short-circuits to null and those features silently disable in prod.
 variable "openweather_api_key" {
@@ -162,6 +172,13 @@ variable "sprout_api_url" {
   description = "Base URL of the hosted Sprout API."
   type        = string
   default     = ""
+  validation {
+    condition = (
+      var.sprout_api_url == "" ||
+      can(regex("^https://api\\.sprout\\.chelseakr\\.com/?$", var.sprout_api_url))
+    )
+    error_message = "sprout_api_url must be blank or https://api.sprout.chelseakr.com."
+  }
 }
 
 variable "sprout_integration_secret_id" {
@@ -187,6 +204,34 @@ variable "sms_notifications_enabled" {
   validation {
     condition     = contains(["", "1"], var.sms_notifications_enabled)
     error_message = "sms_notifications_enabled must be blank or '1'."
+  }
+}
+
+variable "web_push_vapid_public_key" {
+  description = "VAPID public key shared by the browser build and notification Lambdas. Blank disables background web push."
+  type        = string
+  default     = ""
+}
+
+variable "web_push_vapid_private_key" {
+  description = "VAPID private key used only by notification Lambdas. Supply through a protected TF_VAR secret, never the frontend build."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "web_push_vapid_subject" {
+  description = "VAPID contact URI, normally mailto:hello@example.com. Required when a key pair is configured."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (
+      var.web_push_vapid_subject == "" ||
+      startswith(var.web_push_vapid_subject, "mailto:") ||
+      startswith(var.web_push_vapid_subject, "https://")
+    )
+    error_message = "web_push_vapid_subject must be blank or start with mailto: or https://."
   }
 }
 

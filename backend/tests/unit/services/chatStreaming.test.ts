@@ -17,6 +17,7 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     newConversationId: vi.fn(() => 'conv-stream-1'),
     appendMessage: vi.fn(async () => undefined),
     appendMessagePair: vi.fn(async () => undefined),
+    appendTurnUserMessage: vi.fn(async () => undefined),
     getConversation: vi.fn(async () => []),
     reserveBudget: vi.fn(
       async (_hh: string, reserve: { inputTokens: number; outputTokens: number }) => ({
@@ -30,6 +31,7 @@ vi.mock('../../../src/services/chat/persistence.js', async () => {
     incrementBudget: vi.fn(async () => undefined),
     claimTurn: vi.fn(async () => ({ status: 'claimed' as const })),
     finalizeTurn: vi.fn(async () => undefined),
+    markTurnRetryable: vi.fn(async () => undefined),
     releaseTurn: vi.fn(async () => undefined),
   };
 });

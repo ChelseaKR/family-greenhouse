@@ -5,6 +5,9 @@ vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/spaceService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
+vi.mock('../../../src/services/enrichment.js', () => ({
+  getSpeciesCached: vi.fn(),
+}));
 // Serves double duty: authMiddleware validates the claim household against
 // this membership row, and the handler reads the denormalized member name
 // for activity attribution (replaced the per-request Cognito AdminGetUser).
@@ -292,6 +295,55 @@ describe('plants handler', () => {
     );
     // The old count-then-write pre-check is gone — no plant listing on create.
     expect(plantService.getPlants).not.toHaveBeenCalled();
+  });
+
+  it('derives the integration-safe species from the server catalog, not user text', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const enrichment = await import('../../../src/services/enrichment.js');
+    const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(enrichment.getSpeciesCached).mockResolvedValueOnce({
+      id: 7,
+      commonName: 'Monstera',
+      scientificName: 'Monstera deliciosa',
+      thumbnailUrl: null,
+      family: null,
+      cycle: null,
+      watering: null,
+      sunlight: [],
+      hardinessZone: null,
+      indoor: true,
+      edible: false,
+      poisonousToPets: null,
+      defaultImageUrl: null,
+    });
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p2' } as never);
+
+    const res = (await createPlant(
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify({
+          name: 'Pothos',
+          species: 'Chelsea, 123 Private Street',
+          perenualSpeciesId: 7,
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
+    expect(plantService.createPlant).toHaveBeenCalledWith(
+      {
+        name: 'Pothos',
+        species: 'Chelsea, 123 Private Street',
+        perenualSpeciesId: 7,
+        canonicalSpecies: 'Monstera deliciosa',
+      },
+      'hh-1',
+      'user-1',
+      500
+    );
   });
 
   it('createPlant returns 402 naming the plan when the service reports the cap (PlanLimitError)', async () => {
@@ -751,6 +803,35 @@ describe('plants handler', () => {
       const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(400);
       expect(res.body).toMatch(/5 MiB/);
+      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
+      expect(vi.mocked(DeleteObjectCommand).mock.calls[0][0]).toEqual({
+        Bucket: 'test-bucket',
+        Key: 'plants/hh-1/p1/abc.jpg',
+      });
+    });
+
+    it('rejects and removes an empty upload instead of attaching a broken image', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { s3 } = await import('../../../src/utils/s3.js');
+      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+      const send = s3.send as ReturnType<typeof vi.fn>;
+      send.mockResolvedValueOnce({ ContentLength: 0, ContentType: 'image/jpeg' });
+      send.mockResolvedValueOnce({});
+      const event = buildEvent({
+        httpMethod: 'POST',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify({
+          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
+        }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toMatch(/image is empty/i);
       expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
       expect(vi.mocked(DeleteObjectCommand).mock.calls[0][0]).toEqual({
         Bucket: 'test-bucket',

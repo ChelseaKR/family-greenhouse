@@ -23,7 +23,11 @@ export default defineConfig({
   timeout: 60_000,
   use: {
     baseURL,
-    trace: 'retain-on-failure',
+    // A trace archives full request URLs. This suite exercises a presigned S3
+    // PUT, so retaining a failure trace would persist its query credentials in
+    // the CI artifact. Keep screenshots/video plus sanitized hostname/status
+    // assertions instead.
+    trace: 'off',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },

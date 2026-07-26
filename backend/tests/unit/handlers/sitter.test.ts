@@ -181,8 +181,44 @@ describe('POST /sitter/{token}/tasks/{taskId}/complete (public)', () => {
       'hh-1',
       't1',
       'sitter:link-1',
-      'a plant sitter'
+      'a plant sitter',
+      undefined,
+      undefined
     );
+  });
+
+  it('treats a retry for an already-advanced occurrence as a no-op', async () => {
+    const { getActiveLink } = await import('../../../src/services/sitterService.js');
+    const { getTask, completeTask } = await import('../../../src/services/taskService.js');
+    const { recordActivity } = await import('../../../src/services/activity.js');
+    vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
+    vi.mocked(getTask).mockResolvedValueOnce({
+      id: 't1',
+      householdId: 'hh-1',
+      plantId: 'p1',
+      plantName: 'Monstera',
+      type: 'water',
+      customType: null,
+      nextDue: '2026-08-01T00:00:00.000Z',
+    } as never);
+
+    const { completeSitterTask } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await completeSitterTask(
+      anonEvent({
+        httpMethod: 'POST',
+        path: `/sitter/${TOKEN}/tasks/t1/complete`,
+        pathParameters: { token: TOKEN, taskId: 't1' },
+        body: JSON.stringify({ expectedNextDue: '2026-07-25T00:00:00.000Z' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).dueDate).toBe('2026-08-01T00:00:00.000Z');
+    expect(completeTask).not.toHaveBeenCalled();
+    expect(recordActivity).not.toHaveBeenCalled();
   });
 
   it('rejects a task that belongs to ANOTHER household (cross-household guard → 404)', async () => {

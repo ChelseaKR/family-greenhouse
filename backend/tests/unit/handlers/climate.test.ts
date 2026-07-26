@@ -57,6 +57,8 @@ async function mockMembership(role: 'admin' | 'member' = 'admin', householdId = 
 describe('climate handler', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
+    const weather = await import('../../../src/services/weather.js');
+    vi.mocked(weather.isConfigured).mockReturnValue(true);
     // authMiddleware validates the claim household against the (mocked)
     // membership table and caches the result — reset both per test.
     const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
@@ -100,6 +102,7 @@ describe('climate handler', () => {
       const body = JSON.parse(res.body);
       expect(body).toMatchObject({
         configured: true,
+        location: { city: 'Austin', lat: 30.27, lon: -97.74 },
         weather: { tempC: 25, humidity: 50 },
         tips: [],
       });
@@ -127,11 +130,11 @@ describe('climate handler', () => {
 
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body).toMatchObject({ weather: null, tips: [] });
+      expect(body).toMatchObject({ location: null, weather: null, tips: [] });
       expect(climate.getWeatherCached).not.toHaveBeenCalled();
     });
 
-    it('returns null weather (but still 200) when budget is exhausted upstream', async () => {
+    it('returns a retryable 503 when the weather budget is exhausted', async () => {
       const climate = await import('../../../src/services/climate.js');
       const householdService = await import('../../../src/services/householdService.js');
       const { getClimate } = await import('../../../src/handlers/climate/handler.js');
@@ -143,9 +146,9 @@ describe('climate handler', () => {
         createdAt: '',
         createdBy: 'user-1',
       });
-      // getWeatherCached returns null when budget exhausted or the upstream
-      // call fails — handler must treat that as "no weather" not as an error.
-      vi.mocked(climate.getWeatherCached).mockResolvedValueOnce(null);
+      vi.mocked(climate.getWeatherCached).mockRejectedValueOnce(
+        new climate.ClimateUnavailableError('budget_exhausted')
+      );
 
       const res = (await getClimate(
         buildEvent({ pathParameters: { id: 'hh-1' } }),
@@ -153,11 +156,10 @@ describe('climate handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(503);
       const body = JSON.parse(res.body);
-      expect(body.weather).toBeNull();
-      expect(body.tips).toEqual([]);
-      // deriveClimateTips is only called for a non-null snapshot.
+      expect(body.message).toMatch(/temporarily unavailable/i);
+      expect(body.message).not.toMatch(/budget/i);
       expect(climate.deriveClimateTips).not.toHaveBeenCalled();
     });
 
@@ -306,6 +308,55 @@ describe('climate handler', () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toMatch(/could not find that location/i);
+      expect(householdService.setHouseholdLocation).not.toHaveBeenCalled();
+    });
+
+    it('returns 503, not "location not found", when the geocoder provider is unavailable', async () => {
+      const climate = await import('../../../src/services/climate.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const { setLocation } = await import('../../../src/handlers/climate/handler.js');
+      vi.mocked(climate.geocodeCached).mockRejectedValueOnce(
+        new climate.ClimateUnavailableError('provider')
+      );
+
+      const res = (await setLocation(
+        buildEvent({
+          httpMethod: 'PUT',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ city: 'Austin' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body).toMatch(/temporarily unavailable/i);
+      expect(res.body).not.toMatch(/could not find/i);
+      expect(householdService.setHouseholdLocation).not.toHaveBeenCalled();
+    });
+
+    it('returns a retryable service error instead of calling an unconfigured geocoder', async () => {
+      const climate = await import('../../../src/services/climate.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const weather = await import('../../../src/services/weather.js');
+      const { setLocation } = await import('../../../src/handlers/climate/handler.js');
+      vi.mocked(weather.isConfigured).mockReturnValueOnce(false);
+
+      const res = (await setLocation(
+        buildEvent({
+          httpMethod: 'PUT',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ city: 'Austin' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(503);
+      expect(res.body).toMatch(/temporarily unavailable/i);
+      expect(climate.geocodeCached).not.toHaveBeenCalled();
       expect(householdService.setHouseholdLocation).not.toHaveBeenCalled();
     });
 

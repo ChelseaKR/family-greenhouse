@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
 import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
@@ -71,13 +71,13 @@ describe('TasksPage task-type icons', () => {
   });
 });
 
-function renderTasksPage() {
+function renderTasksPage(initialEntry = '/tasks') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/tasks']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <TasksPage />
       </MemoryRouter>
     </QueryClientProvider>
@@ -139,5 +139,55 @@ describe("TasksPage 'My tasks' filter", () => {
 
     expect(await screen.findByText('Pothos')).toBeInTheDocument();
     expect(screen.queryByText('Fern')).not.toBeInTheDocument();
+  });
+});
+
+describe('TasksPage notification deep links', () => {
+  it('maps filter=due to the today + overdue care queue', async () => {
+    useAuthStore.setState({
+      accessToken: 'access-1',
+      user: { id: 'u1', email: 'me@example.com', name: 'Me', householdId: 'hh-1' } as User,
+    });
+    const dateAtNoon = (offsetDays: number) => {
+      const value = new Date();
+      value.setHours(12, 0, 0, 0);
+      value.setDate(value.getDate() + offsetDays);
+      return value.toISOString();
+    };
+    const task = (id: string, plantName: string, nextDue: string) => ({
+      id,
+      plantId: `plant-${id}`,
+      plantName,
+      type: 'water',
+      customType: null,
+      frequency: 7,
+      lastCompleted: null,
+      nextDue,
+      assignedTo: null,
+      assignedToName: null,
+      notes: null,
+      createdBy: 'u1',
+      createdAt: '',
+    });
+    server.use(
+      http.get(`${API}/tasks`, () =>
+        HttpResponse.json([
+          task('overdue', 'Overdue Fern', dateAtNoon(-1)),
+          task('today', 'Today Pothos', dateAtNoon(0)),
+          task('later', 'Later Palm', dateAtNoon(3)),
+        ])
+      ),
+      http.get(`${API}/households/hh-1/climate`, () =>
+        HttpResponse.json({ configured: false, weather: null, tips: [] })
+      ),
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
+
+    renderTasksPage('/tasks?filter=due');
+
+    expect(await screen.findByText('Overdue Fern')).toBeInTheDocument();
+    expect(screen.getByText('Today Pothos')).toBeInTheDocument();
+    expect(screen.queryByText('Later Palm')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Today' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

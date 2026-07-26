@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 /**
- * Visual capture spec — sweeps every route in the app at desktop + mobile
+ * Visual capture spec — sweeps representative routes at desktop + mobile
  * sizes and dumps a full-page PNG to `tests/e2e/screenshots/`. Not a
  * regression suite (no baseline comparison). The output is what gets
  * eyeballed during a design pass to spot layout glitches: clipped art,
@@ -37,7 +37,6 @@ const AUTH_ROUTES: Array<{ name: string; path: string }> = [
   { name: 'household', path: '/household' },
   { name: 'settings', path: '/settings' },
   { name: 'help', path: '/help' },
-  { name: 'chat', path: '/chat' },
 ];
 
 const VIEWPORTS = {

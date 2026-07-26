@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HouseholdPage } from '@/features/household/HouseholdPage';
 import { useAuthStore } from '@/store/authStore';
@@ -81,5 +81,62 @@ describe('HouseholdPage', () => {
     expect(screen.queryByText('alice@example.com')).not.toBeInTheDocument();
     expect(screen.queryByText('bob@example.com')).not.toBeInTheDocument();
     expect(screen.queryByText(/@example\.com/)).not.toBeInTheDocument();
+  });
+
+  it('does not offer a dead location form when the climate provider is unavailable', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'user-1',
+        email: 'alice@example.com',
+        name: 'Alice',
+        householdId: 'hh-1',
+        householdRole: 'admin',
+      },
+    } as never);
+    server.use(
+      http.get(`${API}/me/households`, () =>
+        HttpResponse.json([
+          { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'admin', joinedAt: '' },
+        ])
+      ),
+      http.get(`${API}/households/hh-1/climate`, () =>
+        HttpResponse.json({ configured: false, location: null, weather: null, tips: [] })
+      )
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/Climate-aware tips are unavailable right now/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('City')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save location' })).not.toBeInTheDocument();
+  });
+
+  it('offers location setup when the climate provider is configured', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'user-1',
+        email: 'alice@example.com',
+        name: 'Alice',
+        householdId: 'hh-1',
+        householdRole: 'admin',
+      },
+    } as never);
+    server.use(
+      http.get(`${API}/me/households`, () =>
+        HttpResponse.json([
+          { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'admin', joinedAt: '' },
+        ])
+      ),
+      http.get(`${API}/households/hh-1/climate`, () =>
+        HttpResponse.json({ configured: true, location: null, weather: null, tips: [] })
+      )
+    );
+
+    renderPage();
+
+    expect(await screen.findByLabelText('City')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save location' })).toBeDisabled();
   });
 });

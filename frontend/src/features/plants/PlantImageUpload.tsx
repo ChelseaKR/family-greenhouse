@@ -14,9 +14,10 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 interface PlantImageUploadProps {
   plantId: string;
+  onUploadSuccess?: () => void;
 }
 
-export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
+export function PlantImageUpload({ plantId, onUploadSuccess }: PlantImageUploadProps) {
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
   const inputId = useId();
@@ -60,6 +61,7 @@ export function PlantImageUpload({ plantId }: PlantImageUploadProps) {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       setProgress(0);
       setLastFile(null);
+      onUploadSuccess?.();
     },
     onError: (err) => {
       // A cancelled upload (unmount, or a newer upload superseding this one)

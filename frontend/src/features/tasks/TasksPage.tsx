@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { CalendarDaysIcon, CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -34,6 +34,15 @@ import { TaskLocation } from '@/components/TaskLocation';
 import { plantLocationLabel, spaceMap } from '@/utils/spaces';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
+
+function filterFromSearchParam(value: string | null): FilterType {
+  // Notification links historically used `filter=due`; keep those links
+  // useful by mapping "due" to the existing today + overdue care queue.
+  if (value === 'due') return 'today';
+  return value === 'mine' || value === 'overdue' || value === 'today' || value === 'week'
+    ? value
+    : 'all';
+}
 
 function formatDueDate(dateString: string): string {
   const date = new Date(dateString);
@@ -78,10 +87,26 @@ export function TasksPage() {
   const { householdId, householdQuery } = useActiveHousehold();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedSpaceFilter = searchParams.get('space');
-  const [filter, setFilter] = useState<FilterType>('all');
+  const requestedTaskFilter = filterFromSearchParam(searchParams.get('filter'));
+  const [filter, setFilter] = useState<FilterType>(requestedTaskFilter);
   const [displayMode, setDisplayMode] = useState<'schedule' | 'round'>(() =>
     requestedSpaceFilter ? 'round' : 'schedule'
   );
+
+  useEffect(() => {
+    setFilter(requestedTaskFilter);
+  }, [requestedTaskFilter]);
+
+  function selectFilter(nextFilter: FilterType): void {
+    setFilter(nextFilter);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextFilter === 'all') {
+      nextParams.delete('filter');
+    } else {
+      nextParams.set('filter', nextFilter);
+    }
+    setSearchParams(nextParams, { replace: true });
+  }
 
   const {
     data: tasks,
@@ -292,7 +317,7 @@ export function TasksPage() {
           <button
             key={f.id}
             type="button"
-            onClick={() => setFilter(f.id as FilterType)}
+            onClick={() => selectFilter(f.id as FilterType)}
             className={clsx(
               'inline-flex min-h-touch items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
               filter === f.id
@@ -365,9 +390,16 @@ export function TasksPage() {
               key={group.id}
               title={`${t(`spaces.${group.environment}`)} · ${group.name}`}
               tasks={group.tasks}
-              onComplete={(id) => completeTaskMutation.mutate(id)}
+              onComplete={(task) =>
+                completeTaskMutation.mutate({
+                  taskId: task.id,
+                  expectedNextDue: task.nextDue,
+                })
+              }
               completingTaskId={
-                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+                completeTaskMutation.isPending
+                  ? (completeTaskMutation.variables?.taskId ?? null)
+                  : null
               }
               extras={rowExtras}
             />
@@ -379,9 +411,16 @@ export function TasksPage() {
             <TaskSection
               title="Overdue"
               tasks={overdueTasks}
-              onComplete={(id) => completeTaskMutation.mutate(id)}
+              onComplete={(task) =>
+                completeTaskMutation.mutate({
+                  taskId: task.id,
+                  expectedNextDue: task.nextDue,
+                })
+              }
               completingTaskId={
-                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+                completeTaskMutation.isPending
+                  ? (completeTaskMutation.variables?.taskId ?? null)
+                  : null
               }
               variant="danger"
               extras={rowExtras}
@@ -392,9 +431,16 @@ export function TasksPage() {
             <TaskSection
               title="Today"
               tasks={todayTasks}
-              onComplete={(id) => completeTaskMutation.mutate(id)}
+              onComplete={(task) =>
+                completeTaskMutation.mutate({
+                  taskId: task.id,
+                  expectedNextDue: task.nextDue,
+                })
+              }
               completingTaskId={
-                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+                completeTaskMutation.isPending
+                  ? (completeTaskMutation.variables?.taskId ?? null)
+                  : null
               }
               extras={rowExtras}
             />
@@ -404,9 +450,16 @@ export function TasksPage() {
             <TaskSection
               title="Upcoming"
               tasks={upcomingTasks}
-              onComplete={(id) => completeTaskMutation.mutate(id)}
+              onComplete={(task) =>
+                completeTaskMutation.mutate({
+                  taskId: task.id,
+                  expectedNextDue: task.nextDue,
+                })
+              }
               completingTaskId={
-                completeTaskMutation.isPending ? completeTaskMutation.variables : null
+                completeTaskMutation.isPending
+                  ? (completeTaskMutation.variables?.taskId ?? null)
+                  : null
               }
               extras={rowExtras}
             />
@@ -431,7 +484,7 @@ interface TaskRowExtras {
 interface TaskSectionProps {
   title: string;
   tasks: TaskWithCoverage[];
-  onComplete: (taskId: string) => void;
+  onComplete: (task: TaskWithCoverage) => void;
   completingTaskId: string | null;
   variant?: 'default' | 'danger';
   extras: TaskRowExtras;
@@ -530,7 +583,7 @@ function TaskSection({
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => onComplete(task.id)}
+                  onClick={() => onComplete(task)}
                   disabled={completingTaskId === task.id}
                   leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
                 >

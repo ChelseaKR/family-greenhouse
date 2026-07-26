@@ -4,8 +4,9 @@
  *   1. Read the household's plants that have a perenualSpeciesId set.
  *   2. For each, fetch the pest list from Perenual (cached).
  *   3. Pick pests whose typical season matches the current month.
- *   4. Suppress duplicates: any pest already alerted on this plant within
- *      the last quarter is skipped.
+ *   4. Return one seasonal candidate per plant. The caller applies the
+ *      per-recipient 90-day suppression marker so a provider failure for one
+ *      member never gets hidden by another member's successful delivery.
  *   5. Return one alert per plant (or none) — the caller dispatches via
  *      the notification fanout.
  *
@@ -79,34 +80,56 @@ export function pestActiveThisMonth(pest: PerenualPestSummary, monthName: string
   return new RegExp(`\\b${capitalize(monthName)}\\b`, 'i').test(text);
 }
 
-async function lastAlertedAt(plantId: string, pestId: number): Promise<string | null> {
+async function lastAlertedAt(
+  userId: string,
+  plantId: string,
+  pestId: number
+): Promise<string | null> {
   const result = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `PLANT#${plantId}`, SK: `PEST_ALERT#${pestId}` },
+      Key: { PK: `USER#${userId}`, SK: `PEST_ALERT#${plantId}#${pestId}` },
     })
   );
   return (result.Item?.alertedAt as string) ?? null;
 }
 
 /**
- * Write the 90-day suppression marker for a plant+pest pair. Exported so the
- * caller (the reminder run) records it only AFTER a successful delivery — a
- * failed send must not suppress the alert for a whole quarter.
+ * True when this recipient already received this plant+pest alert within the
+ * last quarter.
  */
-export async function markAlerted(plantId: string, pestId: number): Promise<void> {
+export async function wasAlerted(
+  userId: string,
+  plantId: string,
+  pestId: number,
+  now = new Date()
+): Promise<boolean> {
+  return withinQuarter(await lastAlertedAt(userId, plantId, pestId), now.getTime());
+}
+
+/**
+ * Write the per-recipient 90-day suppression marker only after that
+ * recipient's provider accepted a delivery.
+ */
+export async function markAlerted(
+  userId: string,
+  plantId: string,
+  pestId: number,
+  now = new Date()
+): Promise<void> {
   await dynamodb.send(
     new PutCommand({
       TableName: TABLE_NAME,
       Item: {
-        PK: `PLANT#${plantId}`,
-        SK: `PEST_ALERT#${pestId}`,
+        PK: `USER#${userId}`,
+        SK: `PEST_ALERT#${plantId}#${pestId}`,
         entityType: 'PestAlert',
+        userId,
         plantId,
         pestId,
-        alertedAt: new Date().toISOString(),
+        alertedAt: now.toISOString(),
         // Sweep after a year — long-tail dedup not worth keeping forever.
-        ttl: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
+        ttl: Math.floor(now.getTime() / 1000) + 60 * 60 * 24 * 365,
       },
     })
   );
@@ -157,12 +180,10 @@ export async function evaluatePestAlerts(
     const pests = lookup.pests;
     if (pests.length === 0) continue;
 
-    // Pick the first seasonally-active pest we haven't alerted on
-    // recently. One alert per plant per cycle keeps the volume sane.
+    // Pick the first seasonally-active pest. One alert per plant per cycle
+    // keeps volume sane; per-recipient suppression happens during delivery.
     for (const pest of pests) {
       if (!pestActiveThisMonth(pest, month)) continue;
-      const last = await lastAlertedAt(plant.id, pest.id);
-      if (withinQuarter(last, now.getTime())) continue;
 
       alerts.push({
         plantId: plant.id,
@@ -171,8 +192,8 @@ export async function evaluatePestAlerts(
         pestName: pest.commonName,
         message: `Your ${plant.name} may be entering ${pest.commonName} season — give it a quick check.`,
       });
-      // NOTE: the suppression marker is deliberately NOT written here — the
-      // caller calls markAlerted() after the notification actually goes out.
+      // NOTE: suppression is deliberately NOT checked/written here — the
+      // caller does it per recipient around the actual provider send.
       break;
     }
   }

@@ -1,9 +1,10 @@
 import { api } from './api';
 
-export type ComponentStatus = 'ok' | 'degraded' | 'down';
+export type OverallStatus = 'ok' | 'degraded' | 'down';
+export type ComponentStatus = OverallStatus | 'error' | 'unknown';
 
 export interface HealthResponse {
-  status: ComponentStatus;
+  status: OverallStatus;
   version: string;
   checkedAt: string;
   components: {

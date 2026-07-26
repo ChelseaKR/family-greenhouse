@@ -24,11 +24,37 @@ import * as sitterService from '../../services/sitterService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
+import * as accountCleanup from '../../services/accountCleanup.js';
 import { getPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { rateLimit } from '../../middleware/rateLimit.js';
 import { logger } from '../../utils/logger.js';
+
+async function sendFirstHouseholdWelcome(
+  userId: string,
+  email: string,
+  userName: string
+): Promise<void> {
+  const appUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
+  if (appUrl) {
+    try {
+      // The service owns a conditional, reclaimable delivery marker, so this
+      // is safe on claim-repair retries as well as the original creation path.
+      await welcomeEmail.sendWelcomeEmail(userId, email, userName, appUrl);
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, userId, msg: 'welcome_email_failed' },
+        'welcome_email_failed'
+      );
+    }
+  } else {
+    logger.warn(
+      { userId, msg: 'welcome_email_skipped_no_base_url' },
+      'welcome_email_skipped_no_base_url'
+    );
+  }
+}
 
 // POST /households
 //
@@ -43,6 +69,36 @@ export const createHousehold = createHandler(
     const { validatedBody } = event as ValidatedEvent<CreateHouseholdInput>;
 
     const userName = await cognitoUsers.getUserName(user.userId, user.email);
+    // JWT custom claims can remain stale until the client refreshes after its
+    // first household is created. Consult the membership index as well so a
+    // quick second create cannot overwrite the original default household or
+    // send a duplicate "one-time" welcome email.
+    const memberships = await householdService.getMembershipsByUser(user.userId);
+    const isFirstHousehold = !user.householdId && memberships.length === 0;
+
+    if (!user.householdId && memberships.length > 0) {
+      // Recovery path for the only non-transactional boundary in first
+      // household creation: DynamoDB may have committed the household +
+      // membership before Cognito rejected/timed out. A retry must repair that
+      // authoritative default claim and return the existing household, never
+      // create a second household and strand onboarding again.
+      const firstMembership = [...memberships].sort(
+        (a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.householdId.localeCompare(b.householdId)
+      )[0];
+      const existingHousehold = await householdService.getHousehold(firstMembership.householdId);
+      if (!existingHousehold) {
+        throw new Error(
+          `Membership ${firstMembership.householdId} exists without household metadata`
+        );
+      }
+      await cognitoUsers.setHouseholdClaims(
+        user.userId,
+        firstMembership.householdId,
+        firstMembership.role
+      );
+      await sendFirstHouseholdWelcome(user.userId, user.email, userName);
+      return createdResponse(existingHousehold);
+    }
 
     const household = await householdService.createHousehold(
       validatedBody,
@@ -56,25 +112,14 @@ export const createHousehold = createHandler(
     // newer household requires the X-Household-Id header from the
     // frontend's HouseholdSwitcher.
     //
-    // The absence of an existing household claim is also our fire-once signal
-    // for the welcome email: this is the user's genuine first household (a new
-    // account finishing setup), not an "add another household" from the
-    // switcher, so they get exactly one warm welcome. It's best-effort —
-    // sendWelcomeEmail swallows its own failures, but we also don't await it on
-    // the critical path: a slow or flaky SES send must never delay or break
-    // onboarding.
-    if (!user.householdId) {
+    // Membership state (not only the possibly stale JWT claim) is the
+    // fire-once signal for the welcome email and default Cognito household.
+    // Await the best-effort sender before returning: an un-awaited network
+    // promise can be frozen as soon as Lambda completes, making welcomes
+    // intermittent. Failures are still isolated so onboarding always wins.
+    if (isFirstHousehold) {
       await cognitoUsers.setHouseholdClaims(user.userId, household.id, 'admin');
-
-      const appUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
-      if (appUrl) {
-        void welcomeEmail.sendWelcomeEmail(user.userId, user.email, userName, appUrl);
-      } else {
-        logger.warn(
-          { userId: user.userId, msg: 'welcome_email_skipped_no_base_url' },
-          'welcome_email_skipped_no_base_url'
-        );
-      }
+      await sendFirstHouseholdWelcome(user.userId, user.email, userName);
     }
 
     audit('household.created', {
@@ -236,10 +281,18 @@ export const joinHousehold = createHandler(
 
     const userName = await cognitoUsers.getUserName(user.userId, user.email);
 
-    // Refuse a second join into the same household — there's already a
-    // member row and we don't want to silently overwrite role state.
+    // A member row can exist while the caller's default Cognito claim is
+    // still missing if addMember committed and the subsequent Cognito write
+    // timed out. Treat that exact state as an idempotent recovery: repair the
+    // claim and return the household without incrementing memberCount again.
+    // A caller that already has a default household still gets the ordinary
+    // duplicate-join error.
     const existing = await householdService.getMemberByUserId(invite.householdId, user.userId);
     if (existing) {
+      if (!user.householdId) {
+        await cognitoUsers.setHouseholdClaims(user.userId, invite.householdId, existing.role);
+        return successResponse(household);
+      }
       throw createHttpError(400, 'You are already a member of this household');
     }
 
@@ -470,6 +523,10 @@ export const removeMember = createHandler(
       }
       throw err;
     }
+    // Member rows are only one half of departure. Clear every active task
+    // assignment, vacation/cover relationship, and space default that still
+    // points at the departed user, while anonymizing retained history.
+    await accountCleanup.anonymizeUserInHousehold(householdId, userId);
 
     // Claims hygiene. Removal from a SECONDARY household must not touch the
     // user's Cognito claims at all (the old unconditional clear logged users

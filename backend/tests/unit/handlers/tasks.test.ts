@@ -269,14 +269,24 @@ describe('tasks handler', () => {
     const event = buildEvent({
       httpMethod: 'POST',
       pathParameters: { id: 't1' },
-      body: JSON.stringify({ notes: 'done' }),
+      body: JSON.stringify({
+        notes: 'done',
+        expectedNextDue: '2026-07-25T12:00:00.000Z',
+      }),
       headers: { 'content-type': 'application/json' },
     });
     const res = (await completeTask(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     // completedByName resolves to the real member name from the household
     // member row ('Tester'), NOT the email local-part 'a' (M5).
-    expect(taskService.completeTask).toHaveBeenCalledWith('hh-1', 't1', 'user-1', 'Tester', 'done');
+    expect(taskService.completeTask).toHaveBeenCalledWith(
+      'hh-1',
+      't1',
+      'user-1',
+      'Tester',
+      'done',
+      '2026-07-25T12:00:00.000Z'
+    );
   });
 
   it('completeTask returns 404 when task missing', async () => {
@@ -312,7 +322,7 @@ describe('tasks handler', () => {
   it('snoozeTask 404s when missing', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     const { snoozeTask } = await import('../../../src/handlers/tasks/handler.js');
-    vi.mocked(taskService.snoozeTask).mockResolvedValueOnce(null);
+    vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValueOnce(null);
     const event = buildEvent({
       httpMethod: 'POST',
       pathParameters: { id: 't' },
@@ -338,21 +348,24 @@ describe('tasks handler', () => {
   it('snoozeTask returns updated task on success', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     const { snoozeTask } = await import('../../../src/handlers/tasks/handler.js');
-    vi.mocked(taskService.snoozeTask).mockResolvedValueOnce({
-      id: 't',
-      householdId: 'hh-1',
-      plantId: 'p',
-      plantName: 'P',
-      type: 'water',
-      customType: null,
-      frequency: 7,
-      lastCompleted: null,
-      nextDue: '2026-05-04',
-      assignedTo: null,
-      assignedToName: null,
-      notes: null,
-      createdBy: '',
-      createdAt: '',
+    vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValueOnce({
+      changed: true,
+      task: {
+        id: 't',
+        householdId: 'hh-1',
+        plantId: 'p',
+        plantName: 'P',
+        type: 'water',
+        customType: null,
+        frequency: 7,
+        lastCompleted: null,
+        nextDue: '2026-05-04',
+        assignedTo: null,
+        assignedToName: null,
+        notes: null,
+        createdBy: '',
+        createdAt: '',
+      },
     });
     const event = buildEvent({
       httpMethod: 'POST',
@@ -362,28 +375,31 @@ describe('tasks handler', () => {
     });
     const res = (await snoozeTask(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
-    expect(taskService.snoozeTask).toHaveBeenCalledWith('hh-1', 't', 3);
+    expect(taskService.snoozeTaskWithOutcome).toHaveBeenCalledWith('hh-1', 't', 3, undefined);
   });
 
   it('snoozeTask records the reason in the activity feed entry', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     const activity = await import('../../../src/services/activity.js');
     const { snoozeTask } = await import('../../../src/handlers/tasks/handler.js');
-    vi.mocked(taskService.snoozeTask).mockResolvedValueOnce({
-      id: 't',
-      householdId: 'hh-1',
-      plantId: 'p',
-      plantName: 'Pothos',
-      type: 'water',
-      customType: null,
-      frequency: 7,
-      lastCompleted: null,
-      nextDue: '2026-06-18',
-      assignedTo: null,
-      assignedToName: null,
-      notes: null,
-      createdBy: '',
-      createdAt: '',
+    vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValueOnce({
+      changed: true,
+      task: {
+        id: 't',
+        householdId: 'hh-1',
+        plantId: 'p',
+        plantName: 'Pothos',
+        type: 'water',
+        customType: null,
+        frequency: 7,
+        lastCompleted: null,
+        nextDue: '2026-06-18',
+        assignedTo: null,
+        assignedToName: null,
+        notes: null,
+        createdBy: '',
+        createdAt: '',
+      },
     });
     const event = buildEvent({
       httpMethod: 'POST',
@@ -401,6 +417,48 @@ describe('tasks handler', () => {
         payload: expect.objectContaining({ taskId: 't', days: 7, reason: 'rain' }),
       })
     );
+  });
+
+  it('snoozeTask passes the occurrence token and does not duplicate activity on retry', async () => {
+    const taskService = await import('../../../src/services/taskService.js');
+    const activity = await import('../../../src/services/activity.js');
+    const { snoozeTask } = await import('../../../src/handlers/tasks/handler.js');
+    const expectedNextDue = '2026-06-11T00:00:00.000Z';
+    const task = {
+      id: 't',
+      householdId: 'hh-1',
+      plantId: 'p',
+      plantName: 'Pothos',
+      type: 'water' as const,
+      customType: null,
+      frequency: 7,
+      lastCompleted: null,
+      nextDue: '2026-06-18T00:00:00.000Z',
+      assignedTo: null,
+      assignedToName: null,
+      notes: null,
+      createdBy: '',
+      createdAt: '',
+    };
+    vi.mocked(taskService.snoozeTaskWithOutcome).mockResolvedValueOnce({
+      task,
+      changed: false,
+    });
+
+    const res = (await snoozeTask(
+      buildEvent({
+        httpMethod: 'POST',
+        pathParameters: { id: 't' },
+        body: JSON.stringify({ days: 7, expectedNextDue }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(taskService.snoozeTaskWithOutcome).toHaveBeenCalledWith('hh-1', 't', 7, expectedNextDue);
+    expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
   it('snoozeTask rejects an unknown reason', async () => {

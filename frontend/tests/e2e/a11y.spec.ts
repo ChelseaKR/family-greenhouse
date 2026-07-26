@@ -119,7 +119,10 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
   test('plant-sitter page (with due tasks)', async ({ page }) => {
     // The public sitter page fetches GET /sitter/{token}; stub it so the
     // task-list state (the busiest layout) is what axe scans. No auth needed.
-    await page.route('**/sitter/**', (route) =>
+    // Scope this to the API origin. A broad `**/sitter/**` also intercepts
+    // Vite's `/src/features/sitter/SitPage.tsx` module request and replaces
+    // the JavaScript chunk with JSON, silently scanning the error boundary.
+    await page.route('http://localhost:4000/sitter/**', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

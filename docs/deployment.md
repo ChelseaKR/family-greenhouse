@@ -16,7 +16,10 @@ Route 53 ── CloudFront ┬─ S3 (static frontend bundle)
 EventBridge cron ── runReminders Lambda ── SES + SNS + Web Push
 ```
 
-Two distinct Terraform stacks, one per environment, in `infrastructure/environments/{staging,production}`. The shared modules live under `infrastructure/modules/`.
+Both environments use the root `infrastructure/` configuration with separate
+`environments/{staging,production}/terraform.tfvars` files and separate remote
+state keys (`staging/terraform.tfstate` versus the production backend default).
+Shared modules live under `infrastructure/modules/`.
 
 ## Prerequisites
 
@@ -24,7 +27,8 @@ Two distinct Terraform stacks, one per environment, in `infrastructure/environme
 - Domain name in Route 53 (or external NS pointed at AWS)
 - Terraform 1.5+
 - AWS CLI authenticated (`aws sso login` or static creds — OIDC for CI is best, see below)
-- A Stripe account (live mode for prod, test mode for staging)
+- A Stripe account only when the commercial hold is lifted; billing remains
+  intentionally inert while its keys and price IDs are blank
 - A Sentry project (optional but recommended)
 - An SES verified domain identity (out-of-sandbox)
 
@@ -129,7 +133,11 @@ Terraform creates the user pool, but the _attribute schema_ matters and is hard 
 - `custom:household_id`
 - `custom:household_role`
 
-The Lambda role needs the IAM permission `cognito-idp:AdminUpdateUserAttributes` on the user pool ARN; without it, every household creation will fail at the Cognito write step.
+The Lambda role needs `cognito-idp:AdminUpdateUserAttributes` and
+`cognito-idp:AdminDeleteUser` on the user-pool ARN. The former keeps household
+claims current; the latter is required for self-service `DELETE /me` to finish
+erasing the Cognito identity instead of returning 500 after deleting
+application data.
 
 For SES email sending in confirmation emails, point the user pool's email config at SES (not Cognito's default service) — the default has a 50/day cap.
 
@@ -161,7 +169,7 @@ The webhook route needs to be configured for **raw body** so Stripe's signature 
 Two workflows in `.github/workflows/`:
 
 - `ci.yml` — runs on every PR + push to `main`: lint, typecheck, test, build
-- `cd-staging.yml` — pushes to `main` deploy to staging
+- `cd-staging.yml` — manual staging deploy (`workflow_dispatch`)
 - `cd-production.yml` — version tag (`v*`) or manual dispatch deploys to production
 
 Use OIDC federated identity from GitHub to AWS instead of static keys:
@@ -181,12 +189,17 @@ Configure the IAM role with a trust policy bound to your repo + branch.
 
 ## Deploy steps (high level)
 
+Use the staging workflow from a merged `main` commit:
+
 ```bash
-cd infrastructure/environments/staging
-terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
+gh workflow run cd-staging.yml --ref main
+gh run watch <run-id> --exit-status
 ```
+
+The workflow runs Terraform from `infrastructure/` with the staging tfvars and
+isolated state key, then deploys the backend and frontend and runs the deployed
+Playwright smoke. Staging currently has no automatic rollback, so do not
+promote a failed or incomplete run.
 
 After Terraform completes, build + deploy the application bundles. CI does this automatically:
 
@@ -197,7 +210,8 @@ npm --workspace backend run build
 # Frontend bundle (vite → /frontend/dist/)
 npm --workspace frontend run build
 
-# Push backend artifacts: handled by Terraform `lambda_function.filename` referring to dist/
+# Push backend artifacts: the CD workflow publishes each esbuild bundle to its
+# unqualified Lambda function and archives the published zip for rollback.
 # Push frontend artifacts: aws s3 sync as shown above
 ```
 
@@ -214,11 +228,24 @@ The workflow opens a deploy request that an admin approves before applying.
 
 ## Rolling back
 
-For Lambda, every deploy publishes a new version. The Terraform `aws_lambda_alias` resource points the live alias at the new version; rolling back means pointing it back at the previous version's alias.
+Production has no Lambda aliases or traffic split. Before changing code, the
+workflow downloads the latest published package for every function and stores
+it in the rollback bucket. A failed deploy or smoke re-publishes those packages
+to the unqualified functions. Because functions update sequentially, a brief
+mixed-handler window is possible during deployment.
 
 For DynamoDB, PITR gives 35-day recovery. Restoring is a destructive operation against the live table — coordinate downtime first.
 
-For frontend, S3 versioning + CloudFront invalidation. Roll back to a previous build's hash directory if you keep them around (recommend: deploy to `s3://bucket/builds/{sha}/`, point the CloudFront origin at `latest/`, swap with a copy + invalidate).
+For frontend, the production workflow snapshots the complete live bucket
+before sync and restores it plus a CloudFront invalidation when deploy/smoke
+fails. That run-scoped snapshot is purged after a successful smoke or verified
+rollback; a later manual rollback therefore needs a retained build artifact or
+careful S3-version restoration.
+
+The automatic rollback also restores the pre-deploy Cognito registration
+policy. It does not generically reverse other Terraform changes, so inspect the
+plan before approval and use a targeted follow-up plan if infrastructure—not
+application code—must be reverted.
 
 ## Health checks
 
@@ -229,11 +256,16 @@ curl -fsSL https://api.family-greenhouse.example.com/health
 # {"status":"ok"}
 ```
 
-CI runs Playwright e2e against staging and a focused smoke suite after every
-production deploy. The production suite creates unique disposable Cognito users,
+The manually triggered staging workflow and every production deploy run a
+focused deployed Playwright smoke. The production suite creates unique
+disposable Cognito users,
 verifies public signup reaches the confirmation-ready state, exercises the
-authenticated critical path with a separate confirmed fixture, and deletes the
-users plus smoke-created household rows during teardown.
+authenticated critical path with a separate confirmed fixture, and verifies a
+repository PNG traverses the live plant-create, S3 presign/PUT, confirm, and
+rendered-image path. Teardown uses the real account-erasure endpoint to remove
+S3 photos before its Cognito/DynamoDB administrative fallback, then
+independently purges and verifies every Version/DeleteMarker for only the exact
+object URL issued to that disposable fixture.
 
 ## Costs roughly
 

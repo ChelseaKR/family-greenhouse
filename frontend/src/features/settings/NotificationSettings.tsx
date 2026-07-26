@@ -13,7 +13,7 @@ import {
   isSupported,
   requestPermission,
 } from '@/utils/notifications';
-import { notificationService } from '@/services/notificationService';
+import { notificationService, type NotificationPreferences } from '@/services/notificationService';
 import { getErrorMessage } from '@/services/api';
 import { isNativeApp } from '@/lib/platform';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -42,6 +42,25 @@ async function registerPushSubscription(): Promise<PushSubscription | null> {
 }
 
 const E164 = /^\+[1-9]\d{6,14}$/;
+type PreferencesUpdate = Parameters<typeof notificationService.updatePreferences>[0];
+
+function buildPreferencesUpdate(
+  current: NotificationPreferences,
+  overrides: Partial<PreferencesUpdate>
+): PreferencesUpdate {
+  return {
+    browser: current.browser,
+    email: current.email,
+    sms: current.sms,
+    phone: current.phone,
+    dndStart: current.dndStart,
+    dndEnd: current.dndEnd,
+    timezone: current.timezone,
+    pestAlerts: current.pestAlerts ?? false,
+    weeklyDigest: current.weeklyDigest ?? true,
+    ...overrides,
+  };
+}
 
 export function NotificationSettings() {
   const { t } = useTranslation();
@@ -63,18 +82,53 @@ export function NotificationSettings() {
     typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
   );
 
-  useEffect(() => {
-    if (native) return;
-    setPermission(getPermission());
-    setBrowserActive(isEnabledLocally());
-  }, [native]);
-
   const prefsQuery = useQuery({
     // Preferences are stored per household membership — scope by household.
     queryKey: ['notification-prefs', householdId],
     queryFn: notificationService.getPreferences,
     enabled: Boolean(householdId),
   });
+  const prefsKey = ['notification-prefs', householdId] as const;
+  const browserPreference = prefsQuery.data?.browser ?? false;
+
+  useEffect(() => {
+    if (native) return;
+
+    const refreshBrowserState = () => {
+      setPermission(getPermission());
+      // The local permission/opt-in and the durable account preference must
+      // both agree before the UI calls this device active.
+      setBrowserActive(isEnabledLocally() && browserPreference);
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshBrowserState();
+    };
+
+    refreshBrowserState();
+    // Browser permission can change in site settings while this page remains
+    // mounted. Re-read it when the user returns instead of leaving a denied
+    // Enable button stale until a full reload.
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshBrowserState);
+    window.addEventListener('pageshow', refreshBrowserState);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshBrowserState);
+      window.removeEventListener('pageshow', refreshBrowserState);
+    };
+  }, [browserPreference, native]);
+
+  // TanStack serializes mutations that share a scope id. Browser enable/
+  // disable, phone verification, and ordinary toggles all replace the same
+  // server document, so letting them race can silently restore an older
+  // field value from the slower request.
+  const preferencesMutationScope = {
+    id: `notification-preferences:${householdId ?? 'none'}`,
+  };
+
+  function currentPreferences(): NotificationPreferences | undefined {
+    return queryClient.getQueryData<NotificationPreferences>(prefsKey) ?? prefsQuery.data;
+  }
 
   useEffect(() => {
     if (prefsQuery.data) {
@@ -86,10 +140,19 @@ export function NotificationSettings() {
   }, [prefsQuery.data]);
 
   const saveMutation = useMutation({
-    mutationFn: notificationService.updatePreferences,
+    scope: preferencesMutationScope,
+    mutationFn: (overrides: Partial<PreferencesUpdate>) => {
+      const current = currentPreferences();
+      if (!current) throw new Error(t('notifications.preferencesUnavailable'));
+      return notificationService.updatePreferences(buildPreferencesUpdate(current, overrides));
+    },
+    onMutate: () => {
+      setInfo(null);
+      setError(null);
+    },
     onSuccess: (updated) => {
-      queryClient.setQueryData(['notification-prefs', householdId], updated);
-      setInfo('Preferences saved.');
+      queryClient.setQueryData(prefsKey, updated);
+      setInfo(t('notifications.preferencesSaved'));
       setError(null);
     },
     onError: (err) => setError(getErrorMessage(err)),
@@ -104,33 +167,9 @@ export function NotificationSettings() {
    * draft — only the explicit "Save quiet hours" action should do that,
    * via an explicit override.
    */
-  function save(
-    overrides: Partial<{
-      browser: boolean;
-      email: boolean;
-      sms: boolean;
-      phone: string;
-      dndStart: string;
-      dndEnd: string;
-      timezone: string;
-      pestAlerts: boolean;
-      weeklyDigest: boolean;
-    }>
-  ): void {
-    const current = prefsQuery.data;
-    if (!current) return;
-    saveMutation.mutate({
-      browser: current.browser,
-      email: current.email,
-      sms: current.sms,
-      phone: current.phone,
-      dndStart: current.dndStart,
-      dndEnd: current.dndEnd,
-      timezone: current.timezone,
-      pestAlerts: current.pestAlerts ?? false,
-      weeklyDigest: current.weeklyDigest ?? true,
-      ...overrides,
-    });
+  function save(overrides: Partial<PreferencesUpdate>): void {
+    if (!currentPreferences()) return;
+    saveMutation.mutate(overrides);
   }
 
   const sendCodeMutation = useMutation({
@@ -145,9 +184,10 @@ export function NotificationSettings() {
   });
 
   const verifyCodeMutation = useMutation({
+    scope: preferencesMutationScope,
     mutationFn: () => notificationService.confirmPhoneVerification(codeDraft),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['notification-prefs', householdId], updated);
+      queryClient.setQueryData(prefsKey, updated);
       setCodeSent(false);
       setCodeDraft('');
       setInfo(t('notifications.phoneVerifySuccess'));
@@ -157,67 +197,146 @@ export function NotificationSettings() {
   });
 
   const enableBrowser = useMutation({
+    scope: preferencesMutationScope,
     mutationFn: async () => {
+      const current = currentPreferences();
+      if (!current) throw new Error(t('notifications.preferencesUnavailable'));
+
       const result = await requestPermission();
       if (result === 'unsupported') {
-        throw new Error('This browser does not support notifications.');
+        throw new Error(t('notifications.browserUnsupportedError'));
       }
       if (result === 'denied') {
-        throw new Error(
-          'Notification permission was denied. Update your browser settings to enable.'
-        );
+        throw new Error(t('notifications.browserDeniedError'));
       }
+      if (result !== 'granted') {
+        // Browsers return "default" when the prompt is dismissed. Treat that
+        // as no consent: do not persist browser=true or present an enabled UI.
+        throw new Error(t('notifications.browserDismissedError'));
+      }
+
+      let subscription: PushSubscription | null = null;
+      let backgroundPush = false;
+      let backgroundPushFailed = false;
       try {
-        const sub = await registerPushSubscription();
-        if (sub) {
-          const json = sub.toJSON();
+        subscription = await registerPushSubscription();
+        if (subscription) {
+          const json = subscription.toJSON();
           await notificationService.subscribe({
-            endpoint: json.endpoint!,
+            endpoint: subscription.endpoint,
             keys: { p256dh: json.keys!.p256dh!, auth: json.keys!.auth! },
           });
+          backgroundPush = true;
         }
       } catch (e) {
         // Local browser notifications still work even if push registration failed.
+        backgroundPushFailed = true;
         console.warn('Push subscription failed', e);
       }
+
+      try {
+        const updated = await notificationService.updatePreferences(
+          buildPreferencesUpdate(current, { browser: true })
+        );
+        return { updated, backgroundPush, backgroundPushFailed };
+      } catch (cause) {
+        // requestPermission persists the local opt-in. Roll it back when the
+        // durable server preference cannot be saved, so the UI and delivery
+        // gate never claim contradictory states.
+        disableLocally();
+        if (subscription) {
+          await notificationService.unsubscribe(subscription.endpoint).catch(() => undefined);
+          await subscription.unsubscribe().catch(() => false);
+        }
+        throw cause;
+      }
     },
-    onSuccess: () => {
-      setBrowserActive(true);
-      setPermission(getPermission());
-      setInfo("You'll now get browser reminders for overdue plants.");
+    onMutate: () => {
+      setInfo(null);
       setError(null);
     },
-    onError: (err: Error) => setError(err.message),
+    onSuccess: ({ updated, backgroundPush, backgroundPushFailed }) => {
+      queryClient.setQueryData(prefsKey, updated);
+      setBrowserActive(true);
+      setPermission(getPermission());
+      setInfo(
+        backgroundPush
+          ? t('notifications.browserEnabledBackground')
+          : backgroundPushFailed
+            ? t('notifications.browserEnabledForegroundFailed')
+            : t('notifications.browserEnabledForegroundUnavailable')
+      );
+      setError(null);
+    },
+    onError: (err) => setError(getErrorMessage(err)),
   });
 
   const disableBrowser = useMutation({
+    scope: preferencesMutationScope,
     mutationFn: async () => {
-      disableLocally();
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        const sub = await reg?.pushManager.getSubscription();
-        if (sub) {
-          await notificationService.unsubscribe(sub.endpoint);
-          await sub.unsubscribe();
+      const current = currentPreferences();
+      if (!current) throw new Error(t('notifications.preferencesUnavailable'));
+
+      let remainingSubscriptions: number | undefined;
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          const sub = await reg?.pushManager?.getSubscription();
+          if (sub) {
+            await sub.unsubscribe().catch((cause) => {
+              console.warn('Browser push unsubscribe failed', cause);
+              return false;
+            });
+            const result = await notificationService.unsubscribe(sub.endpoint).catch((cause) => {
+              console.warn('Server push subscription cleanup failed', cause);
+              return undefined;
+            });
+            remainingSubscriptions = result?.remainingSubscriptions;
+          }
         }
+      } catch (cause) {
+        // A broken/stale service worker must not prevent this device's local
+        // foreground opt-in from being cleared.
+        console.warn('Browser push cleanup failed', cause);
       }
+
+      // `browser` is an account-wide delivery gate shared by every browser.
+      // Turning off this device must not silence subscriptions on a laptop or
+      // phone. Close the global gate only after the server confirms this was
+      // the last registered endpoint; otherwise leave the persisted prefs
+      // untouched and clear only this device's local opt-in below.
+      const updated =
+        remainingSubscriptions === 0
+          ? await notificationService.updatePreferences(
+              buildPreferencesUpdate(current, { browser: false })
+            )
+          : current;
+      disableLocally();
+      return updated;
     },
-    onSuccess: () => {
+    onMutate: () => {
+      setInfo(null);
+      setError(null);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(prefsKey, updated);
       setBrowserActive(false);
-      setInfo('Browser notifications disabled.');
+      setInfo(t('notifications.browserDisabled'));
+      setError(null);
     },
+    onError: (err) => setError(getErrorMessage(err)),
   });
 
-  if (!native && !isSupported()) {
+  if (!householdId) {
     return (
       <Card>
         <CardHeader title="Notifications" description="How you want to be reminded" />
-        <Alert variant="info">Notifications aren't supported in this browser.</Alert>
+        <Alert variant="info">{t('notifications.householdRequired')}</Alert>
       </Card>
     );
   }
 
-  if (!householdId || prefsQuery.isLoading || !prefsQuery.data) {
+  if (prefsQuery.isLoading) {
     return (
       <div className="flex justify-center py-12">
         <LoadingSpinner size="lg" />
@@ -225,13 +344,35 @@ export function NotificationSettings() {
     );
   }
 
-  const prefs = prefsQuery.data!;
+  if (!prefsQuery.data) {
+    return (
+      <Card>
+        <CardHeader title="Notifications" description="How you want to be reminded" />
+        <div className="space-y-3">
+          <Alert variant="error">
+            {getErrorMessage(prefsQuery.error) || t('notifications.loadFailed')}
+          </Alert>
+          <Button
+            variant="secondary"
+            onClick={() => void prefsQuery.refetch()}
+            isLoading={prefsQuery.isFetching}
+          >
+            {t('common.retry')}
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const prefs = prefsQuery.data;
   const smsAvailable = prefs.smsAvailable ?? false;
-  const canEnableBrowser = permission !== 'denied';
+  const browserSupported = isSupported();
+  const canEnableBrowser = browserSupported && permission !== 'denied';
   // Verified status applies to the SAVED number; editing the field to a
   // different number drops back to the unverified flow until confirmed.
   const phoneIsVerified =
     (prefs.phoneVerified ?? false) && prefs.phone !== '' && phoneDraft === prefs.phone;
+  const browserMutationPending = enableBrowser.isPending || disableBrowser.isPending;
 
   return (
     <Card>
@@ -246,7 +387,7 @@ export function NotificationSettings() {
         {/* Native delivery is deliberately hidden until the APNs/FCM sender
             is live. Showing a permission toggle before reminders can arrive
             would be a misleading, non-functional control in store builds. */}
-        {!native && (
+        {!native && browserSupported && (
           <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
             <div>
               <p className="text-sm font-medium text-gray-900">{t('notifications.browser')}</p>
@@ -263,6 +404,7 @@ export function NotificationSettings() {
                 variant="secondary"
                 onClick={() => disableBrowser.mutate()}
                 isLoading={disableBrowser.isPending}
+                disabled={browserMutationPending}
               >
                 Turn off
               </Button>
@@ -270,11 +412,18 @@ export function NotificationSettings() {
               <Button
                 onClick={() => enableBrowser.mutate()}
                 isLoading={enableBrowser.isPending}
-                disabled={!canEnableBrowser}
+                disabled={!canEnableBrowser || browserMutationPending}
               >
                 Enable
               </Button>
             )}
+          </div>
+        )}
+
+        {!native && !browserSupported && (
+          <div className="border-b border-primary-100/70 pb-4">
+            <p className="text-sm font-medium text-gray-900">{t('notifications.browser')}</p>
+            <p className="text-sm text-gray-600">{t('notifications.browserUnsupportedDevice')}</p>
           </div>
         )}
 
@@ -292,6 +441,7 @@ export function NotificationSettings() {
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={prefs.email}
+              disabled={saveMutation.isPending}
               onChange={(e) => save({ email: e.target.checked })}
             />
           </label>
@@ -315,7 +465,7 @@ export function NotificationSettings() {
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={(prefs.weeklyDigest ?? true) && prefs.email}
-              disabled={!prefs.email}
+              disabled={!prefs.email || saveMutation.isPending}
               onChange={(e) => save({ weeklyDigest: e.target.checked })}
             />
           </label>
@@ -330,7 +480,7 @@ export function NotificationSettings() {
                 {!smsAvailable
                   ? t('notifications.smsUnavailableShort')
                   : phoneIsVerified || prefs.sms
-                    ? 'Short SMS reminders when tasks slip past due. Standard message rates may apply.'
+                    ? 'Short SMS reminders when tasks are due or overdue. Standard message rates may apply.'
                     : t('notifications.phoneUnverifiedHint')}
               </p>
             </div>
@@ -341,7 +491,9 @@ export function NotificationSettings() {
                 className="h-5 w-5 accent-primary-700"
                 checked={prefs.sms}
                 // Allow turning OFF anytime; turning ON requires a verified number.
-                disabled={prefs.sms ? false : !smsAvailable || !phoneIsVerified}
+                disabled={
+                  saveMutation.isPending || (prefs.sms ? false : !smsAvailable || !phoneIsVerified)
+                }
                 onChange={(e) => save({ sms: e.target.checked, phone: prefs.phone })}
               />
             </label>
@@ -359,6 +511,7 @@ export function NotificationSettings() {
                     placeholder="+15551234567"
                     helperText="E.164 format. Leading + and country code required."
                     value={phoneDraft}
+                    disabled={sendCodeMutation.isPending || verifyCodeMutation.isPending}
                     onChange={(e) => {
                       setPhoneDraft(e.target.value.trim());
                       setCodeSent(false);
@@ -382,7 +535,7 @@ export function NotificationSettings() {
                     variant="secondary"
                     onClick={() => sendCodeMutation.mutate()}
                     isLoading={sendCodeMutation.isPending}
-                    disabled={!E164.test(phoneDraft)}
+                    disabled={!E164.test(phoneDraft) || verifyCodeMutation.isPending}
                   >
                     {t('notifications.phoneSendCode')}
                   </Button>
@@ -397,13 +550,14 @@ export function NotificationSettings() {
                       placeholder="123456"
                       helperText={t('notifications.phoneCodeHelper')}
                       value={codeDraft}
+                      disabled={verifyCodeMutation.isPending}
                       onChange={(e) => setCodeDraft(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     />
                   </div>
                   <Button
                     onClick={() => verifyCodeMutation.mutate()}
                     isLoading={verifyCodeMutation.isPending}
-                    disabled={codeDraft.length !== 6}
+                    disabled={codeDraft.length !== 6 || sendCodeMutation.isPending}
                   >
                     {t('notifications.phoneVerifyButton')}
                   </Button>
@@ -429,6 +583,7 @@ export function NotificationSettings() {
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={prefs.pestAlerts ?? false}
+              disabled={saveMutation.isPending}
               onChange={(e) => save({ pestAlerts: e.target.checked })}
             />
           </label>
@@ -448,6 +603,7 @@ export function NotificationSettings() {
               label="Start"
               type="time"
               value={dndStartDraft}
+              disabled={saveMutation.isPending}
               onChange={(e) => setDndStartDraft(e.target.value)}
               helperText="24-hour, your local time"
             />
@@ -455,6 +611,7 @@ export function NotificationSettings() {
               label="End"
               type="time"
               value={dndEndDraft}
+              disabled={saveMutation.isPending}
               onChange={(e) => setDndEndDraft(e.target.value)}
               helperText="If end is earlier than start, the window wraps past midnight."
             />
@@ -466,6 +623,7 @@ export function NotificationSettings() {
                 id="dnd-tz"
                 className="input"
                 value={tzDraft}
+                disabled={saveMutation.isPending}
                 onChange={(e) => setTzDraft(e.target.value)}
                 placeholder="America/New_York"
               />
@@ -479,7 +637,7 @@ export function NotificationSettings() {
                 setDndEndDraft('');
                 save({ dndStart: '', dndEnd: '' });
               }}
-              disabled={!dndStartDraft && !dndEndDraft}
+              disabled={saveMutation.isPending || (!dndStartDraft && !dndEndDraft)}
             >
               Clear
             </Button>
@@ -488,7 +646,10 @@ export function NotificationSettings() {
                 save({ dndStart: dndStartDraft, dndEnd: dndEndDraft, timezone: tzDraft })
               }
               isLoading={saveMutation.isPending}
-              disabled={(!!dndStartDraft || !!dndEndDraft) && (!dndStartDraft || !dndEndDraft)}
+              disabled={
+                saveMutation.isPending ||
+                ((!!dndStartDraft || !!dndEndDraft) && (!dndStartDraft || !dndEndDraft))
+              }
             >
               Save quiet hours
             </Button>

@@ -151,10 +151,23 @@ const getHouseholdClimate: ToolDefinition = {
     if (!household?.location) {
       return { hasLocation: false };
     }
-    const snapshot = await climateService.getWeatherCached(
-      household.location.lat,
-      household.location.lon
-    );
+    let snapshot;
+    try {
+      snapshot = await climateService.getWeatherCached(
+        household.location.lat,
+        household.location.lon
+      );
+    } catch (err) {
+      if (err instanceof climateService.ClimateUnavailableError) {
+        return {
+          hasLocation: true,
+          location: household.location,
+          weather: null,
+          unavailable: true,
+        };
+      }
+      throw err;
+    }
     if (!snapshot) {
       return { hasLocation: true, location: household.location, weather: null };
     }

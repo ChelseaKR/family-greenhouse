@@ -50,6 +50,7 @@ CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
 API_URL=$(terraform output -raw api_url)
 COGNITO_POOL_ID=$(terraform output -raw cognito_user_pool_id)
 COGNITO_CLIENT_ID=$(terraform output -raw cognito_client_id)
+VAPID_PUBLIC_KEY=$(terraform output -raw web_push_vapid_public_key)
 AWS_REGION=$(terraform output -raw aws_region 2>/dev/null || echo "us-east-1")
 cd ..
 
@@ -59,6 +60,7 @@ VITE_API_URL="$API_URL" \
 VITE_COGNITO_USER_POOL_ID="$COGNITO_POOL_ID" \
 VITE_COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID" \
 VITE_COGNITO_REGION="$AWS_REGION" \
+VITE_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
     npm --workspace frontend run build
 
 # Deploy frontend
@@ -67,9 +69,15 @@ aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
     --delete \
     --cache-control "max-age=31536000,public" \
     --exclude "index.html" \
+    --exclude "sw.js" \
+    --exclude "push-handler.js" \
     --exclude "*.json"
 
 aws s3 cp frontend/dist/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+    --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+aws s3 cp frontend/dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
+    --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+aws s3 cp frontend/dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
 # Invalidate CloudFront

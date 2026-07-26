@@ -35,7 +35,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      // The legacy headless shell hard-denies Notification permission even
+      // after BrowserContext.grantPermissions(). Use full Chromium's new
+      // headless mode so notification E2E exercises the real permission API.
+      use: { ...devices['Desktop Chrome'], channel: 'chromium' },
     },
     {
       name: 'firefox',
@@ -47,7 +50,7 @@ export default defineConfig({
     },
     {
       name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
+      use: { ...devices['Pixel 5'], channel: 'chromium' },
     },
     {
       name: 'Mobile Safari',
@@ -65,7 +68,11 @@ export default defineConfig({
       ? []
       : [
           {
-            command: 'npm run dev',
+            // Exercise the production bundle and generated service worker.
+            // Vite's dev-only Firefox parser uses eval (correctly blocked by
+            // our production CSP), and hot-module invalidation can turn
+            // parallel lazy-route requests into misleading import failures.
+            command: 'npm run build && npm run preview',
             url: 'http://localhost:3000',
             reuseExistingServer: !process.env.CI,
           },

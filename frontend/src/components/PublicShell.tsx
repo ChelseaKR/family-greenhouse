@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import clsx from 'clsx';
 import { BrandMark } from './BrandMark';
 import { Footer } from './Footer';
