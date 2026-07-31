@@ -110,7 +110,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
-    "jest-axe": "^10.0.0",
+    "jest-axe": "^11.0.0",
     "msw": "^2.15.0",
     "postcss": "^8.5.19",
     "size-limit": "^12.1.0",
