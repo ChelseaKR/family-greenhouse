@@ -147,9 +147,12 @@ jobs:
         # so a poisoned Actions cache entry would flow straight into the prod
         # Lambda bundles and the live site. Release/publish builds stay
         # cache-free; only PR-triggered CI jobs may cache (ci.yml does).
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        # setup-node v7 turns package-manager caching on by default, so the
+        # cache-free posture now has to be declared explicitly.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -582,10 +585,12 @@ jobs:
         # cache read/write on the same job is exactly the pattern CICD-24
         # forbids. The other `id-token: write` jobs in this workflow
         # (terraform, deploy-frontend, deploy-backend) are already cache-free;
-        # this was the one holdout.
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        # this was the one holdout. setup-node v7 turns package-manager
+        # caching on by default, so cache-free is now declared explicitly.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
