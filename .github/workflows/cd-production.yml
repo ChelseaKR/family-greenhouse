@@ -75,7 +75,7 @@ jobs:
         # Needed for the version/CHANGELOG/signature checks below — they read
         # package.json and CHANGELOG.md AS OF the tag being deployed, not the
         # workflow-triggering ref.
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
@@ -137,7 +137,7 @@ jobs:
     needs: validate
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -225,7 +225,7 @@ jobs:
       admin_create_user_only_before: ${{ steps.registration_snapshot.outputs.admin_create_user_only }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -418,7 +418,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -573,7 +573,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -643,7 +643,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout workflow cleanup helper
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -675,7 +675,7 @@ jobs:
         id: checkout
         # allow-silenced-gate: independent rollback branches continue; the final outcome verifier re-fails incomplete recovery
         continue-on-error: true
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.version }}
 
@@ -861,7 +861,7 @@ jobs:
 
       - name: Checkout workflow cleanup helper
         if: ${{ success() && steps.verify_rollback.outcome == 'success' }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           path: cleanup-workflow-source
