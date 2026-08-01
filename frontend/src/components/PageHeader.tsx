@@ -45,7 +45,12 @@ export function PageHeader({
               {eyebrow}
             </p>
           )}
-          <h1 className="font-serif text-3xl sm:text-4xl text-ink leading-tight tracking-tight">
+          {/* `sm:leading-10` (2.5rem) pins the ≥sm line-height to what `text-4xl`
+              produced under Tailwind v3, where the responsive font-size utility won
+              over the unprefixed `leading-tight` on source order. v4 composes leading
+              through `--tw-leading` so `leading-tight` would otherwise win at every
+              breakpoint and grow every page header by 5px. */}
+          <h1 className="font-serif text-3xl sm:text-4xl text-ink leading-tight sm:leading-10 tracking-tight">
             {title}
           </h1>
           <TitleUnderline className="mt-1 ml-1 h-3 w-28 sm:w-36 md:w-44 text-primary-600" />
@@ -53,8 +58,8 @@ export function PageHeader({
             <p className="mt-3 text-sm sm:text-base text-gray-600 max-w-2xl">{description}</p>
           )}
         </div>
-        {art && <div className="hidden w-48 flex-shrink-0 sm:block lg:w-56">{art}</div>}
-        {action && !art && <div className="w-full flex-shrink-0 sm:w-auto">{action}</div>}
+        {art && <div className="hidden w-48 shrink-0 sm:block lg:w-56">{art}</div>}
+        {action && !art && <div className="w-full shrink-0 sm:w-auto">{action}</div>}
       </div>
       {action && art && <div className="mt-4 flex justify-end">{action}</div>}
     </header>

@@ -33,7 +33,7 @@ const VARIANT_CLASSES: Record<NonNullable<CardProps['variant']>, string> = {
   paper:
     'bg-paper/90 rounded-2xl shadow-journal transition-shadow duration-200 border border-dew/55',
   journal: 'bg-paper border-b border-primary-100/80 last:border-b-0 rounded-none',
-  glass: 'glass-surface rounded-2xl border backdrop-blur-sm',
+  glass: 'glass-surface rounded-2xl border backdrop-blur-xs',
 };
 
 export function Card({ children, className, padding = 'md', variant = 'solid' }: CardProps) {

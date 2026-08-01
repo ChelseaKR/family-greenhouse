@@ -163,7 +163,7 @@ export function Layout() {
             the native shells and installed PWAs draw edge-to-edge, so the bar
             extends its own background under the iOS/Android status bar and
             keeps its content below it. env() is 0 in regular browser tabs. */}
-        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-sm sm:gap-x-6 sm:px-6 lg:hidden">
+        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"
@@ -242,7 +242,7 @@ function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarCo
                         clsx(
                           'group flex min-h-touch items-center gap-x-3 rounded-lg border-l-2 p-2 text-sm font-semibold leading-6 transition-colors',
                           isActive
-                            ? 'border-accent-400 bg-white/10 text-white shadow-sm ring-1 ring-white/10'
+                            ? 'border-accent-400 bg-white/10 text-white shadow-xs ring-1 ring-white/10'
                             : 'border-transparent text-primary-100/90 hover:bg-white/[0.07] hover:text-white'
                         )
                       }
@@ -271,7 +271,7 @@ function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarCo
             <button
               type="button"
               onClick={onLogout}
-              className="mt-2 inline-flex min-h-touch w-full items-center justify-center rounded-lg border border-primary-600/80 bg-primary-950/35 px-4 py-2 text-sm font-medium text-primary-100 transition-colors hover:bg-primary-700/75 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-900"
+              className="mt-2 inline-flex min-h-touch w-full items-center justify-center rounded-lg border border-primary-600/80 bg-primary-950/35 px-4 py-2 text-sm font-medium text-primary-100 transition-colors hover:bg-primary-700/75 hover:text-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-900"
             >
               Sign out
             </button>

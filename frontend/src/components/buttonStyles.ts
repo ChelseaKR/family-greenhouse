@@ -6,7 +6,7 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 // min-h-touch + min-w-touch guarantee a 44×44 CSS-px target (WCAG 2.5.5
 // AAA) for both buttons and links; sizes tune padding/text on top of that floor.
 const baseClasses =
-  'inline-flex items-center justify-center whitespace-nowrap font-medium rounded-lg transition-[color,background-color,border-color,box-shadow,transform] min-h-touch min-w-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-px';
+  'inline-flex items-center justify-center whitespace-nowrap font-medium rounded-lg transition-[color,background-color,border-color,box-shadow,transform] min-h-touch min-w-touch focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-px';
 
 const variantClasses: Record<ButtonVariant, string> = {
   // primary-700 + white clears WCAG AA contrast (5:1); primary-600 was 3.76.

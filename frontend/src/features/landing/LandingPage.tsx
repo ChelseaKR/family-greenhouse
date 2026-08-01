@@ -366,7 +366,7 @@ function AppMockup({ className }: { className?: string }) {
                     className={clsx(
                       'group flex items-center gap-x-3 rounded-md p-2 text-sm font-medium leading-6',
                       item.active
-                        ? 'bg-primary-700/80 text-white shadow-sm ring-1 ring-primary-600/50'
+                        ? 'bg-primary-700/80 text-white shadow-xs ring-1 ring-primary-600/50'
                         : 'text-primary-100/90'
                     )}
                   >
@@ -392,7 +392,7 @@ function AppMockup({ className }: { className?: string }) {
                     Here&rsquo;s what&rsquo;s happening with your plants today.
                   </p>
                 </div>
-                <div className="hidden lg:block flex-shrink-0 w-28">
+                <div className="hidden lg:block shrink-0 w-28">
                   <DashboardHeaderArt className="w-full h-auto" />
                 </div>
               </header>
@@ -420,7 +420,7 @@ function AppMockup({ className }: { className?: string }) {
                         >
                           <span
                             className={clsx(
-                              'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ring-1',
+                              'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1',
                               taskChip[t.type]
                             )}
                             aria-hidden="true"
@@ -491,7 +491,13 @@ interface MetricProps {
 function Metric({ label, value }: MetricProps) {
   return (
     <div className="flex items-baseline gap-1.5">
-      <dt className="text-[10px] uppercase tracking-[0.14em] text-gray-500">{label}</dt>
+      {/* `leading-4` (1rem) restates the line-height this label inherited under
+          Tailwind v3. v3's font-size utilities set line-height as an absolute
+          length (`text-xs` → `1rem`), so the enclosing `dl.text-xs` handed this
+          10px label a fixed 16px. v4 expresses the same defaults as unitless
+          ratios, which re-resolve against the child's own font-size (10px →
+          13.3px) and shrink the row. */}
+      <dt className="text-[10px] uppercase tracking-[0.14em] leading-4 text-gray-500">{label}</dt>
       <dd className="font-serif text-base text-ink leading-none tabular-nums">{value}</dd>
     </div>
   );
@@ -642,7 +648,14 @@ export function LandingPage() {
                 <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
                   {heroCopy[variant].eyebrow}
                 </p>
-                <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05]">
+                {/* `sm:leading-none` pins the ≥sm line-height to 1. Under Tailwind v3
+                    the responsive `text-*` utilities won over the unprefixed
+                    `leading-[1.05]` purely on source order (their media queries came
+                    later in the stylesheet), so this headline has always rendered at
+                    a 1.0 ratio from `sm` up. v4 composes leading through
+                    `--tw-leading`, which makes `leading-[1.05]` win at every
+                    breakpoint — pinning keeps the shipped rendering unchanged. */}
+                <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
                   {heroCopy[variant].headlinePre}
                   <span className="italic text-primary-700">
                     {heroCopy[variant].headlineEmphasis}
@@ -866,7 +879,10 @@ export function LandingPage() {
               <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
                 Before you bring one home
               </p>
-              <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight">
+              {/* `sm:leading-none` — see the hero h1: v3 let `sm:text-5xl` (line-height 1)
+                  override the unprefixed `leading-tight` on source order, so this
+                  heading has always rendered at 1.0 from `sm` up. */}
+              <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight sm:leading-none">
                 Know what you&rsquo;re getting into
               </h2>
               <TitleUnderline className="mt-2 h-3 w-40 text-primary-600" />
@@ -1056,7 +1072,10 @@ function SectionHeading({ eyebrow, title, description }: SectionHeadingProps) {
       <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
         {eyebrow}
       </p>
-      <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight">
+      {/* `sm:leading-none` — see the hero h1: v3 let `sm:text-5xl` (line-height 1)
+          override the unprefixed `leading-tight` on source order, so this heading
+          has always rendered at 1.0 from `sm` up. */}
+      <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight sm:leading-none">
         {title}
       </h2>
       <div className="mt-2 flex justify-center">

@@ -192,11 +192,11 @@ export function PlantsPage() {
         >
           {t('spaces.manageAction')}
         </Button>
-        <div className="flex rounded-md shadow-sm" role="group" aria-label="View mode">
+        <div className="flex rounded-md shadow-xs" role="group" aria-label="View mode">
           <button
             type="button"
             className={clsx(
-              'relative inline-flex items-center rounded-l-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+              'relative inline-flex items-center rounded-l-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
               viewMode === 'grid'
                 ? 'bg-primary-50 text-primary-700 border-primary-500'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -210,7 +210,7 @@ export function PlantsPage() {
           <button
             type="button"
             className={clsx(
-              'relative -ml-px inline-flex items-center min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+              'relative -ml-px inline-flex items-center min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
               viewMode === 'list'
                 ? 'bg-primary-50 text-primary-700 border-primary-500'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -224,7 +224,7 @@ export function PlantsPage() {
           <button
             type="button"
             className={clsx(
-              'relative -ml-px inline-flex items-center rounded-r-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+              'relative -ml-px inline-flex items-center rounded-r-md min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
               viewMode === 'spaces'
                 ? 'bg-primary-50 text-primary-700 border-primary-500'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -365,7 +365,7 @@ export function PlantsPage() {
                   to={`/plants/${plant.id}`}
                   className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-parchment/60"
                 >
-                  <div className="h-12 w-12 rounded-lg bg-parchment overflow-hidden flex-shrink-0 ring-1 ring-primary-100/60">
+                  <div className="h-12 w-12 rounded-lg bg-parchment overflow-hidden shrink-0 ring-1 ring-primary-100/60">
                     <PlantImage plant={plant} width={48} height={48} />
                   </div>
                   <div className="flex-1 min-w-0">

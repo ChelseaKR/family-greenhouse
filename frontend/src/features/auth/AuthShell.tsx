@@ -47,7 +47,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
       </div>
 
       <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="glass-surface rounded-2xl border border-dew/60 bg-paper/90 px-4 py-8 shadow-journal backdrop-blur-sm sm:px-10">
+        <div className="glass-surface rounded-2xl border border-dew/60 bg-paper/90 px-4 py-8 shadow-journal backdrop-blur-xs sm:px-10">
           {children}
         </div>
         {footer && <p className="mt-6 text-center text-sm text-gray-700">{footer}</p>}

@@ -11,10 +11,7 @@ export function NoCareDataNotice() {
   return (
     <Card padding="none">
       <div className="flex gap-3 p-6">
-        <InformationCircleIcon
-          className="h-5 w-5 flex-shrink-0 text-primary-500"
-          aria-hidden="true"
-        />
+        <InformationCircleIcon className="h-5 w-5 shrink-0 text-primary-500" aria-hidden="true" />
         <div className="text-sm text-gray-700">
           <h2 className="font-semibold text-gray-900">No care guide for this species yet</h2>
           <p className="mt-1">

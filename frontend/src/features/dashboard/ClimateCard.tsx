@@ -44,7 +44,7 @@ export function ClimateCard() {
     return (
       <Card>
         <div className="flex items-center gap-4">
-          <EmptyClimate className="h-20 w-auto flex-shrink-0" />
+          <EmptyClimate className="h-20 w-auto shrink-0" />
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Local climate</h3>
             <p className="mt-1 text-sm text-gray-600">

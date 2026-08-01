@@ -129,7 +129,7 @@ export function CommandPalette() {
                   />
                   <Combobox.Input
                     ref={inputRef}
-                    className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 text-base sm:text-sm"
+                    className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 text-base sm:text-sm"
                     placeholder="Search plants and tasks..."
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -214,7 +214,7 @@ export function CommandPalette() {
                 {query === '' && (
                   <p className="px-6 py-8 text-center text-sm text-gray-500">
                     Type to search plants and tasks. Press{' '}
-                    <kbd className="rounded border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs">
+                    <kbd className="rounded-sm border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs">
                       Esc
                     </kbd>{' '}
                     to close.

@@ -128,7 +128,7 @@ export function HouseholdOnboarding() {
             <button type="button" onClick={() => setStep('create')} className="w-full">
               <Card className="hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
                 <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 rounded-lg bg-primary-100 p-3">
+                  <div className="shrink-0 rounded-lg bg-primary-100 p-3">
                     <HomeIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
@@ -144,7 +144,7 @@ export function HouseholdOnboarding() {
             <button type="button" onClick={() => setStep('join')} className="w-full">
               <Card className="hover:border-primary-500 hover:shadow-md transition-all cursor-pointer">
                 <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 rounded-lg bg-accent-100 p-3">
+                  <div className="shrink-0 rounded-lg bg-accent-100 p-3">
                     <UserGroupIcon className="h-6 w-6 text-accent-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">

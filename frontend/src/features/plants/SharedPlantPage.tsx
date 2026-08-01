@@ -159,7 +159,7 @@ export function SharedPlantPage() {
             ) : (
               <PlantPlaceholder />
             )}
-            <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-paper/90 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary-800 shadow-sm backdrop-blur">
+            <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-paper/90 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary-800 shadow-xs backdrop-blur">
               {t('plants.shared.eyebrow')}
             </span>
           </div>

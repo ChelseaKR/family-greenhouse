@@ -38,7 +38,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
 
   return (
     <div className="min-h-screen bg-paper flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 backdrop-blur-xs">
         <nav
           className={clsx(
             'mx-auto flex items-center justify-between gap-3 px-4 py-4 sm:px-6',

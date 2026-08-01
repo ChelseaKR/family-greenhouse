@@ -183,7 +183,15 @@ export function DashboardPage() {
           page no longer shouts numbers at you; the dashboard art is the
           focal element and these read as a quiet status line beneath the
           title. */}
-      <dl className="flex flex-wrap items-baseline gap-x-4 sm:gap-x-8 gap-y-3 -mt-4 text-sm">
+      {/* `mt-10` replaces a `-mt-4` that never actually applied. Tailwind v3
+          implemented `space-y-10` as a margin-TOP on each later sibling, which
+          outranked this element's own `-mt-4`, so the row has always sat 40px
+          below the header. v4 implements the same utility as a margin-BOTTOM on
+          each earlier sibling, leaving margin-top free — which let the stale
+          `-mt-4` take effect and pulled the row up 24px. Stating the 40px
+          directly keeps the shipped spacing and no longer depends on which
+          side of the gap the space-y utility happens to own. */}
+      <dl className="flex flex-wrap items-baseline gap-x-4 sm:gap-x-8 gap-y-3 mt-10 text-sm">
         <Metric label="Plants" value={plantCount} />
         <Metric label="Due today" value={todayCount} />
         <Metric
@@ -332,7 +340,7 @@ export function DashboardPage() {
                   onClick={() => setActivityFilter(f)}
                   aria-pressed={activityFilter === f}
                   className={clsx(
-                    'min-h-touch rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                    'min-h-touch rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
                     activityFilter === f
                       ? 'bg-primary-100 text-primary-800 border-primary-400'
                       : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
@@ -552,7 +560,7 @@ function TaskItem({
       <div className="flex items-center gap-4 min-w-0">
         <span
           className={clsx(
-            'inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ring-1',
+            'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1',
             style.chip
           )}
           aria-hidden="true"
