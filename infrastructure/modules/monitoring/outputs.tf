@@ -4,6 +4,6 @@ output "sns_topic_arn" {
 }
 
 output "dashboard_name" {
-  description = "CloudWatch dashboard name"
-  value       = aws_cloudwatch_dashboard.main.dashboard_name
+  description = "CloudWatch dashboard name, or null when enable_dashboard is false"
+  value       = one(aws_cloudwatch_dashboard.main[*].dashboard_name)
 }

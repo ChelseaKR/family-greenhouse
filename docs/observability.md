@@ -23,6 +23,30 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
   Lambda log group because Cognito confirmation precedes login; Stripe-confirmed events land in the
   billing Lambda log group. Select all three groups for a complete funnel query.
 
+## Where alarms are created
+
+The title of this page is deliberate: alarms and the dashboard are a
+**production** capability. `enable_monitoring_alarms` and
+`enable_monitoring_dashboard` (root variables, both defaulting to `true`) gate
+every `aws_cloudwatch_metric_alarm` and the `aws_cloudwatch_dashboard` in
+`infrastructure/modules/monitoring`. Production sets neither and therefore keeps
+all 19 alarms and its dashboard; `environments/staging/terraform.tfvars` sets
+both `false`.
+
+Staging is off because its alerts SNS topic had no subscribers — `alert_email`
+is empty there, so 18 alarms plus a dashboard billed roughly $5.60/month to
+notify nobody. An alarm whose destination is empty is cost without coverage, so
+the module carries a `check "alarms_have_a_notification_destination"` block that
+warns on every plan when `enable_alarms` is true and the topic has neither an
+email nor an SMS subscription. Re-enable staging monitoring by setting
+`alert_email` (or `alert_sms_number`) first, then flipping the two flags back to
+`true`; doing it in the other order recreates the same silent bill and the check
+will say so.
+
+Metric filters, the SNS topic, the budget, and Cost Anomaly Detection are not
+gated — they are free or near-free and several are the data source the alarms
+would read on the way back up.
+
 ## Triage
 
 1. Open the `family-greenhouse-production` CloudWatch dashboard and set the incident time range.

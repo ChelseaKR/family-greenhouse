@@ -8,6 +8,18 @@ variable "project_name" {
   type        = string
 }
 
+variable "enable_alarms" {
+  description = "Create the CloudWatch metric alarms. Each standard alarm bills ~$0.10/mo, so a stack whose alerts topic has no subscribers (see the check block in main.tf) is paying for notifications nobody receives. Production keeps this true; disable only for stacks nobody is on call for."
+  type        = bool
+  default     = true
+}
+
+variable "enable_dashboard" {
+  description = "Create the CloudWatch dashboard. The first three dashboards per account are free, so a second stack's dashboard bills ~$3/mo. Production keeps this true."
+  type        = bool
+  default     = true
+}
+
 variable "enable_cost_anomaly_monitor" {
   description = "Create the account-global Cost Explorer service anomaly monitor. Enable in only one stack per AWS account."
   type        = bool

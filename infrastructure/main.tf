@@ -212,6 +212,8 @@ module "monitoring" {
   environment                 = var.environment
   project_name                = var.project_name
   enable_cost_anomaly_monitor = var.environment == "production"
+  enable_alarms               = var.enable_monitoring_alarms
+  enable_dashboard            = var.enable_monitoring_dashboard
   api_gateway_id              = module.api.api_gateway_id
   api_access_log_group_name   = module.api.api_access_log_group_name
   api_lambda_log_group_name   = module.api.api_lambda_log_group_name

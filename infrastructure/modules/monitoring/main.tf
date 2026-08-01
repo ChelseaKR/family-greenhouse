@@ -114,6 +114,8 @@ resource "aws_ce_anomaly_subscription" "alerts" {
 # request/error panels deliberately exclude GET /health so the 30-second
 # synthetic probe cannot swamp the two real users' traffic or error rate.
 resource "aws_cloudwatch_dashboard" "main" {
+  count = var.enable_dashboard ? 1 : 0
+
   dashboard_name = "${var.project_name}-${var.environment}"
 
   dashboard_body = jsonencode({
@@ -275,6 +277,14 @@ resource "aws_cloudwatch_dashboard" "main" {
   })
 }
 
+# Keep the existing (production) dashboard in place now that the resource is
+# counted — without this, adding `count` would move the state address from
+# .main to .main[0] and Terraform would destroy and recreate the dashboard.
+moved {
+  from = aws_cloudwatch_dashboard.main
+  to   = aws_cloudwatch_dashboard.main[0]
+}
+
 data "aws_region" "current" {}
 
 # Health-excluded RED metrics derived from the structured access log. These
@@ -355,6 +365,8 @@ locals {
 # Any Lambda error anywhere in the account/region. Coarse by design — the
 # dashboard's per-function Errors widget gives the attribution.
 resource "aws_cloudwatch_metric_alarm" "lambda_errors_aggregate" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-lambda-errors-aggregate-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -381,6 +393,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors_aggregate" {
 # below cover latency for the two functions where it matters, and the
 # dashboard's p95 widget covers the rest.
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles_aggregate" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-lambda-throttles-aggregate-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
@@ -401,7 +415,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles_aggregate" {
 
 # Per-function alarms for the critical pair only (see strategy note above).
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  for_each = toset(local.critical_lambda_names)
+  for_each = toset(var.enable_alarms ? local.critical_lambda_names : [])
 
   alarm_name          = "${each.value}-errors"
   comparison_operator = "GreaterThanThreshold"
@@ -429,7 +443,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  for_each = toset(local.critical_lambda_names)
+  for_each = toset(var.enable_alarms ? local.critical_lambda_names : [])
 
   alarm_name          = "${each.value}-duration"
   comparison_operator = "GreaterThanThreshold"
@@ -456,7 +470,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "dynamodb_throttle" {
-  count = var.dynamodb_table_name == "" ? 0 : 1
+  count = var.enable_alarms && var.dynamodb_table_name != "" ? 1 : 0
 
   alarm_name          = "${var.project_name}-ddb-throttle-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
@@ -482,7 +496,7 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttle" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "dynamodb_write_throttle" {
-  count = var.dynamodb_table_name == "" ? 0 : 1
+  count = var.enable_alarms && var.dynamodb_table_name != "" ? 1 : 0
 
   alarm_name          = "${var.project_name}-ddb-write-throttle-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
@@ -507,6 +521,8 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_write_throttle" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "api_5xx" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-api-5xx-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -534,6 +550,8 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
 # current traffic level and must page even when Lambda itself returns a shaped
 # 5xx response (which does not increment the Lambda Errors metric).
 resource "aws_cloudwatch_metric_alarm" "application_5xx" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-application-5xx-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
@@ -549,6 +567,8 @@ resource "aws_cloudwatch_metric_alarm" "application_5xx" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "application_latency_p95" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-application-latency-p95-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
@@ -569,6 +589,8 @@ resource "aws_cloudwatch_metric_alarm" "application_latency_p95" {
 # burn (3% errors) sustained across most of six hours. Both use the same
 # health-excluded application request/error metrics as the dashboard.
 resource "aws_cloudwatch_metric_alarm" "availability_fast_burn" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-availability-fast-burn-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 12
@@ -610,6 +632,8 @@ resource "aws_cloudwatch_metric_alarm" "availability_fast_burn" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "availability_slow_burn" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-availability-slow-burn-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 12
@@ -651,6 +675,8 @@ resource "aws_cloudwatch_metric_alarm" "availability_slow_burn" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-frontend-errors-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
@@ -670,7 +696,7 @@ resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
 # data loss we want to know about immediately. treat_missing_data=notBreaching
 # so a normally-empty queue (no metric emitted) doesn't false-alarm.
 resource "aws_cloudwatch_metric_alarm" "lambda_dlq_depth" {
-  count = var.lambda_dlq_name == "" ? 0 : 1
+  count = var.enable_alarms && var.lambda_dlq_name != "" ? 1 : 0
 
   alarm_name          = "${var.project_name}-lambda-dlq-not-empty-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
@@ -700,7 +726,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_dlq_depth" {
 # created when a domain is configured. treat_missing_data = notBreaching so a
 # normally-empty queue doesn't false-alarm.
 resource "aws_cloudwatch_metric_alarm" "email_forwarder_dlq_depth" {
-  count = var.email_forwarder_dlq_name == "" ? 0 : 1
+  count = var.enable_alarms && var.email_forwarder_dlq_name != "" ? 1 : 0
 
   alarm_name          = "${var.project_name}-mail-forwarder-dlq-not-empty-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
@@ -742,6 +768,8 @@ resource "aws_cloudwatch_log_metric_filter" "auth_login_failure" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.project_name}-auth-login-failure-spike-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
@@ -756,5 +784,79 @@ resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
 
   tags = {
     Name = "${var.project_name}-auth-login-failure-alarm-${var.environment}"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# State moves for the alarm gate
+#
+# Adding `count` to a resource that never had one moves its state address from
+# `.name` to `.name[0]`. Without these blocks Terraform would read that as
+# "destroy the old alarm, create a new one" on the next production apply. Each
+# alarm below is a no-op address rewrite; the alarm's own configuration is
+# untouched, so production keeps every alarm it has today.
+# ---------------------------------------------------------------------------
+moved {
+  from = aws_cloudwatch_metric_alarm.lambda_errors_aggregate
+  to   = aws_cloudwatch_metric_alarm.lambda_errors_aggregate[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.lambda_throttles_aggregate
+  to   = aws_cloudwatch_metric_alarm.lambda_throttles_aggregate[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.api_5xx
+  to   = aws_cloudwatch_metric_alarm.api_5xx[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.application_5xx
+  to   = aws_cloudwatch_metric_alarm.application_5xx[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.application_latency_p95
+  to   = aws_cloudwatch_metric_alarm.application_latency_p95[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.availability_fast_burn
+  to   = aws_cloudwatch_metric_alarm.availability_fast_burn[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.availability_slow_burn
+  to   = aws_cloudwatch_metric_alarm.availability_slow_burn[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.frontend_errors
+  to   = aws_cloudwatch_metric_alarm.frontend_errors[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.auth_login_failure_spike
+  to   = aws_cloudwatch_metric_alarm.auth_login_failure_spike[0]
+}
+
+# An alarm nobody receives is cost without coverage. Every alarm above routes
+# its alarm_actions to aws_sns_topic.alerts, but that topic only gets a
+# subscriber when alert_email or alert_sms_number is set — so a stack can bill
+# ~$0.10/alarm/month to notify a topic with zero destinations and look
+# monitored while being silent. Staging did exactly that (18 alarms plus a
+# dashboard, no subscribers, ~$5.60/mo) before enable_alarms existed.
+#
+# This is a `check`, not a lifecycle precondition, on purpose: it warns on
+# every plan/apply instead of hard-failing, so standing alarms up before the
+# destination is wired stays possible while the gap is impossible to miss.
+check "alarms_have_a_notification_destination" {
+  assert {
+    condition = (
+      !var.enable_alarms ||
+      length(aws_sns_topic_subscription.email) + length(aws_sns_topic_subscription.sms) > 0
+    )
+    error_message = "enable_alarms is true but the ${var.environment} alerts topic has no subscribers: alert_email and alert_sms_number are both empty, so every alarm here notifies nobody while still billing ~$0.10/month. Set alert_email (and/or alert_sms_number) in this environment's tfvars, or set enable_alarms = false."
   }
 }
