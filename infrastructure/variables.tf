@@ -68,6 +68,18 @@ variable "monthly_budget_usd" {
   default     = "50"
 }
 
+variable "enable_monitoring_alarms" {
+  description = "Create the CloudWatch metric alarms (~$0.10/alarm/month). Defaults true so production is unaffected; staging sets it false because its alerts topic has no subscribers, so the alarms notified nobody."
+  type        = bool
+  default     = true
+}
+
+variable "enable_monitoring_dashboard" {
+  description = "Create the CloudWatch dashboard (~$3/month beyond the account's first three). Defaults true so production is unaffected; staging sets it false."
+  type        = bool
+  default     = true
+}
+
 variable "email_from_address" {
   description = "Friendly From header for Cognito mail (signup confirmations, password resets). E.g. 'Family Greenhouse <hello@familygreenhouse.net>'. Required when domain_name is set."
   type        = string
