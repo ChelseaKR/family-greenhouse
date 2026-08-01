@@ -1,36 +1,36 @@
 # AI Evaluation Standard
 
-The AI-specific companion to `RESPONSIBLE-TECH-FRAMEWORK.md`. The framework asks *what could go wrong, how do we test, what do we commit to, how is it enforced*; this document supplies the **named tools, numeric thresholds, and CI gates** for AI/RAG/eval systems so that every AI repo enforces the same bar instead of reinventing it. Cross-cutting rigor lives here once; repos record only project-specific values and findings in `docs/ROADMAP.md` (Metrics table) and `docs/RESPONSIBLE-TECH-AUDITS.md`.
+The AI-specific companion to `RESPONSIBLE-TECH-FRAMEWORK.md`. The framework asks *what could go wrong, how do we test, what do we commit to, how is it enforced*; this document supplies the **minimum metrics, evidence, and CI gates** for AI/RAG/eval systems. Cross-cutting requirements live here once; projects record only implementation-specific tools, values, and findings in `docs/ROADMAP.md` (Metrics table) and `docs/RESPONSIBLE-TECH-AUDITS.md`.
 
-This standard codifies practice that **already exists in the best repos** (`govchat-eval`, `civic-ai-eval-harness`'s judge-calibration kappa gate; `fare-assistant` / `civic-rag-starter-kit`'s code-enforced citation guards; `women-artist-discovery`'s AST-level no-inference test) and makes it the portfolio norm. The work is propagation, not invention.
+This standard is intentionally capability-based rather than tied to a repository inventory. A project inherits the controls for the AI behavior it implements, including retrieval, generation, ranking, classification, tool use, or model-based evaluation.
 
-**Regulatory frame (de-facto enforceable as of 2026-06-21):** NIST AI RMF 1.0 + the Generative AI Profile (NIST AI 600-1) supply the risk taxonomy; ISO/IEC 42001:2023 supplies the management-system artifacts (risk register, Statement of Applicability, impact assessment); the EU AI Act is in **full force since 2026-08-02** for high-risk systems (Annex III deadline 2027-12-02), with GPAI obligations live since 2025-08. None of this portfolio's systems are believed high-risk or GPAI today — but each AI repo must **declare** that classification rather than assume it (see §6).
+**Regulatory frame (verified 2026-07-31):** [NIST AI RMF 1.0](https://www.nist.gov/itl/ai-risk-management-framework) and the [Generative AI Profile (NIST AI 600-1)](https://doi.org/10.6028/NIST.AI.600-1) supply the risk taxonomy; ISO/IEC 42001:2023 supplies management-system patterns such as a risk register and Statement of Applicability, while [ISO/IEC 42005:2025](https://www.iso.org/standard/42005) supplies AI-system impact-assessment guidance. The [EU AI Act implementation timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) is phased: prohibited-practice rules have applied since 2025-02-02, GPAI-model obligations since 2025-08-02, transparency and most remaining provisions apply from 2026-08-02, Annex III high-risk rules from 2027-12-02, and high-risk rules for systems embedded in regulated products from 2028-08-02. Applicability depends on the project's role, market, and use case; each project must **record** its classification rather than inherit a portfolio-wide assumption (see §6). This standard is an engineering control set, not a legal determination.
 
 ---
 
-## 0. Scope — which repos this binds, and the mandatory N/A declaration
+## 0. Scope — which systems this binds, and the mandatory N/A declaration
 
-**In scope (AI/RAG/eval repos):** `civic-ai-eval-harness`, `civic-rag-starter-kit`, `govchat-eval`, `trans-docs-navigator`, `women-artist-discovery`, `queer-the-stacks` (and its undocumented fork `queer-specfic-reader` — reconcile per `CODE-QUALITY-STANDARD`; until reconciled, both inherit this standard). `fare-assistant` and `jobradar` are in scope for any feature that retrieves + generates or ranks people.
+**In scope:** any shipped feature or evaluation pipeline that calls a model to retrieve, generate, summarize, rank, recommend, classify, extract, moderate, select tools, or judge other model output. Apply only the relevant sections: for example, §1 retrieval metrics apply to retrieval systems, while §2 applies to any feature that accepts untrusted input or context.
 
-**Out of scope:** repos with no model inference in a user-facing or decision-making path (`davis-bike-hazard-map`, `personal-site`, `gtfs-scorecard`, `tods-validate`, `habitable`, `ledger`, `nearmiss`, `swelter`, `olive-bark-logger`, `self-osint-monitor`).
+**Out of scope:** projects with no model inference in a user-facing, automated-decision, or evaluation path. Developer-only autocomplete or one-off exploratory analysis is also out of scope when its output is reviewed before it enters the product or a committed decision artifact.
 
-A repo is **never silently out of scope.** Every repo's `docs/ROADMAP.md` carries one line:
+A project is **never silently out of scope.** Every project's `docs/ROADMAP.md` carries one line:
 
 ```
 AI-Evaluation-Standard: APPLIES  (tiers: RAG, red-team, model-card)
 # or
-AI-Evaluation-Standard: N/A — no model inference in any user-facing or decision path. Reviewed 2026-06-21.
+AI-Evaluation-Standard: N/A — no model inference in any user-facing, automated-decision, or evaluation path. Reviewed <YYYY-MM-DD>.
 ```
 
-A new `uses:` of an LLM SDK (`anthropic`, `openai`, etc.) flips the declaration to APPLIES and is itself a REVIEW-GATE: the PR introducing the first model call cannot merge without the §1–§3 gates wired or an explicit, dated waiver in the Metrics table.
+A new runtime or evaluation model call flips the declaration to APPLIES and is itself a REVIEW-GATE. The change introducing that call cannot merge without its applicable gates wired or an explicit, dated waiver in the Metrics table. Merely installing an SDK does not change scope until a model-mediated path uses it.
 
-**Provider note:** the portfolio standardizes on Anthropic Claude for generation and LLM-as-judge unless a repo's ROADMAP records a "rejected because" note. Evaluators (RAGAS/DeepEval) are provider-agnostic and run against whatever model the repo pins.
+**Provider note:** this standard is provider-neutral. Each project pins and records the provider, model identifier or snapshot, API version, evaluator version, and judge configuration. A change to any of them triggers the model-version gates in §5. Hosted evaluation services may supplement, but not replace, reproducible evidence committed by CI.
 
 ---
 
 ## 1. Metric suite — the three-layer eval (AUTO-GATE)
 
-RAG evaluation is **three layers: retrieval, generation, calibration.** A repo that retrieves-then-generates must gate all three. Tooling: **RAGAS or DeepEval** for offline scoring (reference-free, runs in `pytest`, gates every prompt/retrieval change). *Rejected:* TruLens/Arize Phoenix as the gate — excellent for production tracing, but their value is online observability, not a fast CI gate; adopt them under `OBSERVABILITY-STANDARD` for the online layer, not here. LangSmith rejected as a gate — ties CI to a hosted service and the LangChain ecosystem.
+RAG evaluation is **three layers: retrieval, generation, calibration.** A project that retrieves-then-generates must gate all three. Use **RAGAS, DeepEval, or an equivalent pinned evaluator** for offline scoring in the project's normal test stack. Some metrics require references or judge models; the eval manifest must state which inputs and evaluator each metric uses. Production tracing tools belong to the online layer under `OBSERVABILITY-STANDARD` and do not replace an offline merge gate.
 
 The benchmark is a committed, version-controlled set of **100–500 labeled queries** (`tests/eval/benchmark/*.jsonl`) with disaggregation labels (language, segment). It is a build artifact, regenerated and re-committed like any audit.
 
@@ -45,13 +45,13 @@ The benchmark is a committed, version-controlled set of **100–500 labeled quer
 | Refusal correctness | ≥ 0.95 on should-refuse set; ≤ 2% over-refusal on should-answer set | labeled refusal benchmark | AUTO-GATE | — |
 | Truthfulness (model-version change) | no drop > 3 pp from model-card baseline | TruthfulQA (817 q) | AUTO-GATE on model bump | — |
 | Per-segment pass rate (disaggregated) | no segment > 5 pp below the macro mean | benchmark grouped by `segment`/`lang` label | AUTO-GATE | — |
-| EN/ES pass-rate parity | |EN − ES| ≤ 5 pp | bilingual benchmark slice | AUTO-GATE (bilingual repos) | — |
+| EN/ES pass-rate parity | \|EN − ES\| ≤ 5 pp | bilingual benchmark slice | AUTO-GATE (bilingual projects) | — |
 
-**Trigger:** these gates run on **every PR touching prompts, retrieval, chunking, reranking, prompt assembly, or the pinned model version.** A path filter on `.github/workflows/eval.yml` plus a label is acceptable, but the eval job is a **required status check** — it cannot be `continue-on-error` or `|| true` (the same `|| true` defeat that neutered `pip-audit` in `ledger`/`nearmiss` is forbidden here by rule).
+**Trigger:** these gates run on **every PR touching prompts, retrieval, chunking, reranking, prompt assembly, or the pinned model version.** A path filter on `.github/workflows/eval.yml` plus a label is acceptable, but the eval job is a **required status check**—it cannot be `continue-on-error` or `|| true`.
 
-**No ungrounded code path.** Where the repo already code-enforces grounding (`fare-assistant`, civic RAG repos), the citation guard is a unit test, not just an eval metric: a generated claim with no supporting retrieved span is a test failure, asserted with injected fixtures. This is the portfolio norm, lifted from those repos.
+**No ungrounded code path.** The citation guard is a unit test, not just an aggregate eval metric: a generated claim with no supporting retrieved span is a test failure, asserted with injected fixtures. High-impact claims should use deterministic claim-to-source checks where possible; judge-model scores alone are insufficient evidence.
 
-DeepEval-in-pytest is the reference wiring (runs under the existing `pytest` + `make verify` stack):
+DeepEval in `pytest` is illustrative reference wiring. Validate names and arguments against the version pinned by the project:
 
 ```python
 # tests/eval/test_rag_gates.py
@@ -86,40 +86,38 @@ verify: lint type test security eval   # eval is part of the blocking chain
 
 ## 2. Red-team / jailbreak suite (AUTO-GATE on critical; REVIEW-GATE for the structured exercise)
 
-Tooling: **Garak** (NVIDIA, 120+ probes — baseline scanner, nightly + PR) and **Promptfoo** (CI-native YAML, GitHub Actions, findings mapped to OWASP-LLM / NIST AI RMF / EU AI Act — the gate). *Rejected as the CI gate:* PyRIT — superb multi-turn (Crescendo, TAP) orchestration but no CI integration or dashboard; it is the tool for the **quarterly structured red-team** (REVIEW-GATE below), not the per-PR gate.
+Use **Garak or an equivalent scanner** for broad baseline probes and **Promptfoo or an equivalent application-level harness** for policy- and threat-mapped checks. Use **PyRIT or equivalent orchestration** when a structured exercise needs stateful, multi-turn attacks. Tool capabilities change; conformance is determined by the required coverage, recorded findings, and gates below—not by a product name.
 
-The required checklist is **OWASP Top 10 for LLM Applications v2.0 (LLM01–LLM10)**. Every LLM feature is reviewed against all ten before ship; Promptfoo emits the mapping.
+The required checklist is the **[OWASP Top 10 for LLM Applications 2025 (v2.0)](https://genai.owasp.org/llm-top-10/)** (LLM01–LLM10). Every LLM feature is reviewed against all ten before ship; the report records the mapping and marks non-applicable categories with a reason.
 
 | Control | Target | Measured by | Gate |
 |---------|--------|-------------|------|
 | OWASP LLM01–LLM10 red-team scan | 0 critical-severity findings open | Promptfoo `redteam` (OWASP plugin) | AUTO-GATE on prompt/model PR |
-| Garak baseline probe suite | 0 critical regressions vs. baseline | `garak` nightly + on model bump | AUTO-GATE (nightly required check) |
-| Prompt-injection (direct + indirect, RAG context) | resists curated injection corpus | Promptfoo + repo injection fixtures | AUTO-GATE |
+| Broad baseline probe suite | 0 critical regressions vs. baseline | Garak or equivalent, scheduled + on model bump | AUTO-GATE |
+| Prompt-injection (direct + indirect, RAG context) | resists curated injection corpus | Promptfoo + project injection fixtures | AUTO-GATE |
 | System-prompt / context leakage | no system prompt or other-tenant context emitted | Promptfoo `harmful:privacy` + leak probes | AUTO-GATE |
-| Structured multi-turn red-team | findings triaged, severities assigned, remediation tracked | PyRIT (Crescendo+TAP) → committed report | REVIEW-GATE, ≥ quarterly + each major model/prompt release |
+| Structured multi-turn red-team | findings triaged, severities assigned, remediation tracked | PyRIT or equivalent → committed report | REVIEW-GATE, ≥ quarterly + each major model/prompt release |
 
 ```yaml
-# promptfooconfig.yaml — redteam gate, OWASP-mapped
+# promptfooconfig.yaml — illustrative current shape; pin the Promptfoo version in CI
+purpose: Answer questions only from approved retrieved sources.
+targets:
+  - id: https://localhost:8000/answer
 redteam:
-  plugins: [owasp:llm]            # LLM01..LLM10
+  plugins: [owasp:llm]
   strategies: [jailbreak, prompt-injection, base64]
   numTests: 25
-targets:
-  - id: https://localhost:8000/answer   # the RAG endpoint under test
-defaultTest:
-  assert:
-    - type: promptfoo:redteam
-      severity: critical
-      threshold: 0          # zero open critical findings → merge-blocking
 ```
 
-The structured exercise produces `docs/audits/red-team-<date>.md` (findings, severity, OWASP category, remediation, sign-off) — committed, regenerated per release, exactly the "audit-as-artifact" discipline the portfolio already practices.
+CI runs the pinned tool's red-team command, writes machine-readable results, and invokes a repository-owned check that fails on an open critical finding or a critical regression. Tool defaults or dashboard severity alone do not implement the gate.
+
+The structured exercise produces `docs/audits/red-team-<date>.md` (scope, findings, severity, OWASP category, remediation, and sign-off), committed and regenerated per release.
 
 ---
 
 ## 3. Judge calibration (AUTO-GATE) + the eval-driven-development loop
 
-LLM-as-judge metrics are only trustworthy if the judge tracks human labels. **Lift `govchat-eval`/`civic-ai-eval-harness`'s calibration gate to the portfolio standard:** weekly human review of 50–100 sampled traces, scored against the automated judge, with agreement and Cohen's kappa as a merge-blocking gate.
+LLM-as-judge metrics are only trustworthy if the judge tracks human labels. Review 50–100 sampled traces, score the same traces with the automated judge, and make agreement and Cohen's kappa merge-blocking gates.
 
 | Metric | Target | Measured by | Gate |
 |--------|--------|-------------|------|
@@ -131,31 +129,25 @@ LLM-as-judge metrics are only trustworthy if the judge tracks human labels. **Li
 The full eval-driven-development loop (REVIEW-GATE for the online + drift layers, since they need judgment and committed artifacts):
 
 1. **Offline** — the §1 benchmark gates every prompt/model change in CI. (AUTO)
-2. **Online** — sample 5–20% of production traffic, score with LLM-as-judge (target judge latency < 5 s), log results. (REVIEW — wire via `OBSERVABILITY-STANDARD` OTel traces; not all repos are deployed, so this is N/A-with-reason for local-only repos.)
+2. **Online** — use a documented, privacy-reviewed sampling plan sized to the system's traffic and risk; score sampled traces and log the results. Keep judge work off the user-response path unless the feature explicitly requires synchronous moderation. (REVIEW — wire via `OBSERVABILITY-STANDARD` traces; this is N/A-with-reason for systems with no production traffic.)
 3. **Calibration** — the weekly human pass above; document kappa, track drift monthly. (AUTO for the gate, REVIEW for the drift narrative.)
 
 ---
 
 ## 4. Model cards & data cards as committed artifacts (AUTO-GATE on completeness; REVIEW-GATE on honesty)
 
-Transparency artifacts are **committed files regenerated on release**, never slideware — consistent with `RESPONSIBLE-TECH-FRAMEWORK.md` §D and the portfolio's existing data/model cards. Format: Hugging Face **model card** spec (YAML front-matter + narrative) and **Datasheets for Datasets** (Gebru et al., 7 sections). Even for repos that *use* rather than *train* a model, a model card documents the pinned model, intended/out-of-scope use, eval results, and limitations.
+Transparency artifacts are **committed files regenerated on release**—consistent with `RESPONSIBLE-TECH-FRAMEWORK.md` §D. Use a Hugging Face-compatible **model card** when its metadata fits the system and **Datasheets for Datasets** (Gebru et al., 7 sections) for datasets. A project that consumes rather than trains a model still needs a system/model card documenting the pinned model, intended and out-of-scope use, evaluation results, data handling, and limitations; fields that apply only to trained or published models are N/A-with-reason.
 
 | Artifact | Required content | Measured by | Gate |
 |----------|------------------|-------------|------|
-| `docs/cards/model-card.md` | YAML: `language, license, base_model, pipeline_tag, library_name`, ≥ 1 `model-index` eval result; narrative: intended use, **out-of-scope use**, eval results with **per-group fairness breakdown**, limitations, CO₂/compute if trained | JSON-Schema lint of YAML front-matter | AUTO-GATE |
+| `docs/cards/model-card.md` | Stable model/provider identifier and version; intended and **out-of-scope use**; eval results with relevant per-group breakdown; data handling; limitations; CO₂/compute if trained; applicable publication metadata | schema/section lint appropriate to the card type | AUTO-GATE |
 | `docs/cards/data-card-*.md` | All 7 datasheet sections: Motivation, Composition, Collection, Preprocessing, Uses, Distribution, Maintenance — non-empty | section-presence lint (pre-run hook before any fine-tune) | AUTO-GATE |
-| Environmental footprint | GPU-hours + CO₂e (CodeCarbon / ML CO₂ Impact) | committed to model card, training repos only | AUTO-GATE on train; **N/A-with-reason** for API-only repos |
+| Environmental footprint | GPU-hours + CO₂e (CodeCarbon / ML CO₂ Impact) | committed to model card, training projects only | AUTO-GATE on train; **N/A-with-reason** for API-only projects |
 | Card honesty / framing | limitations and out-of-scope are truthful, not box-ticking | accountable-owner review | REVIEW-GATE per release |
 
 ```yaml
-# .github/workflows/cards.yml — front-matter completeness lint
-- run: |
-    uv run python -c "
-    import sys,yaml,pathlib
-    fm=yaml.safe_load(pathlib.Path('docs/cards/model-card.md').read_text().split('---')[1])
-    req={'language','license','base_model','pipeline_tag','library_name','model-index'}
-    missing=req-set(fm)
-    sys.exit(f'model-card missing: {missing}' if missing else 0)"
+# .github/workflows/cards.yml — project-owned schema/section lint
+- run: uv run python scripts/check_ai_cards.py
 ```
 
 Datasheet completeness is a **pre-run hook**: a fine-tune or training run with a missing/empty-section datasheet **aborts**.
@@ -164,7 +156,7 @@ Datasheet completeness is a **pre-run hook**: a fine-tune or training run with a
 
 ## 5. Regression gates — how the thresholds bind in CI
 
-The gate is **regression on a committed baseline**, not an absolute floor alone. Each repo commits `docs/audits/eval-baseline.json`; the CI eval job fails if any §1 metric drops below its threshold **or** regresses > the per-metric tolerance from baseline.
+The gate is **regression on a committed baseline**, not an absolute floor alone. Each project commits `docs/audits/eval-baseline.json`; the CI eval job fails if any §1 metric drops below its threshold **or** regresses > the per-metric tolerance from baseline.
 
 | Change class | Gates triggered |
 |--------------|-----------------|
@@ -174,30 +166,30 @@ The gate is **regression on a committed baseline**, not an absolute floor alone.
 | New benchmark queries | re-baseline (REVIEW-GATE: owner approves the new baseline JSON) |
 | New AI feature / first model call | all of the above + §6 risk classification (REVIEW-GATE) |
 
-**Reference, don't repeat:** the eval thresholds above are stated once here. A repo's `docs/ROADMAP.md` Metrics table records only its *measured* values and any justified deviation (e.g. a broad-domain repo raising the Context Precision target's domain qualifier), each carrying a one-line rationale. Silent deviation is a defect.
+**Reference, don't repeat:** the eval thresholds above are stated once here. A project's `docs/ROADMAP.md` Metrics table records only its *measured* values and any justified deviation (e.g. a broad-domain system raising the Context Precision target's domain qualifier), each carrying a one-line rationale. Silent deviation is a defect.
 
 ---
 
-## 6. Governance artifacts — NIST AI RMF / ISO 42001 / EU AI Act (REVIEW-GATE)
+## 6. Governance artifacts — NIST AI RMF / ISO 42001 and 42005 / EU AI Act (REVIEW-GATE)
 
 These require human judgment, so they are REVIEW-GATEs paired with a committed artifact and an accountable-owner sign-off. They extend `RESPONSIBLE-TECH-AUDITS.md`, not duplicate it.
 
 | Artifact | Frame | Trigger / cadence | Gate |
 |----------|-------|-------------------|------|
 | `docs/audits/ai-risk-register.md` | NIST AI RMF **MAP**: inventory each AI system, its risk tier, which of the 12 AI 600-1 GenAI risks apply (confabulation, bias/homogenization, data privacy, info integrity, etc.) | before any new AI feature ships; review ≥ quarterly | REVIEW-GATE |
-| `docs/audits/ai-impact-assessment-<feature>.md` | ISO 42001 **Clause 6.1.4** impact assessment: societal + individual consequences | per feature that processes personal data, makes consequential decisions, or faces external users | REVIEW-GATE |
-| `docs/audits/iso42001-soa.md` | ISO 42001 Statement of Applicability: applicable Annex A controls (of 42) + exclusion rationale | per production AI system; review annually + on architecture change | REVIEW-GATE |
+| `docs/audits/ai-impact-assessment-<feature>.md` | ISO/IEC 42005 impact assessment: impacts on individuals, groups, and society across the lifecycle | per feature that processes personal data, makes consequential decisions, or faces external users | REVIEW-GATE |
+| `docs/audits/iso42001-soa.md` | ISO/IEC 42001 Statement of Applicability: applicable Annex A controls + exclusion rationale | per production AI system; review annually + on architecture change | REVIEW-GATE |
 | EU AI Act classification line | Annex III high-risk? GPAI? compute near 10²⁵ FLOPs? | per AI feature; recorded in the risk register | REVIEW-GATE — **must be explicit** |
 
-**Classification is mandatory and explicit.** A typical entry: *"Not Annex III high-risk (no recruitment/credit/law-enforcement/education/critical-infra decisioning); not GPAI; API-only, training compute = 0. Reviewed 2026-06-21 by <owner>."* If a feature *does* land in Annex III, the conformity-assessment package (technical docs Art. 18, QMS Art. 17, Declaration of Conformity Art. 47) becomes a hard pre-ship REVIEW-GATE with the 2027-12-02 Annex III deadline. The civic repos (`civic-rag-starter-kit`, `govchat-eval`, `fare-assistant`) are the highest-attention candidates and must keep this line current.
+**Classification is mandatory and explicit.** A typical entry: *"Not Annex III high-risk (no recruitment, credit, law-enforcement, education, migration, or critical-infrastructure decisioning); project is a deployer, not a GPAI-model provider; API-only, training compute = 0. Reviewed <YYYY-MM-DD> by <owner>."* Record relevant jurisdictions and organizational role; using a GPAI model does not by itself make the project a GPAI-model provider. If a feature is classified as high-risk, applicable conformity-assessment and documentation obligations become a hard pre-ship REVIEW-GATE on the effective timeline recorded in the risk register.
 
-The portfolio's **no-inference / no-outing** guarantees are first-class risk-register entries: `women-artist-discovery`'s AST-level "no identity inference ever" static test and `ledger`'s no-outing sentinel job are the enforcement of the "Harmful Bias" and "Data Privacy" RMF risks — referenced here, owned in those repos.
+Project-specific **no-inference, no-outing, no-profiling, and protected-trait** guarantees are first-class risk-register entries. Enforce them with deterministic tests at the data and tool boundaries; do not rely only on prompts or judge-model scores.
 
 ---
 
-## What gets committed into each AI repo
+## What gets committed into each AI project
 
-Per `DOCUMENTATION-STANDARD.md`, each in-scope repo carries, regenerated by `make verify` / on release:
+Per `DOCUMENTATION-STANDARD.md`, each in-scope project carries, regenerated by `make verify` / on release:
 
 - `tests/eval/benchmark/*.jsonl` — the 100–500-query labeled, disaggregated benchmark.
 - `tests/eval/calibration/*.jsonl` — the dated judge-calibration set.
@@ -211,4 +203,4 @@ Every item is either an AUTO-GATE (mechanically checked, merge-blocking) or a RE
 
 ---
 
-Last verified: 2026-06-21 · Recheck cadence: per NIST AI RMF / AI 600-1, ISO/IEC 42001, EU AI Act phase-gate, and OWASP Top 10 for LLMs revision — and whenever RAGAS/DeepEval/Garak/Promptfoo ship a breaking metric/threshold change. Confirm framework versions and tool defaults at build time.
+Last verified: 2026-07-31 · Recheck cadence: at least quarterly; at each applicable EU AI Act phase gate; when NIST AI RMF / AI 600-1, ISO/IEC 42001 or 42005, or the OWASP Top 10 for LLM Applications changes; and whenever a pinned evaluator or scanner ships a breaking metric, schema, or threshold change. CI must use pinned tool versions and validate configuration against those versions.
