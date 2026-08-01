@@ -112,7 +112,7 @@
     "globals": "^17.8.0",
     "jest-axe": "^11.0.0",
     "msw": "^2.15.0",
-    "postcss": "^8.5.24",
+    "postcss": "^8.5.25",
     "size-limit": "^13.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
