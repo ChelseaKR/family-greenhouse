@@ -14,21 +14,47 @@ terraform {
   }
 }
 
+locals {
+  application_domain = var.application_domain != "" ? var.application_domain : var.domain_name
+  hosted_zone_name   = var.hosted_zone_name != "" ? var.hosted_zone_name : var.domain_name
+
+  # Tags stamped onto every taggable resource by BOTH aws providers below.
+  #
+  # Why two spellings of the same thing: AWS cost-allocation tag KEYS are
+  # case-sensitive, and the payer account activated the lowercase `project`
+  # key (plus `environment`) in Cost Explorer. The TitleCase Project/
+  # Environment tags this stack already applied are therefore invisible to
+  # billing — which is why family-greenhouse showed $0 of tagged spend while
+  # still running real infrastructure. The lowercase pair is what the
+  # per-project prod/staging budgets actually filter on.
+  #
+  # The TitleCase pair is deliberately KEPT rather than renamed: nothing in
+  # AWS reads a tag key case-insensitively, so dropping it would silently
+  # break any console filter, saved report or ad-hoc query built on it, and
+  # would rewrite tags on every resource in the stack for no billing gain.
+  #
+  # `environment` is var.environment ("production" | "staging", enforced by
+  # the validation in variables.tf). The two environments are separate
+  # Terraform states selected by backend key at init time (see backend.tf),
+  # each fed its own environments/<env>/terraform.tfvars, so this value is
+  # always the environment being applied and the two budgets can tell each
+  # other apart.
+  cost_allocation_tags = {
+    Project     = "family-greenhouse"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+
+    project     = "family-greenhouse"
+    environment = var.environment
+  }
+}
+
 provider "aws" {
   region = var.aws_region
 
   default_tags {
-    tags = {
-      Project     = "family-greenhouse"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
+    tags = local.cost_allocation_tags
   }
-}
-
-locals {
-  application_domain = var.application_domain != "" ? var.application_domain : var.domain_name
-  hosted_zone_name   = var.hosted_zone_name != "" ? var.hosted_zone_name : var.domain_name
 }
 
 # Provider for CloudFront certificates (must be us-east-1)
@@ -37,11 +63,7 @@ provider "aws" {
   region = "us-east-1"
 
   default_tags {
-    tags = {
-      Project     = "family-greenhouse"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
+    tags = local.cost_allocation_tags
   }
 }
 
