@@ -202,7 +202,7 @@ export function SpaceBrowseView({
                           {!tasksError && (
                             <Link
                               to={`/tasks?space=${encodeURIComponent(group.id)}`}
-                              className="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-primary-800 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                              className="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-primary-800 hover:bg-primary-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                             >
                               {t('spaces.viewCareTasks')}
                               <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
@@ -271,7 +271,7 @@ export function SpaceBrowseView({
                           <Link
                             key={plant.id}
                             to={`/plants/${plant.id}`}
-                            className="group rounded-lg border border-primary-100/70 bg-paper p-2 hover:border-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                            className="group rounded-lg border border-primary-100/70 bg-paper p-2 hover:border-primary-400 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                           >
                             <div className="aspect-square overflow-hidden rounded-md bg-parchment">
                               <PlantImage plant={plant} width={160} height={160} />

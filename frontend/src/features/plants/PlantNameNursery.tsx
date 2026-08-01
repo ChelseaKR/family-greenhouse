@@ -52,7 +52,7 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
     return (
       <button
         type="button"
-        className="group inline-flex min-h-touch items-center gap-2 rounded-md text-sm font-semibold text-primary-700 hover:text-primary-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+        className="group inline-flex min-h-touch items-center gap-2 rounded-md text-sm font-semibold text-primary-700 hover:text-primary-900 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         onClick={() => {
           setIsOpen(true);
           rollName();
@@ -84,7 +84,7 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
           </div>
           <button
             type="button"
-            className="min-h-touch rounded-md px-2 text-xs font-medium text-primary-700 hover:bg-primary-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            className="min-h-touch rounded-md px-2 text-xs font-medium text-primary-700 hover:bg-primary-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
             onClick={() => setIsOpen(false)}
           >
             {t('plants.nameNursery.close')}
@@ -100,9 +100,9 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
             <button
               key={option.value}
               type="button"
-              className={`min-h-touch rounded-full border px-3 py-1.5 text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
+              className={`min-h-touch rounded-full border px-3 py-1.5 text-xs font-semibold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                 vibe === option.value
-                  ? 'border-primary-700 bg-primary-700 text-white shadow-sm'
+                  ? 'border-primary-700 bg-primary-700 text-white shadow-xs'
                   : 'border-primary-200 bg-paper text-primary-800 hover:-translate-y-0.5 hover:border-primary-400'
               }`}
               onClick={() => chooseVibe(option.value)}
@@ -138,7 +138,7 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
             <div className="mt-4 flex flex-col-reverse justify-center gap-2 sm:flex-row">
               <button
                 type="button"
-                className="inline-flex min-h-touch items-center justify-center gap-2 rounded-md border border-primary-300 bg-paper px-4 text-sm font-semibold text-primary-800 hover:bg-primary-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="inline-flex min-h-touch items-center justify-center gap-2 rounded-md border border-primary-300 bg-paper px-4 text-sm font-semibold text-primary-800 hover:bg-primary-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                 onClick={() => rollName()}
               >
                 <ArrowPathIcon className="h-4 w-4" />
@@ -146,7 +146,7 @@ export function PlantNameNursery({ species, onUseName }: PlantNameNurseryProps) 
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-touch items-center justify-center gap-2 rounded-md bg-primary-700 px-4 text-sm font-semibold text-white hover:bg-primary-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                className="inline-flex min-h-touch items-center justify-center gap-2 rounded-md bg-primary-700 px-4 text-sm font-semibold text-white hover:bg-primary-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
                 onClick={() => {
                   onUseName(suggestion.name);
                   setIsOpen(false);

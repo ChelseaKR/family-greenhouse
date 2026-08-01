@@ -536,7 +536,7 @@ export function HelpPage() {
                   <li key={article.q}>
                     <button
                       type="button"
-                      className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left hover:bg-parchment/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                      className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left hover:bg-parchment/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                       aria-expanded={isOpen}
                       aria-controls={`faq-${id}`}
                       onClick={() => setOpen(isOpen ? null : id)}
@@ -544,7 +544,7 @@ export function HelpPage() {
                       <span className="text-sm font-medium text-gray-900">{article.q}</span>
                       <ChevronDownIcon
                         className={clsx(
-                          'h-5 w-5 flex-shrink-0 text-gray-500 transition-transform',
+                          'h-5 w-5 shrink-0 text-gray-500 transition-transform',
                           isOpen && 'rotate-180'
                         )}
                         aria-hidden="true"

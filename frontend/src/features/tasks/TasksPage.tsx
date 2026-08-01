@@ -531,7 +531,7 @@ function TaskSection({
               <div className="flex items-center gap-4 min-w-0">
                 <span
                   className={clsx(
-                    'inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ring-1',
+                    'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1',
                     style.chip
                   )}
                   aria-hidden="true"
@@ -573,7 +573,7 @@ function TaskSection({
                   )}
                 </div>
               </div>
-              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
                 <ClaimControls
                   task={task}
                   onClaim={extras.onClaim}

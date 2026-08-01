@@ -1,18 +1,142 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Tailwind v4 detects source files automatically, but this app is built
+   from the `frontend/` workspace while the CSS lives in `src/`, so the
+   scan roots are declared explicitly to keep class detection independent
+   of the process CWD (vite dev, vite build, vitest, playwright). */
+@source '../index.html';
+@source '../src/**/*.{js,ts,jsx,tsx}';
+
+/* ---------------------------------------------------------------------
+   Theme — ported from the former tailwind.config.js `theme.extend`.
+   v4 is CSS-first: every key below becomes a real CSS custom property and
+   generates the matching utilities (`bg-primary-600`, `shadow-journal`,
+   `font-serif`, `animate-fade-in`, …).
+   --------------------------------------------------------------------- */
+@theme {
+  /* Deep brand green used for hand-drawn strokes and serif titles. */
+  --color-ink: #27500a;
+
+  /* Daylight surfaces: the prior cream/parchment pair leaned hard into a
+     generic stationery look. These cooler neutrals pick up the color of
+     greenhouse glass while keeping the journal warmth in the copy and
+     terracotta details. */
+  --color-paper: #f7f8f2;
+  --color-parchment: #eef1e6;
+  --color-glass: #ddeee7;
+  --color-dew: #b7d9d1;
+
+  /* Brand primary scale. Built around the greenhouse-asset palette
+     (#27500A, #639922, #97C459) with a 50–950 ramp interpolated for UI
+     use. WCAG: 700 (#27500A) on white = 9.3:1, 600 on white = 5.5:1 —
+     both clear AA. The 100/200 tints come straight from the brand SVGs
+     (#EAF3DE / #C0DD97) so logo + UI accents harmonize. */
+  --color-primary-50: #f5fae9;
+  --color-primary-100: #eaf3de;
+  --color-primary-200: #c0dd97;
+  --color-primary-300: #97c459;
+  --color-primary-400: #7aad3a;
+  --color-primary-500: #639922;
+  --color-primary-600: #4f7a1b;
+  --color-primary-700: #3b6d11;
+  --color-primary-800: #27500a;
+  --color-primary-900: #173404;
+  --color-primary-950: #0e2103;
+
+  /* Warm terracotta accent — used sparingly for secondary CTAs and
+     illustrations. Distinct from anything in the default palette. */
+  --color-accent-50: #fdf4ed;
+  --color-accent-100: #fae6d4;
+  --color-accent-200: #f4caa4;
+  --color-accent-300: #eda86a;
+  --color-accent-400: #e58a3f;
+  --color-accent-500: #dc6c1f;
+  --color-accent-600: #c8541a;
+  --color-accent-700: #a23f1a;
+  --color-accent-800: #7e3219;
+  --color-accent-900: #5e2614;
+
+  --color-secondary-50: #fefce8;
+  --color-secondary-100: #fef9c3;
+  --color-secondary-200: #fef08a;
+  --color-secondary-300: #fde047;
+  --color-secondary-400: #facc15;
+  --color-secondary-500: #eab308;
+  --color-secondary-600: #ca8a04;
+  --color-secondary-700: #a16207;
+  --color-secondary-800: #854d0e;
+  --color-secondary-900: #713f12;
+  --color-secondary-950: #422006;
+
+  /* Body font per brand guidelines: Instrument Sans (variable woff2,
+     self-hosted via @fontsource). Inter + system stack as fallbacks so
+     unloaded body text still reads cleanly. */
+  --font-sans:
+    'Instrument Sans Variable', Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, sans-serif;
+
+  /* Display font per brand guidelines: Bitter Variable (100–900,
+     self-hosted). Used on the wordmark and major headlines.
+
+     We mount Bitter Variable as `font-serif` rather than a custom
+     `font-display` key on purpose: `font-display` collides with the CSS
+     `font-display` keyword and Tailwind's `@apply` engine rejects it.
+     Using the built-in `serif` slot avoids the clash and is also
+     semantically accurate. */
+  --font-serif: 'Bitter Variable', Bitter, Georgia, Cambria, 'Times New Roman', Times, serif;
+
+  /* Bespoke spacing steps carried over from the v3 config. `touch` backs
+     the `min-h-touch` / `min-w-touch` tap-target floor used across the
+     interactive components (44px is the WCAG 2.5.5 / iOS HIG minimum);
+     v4 resolves named sizing utilities from the `--spacing-*` namespace,
+     which replaces v3's separate `minHeight` / `minWidth` scales. */
+  --spacing-18: 4.5rem;
+  --spacing-88: 22rem;
+  --spacing-touch: 44px;
+
+  /* Brand-green-tinted shadows. `card` is the original; `journal` is
+     softer + lifted as if a paper page rests on the desk; `lifted` is
+     hover variant. */
+  --shadow-card: 0 1px 2px 0 rgb(23 52 4 / 0.05), 0 1px 3px 0 rgb(23 52 4 / 0.06);
+  --shadow-card-hover: 0 4px 6px -1px rgb(23 52 4 / 0.09), 0 2px 4px -2px rgb(23 52 4 / 0.06);
+  --shadow-journal: 0 1px 0 0 rgb(23 52 4 / 0.04), 0 10px 30px -20px rgb(23 52 4 / 0.22);
+  --shadow-journal-hover: 0 1px 0 0 rgb(23 52 4 / 0.04), 0 18px 40px -22px rgb(23 52 4 / 0.28);
+
+  /* Subtle entrance for cards as they hydrate. 200ms is the sweet spot —
+     long enough to feel intentional, short enough that the page never
+     feels sluggish. */
+  --animate-fade-in: fade-in 200ms ease-out both;
+
+  @keyframes fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   v3 compatibility shim. v4 changed a Preflight default that would
+   otherwise silently restyle every existing call site: the default border
+   color moved from `gray-200` to `currentColor`. This app has ~270
+   `border` / `divide-*` usages that relied on the v3 default, so the v3
+   behaviour is restored here rather than annotating every call site.
+   --------------------------------------------------------------------- */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
 
 @layer base {
-  :root {
-    /* Emerald primary; updated to satisfy WCAG AA contrast with white. */
-    --color-primary: 5 150 105;
-    --color-secondary: 234 179 8;
-  }
-
-  /* Dark mode removed until components get real dark variants — the old
-     html[data-theme='dark'] block only inverted the body surface, leaving
-     cards/inputs unreadable (frontend-audit 2026-06-12, item 6). */
-
   html[data-density='compact'] .card {
     @apply p-4;
   }
@@ -48,7 +172,7 @@
 
   /* Focus visible styles */
   :focus-visible {
-    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+    @apply outline-hidden ring-2 ring-primary-500 ring-offset-2;
   }
 
   /* Reduced motion preference */
@@ -65,28 +189,36 @@
 }
 
 @layer components {
-  .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-touch min-w-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  /* v4 note: `@apply` only accepts real utilities now, so the variants can
+     no longer `@apply btn` the way they did under v3. The shared base is
+     applied to every variant through a grouped selector instead. All four
+     rules stay in the same `components` layer, so the variant-specific
+     declarations below still win exactly as they did before. */
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-touch min-w-touch focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2;
   }
 
   .btn-primary {
     /* primary-700 (#047857) clears WCAG AA contrast (5:1) with white text;
        primary-600 was 3.76:1, just under the 4.5 threshold for normal-size body text. */
-    @apply btn bg-primary-700 text-white hover:bg-primary-800 focus-visible:ring-primary-500;
+    @apply bg-primary-700 text-white hover:bg-primary-800 focus-visible:ring-primary-500;
   }
 
   .btn-secondary {
-    @apply btn bg-paper text-ink border border-primary-300/70 hover:bg-primary-50 focus-visible:ring-primary-500;
+    @apply bg-paper text-ink border border-primary-300/70 hover:bg-primary-50 focus-visible:ring-primary-500;
   }
 
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500;
+    @apply bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500;
   }
 
   .input {
     /* text-base at mobile keeps iOS from auto-zooming on focus (<16px does);
        brand-tinted border replaces the stock gray. */
-    @apply block w-full bg-white/80 px-3 py-2 border border-primary-200 rounded-lg shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
+    @apply block w-full bg-white/80 px-3 py-2 border border-primary-200 rounded-lg shadow-xs placeholder-gray-500 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
   }
 
   .input-error {

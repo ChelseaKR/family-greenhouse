@@ -264,7 +264,7 @@ export function ChatPage() {
               title={`${budgetPct}% of monthly chat budget used`}
             >
               {budgetPct}% used this month
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-gray-200 sm:w-32">
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-sm bg-gray-200 sm:w-32">
                 <div
                   className={`h-full ${lowBudget ? 'bg-amber-500' : 'bg-primary-600'}`}
                   style={{ width: `${budgetPct}%` }}
@@ -364,7 +364,7 @@ export function ChatPage() {
         {error && (
           <div className="flex justify-start" role="alert">
             <div className="max-w-xl rounded-lg bg-red-50 text-red-900 px-3 py-2 text-sm flex items-start gap-2">
-              <ExclamationTriangleIcon className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <ExclamationTriangleIcon className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           </div>

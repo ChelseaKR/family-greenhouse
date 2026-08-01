@@ -28,7 +28,7 @@ Errors say what happened and what to do next:
 
 ## Palette
 
-The implementation source is `frontend/tailwind.config.js`.
+The implementation source is the `@theme` block in `frontend/src/index.css`.
 
 | Token      | Hex       | Role                                                   |
 | ---------- | --------- | ------------------------------------------------------ |

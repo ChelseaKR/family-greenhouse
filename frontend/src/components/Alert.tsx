@@ -50,7 +50,7 @@ export function Alert({ variant, title, children, className }: AlertProps) {
   return (
     <div className={clsx('rounded-md p-4', config.bgClass, className)} role="alert">
       <div className="flex">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <Icon className={clsx('h-5 w-5', config.iconClass)} aria-hidden="true" />
         </div>
         <div className="ml-3">

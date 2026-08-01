@@ -83,7 +83,7 @@ export function PlantPlaceholder({ className }: { className?: string }) {
           strokeWidth="0.8"
         />
       </svg>
-      <svg className="relative h-[58%] w-[58%] drop-shadow-sm" viewBox="0 0 96 96">
+      <svg className="relative h-[58%] w-[58%] drop-shadow-xs" viewBox="0 0 96 96">
         <path d="M48 77V31" fill="none" stroke="#27500A" strokeWidth="4" strokeLinecap="round" />
         <path
           d="M48 52C29 51 20 39 22 23c18 0 28 10 26 29Z"

@@ -139,7 +139,7 @@ export function HouseholdPage() {
               get them out of, since the collaborative loop is the value. */}
           {household.members.length === 1 && !inviteLink && (
             <div className="mb-4 flex items-center gap-4 rounded-lg border border-primary-100 bg-primary-50 p-4">
-              <EmptyMembers className="h-20 w-auto flex-shrink-0" />
+              <EmptyMembers className="h-20 w-auto shrink-0" />
               <p className="text-sm text-primary-900">
                 You&rsquo;re the only one here. Plant care is more fun (and more reliable) with
                 someone else helping — share an invite link with whoever lives with you.

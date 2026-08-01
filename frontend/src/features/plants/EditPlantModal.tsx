@@ -142,7 +142,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                 <div className="absolute right-0 top-0 pr-4 pt-4">
                   <button
                     type="button"
-                    className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                     onClick={handleClose}
                   >
                     <span className="sr-only">Close</span>

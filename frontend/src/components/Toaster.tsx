@@ -62,14 +62,14 @@ export function Toaster() {
               c.bg
             )}
           >
-            <Icon className={clsx('h-5 w-5 flex-shrink-0', c.iconColor)} aria-hidden="true" />
+            <Icon className={clsx('h-5 w-5 shrink-0', c.iconColor)} aria-hidden="true" />
             <p className={clsx('flex-1 text-sm', c.text)}>{t.message}</p>
             <button
               type="button"
               onClick={() => dismiss(t.id)}
               aria-label="Dismiss notification"
               className={clsx(
-                'inline-flex min-h-touch min-w-touch flex-shrink-0 items-center justify-center rounded opacity-70 transition-opacity hover:opacity-100',
+                'inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-sm opacity-70 transition-opacity hover:opacity-100',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
                 c.text
               )}

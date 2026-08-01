@@ -18,7 +18,7 @@ interface TaskTypeIconProps {
 }
 
 export function TaskTypeIcon({ type, className }: TaskTypeIconProps) {
-  const cls = clsx('h-3.5 w-3.5 flex-shrink-0', className);
+  const cls = clsx('h-3.5 w-3.5 shrink-0', className);
   switch (type) {
     case 'water':
       // Water droplet

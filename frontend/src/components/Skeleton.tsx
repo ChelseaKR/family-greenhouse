@@ -9,7 +9,7 @@ import clsx from 'clsx';
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div
-      className={clsx('motion-safe:animate-pulse rounded bg-primary-100/70', className)}
+      className={clsx('motion-safe:animate-pulse rounded-sm bg-primary-100/70', className)}
       aria-hidden="true"
     />
   );

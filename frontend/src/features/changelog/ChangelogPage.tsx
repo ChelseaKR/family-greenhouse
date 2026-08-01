@@ -223,7 +223,7 @@ const ENTRIES: Entry[] = [
     body: (
       <>
         Press{' '}
-        <kbd className="rounded border border-primary-200/70 bg-parchment px-1 font-sans text-xs">
+        <kbd className="rounded-sm border border-primary-200/70 bg-parchment px-1 font-sans text-xs">
           ⌘K
         </kbd>{' '}
         anywhere to search across plants and tasks. Results split by type; press Enter to jump.

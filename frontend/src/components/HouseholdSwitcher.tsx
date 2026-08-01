@@ -41,14 +41,14 @@ export function HouseholdSwitcher() {
           'list-none cursor-pointer rounded-md px-3 py-2 text-sm',
           'bg-primary-800 text-white hover:bg-primary-900',
           'flex items-center justify-between gap-2',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-white'
+          'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white'
         )}
       >
         <span className="truncate">
           <span className="block text-xs text-primary-200">Active household</span>
           <span className="block font-medium">{active.name}</span>
         </span>
-        <ChevronUpDownIcon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+        <ChevronUpDownIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
       </summary>
       <ul className="mt-1 space-y-1">
         {memberships.map((m) => (

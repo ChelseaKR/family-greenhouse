@@ -34,7 +34,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
       <h2 className="text-sm font-semibold text-ink mb-2">Photo timeline</h2>
       <ul className="flex gap-3 overflow-x-auto pb-2">
         {photos.map((photo) => (
-          <li key={photo.id} className="flex-shrink-0">
+          <li key={photo.id} className="shrink-0">
             <figure className="w-32">
               <img
                 src={photo.imageUrl}

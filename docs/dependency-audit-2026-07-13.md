@@ -62,10 +62,14 @@ Concrete evidence:
 
 ## Deliberate holds
 
-- `#26` / reverted `#149` (Tailwind 4): held at 3.4.19. The repository uses
+- ~~`#26` / reverted `#149` (Tailwind 4): held at 3.4.19. The repository uses
   the Tailwind 3 JavaScript config and `@tailwind` pipeline; the prior direct
   bump broke the locked install and was explicitly reverted by `09357ee`.
-  This needs a real configuration/CSS migration, not a version-only PR.
+  This needs a real configuration/CSS migration, not a version-only PR.~~
+  **Resolved in `#266`** — the hold is lifted by an actual migration:
+  `@tailwindcss/postcss`, `@import "tailwindcss"`, the theme moved from
+  `tailwind.config.js` into a CSS `@theme` block, and the renamed v4
+  utilities updated across the components.
 - TypeScript 7 is newer than the old Dependabot inventory (whose TypeScript 6
   requests are already landed). It remains outside the declared `^6.0.3`
   range and is not silently folded into a lock refresh.

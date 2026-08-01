@@ -127,7 +127,7 @@ export function SharedCarePulse() {
           <button
             type="button"
             onClick={dismissForThirtyDays}
-            className="inline-flex min-h-touch shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-gray-600 transition-colors hover:bg-paper/80 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            className="inline-flex min-h-touch shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-gray-600 transition-colors hover:bg-paper/80 hover:text-ink focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
             aria-label={t('sharedCarePulse.dismissAria')}
           >
             <XMarkIcon className="h-4 w-4" aria-hidden="true" />
@@ -155,7 +155,7 @@ export function SharedCarePulse() {
                 >
                   <span
                     className={clsx(
-                      'relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold shadow-sm transition-colors',
+                      'relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold shadow-xs transition-colors',
                       milestone.completed
                         ? 'border-primary-700 bg-primary-700 text-white'
                         : isCurrent
@@ -207,7 +207,7 @@ export function SharedCarePulse() {
                 context: nextKey === 'sharedCare' ? 'shared_care' : nextKey,
               })
             }
-            className="inline-flex min-h-touch shrink-0 items-center justify-center rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+            className="inline-flex min-h-touch shrink-0 items-center justify-center rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white shadow-xs transition-colors hover:bg-primary-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
           >
             {t(`sharedCarePulse.milestones.${nextKey}.action`)}
           </Link>

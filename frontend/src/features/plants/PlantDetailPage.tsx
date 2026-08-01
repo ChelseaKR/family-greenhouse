@@ -213,7 +213,7 @@ export function PlantDetailPage() {
 
       {/* Plant header */}
       <div className="flex flex-col sm:flex-row gap-6">
-        <div className="w-full sm:w-48 flex-shrink-0 space-y-3">
+        <div className="w-full sm:w-48 shrink-0 space-y-3">
           <div className="h-48 rounded-lg bg-parchment overflow-hidden">
             <PlantImage plant={plant} width={192} height={192} />
           </div>
@@ -691,7 +691,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
         className={clsx(
           'list-none inline-flex w-full items-center justify-center gap-1 px-3 py-2 text-sm font-medium rounded-md min-h-touch min-w-touch cursor-pointer sm:w-auto',
           'bg-paper text-gray-700 border border-primary-200/70 hover:bg-primary-50',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
+          'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
           isSnoozing && 'opacity-50 cursor-wait'
         )}
         aria-label="Snooze task"
@@ -704,7 +704,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
           <li key={opt.label}>
             <button
               type="button"
-              className="flex min-h-touch w-full items-center px-3 py-2 text-sm text-gray-700 hover:bg-parchment/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
+              className="flex min-h-touch w-full items-center px-3 py-2 text-sm text-gray-700 hover:bg-parchment/60 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
               onClick={(e) => {
                 onPick(opt.days);
                 // Close the details popover after clicking.

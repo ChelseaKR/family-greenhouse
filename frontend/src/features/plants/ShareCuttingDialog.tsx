@@ -83,7 +83,7 @@ export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDia
             >
               <Dialog.Panel className="relative w-full transform overflow-hidden rounded-lg bg-paper border border-primary-100/70 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:max-w-lg sm:p-6">
                 <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 sm:mx-0 sm:h-10 sm:w-10">
+                  <div className="mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-100 sm:mx-0 sm:h-10 sm:w-10">
                     <ShareIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
                   </div>
                   <div className="mt-3 w-full text-center sm:ml-4 sm:mt-0 sm:text-left">

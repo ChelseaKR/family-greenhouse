@@ -47,7 +47,7 @@ export function BillingSettings() {
   return (
     <div className="space-y-6">
       <Alert variant="info" className="flex items-start gap-3">
-        <SparklesIcon className="h-5 w-5 flex-shrink-0 mt-0.5 text-primary-700" />
+        <SparklesIcon className="h-5 w-5 shrink-0 mt-0.5 text-primary-700" />
         <div>
           <p className="font-semibold">Paid plan changes are paused</p>
           <p className="mt-1 text-sm">{t('commercialHold.message')}</p>

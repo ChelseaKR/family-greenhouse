@@ -114,7 +114,7 @@ export function ApiKeysSettings() {
           <Alert variant="success" className="mb-4">
             <p className="font-medium">New key created — copy it now, it won't be shown again.</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="min-w-0 flex-1 rounded bg-white px-2 py-1 text-xs font-mono break-all">
+              <code className="min-w-0 flex-1 rounded-sm bg-white px-2 py-1 text-xs font-mono break-all">
                 {createdPlaintext}
               </code>
               <Button
@@ -181,7 +181,7 @@ export function ApiKeysSettings() {
                   <label key={scope} className="flex items-center gap-2 text-sm text-gray-700">
                     <input
                       type="checkbox"
-                      className="rounded border-gray-300 accent-primary-700 text-primary-600 focus:ring-primary-500"
+                      className="rounded-sm border-gray-300 accent-primary-700 text-primary-600 focus:ring-primary-500"
                       checked={scopes.includes(scope)}
                       onChange={() => toggleScope(scope)}
                     />
@@ -235,7 +235,7 @@ export function ApiKeysSettings() {
                     {(key.scopes ?? []).map((scope) => (
                       <span
                         key={scope}
-                        className="inline-flex rounded bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-800"
+                        className="inline-flex rounded-sm bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-800"
                       >
                         {SCOPE_LABELS[scope] ?? scope}
                       </span>

@@ -83,7 +83,7 @@ describe('PageHeader', () => {
   it('places action inline (no extra stacked row) when art is absent', () => {
     renderHeader(<PageHeader title="Plants" action={<button type="button">Add plant</button>} />);
     const actionWrapper = screen.getByRole('button', { name: 'Add plant' }).parentElement;
-    expect(actionWrapper).toHaveClass('flex-shrink-0');
+    expect(actionWrapper).toHaveClass('shrink-0');
     // Without art, there should not be the extra stacked `mt-4 justify-end`
     // row.
     expect(actionWrapper).not.toHaveClass('justify-end');

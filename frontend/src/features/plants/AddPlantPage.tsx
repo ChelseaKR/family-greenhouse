@@ -382,7 +382,7 @@ export function AddPlantPage() {
           <div className="space-y-3">
             <span className="label">Photo (optional)</span>
             <div className="flex items-start gap-4">
-              <div className="h-32 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-parchment">
+              <div className="h-32 w-32 shrink-0 overflow-hidden rounded-lg bg-parchment">
                 {pickedPreview ? (
                   <img
                     src={pickedPreview}
@@ -515,7 +515,7 @@ export function AddPlantPage() {
                 <input
                   id="auto-add-care-tasks"
                   type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-primary-300 text-primary-700 focus:ring-primary-500"
+                  className="mt-1 h-4 w-4 rounded-sm border-primary-300 text-primary-700 focus:ring-primary-500"
                   checked={autoAddCareTasks}
                   onChange={(event) => setAutoAddCareTasks(event.target.checked)}
                 />

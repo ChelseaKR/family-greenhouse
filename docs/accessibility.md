@@ -20,7 +20,7 @@ Four layers, all gating:
 3. **`eslint-plugin-jsx-a11y` at `strict`** (not just `recommended`) — static analysis at lint time catches missing alt text, invalid ARIA, unlabeled controls, etc., and fails the build.
 4. **`jest-axe`** structural checks on shared primitives in the unit suite (`tests/unit/a11y/components.a11y.test.tsx`) — fast feedback in jsdom (contrast, which needs layout, is left to layer 2).
 
-**Target size (2.5.5 AAA):** the shared `Button` enforces a 44×44 CSS-px floor (`min-h-touch`/`min-w-touch`, the `touch` = 44px token in `tailwind.config`); raw interactive controls (view toggles, snooze menu items, the household-switcher add button) carry the same floor. axe does not mechanically check target size, so this is maintained by convention + review.
+**Target size (2.5.5 AAA):** the shared `Button` enforces a 44×44 CSS-px floor (`min-h-touch`/`min-w-touch`, the `--spacing-touch` = 44px token in the `@theme` block of `frontend/src/index.css`); raw interactive controls (view toggles, snooze menu items, the household-switcher add button) carry the same floor. axe does not mechanically check target size, so this is maintained by convention + review.
 
 **Contrast (1.4.6 AAA):** body/helper text uses `gray-600`+ (≥7:1 on white), status/type badges use `text-*-900` on `*-100` tints (≥7:1), placeholders are `gray-500` (AA — placeholders are never the only label, so AAA is not required of them). This is a design-token discipline, not an automated gate — the axe suite enforces AA (`color-contrast`) only; a regression to a lower-contrast AAA token would not fail CI today. Tracked as a gap in the conformance table (README).
 
