@@ -20,12 +20,19 @@ function bitmap(width: number, height: number) {
   return { width, height, close: vi.fn() };
 }
 
+const nativeToBlob = HTMLCanvasElement.prototype.toBlob;
+
 /** Install a canvas whose encoder only knows the types in `encoded`. */
 function installCanvas(options?: { context?: unknown; toBlobThrows?: boolean }) {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
     (options && 'context' in options ? options.context : { drawImage }) as never
   );
-  HTMLCanvasElement.prototype.toBlob = function (
+  // spyOn, not a direct prototype assignment: `vi.restoreAllMocks()` in
+  // afterEach only knows how to undo spies, so assigning straight onto
+  // HTMLCanvasElement.prototype would leave this fake encoder installed for
+  // every test file that runs after this one in the same worker.
+  vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
+    this: HTMLCanvasElement,
     callback: BlobCallback,
     type?: string,
     quality?: number
@@ -38,7 +45,7 @@ function installCanvas(options?: { context?: unknown; toBlobThrows?: boolean }) 
       height: this.height,
     });
     callback(encoded[type ?? ''] ?? null);
-  };
+  });
 }
 
 beforeEach(() => {
@@ -62,6 +69,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  // Guards the spy in installCanvas: a plain `HTMLCanvasElement.prototype.toBlob = ...`
+  // survives restoreAllMocks and would leak this fake encoder into every later
+  // test file sharing the worker.
+  expect(HTMLCanvasElement.prototype.toBlob).toBe(nativeToBlob);
 });
 
 describe('downscaleImage', () => {

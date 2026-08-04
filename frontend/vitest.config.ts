@@ -38,11 +38,15 @@ export default defineConfig({
         '**/sw.ts',
         'dist/**',
       ],
-      // Ratchet (CQ-16, P1-5): measured 2026-08-04 is lines 77.89 /
-      // statements 77.14 / branches 67.65 / functions 68.61 — floors set ~2pp
-      // below that (not jump-cut to the standard's 80x4-perFile target, which
-      // just breeds exclusions). Raise ~5pp per release with a tracked issue;
-      // see README "Standards conformance" (CODE-QUALITY row). Previous rung
+      // Ratchet (CQ-16, P1-5 — both defined in README "Standards conformance",
+      // see its "Finding IDs" note): measured 2026-08-04 is lines 77.89 /
+      // statements 77.14 / branches 67.65 / functions 68.61, reproducible run
+      // to run (PlantNameNursery's spec used to leave its name draw on the
+      // real Math.random, which moved this total by a line/statement/branch
+      // between identical runs). Floors set ~2pp below the measurement (not
+      // jump-cut to the standard's 80x4-perFile target, which just breeds
+      // exclusions). Raise ~5pp per release with a tracked issue; see README
+      // "Standards conformance" (CODE-QUALITY row). Previous rung
       // (2026-07-05): 65 / 64 / 59 / 57 against a 67.34 / 66.75 / 61.46 /
       // 59.04 measurement; this rung came from covering the chat stream
       // parser, the telemetry vitals/error rail, client-side image

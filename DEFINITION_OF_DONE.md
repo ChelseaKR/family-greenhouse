@@ -39,9 +39,12 @@ Auto-gates that run but are **not** in the ruleset's required list (honest note)
 
 **Local parity:** `make verify` (a thin, portable wrapper around
 `npm run verify` at the repo root) = format:check + lint +
-typecheck + test + `npm audit --omit=dev --audit-level=high` + the bare-marker
-and silenced-gates guards — the local mirror of the CI gates that have no
-browser/cloud dependency. Run it before pushing.
+typecheck + `test:coverage` + `npm audit --omit=dev --audit-level=high` + the
+bare-marker and silenced-gates guards — the local mirror of the CI gates that
+have no browser/cloud dependency. It runs `vitest run --coverage` in both
+workspaces, so the coverage floors in `frontend/vitest.config.ts` and
+`backend/vitest.config.ts` fail locally exactly where `Test Frontend` /
+`Test Backend` would fail in CI. Run it before pushing.
 
 ## REVIEW-GATE — human sign-off on the PR
 
