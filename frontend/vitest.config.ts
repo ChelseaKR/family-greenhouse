@@ -38,16 +38,32 @@ export default defineConfig({
         '**/sw.ts',
         'dist/**',
       ],
-      // Ratchet (CQ-16, P1-5): measured 2026-07-05 was lines 67.34 /
-      // statements 66.75 / branches 61.46 / functions 59.04 — floors set ~2pp
-      // below that (not jump-cut to the standard's 80x4-perFile target, which
-      // just breeds exclusions). Raise ~5pp per release with a tracked issue;
-      // see README "Standards conformance" (CODE-QUALITY row).
+      // Ratchet (CQ-16, P1-5 — both defined in README "Standards conformance",
+      // see its "Finding IDs" note): measured 2026-08-04 on the `Test Frontend`
+      // runner (Linux, Node 22 — the gate of record) is lines 77.86 /
+      // statements 77.11 / branches 67.65 / functions 68.61. That measurement
+      // is now stable run to run; PlantNameNursery's spec used to draw names
+      // from the real Math.random, so whether its reroll-retry loop ran moved
+      // this total by a line/statement/branch between identical runs.
+      //
+      // A local run may report one more covered line/statement (77.89 / 77.14)
+      // because `src/i18n/index.ts` takes its localStorage `catch` on some
+      // hosts and not others — a pre-existing host difference, visible in
+      // main's CI runs too, worth 0.03pp and no floor.
+      //
+      // Floors set ~2pp below the measurement (not jump-cut to the standard's
+      // 80x4-perFile target, which just breeds exclusions). Raise ~5pp per
+      // release with a tracked issue; see README "Standards conformance"
+      // (CODE-QUALITY row). Previous rung (2026-07-05): 65 / 64 / 59 / 57
+      // against a 67.34 / 66.75 / 61.46 / 59.04 measurement; this rung came
+      // from covering the chat stream parser, the telemetry vitals/error rail,
+      // client-side image downscaling, the notification wrapper, locale
+      // formatting, UI prefs, and the untested service write paths.
       thresholds: {
-        lines: 65,
-        statements: 64,
-        branches: 59,
-        functions: 57,
+        lines: 76,
+        statements: 75,
+        branches: 65,
+        functions: 66,
       },
     },
   },

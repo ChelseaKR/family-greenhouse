@@ -35,7 +35,8 @@ export default defineConfig({
         '**/*.config.*',
         '**/index.ts',
       ],
-      // Ratchet (CQ-16, P1-5): measured 2026-07-05 was lines 82.84 / statements
+      // Ratchet (CQ-16, P1-5 — both defined in README "Standards conformance",
+      // see its "Finding IDs" note): measured 2026-07-05 was lines 82.84 / statements
       // 82.05 / branches 73.77 / functions 82.27 — these floors are set ~2pp
       // below that measurement (not the standard's 80x4-perFile target,
       // reached honestly rather than jump-cut, which just breeds exclusions).

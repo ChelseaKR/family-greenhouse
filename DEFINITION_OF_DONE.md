@@ -16,7 +16,7 @@ Required status checks (blocking via the `protect-main` ruleset):
 | -------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Lint`                                             | `.github/workflows/ci.yml`     | ESLint zero errors; Prettier `--check`; no bare TODO/FIXME/HACK markers; no silenced test/security/lint gates in workflows; API spec covers every handler route; commitlint |
 | `Type Check`                                       | `ci.yml`                       | `tsc` frontend + backend, zero errors                                                                                                                                       |
-| `Test Frontend`                                    | `ci.yml`                       | Vitest; coverage floors lines 65 / statements 64 / branches 59 / functions 57 (`frontend/vitest.config.ts`)                                                                 |
+| `Test Frontend`                                    | `ci.yml`                       | Vitest; coverage floors lines 76 / statements 75 / branches 65 / functions 66 (`frontend/vitest.config.ts`)                                                                 |
 | `Test Backend`                                     | `ci.yml`                       | Vitest; coverage floors lines 80 / statements 80 / branches 71 / functions 80 (`backend/vitest.config.ts`)                                                                  |
 | `Security Scan`                                    | `ci.yml`                       | `npm audit` on production deps (HIGH+CRITICAL block); Gitleaks (blocking, no `\|\| true`)                                                                                   |
 | `SAST (Semgrep)`                                   | `ci.yml`                       | Semgrep scan, blocking                                                                                                                                                      |
@@ -39,9 +39,12 @@ Auto-gates that run but are **not** in the ruleset's required list (honest note)
 
 **Local parity:** `make verify` (a thin, portable wrapper around
 `npm run verify` at the repo root) = format:check + lint +
-typecheck + test + `npm audit --omit=dev --audit-level=high` + the bare-marker
-and silenced-gates guards — the local mirror of the CI gates that have no
-browser/cloud dependency. Run it before pushing.
+typecheck + `test:coverage` + `npm audit --omit=dev --audit-level=high` + the
+bare-marker and silenced-gates guards — the local mirror of the CI gates that
+have no browser/cloud dependency. It runs `vitest run --coverage` in both
+workspaces, so the coverage floors in `frontend/vitest.config.ts` and
+`backend/vitest.config.ts` fail locally exactly where `Test Frontend` /
+`Test Backend` would fail in CI. Run it before pushing.
 
 ## REVIEW-GATE — human sign-off on the PR
 
