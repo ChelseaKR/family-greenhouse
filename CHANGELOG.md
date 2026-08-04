@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- Frontend coverage floors ratcheted from lines 65 / statements 64 / branches
+  59 / functions 57 to lines 76 / statements 75 / branches 65 / functions 66
+  (`frontend/vitest.config.ts`, CQ-16 / P1-5), backed by new unit coverage for
+  the chat SSE stream parser, the browser telemetry vitals and error rail
+  (including the CLS session-window rule and the per-session error cap),
+  client-side image downscaling, the browser-notification wrapper, locale
+  formatting, the UI-preferences store and its v0→v1 migration, and the
+  previously untested task, household, space, species, climate, sitter, and
+  photo-upload service paths. No production code changed.
+
 ### Fixed
 
 - Removed superseded repository-visibility language from the CI workflow; its

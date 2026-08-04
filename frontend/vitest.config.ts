@@ -38,16 +38,21 @@ export default defineConfig({
         '**/sw.ts',
         'dist/**',
       ],
-      // Ratchet (CQ-16, P1-5): measured 2026-07-05 was lines 67.34 /
-      // statements 66.75 / branches 61.46 / functions 59.04 — floors set ~2pp
+      // Ratchet (CQ-16, P1-5): measured 2026-08-04 is lines 77.89 /
+      // statements 77.14 / branches 67.65 / functions 68.61 — floors set ~2pp
       // below that (not jump-cut to the standard's 80x4-perFile target, which
       // just breeds exclusions). Raise ~5pp per release with a tracked issue;
-      // see README "Standards conformance" (CODE-QUALITY row).
+      // see README "Standards conformance" (CODE-QUALITY row). Previous rung
+      // (2026-07-05): 65 / 64 / 59 / 57 against a 67.34 / 66.75 / 61.46 /
+      // 59.04 measurement; this rung came from covering the chat stream
+      // parser, the telemetry vitals/error rail, client-side image
+      // downscaling, the notification wrapper, locale formatting, UI prefs,
+      // and the untested service write paths.
       thresholds: {
-        lines: 65,
-        statements: 64,
-        branches: 59,
-        functions: 57,
+        lines: 76,
+        statements: 75,
+        branches: 65,
+        functions: 66,
       },
     },
   },
