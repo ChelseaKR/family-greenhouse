@@ -36,18 +36,28 @@ export default defineConfig({
         '**/index.ts',
       ],
       // Ratchet (CQ-16, P1-5 — both defined in README "Standards conformance",
-      // see its "Finding IDs" note): measured 2026-07-05 was lines 82.84 / statements
-      // 82.05 / branches 73.77 / functions 82.27 — these floors are set ~2pp
-      // below that measurement (not the standard's 80x4-perFile target,
+      // see its "Finding IDs" note): measured 2026-08-04 was lines 84.47 /
+      // statements 83.31 / branches 76.01 / functions 84.57 — up from the
+      // 2026-07-05 rung (82.84 / 82.05 / 73.77 / 82.27) purely from coverage
+      // that feature/fix PRs already added since, not from a dedicated
+      // coverage push. Floors set ~2pp below the new measurement, same
+      // methodology as before (not the standard's 80x4-perFile target,
       // reached honestly rather than jump-cut, which just breeds exclusions).
-      // Raise ~5pp per release with a tracked issue; see README "Standards
-      // conformance" (CODE-QUALITY row) and add `perFile: true` once within
-      // 10pp of 80 on every dimension.
+      //
+      // `perFile: true` is NOT safe yet despite the aggregate sitting within
+      // 10pp of 80 on every dimension — per-file coverage is highly uneven
+      // (e.g. `services/householdUsage.ts` measured 0%, `handlers/apiKeys`
+      // ~19%, `services/chatReports.ts` 20% on 2026-08-04), so flipping it on
+      // would fail CI immediately. Revisit once the lagging files are
+      // individually covered, not just once the aggregate looks close.
+      //
+      // Raise again with a tracked issue once the next wave of feature/fix
+      // coverage lands; see README "Standards conformance" (CODE-QUALITY row).
       thresholds: {
-        lines: 80,
-        statements: 80,
-        branches: 71,
-        functions: 80,
+        lines: 82,
+        statements: 81,
+        branches: 74,
+        functions: 82,
       },
     },
   },
