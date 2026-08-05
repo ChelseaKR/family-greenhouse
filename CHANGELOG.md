@@ -31,9 +31,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `test:coverage` rather than plain `test`, so both workspaces' coverage floors
   fail locally at the same point CI's `Test Frontend` / `Test Backend` jobs
   would fail them.
+- Backend coverage floors ratcheted from lines 80 / statements 80 / branches
+  71 / functions 80 to lines 82 / statements 81 / branches 74 / functions 82
+  (`backend/vitest.config.ts`), reflecting coverage that feature/fix PRs
+  already added since the last rung (2026-07-05) rather than a dedicated
+  coverage push. No production or test code changed.
 
 ### Fixed
 
+- README's Code Quality conformance row claimed the backend "clears 80% on
+  all four coverage metrics" — untrue for branches, which measured 73.77% at
+  the 2026-07-05 rung this claim was written against and 76.01% today. The
+  row now states backend branches and all four frontend metrics remain below
+  the 80% target, matching the honest-not-aspirational standard the same
+  section commits to.
 - The plant-name nursery's unit spec pinned its random draw. Previously it used
   the real `Math.random`, so whether the "reroll until the name differs" retry
   ran — and therefore the repo's measured frontend coverage — changed between
