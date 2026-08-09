@@ -26,7 +26,7 @@ describe('activity service', () => {
       householdId: 'hh',
       actorId: 'u1',
       actorName: 'A',
-      payload: { plantId: 'p1' },
+      payload: { plantId: 'p1', plantName: 'Fernie' },
     });
 
     const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
@@ -50,7 +50,7 @@ describe('activity service', () => {
         householdId: 'hh',
         actorId: 'u1',
         actorName: 'A',
-        payload: {},
+        payload: { role: 'member' },
       })
     ).resolves.toBeUndefined();
   });

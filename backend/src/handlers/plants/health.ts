@@ -119,7 +119,12 @@ export const checkPlantHealth = createHandler(
         householdId: user.householdId!,
         actorId: user.userId,
         actorName,
-        payload: { plantId: plant.id, plantName: plant.name, overall: assessment.overall },
+        payload: {
+          plantId: plant.id,
+          plantName: plant.name,
+          overall: assessment.overall,
+          demo: assessment.demo === true,
+        },
       })
       .catch((err) => {
         logger.warn({ err }, 'activity_record_failed');

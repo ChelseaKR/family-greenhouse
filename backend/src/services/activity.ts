@@ -14,34 +14,121 @@ import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 
-export type ActivityType =
-  | 'task.completed'
-  | 'task.snoozed'
-  | 'task.claimed'
-  | 'task.unclaimed'
-  | 'plant.created'
-  | 'plants.imported'
-  | 'plant.deleted'
-  | 'plant.died'
-  | 'plant.gave_away'
-  | 'plant.archived'
-  | 'plant.restored'
-  | 'plant.propagated'
-  | 'plant.shared_accepted'
-  | 'plant.health_checked'
-  | 'photo.uploaded'
-  | 'member.joined'
-  | 'member.left';
+export interface TaskCompletedActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName?: string;
+  taskType: string;
+  notes?: string | null;
+  viaSitter?: boolean;
+}
 
-export interface ActivityEvent<T = unknown> {
+export interface TaskSnoozedActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName: string;
+  taskType: string;
+  days: number;
+  reason: 'rain' | 'frost' | 'heat' | 'other' | null;
+  note: string | null;
+}
+
+export interface TaskAssignmentActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName: string;
+  taskType: string;
+}
+
+export interface PlantIdentityActivityPayload {
+  plantId: string;
+  plantName: string;
+}
+
+export interface PlantLifecycleActivityPayload extends PlantIdentityActivityPayload {
+  previousStatus?: 'active' | 'died' | 'gave_away' | 'archived';
+}
+
+/**
+ * Payload contract keyed by the durable event discriminator. Keeping this as
+ * an explicit map lets both the event envelope and producer input be derived
+ * as discriminated unions, so a type can no longer be paired with another
+ * event's payload by accident.
+ */
+export interface ActivityPayloadByType {
+  'task.completed': TaskCompletedActivityPayload;
+  'task.snoozed': TaskSnoozedActivityPayload;
+  'task.claimed': TaskAssignmentActivityPayload;
+  'task.unclaimed': TaskAssignmentActivityPayload;
+  'plant.created': PlantIdentityActivityPayload;
+  'plants.imported': { count: number };
+  'plant.deleted': PlantIdentityActivityPayload;
+  'plant.died': PlantLifecycleActivityPayload;
+  'plant.gave_away': PlantLifecycleActivityPayload;
+  'plant.archived': PlantLifecycleActivityPayload;
+  'plant.restored': PlantLifecycleActivityPayload;
+  'plant.propagated': PlantIdentityActivityPayload & {
+    parentPlantId: string;
+    parentPlantName: string;
+  };
+  'plant.shared_accepted': PlantIdentityActivityPayload & { fromHouseholdName: string };
+  'plant.health_checked': PlantIdentityActivityPayload & {
+    overall: 'healthy' | 'monitor' | 'concern';
+    demo: boolean;
+  };
+  'photo.uploaded': { plantId: string; photoId: string };
+  'member.joined': { role: 'admin' | 'member' };
+  'member.left': { role?: 'admin' | 'member' };
+}
+
+export type ActivityType = keyof ActivityPayloadByType;
+
+/** Runtime vocabulary used by parity tests and persistence-boundary guards. */
+export const ACTIVITY_TYPES = [
+  'task.completed',
+  'task.snoozed',
+  'task.claimed',
+  'task.unclaimed',
+  'plant.created',
+  'plants.imported',
+  'plant.deleted',
+  'plant.died',
+  'plant.gave_away',
+  'plant.archived',
+  'plant.restored',
+  'plant.propagated',
+  'plant.shared_accepted',
+  'plant.health_checked',
+  'photo.uploaded',
+  'member.joined',
+  'member.left',
+] as const satisfies readonly ActivityType[];
+
+type AssertNever<T extends never> = T;
+export type ActivityTypeListIsComplete = AssertNever<
+  Exclude<ActivityType, (typeof ACTIVITY_TYPES)[number]>
+>;
+
+interface ActivityEventEnvelope {
   id: string;
-  type: ActivityType;
   householdId: string;
   actorId: string;
   actorName: string;
   occurredAt: string;
-  payload: T;
 }
+
+export type ActivityEventByType<T extends ActivityType> = ActivityEventEnvelope & {
+  type: T;
+  payload: ActivityPayloadByType[T];
+};
+
+export type ActivityEvent = {
+  [T in ActivityType]: ActivityEventByType<T>;
+}[ActivityType];
+
+export type RecordActivityInput = {
+  [T in ActivityType]: Omit<ActivityEventByType<T>, 'id' | 'occurredAt'>;
+}[ActivityType];
 
 const MAX_LIMIT = 200;
 
@@ -52,13 +139,7 @@ const MAX_LIMIT = 200;
  * is missing one row," which is far better than a write that succeeded
  * partially.)
  */
-export async function recordActivity<T>(input: {
-  type: ActivityType;
-  householdId: string;
-  actorId: string;
-  actorName: string;
-  payload: T;
-}): Promise<void> {
+export async function recordActivity(input: RecordActivityInput): Promise<void> {
   const id = uuid();
   const now = new Date().toISOString();
   try {
@@ -113,6 +194,10 @@ export async function listActivity(householdId: string, limit = 50): Promise<Act
 
   return (result.Items ?? []).map((item) => {
     if (item.entityType === 'ActivityEvent') {
+      // DynamoDB is a persistence boundary: historical rows predate the
+      // compile-time payload map, so preserve them verbatim. Producers are
+      // checked by RecordActivityInput; the frontend keeps runtime fallbacks
+      // for older/newer rows.
       return {
         id: item.id as string,
         type: item.type as ActivityType,
@@ -121,7 +206,7 @@ export async function listActivity(householdId: string, limit = 50): Promise<Act
         actorName: item.actorName as string,
         occurredAt: item.occurredAt as string,
         payload: item.payload as unknown,
-      };
+      } as ActivityEvent;
     }
     // TaskCompletion legacy shape — fold into the envelope.
     return {

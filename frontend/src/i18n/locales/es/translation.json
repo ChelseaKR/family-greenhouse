@@ -19,6 +19,21 @@
     "daysAgo_other": "hace {{count}} días",
     "daysAgo_many": "{{count}} days ago"
   },
+  "activity": {
+    "aPlant": "una planta",
+    "anotherPlant": "otra planta",
+    "anotherHousehold": "otro hogar",
+    "generic": "{{actor}} realizó una actualización",
+    "imported_one": "{{actor}} importó {{count}} planta",
+    "imported_many": "{{actor}} importó {{count}} plantas",
+    "imported_other": "{{actor}} importó {{count}} plantas",
+    "importedUnknown": "{{actor}} importó plantas",
+    "propagated": "{{actor}} propagó {{plant}} a partir de {{parent}}",
+    "sharedAccepted": "{{actor}} aceptó {{plant}} de {{household}}",
+    "healthChecked": "{{actor}} revisó la salud de las hojas de {{plant}} — {{overall}}",
+    "healthCheckedUnknown": "{{actor}} revisó la salud de las hojas de {{plant}}",
+    "healthDemo": "{{actor}} vio un resultado de demostración de salud foliar para {{plant}} — no se realizó ningún análisis de imagen"
+  },
   "spaces": {
     "all": "Todos los espacios",
     "inside": "Interior",
@@ -533,7 +548,9 @@
     "billing": {
       "usageTitle": "Uso",
       "plantsUsage": "{{n}} de {{max}} plantas",
+      "plantsUsageUnavailable": "— de {{max}} plantas — uso no disponible",
       "membersUsage": "{{n}} de {{max}} miembros",
+      "membersUsageUnavailable": "— de {{max}} miembros — uso no disponible",
       "nativeUnavailable": "Los cambios de plan no están disponibles en la aplicación.",
       "overLimitTitle": "Por encima del límite de tu plan",
       "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite."

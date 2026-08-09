@@ -16,8 +16,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-08-09
+
 ### Changed
 
+- RAG grounding now recognizes care quantities that carry volume, mass,
+  dilution, repetition, and fertilizer-ratio units, verifies unit-aware dose
+  evidence (including `per` and `/` denominators), and records content-free pass
+  telemetry with checked-claim and source counts. Zero-claim passes are now
+  observable instead of looking identical to a substantive verification.
 - Frontend coverage floors ratcheted from lines 65 / statements 64 / branches
   59 / functions 57 to lines 76 / statements 75 / branches 65 / functions 66
   (`frontend/vitest.config.ts`), backed by new unit coverage for the chat SSE
@@ -39,6 +46,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- Household activity now gives every emitted event type a descriptive row,
+  includes imports in the Plants filter, and labels demo leaf-health results
+  as canned rather than durable real assessments. The event renderer and
+  filter exhaustively cover the frontend's declared event union while retaining
+  a safe fallback for older clients that receive a newer event type.
+- Billing usage counters now preserve genuine zeroes while reporting missing
+  or unreadable household counters as unavailable through the additive
+  `usageDetail` response. The legacy `usage` object remains numeric-only and is
+  omitted when incomplete, keeping cached clients safe; current plan meters no
+  longer show unknown usage as `0`, and a known over-limit count still surfaces
+  the post-downgrade warning when the other count is unavailable.
 - README's Code Quality conformance row claimed the backend "clears 80% on
   all four coverage metrics" — untrue for branches, which measured 73.77% at
   the 2026-07-05 rung this claim was written against and 76.01% today. The

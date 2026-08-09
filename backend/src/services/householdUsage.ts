@@ -7,20 +7,22 @@
  * Used by GET /billing/me to surface "n of max" usage so the UI can show
  * meters and an over-limit banner after a downgrade. Deliberately tolerant:
  * legacy households predate the counters and the backfill is lazy, so a
- * missing attribute (or even a failed read) reports 0 rather than erroring —
- * billing/me must never 500 because a counter hasn't been seeded yet.
+ * missing attribute (or even a failed read) reports null rather than erroring
+ * or inventing a zero — billing/me must never 500 because a counter hasn't
+ * been seeded yet, but callers must still be able to distinguish "none" from
+ * "not known".
  */
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 
 export interface HouseholdCounters {
-  plantCount: number;
-  memberCount: number;
+  plantCount: number | null;
+  memberCount: number | null;
 }
 
-function asCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+function asCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 export async function getHouseholdCounters(householdId: string): Promise<HouseholdCounters> {
@@ -31,12 +33,19 @@ export async function getHouseholdCounters(householdId: string): Promise<Househo
         Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
       })
     );
-    return {
+    const counters: HouseholdCounters = {
       plantCount: asCount(result.Item?.plantCount),
       memberCount: asCount(result.Item?.memberCount),
     };
+    const unavailableCounters = (['plantCount', 'memberCount'] as const).filter(
+      (counter) => counters[counter] === null
+    );
+    if (unavailableCounters.length > 0) {
+      logger.warn({ householdId, unavailableCounters }, 'household_counters_unseeded');
+    }
+    return counters;
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'household_counters_read_failed');
-    return { plantCount: 0, memberCount: 0 };
+    return { plantCount: null, memberCount: null };
   }
 }

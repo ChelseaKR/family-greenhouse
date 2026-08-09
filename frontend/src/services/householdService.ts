@@ -159,32 +159,116 @@ export interface DailyAnalytics {
   series: Array<{ date: string; count: number }>;
 }
 
+export interface TaskCompletedActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName?: string;
+  taskType: string;
+  notes?: string | null;
+  viaSitter?: boolean;
+}
+
+export interface TaskSnoozedActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName: string;
+  taskType: string;
+  days: number;
+  reason: 'rain' | 'frost' | 'heat' | 'other' | null;
+  note: string | null;
+}
+
+export interface TaskAssignmentActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName: string;
+  taskType: string;
+}
+
+export interface PlantIdentityActivityPayload {
+  plantId: string;
+  plantName: string;
+}
+
+export interface PlantLifecycleActivityPayload extends PlantIdentityActivityPayload {
+  previousStatus?: 'active' | 'died' | 'gave_away' | 'archived';
+}
+
 /**
- * Unified activity envelope. The `type` discriminator drives which fields
- * are present in `payload`; the renderer pattern-matches on it.
+ * Payload contract keyed by the durable event discriminator. The API client
+ * and dashboard renderer both consume the discriminated union derived from
+ * this map, while their runtime fallbacks still tolerate older or newer rows.
  */
-export interface ActivityEvent {
+export interface ActivityPayloadByType {
+  'task.completed': TaskCompletedActivityPayload;
+  'task.snoozed': TaskSnoozedActivityPayload;
+  'task.claimed': TaskAssignmentActivityPayload;
+  'task.unclaimed': TaskAssignmentActivityPayload;
+  'plant.created': PlantIdentityActivityPayload;
+  'plants.imported': { count: number };
+  'plant.deleted': PlantIdentityActivityPayload;
+  'plant.died': PlantLifecycleActivityPayload;
+  'plant.gave_away': PlantLifecycleActivityPayload;
+  'plant.archived': PlantLifecycleActivityPayload;
+  'plant.restored': PlantLifecycleActivityPayload;
+  'plant.propagated': PlantIdentityActivityPayload & {
+    parentPlantId: string;
+    parentPlantName: string;
+  };
+  'plant.shared_accepted': PlantIdentityActivityPayload & { fromHouseholdName: string };
+  'plant.health_checked': PlantIdentityActivityPayload & {
+    overall: 'healthy' | 'monitor' | 'concern';
+    demo: boolean;
+  };
+  'photo.uploaded': { plantId: string; photoId: string };
+  'member.joined': { role: 'admin' | 'member' };
+  'member.left': { role?: 'admin' | 'member' };
+}
+
+export type ActivityType = keyof ActivityPayloadByType;
+
+/** Runtime vocabulary kept in mechanical parity with the backend list. */
+export const ACTIVITY_TYPES = [
+  'task.completed',
+  'task.snoozed',
+  'task.claimed',
+  'task.unclaimed',
+  'plant.created',
+  'plants.imported',
+  'plant.deleted',
+  'plant.died',
+  'plant.gave_away',
+  'plant.archived',
+  'plant.restored',
+  'plant.propagated',
+  'plant.shared_accepted',
+  'plant.health_checked',
+  'photo.uploaded',
+  'member.joined',
+  'member.left',
+] as const satisfies readonly ActivityType[];
+
+type AssertNever<T extends never> = T;
+export type ActivityTypeListIsComplete = AssertNever<
+  Exclude<ActivityType, (typeof ACTIVITY_TYPES)[number]>
+>;
+
+interface ActivityEventEnvelope {
   id: string;
-  type:
-    | 'task.completed'
-    | 'task.snoozed'
-    | 'task.claimed'
-    | 'task.unclaimed'
-    | 'plant.created'
-    | 'plant.deleted'
-    | 'plant.died'
-    | 'plant.gave_away'
-    | 'plant.archived'
-    | 'plant.restored'
-    | 'photo.uploaded'
-    | 'member.joined'
-    | 'member.left';
   householdId: string;
   actorId: string;
   actorName: string;
   occurredAt: string;
-  payload: Record<string, unknown>;
 }
+
+export type ActivityEventByType<T extends ActivityType> = ActivityEventEnvelope & {
+  type: T;
+  payload: ActivityPayloadByType[T];
+};
+
+export type ActivityEvent = {
+  [T in ActivityType]: ActivityEventByType<T>;
+}[ActivityType];
 
 export interface Membership {
   householdId: string;

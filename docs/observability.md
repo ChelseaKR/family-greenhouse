@@ -91,6 +91,23 @@ responses are operationally different from 5xx.
 
 Useful Logs Insights queries:
 
+To separate substantive RAG grounding passes from answers where the
+deterministic guard recognized no quantitative claim, query the chat Lambda log
+group:
+
+```text
+fields @timestamp, claimsChecked, sourceCount, conversationId
+| filter msg = "chat_grounding_checked"
+| stats count(*) as passes by claimsChecked
+| sort claimsChecked asc
+```
+
+The `claimsChecked = 0` row is an observability signal, not a failure by itself:
+qualitative answers may legitimately contain nothing this guard is designed to
+inspect. Investigate a sustained shift alongside request mix and manual review;
+the current offline evaluation suite cannot explain it, and answer or source
+text must never be added to this log.
+
 ```text
 fields @timestamp, routeKey, status, responseLatency, requestId
 | filter routeKey != "GET /health" and status >= 500

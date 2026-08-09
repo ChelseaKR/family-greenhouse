@@ -69,10 +69,11 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
 });
 
 // GET /billing/me
-// Returns the subscription plus current usage against the plan's caps
-// ({plantCount, maxPlants, memberCount, maxMembers}) so the UI can render
-// usage meters and an over-limit notice after a downgrade. Counters missing
-// from legacy METADATA rows read as 0 (see services/householdUsage.ts).
+// Returns the subscription plus current usage against the plan's caps so the
+// UI can render meters and an over-limit notice after a downgrade. The legacy
+// `usage` object remains numeric-only for rolling-deploy/PWA compatibility and
+// is omitted if either counter is unknown. `usageDetail` is the additive,
+// nullable source of truth for current clients.
 export const getCurrentSubscription = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -81,14 +82,25 @@ export const getCurrentSubscription = createHandler(
       getHouseholdCounters(user.householdId!),
     ]);
     const plan = getPlan(sub.planId);
+    const usageDetail = {
+      plantCount: counters.plantCount,
+      maxPlants: plan.maxPlants,
+      memberCount: counters.memberCount,
+      maxMembers: plan.maxMembers,
+    };
+    const usage =
+      counters.plantCount !== null && counters.memberCount !== null
+        ? {
+            plantCount: counters.plantCount,
+            maxPlants: plan.maxPlants,
+            memberCount: counters.memberCount,
+            maxMembers: plan.maxMembers,
+          }
+        : undefined;
     return successResponse({
       ...sub,
-      usage: {
-        plantCount: counters.plantCount,
-        maxPlants: plan.maxPlants,
-        memberCount: counters.memberCount,
-        maxMembers: plan.maxMembers,
-      },
+      ...(usage ? { usage } : {}),
+      usageDetail,
     });
   }
 )

@@ -23,5 +23,6 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 | [0005](0005-npm-workspaces-monorepo.md)              | npm-workspaces monorepo layout             | Accepted |
 | [0006](0006-standards-applicability-declarations.md) | Standards applicability declarations       | Accepted |
 | [0007](0007-i18n-json-catalogs-native-format.md)     | i18n: JSON catalogs, i18next-native format | Accepted |
+| [0008](0008-unit-aware-rag-grounding.md)             | Unit-aware quantitative RAG grounding      | Accepted |
 
 > Several earlier decisions (Cognito for auth, React+Vite+TanStack Query, gated external integrations) are documented inline in `docs/architecture.md` / `docs/strategy-review.md` and could be backfilled as ADRs when next touched.

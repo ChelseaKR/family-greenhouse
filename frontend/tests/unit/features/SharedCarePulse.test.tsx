@@ -23,7 +23,7 @@ function completion(actorId: string, occurredAt: string): ActivityEvent {
     actorId,
     actorName: actorId,
     occurredAt,
-    payload: {},
+    payload: { taskId: 'task-1', plantId: 'plant-1', taskType: 'water' },
   };
 }
 

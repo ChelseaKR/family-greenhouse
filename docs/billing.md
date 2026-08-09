@@ -70,6 +70,47 @@ The "Upgrade to X" button on `BillingSettings` does:
 
 The portal flow ("Manage subscription") is the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI.
 
+## Usage response contract
+
+`GET /billing/me` returns the household's subscription state and two usage
+representations during the compatibility window:
+
+| Field         | Presence                          | Counter types    | Client contract                                                                |
+| ------------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------ |
+| `usageDetail` | Always                            | `number \| null` | Source of truth for current clients; `null` means unavailable, never zero      |
+| `usage`       | Only when both counters are known | `number`         | Legacy shape for cached/older clients that do not understand nullable counters |
+
+Both objects carry `plantCount`, `maxPlants`, `memberCount`, and `maxMembers`.
+The plan caps are always known. A genuine zero remains `0`; a missing, invalid,
+or unreadable metadata counter becomes `null` in `usageDetail`. If either
+counter is unknown, the server omits `usage` entirely so a numeric-only client
+does not coerce unknown data into a zero-value meter.
+
+When both counters are known, the two representations are identical:
+
+```json
+{
+  "planId": "seedling",
+  "usage": { "plantCount": 4, "maxPlants": 10, "memberCount": 2, "maxMembers": 6 },
+  "usageDetail": { "plantCount": 4, "maxPlants": 10, "memberCount": 2, "maxMembers": 6 }
+}
+```
+
+Partial knowledge is preserved per field, while the legacy object is omitted:
+
+```json
+{
+  "planId": "seedling",
+  "usageDetail": { "plantCount": 10, "maxPlants": 10, "memberCount": null, "maxMembers": 6 }
+}
+```
+
+New clients prefer `usageDetail` and fall back to `usage` when talking to an
+older backend. They evaluate each known counter independently, so an unknown
+member count neither creates an over-limit warning nor hides a known plant
+overage. The machine-readable contract is in
+[`api-spec.yaml`](api-spec.yaml).
+
 ## Backend implementation
 
 `backend/src/services/billing.ts` is the single billing service. Key surfaces:
@@ -165,6 +206,14 @@ second activation path. Retained Stripe mechanics are covered with isolated
 unit mocks; do not point development UI at an external billing environment
 while the hold remains active.
 
+For `GET /billing/me`, the local server computes plant and member totals from
+its in-memory records. Those reads have no unseeded or unavailable state, so
+local responses include both `usage` and `usageDetail` with the same numeric
+values. This is an intentional parity limit, not a claim that production
+counters are always available. The nullable and partial-counter paths are
+covered by the household-usage service, billing-handler, and frontend billing
+tests instead of a synthetic local-server failure switch.
+
 ## Plan caps and downgrades
 
 If a household downgrades from Greenhouse → Seedling and they have 200 plants,
@@ -187,7 +236,9 @@ Invoice access goes through the Stripe Customer Portal. We don't ingest invoice 
 ## Testing
 
 - `tests/unit/services/billing.test.ts` — pure tests of `deltaForStripeEvent` for every event type, plus `getHouseholdSubscription` defaults
-- `tests/integration/local-server.test.ts` — `describe('billing')` and `describe('plan limits')` blocks exercise checkout, plan-flip, plant-cap-402 against the real handlers via supertest
+- `tests/unit/services/householdUsage.test.ts` and `tests/unit/handlers/billing.test.ts` — genuine-zero, partial/invalid counter, read-failure, and compatibility response shapes
+- `frontend/tests/unit/features/BillingSettings.test.tsx` — nullable meters, legacy fallback, and independent over-limit evaluation
+- `tests/integration/local-server.test.ts` — `describe('billing')` and `describe('plan limits')` blocks exercise checkout, local `usage`/`usageDetail` parity, plan-flip, and plant-cap-402 via supertest
 
 The webhook signature verification is _not_ unit-tested here because mocking `stripe.webhooks.constructEvent` would just be testing our mock. We rely on Stripe's official typings + the `deltaForStripeEvent` test coverage.
 

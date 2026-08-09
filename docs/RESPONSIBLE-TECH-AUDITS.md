@@ -1,6 +1,8 @@
 # Responsible-Tech Audits — family-greenhouse
 
-Instantiates `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md`. Last regenerated: 2026-07-13 (baseline created 2026-07-05; controls re-verified and documented gaps drained 2026-07-13).
+Instantiates `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md`. Last regenerated:
+2026-08-09 (baseline created 2026-07-05; quantitative grounding scope and
+observability re-verified 2026-08-09).
 
 This is the detail layer behind the README's `## Standards conformance` table. Where a control needs a number or a mechanical gate, it's owned by the sibling standard and only referenced here (per the framework's "reference, don't repeat" rule).
 
@@ -53,7 +55,7 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 **Findings:** Every chat answer is attributable to either a tool call (the user's own data — inherently sourced) or the RAG corpus (`search_care_knowledge` → `backend/src/data/plant-care-corpus/`). Model card: [`model-card.md`](../model-card.md).
 
 - **Commitment:** model card exists with intended/out-of-scope use, known failure modes, and eval-baseline reference. The persistent chat composer footer says "AI-generated — verify before acting," remains visible throughout the conversation, and is asserted in the authenticated responsive Playwright flow (`responsive-ux.spec.ts`).
-- **Gate:** AUTO-GATE — the citation/grounding guard is unit-tested and wired into the live `turnEvents` RAG path. It checks every quantitative token in the completed answer against retrieved spans before persistence or delivery; a failed answer is replaced by a safe verification message. RAG streaming text is held until the same guard passes, with sync and streaming regression tests. The deterministic starter benchmark still checks retrieval recall only; the full live-model scoring waiver below remains in force.
+- **Gate:** AUTO-GATE — the citation/grounding guard is unit-tested and wired into the live `turnEvents` RAG path. It checks recognized care-relevant quantitative claims (frequency, percentage, temperature, duration, length, volume, mass, dose/dilution, repetition, and fertilizer ratios) against retrieved spans before persistence or delivery; a failed answer is replaced by a safe verification message. RAG streaming text is held until the same guard passes, with sync and streaming regression tests. Content-free pass telemetry distinguishes substantive checks from zero-recognized-claim passes; the guard remains a selective heuristic rather than semantic entailment. The deterministic starter benchmark still checks retrieval recall only; the full live-model scoring waiver below remains in force. See [ADR 0008](adr/0008-unit-aware-rag-grounding.md).
 
 ## E. Accessibility audit
 
@@ -89,7 +91,7 @@ AI-Evaluation-Standard: APPLIES (tiers: tool-use + RAG, citation/grounding guard
 >
 > The following AI-EVALUATION-STANDARD gates are **not yet fully wired** and are explicitly waived, not silently skipped, until the expiry date above:
 >
-> - **§1 full RAGAS/DeepEval three-layer metric suite** (faithfulness ≥0.80, context recall/precision, answer relevancy, citation accuracy, hallucination rate, refusal correctness, per-segment breakdown, TruthfulQA drift). This standard's reference tooling is Python (`uv run pytest`); this is a Node/TypeScript monorepo. **What exists instead:** a starter benchmark (`evals/benchmark.jsonl`, 22 questions across all 11 corpus articles — the standard's target is 100–500) and a live citation/grounding guard (`backend/src/services/chat/groundingGuard.ts` + sync/stream tests) that checks retrieved context and blocks unsupported numeric care claims before delivery. This is a real, CI-gated starter, **not** the full RAGAS metric suite — no faithfulness/hallucination/refusal scoring against live model output exists yet, because that requires calling live Bedrock, which is out of scope for an offline CI gate without a dedicated eval-run budget and is not something this remediation pass executes against real AWS infrastructure.
+> - **§1 full RAGAS/DeepEval three-layer metric suite** (faithfulness ≥0.80, context recall/precision, answer relevancy, citation accuracy, hallucination rate, refusal correctness, per-segment breakdown, TruthfulQA drift). This standard's reference tooling is Python (`uv run pytest`); this is a Node/TypeScript monorepo. **What exists instead:** a 134-item starter benchmark (`evals/benchmark.jsonl`) across the 11 corpus articles and labeled adversarial classes, plus a live citation/grounding guard (`backend/src/services/chat/groundingGuard.ts` + sync/stream tests) that checks retrieved context and blocks unsupported recognized quantitative care claims before delivery. This is a real, CI-gated starter, **not** the full RAGAS metric suite — no faithfulness/hallucination/refusal scoring against live model output exists yet, because that requires calling live Bedrock, which is out of scope for an offline CI gate without a dedicated eval-run budget and is not something this remediation pass executes against real AWS infrastructure.
 > - **§2 red-team / Promptfoo OWASP-LLM scan + Garak baseline.** Partially addressed 2026-07-17. What now exists: a **structured, mapped, CI-gated injection-corpus exercise** — `evals/redteam/injection-corpus.json` (9 payloads tagged OWASP LLM01/02/06) run through the real tool executors + model-boundary sanitizer by `backend/tests/unit/services/chatRedteamInjection.test.ts`, asserting household-scope, PII-redaction, and write-gate invariants hold under injection; dated report in `docs/audits/red-team-2026-07-17.md`. What is **still not built** (this waiver bullet remains in force for these): live-model refusal/no-fabrication scoring against real Bedrock output, a Promptfoo OWASP LLM01–10 config against the mock chat path, and a Garak baseline. The offline exercise proves the _data layer_ can't be made to leak PII or cross household boundaries; it does not and cannot prove the _model's_ response behavior, which needs the ⛔USER-triggered live eval job.
 > - **§3 judge calibration.** N/A — no LLM-as-judge is in use (no automated grading of chat output by a second model).
 > - **§6 governance:** `docs/audits/ai-risk-register.md` and `docs/audits/eu-ai-act-classification.md` **are** committed as of this pass (see below). `docs/audits/iso42001-soa.md` and a feature-level `docs/audits/ai-impact-assessment-chat.md` are **not** — tracked as follow-on gaps, same expiry.
@@ -117,4 +119,6 @@ See `evals/eval-baseline.json` and `evals/README.md` for the full method and hon
 
 ---
 
-Last verified: 2026-07-13 · Recheck cadence: quarterly, and immediately on any Bedrock model swap, system-prompt rewrite, or new tool added to the chat tool registry.
+Last verified: 2026-08-09 · Recheck cadence: quarterly, and immediately on any
+Bedrock model swap, system-prompt rewrite, grounding-guard change, or new tool
+added to the chat tool registry.

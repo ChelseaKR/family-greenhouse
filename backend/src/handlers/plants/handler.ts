@@ -251,28 +251,34 @@ export const createPlant = createHandler(
     // A create WITH a parent records the more specific 'plant.propagated'
     // (instead of, not in addition to, 'plant.created' — one feed row per
     // create) so the feed can tell the propagation story.
-    activity
-      .recordActivity({
-        type: parentPlant ? 'plant.propagated' : 'plant.created',
-        householdId: user.householdId!,
-        actorId: user.userId,
-        actorName: await resolveActorName(user.householdId!, user.userId),
-        payload: parentPlant
-          ? {
-              plantId: plant.id,
-              plantName: plant.name,
-              parentPlantId: parentPlant.id,
-              parentPlantName: parentPlant.name,
-            }
-          : { plantId: plant.id, plantName: plant.name },
-      })
-      .catch((err) => {
-        // Activity-stream rows are advisory, not load-bearing — losing one
-        // doesn't affect correctness of the underlying mutation. Surfacing
-        // the failure as a warn keeps "DDB is degrading" visible in
-        // CloudWatch before the next mutation also fails.
-        logger.warn({ err }, 'activity_record_failed');
-      });
+    const actorName = await resolveActorName(user.householdId!, user.userId);
+    const activityInput: activity.RecordActivityInput = parentPlant
+      ? {
+          type: 'plant.propagated',
+          householdId: user.householdId!,
+          actorId: user.userId,
+          actorName,
+          payload: {
+            plantId: plant.id,
+            plantName: plant.name,
+            parentPlantId: parentPlant.id,
+            parentPlantName: parentPlant.name,
+          },
+        }
+      : {
+          type: 'plant.created',
+          householdId: user.householdId!,
+          actorId: user.userId,
+          actorName,
+          payload: { plantId: plant.id, plantName: plant.name },
+        };
+    activity.recordActivity(activityInput).catch((err) => {
+      // Activity-stream rows are advisory, not load-bearing — losing one
+      // doesn't affect correctness of the underlying mutation. Surfacing
+      // the failure as a warn keeps "DDB is degrading" visible in
+      // CloudWatch before the next mutation also fails.
+      logger.warn({ err }, 'activity_record_failed');
+    });
 
     return createdResponse(plant);
   }
@@ -460,27 +466,29 @@ export const updatePlant = createHandler(
     // restore are operational events; died/gave-away additionally feed the
     // survival metric. Best-effort, same as plant.created.
     if (validatedBody.status && lifecycleBefore?.status !== plant.status) {
-      const lifecycleType = {
-        active: 'plant.restored',
-        archived: 'plant.archived',
-        died: 'plant.died',
-        gave_away: 'plant.gave_away',
-      }[validatedBody.status] as activity.ActivityType;
-      activity
-        .recordActivity({
-          type: lifecycleType,
-          householdId: user.householdId!,
-          actorId: user.userId,
-          actorName: await resolveActorName(user.householdId!, user.userId),
-          payload: {
-            plantId: plant.id,
-            plantName: plant.name,
-            previousStatus: lifecycleBefore?.status,
-          },
-        })
-        .catch((err) => {
-          logger.warn({ err }, 'activity_record_failed');
-        });
+      const actorName = await resolveActorName(user.householdId!, user.userId);
+      const eventBase = {
+        householdId: user.householdId!,
+        actorId: user.userId,
+        actorName,
+        payload: {
+          plantId: plant.id,
+          plantName: plant.name,
+          previousStatus: lifecycleBefore?.status,
+        },
+      };
+      const lifecycleActivityByStatus = {
+        active: { ...eventBase, type: 'plant.restored' },
+        archived: { ...eventBase, type: 'plant.archived' },
+        died: { ...eventBase, type: 'plant.died' },
+        gave_away: { ...eventBase, type: 'plant.gave_away' },
+      } satisfies Record<
+        'active' | 'died' | 'gave_away' | 'archived',
+        activity.RecordActivityInput
+      >;
+      activity.recordActivity(lifecycleActivityByStatus[validatedBody.status]).catch((err) => {
+        logger.warn({ err }, 'activity_record_failed');
+      });
     }
 
     return successResponse(plant);
