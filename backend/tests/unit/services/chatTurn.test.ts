@@ -98,6 +98,7 @@ import * as plantService from '../../../src/services/plantService.js';
 import * as climateService from '../../../src/services/climate.js';
 import * as householdService from '../../../src/services/householdService.js';
 import { searchCorpus } from '../../../src/services/chat/corpus.js';
+import { logger } from '../../../src/utils/logger.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -390,6 +391,108 @@ describe('runChatTurn', () => {
     const persistedAnswer = vi.mocked(appendMessage).mock.calls.at(-1)?.[1];
     expect(persistedAnswer?.content).toEqual([{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }]);
     expect(JSON.stringify(persistedAnswer)).not.toContain('92%');
+  });
+
+  it('logs a grounded pass with claim and source counts, including a zero-claim pass', async () => {
+    const infoSpy = vi.spyOn(logger, 'info');
+    vi.mocked(searchCorpus).mockResolvedValueOnce([
+      {
+        articleTitle: 'Lighting',
+        sectionTitle: 'Indirect light',
+        source: 'light-requirements.md',
+        text: 'Bright indirect light suits many tropical houseplants.',
+        score: 0.92,
+      },
+    ]);
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu-rag-observability',
+            name: 'search_care_knowledge',
+            input: { query: 'tropical plant lighting' },
+          },
+        ],
+        stopReason: 'tool_use',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'Bright indirect light is a good starting point.' }],
+        stopReason: 'end_turn',
+        inputTokens: 120,
+        outputTokens: 15,
+        costUsd: 0.0004,
+      });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'What light should I provide?',
+    });
+
+    expect(result.assistantText).toBe('Bright indirect light is a good starting point.');
+    expect(infoSpy).toHaveBeenCalledWith(
+      {
+        conversationId: 'conv-1',
+        claimsChecked: 0,
+        sourceCount: 1,
+      },
+      'chat_grounding_checked'
+    );
+  });
+
+  it('logs a grounded quantitative pass with a nonzero checked-claim count', async () => {
+    const infoSpy = vi.spyOn(logger, 'info');
+    vi.mocked(searchCorpus).mockResolvedValueOnce([
+      {
+        articleTitle: 'Humidity',
+        sectionTitle: 'Tropicals',
+        source: 'humidity-tropicals.md',
+        text: 'Calatheas prefer at least 50% humidity.',
+        score: 0.92,
+      },
+    ]);
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu-rag-quantitative-observability',
+            name: 'search_care_knowledge',
+            input: { query: 'calathea humidity' },
+          },
+        ],
+        stopReason: 'tool_use',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'Aim for at least 50% humidity.' }],
+        stopReason: 'end_turn',
+        inputTokens: 120,
+        outputTokens: 15,
+        costUsd: 0.0004,
+      });
+
+    const result = await runChatTurn({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'What humidity does a calathea need?',
+    });
+
+    expect(result.assistantText).toBe('Aim for at least 50% humidity.');
+    expect(infoSpy).toHaveBeenCalledWith(
+      {
+        conversationId: 'conv-1',
+        claimsChecked: 1,
+        sourceCount: 1,
+      },
+      'chat_grounding_checked'
+    );
   });
 
   it('accepts a current authoritative tool number when historical RAG keeps the guard active', async () => {

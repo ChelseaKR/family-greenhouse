@@ -18,6 +18,20 @@
     "daysAgo_one": "{{count}} day ago",
     "daysAgo_other": "{{count}} days ago"
   },
+  "activity": {
+    "aPlant": "a plant",
+    "anotherPlant": "another plant",
+    "anotherHousehold": "another household",
+    "generic": "{{actor}} made an update",
+    "imported_one": "{{actor}} imported {{count}} plant",
+    "imported_other": "{{actor}} imported {{count}} plants",
+    "importedUnknown": "{{actor}} imported plants",
+    "propagated": "{{actor}} propagated {{plant}} from {{parent}}",
+    "sharedAccepted": "{{actor}} accepted {{plant}} from {{household}}",
+    "healthChecked": "{{actor}} ran a leaf-health check on {{plant}} — {{overall}}",
+    "healthCheckedUnknown": "{{actor}} ran a leaf-health check on {{plant}}",
+    "healthDemo": "{{actor}} viewed a demo leaf-health result for {{plant}} — no image analysis was performed"
+  },
   "spaces": {
     "all": "All spaces",
     "inside": "Inside",
@@ -520,7 +534,9 @@
     "billing": {
       "usageTitle": "Usage",
       "plantsUsage": "{{n}} of {{max}} plants",
+      "plantsUsageUnavailable": "— of {{max}} plants — usage unavailable",
       "membersUsage": "{{n}} of {{max}} members",
+      "membersUsageUnavailable": "— of {{max}} members — usage unavailable",
       "nativeUnavailable": "Plan changes aren't available in the app.",
       "overLimitTitle": "Over your plan limit",
       "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit."

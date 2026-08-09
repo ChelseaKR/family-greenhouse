@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { SparklesIcon } from '@heroicons/react/24/outline';
-import { billingService, isOverPlanLimit, PlanUsage } from '@/services/billingService';
+import {
+  billingService,
+  isOverPlanLimit,
+  resolvePlanUsage,
+  type PlanUsageDetail,
+} from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
@@ -39,7 +44,7 @@ export function BillingSettings() {
   // Fail closed if an old or malformed API response omits the status field.
   const paymentsAvailable = plansQuery.data?.paymentsAvailable === true;
   const currentPlanId = subQuery.data?.planId ?? 'seedling';
-  const usage = subQuery.data?.usage;
+  const usage = resolvePlanUsage(subQuery.data);
   // Genuinely over the plan caps — only possible after a downgrade. Reads,
   // edits, and deletes all keep working; only adding is blocked server-side.
   const overLimit = isOverPlanLimit(usage);
@@ -90,44 +95,69 @@ export function BillingSettings() {
 /**
  * Ambient "n of max" meters for the household's plan caps. Bars turn red when
  * over the cap (post-downgrade) — purely informational, the server enforces.
+ * Unknown counters get explicit text and no bar, so unavailable data cannot
+ * look like a genuine zero.
  */
-function UsageMeters({ usage }: { usage: PlanUsage }) {
+function UsageMeters({ usage }: { usage: PlanUsageDetail }) {
   const { t } = useTranslation();
   const meters = [
     {
-      label: t('settings.billing.plantsUsage', { n: usage.plantCount, max: usage.maxPlants }),
+      key: 'plants',
+      label:
+        usage.plantCount === null
+          ? t('settings.billing.plantsUsageUnavailable', { max: usage.maxPlants })
+          : t('settings.billing.plantsUsage', {
+              n: usage.plantCount,
+              max: usage.maxPlants,
+            }),
       count: usage.plantCount,
       max: usage.maxPlants,
     },
     {
-      label: t('settings.billing.membersUsage', { n: usage.memberCount, max: usage.maxMembers }),
+      key: 'members',
+      label:
+        usage.memberCount === null
+          ? t('settings.billing.membersUsageUnavailable', { max: usage.maxMembers })
+          : t('settings.billing.membersUsage', {
+              n: usage.memberCount,
+              max: usage.maxMembers,
+            }),
       count: usage.memberCount,
       max: usage.maxMembers,
     },
   ];
   return (
-    <div className="mt-4 space-y-3" data-testid="usage-meters">
-      <p className="text-sm font-medium text-gray-700">{t('settings.billing.usageTitle')}</p>
-      {meters.map((m) => {
-        const over = m.count > m.max;
-        const pct = m.max > 0 ? Math.min(100, Math.round((m.count / m.max) * 100)) : 0;
-        return (
-          <div key={m.label}>
-            <p className={clsx('text-xs', over ? 'text-red-600 font-medium' : 'text-gray-600')}>
-              {m.label}
-            </p>
-            <div
-              className="mt-1 h-1.5 w-full max-w-xs rounded-full bg-primary-100/60"
-              role="presentation"
-            >
-              <div
-                className={clsx('h-1.5 rounded-full', over ? 'bg-red-500' : 'bg-primary-500')}
-                style={{ width: `${pct}%` }}
-              />
+    <div className="mt-4" data-testid="usage-meters">
+      <p id="billing-usage-title" className="text-sm font-medium text-gray-700">
+        {t('settings.billing.usageTitle')}
+      </p>
+      <div className="mt-3 space-y-3" role="list" aria-labelledby="billing-usage-title">
+        {meters.map((m) => {
+          const available = m.count !== null;
+          const over = m.count !== null && m.count > m.max;
+          const pct =
+            m.count !== null && m.max > 0 ? Math.min(100, Math.round((m.count / m.max) * 100)) : 0;
+          return (
+            <div key={m.key} role="listitem" data-testid={`usage-meter-${m.key}`}>
+              <p className={clsx('text-xs', over ? 'text-red-600 font-medium' : 'text-gray-600')}>
+                {m.label}
+              </p>
+              {available && (
+                <div
+                  className="mt-1 h-1.5 w-full max-w-xs rounded-full bg-primary-100/60"
+                  role="presentation"
+                  data-testid={`usage-meter-${m.key}-bar`}
+                >
+                  <div
+                    className={clsx('h-1.5 rounded-full', over ? 'bg-red-500' : 'bg-primary-500')}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

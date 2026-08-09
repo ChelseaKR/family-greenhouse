@@ -904,9 +904,17 @@ paths:
   /billing/me:
     get:
       summary: Current household subscription state
+      description: >-
+        `usageDetail` reports nullable per-field counters. The legacy numeric-only `usage` object is
+        included only when both counters are known, preserving rolling-deploy and cached-client safety.
       tags: [Billing]
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: Subscription, plan caps, and best-known household usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingSubscriptionState'
   /billing/checkout:
     post:
       summary: 'Start an idempotent Stripe checkout session (body: planId, optional interval month|year|lifetime, optional checkoutAttemptId UUID)'
@@ -1348,6 +1356,52 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    BillingUsage:
+      type: object
+      additionalProperties: false
+      description: >-
+        Legacy numeric-only usage. This object is omitted from /billing/me unless both counters are
+        known.
+      required: [plantCount, maxPlants, memberCount, maxMembers]
+      properties:
+        plantCount: { type: integer, minimum: 0 }
+        maxPlants: { type: integer, minimum: 0 }
+        memberCount: { type: integer, minimum: 0 }
+        maxMembers: { type: integer, minimum: 0 }
+
+    BillingUsageDetail:
+      type: object
+      additionalProperties: false
+      description: >-
+        Best-known usage. A null counter means its value is unavailable; it never means zero. Plan
+        caps remain known and non-null.
+      required: [plantCount, maxPlants, memberCount, maxMembers]
+      properties:
+        plantCount: { type: integer, minimum: 0, nullable: true }
+        maxPlants: { type: integer, minimum: 0 }
+        memberCount: { type: integer, minimum: 0, nullable: true }
+        maxMembers: { type: integer, minimum: 0 }
+
+    BillingSubscriptionState:
+      type: object
+      additionalProperties: false
+      required: [planId, usageDetail]
+      properties:
+        planId: { type: string, enum: [seedling, garden, greenhouse] }
+        stripeCustomerId: { type: string }
+        stripeSubscriptionId: { type: string }
+        status:
+          type: string
+          description: Current Stripe subscription or retained entitlement status, when present.
+        currentPeriodEnd: { type: string, format: date-time }
+        usage:
+          allOf:
+            - $ref: '#/components/schemas/BillingUsage'
+          description: >-
+            Compatibility field for numeric-only clients; omitted whenever either counter is unknown.
+        usageDetail:
+          $ref: '#/components/schemas/BillingUsageDetail'
+
     FrontendTelemetryEvent:
       oneOf:
         - type: object

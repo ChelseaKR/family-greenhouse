@@ -2,12 +2,16 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { CheckIcon } from '@heroicons/react/24/outline';
+import {
+  CheckIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+} from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
 import { climateService } from '@/services/climateService';
-import { householdService } from '@/services/householdService';
+import { householdService, type ActivityEvent } from '@/services/householdService';
 import { deriveClimateSignals, climateSkipSuggestion } from '@/features/tasks/climateSignals';
 import {
   ClaimControls,
@@ -44,8 +48,7 @@ import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { formatDueDate, isOverdue } from '@/utils/date';
-
-type ActivityFilter = 'all' | 'tasks' | 'plants' | 'people';
+import { filterActivity, type ActivityFilter } from './activityFeed';
 
 const filterLabels: Record<ActivityFilter, string> = {
   all: 'All',
@@ -53,25 +56,6 @@ const filterLabels: Record<ActivityFilter, string> = {
   plants: 'Plants',
   people: 'People',
 };
-
-function filterActivity(
-  events: import('@/services/householdService').ActivityEvent[],
-  filter: ActivityFilter
-) {
-  if (filter === 'all') return events;
-  return events.filter((e) => {
-    if (filter === 'tasks')
-      return (
-        e.type === 'task.completed' ||
-        e.type === 'task.snoozed' ||
-        e.type === 'task.claimed' ||
-        e.type === 'task.unclaimed'
-      );
-    if (filter === 'plants') return e.type.startsWith('plant.') || e.type === 'photo.uploaded';
-    if (filter === 'people') return e.type === 'member.joined' || e.type === 'member.left';
-    return true;
-  });
-}
 
 export function DashboardPage() {
   useDocumentTitle('Dashboard');
@@ -400,28 +384,29 @@ function Metric({ label, value, emphasis }: MetricProps) {
 }
 
 interface ActivityRowProps {
-  event: import('@/services/householdService').ActivityEvent;
+  event: ActivityEvent;
 }
 
 function ActivityRow({ event }: ActivityRowProps) {
-  const { type, actorName, occurredAt, payload } = event;
-  const icon = <CheckIcon className="h-4 w-4 text-primary-700" aria-hidden="true" />;
+  const { t } = useTranslation();
+  const { actorName, occurredAt } = event;
+  let icon = <CheckIcon className="h-4 w-4 text-primary-700" aria-hidden="true" />;
+  let iconTone = 'bg-primary-100 ring-primary-200/60';
   let body: React.ReactNode;
-  switch (type) {
+
+  switch (event.type) {
     case 'task.completed':
       body = (
         <>
           <span className="font-medium">{actorName}</span> completed{' '}
-          <span className="font-medium">
-            {(payload as { taskType?: string }).taskType ?? 'a task'}
-          </span>
+          <span className="font-medium">{event.payload.taskType ?? 'a task'}</span>
         </>
       );
       break;
     case 'task.snoozed': {
       // "snoozed water for Monstera (rain expected)" — the climate skip
       // reasons read as why the cycle was skipped.
-      const p = payload as { taskType?: string; plantName?: string; reason?: string | null };
+      const p = event.payload;
       const reasonLabel =
         p.reason === 'rain'
           ? 'rain expected'
@@ -442,11 +427,11 @@ function ActivityRow({ event }: ActivityRowProps) {
     }
     case 'task.claimed':
     case 'task.unclaimed': {
-      const p = payload as { taskType?: string; plantName?: string };
+      const p = event.payload;
       body = (
         <>
           <span className="font-medium">{actorName}</span>{' '}
-          {type === 'task.claimed' ? 'claimed' : 'released'}{' '}
+          {event.type === 'task.claimed' ? 'claimed' : 'released'}{' '}
           <span className="font-medium">{p.taskType ?? 'a task'}</span>
           {p.plantName && <> for {p.plantName}</>}
         </>
@@ -457,23 +442,80 @@ function ActivityRow({ event }: ActivityRowProps) {
       body = (
         <>
           <span className="font-medium">{actorName}</span> added{' '}
-          <span className="font-medium">
-            {(payload as { plantName?: string }).plantName ?? 'a plant'}
-          </span>
+          <span className="font-medium">{event.payload.plantName ?? 'a plant'}</span>
         </>
       );
       break;
+    case 'plants.imported': {
+      const p = event.payload;
+      const count =
+        typeof p.count === 'number' && Number.isInteger(p.count) && p.count > 0 ? p.count : null;
+      body =
+        count === null
+          ? t('activity.importedUnknown', { actor: actorName })
+          : t('activity.imported', { actor: actorName, count });
+      break;
+    }
+    case 'plant.propagated': {
+      const p = event.payload;
+      body = t('activity.propagated', {
+        actor: actorName,
+        plant: p.plantName ?? t('activity.aPlant'),
+        parent: p.parentPlantName ?? t('activity.anotherPlant'),
+      });
+      break;
+    }
+    case 'plant.shared_accepted': {
+      const p = event.payload;
+      body = t('activity.sharedAccepted', {
+        actor: actorName,
+        plant: p.plantName ?? t('activity.aPlant'),
+        household: p.fromHouseholdName ?? t('activity.anotherHousehold'),
+      });
+      break;
+    }
+    case 'plant.health_checked': {
+      const p = event.payload;
+      const overall =
+        p.overall === 'healthy' || p.overall === 'monitor' || p.overall === 'concern'
+          ? p.overall
+          : null;
+      const plant = p.plantName ?? t('activity.aPlant');
+      if (p.demo) {
+        icon = <InformationCircleIcon className="h-4 w-4 text-amber-700" aria-hidden="true" />;
+        iconTone = 'bg-amber-50 ring-amber-200';
+        body = t('activity.healthDemo', { actor: actorName, plant });
+      } else if (p.demo === false && overall) {
+        if (overall === 'monitor') {
+          icon = <InformationCircleIcon className="h-4 w-4 text-amber-700" aria-hidden="true" />;
+          iconTone = 'bg-amber-50 ring-amber-200';
+        } else if (overall === 'concern') {
+          icon = <ExclamationTriangleIcon className="h-4 w-4 text-red-700" aria-hidden="true" />;
+          iconTone = 'bg-red-50 ring-red-200';
+        }
+        body = t('activity.healthChecked', {
+          actor: actorName,
+          plant,
+          overall: t(`plants.leafHealth.overall.${overall}`),
+        });
+      } else {
+        icon = <InformationCircleIcon className="h-4 w-4 text-gray-600" aria-hidden="true" />;
+        iconTone = 'bg-gray-100 ring-gray-200';
+        body = t('activity.healthCheckedUnknown', { actor: actorName, plant });
+      }
+      break;
+    }
     case 'plant.archived':
     case 'plant.restored':
     case 'plant.died':
     case 'plant.gave_away': {
-      const p = payload as { plantName?: string };
+      const p = event.payload;
       const verb = {
         'plant.archived': 'archived',
         'plant.restored': 'restored',
         'plant.died': 'recorded the loss of',
         'plant.gave_away': 'recorded giving away',
-      }[type];
+      }[event.type];
       body = (
         <>
           <span className="font-medium">{actorName}</span> {verb}{' '}
@@ -510,12 +552,19 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
-    default:
-      body = <span className="font-medium">{actorName}</span>;
+    default: {
+      const _exhaustive: never = event;
+      void _exhaustive;
+      body = t('activity.generic', { actor: actorName });
+      break;
+    }
   }
+
   return (
     <li className="flex items-center gap-4 px-6 py-3 text-sm">
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 ring-1 ring-primary-200/60">
+      <span
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-full ring-1 ${iconTone}`}
+      >
         {icon}
       </span>
       <div className="flex-1">

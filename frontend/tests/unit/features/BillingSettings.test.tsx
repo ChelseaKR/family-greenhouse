@@ -5,8 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillingSettings } from '@/features/settings/BillingSettings';
 import {
   isOverPlanLimit,
+  resolvePlanUsage,
   type Plan,
   type PlanUsage,
+  type PlanUsageDetail,
   type SubscriptionState,
 } from '@/services/billingService';
 import { useAuthStore } from '@/store/authStore';
@@ -54,7 +56,11 @@ const PLANS: Plan[] = [
   },
 ];
 
-function usage(over: Partial<PlanUsage> = {}): PlanUsage {
+function usage(over: Partial<PlanUsageDetail> = {}): PlanUsageDetail {
+  return { plantCount: 4, maxPlants: 10, memberCount: 1, maxMembers: 1, ...over };
+}
+
+function legacyUsage(over: Partial<PlanUsage> = {}): PlanUsage {
   return { plantCount: 4, maxPlants: 10, memberCount: 1, maxMembers: 1, ...over };
 }
 
@@ -105,6 +111,33 @@ describe('isOverPlanLimit (over-limit calc)', () => {
     expect(isOverPlanLimit(usage({ plantCount: 11 }))).toBe(true);
     expect(isOverPlanLimit(usage({ memberCount: 2 }))).toBe(true);
   });
+
+  it('does not treat unknown counts as zero but still warns for a known over-limit count', () => {
+    expect(isOverPlanLimit(usage({ plantCount: null, memberCount: null }))).toBe(false);
+    expect(isOverPlanLimit(usage({ plantCount: null, memberCount: 1 }))).toBe(false);
+    expect(isOverPlanLimit(usage({ plantCount: 11, memberCount: null }))).toBe(true);
+    expect(isOverPlanLimit(usage({ plantCount: null, memberCount: 2 }))).toBe(true);
+  });
+});
+
+describe('resolvePlanUsage (rolling-deploy compatibility)', () => {
+  it('prefers nullable usageDetail over the legacy numeric shape', () => {
+    const detail = usage({ plantCount: null, memberCount: 2 });
+    expect(
+      resolvePlanUsage({
+        planId: 'seedling',
+        usage: legacyUsage({ plantCount: 0, memberCount: 1 }),
+        usageDetail: detail,
+      })
+    ).toBe(detail);
+  });
+
+  it('falls back to legacy usage and tolerates responses with neither shape', () => {
+    const legacy = legacyUsage();
+    expect(resolvePlanUsage({ planId: 'seedling', usage: legacy })).toBe(legacy);
+    expect(resolvePlanUsage({ planId: 'seedling' })).toBeUndefined();
+    expect(resolvePlanUsage(undefined)).toBeUndefined();
+  });
 });
 
 describe('BillingSettings', () => {
@@ -113,7 +146,7 @@ describe('BillingSettings', () => {
   });
 
   it('shows ambient usage meters whenever usage data is present', async () => {
-    await renderBilling({ planId: 'seedling', usage: usage() });
+    await renderBilling({ planId: 'seedling', usage: legacyUsage() });
     expect(screen.getByTestId('usage-meters')).toBeInTheDocument();
     expect(screen.getByText('4 of 10 plants')).toBeInTheDocument();
     expect(screen.getByText('1 of 1 members')).toBeInTheDocument();
@@ -121,10 +154,47 @@ describe('BillingSettings', () => {
     expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
   });
 
+  it('renders a genuine zero as zero rather than unavailable', async () => {
+    await renderBilling({ planId: 'seedling', usage: legacyUsage({ plantCount: 0 }) });
+
+    expect(screen.getByText('0 of 10 plants')).toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-plants-bar')).toBeInTheDocument();
+    expect(screen.queryByText(/plants.*usage unavailable/i)).not.toBeInTheDocument();
+  });
+
   it('renders no meters (and no banner) when the backend omits usage', async () => {
     await renderBilling({ planId: 'seedling' });
     expect(screen.queryByTestId('usage-meters')).not.toBeInTheDocument();
     expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+  });
+
+  it('renders explicit accessible unavailable states instead of zero-value meters', async () => {
+    await renderBilling({
+      planId: 'seedling',
+      usageDetail: { plantCount: null, maxPlants: 10, memberCount: null, maxMembers: 1 },
+    });
+
+    expect(screen.getByRole('list', { name: 'Usage' })).toBeInTheDocument();
+    expect(screen.getByText('— of 10 plants — usage unavailable')).toBeInTheDocument();
+    expect(screen.getByText('— of 1 members — usage unavailable')).toBeInTheDocument();
+    expect(screen.queryByTestId('usage-meter-plants-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('usage-meter-members-bar')).not.toBeInTheDocument();
+    expect(screen.queryByText('0 of 10 plants')).not.toBeInTheDocument();
+    expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+  });
+
+  it('keeps the warning when one counter is unknown but the known counter is over its cap', async () => {
+    await renderBilling({
+      planId: 'seedling',
+      // A stale/cached legacy value must not win over the detail supplied by
+      // the current backend.
+      usage: legacyUsage({ plantCount: 0, memberCount: 1 }),
+      usageDetail: { plantCount: 25, maxPlants: 10, memberCount: null, maxMembers: 1 },
+    });
+
+    expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
+    expect(screen.getByText('25 of 10 plants')).toBeInTheDocument();
+    expect(screen.getByText('— of 1 members — usage unavailable')).toBeInTheDocument();
   });
 
   it('shows the over-limit banner after a downgrade leaves the household over its caps', async () => {
@@ -182,7 +252,7 @@ describe('BillingSettings', () => {
       await renderBilling({
         planId: 'garden',
         stripeCustomerId: 'cus_1',
-        usage: usage(),
+        usage: legacyUsage(),
       });
       // No checkout cards (Greenhouse is the non-current plan here), no
       // cadence toggle, no Stripe portal button.

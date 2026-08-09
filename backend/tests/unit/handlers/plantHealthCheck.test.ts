@@ -95,7 +95,12 @@ describe('plants health-check handler', () => {
         householdId: 'hh-1',
         actorId: 'user-1',
         actorName: 'Chelsea',
-        payload: { plantId: 'plant-1', plantName: 'Fernie', overall: 'monitor' },
+        payload: {
+          plantId: 'plant-1',
+          plantName: 'Fernie',
+          overall: 'monitor',
+          demo: false,
+        },
       })
     );
     // A real (non-demo) assessment was reserved before Bedrock ran.
@@ -138,6 +143,16 @@ describe('plants health-check handler', () => {
     expect(res.statusCode).toBe(200);
     expect(leafHealthBudget.releaseUsage).toHaveBeenCalledWith('hh-1');
     expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
+    expect(activity.recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'plant.health_checked',
+        payload: expect.objectContaining({
+          plantId: 'plant-1',
+          overall: 'monitor',
+          demo: true,
+        }),
+      })
+    );
   });
 
   it('fails closed before Bedrock when the atomic reservation is unavailable', async () => {

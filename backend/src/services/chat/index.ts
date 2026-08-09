@@ -704,6 +704,7 @@ async function* turnEvents(
 
       if (response.stopReason !== 'tool_use' && retrievedSpans.length > 0) {
         const grounding = checkGrounding(extractAssistantText(response.content), retrievedSpans);
+        const sourceCount = new Set(retrievedSpans.map((span) => span.source)).size;
         if (!grounding.grounded) {
           // Never log the claim text: chat content can itself contain PII.
           logger.warn(
@@ -711,7 +712,7 @@ async function* turnEvents(
               conversationId,
               claimsChecked: grounding.claimsChecked.length,
               ungroundedClaimCount: grounding.ungroundedClaims.length,
-              sourceCount: new Set(retrievedSpans.map((span) => span.source)).size,
+              sourceCount,
             },
             'chat_grounding_blocked'
           );
@@ -719,6 +720,18 @@ async function* turnEvents(
             ...response,
             content: [{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }],
           };
+        } else {
+          // A clean pass and a vacuous pass (zero recognized claims) must be
+          // distinguishable in production. Counts only: never log answer or
+          // source text, which can contain user-provided/PII-bearing content.
+          logger.info(
+            {
+              conversationId,
+              claimsChecked: grounding.claimsChecked.length,
+              sourceCount,
+            },
+            'chat_grounding_checked'
+          );
         }
       }
 

@@ -47,6 +47,7 @@ import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
+import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
@@ -271,32 +272,6 @@ interface VacationWindow {
   endDate: string;
   createdBy: string;
   createdAt: string;
-}
-
-interface ActivityEvent {
-  id: string;
-  type:
-    | 'task.completed'
-    | 'task.snoozed'
-    | 'task.claimed'
-    | 'task.unclaimed'
-    | 'plant.created'
-    | 'plants.imported'
-    | 'plant.deleted'
-    | 'plant.died'
-    | 'plant.gave_away'
-    | 'plant.archived'
-    | 'plant.restored'
-    | 'plant.propagated'
-    | 'plant.shared_accepted'
-    | 'photo.uploaded'
-    | 'member.joined'
-    | 'member.left';
-  householdId: string;
-  actorId: string;
-  actorName: string;
-  occurredAt: string;
-  payload: Record<string, unknown>;
 }
 
 interface ApiKey {
@@ -663,13 +638,7 @@ function membersOf(householdId: string) {
 }
 
 // Helper for emitting activity events. Mirrors `services/activity.ts`.
-function recordActivity(input: {
-  type: ActivityEvent['type'];
-  householdId: string;
-  actorId: string;
-  actorName: string;
-  payload: Record<string, unknown>;
-}): void {
+function recordActivity(input: RecordActivityInput): void {
   const id = uuidv4();
   db.activity.set(id, {
     id,
@@ -2174,7 +2143,7 @@ app.put(
         archived: 'plant.archived',
         died: 'plant.died',
         gave_away: 'plant.gave_away',
-      }[body.status] as ActivityEvent['type'];
+      }[body.status];
       recordActivity({
         type: lifecycleType,
         householdId: user.householdId,
@@ -2324,9 +2293,9 @@ app.post(
     if (!plant || plant.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Plant not found' });
     }
-    res.json({
+    const assessment = {
       demo: true,
-      overall: 'monitor',
+      overall: 'monitor' as const,
       observations: [
         {
           sign: 'demo mode',
@@ -2338,7 +2307,20 @@ app.post(
         'Keep an eye on the leaf over the next week and compare against a new photo. (Demo response — no analysis was performed.)',
       disclaimer:
         'This is a cosmetic visual check from a single photo, not a plant-health diagnosis.',
+    };
+    recordActivity({
+      type: 'plant.health_checked',
+      householdId: user.householdId,
+      actorId: user.userId,
+      actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+      payload: {
+        plantId: plant.id,
+        plantName: plant.name,
+        overall: assessment.overall,
+        demo: assessment.demo,
+      },
     });
+    res.json(assessment);
   }
 );
 
@@ -3464,17 +3446,21 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
     (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
   ).length;
   const memberCount = membersOf(user.householdId).length;
+  const usage = {
+    plantCount,
+    maxPlants: plan.maxPlants,
+    memberCount,
+    maxMembers: plan.maxMembers,
+  };
   res.json({
     planId,
     stripeCustomerId: h?.stripeCustomerId,
     stripeSubscriptionId: h?.stripeSubscriptionId,
     status: h?.subscriptionStatus,
-    usage: {
-      plantCount,
-      maxPlants: plan.maxPlants,
-      memberCount,
-      maxMembers: plan.maxMembers,
-    },
+    // Local counts are always available, so expose both the legacy numeric
+    // shape and the additive nullable-capable shape with identical values.
+    usage,
+    usageDetail: usage,
   });
 });
 

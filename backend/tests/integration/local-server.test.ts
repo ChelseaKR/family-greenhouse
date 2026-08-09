@@ -929,6 +929,37 @@ describe('GET /households/:id/activity', () => {
   });
 });
 
+describe('POST /plants/:id/health-check activity', () => {
+  it('labels the local canned result as demo data in the durable activity payload', async () => {
+    const token = await loginAsSeed();
+    const check = await request(app)
+      .post(`/plants/${seedPlantId}/health-check`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ imageBase64: 'A'.repeat(64) });
+
+    expect(check.status).toBe(200);
+    expect(check.body).toMatchObject({ demo: true, overall: 'monitor' });
+
+    const activity = await request(app)
+      .get(`/households/${seedHouseholdId}/activity`)
+      .set('Authorization', `Bearer ${token}`);
+    const event = activity.body.find(
+      (candidate: { type: string }) => candidate.type === 'plant.health_checked'
+    );
+    expect(event).toMatchObject({
+      type: 'plant.health_checked',
+      householdId: seedHouseholdId,
+      actorId: seedUserId,
+      payload: {
+        plantId: seedPlantId,
+        plantName: 'Monstera',
+        overall: 'monitor',
+        demo: true,
+      },
+    });
+  });
+});
+
 describe('DELETE /me', () => {
   it('refuses when caller is sole admin of a multi-member household', async () => {
     db.users.set('member-x', {
@@ -1965,6 +1996,13 @@ describe('billing', () => {
     const res = await request(app).get('/billing/me').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.planId).toBe('seedling');
+    expect(res.body.usageDetail).toEqual(res.body.usage);
+    expect(res.body.usage).toMatchObject({
+      plantCount: expect.any(Number),
+      memberCount: expect.any(Number),
+      maxPlants: expect.any(Number),
+      maxMembers: expect.any(Number),
+    });
   });
 
   it('admin checkout fails closed without changing the plan', async () => {

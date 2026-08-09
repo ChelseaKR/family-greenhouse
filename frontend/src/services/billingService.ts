@@ -20,11 +20,19 @@ export interface PlanCatalog {
   plans: Plan[];
 }
 
-/** Current usage vs. the active plan's caps, from GET /billing/me. */
+/** Legacy numeric-only usage shape from GET /billing/me. */
 export interface PlanUsage {
   plantCount: number;
   maxPlants: number;
   memberCount: number;
+  maxMembers: number;
+}
+
+/** Nullable usage shape for counters that may be unseeded or unavailable. */
+export interface PlanUsageDetail {
+  plantCount: number | null;
+  maxPlants: number;
+  memberCount: number | null;
   maxMembers: number;
 }
 
@@ -34,8 +42,17 @@ export interface SubscriptionState {
   stripeSubscriptionId?: string;
   status?: string;
   currentPeriodEnd?: string;
-  /** Optional: older backends don't send it; treat absence as "unknown". */
+  /** Legacy shape: present only when both counters are known. */
   usage?: PlanUsage;
+  /** Additive nullable shape. Older backends do not send it. */
+  usageDetail?: PlanUsageDetail;
+}
+
+/** Prefer the nullable contract, with rolling-deploy fallback to legacy usage. */
+export function resolvePlanUsage(
+  subscription?: SubscriptionState | null
+): PlanUsageDetail | undefined {
+  return subscription?.usageDetail ?? subscription?.usage;
 }
 
 /**
@@ -43,9 +60,13 @@ export interface SubscriptionState {
  * allows — only possible after a downgrade (or an admin-side plan change).
  * Existing data stays readable/editable; only adding is blocked server-side.
  */
-export function isOverPlanLimit(usage?: PlanUsage | null): boolean {
+export function isOverPlanLimit(usage?: PlanUsageDetail | null): boolean {
   if (!usage) return false;
-  return usage.plantCount > usage.maxPlants || usage.memberCount > usage.maxMembers;
+  // Evaluate each dimension independently: an unknown member count must not
+  // manufacture a warning, but it also must not hide a known plant overage.
+  const plantsOver = typeof usage.plantCount === 'number' && usage.plantCount > usage.maxPlants;
+  const membersOver = typeof usage.memberCount === 'number' && usage.memberCount > usage.maxMembers;
+  return plantsOver || membersOver;
 }
 
 export const billingService = {

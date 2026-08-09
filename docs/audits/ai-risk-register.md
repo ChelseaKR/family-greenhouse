@@ -2,7 +2,7 @@
 
 Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI systems" (NIST AI RMF **MAP** function). Seeded from `docs/chat-rag-design.md`'s non-goals and open-risks sections plus the tool-guard threat notes already in the codebase — this is a consolidation of existing, real design decisions into the register format the standard requires, not new analysis invented for this document.
 
-**Owner:** Chelsea Kelly-Reif. **Reviewed:** 2026-07-13 (first version 2026-07-05; live guard/privacy/disclosure controls re-verified 2026-07-13). **Recheck cadence:** quarterly, and immediately on any new tool added to `TOOL_REGISTRY`, a system-prompt rewrite, or a model swap.
+**Owner:** Chelsea Kelly-Reif. **Reviewed:** 2026-08-09 (first version 2026-07-05; quantitative grounding scope and observability re-verified 2026-08-09). **Recheck cadence:** quarterly, and immediately on any new tool added to `TOOL_REGISTRY`, a system-prompt rewrite, a grounding-guard change, or a model swap.
 
 ---
 
@@ -38,7 +38,8 @@ Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI sys
 
 - Tool-use architecture: for anything about the user's _own_ plants, the model must call a tool rather than guess — the tool result, not the model's prior, is the source of truth.
 - System-prompt rule 5: "If a tool returns no data... say so plainly" (explicit instruction against the missing-data-as-false-answer pattern).
-- `groundingGuard.ts`: a numeric-claim grounding heuristic wired into both sync and streaming RAG turns. Every numeric token in a completed answer must occur in the retrieved spans; otherwise the answer is replaced before it is persisted or shown. Streaming RAG output is buffered until the same check passes.
+- `groundingGuard.ts`: a quantitative-claim grounding heuristic wired into both sync and streaming RAG turns. It recognizes care-relevant frequencies, percentages, temperatures, durations, lengths, volumes, masses, doses, dilution/repetition forms, and fertilizer ratios. Recognized evidence is matched by number and, for safety-sensitive doses, canonical units and denominators expressed with `per` or `/`; unsupported claims are replaced before persistence or display. Streaming RAG output is buffered until the same check passes.
+- Successful checks emit content-free `chat_grounding_checked` telemetry with `claimsChecked` and `sourceCount`. This makes a zero-claim pass observable without logging answer or source text; it does not turn that pass into evidence that every sentence was verified. See [ADR 0008](../adr/0008-unit-aware-rag-grounding.md).
 
 **Gap:** no live faithfulness/hallucination-rate measurement against real model output exists (`evals/README.md` limitation). **Tracked, dated waiver:** `docs/RESPONSIBLE-TECH-AUDITS.md`.
 
@@ -64,7 +65,11 @@ Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI sys
 
 **Mitigations:** fixed, server-defined tool catalog (the model can't invent new tools); hallucinated-plant-ID rejection (server re-validates by name, never trusts the model's raw ID); per-turn tool-call cap (5); the RAG corpus is first-party authored content (not user- or web-sourced), so classic "indirect injection via untrusted retrieved content" has a much smaller attack surface than a general web-RAG system.
 
-**Gap:** no structured red-team exercise (Promptfoo OWASP-LLM scan, Garak baseline) has ever been run — tracked, dated waiver in `docs/RESPONSIBLE-TECH-AUDITS.md`.
+**Residual gap:** the committed red-team exercise covers the offline tool/data
+layer with mapped prompt-injection fixtures, but no live-model
+refusal/no-fabrication run, Promptfoo OWASP-LLM scan, or Garak baseline exists.
+The remaining generation-layer work is tracked by the dated waiver in
+`docs/RESPONSIBLE-TECH-AUDITS.md`.
 
 ### Value-chain / component integration
 

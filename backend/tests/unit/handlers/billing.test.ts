@@ -131,7 +131,7 @@ describe('billing handler', () => {
       expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
     });
 
-    it('includes usage (counters + plan caps) so the UI can render meters', async () => {
+    it('includes matching legacy usage and nullable-capable detail when both counters are known', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'garden' });
@@ -144,12 +144,15 @@ describe('billing handler', () => {
       )) as APIGatewayProxyResult;
 
       expect(res.statusCode).toBe(200);
-      expect(JSON.parse(res.body).usage).toEqual({
+      const body = JSON.parse(res.body);
+      const expectedUsage = {
         plantCount: 42,
         maxPlants: 500,
         memberCount: 3,
         maxMembers: 6,
-      });
+      };
+      expect(body.usage).toEqual(expectedUsage);
+      expect(body.usageDetail).toEqual(expectedUsage);
       expect(getHouseholdCounters).toHaveBeenCalledWith('hh-1');
     });
 
@@ -166,17 +169,22 @@ describe('billing handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
 
-      const usage = JSON.parse(res.body).usage;
+      const body = JSON.parse(res.body);
+      const usage = body.usage;
       expect(usage).toEqual({ plantCount: 25, maxPlants: 10, memberCount: 8, maxMembers: 6 });
+      expect(body.usageDetail).toEqual(usage);
       expect(usage.plantCount).toBeGreaterThan(usage.maxPlants);
       expect(usage.memberCount).toBeGreaterThan(usage.maxMembers);
     });
 
-    it('tolerates missing counters (legacy households) as zero usage', async () => {
+    it('omits legacy usage and preserves partial knowledge in usageDetail', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
-      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'greenhouse' });
-      // Default beforeEach mock: { plantCount: 0, memberCount: 0 }.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({
+        plantCount: 25,
+        memberCount: null,
+      });
 
       const res = (await getCurrentSubscription(
         buildEvent({ httpMethod: 'GET' }),
@@ -184,11 +192,14 @@ describe('billing handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
 
-      expect(JSON.parse(res.body).usage).toEqual({
-        plantCount: 0,
-        maxPlants: 5000,
-        memberCount: 0,
-        maxMembers: 50,
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).not.toHaveProperty('usage');
+      expect(body.usageDetail).toEqual({
+        plantCount: 25,
+        maxPlants: 10,
+        memberCount: null,
+        maxMembers: 6,
       });
     });
 
