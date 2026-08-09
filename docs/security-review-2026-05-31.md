@@ -1,7 +1,7 @@
 # Family Greenhouse — OWASP Top 10 (2021) Security Review
 
 **Date:** 2026-05-31
-**Scope:** Application code at `/Users/chelsea/family-greenhouse` (backend Lambda handlers, middleware, services, frontend React app, and the dev-only `local-server.ts`). Infrastructure Terraform is referenced for context only; no `terraform plan` was run.
+**Scope:** Repository application code (backend Lambda handlers, middleware, services, frontend React app, and the dev-only `local-server.ts`). Infrastructure Terraform is referenced for context only; no `terraform plan` was run.
 **Out of scope (per request):** the orphaned WAF web ACL (API Gateway v2 HTTP doesn't accept WAF), unprovisioned secrets (Stripe / VAPID / Sentry / SES), and the broad `*.amazonaws.com` / `*.amazoncognito.com` CloudFront CSP. These are tracked elsewhere.
 
 The review covers what the code does today; it does not re-affirm what the existing [`docs/security.md`](docs/security.md) already documents unless I disagree with it. Where it does, I say so explicitly.
