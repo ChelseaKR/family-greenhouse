@@ -4,7 +4,7 @@
 
 ## Context
 
-The 2026-07-05 conformance audit (`portfolio/audit-2026-07-05/family-greenhouse-AUDIT.md`) against the vendored `docs/standards/` (pinned `v1.0.1`, since #137) found that this repo scored 76/211 (~36%) not primarily because the engineering is weak — CI has 10 real gating jobs, 61/61 SHA-pinned actions, OIDC-only cloud creds — but because **nothing was declared**: no README conformance table, no ASVS level, no observability tier, no AI-evaluation applicability statement. `STANDARDS/README.md` §"How a repo declares conformance" treats silent omission as a defect in its own right, independent of the underlying engineering quality (CQ-45 / DOC-11-14 / RTF-07).
+The 2026-07-05 conformance audit against the vendored `docs/standards/` (pinned `v1.0.1`, since #137) found that this repo scored 76/211 (~36%) not primarily because the engineering is weak — CI has 10 real gating jobs, 61/61 SHA-pinned actions, OIDC-only cloud creds — but because **nothing was declared**: no README conformance table, no ASVS level, no observability tier, no AI-evaluation applicability statement. `docs/standards/README.md` §"How a repo declares conformance" treats silent omission as a defect in its own right, independent of the underlying engineering quality (CQ-45 / DOC-11-14 / RTF-07).
 
 ## Decision
 
