@@ -6,6 +6,7 @@ import {
   CheckIcon,
   ExclamationTriangleIcon,
   InformationCircleIcon,
+  QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -503,10 +504,20 @@ function ActivityRow({ event }: ActivityRowProps) {
           plant,
           overall: t(`plants.leafHealth.overall.${overall}`),
         });
-      } else {
+      } else if (p.demo === false) {
+        // A real check whose verdict this build can't render. The check
+        // itself is still an established fact, so the row may state it.
         icon = <InformationCircleIcon className="h-4 w-4 text-gray-600" aria-hidden="true" />;
         iconTone = 'bg-gray-100 ring-gray-200';
         body = t('activity.healthCheckedUnknown', { actor: actorName, plant });
+      } else {
+        // No `demo` flag at all: rows written before the flag was recorded
+        // (#306) cannot be told apart from demo results. "Ran a leaf-health
+        // check" would assert an analysis that may never have happened, so
+        // the row states the request and admits the provenance is unknown.
+        icon = <QuestionMarkCircleIcon className="h-4 w-4 text-gray-600" aria-hidden="true" />;
+        iconTone = 'bg-gray-100 ring-gray-200';
+        body = t('activity.healthCheckedUnlabelled', { actor: actorName, plant });
       }
       break;
     }

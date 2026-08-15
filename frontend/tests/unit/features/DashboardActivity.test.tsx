@@ -154,7 +154,12 @@ describe('dashboard activity rows', () => {
   it('uses neutral copy when a legacy payload lacks a count or known health verdict', async () => {
     renderDashboardActivity([
       runtimeEvent('plants.imported', {}),
-      runtimeEvent('plant.health_checked', { plantName: 'Fernie', overall: 'unexpected' }),
+      runtimeEvent('plant.health_checked', {
+        plantName: 'Fernie',
+        overall: 'unexpected',
+        // A real check — only its verdict is unrenderable here.
+        demo: false,
+      }),
     ]);
 
     expect(await screen.findByText('Chelsea imported plants')).toBeInTheDocument();
@@ -169,9 +174,28 @@ describe('dashboard activity rows', () => {
     ]);
 
     expect(
-      await screen.findByText('Chelsea ran a leaf-health check on Fernie')
+      await screen.findByText(
+        "Chelsea requested a leaf-health check for Fernie — this record doesn't say whether a real analysis ran or a demo result was shown"
+      )
     ).toBeInTheDocument();
     expect(screen.queryByText(/looking healthy/i)).not.toBeInTheDocument();
+  });
+
+  it('will not claim a check ran for a row written before demo labelling', async () => {
+    // Rows recorded before the `demo` flag existed are indistinguishable from
+    // demo results, and a demo result means no image was analysed. The row
+    // must not assert the analysis it cannot evidence (#306).
+    renderDashboardActivity([
+      runtimeEvent('plant.health_checked', { plantName: 'Fernie', overall: 'monitor' }),
+    ]);
+
+    const row = (await screen.findByText(/requested a leaf-health check for Fernie/)).closest('li');
+    expect(row).not.toBeNull();
+    expect(screen.queryByText(/ran a leaf-health check/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/worth monitoring/i)).not.toBeInTheDocument();
+    // Not the success tick, which is what made an unexplained row read as
+    // "someone did something and it worked".
+    expect(row?.querySelector('svg')).not.toHaveClass('text-primary-700');
   });
 
   it('uses status-specific visual tones while keeping the verdict in text', async () => {
