@@ -91,22 +91,42 @@ responses are operationally different from 5xx.
 
 Useful Logs Insights queries:
 
-To separate substantive RAG grounding passes from answers where the
-deterministic guard recognized no quantitative claim, query the chat Lambda log
-group:
+The RAG grounding guard emits one of three events per checked answer, one per
+verdict (see [ADR 0009](adr/0009-three-state-grounding-verdict.md)). The event
+name carries the verdict so a query for "answers the guard verified" cannot
+sweep up answers it merely didn't recognize:
+
+| event                       | meaning                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `chat_grounding_checked`    | verified: ≥1 quantitative claim checked, all traced to a retrieved span   |
+| `chat_grounding_unverified` | the guard checked nothing it can vouch for; the answer was still returned |
+| `chat_grounding_blocked`    | a recognized claim was unsupported; the answer was replaced               |
 
 ```text
-fields @timestamp, claimsChecked, sourceCount, conversationId
-| filter msg = "chat_grounding_checked"
-| stats count(*) as passes by claimsChecked
-| sort claimsChecked asc
+fields @timestamp, claimsChecked, unclassifiedNumericCount, sourceCount, conversationId
+| filter msg like /^chat_grounding_/
+| stats count(*) as answers by msg
+| sort answers desc
 ```
 
-The `claimsChecked = 0` row is an observability signal, not a failure by itself:
-qualitative answers may legitimately contain nothing this guard is designed to
-inspect. Investigate a sustained shift alongside request mix and manual review;
-the current offline evaluation suite cannot explain it, and answer or source
-text must never be added to this log.
+`chat_grounding_checked` always carries `claimsChecked >= 1`; a zero there
+would be a bug, not a vacuous pass. Vacuous passes are the
+`chat_grounding_unverified` rows, and they are an observability signal rather
+than a failure: qualitative answers legitimately contain nothing this guard is
+designed to inspect. The row worth watching is
+`chat_grounding_unverified` with `unclassifiedNumericCount > 0` — an answer
+that carried a number no claim shape matched:
+
+```text
+fields @timestamp, unclassifiedNumericCount, sourceCount, conversationId
+| filter msg = "chat_grounding_unverified" and unclassifiedNumericCount > 0
+| stats count(*) as answers by bin(1d)
+```
+
+A sustained volume there is the evidence for deciding whether that case should
+block (deliberately left open in ADR 0009). Investigate alongside request mix
+and manual review; the current offline evaluation suite cannot explain it, and
+answer or source text must never be added to this log.
 
 ```text
 fields @timestamp, routeKey, status, responseLatency, requestId

@@ -15,12 +15,33 @@
  * span is flagged as ungrounded — the model asserted a specific fact the
  * corpus never gave it.
  *
+ * What it REPORTS is a three-state verdict, never a bare boolean pass
+ * (#307). "The guard checked four numbers and they all trace to the corpus"
+ * and "the guard recognized nothing in this answer" are different facts and
+ * must not share a value:
+ *
+ *   - `verified`   — at least one claim was checked and every one is
+ *                    supported, and no unclassified numeric content remains.
+ *   - `unverified` — the guard checked nothing it can vouch for: either the
+ *                    answer carries no recognized claim at all, or it carries
+ *                    numeric content that fits no checkable claim shape. The
+ *                    guard makes NO assertion about such an answer.
+ *   - `ungrounded` — at least one recognized claim is unsupported. This is
+ *                    the only verdict that blocks delivery.
+ *
+ * `unverified` deliberately does not block: an answer may legitimately be
+ * qualitative, and blocking on "I don't recognize this" would replace every
+ * such answer with the verification message. It also must never be read as a
+ * pass — see `docs/observability.md` for the distinct log events, and
+ * `docs/adr/0008-unit-aware-rag-grounding.md` for the decision record.
+ *
  * Deliberately NOT covered (starter-version limitation, see evals/README.md):
  * qualitative claims ("bright indirect light is best for pothos") aren't
  * mechanically checked here — verifying those requires semantic entailment
  * (an LLM-as-judge or FActScore-class tool), which is the full RAGAS/DeepEval
  * suite this repo has waived pending the eval-harness build-out (see the
- * dated waiver in docs/RESPONSIBLE-TECH-AUDITS.md).
+ * dated waiver in docs/RESPONSIBLE-TECH-AUDITS.md). Such an answer is
+ * reported `unverified`, not passed as checked.
  *
  * This module is unit-tested against synthetic fixtures
  * (chatGroundingGuard.test.ts) and wired into the live turnEvents() response
@@ -35,12 +56,35 @@ export interface RetrievedSpan {
   text: string;
 }
 
+/**
+ * Three distinguishable outcomes. There is deliberately no `grounded: boolean`
+ * on the result: a boolean cannot tell "checked and supported" apart from
+ * "checked nothing", and the second one reported as the first is the defect
+ * this shape exists to make unrepresentable (#307).
+ */
+export type GroundingVerdict = 'verified' | 'unverified' | 'ungrounded';
+
 export interface GroundingResult {
-  grounded: boolean;
+  verdict: GroundingVerdict;
   /** Claim sentences whose numeric/quantitative token has no match in any retrieved span. */
   ungroundedClaims: string[];
   /** All numeric/quantitative claim sentences found, grounded or not (for reporting). */
   claimsChecked: string[];
+  /**
+   * Sentences that carry numeric content the guard could not resolve to a
+   * checkable claim shape. Non-empty means "there are numbers in this answer
+   * that nothing verified" — the honest inverse of silently treating an
+   * unrecognized number as clean.
+   */
+  unclassifiedNumericSentences: string[];
+}
+
+/**
+ * The single delivery decision. Only an actively contradicted claim blocks;
+ * callers must not treat `unverified` as a failure, nor as a pass.
+ */
+export function isBlockingVerdict(result: GroundingResult): boolean {
+  return result.verdict === 'ungrounded';
 }
 
 // Matches a number followed by a care-relevant unit, a bare "every N"
@@ -68,6 +112,37 @@ const CLAIM_PATTERN = new RegExp(
   String.raw`(?:(?<!\d)(?:${NPK_RATIO}|${COLON_RATIO})(?!\d)|${NUMBER}\s*${CARE_UNIT}(?![a-z])|every\s+${NUMBER})`,
   'i'
 );
+
+// Dose claims are not always written with a digit. The corpus itself gives
+// the highest-consequence instruction in words — "at half the recommended
+// strength" (fertilizing.md:7), "quarter strength" (:8), "half-strength"
+// (seasonal-care.md:41) — so an answer saying "at double strength" carries a
+// real dilution instruction that the numeric patterns above cannot see at
+// all. Treated as a checkable claim (matched against the same corpus spans),
+// not as an unverifiable shape: the quantity word either appears with that
+// noun in the retrieved text or it does not.
+const DOSE_WORD_QUANTITY = String.raw`(?:half|quarter|third|full|double|twice|triple)`;
+const DOSE_WORD_NOUN = String.raw`(?:strengths?|doses?|dosage|dilutions?|concentrations?)`;
+const DOSE_WORD_SOURCE = String.raw`\b(${DOSE_WORD_QUANTITY})[-\s]+(?:\w+[-\s]+){0,3}?(${DOSE_WORD_NOUN})\b`;
+// Separate instances: the `g`-flagged one carries `lastIndex` state and must
+// never be shared with a `.test()` call site.
+const DOSE_WORD_PATTERN = new RegExp(DOSE_WORD_SOURCE, 'i');
+const DOSE_WORD_PATTERN_GLOBAL = new RegExp(DOSE_WORD_SOURCE, 'gi');
+
+/** A sentence carries a claim if any recognized claim shape appears in it. */
+function isClaimSentence(sentence: string): boolean {
+  return CLAIM_PATTERN.test(sentence) || DOSE_WORD_PATTERN.test(sentence);
+}
+
+/**
+ * Numeric content in a NON-claim sentence: a number the guard saw but could
+ * not resolve to any checkable shape. Bare list markers ("1.", "2)") are not
+ * quantitative content and are excluded so ordinary numbered advice doesn't
+ * masquerade as an unverifiable quantity.
+ */
+function hasUnclassifiedNumber(sentence: string): boolean {
+  return /\d/.test(sentence.replace(/^\s*\d+[.)]\s*/, ''));
+}
 
 /**
  * Dose/dilution evidence needs a little more specificity than the legacy
@@ -118,7 +193,22 @@ function extractSensitiveEvidence(text: string): Set<string> {
   for (const match of text.matchAll(ratioPattern)) {
     evidence.add(`ratio:${extractNumbers(match[0]).join(':')}`);
   }
+
+  for (const match of text.matchAll(DOSE_WORD_PATTERN_GLOBAL)) {
+    evidence.add(`dose:${canonicalDoseQuantity(match[1])}:${canonicalDoseNoun(match[2])}`);
+  }
   return evidence;
+}
+
+/** "twice the strength" and "double strength" are the same instruction. */
+function canonicalDoseQuantity(quantity: string): string {
+  const word = quantity.toLowerCase();
+  return word === 'twice' ? 'double' : word;
+}
+
+function canonicalDoseNoun(noun: string): string {
+  const word = noun.toLowerCase().replace(/s$/, '');
+  return word === 'dosage' ? 'dose' : word;
 }
 
 function splitSentences(text: string): string[] {
@@ -144,17 +234,23 @@ function extractNumbers(text: string): string[] {
 
 /**
  * Checks whether an answer's numeric/quantitative claims are each backed by
- * at least one retrieved span containing the same number. Vacuously grounded
- * if the answer makes no numeric claims (nothing to check) — this guard
- * targets the specific "fabricated statistic" failure mode, not general
- * factuality.
+ * at least one retrieved span containing the same number.
+ *
+ * An answer the guard recognized nothing in is reported `unverified`, NOT
+ * grounded: "nothing to check" is not evidence of correctness, and a caller
+ * (or a reader of the logs, or `docs/RESPONSIBLE-TECH-AUDITS.md`) must not be
+ * able to mistake it for one. This guard targets the specific "fabricated
+ * quantity" failure mode, not general factuality.
  */
 export function checkGrounding(
   answerText: string,
   retrievedSpans: RetrievedSpan[]
 ): GroundingResult {
   const sentences = splitSentences(answerText);
-  const claimSentences = sentences.filter((s) => CLAIM_PATTERN.test(s));
+  const claimSentences = sentences.filter(isClaimSentence);
+  const unclassifiedNumericSentences = sentences.filter(
+    (s) => !isClaimSentence(s) && hasUnclassifiedNumber(s)
+  );
   const corpusText = retrievedSpans.map((s) => s.text).join('\n');
   const corpusNumbers = new Set(extractNumbers(corpusText));
   const corpusSensitiveEvidence = extractSensitiveEvidence(corpusText);
@@ -177,9 +273,20 @@ export function checkGrounding(
     if (!hasSupport) ungroundedClaims.push(claim);
   }
 
+  // Verified requires positive evidence: something was checked, all of it
+  // held, and no number was left unaccounted for. Anything else that isn't
+  // an outright contradiction is "the guard cannot vouch for this answer".
+  const verdict: GroundingVerdict =
+    ungroundedClaims.length > 0
+      ? 'ungrounded'
+      : claimSentences.length > 0 && unclassifiedNumericSentences.length === 0
+        ? 'verified'
+        : 'unverified';
+
   return {
-    grounded: ungroundedClaims.length === 0,
+    verdict,
     ungroundedClaims,
     claimsChecked: claimSentences,
+    unclassifiedNumericSentences,
   };
 }

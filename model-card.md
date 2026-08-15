@@ -112,13 +112,22 @@ that should run it. This card does not make that call — it surfaces it.
   chat RAG answers: a claim not backed by retrieved data should be flagged,
   not asserted.
 - **Fabricated numeric care claims** (mitigated by a narrow live guard):
-  `backend/src/services/chat/groundingGuard.ts` detects a numeric/quantitative
-  claim (a percentage, frequency, temperature, or duration) unless every
-  numeric token occurs in the retrieved RAG spans. `turnEvents()` replaces a
-  failed answer with a safe verification message before persistence or
-  delivery; streaming RAG text is buffered until the same check passes. Sync,
-  streaming, and mixed-supported/unsupported-number cases are regression
+  `backend/src/services/chat/groundingGuard.ts` flags a quantitative claim (a
+  percentage, frequency, temperature, duration, length, volume, mass,
+  dose/dilution, `times`/`parts` repetition, fertilizer ratio, or a
+  word-quantity dose such as "half strength") unless every numeric token and
+  canonical dose token in it occurs in the retrieved RAG spans. `turnEvents()`
+  replaces a failed answer with a safe verification message before persistence
+  or delivery; streaming RAG text is buffered until the same check passes.
+  Sync, streaming, and mixed-supported/unsupported-number cases are regression
   tested. Qualitative entailment remains outside this heuristic.
+- **Answers the guard cannot check** (disclosed, not mitigated): the guard
+  reports `verified` / `unverified` / `ungrounded`, and an answer in which it
+  recognized no checkable claim — or which carries numeric content fitting no
+  claim shape — is `unverified` and still delivered. `unverified` is not a
+  pass: it means nothing in that answer was checked. Do not read the guard's
+  presence as coverage of every delivered answer
+  (`docs/adr/0009-three-state-grounding-verdict.md`).
 - **No live faithfulness/hallucination/refusal scoring** — this repo has not
   run the model against a benchmark and measured its actual answer quality;
   the eval-baseline in `evals/eval-baseline.json` measures retrieval-ranking

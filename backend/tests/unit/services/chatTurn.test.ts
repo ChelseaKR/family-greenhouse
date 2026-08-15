@@ -393,7 +393,7 @@ describe('runChatTurn', () => {
     expect(JSON.stringify(persistedAnswer)).not.toContain('92%');
   });
 
-  it('logs a grounded pass with claim and source counts, including a zero-claim pass', async () => {
+  it('logs a zero-claim answer as unverified, never as a checked pass', async () => {
     const infoSpy = vi.spyOn(logger, 'info');
     vi.mocked(searchCorpus).mockResolvedValueOnce([
       {
@@ -433,15 +433,22 @@ describe('runChatTurn', () => {
       message: 'What light should I provide?',
     });
 
+    // Delivered — a qualitative answer is legitimate — but the guard checked
+    // nothing, so it must say so under its own event name.
     expect(result.assistantText).toBe('Bright indirect light is a good starting point.');
     expect(infoSpy).toHaveBeenCalledWith(
       {
         conversationId: 'conv-1',
         claimsChecked: 0,
+        unclassifiedNumericCount: 0,
         sourceCount: 1,
       },
-      'chat_grounding_checked'
+      'chat_grounding_unverified'
     );
+    // The false signal this asserts the absence of: a "grounding checked"
+    // event emitted for an answer in which nothing was checked (#307).
+    const checkedEvents = infoSpy.mock.calls.filter(([, msg]) => msg === 'chat_grounding_checked');
+    expect(checkedEvents).toHaveLength(0);
   });
 
   it('logs a grounded quantitative pass with a nonzero checked-claim count', async () => {

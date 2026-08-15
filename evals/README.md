@@ -35,11 +35,15 @@ real decision.
   PR — no new path-filtered CI job was added; the eval is cheap, deterministic,
   and has no reason to run less often than every backend test run).
 - **`../backend/src/services/chat/groundingGuard.ts`** — the citation/grounding
-  guard (AIEV-12), a numeric-claim grounding heuristic, unit-tested in
+  guard (AIEV-12), a quantitative-claim grounding heuristic, unit-tested in
   `backend/tests/unit/services/chatGroundingGuard.test.ts` and enforced by the
   live sync/stream orchestration tests. When RAG context exists, the completed
   answer is checked before persistence or delivery; unsupported quantitative
   claims are replaced, and streaming output is buffered until the check passes.
+  It reports `verified` / `unverified` / `ungrounded` — an answer it recognized
+  no checkable claim in is `unverified`, never a pass, so the guard's own
+  output cannot be mistaken for coverage it does not have
+  ([ADR 0009](../docs/adr/0009-three-state-grounding-verdict.md)).
 
 Run it directly: `npm run eval` (root) or `npm run eval --workspace backend`
 — both alias to `vitest run tests/eval` in the backend workspace.

@@ -150,7 +150,7 @@ V2 streaming options to evaluate (in order of preference):
 
 ## Original risks and current controls (reconciled 2026-07-13)
 
-- **Hallucinated care advice.** The UI keeps an "AI-generated — verify before acting" disclosure visible; pesticide/dosage refusal is in the system prompt. RAG quantitative claims now pass the live grounding guard before persistence/delivery, including the streaming path. Broader semantic faithfulness scoring remains under the dated AI-evaluation waiver.
+- **Hallucinated care advice.** The UI keeps an "AI-generated — verify before acting" disclosure visible; pesticide/dosage refusal is in the system prompt. RAG answers pass the live grounding guard before persistence/delivery, including the streaming path; it blocks a _recognized_ quantitative claim the retrieved spans don't support, and reports an answer it recognized nothing in as `unverified` rather than as a pass ([ADR 0009](adr/0009-three-state-grounding-verdict.md)). Broader semantic faithfulness scoring remains under the dated AI-evaluation waiver.
 - **Cost surprises.** The chat has an atomic household token reservation/cap, and the infrastructure already provisions account-level AWS Budget actual/forecast notifications through the alerts topic.
 - **PII leakage in tool results.** A centralized recursive sanitizer strips known PII-bearing field names on live results and history replay; nested-field tests protect the boundary. New tools still require privacy review for PII hidden in generic values.
 - **Tool-use loop divergence.** The five-call cap is enforced and identical calls reuse the first validated result instead of repeating service work or creating duplicate confirm cards.
