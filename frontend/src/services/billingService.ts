@@ -56,17 +56,52 @@ export function resolvePlanUsage(
 }
 
 /**
- * True when the household holds more plants or members than its current plan
- * allows — only possible after a downgrade (or an admin-side plan change).
- * Existing data stays readable/editable; only adding is blocked server-side.
+ * Where a household sits against one plan cap. `unknown` is a first-class
+ * answer and is deliberately NOT collapsed into `within`: an unreadable
+ * counter is not evidence that the household is under its limit, and a
+ * boolean cannot hold that difference (#308).
  */
-export function isOverPlanLimit(usage?: PlanUsageDetail | null): boolean {
-  if (!usage) return false;
-  // Evaluate each dimension independently: an unknown member count must not
-  // manufacture a warning, but it also must not hide a known plant overage.
-  const plantsOver = typeof usage.plantCount === 'number' && usage.plantCount > usage.maxPlants;
-  const membersOver = typeof usage.memberCount === 'number' && usage.memberCount > usage.maxMembers;
-  return plantsOver || membersOver;
+export type PlanLimitState = 'within' | 'over' | 'unknown';
+
+export interface PlanLimitEvaluation {
+  plants: PlanLimitState;
+  members: PlanLimitState;
+  /**
+   * The state to speak to the user: a known overage outranks an unknown
+   * counter (it is actionable), and `unknown` outranks `within` (we cannot
+   * claim they are inside their caps while a counter is missing).
+   */
+  overall: PlanLimitState;
+}
+
+function limitState(count: number | null | undefined, max: number): PlanLimitState {
+  if (typeof count !== 'number' || !Number.isFinite(count)) return 'unknown';
+  return count > max ? 'over' : 'within';
+}
+
+/**
+ * Evaluate the household against its plan caps — only breached after a
+ * downgrade (or an admin-side plan change). Existing data stays
+ * readable/editable; only adding is blocked server-side.
+ *
+ * Each dimension is evaluated independently, so an unknown member count
+ * neither manufactures a warning nor hides a known plant overage.
+ */
+export function evaluatePlanLimits(usage?: PlanUsageDetail | null): PlanLimitEvaluation {
+  if (!usage) {
+    // No usage in the response at all (older backend, or still loading). We
+    // know nothing, and say so rather than implying compliance.
+    return { plants: 'unknown', members: 'unknown', overall: 'unknown' };
+  }
+  const plants = limitState(usage.plantCount, usage.maxPlants);
+  const members = limitState(usage.memberCount, usage.maxMembers);
+  const overall: PlanLimitState =
+    plants === 'over' || members === 'over'
+      ? 'over'
+      : plants === 'unknown' || members === 'unknown'
+        ? 'unknown'
+        : 'within';
+  return { plants, members, overall };
 }
 
 export const billingService = {

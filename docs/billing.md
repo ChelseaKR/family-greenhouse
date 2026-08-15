@@ -106,9 +106,14 @@ Partial knowledge is preserved per field, while the legacy object is omitted:
 ```
 
 New clients prefer `usageDetail` and fall back to `usage` when talking to an
-older backend. They evaluate each known counter independently, so an unknown
-member count neither creates an over-limit warning nor hides a known plant
-overage. The machine-readable contract is in
+older backend. `evaluatePlanLimits` (`frontend/src/services/billingService.ts`)
+turns the counters into three states per dimension — `within`, `over`,
+`unknown` — plus an `overall` that a known overage wins, an unknown counter
+takes next, and `within` only when every counter is known and inside its cap.
+Each dimension is evaluated independently, so an unknown member count neither
+manufactures a warning nor hides a known plant overage — and, because
+`unknown` is never folded into `within`, an unreadable counter cannot silently
+satisfy a limit. The machine-readable contract is in
 [`api-spec.yaml`](api-spec.yaml).
 
 ## Backend implementation
@@ -219,7 +224,10 @@ tests instead of a synthetic local-server failure switch.
 If a household downgrades from Greenhouse → Seedling and they have 200 plants,
 the cap is breached. We don't auto-delete; we just stop allowing new
 creations. Billing settings shows an explicit over-limit warning explaining
-that existing data remains usable while new plants/members are paused.
+that existing data remains usable while new plants/members are paused. When a
+counter cannot be read, it shows a third, distinct notice saying the check
+could not be made — never the silent absence of a warning, which reads as
+"you're under your limit".
 
 The household can still read/edit/delete what it has; it just can't add more
 until it is back under the new cap. Support follows the same
@@ -237,7 +245,7 @@ Invoice access goes through the Stripe Customer Portal. We don't ingest invoice 
 
 - `tests/unit/services/billing.test.ts` — pure tests of `deltaForStripeEvent` for every event type, plus `getHouseholdSubscription` defaults
 - `tests/unit/services/householdUsage.test.ts` and `tests/unit/handlers/billing.test.ts` — genuine-zero, partial/invalid counter, read-failure, and compatibility response shapes
-- `frontend/tests/unit/features/BillingSettings.test.tsx` — nullable meters, legacy fallback, and independent over-limit evaluation
+- `frontend/tests/unit/features/BillingSettings.test.tsx` — nullable meters, legacy fallback, independent per-dimension evaluation, and the invariant that an unknown counter never resolves to `within`
 - `tests/integration/local-server.test.ts` — `describe('billing')` and `describe('plan limits')` blocks exercise checkout, local `usage`/`usageDetail` parity, plan-flip, and plant-cap-402 via supertest
 
 The webhook signature verification is _not_ unit-tested here because mocking `stripe.webhooks.constructEvent` would just be testing our mock. We rely on Stripe's official typings + the `deltaForStripeEvent` test coverage.

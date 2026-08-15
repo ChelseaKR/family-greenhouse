@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillingSettings } from '@/features/settings/BillingSettings';
 import {
-  isOverPlanLimit,
+  evaluatePlanLimits,
   resolvePlanUsage,
   type Plan,
   type PlanUsage,
@@ -18,7 +18,7 @@ vi.mock('@/services/billingService', async () => {
     '@/services/billingService'
   );
   return {
-    ...actual, // keep isOverPlanLimit (the real over-limit calc) and types
+    ...actual, // keep evaluatePlanLimits (the real limit calc) and types
     billingService: {
       listPlans: vi.fn(),
       getCurrentSubscription: vi.fn(),
@@ -95,28 +95,54 @@ async function renderBilling(sub: SubscriptionState) {
   await screen.findByText(/Your household is on the/);
 }
 
-describe('isOverPlanLimit (over-limit calc)', () => {
-  it('is false with no usage data (older backend / loading)', () => {
-    expect(isOverPlanLimit(undefined)).toBe(false);
-    expect(isOverPlanLimit(null)).toBe(false);
+describe('evaluatePlanLimits (three states, never two)', () => {
+  it('reports unknown — not "within" — when there is no usage data at all', () => {
+    for (const value of [undefined, null] as const) {
+      const limits = evaluatePlanLimits(value);
+      expect(limits).toEqual({ plants: 'unknown', members: 'unknown', overall: 'unknown' });
+      expect(limits.overall).not.toBe('within');
+    }
   });
 
-  it('is false at or under the caps (boundary: exactly at cap is NOT over)', () => {
-    expect(isOverPlanLimit(usage())).toBe(false);
-    expect(isOverPlanLimit(usage({ plantCount: 10 }))).toBe(false);
-    expect(isOverPlanLimit(usage({ memberCount: 1 }))).toBe(false);
+  it('is within at or under the caps (boundary: exactly at cap is NOT over)', () => {
+    expect(evaluatePlanLimits(usage()).overall).toBe('within');
+    expect(evaluatePlanLimits(usage({ plantCount: 10 })).overall).toBe('within');
+    expect(evaluatePlanLimits(usage({ memberCount: 1 })).overall).toBe('within');
   });
 
-  it('is true when either plants or members exceed the cap', () => {
-    expect(isOverPlanLimit(usage({ plantCount: 11 }))).toBe(true);
-    expect(isOverPlanLimit(usage({ memberCount: 2 }))).toBe(true);
+  it('separates a genuine zero from an unknown count', () => {
+    expect(evaluatePlanLimits(usage({ plantCount: 0 })).plants).toBe('within');
+    expect(evaluatePlanLimits(usage({ plantCount: null })).plants).toBe('unknown');
   });
 
-  it('does not treat unknown counts as zero but still warns for a known over-limit count', () => {
-    expect(isOverPlanLimit(usage({ plantCount: null, memberCount: null }))).toBe(false);
-    expect(isOverPlanLimit(usage({ plantCount: null, memberCount: 1 }))).toBe(false);
-    expect(isOverPlanLimit(usage({ plantCount: 11, memberCount: null }))).toBe(true);
-    expect(isOverPlanLimit(usage({ plantCount: null, memberCount: 2 }))).toBe(true);
+  it('is over when either plants or members exceed the cap', () => {
+    expect(evaluatePlanLimits(usage({ plantCount: 11 })).overall).toBe('over');
+    expect(evaluatePlanLimits(usage({ memberCount: 2 })).overall).toBe('over');
+  });
+
+  it('never lets an unknown count satisfy a limit', () => {
+    // The defect this replaces: `isOverPlanLimit` answered `false` here, and
+    // `false` was consumed as "this household is inside its plan".
+    const cases: Array<Partial<PlanUsageDetail>> = [
+      { plantCount: null, memberCount: null },
+      { plantCount: null, memberCount: 1 },
+      { plantCount: 4, memberCount: null },
+      { plantCount: 0, memberCount: null },
+    ];
+    for (const override of cases) {
+      const limits = evaluatePlanLimits(usage(override));
+      expect(limits.overall).toBe('unknown');
+      expect(limits.overall).not.toBe('within');
+    }
+  });
+
+  it('lets a known overage outrank an unknown counter', () => {
+    expect(evaluatePlanLimits(usage({ plantCount: 11, memberCount: null }))).toEqual({
+      plants: 'over',
+      members: 'unknown',
+      overall: 'over',
+    });
+    expect(evaluatePlanLimits(usage({ plantCount: null, memberCount: 2 })).overall).toBe('over');
   });
 });
 
@@ -150,8 +176,10 @@ describe('BillingSettings', () => {
     expect(screen.getByTestId('usage-meters')).toBeInTheDocument();
     expect(screen.getByText('4 of 10 plants')).toBeInTheDocument();
     expect(screen.getByText('1 of 1 members')).toBeInTheDocument();
-    // Within limits → no over-limit banner.
+    // Within limits → neither the over-limit banner nor the can't-check one.
     expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't check your plan usage")).not.toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-plants')).toHaveAttribute('data-state', 'within');
   });
 
   it('renders a genuine zero as zero rather than unavailable', async () => {
@@ -160,12 +188,17 @@ describe('BillingSettings', () => {
     expect(screen.getByText('0 of 10 plants')).toBeInTheDocument();
     expect(screen.getByTestId('usage-meter-plants-bar')).toBeInTheDocument();
     expect(screen.queryByText(/plants.*usage unavailable/i)).not.toBeInTheDocument();
+    // A genuine zero IS a satisfied limit — and says so, unlike unknown.
+    expect(screen.getByTestId('usage-meter-plants')).toHaveAttribute('data-state', 'within');
+    expect(screen.queryByText("We couldn't check your plan usage")).not.toBeInTheDocument();
   });
 
-  it('renders no meters (and no banner) when the backend omits usage', async () => {
+  it('says it could not check when the backend omits usage entirely', async () => {
     await renderBilling({ planId: 'seedling' });
     expect(screen.queryByTestId('usage-meters')).not.toBeInTheDocument();
     expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+    // Silence here reads as "you're fine"; the card must not imply that.
+    expect(screen.getByText("We couldn't check your plan usage")).toBeInTheDocument();
   });
 
   it('renders explicit accessible unavailable states instead of zero-value meters', async () => {
@@ -183,6 +216,24 @@ describe('BillingSettings', () => {
     expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
   });
 
+  it('states that the limit could not be checked rather than staying silent', async () => {
+    // The second-order half of #308: the meter already said "unavailable",
+    // but the over-limit banner's absence still read as "you are under your
+    // limit". Unknown now has its own message.
+    await renderBilling({
+      planId: 'seedling',
+      usageDetail: { plantCount: null, maxPlants: 10, memberCount: 1, maxMembers: 1 },
+    });
+
+    expect(screen.getByText("We couldn't check your plan usage")).toBeInTheDocument();
+    expect(
+      screen.getByText(/we can't tell whether this household is within its plan limits/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-plants')).toHaveAttribute('data-state', 'unknown');
+    expect(screen.getByTestId('usage-meter-members')).toHaveAttribute('data-state', 'within');
+  });
+
   it('keeps the warning when one counter is unknown but the known counter is over its cap', async () => {
     await renderBilling({
       planId: 'seedling',
@@ -195,6 +246,9 @@ describe('BillingSettings', () => {
     expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
     expect(screen.getByText('25 of 10 plants')).toBeInTheDocument();
     expect(screen.getByText('— of 1 members — usage unavailable')).toBeInTheDocument();
+    // A known overage is the actionable message; it outranks the unknown one
+    // rather than showing both.
+    expect(screen.queryByText("We couldn't check your plan usage")).not.toBeInTheDocument();
   });
 
   it('shows the over-limit banner after a downgrade leaves the household over its caps', async () => {

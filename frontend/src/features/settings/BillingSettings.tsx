@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import {
   billingService,
-  isOverPlanLimit,
+  evaluatePlanLimits,
   resolvePlanUsage,
+  type PlanLimitEvaluation,
   type PlanUsageDetail,
 } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -45,9 +46,12 @@ export function BillingSettings() {
   const paymentsAvailable = plansQuery.data?.paymentsAvailable === true;
   const currentPlanId = subQuery.data?.planId ?? 'seedling';
   const usage = resolvePlanUsage(subQuery.data);
-  // Genuinely over the plan caps — only possible after a downgrade. Reads,
-  // edits, and deletes all keep working; only adding is blocked server-side.
-  const overLimit = isOverPlanLimit(usage);
+  // Three outcomes, three messages. `over` is genuinely over the plan caps —
+  // only possible after a downgrade; reads, edits, and deletes all keep
+  // working, only adding is blocked server-side. `unknown` means a counter
+  // didn't load: the card says so instead of staying silent, because silence
+  // here reads as "you're fine".
+  const limits = evaluatePlanLimits(usage);
 
   return (
     <div className="space-y-6">
@@ -65,9 +69,14 @@ export function BillingSettings() {
       </Alert>
       <Card>
         <CardHeader title="Plan status" description="View your household's current plan limits." />
-        {overLimit && (
+        {limits.overall === 'over' && (
           <Alert variant="warning" title={t('settings.billing.overLimitTitle')} className="mb-4">
             <p>{t('settings.billing.overLimitBody')}</p>
+          </Alert>
+        )}
+        {limits.overall === 'unknown' && (
+          <Alert variant="info" title={t('settings.billing.limitUnknownTitle')} className="mb-4">
+            <p>{t('settings.billing.limitUnknownBody')}</p>
           </Alert>
         )}
         <p className="text-sm text-gray-600">
@@ -78,7 +87,7 @@ export function BillingSettings() {
           plan
           {subQuery.data?.status === 'trialing' && ' (free trial)'}.
         </p>
-        {usage && <UsageMeters usage={usage} />}
+        {usage && <UsageMeters usage={usage} limits={limits} />}
         {native && (
           <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
         )}
@@ -93,12 +102,14 @@ export function BillingSettings() {
 }
 
 /**
- * Ambient "n of max" meters for the household's plan caps. Bars turn red when
- * over the cap (post-downgrade) — purely informational, the server enforces.
- * Unknown counters get explicit text and no bar, so unavailable data cannot
- * look like a genuine zero.
+ * Ambient "n of max" meters for the household's plan caps. Three states per
+ * row, never two: a number (including a genuine 0) with a bar, or an explicit
+ * "usage unavailable" with no bar. Bars turn red when over the cap
+ * (post-downgrade) — purely informational, the server enforces. The
+ * over/within/unknown decision comes from the same `evaluatePlanLimits` call
+ * that drives the banner, so a row and the banner cannot disagree.
  */
-function UsageMeters({ usage }: { usage: PlanUsageDetail }) {
+function UsageMeters({ usage, limits }: { usage: PlanUsageDetail; limits: PlanLimitEvaluation }) {
   const { t } = useTranslation();
   const meters = [
     {
@@ -112,6 +123,7 @@ function UsageMeters({ usage }: { usage: PlanUsageDetail }) {
             }),
       count: usage.plantCount,
       max: usage.maxPlants,
+      state: limits.plants,
     },
     {
       key: 'members',
@@ -124,6 +136,7 @@ function UsageMeters({ usage }: { usage: PlanUsageDetail }) {
             }),
       count: usage.memberCount,
       max: usage.maxMembers,
+      state: limits.members,
     },
   ];
   return (
@@ -133,12 +146,17 @@ function UsageMeters({ usage }: { usage: PlanUsageDetail }) {
       </p>
       <div className="mt-3 space-y-3" role="list" aria-labelledby="billing-usage-title">
         {meters.map((m) => {
-          const available = m.count !== null;
-          const over = m.count !== null && m.count > m.max;
+          const available = m.state !== 'unknown' && m.count !== null;
+          const over = m.state === 'over';
           const pct =
             m.count !== null && m.max > 0 ? Math.min(100, Math.round((m.count / m.max) * 100)) : 0;
           return (
-            <div key={m.key} role="listitem" data-testid={`usage-meter-${m.key}`}>
+            <div
+              key={m.key}
+              role="listitem"
+              data-testid={`usage-meter-${m.key}`}
+              data-state={m.state}
+            >
               <p className={clsx('text-xs', over ? 'text-red-600 font-medium' : 'text-gray-600')}>
                 {m.label}
               </p>

@@ -150,9 +150,14 @@ export function DashboardPage() {
       (task) => !isOverdue(task.nextDue) && formatDueDate(task.nextDue) !== 'Today'
     ) || [];
 
-  const plantCount = plantsLoading ? null : (plants?.length ?? 0);
-  const todayCount = tasksLoading ? null : todayTasks.length;
-  const overdueCount = tasksLoading ? null : overdueTasks.length;
+  // `undefined` data covers loading AND a failed fetch. Keying on the loading
+  // flag alone published a failed plants/tasks read as the number 0 — "you
+  // have no plants", "nothing is overdue" — which is the same
+  // absence-as-zero the plan meters had (#308). No data means no number: the
+  // metric renders an em dash instead of a reassuring zero.
+  const plantCount = plants === undefined ? null : plants.length;
+  const todayCount = upcomingTasks === undefined ? null : todayTasks.length;
+  const overdueCount = upcomingTasks === undefined ? null : overdueTasks.length;
 
   return (
     <div className="space-y-10">

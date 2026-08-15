@@ -539,7 +539,9 @@
       "membersUsageUnavailable": "— of {{max}} members — usage unavailable",
       "nativeUnavailable": "Plan changes aren't available in the app.",
       "overLimitTitle": "Over your plan limit",
-      "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit."
+      "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit.",
+      "limitUnknownTitle": "We couldn't check your plan usage",
+      "limitUnknownBody": "At least one of your counts didn't load, so we can't tell whether this household is within its plan limits right now. Nothing about your plants has changed. Try again in a moment — and if you add a plant or member meanwhile, the server still applies your plan's limits."
     }
   },
   "notifications": {
