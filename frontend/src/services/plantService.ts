@@ -91,8 +91,22 @@ export interface PlantLineage {
   children: Array<LineageEntry & { createdAt: string }>;
 }
 
+/**
+ * How many completions `GET /plants/{id}` returns in `recentCompletions`.
+ * Mirrors `RECENT_COMPLETIONS_LIMIT` in
+ * `backend/src/handlers/plants/handler.ts` (and the matching slice in
+ * `backend/src/local-server.ts`); change both together.
+ *
+ * Anything computed from `recentCompletions` — counts, streaks — is bounded
+ * by this number and must be labelled with the window rather than presented
+ * as a lifetime figure.
+ */
+export const RECENT_COMPLETIONS_LIMIT = 10;
+
 export interface PlantWithTasks extends Plant {
   upcomingTasks: Task[];
+  /** The most recent `RECENT_COMPLETIONS_LIMIT` completions across all of
+   *  this plant's tasks — NOT the full history. */
   recentCompletions: TaskCompletion[];
   lineage?: PlantLineage;
 }

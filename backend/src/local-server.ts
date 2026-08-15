@@ -2048,6 +2048,8 @@ app.get('/plants/:id', authMiddleware, requireHousehold, (req, res) => {
     }
   }
 
+  // Keep in step with RECENT_COMPLETIONS_LIMIT in handlers/plants/handler.ts
+  // and frontend/src/services/plantService.ts — this is a window, not a total.
   res.json({ ...plant, upcomingTasks, recentCompletions: recentCompletions.slice(0, 10), lineage });
 });
 

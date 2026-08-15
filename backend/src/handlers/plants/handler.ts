@@ -315,6 +315,18 @@ export const movePlants = createHandler(
   .use(requireHousehold())
   .use(validateBody(movePlantsSchema));
 
+/**
+ * How many completions `GET /plants/{id}` returns in `recentCompletions`.
+ * The frontend mirrors this as `RECENT_COMPLETIONS_LIMIT` in
+ * `frontend/src/services/plantService.ts`, and `local-server.ts` slices to
+ * the same number; change all three together.
+ *
+ * This is a *window*, not a total. Any figure the UI derives from
+ * `recentCompletions` (completion counts, streaks) is capped by it and must
+ * be labelled with the window instead of being shown as a lifetime number.
+ */
+const RECENT_COMPLETIONS_LIMIT = 10;
+
 // GET /plants/:id
 export const getPlant = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -336,7 +348,7 @@ export const getPlant = createHandler(
     // the filter-the-household tradeoff note).
     const [upcomingTasks, recentCompletions, lineage] = await Promise.all([
       taskService.getTasksForPlant(user.householdId!, plantId),
-      taskService.getTaskCompletions(user.householdId!, plantId, 10),
+      taskService.getTaskCompletions(user.householdId!, plantId, RECENT_COMPLETIONS_LIMIT),
       plantService.getLineage(user.householdId!, plantId, plant.parentPlantId),
     ]);
 

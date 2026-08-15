@@ -1,4 +1,5 @@
 import { Card, CardHeader } from '@/components/Card';
+import { RECENT_COMPLETIONS_LIMIT } from '@/services/plantService';
 import type { PlantWithTasks, Task } from '@/services/plantService';
 import { longestStreak } from '@/utils/streaks';
 
@@ -12,6 +13,16 @@ interface CareReportCardProps {
  * recentCompletions gives us the per-task history we need for streaks
  * and counts. We don't fetch additional data here — keeping it cheap so
  * the card stays in step with the rest of the page's loading state.
+ *
+ * Every count and streak on this card is computed from
+ * `plant.recentCompletions`, which `GET /plants/{id}` caps at
+ * RECENT_COMPLETIONS_LIMIT rows across ALL of the plant's tasks. So the
+ * numbers are bounded by that window and cannot exceed it — a plant watered
+ * fifty times still has at most RECENT_COMPLETIONS_LIMIT rows to count. This
+ * card used to label that capped count "Total completions" and the capped
+ * run "Longest streak", which made a ceiling look like a measurement. Every
+ * label here states the window; if you ever want true lifetime figures they
+ * have to be aggregated server-side, not inferred from this list.
  */
 export function CareReportCard({ plant }: CareReportCardProps) {
   const completions = plant.recentCompletions;
@@ -32,14 +43,17 @@ export function CareReportCard({ plant }: CareReportCardProps) {
     <Card>
       <CardHeader
         title="Care report"
-        description="Snapshot of how this plant has been cared for."
+        description={`How this plant has been cared for across its last ${RECENT_COMPLETIONS_LIMIT} logged completions. Older care is not counted here.`}
       />
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm">
         <Stat label="Active tasks" value={totalTasks.toString()} />
-        <Stat label="Total completions" value={totalCompletions.toString()} />
         <Stat
-          label="Longest streak"
+          label={`Completions (last ${RECENT_COMPLETIONS_LIMIT})`}
+          value={totalCompletions.toString()}
+        />
+        <Stat
+          label={`Best streak (last ${RECENT_COMPLETIONS_LIMIT})`}
           value={overallBestStreak >= 2 ? `${overallBestStreak} cycles` : '—'}
         />
         <Stat label="Last care" value={lastCompletion ? formatRelative(lastCompletion) : 'Never'} />
@@ -48,7 +62,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
       {plant.upcomingTasks.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
-            By task
+            By task, within those {RECENT_COMPLETIONS_LIMIT}
           </h4>
           <ul className="divide-y divide-primary-100/60 text-sm">
             {plant.upcomingTasks.map((t) => (
