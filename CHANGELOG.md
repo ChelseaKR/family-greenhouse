@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- `PageHeader`'s underline test no longer matches the SVG through a
+  `svg[viewBox="…"]` CSS attribute selector. jsdom 30 stopped matching
+  camelCase SVG attribute names in selectors — on 29.1.1 both the camelCase and
+  lower-cased spellings match, on 30.0.1 neither does, while
+  `getAttribute('viewBox')` still returns the value on both — so the assertion
+  was engine-dependent, not a statement about the component. It now reads the
+  attribute, the way the neighbouring assertion in the same file already did.
+  This is what fails `Test Frontend` on the jsdom 30 bump (#312); with this on
+  `main`, that bump goes green on a rebase.
+
 ## [0.23.1] - 2026-08-09
 
 ### Changed

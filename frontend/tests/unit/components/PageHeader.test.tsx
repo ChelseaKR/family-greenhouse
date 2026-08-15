@@ -48,8 +48,18 @@ describe('PageHeader', () => {
 
   it('renders TitleUnderline even when no other props are provided beyond title', () => {
     const { container } = renderHeader(<PageHeader title="Bare" />);
-    const underline = container.querySelector('svg[viewBox="0 0 240 14"]');
-    expect(underline).not.toBeNull();
+    // Read the attribute rather than matching `svg[viewBox="…"]` as a CSS
+    // attribute selector. jsdom 30 stopped matching camelCase SVG attribute
+    // names in selectors — verified directly: on jsdom 29.1.1 both
+    // `svg[viewBox="0 0 240 14"]` and the lower-cased spelling match; on
+    // jsdom 30.0.1 neither does, while `getAttribute('viewBox')` still
+    // returns the value on both. Browsers match the camelCase selector, so
+    // this is an engine quirk, not a statement about the component — the
+    // assertion above already reads the attribute for exactly this reason.
+    const underline = Array.from(container.querySelectorAll('svg')).find(
+      (s) => s.getAttribute('viewBox') === '0 0 240 14'
+    );
+    expect(underline).toBeDefined();
   });
 
   it('places art in a sm:block container and stacks action below when both are present', () => {
