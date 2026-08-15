@@ -33,7 +33,9 @@
  * qualitative, and blocking on "I don't recognize this" would replace every
  * such answer with the verification message. It also must never be read as a
  * pass — see `docs/observability.md` for the distinct log events, and
- * `docs/adr/0008-unit-aware-rag-grounding.md` for the decision record.
+ * `docs/adr/0009-three-state-grounding-verdict.md` for the decision record.
+ * (ADR 0008 is the unit-aware recognition decision; 0009 amends its reporting
+ * bullet, so a reader sent to 0008 alone lands on the superseded half.)
  *
  * Deliberately NOT covered (starter-version limitation, see evals/README.md):
  * qualitative claims ("bright indirect light is best for pothos") aren't
