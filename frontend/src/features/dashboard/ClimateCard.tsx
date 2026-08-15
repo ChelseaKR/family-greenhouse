@@ -73,7 +73,8 @@ export function ClimateCard() {
           </h3>
           {data.weather ? (
             <p className="mt-1 text-sm text-gray-600">
-              {Math.round(data.weather.tempC)}°C · {Math.round(data.weather.humidity)}% humidity
+              {Math.round(data.weather.tempC)}°C · {Math.round(data.weather.humidity)}% outdoor
+              humidity
               {data.weather.description && ` · ${data.weather.description}`}
             </p>
           ) : (

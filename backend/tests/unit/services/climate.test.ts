@@ -20,17 +20,42 @@ describe('deriveClimateTips', () => {
     expect(deriveClimateTips(base)).toEqual([]);
   });
 
-  it('flags low humidity as a warning targeting tropicals', () => {
+  it('flags low humidity as a warning targeting tropicals, labelled as outdoor', () => {
     const tips = deriveClimateTips({ ...base, humidity: 22 });
     expect(tips).toHaveLength(1);
     expect(tips[0]).toMatchObject({ level: 'warning', appliesTo: ['tropical'] });
     expect(tips[0].message).toMatch(/22%/);
+    expect(tips[0].message).toMatch(/outdoor humidity/i);
   });
 
-  it('flags high humidity as info targeting succulents', () => {
+  it('flags high humidity as info targeting succulents, labelled as outdoor', () => {
     const tips = deriveClimateTips({ ...base, humidity: 78 });
     expect(tips).toHaveLength(1);
     expect(tips[0]).toMatchObject({ level: 'info', appliesTo: ['succulent'] });
+    expect(tips[0].message).toMatch(/outdoor humidity/i);
+  });
+
+  // The snapshot is OpenWeatherMap's reading for the household's city — an
+  // OUTDOOR measurement. There is no indoor sensor in this product. A tip
+  // that attaches a snapshot number to the word "indoor" is telling the user
+  // something nothing in the system measured, and it changes what they do:
+  // 28% outdoors on a rainy 5°C day is a very different room from 28%
+  // outdoors in August.
+  it('never attributes a measured percentage to indoor conditions', () => {
+    for (const humidity of [5, 22, 29, 35, 55, 71, 78, 95]) {
+      for (const tempC of [-5, 20, 35]) {
+        for (const condition of ['Clear', 'Rain', 'Storm']) {
+          for (const tip of deriveClimateTips({ ...base, humidity, tempC, condition })) {
+            // Allowed: "Indoor air is usually drier still" (a qualitative
+            // inference). Not allowed: the phrase "indoor humidity", or a
+            // measured percentage sitting in the same sentence as "indoor".
+            expect(tip.message).not.toMatch(/indoor humidity/i);
+            expect(tip.message).not.toMatch(/indoors?[^.]{0,40}\d+\s*%/i);
+            expect(tip.message).not.toMatch(/\d+\s*%[^.]{0,40}indoors?\b/i);
+          }
+        }
+      }
+    }
   });
 
   it('flags freeze risk when forecast low is under 5C', () => {

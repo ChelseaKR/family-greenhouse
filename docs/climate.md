@@ -8,7 +8,7 @@ The integration is **feature-gated by `OPENWEATHER_API_KEY`**. With no key, clim
 
 **Goals**
 
-- Move from "you told us 7 days" to "given today's 28% humidity, your fiddle leaf needs misting" without the user having to think about it.
+- Move from "you told us 7 days" to "outdoor humidity is 28% today, so your fiddle leaf needs misting" without the user having to think about it.
 - Per-household location storage that the user can set or clear at any time.
 - Same degradation discipline as Perenual: every code path must work with the integration off.
 
@@ -91,7 +91,7 @@ Auth required. Returns:
     {
       "level": "warning",
       "appliesTo": ["tropical"],
-      "message": "Indoor humidity is around 28%. Tropical plants benefit from a humidifier or weekly misting."
+      "message": "Outdoor humidity is around 28%. Indoor air is usually drier still, so tropical plants benefit from a humidifier or weekly misting."
     }
   ]
 }
@@ -117,13 +117,15 @@ Admin-only. Body shape:
 
 | Condition                     | Severity | Targeted at        | Action                |
 | ----------------------------- | -------- | ------------------ | --------------------- |
-| Humidity < 30%                | warning  | tropical           | mist / humidifier     |
-| Humidity > 70%                | info     | succulent          | airflow               |
+| Outdoor humidity < 30%        | warning  | tropical           | mist / humidifier     |
+| Outdoor humidity > 70%        | info     | succulent          | airflow               |
 | Forecast low < 5°C            | warning  | outdoor + tropical | bring indoors         |
 | Condition contains rain/storm | info     | outdoor            | skip watering         |
 | Temp > 32°C                   | warning  | (all)              | check soil more often |
 
 Test coverage in `tests/unit/services/climate.test.ts`. The mapping is intentional and small; we'd rather miss an edge case than spam users with five tips when one would do.
+
+**Every number in a tip is an outdoor reading.** OpenWeatherMap reports conditions at the geocoded city centroid; this product has no indoor sensor and no way to infer one. A tip may reason about indoor conditions ("indoor air is usually drier still") but must never print a snapshot value as if it were measured inside the home. `deriveClimateTips` used to open with "Indoor humidity is around 28%" against the outdoor reading — a wrong label that changes what a user does, since 28% outdoors on a rainy 5°C day is a very different room than 28% outdoors in August. A regression test in `tests/unit/services/climate.test.ts` asserts no tip claims an indoor measurement.
 
 ## Frontend integration points
 

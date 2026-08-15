@@ -191,6 +191,13 @@ export async function getWeatherCached(lat: number, lon: number): Promise<Weathe
  *
  * Mapping happens here (not in the handler) so it's tunable from telemetry
  * without a deploy of a new endpoint shape.
+ *
+ * Every number in these messages comes from `WeatherSnapshot`, which is
+ * OpenWeatherMap's reading for the household's saved city — i.e. it is
+ * OUTDOOR weather. We have no indoor sensor and no way to infer one, so no
+ * tip may present a snapshot value as a reading from inside the home. The
+ * low-humidity tip is still useful (dry outdoor air plus heating means the
+ * room is at least as dry) but it must say what it actually measured.
  */
 export interface ClimateTip {
   /** Severity. Drives the badge color in the UI. */
@@ -208,13 +215,13 @@ export function deriveClimateTips(snapshot: WeatherSnapshot): ClimateTip[] {
     tips.push({
       level: 'warning',
       appliesTo: ['tropical'],
-      message: `Indoor humidity is around ${Math.round(snapshot.humidity)}%. Tropical plants benefit from a humidifier or weekly misting.`,
+      message: `Outdoor humidity is around ${Math.round(snapshot.humidity)}%. Indoor air is usually drier still, so tropical plants benefit from a humidifier or weekly misting.`,
     });
   } else if (snapshot.humidity > 70) {
     tips.push({
       level: 'info',
       appliesTo: ['succulent'],
-      message: `High humidity (${Math.round(snapshot.humidity)}%). Succulents may need extra airflow to avoid rot.`,
+      message: `High outdoor humidity (${Math.round(snapshot.humidity)}%). Succulents may need extra airflow to avoid rot.`,
     });
   }
 

@@ -141,7 +141,7 @@ const listUpcomingTasks: ToolDefinition<{ days?: number }> = {
 const getHouseholdClimate: ToolDefinition = {
   name: 'get_household_climate',
   description:
-    "Get the household's saved location plus current weather conditions. Use this whenever the question is climate-sensitive (watering frequency, sun exposure, when to bring tropicals indoors). Returns null if the user hasn't set a location.",
+    "Get the household's saved location plus current OUTDOOR weather conditions for that location. Use this whenever the question is climate-sensitive (watering frequency, sun exposure, when to bring tropicals indoors). Every figure returned, including humidity, is measured outside; this product has no indoor sensor, so never report these numbers as conditions inside the user's home. Returns null if the user hasn't set a location.",
   input_schema: {
     type: 'object',
     properties: {},
