@@ -38,6 +38,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   in words, so a digit-only guard was still blind to it. Blocking behaviour is
   unchanged except that an unsupported word-quantity dose now blocks too. See
   [ADR 0009](docs/adr/0009-three-state-grounding-verdict.md).
+- An unreadable plan-usage counter no longer satisfies the plan limit. The
+  frontend's over-limit check was a boolean, so "under the cap" and "we could
+  not read the count" were the same answer and the post-downgrade warning
+  simply never appeared. `evaluatePlanLimits` replaces it with `within` /
+  `over` / `unknown` per dimension, and billing settings now shows a third,
+  distinct notice saying the check could not be made rather than staying
+  silent. A genuine zero is still `within`.
+- The dashboard status line no longer publishes a failed plants or tasks read
+  as `0`. It keyed on the loading flag alone, so a fetch error rendered
+  "Plants 0 / Due today 0 / Overdue 0" — indistinguishable from a genuinely
+  empty household, and reassuring in exactly the wrong direction. Missing data
+  now renders the same em dash the loading state uses.
 
 ### Security
 

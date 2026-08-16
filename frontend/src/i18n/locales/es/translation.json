@@ -553,7 +553,9 @@
       "membersUsageUnavailable": "— de {{max}} miembros — uso no disponible",
       "nativeUnavailable": "Los cambios de plan no están disponibles en la aplicación.",
       "overLimitTitle": "Por encima del límite de tu plan",
-      "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite."
+      "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite.",
+      "limitUnknownTitle": "No pudimos comprobar el uso de tu plan",
+      "limitUnknownBody": "Al menos uno de tus recuentos no se cargó, así que ahora mismo no podemos saber si este hogar está dentro de los límites de su plan. Nada ha cambiado en tus plantas. Inténtalo de nuevo en un momento — y si añades una planta o un miembro mientras tanto, el servidor sigue aplicando los límites de tu plan."
     }
   },
   "notifications": {
