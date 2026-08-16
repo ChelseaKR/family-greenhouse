@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { checkGrounding, type RetrievedSpan } from '../../../src/services/chat/groundingGuard.js';
+import {
+  checkGrounding,
+  isBlockingVerdict,
+  type RetrievedSpan,
+} from '../../../src/services/chat/groundingGuard.js';
 
 const HUMIDITY_SPAN: RetrievedSpan = {
   source: 'humidity-tropicals.md',
@@ -22,28 +26,98 @@ const DOSING_SPAN: RetrievedSpan = {
 };
 
 describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
-  it('is vacuously grounded when the answer makes no quantitative claim', () => {
-    const result = checkGrounding('Bright indirect light is best for most tropical houseplants.', [
-      HUMIDITY_SPAN,
-    ]);
-    expect(result.grounded).toBe(true);
-    expect(result.claimsChecked).toHaveLength(0);
-    expect(result.ungroundedClaims).toHaveLength(0);
+  describe('the guard never reports a pass it did not earn (#307)', () => {
+    it('reports "unverified" — not a pass — when it recognized no claim at all', () => {
+      const result = checkGrounding(
+        'Bright indirect light is best for most tropical houseplants.',
+        [HUMIDITY_SPAN]
+      );
+
+      expect(result.claimsChecked).toHaveLength(0);
+      expect(result.verdict).toBe('unverified');
+      expect(result.verdict).not.toBe('verified');
+      expect(result.ungroundedClaims).toHaveLength(0);
+      // Delivered, because a qualitative answer is legitimate — but the guard
+      // asserts nothing about it.
+      expect(isBlockingVerdict(result)).toBe(false);
+    });
+
+    it('exposes no boolean that could carry a pass with zero claims checked', () => {
+      const result = checkGrounding('Repot when roots circle the pot.', [HUMIDITY_SPAN]);
+
+      // The removed `grounded` field is the defect surface itself: a boolean
+      // cannot distinguish "checked and supported" from "checked nothing".
+      expect(result).not.toHaveProperty('grounded');
+    });
+
+    it.each([
+      ['Bright indirect light is best for most tropical houseplants.', [HUMIDITY_SPAN]],
+      ['This is the best houseplant in the entire world.', []],
+      ['Your calathea wants at least 50% humidity to stay happy.', [HUMIDITY_SPAN]],
+      ['Keep it at exactly 92% humidity.', [HUMIDITY_SPAN]],
+      ['The 7 gramophones arrived on 2026-08-09.', [HUMIDITY_SPAN]],
+      ['Fertilize every 2-4 weeks. Water when the top 3 inches are dry.', [FERTILIZING_SPAN]],
+    ])(
+      'a "verified" verdict always has at least one checked claim behind it: %s',
+      (answer, spans) => {
+        const result = checkGrounding(answer, spans as RetrievedSpan[]);
+
+        if (result.verdict === 'verified') {
+          expect(result.claimsChecked.length).toBeGreaterThan(0);
+          expect(result.ungroundedClaims).toHaveLength(0);
+          expect(result.unclassifiedNumericSentences).toHaveLength(0);
+        }
+      }
+    );
+
+    it('will not call an answer verified while numeric content in it went unchecked', () => {
+      // The percentage claim is supported; "3 fertilizers" fits no checkable
+      // shape. The answer as a whole has not been verified, and must not be
+      // reported as though it had.
+      const result = checkGrounding(
+        'Keep humidity at 50% or above. I compared 3 fertilizers for you.',
+        [HUMIDITY_SPAN]
+      );
+
+      expect(result.claimsChecked).toHaveLength(1);
+      expect(result.unclassifiedNumericSentences).toEqual(['I compared 3 fertilizers for you.']);
+      expect(result.verdict).toBe('unverified');
+      expect(isBlockingVerdict(result)).toBe(false);
+    });
+
+    it('reports numeric content it could not classify rather than treating it as clean', () => {
+      const result = checkGrounding(
+        'The 7 gramophones arrived on 2026-08-09; the visit was 8/9, and 4 timeshares were discussed.',
+        []
+      );
+
+      expect(result.claimsChecked).toHaveLength(0);
+      expect(result.unclassifiedNumericSentences).toHaveLength(1);
+      expect(result.verdict).toBe('unverified');
+    });
+
+    it('does not count a bare list marker as unclassified numeric content', () => {
+      const result = checkGrounding('Try these. 1. Move it closer to the window.', []);
+
+      expect(result.unclassifiedNumericSentences).toHaveLength(0);
+      expect(result.claimsChecked).toHaveLength(0);
+      expect(result.verdict).toBe('unverified');
+    });
   });
 
-  it('passes a claim whose number is lifted verbatim from a retrieved span', () => {
+  it('verifies a claim whose number is lifted verbatim from a retrieved span', () => {
     const result = checkGrounding('Your calathea wants at least 50% humidity to stay happy.', [
       HUMIDITY_SPAN,
     ]);
-    expect(result.grounded).toBe(true);
+    expect(result.verdict).toBe('verified');
     expect(result.claimsChecked).toHaveLength(1);
   });
 
-  it('passes a frequency claim ("every N weeks") lifted from a retrieved span', () => {
+  it('verifies a frequency claim ("every N weeks") lifted from a retrieved span', () => {
     const result = checkGrounding('Fertilize every 2-4 weeks during the growing season.', [
       FERTILIZING_SPAN,
     ]);
-    expect(result.grounded).toBe(true);
+    expect(result.verdict).toBe('verified');
   });
 
   it.each([
@@ -55,7 +129,8 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
   ])('flags the issue #307 fabricated dose/ratio example: %s', (answer, expectedClaim) => {
     const result = checkGrounding(answer, [DOSING_SPAN]);
 
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
+    expect(isBlockingVerdict(result)).toBe(true);
     expect(result.claimsChecked).toHaveLength(1);
     expect(result.ungroundedClaims).toHaveLength(1);
     expect(result.ungroundedClaims[0]).toMatch(expectedClaim);
@@ -69,7 +144,7 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
   ])('accepts a supported dose or ratio claim: %s', (answer) => {
     const result = checkGrounding(answer, [DOSING_SPAN]);
 
-    expect(result.grounded).toBe(true);
+    expect(result.verdict).toBe('verified');
     expect(result.claimsChecked).toHaveLength(1);
     expect(result.ungroundedClaims).toHaveLength(0);
   });
@@ -83,14 +158,14 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
   ])('canonicalizes supported numerator and denominator aliases: %s', (source, answer) => {
     const result = checkGrounding(answer, [{ source: 'dose.md', text: source }]);
 
-    expect(result.grounded).toBe(true);
+    expect(result.verdict).toBe('verified');
     expect(result.claimsChecked).toHaveLength(1);
   });
 
   it('does not let a supported numerator ground a substituted dose denominator', () => {
     const result = checkGrounding('Dilute to 1 teaspoon per cup of water.', [DOSING_SPAN]);
 
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.claimsChecked).toHaveLength(1);
     expect(result.ungroundedClaims).toEqual(['Dilute to 1 teaspoon per cup of water.']);
   });
@@ -100,8 +175,41 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
       { source: 'dose.md', text: 'Dilute to 1 teaspoon per 2 gallons.' },
     ]);
 
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.claimsChecked).toHaveLength(1);
+  });
+
+  describe('word-quantity dose claims (no digit, still a dilution instruction)', () => {
+    it.each([
+      'Feed at half strength during the growing season.',
+      'Feed at half the recommended strength.',
+      'Feed at half-strength during the growing season.',
+    ])('verifies a word-quantity dose the corpus actually gives: %s', (answer) => {
+      const result = checkGrounding(answer, [FERTILIZING_SPAN]);
+
+      expect(result.claimsChecked).toHaveLength(1);
+      expect(result.verdict).toBe('verified');
+    });
+
+    it.each([
+      'Feed at double strength during the growing season.',
+      'Feed at twice the recommended strength.',
+      'Use a full-strength dilution every week.',
+    ])('blocks a word-quantity dose the corpus never gives: %s', (answer) => {
+      const result = checkGrounding(answer, [FERTILIZING_SPAN]);
+
+      expect(result.claimsChecked).toHaveLength(1);
+      expect(result.verdict).toBe('ungrounded');
+      expect(isBlockingVerdict(result)).toBe(true);
+    });
+
+    it('treats "twice" and "double" as the same instruction on both sides', () => {
+      const result = checkGrounding('Mix a double concentration for hungry plants.', [
+        { source: 'dose.md', text: 'Some growers mix twice the concentration for hungry plants.' },
+      ]);
+
+      expect(result.verdict).toBe('verified');
+    });
   });
 
   it('keeps fl. oz together while splitting ordinary sentences', () => {
@@ -110,7 +218,7 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
       []
     );
 
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.claimsChecked).toEqual(['Apply 7 fl. oz per gallon.']);
     expect(result.ungroundedClaims).toEqual(['Apply 7 fl. oz per gallon.']);
   });
@@ -141,7 +249,7 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
   ])('recognizes the added volume/mass/dilution unit %s', (quantity) => {
     const result = checkGrounding(`Apply ${quantity} during feeding.`, []);
 
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.claimsChecked).toHaveLength(1);
   });
 
@@ -151,7 +259,7 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
       []
     );
 
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.claimsChecked).toHaveLength(2);
     expect(result.ungroundedClaims).toHaveLength(2);
   });
@@ -162,8 +270,9 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
       []
     );
 
-    expect(result.grounded).toBe(true);
     expect(result.claimsChecked).toHaveLength(0);
+    // Not a claim shape — and therefore not verified either.
+    expect(result.verdict).toBe('unverified');
   });
 
   it('flags a fabricated numeric claim with no support in any retrieved span', () => {
@@ -174,7 +283,7 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
     const result = checkGrounding('Your fern needs 92% humidity or it will die within a day.', [
       HUMIDITY_SPAN,
     ]);
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.ungroundedClaims).toHaveLength(1);
     expect(result.ungroundedClaims[0]).toMatch(/92%/);
   });
@@ -184,13 +293,13 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
       'Keep humidity above 50%, and raise it to 92% whenever the leaves curl.',
       [HUMIDITY_SPAN]
     );
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.ungroundedClaims[0]).toMatch(/92%/);
   });
 
   it('flags a numeric claim when there are no retrieved spans at all (no data, asserted anyway)', () => {
     const result = checkGrounding('Water it every 9 days without fail.', []);
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.ungroundedClaims).toHaveLength(1);
   });
 
@@ -199,7 +308,7 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
       'Calatheas want 50% humidity or more. Also, misting once will permanently fix it for 365 days.';
     const result = checkGrounding(answer, [HUMIDITY_SPAN]);
     expect(result.claimsChecked).toHaveLength(2);
-    expect(result.grounded).toBe(false);
+    expect(result.verdict).toBe('ungrounded');
     expect(result.ungroundedClaims).toHaveLength(1);
     expect(result.ungroundedClaims[0]).toMatch(/365 days/);
   });
@@ -208,8 +317,10 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
     // "the best plant ever" is an unverifiable qualitative claim; this
     // starter-version heuristic does not attempt semantic entailment (that's
     // the full RAGAS/FActScore-class check this repo has waived — see
-    // docs/RESPONSIBLE-TECH-AUDITS.md).
+    // docs/RESPONSIBLE-TECH-AUDITS.md). It is reported as unverified, which
+    // is the truth: nothing about it was checked.
     const result = checkGrounding('This is the best houseplant in the entire world.', []);
-    expect(result.grounded).toBe(true);
+    expect(result.verdict).toBe('unverified');
+    expect(isBlockingVerdict(result)).toBe(false);
   });
 });

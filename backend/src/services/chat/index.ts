@@ -28,7 +28,7 @@ import {
   type ProposeReminderResult,
   type ReminderProposal,
 } from './tools.js';
-import { checkGrounding, type RetrievedSpan } from './groundingGuard.js';
+import { checkGrounding, isBlockingVerdict, type RetrievedSpan } from './groundingGuard.js';
 import {
   appendMessage,
   appendMessagePair,
@@ -705,7 +705,7 @@ async function* turnEvents(
       if (response.stopReason !== 'tool_use' && retrievedSpans.length > 0) {
         const grounding = checkGrounding(extractAssistantText(response.content), retrievedSpans);
         const sourceCount = new Set(retrievedSpans.map((span) => span.source)).size;
-        if (!grounding.grounded) {
+        if (isBlockingVerdict(grounding)) {
           // Never log the claim text: chat content can itself contain PII.
           logger.warn(
             {
@@ -720,10 +720,9 @@ async function* turnEvents(
             ...response,
             content: [{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }],
           };
-        } else {
-          // A clean pass and a vacuous pass (zero recognized claims) must be
-          // distinguishable in production. Counts only: never log answer or
-          // source text, which can contain user-provided/PII-bearing content.
+        } else if (grounding.verdict === 'verified') {
+          // Counts only: never log answer or source text, which can contain
+          // user-provided/PII-bearing content.
           logger.info(
             {
               conversationId,
@@ -731,6 +730,19 @@ async function* turnEvents(
               sourceCount,
             },
             'chat_grounding_checked'
+          );
+        } else {
+          // Delivered, but the guard vouches for nothing here. This gets its
+          // own event name so a query for "answers the guard verified" can
+          // never sweep up answers it merely didn't recognize (#307).
+          logger.info(
+            {
+              conversationId,
+              claimsChecked: grounding.claimsChecked.length,
+              unclassifiedNumericCount: grounding.unclassifiedNumericSentences.length,
+              sourceCount,
+            },
+            'chat_grounding_unverified'
           );
         }
       }

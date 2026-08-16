@@ -1,6 +1,8 @@
 # 0008 — Unit-aware quantitative grounding for RAG answers
 
-**Status:** Accepted
+**Status:** Accepted (reporting bullet amended by
+[ADR 0009](0009-three-state-grounding-verdict.md) — the guard no longer reports a
+boolean `grounded`, and a zero-claim answer is no longer a pass)
 
 **Date:** 2026-08-09
 

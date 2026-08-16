@@ -27,6 +27,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   attribute, the way the neighbouring assertion in the same file already did.
   This is what fails `Test Frontend` on the jsdom 30 bump (#312); with this on
   `main`, that bump goes green on a rebase.
+- The RAG grounding guard no longer reports a pass for an answer it checked
+  nothing in. It returns a three-state verdict (`verified` / `unverified` /
+  `ungrounded`) instead of a boolean `grounded`, reports numeric content it
+  could not resolve to a checkable claim shape, and logs each verdict under its
+  own event name so `chat_grounding_checked` can no longer describe an answer
+  with zero claims checked. Word-quantity dose instructions ("half strength",
+  "double the dose", "twice the concentration") are now checked against the
+  retrieved corpus like numeric doses — the corpus gives its dilution guidance
+  in words, so a digit-only guard was still blind to it. Blocking behaviour is
+  unchanged except that an unsupported word-quantity dose now blocks too. See
+  [ADR 0009](docs/adr/0009-three-state-grounding-verdict.md).
 
 ### Security
 
