@@ -16,6 +16,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- The model card stops publishing its two eval figures as though they were
+  measurements. `recall@3 = 1.0` and `own-chunk-top-1 = 1.0` are 1.0 by
+  construction: the eval uses each corpus chunk's own precomputed embedding as
+  the query vector, and cosine(x, x) = 1 is the maximum possible score, so the
+  target cannot rank anywhere but first. That caveat existed only in
+  `evals/eval-baseline.json`'s `method` field and never reached the card. The
+  `model-index` front matter now carries self-describing metric ids and the
+  caveat inline, and the narrative explains what the numbers are a floor on.
+- The model card's benchmark size is corrected from "22-question" to the real
+  134 items, of which 102 corpus-class items are scored and 32 adversarial
+  items are labelled but ungraded. The count went stale on 2026-07-17 and
+  survived a month; the card's recheck cadence now includes any change to
+  `evals/benchmark.jsonl` or `evals/eval-baseline.json`, and
+  `backend/tests/eval/ragRetrieval.eval.test.ts` fails if the front matter
+  disagrees with either file.
+- `docs/roadmap.md`'s "Measured values" line carried the same two figures, the
+  same "22-question", and a measurement date of 2026-07-05 — twelve days before
+  the baseline it cites was generated. It now dates the baseline correctly,
+  states the by-construction caveat, and splits the standard's target into the
+  half that is met (question count) and the half that is not (live scoring).
+- `evals/eval-baseline.json`'s `method` said `ownChunkTop1Rate` is ~1.0 by
+  construction but did not say the same of `recallAt3`, which the same cosine
+  identity forces. It now says both.
+
 ### Fixed
 
 - `PageHeader`'s underline test no longer matches the SVG through a

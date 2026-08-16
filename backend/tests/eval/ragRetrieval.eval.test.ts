@@ -233,4 +233,59 @@ describe('RAG retrieval regression — starter eval (AIEV-02/26)', () => {
     ).toBeGreaterThanOrEqual(baseline.recallAt3);
     expect(ownChunkTop1Rate).toBeGreaterThanOrEqual(baseline.ownChunkTop1Rate);
   });
+
+  /**
+   * The published surface must not drift from the thing it describes.
+   *
+   * `evals/eval-baseline.json` has always carried the honest caveat that both
+   * figures are ~1.0 by construction (the query vector IS the target chunk's
+   * embedding, and cosine(x, x) = 1 is the maximum possible score). That
+   * caveat lived only in a JSON field nobody publishes, while `model-card.md`
+   * republished the two 1.0s as machine-readable `model-index` retrieval
+   * results — and went on calling the benchmark "22-question" for a month
+   * after it grew to 134. A caveat that does not reach the surface printing
+   * the number is not a caveat. This test makes the front matter follow the
+   * data.
+   */
+  it('model-card front matter cannot drift from the benchmark or the baseline', () => {
+    const card = readFileSync(resolve(REPO_ROOT, 'model-card.md'), 'utf8');
+    const frontMatter = card.split(/^---$/m)[1] ?? '';
+    expect(frontMatter.trim(), 'model-card.md must open with YAML front matter').not.toBe('');
+    // YAML folded scalars wrap mid-sentence; compare on flattened whitespace.
+    const flat = frontMatter.replace(/\s+/g, ' ');
+
+    const publishedValues = [...frontMatter.matchAll(/^\s*value:\s*([\d.]+)\s*$/gm)].map((m) =>
+      Number(m[1])
+    );
+    expect(
+      publishedValues.length,
+      'AI-EVALUATION-STANDARD §4 requires at least one model-index eval result'
+    ).toBeGreaterThan(0);
+    const fromBaseline = [baseline.recallAt3, baseline.ownChunkTop1Rate];
+    for (const value of publishedValues) {
+      expect(
+        fromBaseline,
+        `model-card.md publishes ${value}, which is not a value in evals/eval-baseline.json (${fromBaseline.join(', ')}) — regenerate the card in the same PR as the baseline`
+      ).toContain(value);
+    }
+
+    const adversarial = benchmark.length - corpusItems.length;
+    expect(
+      flat,
+      `model-card.md must state the real benchmark size (${benchmark.length})`
+    ).toContain(`${benchmark.length} items`);
+    expect(
+      flat,
+      `model-card.md must state how many items are actually scored (${corpusItems.length})`
+    ).toContain(`${corpusItems.length} corpus-class items`);
+    expect(
+      flat,
+      `model-card.md must state how many items are labelled but ungraded (${adversarial})`
+    ).toContain(`${adversarial} adversarial items`);
+
+    expect(
+      flat.toLowerCase(),
+      'the "1.0 by construction" caveat must appear in the machine-readable front matter, not only in eval-baseline.json'
+    ).toContain('by construction');
+  });
 });

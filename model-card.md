@@ -5,19 +5,49 @@ base_model: anthropic/claude-haiku-4-5 (Bedrock-hosted; configurable — see "Mo
 pipeline_tag: conversational
 library_name: aws-sdk-bedrock-runtime
 model-index:
+  # These are NOT retrieval-quality results. Nothing in this repo has ever
+  # embedded a benchmark question with the live embedding model; the eval
+  # feeds each corpus chunk's own precomputed vector back in as the query, so
+  # a perfect score is arithmetic, not performance (cosine(x, x) = 1 is the
+  # maximum possible similarity, so the target chunk cannot rank anywhere but
+  # first). The metric ids below say so, because a machine reading this
+  # front-matter will not read the narrative underneath it. The caveat in
+  # evals/eval-baseline.json ("method") is the source of truth.
   - name: family-greenhouse-plant-care-rag
     results:
       - task:
           type: retrieval
-          name: RAG retrieval (plant-care corpus)
+          name: >-
+            Corpus-integrity sanity check (anchor-chunk self-retrieval). Not a
+            measure of retrieval quality on real user queries; no live query
+            embedding is computed anywhere in this eval.
         dataset:
-          name: family-greenhouse starter benchmark
+          name: >-
+            family-greenhouse starter benchmark, 134 items; only the 102
+            corpus-class items are scored here. The 32 adversarial items
+            (should-refuse / out-of-corpus / household-data) are schema- and
+            count-gated but not behaviourally graded.
           type: evals/benchmark.jsonl
         metrics:
-          - type: recall@3
+          # eval-baseline.json calls this field recallAt3.
+          - type: anchor-chunk-self-retrieval-at-3
             value: 1.0
-          - type: own-chunk-top-1-rate
+            name: >-
+              1.0 by construction. Query vector IS the target chunk's
+              embedding, so the target is always in the top 3. Below 1.0 would
+              mean the corpus or the ranking code broke, not that retrieval
+              quality dropped.
+            verified: false
+          # eval-baseline.json calls this field ownChunkTop1Rate. The check
+          # compares the top hit's source ARTICLE, not the chunk itself, so
+          # the field name is looser than it sounds; measured 2026-08-15, the
+          # strict chunk-level rate is also 1.0, for the same reason.
+          - type: anchor-article-rank-1-rate
             value: 1.0
+            name: >-
+              1.0 by construction, same cause. A sanity floor on ranking and
+              corpus integrity, not an accuracy figure.
+            verified: false
 ---
 
 # Model card — Family Greenhouse plant-care assistant
@@ -129,10 +159,12 @@ that should run it. This card does not make that call — it surfaces it.
   presence as coverage of every delivered answer
   (`docs/adr/0009-three-state-grounding-verdict.md`).
 - **No live faithfulness/hallucination/refusal scoring** — this repo has not
-  run the model against a benchmark and measured its actual answer quality;
-  the eval-baseline in `evals/eval-baseline.json` measures retrieval-ranking
-  correctness only (see `evals/README.md` "Method — and its honest
-  limitation"). This is the single largest gap this card exists to disclose.
+  run the model against a benchmark and measured its actual answer quality.
+  The eval-baseline in `evals/eval-baseline.json` is a corpus-integrity and
+  ranking-code sanity floor whose two figures are 1.0 by construction (see
+  "Eval results" below and `evals/README.md` "Method — and its honest
+  limitation"); it is not a retrieval-quality measurement either. This is the
+  single largest gap this card exists to disclose.
 - **Tool-use loop divergence, mitigated:** per-turn tool-call cap of 5
   (`MAX_TOOL_CALLS_PER_TURN`), unit-tested.
 - **Cost/budget runaway, mitigated:** atomic per-household monthly token
@@ -141,12 +173,46 @@ that should run it. This card does not make that call — it surfaces it.
 
 ## Eval results
 
+**Nothing on this card is a measurement of answer quality, and the two
+numbers that look like retrieval scores are 1.0 by construction.** Read this
+section before quoting either of them.
+
 See [`evals/README.md`](evals/README.md) and
-[`evals/eval-baseline.json`](evals/eval-baseline.json). Current state:
-retrieval recall@3 = 1.0 and own-chunk top-1 rate = 1.0 against a 22-question
-starter benchmark (target per `AI-EVALUATION-STANDARD.md`: 100–500 questions
-with live faithfulness/hallucination/refusal scoring — not yet built, see the
-dated waiver in `docs/RESPONSIBLE-TECH-AUDITS.md`).
+[`evals/eval-baseline.json`](evals/eval-baseline.json).
+
+| Reported           | Value | What it actually is                                                                                                              |
+| ------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `recallAt3`        | 1.0   | Fraction of scored items whose expected source article appears in the top 3. **1.0 by construction.**                            |
+| `ownChunkTop1Rate` | 1.0   | Fraction where the anchor ranks first. **1.0 by construction.** Compares the top hit's source _article_, despite the field name. |
+
+Why "by construction": `backend/tests/eval/ragRetrieval.eval.test.ts` does not
+embed the benchmark question. It takes the corpus chunk that the question is
+anchored to and feeds _that chunk's own precomputed Titan vector_ back in as
+the query. Cosine similarity of a vector with itself is 1, the maximum
+possible score, so the anchor chunk cannot rank anywhere but first and its
+article cannot be absent from the top 3. Both figures are therefore a sanity
+floor on corpus integrity and the ranking code — they catch a corpus article
+being rewritten or removed out from under the benchmark, which is worth
+having — and they say nothing whatsoever about whether a real user's phrasing
+lands on the right chunk. `eval-baseline.json`'s `method` field has always
+said this; until 2026-08-15 the caveat did not travel to this card, which
+published the two 1.0s in machine-readable `model-index` front-matter as
+though they were results.
+
+Scope of the run (verified 2026-08-15 against the committed benchmark and
+corpus): `evals/benchmark.jsonl` holds **134 items**, of which the **102
+corpus-class items** are the only ones scored; the other 32
+(`should-refuse` / `out-of-corpus` / `household-data`) are schema-validated
+and count-gated but not behaviourally graded, because grading them requires
+the live generation-layer job that does not exist yet. The corpus is 74
+chunks across 11 articles. The card said "22-question" until 2026-08-15: that
+was the original benchmark size, and the claim went stale on 2026-07-17 when
+the benchmark was expanded, four days after this card's previous review date.
+
+Target per `AI-EVALUATION-STANDARD.md`: 100–500 questions with live
+faithfulness / hallucination / refusal scoring. The question count is now met;
+the scoring is not built. See the dated waiver in
+`docs/RESPONSIBLE-TECH-AUDITS.md`.
 
 ## Guardrails already in place (architecture, not evaluation — credit where due)
 
@@ -174,7 +240,12 @@ declaration in `docs/RESPONSIBLE-TECH-AUDITS.md`).
 ## Review
 
 - **Card owner:** Chelsea Kelly-Reif.
-- **Last reviewed:** 2026-07-13 (first version 2026-07-05; live controls re-verified 2026-07-13).
-- **Recheck cadence:** on any model-ID change, prompt rewrite, or new tool
-  added to `TOOL_REGISTRY`; at minimum quarterly alongside
-  `docs/RESPONSIBLE-TECH-AUDITS.md`.
+- **Last reviewed:** 2026-08-15 (first version 2026-07-05; live controls
+  re-verified 2026-07-13; eval-results section and `model-index` front-matter
+  corrected 2026-08-15).
+- **Recheck cadence:** on any model-ID change, prompt rewrite, new tool added
+  to `TOOL_REGISTRY`, **or any change to `evals/benchmark.jsonl` or
+  `evals/eval-baseline.json`**; at minimum quarterly alongside
+  `docs/RESPONSIBLE-TECH-AUDITS.md`. The benchmark-change trigger is new: the
+  2026-07-17 expansion from 22 to 134 items did not update this card, and the
+  stale count survived here for a month.
