@@ -32,6 +32,7 @@
     "sharedAccepted": "{{actor}} aceptó {{plant}} de {{household}}",
     "healthChecked": "{{actor}} revisó la salud de las hojas de {{plant}} — {{overall}}",
     "healthCheckedUnknown": "{{actor}} revisó la salud de las hojas de {{plant}}",
+    "healthCheckedUnlabelled": "{{actor}} solicitó una revisión de salud foliar para {{plant}} — este registro no indica si se realizó un análisis real o se mostró un resultado de demostración",
     "healthDemo": "{{actor}} vio un resultado de demostración de salud foliar para {{plant}} — no se realizó ningún análisis de imagen"
   },
   "spaces": {

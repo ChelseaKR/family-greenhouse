@@ -50,6 +50,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   "Plants 0 / Due today 0 / Overdue 0" — indistinguishable from a genuinely
   empty household, and reassuring in exactly the wrong direction. Missing data
   now renders the same em dash the loading state uses.
+- Activity rows for leaf-health checks recorded before the `demo` flag existed
+  no longer claim a check ran. Those rows are indistinguishable from demo
+  results — and a demo result means no image was analysed — so the feed now
+  states the request and says the record does not show whether a real analysis
+  or a demo result produced it, with a question-mark icon instead of the
+  success tick. Rows that carry `demo: false` are unchanged.
 
 ### Security
 

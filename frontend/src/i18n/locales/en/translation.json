@@ -30,6 +30,7 @@
     "sharedAccepted": "{{actor}} accepted {{plant}} from {{household}}",
     "healthChecked": "{{actor}} ran a leaf-health check on {{plant}} — {{overall}}",
     "healthCheckedUnknown": "{{actor}} ran a leaf-health check on {{plant}}",
+    "healthCheckedUnlabelled": "{{actor}} requested a leaf-health check for {{plant}} — this record doesn't say whether a real analysis ran or a demo result was shown",
     "healthDemo": "{{actor}} viewed a demo leaf-health result for {{plant}} — no image analysis was performed"
   },
   "spaces": {
