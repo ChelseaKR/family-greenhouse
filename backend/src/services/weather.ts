@@ -21,7 +21,9 @@ export interface WeatherSnapshot {
   /** ISO timestamp the snapshot was retrieved at. */
   observedAt: string;
   tempC: number;
-  /** Relative humidity 0–100. */
+  /** Outdoor relative humidity 0–100, at the city centroid OpenWeatherMap
+   *  geocoded. There is no indoor sensor anywhere in this product, so nothing
+   *  downstream may present this as a reading from inside the home. */
   humidity: number;
   /** OpenWeatherMap condition slug, e.g. "Clear", "Rain", "Snow". */
   condition: string;

@@ -56,6 +56,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   states the request and says the record does not show whether a real analysis
   or a demo result produced it, with a question-mark icon instead of the
   success tick. Rows that carry `demo: false` are unchanged.
+- Climate tips no longer call OpenWeatherMap's outdoor reading "Indoor
+  humidity". The reading is taken at the geocoded city centroid and there is no
+  indoor sensor anywhere in the product, so the low-humidity tip now says
+  "Outdoor humidity is around N%" and infers the indoor consequence in words
+  instead of attaching the number to a room it never measured; the
+  high-humidity tip is labelled the same way, and the dashboard climate card
+  reads "N% outdoor humidity". A regression test asserts no tip puts a measured
+  percentage next to the word "indoor". The `get_household_climate` chat tool
+  describes its payload as outdoor for the same reason: the model was handed a
+  bare `humidity` field and could phrase it as the user's room.
 
 ### Security
 
