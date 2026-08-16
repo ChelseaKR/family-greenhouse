@@ -42,10 +42,15 @@ export function computeStreak(task: Task, completions: TaskCompletion[]): number
 }
 
 /**
- * Walks the entire completion history and returns the longest run of
- * consecutive on-time completions ever observed for this task. Useful
- * for "best streak" stats on the per-plant report — distinct from
- * computeStreak, which only reports the *current* streak.
+ * Returns the longest run of consecutive on-time completions in the
+ * `completions` list it is handed — distinct from computeStreak, which only
+ * reports the *current* streak.
+ *
+ * It is NOT "the best streak ever". Its only caller (CareReportCard) passes
+ * `plant.recentCompletions`, which `GET /plants/{id}` caps at
+ * RECENT_COMPLETIONS_LIMIT rows across all of the plant's tasks, so the
+ * result is bounded by that window. Render it with the window named, or
+ * aggregate lifetime streaks server-side where the full history lives.
  */
 export function longestStreak(task: Task, completions: TaskCompletion[]): number {
   const own = completions

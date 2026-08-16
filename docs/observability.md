@@ -57,7 +57,9 @@ would read on the way back up.
    [`docs/deployment.md`](deployment.md) when failures line up with a release.
 4. For a burn-rate alarm, confirm the health-excluded request/error series. Fast burn pages on 7.2%
    across most of an hour; slow burn pages on 3% across most of six hours.
-5. After mitigation, confirm alarms return to `OK`, `/health` reports every component healthy, browser
+5. After mitigation, confirm alarms return to `OK`, `/health` reports `status: ok` with its
+   `database` component `ok` (`auth` and `mail` are never probed and always report `unknown` —
+   a green `/health` is not evidence that Cognito or SES recovered; check those directly), browser
    telemetry is ingesting, and a real authenticated read succeeds.
 
 ## User and error census

@@ -92,6 +92,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   percentage next to the word "indoor". The `get_household_climate` chat tool
   describes its payload as outdoor for the same reason: the model was handed a
   bare `humidity` field and could phrase it as the user's room.
+- The care report no longer presents a windowed count as a lifetime one.
+  `GET /plants/{id}` returns at most ten completions across all of a plant's
+  tasks, so "Total completions" and "Longest streak" were both capped at ten by
+  construction for any well-used plant. Both are now labelled with the window
+  they can actually see, the card says older care is not counted, and the
+  window size is a named constant on both sides of the API instead of a bare
+  `10`.
+- `docs/observability.md` no longer tells the on-call to confirm `/health`
+  "reports every component healthy". `/health` hardcodes `auth` and `mail` to
+  `unknown` — deliberately, since neither is probed — so that step could never
+  be satisfied, and a green `/health` is not evidence that Cognito or SES
+  recovered.
 
 ### Security
 
