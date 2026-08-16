@@ -28,6 +28,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   This is what fails `Test Frontend` on the jsdom 30 bump (#312); with this on
   `main`, that bump goes green on a rebase.
 
+### Security
+
+- Bumped the `js-yaml` override from `^4.2.0` to `^4.3.1`, closing
+  GHSA-5p4m-2wfm-xmqj (quadratic CPU consumption in `!!omap` resolution, high,
+  affected `>= 4.0.0, < 4.3.1`). The old range resolved to 4.3.0. js-yaml
+  reaches the graph transitively through `cosmiconfig` and `@lhci/utils`, so
+  Dependabot cannot open this bump itself — the override is the only lever. The
+  only package change in the lockfile is `js-yaml` 4.3.0 to 4.3.1. Scope is
+  development, so `npm audit --omit=dev --audit-level=high` was already passing
+  and is unaffected.
+
 ## [0.23.1] - 2026-08-09
 
 ### Changed
