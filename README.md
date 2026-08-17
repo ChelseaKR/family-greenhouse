@@ -143,8 +143,3 @@ self-host for your own household. What it doesn't allow is offering Family
 Greenhouse (or a substantial copy of it) to others as a hosted/managed
 service. If that's something you want to do, get in touch:
 support@familygreenhouse.net.
-
-## Support
-
-This is independent, unpaid work. If it has been useful to you, you can
-<a href='https://ko-fi.com/T6T6GMYTU' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
