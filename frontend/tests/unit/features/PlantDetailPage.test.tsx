@@ -177,4 +177,95 @@ describe('PlantDetailPage', () => {
     expect(recovery).toHaveTextContent('Choose the photo again below to retry');
     expect(screen.getByLabelText(/upload photo/i)).toBeEnabled();
   });
+
+  describe('streak chip', () => {
+    const waterTask = {
+      id: 't1',
+      plantId: 'p1',
+      plantName: 'Pothos',
+      type: 'water',
+      customType: null,
+      frequency: 7,
+      lastCompleted: null,
+      nextDue: '2099-01-01T00:00:00.000Z',
+      assignedTo: null,
+      assignedToName: null,
+      notes: null,
+      createdBy: '',
+      createdAt: '',
+    };
+
+    function completion(taskId: string, daysAgo: number) {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      return {
+        id: `c-${taskId}-${daysAgo}`,
+        taskId,
+        taskType: 'water',
+        completedBy: 'u1',
+        completedByName: 'A',
+        completedAt: d.toISOString(),
+        notes: null,
+      };
+    }
+
+    function servePlant(recentCompletions: unknown[]) {
+      server.use(
+        http.get(`${API}/plants/p1`, () =>
+          HttpResponse.json({
+            id: 'p1',
+            householdId: 'hh',
+            name: 'Pothos',
+            species: null,
+            location: null,
+            imageUrl: null,
+            notes: null,
+            createdAt: '',
+            createdBy: '',
+            updatedAt: '',
+            upcomingTasks: [waterTask],
+            recentCompletions,
+          })
+        )
+      );
+    }
+
+    it('states a plain count when the completion window is not full', async () => {
+      useAuthStore.setState({ accessToken: 'access-1' });
+      servePlant([completion('t1', 0), completion('t1', 7), completion('t1', 14)]);
+      renderDetail('p1');
+      expect(await screen.findByText(/3-cycle watering streak/)).toBeInTheDocument();
+    });
+
+    it('marks the count a floor when the window came back full', async () => {
+      // Regression for the defect #328 fixed on CareReportCard but not here:
+      // `recentCompletions` is capped at RECENT_COMPLETIONS_LIMIT rows across
+      // ALL of the plant's tasks, so a full window means older care exists
+      // that the page cannot see. Rendering "10-cycle watering streak" for a
+      // plant watered forty times states a ceiling as a measurement.
+      useAuthStore.setState({ accessToken: 'access-1' });
+      servePlant(Array.from({ length: 10 }, (_, i) => completion('t1', i * 7)));
+      renderDetail('p1');
+      expect(
+        await screen.findByText('🌱 10+ cycle watering streak (within the last 10 logged)')
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/🌱 10-cycle watering streak$/)).not.toBeInTheDocument();
+    });
+
+    it('marks the count a floor when other tasks fill the shared window', async () => {
+      // Only two of the ten rows belong to the water task; the other eight
+      // are a different task's. The window is still saturated, so the water
+      // streak is still a floor.
+      useAuthStore.setState({ accessToken: 'access-1' });
+      servePlant([
+        completion('t1', 0),
+        completion('t1', 7),
+        ...Array.from({ length: 8 }, (_, i) => completion('t2', i * 7)),
+      ]);
+      renderDetail('p1');
+      expect(
+        await screen.findByText('🌱 2+ cycle watering streak (within the last 10 logged)')
+      ).toBeInTheDocument();
+    });
+  });
 });

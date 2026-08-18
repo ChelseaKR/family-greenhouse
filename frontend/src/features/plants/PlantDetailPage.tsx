@@ -599,8 +599,12 @@ function TaskRow({
   isReadOnly,
 }: TaskRowProps) {
   const { t } = useTranslation();
-  const streak = computeStreak(task, completions);
-  const streakText = streakLabel(task, streak);
+  // `completions` is `plant.recentCompletions` — capped at
+  // RECENT_COMPLETIONS_LIMIT rows across ALL of this plant's tasks, so the
+  // reading may be a floor rather than a count. streakLabel renders the
+  // difference; don't collapse it back to a number here.
+  const streakReading = computeStreak(task, completions);
+  const streakText = streakLabel(task, streakReading);
   const style = taskTypeStyle(task.type);
   const { Icon } = style;
 
