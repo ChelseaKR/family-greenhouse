@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-08-18
+
 ### Changed
 
 - The model card stops publishing its two eval figures as though they were
@@ -41,6 +43,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - `evals/eval-baseline.json`'s `method` said `ownChunkTop1Rate` is ~1.0 by
   construction but did not say the same of `recallAt3`, which the same cosine
   identity forces. It now says both.
+- The vendored portfolio standards in `docs/standards/` are refreshed to
+  v2.0.0 (#310). Documentation only — no CI gate, workflow, or code changed as
+  part of the refresh.
 
 ### Fixed
 
@@ -135,6 +140,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   only package change in the lockfile is `js-yaml` 4.3.0 to 4.3.1. Scope is
   development, so `npm audit --omit=dev --audit-level=high` was already passing
   and is unaffected.
+- The production deploy workflow's advisory tag-signature check can now
+  actually verify a release tag. `git verify-tag` ran with no SSH
+  allowed-signers mapping configured, so every tag — signed or not — took the
+  warning path. The maintainer's SSH signing key (the key GitHub shows as
+  verified, and the same entry `outcome-receipts` releases are authorized
+  against) is now committed at `.github/allowed_signers`, and the check points
+  `gpg.ssh.allowedSignersFile` at it before verifying. The step stays advisory
+  (REL-08); it should flip to blocking once this release's signed tag verifies
+  in CI.
 
 ## [0.23.1] - 2026-08-09
 

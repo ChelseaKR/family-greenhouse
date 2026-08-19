@@ -115,16 +115,17 @@ jobs:
           echo "CHANGELOG.md has an entry for ${expected}."
 
       - name: Tag signature (REL-08, advisory for now)
-        # NOT yet hard-blocking: `git config tag.gpgSign true` was set locally
-        # as of this remediation pass (2026-07-05), but no release has been
-        # signed under it yet, and the maintainer's GPG/gitsign identity may
-        # not be provisioned in this CI runner. Hard-failing here would block
-        # the very next release on a signing setup that hasn't happened yet —
-        # the safer default is to warn loudly until at least one signed tag
-        # exists, then flip this to `exit 1` on failure.
+        # Release tags are SSH-signed (v0.23.1 onward carries an ssh-ed25519
+        # signature). The maintainer's signing key — the one GitHub's API
+        # reports as verified — is committed at .github/allowed_signers, the
+        # same file (and the same entry) outcome-receipts authorizes its
+        # releases against, so this runner can verify instead of always
+        # warning. Still NOT hard-blocking: flip the warning branch to
+        # `exit 1` once one release tag has verified green here.
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          git config gpg.ssh.allowedSignersFile .github/allowed_signers
           if git verify-tag "$VERSION" 2>&1; then
             echo "Tag $VERSION is signed and verified."
           else
