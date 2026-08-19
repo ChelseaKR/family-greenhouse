@@ -44,6 +44,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- The per-task streak chip on the plant detail page no longer states a capped
+  count as a measured one. #328 fixed `CareReportCard` because
+  `plant.recentCompletions` is capped at `RECENT_COMPLETIONS_LIMIT` rows across
+  ALL of a plant's tasks; `PlantDetailPage`'s `TaskRow` consumes that same array
+  through the same mechanism and was not touched, so it kept the same defect one
+  component over. A plant watered forty consecutive times could render at most
+  "10-cycle watering streak", and fewer than that in practice — those ten slots
+  are shared with the plant's fertilize/prune/repot rows, so a multi-task plant's
+  water streak is bounded by however many water rows survive the interleave.
+  `computeStreak` now returns a `StreakReading` (`cycles` plus `truncated`)
+  instead of a bare number: `truncated` is set when an unbroken run consumes
+  every row this task has in a window that came back full, which is precisely
+  the case where the window — not the household's care — is what ended the run.
+  `streakLabel` renders that as "10+ cycle watering streak (within the last 10
+  logged)" rather than "10-cycle watering streak", the same
+  state-the-window treatment `CareReportCard`'s labels got. An exact reading is
+  unchanged. Note the remaining gap, which this does not close: when a task's
+  newest completion is crowded out of the shared window entirely, the chip still
+  renders nothing — absence rather than a false claim, but not distinguishable
+  from "no streak".
 - `PageHeader`'s underline test no longer matches the SVG through a
   `svg[viewBox="…"]` CSS attribute selector. jsdom 30 stopped matching
   camelCase SVG attribute names in selectors — on 29.1.1 both the camelCase and
