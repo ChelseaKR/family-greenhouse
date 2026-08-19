@@ -58,6 +58,14 @@ jobs:
       - name: Verify API spec covers every handler route
         run: node scripts/check-api-spec.mjs
 
+      - name: Verify docs/testing.md matches the suite it documents
+        # Shared with `npm run verify` (scripts/check-docs-testing.mjs) so local
+        # pre-push and CI run the identical check — see CICD-27. Guards the
+        # test-file counts and the coverage-enforcement claims, which had
+        # drifted to the point of telling contributors that coverage was "not
+        # enforced" while three gates were enforcing it.
+        run: node scripts/check-docs-testing.mjs
+
       - name: Verify observability and SLO contract
         run: npm run observability:check
 

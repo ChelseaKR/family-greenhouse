@@ -49,7 +49,7 @@
     "mobile:validate": "node scripts/validate-store-release.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "mobile:release": "frontend/scripts/build-mobile-release.sh",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run i18n:check && npm run observability:check && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run i18n:check && npm run observability:check && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs && node scripts/check-docs-testing.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
