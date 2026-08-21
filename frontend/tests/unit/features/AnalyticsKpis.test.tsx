@@ -20,20 +20,39 @@ const API = 'http://localhost:4000';
  *
  * Unknown must render as unknown, and unknown must never look reassuring.
  */
-function renderAnalytics({ failing }: { failing: boolean }) {
-  const ok = (body: unknown) =>
-    failing
-      ? () => new HttpResponse(null, { status: 500 })
-      : () => HttpResponse.json(body as never);
+const EMPTY_REVIEW = {
+  year: 2026,
+  totalCompletions: 0,
+  byMember: [],
+  byTaskType: [],
+  topPlants: [],
+};
+
+/**
+ * `failing` fails every read together. `overrides` replaces one endpoint's
+ * body — or fails just that one with `'fail'` — so a PARTIAL failure (plants
+ * load, the year-in-review 500s) is reachable; that is the only shape in
+ * which the per-plant "completed" column can publish a wrong zero.
+ */
+function renderAnalytics({
+  failing,
+  overrides = {},
+}: {
+  failing: boolean;
+  overrides?: Partial<Record<'plants' | 'tasks' | 'daily' | 'review', unknown | 'fail'>>;
+}) {
+  const ok = (body: unknown, override?: unknown | 'fail') => {
+    if (override === 'fail' || (failing && override === undefined)) {
+      return () => new HttpResponse(null, { status: 500 });
+    }
+    return () => HttpResponse.json((override ?? body) as never);
+  };
 
   server.use(
-    http.get(`${API}/plants`, ok([])),
-    http.get(`${API}/tasks`, ok([])),
-    http.get(`${API}/households/hh-1/analytics/daily`, ok({ series: [] })),
-    http.get(
-      `${API}/households/hh-1/year-in-review`,
-      ok({ year: 2026, totalCompletions: 0, byMember: [], byTaskType: [], topPlants: [] })
-    ),
+    http.get(`${API}/plants`, ok([], overrides.plants)),
+    http.get(`${API}/tasks`, ok([], overrides.tasks)),
+    http.get(`${API}/households/hh-1/analytics/daily`, ok({ series: [] }, overrides.daily)),
+    http.get(`${API}/households/hh-1/year-in-review`, ok(EMPTY_REVIEW, overrides.review)),
     http.get(`${API}/households/hh-1`, () =>
       HttpResponse.json({
         id: 'hh-1',
@@ -139,5 +158,117 @@ describe('analytics KPI tiles', () => {
     await settled(container);
 
     expect(screen.getByRole('img', { name: /30-day completion trend/i })).toBeInTheDocument();
+  });
+
+  it('still earns the amber warning tone for a real overdue task', async () => {
+    // Positive control for the tone rule: the fix must not have made the
+    // tile incapable of warning. One genuinely overdue task → "1" in amber.
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { tasks: [overdueTask('task-1', 'plant-1')] },
+    });
+    await settled(container);
+
+    const overdue = within(kpiRow(container))
+      .getByText('Overdue now')
+      .closest('div') as HTMLElement;
+    await waitFor(() => expect(within(overdue).getByText('1')).toBeInTheDocument());
+    expect(overdue).toHaveClass('bg-amber-50');
+  });
+});
+
+/** An overdue task: due well before any "today" this test could run on. */
+function overdueTask(id: string, plantId: string) {
+  return {
+    id,
+    plantId,
+    plantName: 'Monstera',
+    type: 'water',
+    frequency: 7,
+    lastCompleted: null,
+    nextDue: '2020-01-01T08:00:00.000Z',
+    assignedTo: null,
+    assignedToName: null,
+    assignmentSource: null,
+    notes: null,
+    createdBy: 'user-1',
+    createdAt: '2019-12-25T08:00:00.000Z',
+  };
+}
+
+const PLANTS = [
+  {
+    id: 'plant-1',
+    householdId: 'hh-1',
+    name: 'Monstera',
+    species: null,
+    location: null,
+    imageUrl: null,
+    notes: null,
+    status: 'active',
+    createdAt: '',
+    createdBy: 'user-1',
+    updatedAt: '',
+  },
+  {
+    id: 'plant-2',
+    householdId: 'hh-1',
+    name: 'Pothos',
+    species: null,
+    location: null,
+    imageUrl: null,
+    notes: null,
+    status: 'active',
+    createdAt: '',
+    createdBy: 'user-1',
+    updatedAt: '',
+  },
+];
+
+describe('analytics per-plant completions', () => {
+  /** The "Per plant" card: the nearest ancestor of its heading that owns the
+   *  row list, so assertions can't accidentally match another card. */
+  async function perPlantCard() {
+    const heading = await screen.findByRole('heading', { name: 'Per plant' });
+    let card: HTMLElement | null = heading.parentElement;
+    while (card && !card.querySelector(':scope > ul')) card = card.parentElement;
+    if (!card) throw new Error('Per-plant card not rendered');
+    return within(card);
+  }
+
+  it('labels every plant "— completed" when the year-in-review read fails, never "0 completed"', async () => {
+    // Plants and tasks load fine; only the year-in-review 500s. `?? 0` used to
+    // turn that one failure into "0 completed" on every row of the household.
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { plants: PLANTS, tasks: [overdueTask('task-1', 'plant-1')], review: 'fail' },
+    });
+    await settled(container);
+
+    const card = await perPlantCard();
+    await waitFor(() => expect(card.getAllByText('— completed')).toHaveLength(2));
+    expect(card.queryByText('0 completed')).not.toBeInTheDocument();
+  });
+
+  it('shows the real completion count, and a real zero, when the year-in-review read succeeds', async () => {
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: {
+        plants: PLANTS,
+        tasks: [],
+        review: {
+          ...EMPTY_REVIEW,
+          totalCompletions: 3,
+          topPlants: [{ plantId: 'plant-1', count: 3 }],
+        },
+      },
+    });
+    await settled(container);
+
+    const card = await perPlantCard();
+    await waitFor(() => expect(card.getByText('3 completed')).toBeInTheDocument());
+    // Pothos genuinely has no completions this year — a real 0, not an unknown.
+    expect(card.getByText('0 completed')).toBeInTheDocument();
+    expect(card.queryByText('— completed')).not.toBeInTheDocument();
   });
 });
