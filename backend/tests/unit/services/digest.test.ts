@@ -421,7 +421,9 @@ describe('digest service', () => {
       ] as never);
 
       const result = await runWeeklyDigests(NOW);
-      expect(result).toEqual({ households: 2, sent: 1 });
+      // Attempted 2, delivered 1, and the crashed household is COUNTED as
+      // failed rather than folded into "processed".
+      expect(result).toEqual({ households: 2, sent: 1, failed: 1 });
       expect(email.sendEmail).toHaveBeenCalledOnce();
     });
   });
@@ -462,6 +464,23 @@ describe('digest service', () => {
       expect(text).toContain('- B: 12');
       expect(text).toContain('- water: 35');
       expect(text).toContain('- Monstera: 20 tasks');
+    });
+
+    it('composeRecapEmail lists at most ten most-pampered plants from a complete per-plant list', async () => {
+      // `review.topPlants` is every plant with a completion (the analytics
+      // page relies on that to read absence as a real zero); the recap is
+      // the one consumer that wants a top list, so it caps for itself.
+      const { composeRecapEmail } = await import('../../../src/services/digest.js');
+      const topPlants = Array.from({ length: 14 }, (_, i) => ({
+        plantId: `p${i}`,
+        count: 50 - i,
+      }));
+      const names = new Map(topPlants.map((p) => [p.plantId, `Plant ${p.plantId}`]));
+      const { text } = composeRecapEmail({ ...REVIEW, topPlants }, names);
+      expect(text).toContain('- Plant p0: 50 tasks');
+      expect(text).toContain('- Plant p9: 41 tasks');
+      expect(text).not.toContain('Plant p10:');
+      expect(text).not.toContain('Plant p13:');
     });
 
     it('sends one recap per email-enabled member and honors the once-per-year marker', async () => {

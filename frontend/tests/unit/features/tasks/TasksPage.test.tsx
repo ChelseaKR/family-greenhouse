@@ -191,3 +191,48 @@ describe('TasksPage notification deep links', () => {
     expect(screen.getByRole('button', { name: 'Today' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+describe('TasksPage overdue chip', () => {
+  function signIn() {
+    useAuthStore.setState({
+      accessToken: 'access-1',
+      user: { id: 'u1', email: 'me@example.com', name: 'Me', householdId: 'hh-1' } as User,
+    });
+  }
+  const climate = http.get(`${API}/households/hh-1/climate`, () =>
+    HttpResponse.json({ configured: false, weather: null, tips: [] })
+  );
+  const overdueChip = () =>
+    screen.getByRole('button', { name: /^Overdue/ }).querySelector('span') as HTMLElement;
+
+  it('does not publish "Overdue 0" while the tasks read has failed', async () => {
+    // The chip row renders outside the loading/error branch, so a 500 used
+    // to show the error alert AND a confident "0" in the overdue chip.
+    signIn();
+    server.use(
+      http.get(`${API}/tasks`, () => new HttpResponse(null, { status: 500 })),
+      climate,
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
+    renderTasksPage();
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(overdueChip()).toHaveTextContent('—');
+    expect(overdueChip()).toHaveAttribute('aria-label', 'Overdue count unknown');
+    expect(overdueChip()).not.toHaveTextContent('0');
+  });
+
+  it('still publishes a real zero once an empty schedule has loaded', async () => {
+    signIn();
+    server.use(
+      http.get(`${API}/tasks`, () => HttpResponse.json([])),
+      climate,
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
+    renderTasksPage();
+
+    expect(await screen.findByText('No tasks found')).toBeInTheDocument();
+    expect(overdueChip()).toHaveTextContent('0');
+    expect(overdueChip()).not.toHaveAttribute('aria-label');
+  });
+});

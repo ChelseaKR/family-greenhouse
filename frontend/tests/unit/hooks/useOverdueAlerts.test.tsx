@@ -5,7 +5,9 @@ import * as notifications from '@/utils/notifications';
 import type { Task } from '@/services/plantService';
 
 const NOW = new Date('2026-07-25T20:00:00.000Z');
-const notifySpy = vi.spyOn(notifications, 'notify').mockImplementation(() => {});
+// `notify` reports whether the Notification was actually shown; default to a
+// successful send so the dedupe assertions below describe delivered alerts.
+const notifySpy = vi.spyOn(notifications, 'notify').mockImplementation(() => true);
 const enabledSpy = vi.spyOn(notifications, 'isEnabledLocally');
 let enabled = true;
 
@@ -14,6 +16,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   sessionStorage.clear();
   notifySpy.mockClear();
+  notifySpy.mockImplementation(() => true);
   enabled = true;
   enabledSpy.mockImplementation(() => enabled);
 });
@@ -146,6 +149,29 @@ describe('useOverdueAlerts', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
     expect(notifySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a task whose notification the browser refused to construct, then dedupes it', async () => {
+    // iOS standalone PWAs can throw from `new Notification(...)`; `notify`
+    // swallows that and reports `false`. The task must NOT be recorded as
+    // announced on that outcome — it used to be, and the alert was then lost
+    // for the rest of the session.
+    notifySpy.mockImplementation(() => false);
+    renderHook(() => useOverdueAlerts([task('a', 1_000)], 'hh-1'));
+
+    await advance(1_000);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem('fg.overdueAlerts.announced.hh-1') ?? '').not.toContain('a');
+
+    // Next wake-up: the browser now accepts the notification.
+    notifySpy.mockImplementation(() => true);
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(notifySpy).toHaveBeenCalledTimes(2);
+    expect(sessionStorage.getItem('fg.overdueAlerts.announced.hh-1')).toContain('a');
+
+    // And now it is deduped like any delivered alert.
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(notifySpy).toHaveBeenCalledTimes(2);
   });
 
   it('cancels the due timer and event listeners on unmount', async () => {

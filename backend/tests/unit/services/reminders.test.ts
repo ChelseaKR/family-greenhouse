@@ -767,6 +767,8 @@ describe('reminders service', () => {
     // …but hhB is still processed.
     expect(result.households).toBe(2);
     expect(result.sent).toBe(1);
+    // …and the failure is counted, not folded into "processed".
+    expect(result.failed).toBe(1);
     expect(notifier.sendToUser).toHaveBeenCalledOnce();
   });
 

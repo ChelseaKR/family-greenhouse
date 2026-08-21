@@ -1,6 +1,16 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 
+// Pin the zone the suite runs in to what the deployed Lambdas use (no TZ
+// override exists in infrastructure/, so they run UTC). The recurrence math
+// in taskService (`setDate(getDate() + frequency)`) is local-zone arithmetic,
+// so without this the snooze/next-due date assertions were only green on
+// laptops whose zone happened to have no DST transition inside the fixture
+// window. Set here, in the main process, for the same reason as the frontend
+// config: worker threads inherit it, but assigning TZ inside one is inert.
+// An explicitly exported TZ (e.g. to reproduce a zone-specific failure) wins.
+process.env.TZ ??= 'UTC';
+
 export default defineConfig({
   test: {
     globals: true,

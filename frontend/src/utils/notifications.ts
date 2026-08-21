@@ -33,16 +33,26 @@ export function disableLocally(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-export function notify(title: string, options?: NotificationOptions): void {
-  if (!isEnabledLocally()) return;
+/**
+ * Show a browser notification. Returns `true` only when the Notification was
+ * actually constructed; `false` when notifications are off locally OR the
+ * browser rejected construction. Callers that remember "already told the
+ * user" must key off this, not off having called it: a swallowed constructor
+ * throw used to be recorded as delivered, and the task was never announced
+ * again that session.
+ */
+export function notify(title: string, options?: NotificationOptions): boolean {
+  if (!isEnabledLocally()) return false;
   try {
     new Notification(title, {
       icon: '/brand/icon-192.png',
       badge: '/brand/icon-192.png',
       ...options,
     });
+    return true;
   } catch {
     // Some browsers reject Notification construction (e.g. on iOS standalone
     // PWA without explicit permission) — silently swallow rather than blow up.
+    return false;
   }
 }

@@ -55,7 +55,7 @@ describe('notification support detection', () => {
     expect(isSupported()).toBe(false);
     expect(getPermission()).toBe('unsupported');
     expect(isEnabledLocally()).toBe(false);
-    expect(notify('hi')).toBeUndefined();
+    expect(notify('hi')).toBe(false);
     expect(constructed).toHaveLength(0);
   });
 
@@ -112,7 +112,7 @@ describe('notify', () => {
     localStorage.setItem(STORAGE_KEY, '1');
     installNotification('granted');
 
-    notify('Water the pothos', { body: 'Due today', icon: '/custom.png' });
+    expect(notify('Water the pothos', { body: 'Due today', icon: '/custom.png' })).toBe(true);
 
     expect(constructed).toEqual([
       {
@@ -125,17 +125,19 @@ describe('notify', () => {
   it('stays silent when the user has not opted in', () => {
     installNotification('granted');
 
-    notify('Water the pothos');
+    expect(notify('Water the pothos')).toBe(false);
 
     expect(constructed).toHaveLength(0);
   });
 
-  it('swallows browsers that reject Notification construction', () => {
+  it('swallows browsers that reject Notification construction and reports it was NOT shown', () => {
     localStorage.setItem(STORAGE_KEY, '1');
     installNotification('granted');
     constructorThrows = true;
 
-    expect(() => notify('Water the pothos')).not.toThrow();
+    // A swallowed throw is a failed send, not a delivered one — callers that
+    // dedupe "already announced" must be able to tell the difference.
+    expect(notify('Water the pothos')).toBe(false);
   });
 });
 

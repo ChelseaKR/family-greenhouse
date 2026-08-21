@@ -91,6 +91,34 @@ describe('getYearInReview', () => {
     expect(review.topPlants[0]).toEqual({ plantId: 'p1', count: 3 });
   });
 
+  it('returns EVERY plant with a completion, not a capped top ten', async () => {
+    // The analytics page treats a plant missing from this list as "0
+    // completed". A `.slice(0, 10)` here made that a lie for the eleventh
+    // plant onward — especially once retired plants occupied list slots.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const items = [];
+    for (let i = 0; i < 13; i++) {
+      for (let n = 0; n <= i; n++) {
+        items.push(
+          completion({
+            id: `c-${i}-${n}`,
+            completedBy: 'u1',
+            completedByName: 'Alice',
+            taskType: 'water',
+            plantId: `p${i}`,
+          })
+        );
+      }
+    }
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: items });
+    const { getYearInReview } = await import('../../../src/services/taskService.js');
+    const review = await getYearInReview('hh', 2026);
+
+    expect(review.topPlants).toHaveLength(13);
+    expect(review.topPlants[0]).toEqual({ plantId: 'p12', count: 13 });
+    expect(review.topPlants[12]).toEqual({ plantId: 'p0', count: 1 });
+  });
+
   it('passes the year window as a between key condition', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] });

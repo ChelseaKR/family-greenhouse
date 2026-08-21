@@ -522,7 +522,8 @@
       "cancelWindow": "Cancelar vacaciones",
       "noCoverOptions": "Añade otro miembro para delegar el cuidado.",
       "description": "Sus recordatorios irán al miembro que cubre hasta que termine el periodo."
-    }
+    },
+    "sitterLinksLoadFailed": "No pudimos cargar tus enlaces de cuidador existentes en este momento; los enlaces que creaste antes siguen activos."
   },
   "settings": {
     "title": "Ajustes",

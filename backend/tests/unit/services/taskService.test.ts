@@ -513,6 +513,32 @@ describe('taskService', () => {
     expect(kinds).toEqual(['Get', 'Update', 'Put']);
   });
 
+  it('completeTask writes nextDue = completion instant + frequency days (UTC), not the old due date', async () => {
+    // Characterization test: the value of `:nextDue` was never asserted
+    // anywhere, so the recurrence contract lived only in the code. Pinning
+    // it here makes any change to the anchor (completion instant vs. the
+    // scheduled due date) or to the unit (UTC calendar days, via setDate
+    // under TZ=UTC) a conscious one. Note the late-evening instant: this is
+    // the case where "+N UTC days" and "+N local days" diverge across DST.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-07T23:30:00.000Z'));
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Item: { ...baseTask, frequency: 7, nextDue: '2026-03-05T00:00:00.000Z' },
+      })
+      .mockResolvedValueOnce({ Attributes: { ...baseTask } })
+      .mockResolvedValueOnce({});
+    await completeTask('hh-1', 't1', 'user-1', 'Test');
+    const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as SentCommand;
+    // Anchored on `now`, not on the overdue 2026-03-05 due date (no catch-up).
+    expect(update.input.ExpressionAttributeValues[':nextDue']).toBe('2026-03-14T23:30:00.000Z');
+    expect(update.input.ExpressionAttributeValues[':lastCompleted']).toBe(
+      '2026-03-07T23:30:00.000Z'
+    );
+  });
+
   it('completeTask guards with attribute_exists + expected nextDue and syncs GSI keys', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { completeTask } = await import('../../../src/services/taskService.js');

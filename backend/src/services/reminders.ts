@@ -596,12 +596,18 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
 /**
  * Hourly scan across every household. Best-effort per household — one
  * household's failure must not abort the rest of the run.
+ *
+ * `households` is how many were ATTEMPTED and `failed` how many of those
+ * threw. Without `failed`, a run where every household crashed summarised
+ * as `{ households: N, sent: 0 }` — indistinguishable from "nobody had
+ * anything due".
  */
 export async function remindAllHouseholds(
   now: Date = new Date()
-): Promise<{ households: number; sent: number }> {
+): Promise<{ households: number; sent: number; failed: number }> {
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
+  let failed = 0;
   for (const id of ids) {
     try {
       sent += await remindHousehold(id, now);
@@ -609,8 +615,9 @@ export async function remindAllHouseholds(
       // Best-effort, but never silent: a swallowed error here previously hid
       // real failures (e.g. Intl throwing on a corrupt stored timezone, which
       // aborted reminders for every member after the bad one).
+      failed += 1;
       logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
     }
   }
-  return { households: ids.length, sent };
+  return { households: ids.length, sent, failed };
 }

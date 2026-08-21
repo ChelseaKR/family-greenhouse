@@ -120,12 +120,16 @@ export function useOverdueAlerts(
 
       for (const { task } of overdue) {
         if (announced.current.has(task.id)) continue;
-        announced.current.add(task.id);
-        changed = true;
-        notify(`${task.plantName} could use a little care`, {
+        // Only a notification that was actually shown counts as announced.
+        // Marking before the send meant a browser that rejected construction
+        // (iOS standalone PWA) silently lost the alert for the whole session.
+        const shown = notify(`${task.plantName} could use a little care`, {
           body: `${task.customType ?? task.type} is ready whenever you are.`,
           tag: `task-${task.id}`,
         });
+        if (!shown) continue;
+        announced.current.add(task.id);
+        changed = true;
       }
 
       if (changed) saveAnnounced(key, announced.current);

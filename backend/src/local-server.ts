@@ -3317,10 +3317,11 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
     byTaskType: [...typeCounts.entries()]
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count),
+    // Complete list, like the real service — the analytics page treats
+    // absence as a true zero.
     topPlants: [...plantCounts.entries()]
       .map(([plantId, count]) => ({ plantId, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10),
+      .sort((a, b) => b.count - a.count),
   });
 });
 

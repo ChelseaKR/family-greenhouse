@@ -269,7 +269,10 @@ export function AnalyticsPage() {
                 plant,
                 // A missing year-in-review read is unknown, not zero: `?? 0`
                 // here labelled every plant in the household "0 completed"
-                // whenever that one request failed.
+                // whenever that one request failed. Absence from a LOADED
+                // list is a real zero only because `topPlants` is complete
+                // (it used to be a top-10, which made this `?? 0` wrong for
+                // any active plant outside the cap).
                 count:
                   review === undefined
                     ? null

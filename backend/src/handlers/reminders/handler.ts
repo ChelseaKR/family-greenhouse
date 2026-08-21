@@ -11,4 +11,5 @@
  */
 import { remindAllHouseholds } from '../../services/reminders.js';
 
-export const handler = (): Promise<{ households: number; sent: number }> => remindAllHouseholds();
+export const handler = (): Promise<{ households: number; sent: number; failed: number }> =>
+  remindAllHouseholds();
