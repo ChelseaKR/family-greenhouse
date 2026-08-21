@@ -191,6 +191,38 @@ describe('AddPlantPage acceptSuggestion race guard', () => {
     expect(screen.queryByText('Toxic to pets')).not.toBeInTheDocument();
   });
 
+  it('drops the previous confident suggestions when a re-identify comes back empty', async () => {
+    // First run: two confident matches. Second run on the same photo: none.
+    // The stale list must not survive alongside "No suggestions came back" —
+    // that rendered a previous guess as if it were the current result.
+    renderPage();
+    await pickPhotoAndIdentify();
+    expect(screen.getAllByRole('button', { name: 'Use' })).toHaveLength(2);
+
+    vi.mocked(plantService.identifyPlant).mockResolvedValueOnce({
+      configured: true,
+      suggestions: [],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /identify from photo/i }));
+
+    expect(await screen.findByText(/No suggestions came back/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Monstera deliciosa/)).not.toBeInTheDocument();
+  });
+
+  it('drops the previous confident suggestions when a re-identify fails', async () => {
+    renderPage();
+    await pickPhotoAndIdentify();
+    expect(screen.getAllByRole('button', { name: 'Use' })).toHaveLength(2);
+
+    vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(new Error('Identify timed out'));
+    fireEvent.click(screen.getByRole('button', { name: /identify from photo/i }));
+
+    expect(await screen.findByText('Identify timed out')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Monstera deliciosa/)).not.toBeInTheDocument();
+  });
+
   it('explains that photo identification is unavailable when the provider is not configured', async () => {
     vi.mocked(plantService.identifyPlant).mockResolvedValue({
       configured: false,

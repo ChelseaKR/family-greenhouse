@@ -148,6 +148,11 @@ export function AddPlantPage() {
     setIsIdentifying(true);
     setError(null);
     setIdentifyNotice(null);
+    // A new identify REPLACES the previous result in every outcome. Leaving
+    // the old list mounted meant an empty or failed re-identify rendered
+    // "No suggestions came back" above a still-clickable "Monstera deliciosa
+    // — 90% confidence" from the last run: a guess presented as current.
+    setSuggestions(null);
     try {
       // Downscale BEFORE encoding — a raw iPhone photo (multi-MB HEIC/JPEG)
       // blows past the endpoint's body cap and the server rejects it outright.
@@ -161,7 +166,6 @@ export function AddPlantPage() {
       }
       const result = await plantService.identifyPlant(dataUrl);
       if (!result.configured) {
-        setSuggestions(null);
         setIdentifyNotice(
           'Photo identification is unavailable right now. You can still enter the species manually.'
         );
