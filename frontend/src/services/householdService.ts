@@ -292,5 +292,7 @@ export interface YearInReview {
   totalCompletions: number;
   byMember: Array<{ userId: string; name: string; count: number }>;
   byTaskType: Array<{ type: string; count: number }>;
+  /** Every plant with ≥1 completion this year, most-completed first — NOT a
+   *  capped top-N, so absence from this list is a genuine zero. */
   topPlants: Array<{ plantId: string; count: number }>;
 }

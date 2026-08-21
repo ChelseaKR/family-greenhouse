@@ -762,6 +762,14 @@ export interface YearInReview {
   totalCompletions: number;
   byMember: Array<{ userId: string; name: string; count: number }>;
   byTaskType: Array<{ type: string; count: number }>;
+  /**
+   * EVERY plant with at least one completion this year, most-completed
+   * first. Deliberately uncapped: this used to `.slice(0, 10)`, and the
+   * analytics page read "not in the list" as "0 completed" — wrong for any
+   * household where more than ten plants (including retired ones) had
+   * completions. A plant absent from this list genuinely had none; consumers
+   * that want a *top* list (the recap email) cap it themselves.
+   */
   topPlants: Array<{ plantId: string; count: number }>;
 }
 
@@ -814,8 +822,7 @@ export async function getYearInReview(householdId: string, year: number): Promis
       .sort((a, b) => b.count - a.count),
     topPlants: [...plantCounts.entries()]
       .map(([plantId, count]) => ({ plantId, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10),
+      .sort((a, b) => b.count - a.count),
   };
 }
 

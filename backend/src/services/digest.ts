@@ -36,6 +36,9 @@ import type { YearInReview } from './taskService.js';
  *  It does not cap what the digest may *count*: `composeDigestEmail` applies
  *  this to the body only, and the subject states the real total. */
 const TOP_PLANTS = 5;
+/** The recap LISTS this many "most pampered" plants. `review.topPlants` is
+ *  complete; the cap is a display concern and lives here. */
+const RECAP_TOP_PLANTS = 10;
 // Weekly marker outlives its week by one day; DynamoDB TTL sweeps it.
 const DIGEST_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
 // Per-user + household recap marker held ~60 days so January retries can't
@@ -348,18 +351,25 @@ export async function digestHousehold(
  */
 export async function runWeeklyDigests(
   now: Date = new Date()
-): Promise<{ households: number; sent: number }> {
+): Promise<{ households: number; sent: number; failed: number }> {
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
+  // `households` counts attempts; `failed` keeps a run where every household
+  // threw from summarising as "nobody had anything due".
+  let failed = 0;
   for (const id of ids) {
     try {
       sent += await digestHousehold(id, now);
     } catch (err) {
+      failed += 1;
       logger.warn({ err: (err as Error).message, householdId: id }, 'digest.household_failed');
     }
   }
-  logger.info({ households: ids.length, sent, msg: 'digest.run_complete' }, 'digest.run_complete');
-  return { households: ids.length, sent };
+  logger.info(
+    { households: ids.length, sent, failed, msg: 'digest.run_complete' },
+    'digest.run_complete'
+  );
+  return { households: ids.length, sent, failed };
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +409,7 @@ export function composeRecapEmail(
   }
   if (review.topPlants.length > 0) {
     lines.push('Most pampered plants:');
-    for (const p of review.topPlants) {
+    for (const p of review.topPlants.slice(0, RECAP_TOP_PLANTS)) {
       lines.push(
         `  - ${plantNames.get(p.plantId) ?? 'A former plant'}: ${p.count} ${p.count === 1 ? 'task' : 'tasks'}`
       );
@@ -604,20 +614,22 @@ export async function recapHousehold(
 export async function runYearRecaps(
   year?: number,
   now: Date = new Date()
-): Promise<{ households: number; sent: number; year: number }> {
+): Promise<{ households: number; sent: number; failed: number; year: number }> {
   const recapYear = year ?? defaultRecapYear(now);
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
+  let failed = 0;
   for (const id of ids) {
     try {
       sent += await recapHousehold(id, recapYear, now);
     } catch (err) {
+      failed += 1;
       logger.warn({ err: (err as Error).message, householdId: id }, 'recap.household_failed');
     }
   }
   logger.info(
-    { households: ids.length, sent, year: recapYear, msg: 'recap.run_complete' },
+    { households: ids.length, sent, failed, year: recapYear, msg: 'recap.run_complete' },
     'recap.run_complete'
   );
-  return { households: ids.length, sent, year: recapYear };
+  return { households: ids.length, sent, failed, year: recapYear };
 }
