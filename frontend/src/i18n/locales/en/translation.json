@@ -508,7 +508,8 @@
       "cancelWindow": "Cancel vacation",
       "noCoverOptions": "Add another member to hand off care.",
       "description": "Their reminders go to the covering member until the window ends."
-    }
+    },
+    "sitterLinksLoadFailed": "We couldn’t load your existing sitter links just now — any links you created earlier are still active."
   },
   "settings": {
     "title": "Settings",

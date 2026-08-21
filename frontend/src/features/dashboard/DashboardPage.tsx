@@ -92,7 +92,11 @@ export function DashboardPage() {
 
   useOverdueAlerts(upcomingTasks, householdId);
 
-  const { data: activity } = useQuery(
+  const {
+    data: activity,
+    isLoading: activityLoading,
+    error: activityError,
+  } = useQuery(
     householdQuery(
       (hh) => ['household', hh, 'activity'],
       // Pull a wider window so client-side filters have something to chew on;
@@ -342,7 +346,19 @@ export function DashboardPage() {
             </div>
           )}
         </div>
-        {!activity || activity.length === 0 ? (
+        {activityLoading ? (
+          <div className="px-6 py-2">
+            <ListSkeleton rows={4} />
+          </div>
+        ) : activityError ? (
+          // A failed feed read is not an empty feed. Rendering "No activity
+          // yet" here told a household whose fetch 500'd that nothing had
+          // happened — the sibling tasks and plants cards already separate
+          // these states; the activity card was the one that didn't.
+          <div className="p-6">
+            <Alert variant="error">{getErrorMessage(activityError)}</Alert>
+          </div>
+        ) : !activity || activity.length === 0 ? (
           <div className="p-8 text-center">
             <EmptyActivity className="mx-auto h-32 w-auto" />
             <p className="mt-3 text-sm text-gray-500">

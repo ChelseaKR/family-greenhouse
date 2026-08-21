@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
@@ -46,7 +46,7 @@ function runtimeEvent(type: string, payload: Record<string, unknown>): ActivityE
   } as unknown as ActivityEvent;
 }
 
-function renderDashboardActivity(activity: ActivityEvent[]) {
+function renderDashboardActivity(activity: ActivityEvent[] | 'fail') {
   server.use(
     http.get(`${API}/tasks/upcoming`, () => HttpResponse.json([])),
     http.get(`${API}/tasks`, () => HttpResponse.json([])),
@@ -61,7 +61,9 @@ function renderDashboardActivity(activity: ActivityEvent[]) {
         members: [{ userId: 'user-1', name: 'Chelsea', role: 'admin', joinedAt: '' }],
       })
     ),
-    http.get(`${API}/households/hh-1/activity`, () => HttpResponse.json(activity)),
+    http.get(`${API}/households/hh-1/activity`, () =>
+      activity === 'fail' ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(activity)
+    ),
     http.get(`${API}/households/hh-1/climate`, () => HttpResponse.json({ status: 'no_location' })),
     http.get(`${API}/households/hh-1/year-in-review`, () =>
       HttpResponse.json({
@@ -298,5 +300,25 @@ describe('dashboard activity filters', () => {
     ];
 
     expect(filterActivity(events, 'plants').map(({ type }) => type)).toEqual(plantTypes);
+  });
+});
+
+describe('dashboard activity feed states', () => {
+  it('renders a genuinely empty feed as "No activity yet"', async () => {
+    renderDashboardActivity([]);
+
+    expect(await screen.findByText(/No activity yet/)).toBeInTheDocument();
+  });
+
+  it('does not render a failed feed read as "No activity yet"', async () => {
+    // The activity query used to destructure only `data`, so a 500 fell
+    // through to the empty state and told the household nothing had
+    // happened. Unknown must read as unknown.
+    renderDashboardActivity('fail');
+
+    const card = (await screen.findByText('Recent activity')).closest('div.rounded-2xl');
+    expect(card).not.toBeNull();
+    await waitFor(() => expect(within(card as HTMLElement).getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByText(/No activity yet/)).not.toBeInTheDocument();
   });
 });

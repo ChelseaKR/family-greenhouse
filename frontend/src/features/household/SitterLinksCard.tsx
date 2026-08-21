@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardDocumentIcon, KeyIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { householdService, type CreatedSitterLink } from '@/services/householdService';
@@ -16,6 +17,7 @@ import { getErrorMessage } from '@/services/api';
  * to access the household. Revoking flips a link to inactive immediately.
  */
 export function SitterLinksCard({ householdId }: { householdId: string }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [created, setCreated] = useState<CreatedSitterLink | null>(null);
   const [copied, setCopied] = useState(false);
@@ -157,6 +159,15 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
       {createMutation.isError && (
         <Alert variant="error" className="mt-4">
           {getErrorMessage(createMutation.error)}
+        </Alert>
+      )}
+
+      {linksQuery.isError && (
+        // A failed read is not "no outstanding links". Rendering nothing here
+        // looked like "you have no live sitter links" while links that still
+        // grant access to the household's task list went un-revokable.
+        <Alert variant="error" className="mt-6">
+          {t('household.sitterLinksLoadFailed')} {getErrorMessage(linksQuery.error)}
         </Alert>
       )}
 

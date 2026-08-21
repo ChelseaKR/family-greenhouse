@@ -167,6 +167,13 @@ export function TasksPage() {
     () => filterTasksForSpace(tasks ?? [], plants ?? [], spaces, activeSpaceFilter),
     [activeSpaceFilter, plants, spaces, tasks]
   );
+  // `tasks` is undefined while loading AND after a failed read. The filter
+  // chips render outside the loading/error branch below, so counting
+  // `spaceScopedTasks` (coalesced from `?? []`) published "Overdue 0" next to
+  // the error alert — a failed schedule read dressed as a calm all-clear.
+  // Same three-state rule as the dashboard metrics: no data means no number.
+  const overdueCount =
+    tasks === undefined ? null : spaceScopedTasks.filter((t) => isOverdue(t.nextDue)).length;
   const isLoading =
     tasksLoading || (Boolean(requestedSpaceFilter) && (plantsLoading || spacesLoading));
   const error = tasksError || (requestedSpaceFilter ? (plantsError ?? spacesError) : null);
@@ -328,8 +335,11 @@ export function TasksPage() {
           >
             {f.label}
             {f.id === 'overdue' && (
-              <span className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-accent-100 text-accent-800">
-                {spaceScopedTasks.filter((t) => isOverdue(t.nextDue)).length}
+              <span
+                className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-accent-100 text-accent-800"
+                {...(overdueCount === null ? { 'aria-label': 'Overdue count unknown' } : {})}
+              >
+                {overdueCount === null ? '—' : overdueCount}
               </span>
             )}
           </button>
