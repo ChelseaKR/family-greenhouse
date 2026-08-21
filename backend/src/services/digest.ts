@@ -32,7 +32,9 @@ import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
 import type { YearInReview } from './taskService.js';
 
-/** Digest lists at most this many plants — it's a nudge, not an inventory. */
+/** Digest LISTS at most this many plants — it's a nudge, not an inventory.
+ *  It does not cap what the digest may *count*: `composeDigestEmail` applies
+ *  this to the body only, and the subject states the real total. */
 const TOP_PLANTS = 5;
 // Weekly marker outlives its week by one day; DynamoDB TTL sweeps it.
 const DIGEST_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
@@ -56,10 +58,17 @@ function taskTypeLabel(t: { type: string; customType: string | null }): string {
 }
 
 /**
- * The household's plants most at risk: every ACTIVE plant with at least one
- * overdue task, ranked by the max days-overdue across its tasks, capped at
- * the top 5. One due-window GSI1 query (cutoff = now ⇒ overdue only) plus
- * the active-plant read — the same shape the reminder scan uses.
+ * The household's plants most at risk: EVERY ACTIVE plant with at least one
+ * overdue task, ranked by the max days-overdue across its tasks. One
+ * due-window GSI1 query (cutoff = now ⇒ overdue only) plus the active-plant
+ * read — the same shape the reminder scan uses.
+ *
+ * Deliberately uncapped. This used to `.slice(0, TOP_PLANTS)` before
+ * returning, which made `atRisk.length` a number that could never exceed 5 —
+ * and `composeDigestEmail` then built the subject from it, telling a
+ * household with 23 neglected plants that "5 plants could use some care".
+ * A cap is a display concern, so the cap now lives in the composer (which
+ * still lists only the top few) and the count stays true.
  */
 export async function computePlantsAtRisk(
   householdId: string,
@@ -92,7 +101,7 @@ export async function computePlantsAtRisk(
     }
   }
 
-  return [...byPlant.values()].sort((a, b) => b.daysOverdue - a.daysOverdue).slice(0, TOP_PLANTS);
+  return [...byPlant.values()].sort((a, b) => b.daysOverdue - a.daysOverdue);
 }
 
 function overduePhrase(days: number): string {
@@ -100,19 +109,36 @@ function overduePhrase(days: number): string {
   return days === 1 ? 'waiting a day for some care' : `waiting ${days} days for some care`;
 }
 
-/** Plain-text weekly digest email body + subject. */
+/**
+ * Plain-text weekly digest email body + subject.
+ *
+ * `atRisk` is the household's FULL ranked at-risk list. The subject reports
+ * its real length; the body lists only the `TOP_PLANTS` waiting longest and
+ * says so when it is showing a subset. Counting the listed rows instead —
+ * what this did before — under-reported every household with more than five
+ * neglected plants, and under-reporting is the dangerous direction for a
+ * care-reminder product: it reassures precisely the households that most
+ * need the nudge.
+ */
 export function composeDigestEmail(atRisk: PlantAtRisk[]): { subject: string; text: string } {
+  const total = atRisk.length;
+  const listed = atRisk.slice(0, TOP_PLANTS);
   const subject =
-    atRisk.length === 1
+    total === 1
       ? 'Weekly digest: 1 plant could use some care'
-      : `Weekly digest: ${atRisk.length} plants could use some care`;
-  const lines = atRisk.map(
+      : `Weekly digest: ${total} plants could use some care`;
+  const lines = listed.map(
     (p, i) => `${i + 1}. ${p.plantName} — ${p.taskType} ${overduePhrase(p.daysOverdue)}`
   );
+  const plantWord = total === 1 ? 'plant' : 'plants';
+  const intro =
+    listed.length < total
+      ? `${total} ${plantWord} could use some catch-up care. Here are the ${listed.length} waiting longest:`
+      : `${total} ${plantWord} could use some catch-up care (the ${total === 1 ? 'one' : 'ones'} waiting longest first):`;
   const text = [
     'Your weekly Family Greenhouse check-in.',
     '',
-    'A few plants could use some catch-up care (the ones waiting longest first):',
+    intro,
     '',
     ...lines,
     '',

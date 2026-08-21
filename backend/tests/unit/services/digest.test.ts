@@ -137,7 +137,7 @@ describe('digest service', () => {
       expect(tasks.getTasksDueBy).toHaveBeenCalledWith('hh', NOW.toISOString());
     });
 
-    it('caps the list at the top 5 plants', async () => {
+    it('returns EVERY at-risk plant ranked, uncapped — the cap is the composer’s job', async () => {
       const tasks = await import('../../../src/services/taskService.js');
       const { computePlantsAtRisk } = await import('../../../src/services/digest.js');
       const plants = Array.from({ length: 7 }, (_, i) => ({ id: `p${i}`, name: `Plant ${i}` }));
@@ -151,9 +151,13 @@ describe('digest service', () => {
         })) as never
       );
 
+      // This used to `.slice(0, 5)` here, which made the returned length a
+      // number that could never exceed 5 — and composeDigestEmail then built
+      // the subject from it. The count must stay true; only the email body
+      // is allowed to show a subset.
       const result = await computePlantsAtRisk('hh', NOW);
-      expect(result).toHaveLength(5);
-      expect(result.map((r) => r.daysOverdue)).toEqual([7, 6, 5, 4, 3]); // most overdue kept
+      expect(result).toHaveLength(7);
+      expect(result.map((r) => r.daysOverdue)).toEqual([7, 6, 5, 4, 3, 2, 1]); // ranked
     });
 
     it('returns [] when nothing is overdue, without reading plants', async () => {
@@ -192,6 +196,46 @@ describe('digest service', () => {
       expect(text).toContain('1. Fern — mist waiting 10 days for some care');
       expect(text).toContain('2. Monstera — water waiting a day for some care');
       expect(text).toContain('3. Cactus — repot ready for a little care today');
+      // Nothing was withheld, so the body must not imply it was.
+      expect(text).not.toContain('waiting longest:');
+    });
+
+    /**
+     * Regression: the subject line counted the LISTED plants, not the
+     * at-risk plants. Because the list was capped at 5 by construction, a
+     * household with 23 neglected plants was told "5 plants could use some
+     * care" — false, and false in the reassuring direction, which is the
+     * dangerous one for a care-reminder product.
+     */
+    it('states the TRUE at-risk total in the subject, not the number of rows listed', async () => {
+      const { composeDigestEmail } = await import('../../../src/services/digest.js');
+      const atRisk = Array.from({ length: 23 }, (_, i) => ({
+        plantId: `p${i}`,
+        plantName: `Plant ${i}`,
+        taskType: 'water',
+        daysOverdue: 23 - i,
+      }));
+
+      const { subject, text } = composeDigestEmail(atRisk);
+
+      expect(subject).toBe('Weekly digest: 23 plants could use some care');
+      expect(subject).not.toContain('5 plants');
+      // The body still lists only the top 5 — and says so, so the subject's
+      // 23 and the five rows below it don't read as a contradiction.
+      expect(text).toContain('23 plants could use some catch-up care. Here are the 5 waiting');
+      expect(text).toContain('1. Plant 0 — water waiting 23 days for some care');
+      expect(text).toContain('5. Plant 4 — water waiting 19 days for some care');
+      expect(text).not.toContain('6. Plant 5');
+    });
+
+    it('keeps subject and body agreeing when a household has exactly one at-risk plant', async () => {
+      const { composeDigestEmail } = await import('../../../src/services/digest.js');
+      const { subject, text } = composeDigestEmail([
+        { plantId: 'p1', plantName: 'Monstera', taskType: 'water', daysOverdue: 4 },
+      ]);
+      expect(subject).toBe('Weekly digest: 1 plant could use some care');
+      expect(text).toContain('1 plant could use some catch-up care');
+      expect(text).toContain('1. Monstera — water waiting 4 days for some care');
     });
   });
 
@@ -217,6 +261,33 @@ describe('digest service', () => {
       expect(sent).toBe(1);
       expect(email.sendEmail).toHaveBeenCalledOnce();
       expect(vi.mocked(email.sendEmail).mock.calls[0][0].to).toBe('a@x.com');
+    });
+
+    /** End-to-end guard on the same defect: whatever the cap is, the count a
+     *  real household receives must be the count of its at-risk plants. */
+    it('emails the true at-risk count for a household well past the display cap', async () => {
+      const tasks = await import('../../../src/services/taskService.js');
+      const household = await import('../../../src/services/householdService.js');
+      const email = await import('../../../src/services/emailNotifier.js');
+      const { digestHousehold } = await import('../../../src/services/digest.js');
+      await mockConditionalMarkerStore();
+      const plants = Array.from({ length: 23 }, (_, i) => ({ id: `p${i}`, name: `Plant ${i}` }));
+      await mockActivePlants(plants);
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue(
+        plants.map((p, i) => ({
+          plantId: p.id,
+          type: 'water',
+          customType: null,
+          nextDue: overdueBy(i + 1),
+        })) as never
+      );
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      await mockPrefs({ u1: {} });
+
+      expect(await digestHousehold('hh', NOW)).toBe(1);
+      const { subject, text } = vi.mocked(email.sendEmail).mock.calls[0][0];
+      expect(subject).toBe('Weekly digest: 23 plants could use some care');
+      expect(text).toContain('23 plants could use some catch-up care. Here are the 5 waiting');
     });
 
     it('atomically reserves before SES so overlapping digest runs send once', async () => {

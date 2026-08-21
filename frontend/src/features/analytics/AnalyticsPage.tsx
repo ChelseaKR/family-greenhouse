@@ -91,7 +91,18 @@ export function AnalyticsPage() {
 
   // KPI tiles use already-fetched data — no extra round-trip.
   const overdueTasks = (tasks ?? []).filter((t) => isOverdue(t.nextDue));
-  const last7DaysCount = (daily?.series ?? []).slice(-7).reduce((sum, d) => sum + d.count, 0);
+
+  // `undefined` data covers loading AND a failed fetch. Coalescing it with
+  // `?? []` and publishing `.length` rendered a failed read as the number 0 —
+  // "Plants 0", "Overdue now 0" — and, worse, `overdueTasks.length > 0` being
+  // false also dropped the amber warning tone, so the failure arrived looking
+  // like a calm, confident all-clear. Same three-state rule the dashboard
+  // status line already follows (DashboardPage.tsx): no data means no number.
+  const plantCount = plants === undefined ? null : plants.length;
+  const taskCount = tasks === undefined ? null : tasks.length;
+  const overdueCount = tasks === undefined ? null : overdueTasks.length;
+  const last7DaysCount =
+    daily === undefined ? null : daily.series.slice(-7).reduce((sum, d) => sum + d.count, 0);
 
   // At-risk = plants whose tasks are overdue. Rank by max-days-overdue across
   // their tasks so the most-neglected plant surfaces first.
@@ -116,13 +127,15 @@ export function AnalyticsPage() {
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiTile label="Plants" value={(plants ?? []).length} />
-        <KpiTile label="Active tasks" value={(tasks ?? []).length} />
+        <KpiTile label="Plants" value={plantCount} />
+        <KpiTile label="Active tasks" value={taskCount} />
         <KpiTile label="Done last 7 days" value={last7DaysCount} />
         <KpiTile
           label="Overdue now"
-          value={overdueTasks.length}
-          tone={overdueTasks.length > 0 ? 'warning' : undefined}
+          value={overdueCount}
+          // An unknown overdue count is not a calm one: only a real, positive
+          // reading earns the reassuring-or-alarming tone either way.
+          tone={overdueCount !== null && overdueCount > 0 ? 'warning' : undefined}
         />
       </div>
 
@@ -136,8 +149,15 @@ export function AnalyticsPage() {
             <div className="flex justify-center py-6">
               <LoadingSpinner />
             </div>
+          ) : daily === undefined ? (
+            // Settled with no data = the read failed. `series ?? []` used to
+            // draw a flat, empty chart labelled "total 0 tasks" — a fabricated
+            // month of doing nothing. Say we don't know instead.
+            <p className="py-6 text-center text-sm text-gray-600">
+              We couldn&rsquo;t load the last 30 days just now.
+            </p>
           ) : (
-            <DailyTrend series={daily?.series ?? []} />
+            <DailyTrend series={daily.series} />
           )}
         </div>
       </Card>
@@ -247,10 +267,16 @@ export function AnalyticsPage() {
             {plants
               .map((plant) => ({
                 plant,
-                count: review?.topPlants.find((p) => p.plantId === plant.id)?.count ?? 0,
+                // A missing year-in-review read is unknown, not zero: `?? 0`
+                // here labelled every plant in the household "0 completed"
+                // whenever that one request failed.
+                count:
+                  review === undefined
+                    ? null
+                    : (review.topPlants.find((p) => p.plantId === plant.id)?.count ?? 0),
                 taskCount: tasks.filter((t) => t.plantId === plant.id).length,
               }))
-              .sort((a, b) => b.count - a.count)
+              .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
               .slice(0, 10)
               .map(({ plant, count, taskCount }) => (
                 <li key={plant.id} className="flex items-center gap-3 px-6 py-3 text-sm">
@@ -258,7 +284,9 @@ export function AnalyticsPage() {
                   <span className="text-gray-600">
                     {taskCount} task{taskCount === 1 ? '' : 's'}
                   </span>
-                  <span className="ml-auto text-gray-600 tabular-nums">{count} completed</span>
+                  <span className="ml-auto text-gray-600 tabular-nums">
+                    {count === null ? '— completed' : `${count} completed`}
+                  </span>
                 </li>
               ))}
           </ul>
@@ -345,7 +373,20 @@ function DailyTrend({ series }: DailyTrendProps) {
   );
 }
 
-function KpiTile({ label, value, tone }: { label: string; value: number; tone?: 'warning' }) {
+/**
+ * `value === null` means "we don't know" — the read hasn't settled or it
+ * failed. It renders an em dash, never a zero, and carries an accessible
+ * label so a screen reader hears "unknown" rather than a bare dash.
+ */
+function KpiTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | null;
+  tone?: 'warning';
+}) {
   return (
     <div
       className={clsx(
@@ -359,8 +400,9 @@ function KpiTile({ label, value, tone }: { label: string; value: number; tone?: 
           'mt-1 font-serif text-2xl tabular-nums',
           tone === 'warning' ? 'text-amber-900' : 'text-ink'
         )}
+        {...(value === null ? { 'aria-label': `${label}: unknown` } : {})}
       >
-        {value}
+        {value === null ? '—' : value}
       </p>
     </div>
   );
