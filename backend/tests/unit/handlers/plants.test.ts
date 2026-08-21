@@ -7,6 +7,7 @@ vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/enrichment.js', () => ({
   getSpeciesCached: vi.fn(),
+  lookupSpeciesCached: vi.fn(),
 }));
 // Serves double duty: authMiddleware validates the claim household against
 // this membership row, and the handler reads the denormalized member name
@@ -301,20 +302,23 @@ describe('plants handler', () => {
     const plantService = await import('../../../src/services/plantService.js');
     const enrichment = await import('../../../src/services/enrichment.js');
     const { createPlant } = await import('../../../src/handlers/plants/handler.js');
-    vi.mocked(enrichment.getSpeciesCached).mockResolvedValueOnce({
-      id: 7,
-      commonName: 'Monstera',
-      scientificName: 'Monstera deliciosa',
-      thumbnailUrl: null,
-      family: null,
-      cycle: null,
-      watering: null,
-      sunlight: [],
-      hardinessZone: null,
-      indoor: true,
-      edible: false,
-      poisonousToPets: null,
-      defaultImageUrl: null,
+    vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+      status: 'found',
+      result: {
+        id: 7,
+        commonName: 'Monstera',
+        scientificName: 'Monstera deliciosa',
+        thumbnailUrl: null,
+        family: null,
+        cycle: null,
+        watering: null,
+        sunlight: [],
+        hardinessZone: null,
+        indoor: true,
+        edible: false,
+        poisonousToPets: null,
+        defaultImageUrl: null,
+      },
     });
     vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p2' } as never);
 
@@ -421,6 +425,98 @@ describe('plants handler', () => {
       id: 'p1',
       upcomingTasks: [],
       recentCompletions: [],
+    });
+  });
+
+  describe('canonicalSpecies when the species catalog is unavailable', () => {
+    const putSpecies = (perenualSpeciesId: number) =>
+      buildEvent({
+        httpMethod: 'PUT',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify({ name: 'Pothos', perenualSpeciesId }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    it('keeps the stored canonical name when an edit re-sends the SAME catalog id', async () => {
+      // "Couldn't check" is not "no such species". An edit that resubmits the
+      // plant's existing perenualSpeciesId during a Perenual outage used to
+      // write canonicalSpecies: null over a previously-correct value.
+      const plantService = await import('../../../src/services/plantService.js');
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'unavailable',
+        reason: 'budget_exhausted',
+        result: null,
+      });
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+        id: 'p1',
+        householdId: 'hh-1',
+        perenualSpeciesId: 7,
+        canonicalSpecies: 'Monstera deliciosa',
+      } as never);
+      vi.mocked(plantService.updatePlant).mockResolvedValueOnce({ id: 'p1' } as never);
+
+      const res = (await updatePlant(
+        putSpecies(7),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      const input = vi.mocked(plantService.updatePlant).mock.calls[0][2];
+      expect(input.canonicalSpecies).toBeUndefined();
+      expect(input.perenualSpeciesId).toBe(7);
+    });
+
+    it('nulls the canonical name when the id CHANGES and cannot be verified', async () => {
+      // A new id the catalog could not confirm must not inherit the old
+      // species' canonical name — null is the honest fail-safe here.
+      const plantService = await import('../../../src/services/plantService.js');
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'unavailable',
+        reason: 'upstream_error',
+        result: null,
+      });
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+        id: 'p1',
+        householdId: 'hh-1',
+        perenualSpeciesId: 7,
+        canonicalSpecies: 'Monstera deliciosa',
+      } as never);
+      vi.mocked(plantService.updatePlant).mockResolvedValueOnce({ id: 'p1' } as never);
+
+      const res = (await updatePlant(
+        putSpecies(8),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(plantService.updatePlant).mock.calls[0][2].canonicalSpecies).toBeNull();
+    });
+
+    it('still writes a definite not_found as null', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'not_found',
+        result: null,
+      });
+      vi.mocked(plantService.updatePlant).mockResolvedValueOnce({ id: 'p1' } as never);
+
+      const res = (await updatePlant(
+        putSpecies(7),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(plantService.updatePlant).mock.calls[0][2].canonicalSpecies).toBeNull();
+      expect(plantService.getPlant).not.toHaveBeenCalled();
     });
   });
 

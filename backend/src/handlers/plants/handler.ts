@@ -53,20 +53,73 @@ async function resolveActorName(householdId: string, userId: string): Promise<st
   }
 }
 
+type CanonicalSpeciesResolution =
+  /** The catalog answered: a name, or a definite "no such species". */
+  | { status: 'resolved'; value: string | null }
+  /** The catalog could not be consulted (unconfigured, budget, upstream). */
+  | { status: 'unavailable' };
+
 /**
  * Resolve the integration-safe scientific name from the server-side species
  * catalog. The adjacent user-editable `species` field is intentionally never
  * trusted for outbound integrations.
+ *
+ * "The catalog said no" and "the catalog could not be reached" are returned
+ * as different states on purpose. Collapsing both to `null` — what this did
+ * before — meant an edit that re-sent the plant's existing `perenualSpeciesId`
+ * during a Perenual outage silently erased a previously-correct
+ * `canonicalSpecies`.
  */
-async function resolveCanonicalSpecies(perenualSpeciesId: number | null | undefined) {
-  if (!perenualSpeciesId) return null;
+async function resolveCanonicalSpecies(
+  perenualSpeciesId: number | null | undefined
+): Promise<CanonicalSpeciesResolution> {
+  if (!perenualSpeciesId) return { status: 'resolved', value: null };
   try {
-    const detail = await enrichment.getSpeciesCached(perenualSpeciesId);
-    return detail?.scientificName.trim() || null;
+    const lookup = await enrichment.lookupSpeciesCached(perenualSpeciesId);
+    if (lookup.status === 'unavailable') {
+      logger.warn(
+        { perenualSpeciesId, reason: lookup.reason },
+        'plant_canonical_species_lookup_unavailable'
+      );
+      return { status: 'unavailable' };
+    }
+    return { status: 'resolved', value: lookup.result?.scientificName.trim() || null };
   } catch (err) {
     logger.warn({ err, perenualSpeciesId }, 'plant_canonical_species_lookup_failed');
-    return null;
+    return { status: 'unavailable' };
   }
+}
+
+/**
+ * What `canonicalSpecies` an update should write, or `undefined` to leave it
+ * untouched:
+ *  - no species-related field in the body → untouched;
+ *  - a free-text `species` edit with no catalog id → null (user text is
+ *    never promoted to canonical);
+ *  - a catalog id the catalog resolved → its answer (name or null);
+ *  - a catalog id the catalog could NOT be consulted for → keep the stored
+ *    value if the plant already carries that same id (nothing changed, so
+ *    nothing should be erased), else null (a new id we couldn't verify).
+ */
+async function canonicalSpeciesForUpdate(
+  householdId: string,
+  plantId: string,
+  body: { perenualSpeciesId?: number | null; species?: string | null }
+): Promise<string | null | undefined> {
+  if (body.perenualSpeciesId === undefined) {
+    return body.species !== undefined ? null : undefined;
+  }
+  const resolution = await resolveCanonicalSpecies(body.perenualSpeciesId);
+  if (resolution.status === 'resolved') return resolution.value;
+  const current = await plantService.getPlant(householdId, plantId);
+  if (current && current.perenualSpeciesId === body.perenualSpeciesId) {
+    logger.info(
+      { plantId, perenualSpeciesId: body.perenualSpeciesId },
+      'plant_canonical_species_kept_during_outage'
+    );
+    return undefined;
+  }
+  return null;
 }
 
 // Hop cap on the ancestor-chain walk in updatePlant's cycle guard — see there.
@@ -220,10 +273,19 @@ export const createPlant = createHandler(
 
     let plant: Awaited<ReturnType<typeof plantService.createPlant>>;
     try {
-      const canonicalSpecies =
+      // On create there is no prior value to protect: an unavailable catalog
+      // leaves canonicalSpecies null (fail-safe — sprout omits the plant
+      // rather than describing it wrongly).
+      const resolution =
         validatedBody.perenualSpeciesId === undefined
           ? undefined
           : await resolveCanonicalSpecies(validatedBody.perenualSpeciesId);
+      const canonicalSpecies =
+        resolution === undefined
+          ? undefined
+          : resolution.status === 'resolved'
+            ? resolution.value
+            : null;
       plant = await plantService.createPlant(
         {
           ...validatedBody,
@@ -448,12 +510,11 @@ export const updatePlant = createHandler(
 
     let plant: Awaited<ReturnType<typeof plantService.updatePlant>>;
     try {
-      const canonicalSpecies =
-        validatedBody.perenualSpeciesId !== undefined
-          ? await resolveCanonicalSpecies(validatedBody.perenualSpeciesId)
-          : validatedBody.species !== undefined
-            ? null
-            : undefined;
+      const canonicalSpecies = await canonicalSpeciesForUpdate(
+        user.householdId!,
+        plantId,
+        validatedBody
+      );
       plant = await plantService.updatePlant(
         user.householdId!,
         plantId,
