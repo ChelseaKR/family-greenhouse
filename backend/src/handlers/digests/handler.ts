@@ -16,13 +16,14 @@
  */
 import { runWeeklyDigests, runYearRecaps } from '../../services/digest.js';
 
-export const runDigests = (): Promise<{ households: number; sent: number }> => runWeeklyDigests();
+export const runDigests = (): Promise<{ households: number; sent: number; failed: number }> =>
+  runWeeklyDigests();
 
 /** EventBridge can pass a constant input `{ "year": 2026 }` to recap a
  *  specific year; otherwise the previous calendar year is used. */
 export const runYearRecap = (
   event?: { year?: number } | null
-): Promise<{ households: number; sent: number; year: number }> =>
+): Promise<{ households: number; sent: number; failed: number; year: number }> =>
   runYearRecaps(typeof event?.year === 'number' ? event.year : undefined);
 
 /**
