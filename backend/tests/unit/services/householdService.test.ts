@@ -537,4 +537,18 @@ describe('householdService', () => {
     );
     await expect(removeMember('hh', 'admin')).rejects.toMatchObject({ name: 'LastAdminError' });
   });
+
+  it('every plan cap stays under the single-page member-query limit', async () => {
+    const { MEMBER_QUERY_LIMIT } = await import('../../../src/services/householdService.js');
+    const { PLANS } = await import('../../../src/models/plans.js');
+
+    // `getHouseholdMembers` is one un-paginated Query. That is only safe while
+    // no plan can hold more members than a single page returns. Raise
+    // `maxMembers` past this and the roster silently truncates instead of
+    // erroring — and reminders iterate exactly that roster, so the members
+    // past the cut are simply never reminded, with nothing recording why.
+    for (const plan of Object.values(PLANS)) {
+      expect(plan.maxMembers).toBeLessThan(MEMBER_QUERY_LIMIT);
+    }
+  });
 });

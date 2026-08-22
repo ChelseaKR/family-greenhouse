@@ -10,10 +10,10 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 
 | Layer                     | Tool               | Where                                                                     | Files | Test cases |
 | ------------------------- | ------------------ | ------------------------------------------------------------------------- | ----- | ---------- |
-| Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 90    | 1,279      |
+| Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 90    | 1,286      |
 | Backend integration       | vitest + supertest | `backend/tests/integration/`                                              | 8     | 199        |
 | Backend RAG eval          | vitest             | `backend/tests/eval/`                                                     | 1     | 7          |
-| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 96    | 684        |
+| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 97    | 691        |
 | Frontend colocated unit   | vitest             | `frontend/src/**/*.test.ts`                                               | 11    | 44         |
 | Frontend integration      | vitest + RTL + MSW | `frontend/tests/integration/`                                             | 1     | 1          |
 | Frontend e2e              | Playwright         | `frontend/tests/e2e/`                                                     | 24    | see below  |
@@ -21,11 +21,11 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,214 vitest cases** across 207 files — 1,485 backend, 729 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,228 vitest cases** across 208 files — 1,492 backend, 736 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
 
 Of the 24 Playwright specs, 22 run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 
-The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (measured 2026-08-21, Node 26.7.0 locally — CI pins Node 22 via .nvmrc, vitest 4.1.10) because collecting them means running the suites; reproduce with:
+The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (measured 2026-08-22, Node 26.7.0 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites; reproduce with:
 
 ```bash
 npm --workspace backend exec vitest list | wc -l

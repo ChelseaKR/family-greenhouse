@@ -388,6 +388,122 @@ describe('NotificationSettings', () => {
     }
   });
 
+  it('does not claim notifications are disabled when the server cleanup failed', async () => {
+    // Turning browser reminders off used to report success unconditionally.
+    // When the teardown failed, this device kept a live push subscription and
+    // the account-wide `browser` gate stayed open (correctly — it is shared
+    // with the user's other devices), so background reminders kept arriving
+    // at a device the user had just been told was silenced.
+    notificationApi.permission = 'granted';
+    notificationApi.enabledLocally = true;
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs({ browser: true }));
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: {
+            getSubscription: vi.fn().mockResolvedValue({
+              endpoint: 'https://fcm.googleapis.com/fcm/send/current-device',
+              // The browser-side unsubscribe went through; the server never
+              // heard about it, so the endpoint is still registered.
+              unsubscribe: vi.fn().mockResolvedValue(true),
+            }),
+          },
+        }),
+      },
+    });
+    vi.mocked(notificationService.unsubscribe).mockRejectedValue(new Error('offline'));
+
+    try {
+      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
+      expect(
+        screen.queryByText('Browser notifications disabled on this device.')
+      ).not.toBeInTheDocument();
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+      } else {
+        delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
+      }
+    }
+  });
+
+  it('does not claim notifications are disabled when the browser refused to unsubscribe', async () => {
+    notificationApi.permission = 'granted';
+    notificationApi.enabledLocally = true;
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs({ browser: true }));
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: {
+            getSubscription: vi.fn().mockResolvedValue({
+              endpoint: 'https://fcm.googleapis.com/fcm/send/current-device',
+              // `PushSubscription.unsubscribe()` resolving false means it did
+              // NOT unsubscribe. The result used to be discarded entirely.
+              unsubscribe: vi.fn().mockResolvedValue(false),
+            }),
+          },
+        }),
+      },
+    });
+    vi.mocked(notificationService.unsubscribe).mockResolvedValue({
+      ok: true,
+      remainingSubscriptions: 0,
+    });
+
+    try {
+      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+      } else {
+        delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
+      }
+    }
+  });
+
+  it('a device that never had a push subscription still reports a clean disable', async () => {
+    notificationApi.permission = 'granted';
+    notificationApi.enabledLocally = true;
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs({ browser: true }));
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistration: vi.fn().mockResolvedValue({
+          pushManager: { getSubscription: vi.fn().mockResolvedValue(null) },
+        }),
+      },
+    });
+
+    try {
+      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+
+      expect(
+        await screen.findByText('Browser notifications disabled on this device.')
+      ).toBeInTheDocument();
+      expect(notificationService.unsubscribe).not.toHaveBeenCalled();
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+      } else {
+        delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
+      }
+    }
+  });
+
   it('keeps email and SMS settings available when this browser lacks Notification API support', async () => {
     notificationApi.supported = false;
     notificationApi.permission = 'unsupported';

@@ -278,12 +278,22 @@ export function NotificationSettings() {
       if (!current) throw new Error(t('notifications.preferencesUnavailable'));
 
       let remainingSubscriptions: number | undefined;
+      // Whether background push for THIS device is known to be gone. It stays
+      // false while any step of the teardown failed or never ran, because a
+      // failed teardown leaves a live subscription: the browser keeps
+      // receiving reminders that the success copy has just told the user are
+      // off. Only a confirmed teardown (or a device that had no subscription
+      // to begin with) earns the confident message.
+      let backgroundPushCleared = false;
       try {
         if ('serviceWorker' in navigator) {
           const reg = await navigator.serviceWorker.getRegistration();
           const sub = await reg?.pushManager?.getSubscription();
           if (sub) {
-            await sub.unsubscribe().catch((cause) => {
+            // `PushSubscription.unsubscribe()` resolves false when it did not
+            // actually unsubscribe; a rejection is a hard failure. Neither is
+            // a teardown, so neither may be discarded.
+            const browserUnsubscribed = await sub.unsubscribe().catch((cause) => {
               console.warn('Browser push unsubscribe failed', cause);
               return false;
             });
@@ -292,11 +302,20 @@ export function NotificationSettings() {
               return undefined;
             });
             remainingSubscriptions = result?.remainingSubscriptions;
+            backgroundPushCleared = browserUnsubscribed === true && result !== undefined;
+          } else {
+            // No push subscription on this device: clearing the local
+            // foreground opt-in below is the whole teardown.
+            backgroundPushCleared = true;
           }
+        } else {
+          // No service worker => no background push was ever registered here.
+          backgroundPushCleared = true;
         }
       } catch (cause) {
         // A broken/stale service worker must not prevent this device's local
-        // foreground opt-in from being cleared.
+        // foreground opt-in from being cleared — but it does mean we could not
+        // confirm that background push is gone.
         console.warn('Browser push cleanup failed', cause);
       }
 
@@ -312,17 +331,24 @@ export function NotificationSettings() {
             )
           : current;
       disableLocally();
-      return updated;
+      return { updated, backgroundPushCleared };
     },
     onMutate: () => {
       setInfo(null);
       setError(null);
     },
-    onSuccess: (updated) => {
+    onSuccess: ({ updated, backgroundPushCleared }) => {
       queryClient.setQueryData(prefsKey, updated);
       setBrowserActive(false);
-      setInfo(t('notifications.browserDisabled'));
-      setError(null);
+      if (backgroundPushCleared) {
+        setInfo(t('notifications.browserDisabled'));
+        setError(null);
+      } else {
+        // Say what actually happened. Claiming "disabled" here sent the user
+        // away believing a channel was off while it was still delivering.
+        setInfo(null);
+        setError(t('notifications.browserDisabledCleanupUnconfirmed'));
+      }
     },
     onError: (err) => setError(getErrorMessage(err)),
   });

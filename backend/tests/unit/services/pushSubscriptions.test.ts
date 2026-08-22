@@ -92,6 +92,31 @@ describe('pushSubscriptions', () => {
     expect(cmd.input.Key).toEqual({ PK: 'USER#u1', SK: expectedSk(endpoint) });
   });
 
+  it('remainingSubscriptions is a real count, not one saturated at the delivery cap', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { deleteSubscription } = await import('../../../src/services/pushSubscriptions.js');
+
+    const revoked = 'https://fcm.googleapis.com/fcm/send/device-to-revoke';
+    // A partition that predates (or has drifted past) the 20-endpoint write
+    // guard. The delivery read slices to 20 on purpose; its LENGTH must not
+    // then be published to the client as "how many subscriptions remain".
+    const survivors = Array.from(
+      { length: 22 },
+      (_, i) => `https://fcm.googleapis.com/fcm/send/device-${i}`
+    );
+
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [storedRow(revoked), ...survivors.map((e) => storedRow(e))],
+      } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({
+        Items: survivors.map((e) => storedRow(e)),
+      } as never);
+
+    await expect(deleteSubscription('u1', revoked)).resolves.toBe(22);
+  });
+
   it('rejects arbitrary, cleartext, and private push endpoints before persistence', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { saveSubscription } = await import('../../../src/services/pushSubscriptions.js');

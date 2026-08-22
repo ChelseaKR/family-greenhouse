@@ -312,6 +312,24 @@ export async function listAllHouseholdIds(): Promise<string[]> {
   return ids;
 }
 
+/**
+ * Every member of a household.
+ *
+ * Deliberately a SINGLE page with no pagination loop, and that is only safe
+ * because of a constant in another file: the largest plan's `maxMembers` is
+ * 50 (`models/plans.ts`), comfortably under the 100 below. Raise `maxMembers`
+ * past this `Limit` and callers stop getting an error — they get a silently
+ * short roster. Reminder fan-out (`services/reminders.ts`) iterates exactly
+ * this list, so a truncated one is a member who is simply never reminded,
+ * with nothing anywhere saying so.
+ *
+ * If `maxMembers` ever grows, page this to exhaustion (see
+ * `plantService.queryAllPages`) rather than raising the two numbers in step.
+ * `householdService.test.ts` fails if any plan's `maxMembers` reaches this
+ * limit, so the coupling cannot be broken silently.
+ */
+export const MEMBER_QUERY_LIMIT = 100;
+
 export async function getHouseholdMembers(householdId: string): Promise<HouseholdMember[]> {
   const result = await dynamodb.send(
     new QueryCommand({
@@ -321,7 +339,8 @@ export async function getHouseholdMembers(householdId: string): Promise<Househol
         ':pk': `HOUSEHOLD#${householdId}`,
         ':sk': 'MEMBER#',
       },
-      Limit: 100,
+      // Bound by models/plans.ts `maxMembers` (max 50) — see the note above.
+      Limit: MEMBER_QUERY_LIMIT,
     })
   );
 

@@ -45,7 +45,10 @@ export const identify = createHandler(
     const allowance = identifyBudget.allowanceForPlan(plan.id);
     const meteringEnabled = identifyBudget.meteringEnabled();
     const upstreamConfigured = plantIdentification.isPlantIdentificationConfigured();
-    let used: number;
+    // `null` = we could not read/write an authoritative total. It is published
+    // as `usage.used` and must never be a stand-in zero or an unverified
+    // estimate; see the `finalUsed` note below.
+    let used: number | null;
 
     if (meteringEnabled && upstreamConfigured) {
       // Reserve BEFORE the paid call. A read-then-check gate lets concurrent
@@ -85,9 +88,15 @@ export const identify = createHandler(
     // Count only calls that actually consumed a Plant.id identification —
     // the "not configured" fallback costs nothing upstream. The increment is
     // fail-soft (null on DDB error): the user already got their result.
+    //
+    // A failed increment used to publish `used + 1`. That number is wrong in
+    // precisely the case that produces it: the write did not land, so the
+    // stored total is still `used` — and when the pre-read had already failed,
+    // `used` was itself a stand-in zero, making the published figure a guess
+    // built on a guess. Report only totals we actually read or wrote.
     let finalUsed = used;
     if (result.configured && !meteringEnabled) {
-      finalUsed = (await identifyBudget.incrementUsage(bucketId)) ?? used + 1;
+      finalUsed = await identifyBudget.incrementUsage(bucketId);
     }
 
     return successResponse({

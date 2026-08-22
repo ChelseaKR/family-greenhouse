@@ -245,6 +245,14 @@ export async function sendToUser(
       // SMS only ever goes to numbers their owner has confirmed — an
       // unverified number (incl. rows that predate verification) is a
       // structured-log skip, never a send.
+      //
+      // This must NOT be left at the initial 'disabled'. "The user turned SMS
+      // off" and "the user asked for SMS but has no usable recipient" are
+      // different states, and a consumer reading `channels.sms === 'disabled'`
+      // as the former would report a reachability failure as a settled user
+      // preference. `'skipped'` is the member that already means "requested,
+      // but no provider call was possible".
+      channels.sms = 'skipped';
       logger.info(
         { userId: recipient.userId, msg: 'sms_skipped_unverified' },
         'sms_skipped_unverified'

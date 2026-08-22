@@ -586,6 +586,7 @@
     "loadFailed": "No se pudieron cargar las preferencias de notificaciones.",
     "preferencesSaved": "Preferencias guardadas.",
     "browserDisabled": "Las notificaciones del navegador están desactivadas en este dispositivo.",
+    "browserDisabledCleanupUnconfirmed": "Este dispositivo ya no mostrará recordatorios mientras la aplicación esté abierta, pero no pudimos confirmar que las notificaciones push en segundo plano se hayan desactivado; puede que sigan llegando. Vuelve a intentarlo cuando tengas conexión.",
     "browserUnsupportedError": "Este navegador no admite notificaciones.",
     "browserDeniedError": "Se denegó el permiso de notificaciones. Actualiza la configuración del navegador para activarlo.",
     "browserDismissedError": "Las notificaciones no se activaron porque se cerró la solicitud de permiso.",
