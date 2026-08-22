@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { householdService } from '@/services/householdService';
@@ -56,6 +57,7 @@ function daysOverdue(nextDue: string, now = new Date()): number {
 }
 export function AnalyticsPage() {
   useDocumentTitle('Analytics');
+  const { t } = useTranslation();
   const { householdId, householdQuery } = useActiveHousehold();
 
   const { data: daily, isLoading: dailyLoading } = useQuery(
@@ -73,14 +75,14 @@ export function AnalyticsPage() {
     )
   );
 
-  const { data: plants } = useQuery(
+  const { data: plants, isLoading: plantsLoading } = useQuery(
     householdQuery(
       (hh) => ['plants', hh],
       () => plantService.getPlants()
     )
   );
 
-  const { data: tasks } = useQuery(
+  const { data: tasks, isLoading: tasksLoading } = useQuery(
     householdQuery(
       (hh) => ['tasks', hh, 'all'],
       () => taskService.getTasks()
@@ -106,6 +108,16 @@ export function AnalyticsPage() {
 
   // At-risk = plants whose tasks are overdue. Rank by max-days-overdue across
   // their tasks so the most-neglected plant surfaces first.
+  //
+  // The card has THREE states, and `(plants ?? [])` / `(tasks ?? [])` used to
+  // collapse all of them into one absent card: an empty `atRisk` was rendered
+  // as nothing at all, whether every plant was genuinely on schedule, a read
+  // had 500'd, or the reads were still in flight. A missing warning reads as
+  // reassurance — the same calm all-clear the KPI comment above warns about,
+  // reached here from a failed fetch. Both reads are required: without tasks
+  // we cannot say what is overdue, and without plants we cannot name it.
+  const riskInputsLoading = plantsLoading || tasksLoading;
+  const riskInputsUnavailable = !riskInputsLoading && (plants === undefined || tasks === undefined);
   const atRisk = (plants ?? [])
     .map((plant) => {
       const plantTasks = (tasks ?? []).filter((t) => t.plantId === plant.id);
@@ -202,8 +214,11 @@ export function AnalyticsPage() {
         </Card>
       )}
 
-      {/* Plants at risk */}
-      {atRisk.length > 0 && (
+      {/* Plants at risk. Rendered as soon as the reads settle — including when
+          they settle badly — so "we don't know" can never be mistaken for
+          "nothing is wrong". Still in flight stays silent: an in-flight read
+          is not an answer either way. */}
+      {!riskInputsLoading && (
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
@@ -211,20 +226,28 @@ export function AnalyticsPage() {
               description="Tasks overdue — the most-overdue plant first."
             />
           </div>
-          <ul className="divide-y divide-primary-100/60">
-            {atRisk.map(({ plant, overdueCount, worst }) => (
-              <li key={plant.id} className="px-6 py-3 text-sm">
-                <Link
-                  to={`/plants/${plant.id}`}
-                  className="flex items-center gap-3 hover:bg-parchment/60 -mx-6 px-6 py-1 -my-1"
-                >
-                  <span className="flex-1 truncate font-medium text-gray-900">{plant.name}</span>
-                  <span className="text-amber-700 tabular-nums">{overdueCount} overdue</span>
-                  <span className="text-gray-500 tabular-nums">worst {worst}d</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {riskInputsUnavailable ? (
+            <p role="status" className="px-6 py-4 text-sm text-gray-600">
+              {t('analytics.atRisk.unknown')}
+            </p>
+          ) : atRisk.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-gray-600">{t('analytics.atRisk.allClear')}</p>
+          ) : (
+            <ul className="divide-y divide-primary-100/60">
+              {atRisk.map(({ plant, overdueCount, worst }) => (
+                <li key={plant.id} className="px-6 py-3 text-sm">
+                  <Link
+                    to={`/plants/${plant.id}`}
+                    className="flex items-center gap-3 hover:bg-parchment/60 -mx-6 px-6 py-1 -my-1"
+                  >
+                    <span className="flex-1 truncate font-medium text-gray-900">{plant.name}</span>
+                    <span className="text-amber-700 tabular-nums">{overdueCount} overdue</span>
+                    <span className="text-gray-500 tabular-nums">worst {worst}d</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       )}
 
