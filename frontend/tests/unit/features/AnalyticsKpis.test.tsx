@@ -33,17 +33,27 @@ const EMPTY_REVIEW = {
  * body — or fails just that one with `'fail'` — so a PARTIAL failure (plants
  * load, the year-in-review 500s) is reachable; that is the only shape in
  * which the per-plant "completed" column can publish a wrong zero.
+ *
+ * `'pending'` holds one endpoint in flight forever, which is how the
+ * still-loading state is reached. Distinguishing loading from a settled
+ * failure is the whole point of the "Plants at risk" assertions below, and a
+ * resolved-but-slow response cannot express it.
  */
 function renderAnalytics({
   failing,
   overrides = {},
 }: {
   failing: boolean;
-  overrides?: Partial<Record<'plants' | 'tasks' | 'daily' | 'review', unknown | 'fail'>>;
+  overrides?: Partial<
+    Record<'plants' | 'tasks' | 'daily' | 'review', unknown | 'fail' | 'pending'>
+  >;
 }) {
-  const ok = (body: unknown, override?: unknown | 'fail') => {
+  const ok = (body: unknown, override?: unknown | 'fail' | 'pending') => {
     if (override === 'fail' || (failing && override === undefined)) {
       return () => new HttpResponse(null, { status: 500 });
+    }
+    if (override === 'pending') {
+      return () => new Promise<never>(() => {});
     }
     return () => HttpResponse.json((override ?? body) as never);
   };
@@ -270,5 +280,108 @@ describe('analytics per-plant completions', () => {
     // Pothos genuinely has no completions this year — a real 0, not an unknown.
     expect(card.getByText('0 completed')).toBeInTheDocument();
     expect(card.queryByText('— completed')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * "Plants at risk" was rendered as `{atRisk.length > 0 && <Card/>}`, and
+ * `atRisk` was built from `(tasks ?? [])`. That one coalesce collapsed three
+ * different situations into the same absent card:
+ *
+ *   - every plant is genuinely on schedule,
+ *   - the tasks read failed so we have no idea,
+ *   - the reads are still in flight.
+ *
+ * An absent "at risk" card reads as reassurance — it is the calm all-clear
+ * this file's own KPI comment warns about, arrived at from a 500. Absence of
+ * a warning is not evidence of safety, so the failed read has to say so.
+ */
+describe('analytics plants at risk', () => {
+  /**
+   * The ranked-list form of the card, located from its heading exactly like
+   * the per-plant card above. Only the positive control needs this scoping —
+   * plant names recur in the per-plant card, while the two state messages
+   * below are unique copy and are asserted against the whole page.
+   */
+  async function riskList() {
+    const heading = await screen.findByRole('heading', { name: 'Plants at risk' });
+    let card: HTMLElement | null = heading.parentElement;
+    while (card && !card.querySelector(':scope > ul')) card = card.parentElement;
+    if (!card) throw new Error('Plants-at-risk list not rendered');
+    return within(card);
+  }
+
+  it('says the risk list is unknown when the tasks read fails, instead of hiding the card', async () => {
+    // Plants load; only /tasks 500s. `(tasks ?? [])` made `atRisk` empty and
+    // the card vanished — indistinguishable from "nothing is overdue".
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { plants: PLANTS, tasks: 'fail' },
+    });
+    await settled(container);
+
+    await screen.findByRole('heading', { name: 'Plants at risk' });
+    await waitFor(() =>
+      expect(screen.getByText(/couldn.t check which plants are at risk/i)).toBeInTheDocument()
+    );
+    // And it must not simultaneously claim the all-clear.
+    expect(screen.queryByText(/nothing is overdue/i)).not.toBeInTheDocument();
+  });
+
+  it('says the risk list is unknown when the plants read fails', async () => {
+    // The card names plants, so a failed /plants read is equally unknowable —
+    // `(plants ?? [])` hid the card for exactly the same wrong reason.
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { plants: 'fail', tasks: [overdueTask('task-1', 'plant-1')] },
+    });
+    await settled(container);
+
+    await screen.findByRole('heading', { name: 'Plants at risk' });
+    await waitFor(() =>
+      expect(screen.getByText(/couldn.t check which plants are at risk/i)).toBeInTheDocument()
+    );
+  });
+
+  it('renders an explicit all-clear when both reads succeed and nothing is overdue', async () => {
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { plants: PLANTS, tasks: [] },
+    });
+    await settled(container);
+
+    await screen.findByRole('heading', { name: 'Plants at risk' });
+    await waitFor(() => expect(screen.getByText(/nothing is overdue/i)).toBeInTheDocument());
+    expect(screen.queryByText(/couldn.t check which plants are at risk/i)).not.toBeInTheDocument();
+  });
+
+  it('still ranks real at-risk plants, with neither the all-clear nor the unknown state', async () => {
+    // Positive control: the three-state split must not have cost the card its
+    // actual job.
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { plants: PLANTS, tasks: [overdueTask('task-1', 'plant-1')] },
+    });
+    await settled(container);
+
+    const list = await riskList();
+    await waitFor(() => expect(list.getByText('Monstera')).toBeInTheDocument());
+    expect(list.getByText('1 overdue')).toBeInTheDocument();
+    expect(screen.queryByText(/nothing is overdue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t check which plants are at risk/i)).not.toBeInTheDocument();
+  });
+
+  it('claims neither all-clear nor unknown while the tasks read is still in flight', async () => {
+    // In-flight is not an answer. `/tasks` never resolves here, so anything
+    // the card asserts at this point is asserted about data we do not have.
+    const { container } = renderAnalytics({
+      failing: false,
+      overrides: { plants: PLANTS, tasks: 'pending' },
+    });
+    await settled(container);
+
+    expect(screen.queryByRole('heading', { name: 'Plants at risk' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing is overdue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t check which plants are at risk/i)).not.toBeInTheDocument();
   });
 });

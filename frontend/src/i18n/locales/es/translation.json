@@ -649,5 +649,11 @@
       "createTask": "Crear tarea",
       "dismiss": "Descartar"
     }
+  },
+  "analytics": {
+    "atRisk": {
+      "unknown": "No hemos podido comprobar qué plantas están en riesgo en este momento.",
+      "allClear": "No hay nada atrasado: todas tus plantas van al día."
+    }
   }
 }

@@ -634,5 +634,11 @@
       "createTask": "Create task",
       "dismiss": "Dismiss"
     }
+  },
+  "analytics": {
+    "atRisk": {
+      "unknown": "We couldn’t check which plants are at risk just now.",
+      "allClear": "Nothing is overdue — every plant is on schedule."
+    }
   }
 }
