@@ -90,10 +90,20 @@ describe('identifyBudget service', () => {
     expect(cmd.input.Key.SK).toBe('MONTH#2026-06#HH#hh-1');
   });
 
-  it('fails OPEN: a DDB read error reports 0 used instead of blocking identify', async () => {
+  it('fails OPEN without inventing a reading: a DDB read error is null, not 0', async () => {
     vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('throttled') as never);
     const { getUsage } = await import('../../../src/services/identifyBudget.js');
-    expect(await getUsage('hh-1')).toBe(0);
+    // Still fails open — it resolves rather than throwing, so metering can
+    // never take down identify. But "we could not read the counter" is not
+    // the same fact as "nothing has been spent this month", and this value is
+    // published to the client as `usage.used`.
+    await expect(getUsage('hh-1')).resolves.toBeNull();
+  });
+
+  it('a genuinely missing row is a real zero, not unknown', async () => {
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    const { getUsage } = await import('../../../src/services/identifyBudget.js');
+    await expect(getUsage('hh-1')).resolves.toBe(0);
   });
 
   it('fails SOFT on increment: a DDB write error returns null, never throws', async () => {

@@ -111,6 +111,45 @@ describe('plants identify handler', () => {
     expect(JSON.parse(res.body).usage).toEqual({ used: 0, allowance: 3, meteringEnabled: false });
   });
 
+  it('a failed budget READ is published as unknown, not as "0 used this month"', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    // getUsage now answers `null` when DynamoDB would not tell it anything.
+    vi.mocked(identifyBudget.getUsage).mockResolvedValue(null);
+    vi.mocked(identifyBudget.incrementUsage).mockResolvedValue(null);
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({ configured: false });
+    vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValueOnce(false);
+
+    const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    // Still fails open — the identification itself succeeded. But the caller
+    // is told the total is unknown rather than being handed a confident zero.
+    expect(JSON.parse(res.body).usage).toEqual({
+      used: null,
+      allowance: 3,
+      meteringEnabled: false,
+    });
+  });
+
+  it('a failed budget INCREMENT is unknown, not an unverified used+1 estimate', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    vi.mocked(identifyBudget.getUsage).mockResolvedValue(4);
+    // The ADD never landed, so the stored total is still 4 — publishing 5
+    // reported a number that is wrong in exactly the case that produced it.
+    vi.mocked(identifyBudget.incrementUsage).mockResolvedValue(null);
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+      configured: true,
+      suggestions: [],
+    });
+
+    const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).usage.used).toBeNull();
+  });
+
   it('enforces the allowance with a 402 (plan name + upgrade pointer) ONLY when metering is enabled', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');

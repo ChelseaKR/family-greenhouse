@@ -147,7 +147,28 @@ export async function deleteSubscription(userId: string, endpoint: string): Prom
   );
   // Return an authoritative post-delete count so disabling push on this
   // device does not accidentally disable the user's other subscribed devices.
-  return (await getUserSubscriptions(userId)).length;
+  //
+  // Counted from the full partition, NOT from `getUserSubscriptions`, whose
+  // defensive `.slice(0, MAX_SUBSCRIPTIONS_PER_USER)` makes its length a
+  // capped number that can never exceed 20. The client is told this is how
+  // many subscriptions remain; a capped count published under that name is a
+  // number that stops being true exactly when a damaged partition makes it
+  // matter.
+  return await countUserSubscriptions(userId);
+}
+
+/**
+ * How many DISTINCT push endpoints this user actually has. Uncapped on
+ * purpose: the delivery read caps the fan-out, but a count that silently
+ * saturates at the cap is not a count.
+ */
+export async function countUserSubscriptions(userId: string): Promise<number> {
+  const rows = await getUserSubscriptionRows(userId);
+  const endpoints = new Set<string>();
+  for (const item of rows) {
+    if (typeof item.endpoint === 'string') endpoints.add(item.endpoint);
+  }
+  return endpoints.size;
 }
 
 export async function getUserSubscriptions(userId: string): Promise<StoredPushSubscription[]> {

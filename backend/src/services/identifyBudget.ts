@@ -74,11 +74,18 @@ function budgetKey(bucketId: string, now: Date): { PK: string; SK: string } {
 
 /**
  * Identifications used this month for the bucket (householdId, or
- * `user:{userId}` for householdless callers). Missing row → 0. DDB failures
- * fail OPEN (0 + a warn log): metering must never take down the identify
- * feature itself.
+ * `user:{userId}` for householdless callers).
+ *
+ * A MISSING row is a real zero — nothing has been spent this month. A FAILED
+ * read is `null`: we do not know. The two used to collapse to `0`, and the
+ * identify handler publishes this number to the client as
+ * `usage.used`, so a DynamoDB blip told the caller "you have used 0 of your
+ * 30 identifications this month" with exactly the confidence of a real
+ * reading. Behaviour is unchanged where it matters — this function is only
+ * consulted in tracking-only mode, and enforcement still runs through the
+ * fail-closed `reserveUsage` — but the number it returns is now honest.
  */
-export async function getUsage(bucketId: string, now: Date = new Date()): Promise<number> {
+export async function getUsage(bucketId: string, now: Date = new Date()): Promise<number | null> {
   try {
     const result = await dynamodb.send(
       new GetCommand({ TableName: TABLE_NAME, Key: budgetKey(bucketId, now) })
@@ -87,7 +94,7 @@ export async function getUsage(bucketId: string, now: Date = new Date()): Promis
     return typeof used === 'number' && used > 0 ? used : 0;
   } catch (err) {
     logger.warn({ err: (err as Error).message, bucketId }, 'identify.budget_read_failed');
-    return 0;
+    return null;
   }
 }
 

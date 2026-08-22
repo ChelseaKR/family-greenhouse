@@ -354,6 +354,40 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     expect(result.channels.sms).toBe('failed');
   });
 
+  it('an UNVERIFIED phone reports sms as skipped, never as disabled', async () => {
+    const { sendToUser, smsMock } = await loadSendToUser({
+      email: false,
+      sms: true,
+      phone: '+15551234567',
+      phoneVerified: false,
+    });
+
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+
+    expect(smsMock).not.toHaveBeenCalled();
+    // The user asked for SMS and has a number; what is missing is a usable
+    // (verified) recipient. Reporting that as 'disabled' publishes an
+    // unreachable channel as a settled user preference — the same state a
+    // user who deliberately turned SMS off produces. 'skipped' is the member
+    // that means "requested, but no provider call was possible".
+    expect(result.channels.sms).toBe('skipped');
+    expect(result.delivered).toBe(false);
+  });
+
+  it('sms genuinely switched off still reports disabled', async () => {
+    const { sendToUser, smsMock } = await loadSendToUser({
+      email: false,
+      sms: false,
+      phone: '+15551234567',
+      phoneVerified: true,
+    });
+
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+
+    expect(smsMock).not.toHaveBeenCalled();
+    expect(result.channels.sms).toBe('disabled');
+  });
+
   it('email-only user inside DND → dndSuppressedOnly (retry next run), not delivered', async () => {
     const { sendToUser } = await loadSendToUser({
       email: true,

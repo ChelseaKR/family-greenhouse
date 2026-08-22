@@ -572,6 +572,7 @@
     "loadFailed": "Notification preferences could not be loaded.",
     "preferencesSaved": "Preferences saved.",
     "browserDisabled": "Browser notifications disabled on this device.",
+    "browserDisabledCleanupUnconfirmed": "This device will no longer show reminders while the app is open, but we couldn't confirm that background push was turned off — it may still deliver notifications. Try again when you're back online.",
     "browserUnsupportedError": "This browser does not support notifications.",
     "browserDeniedError": "Notification permission was denied. Update your browser settings to enable it.",
     "browserDismissedError": "Notifications were not enabled because the permission prompt was dismissed.",

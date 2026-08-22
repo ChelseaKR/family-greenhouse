@@ -56,10 +56,29 @@ export function replaceCompletedTaskInTaskQuery(
   return replaceCompletedTaskInCache(value, updatedTask);
 }
 
+/**
+ * Reproduce the server's next-due arithmetic EXACTLY.
+ *
+ * `backend/src/services/taskService.ts` (`completeTask`) computes
+ * `nextDue.setDate(nextDue.getDate() + frequency)` in the process zone, and
+ * the deployed Lambdas run in UTC (no `TZ` is set anywhere in
+ * `infrastructure/`; `backend/vitest.config.ts` pins the same). `setDate` /
+ * `getDate` here run in the BROWSER's zone, so across a DST transition the
+ * two disagree by an hour — enough to move the rendered calendar date a
+ * whole day. The optimistic row then showed one date and visibly jumped to
+ * another when `onSuccess` swapped in the authoritative value: a guess
+ * rendered as the schedule.
+ *
+ * `setUTCDate` is identical to what the server computes under TZ=UTC, for
+ * every browser zone. It does not fix the underlying "a due date is an
+ * instant, not a calendar date in the household's zone" design problem
+ * (#342) — it only stops the client from publishing a different answer than
+ * the one the server is about to write.
+ */
 function optimisticCompletion(task: Task): Task {
   const completedAt = new Date();
   const nextDue = new Date(completedAt);
-  nextDue.setDate(nextDue.getDate() + task.frequency);
+  nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
   return {
     ...task,
     lastCompleted: completedAt.toISOString(),
