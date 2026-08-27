@@ -31,7 +31,7 @@ Three tiers, all enforced:
 - **pre-push**: `npm run verify` (the full local gate below, including both workspaces' coverage floors).
 - **CI** (`.github/workflows/ci.yml`): lint, typecheck, frontend+backend tests, Semgrep SAST, gitleaks, `npm audit`, terraform validate, build, Lighthouse, bundle-size, Playwright e2e + a11y.
 
-Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — chains `format:check → lint → typecheck → test:coverage → npm audit (--omit=dev --audit-level=high) → bare-marker grep`, the same stages CI runs. `test:coverage` is `vitest run --coverage` in both workspaces, so the coverage floors that gate `Test Frontend` / `Test Backend` are enforced locally too, not only in CI. `.husky/pre-push` already calls it.
+Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — chains `format:check → lint → typecheck → test:coverage → i18n:check → reads:check → observability:check → npm audit (--omit=dev --audit-level=high) → bare-marker grep`, the same stages CI runs. `test:coverage` is `vitest run --coverage` in both workspaces, so the coverage floors that gate `Test Frontend` / `Test Backend` are enforced locally too, not only in CI. `.husky/pre-push` already calls it.
 
 This repo is onboarded to the portfolio's `docs/standards/` (vendored, pinned `v1.0.1`) — see the README `## Standards conformance` table for per-standard state and [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md) for the detail. A change that touches AI/chat, adds a new external API, or changes what PII the app collects should update the relevant declaration in the same PR.
 
@@ -48,6 +48,7 @@ Types: `feat` `fix` `docs` `style` `refactor` `perf` `test` `chore` `ci` `build`
 - **TypeScript is strict.** No `any` escape hatches; no `@ts-ignore` (the one exception is `local-server.ts`, the dev-only mock).
 - **Validate at the boundary.** Every request body goes through a Zod schema (`backend/src/models/schemas.ts`); never trust input.
 - **Integrations degrade, never throw.** Perenual/Plant.id/OpenWeather/SES/SNS return `null`/log-line on failure so the app stays usable. Keep that pattern.
+- **A read has three outcomes, not two.** In flight, settled with data, and settled with no data are different, and the third one must be rendered as itself — never as a `0`, an empty list, or an absent card. An absent card is read as an all-clear nobody computed. `npm run reads:check` (in `verify` and CI's `Lint`) ratchets the one shape it can detect mechanically; the rule and its limits are [ADR 0010](docs/adr/0010-settled-read-states.md).
 - **DynamoDB is one table.** New access patterns are PK/SK/GSI design decisions — see [`docs/architecture.md`](docs/architecture.md) and write an ADR if it's non-obvious.
 - **New API route?** Add the `// METHOD /path` handler comment, the Terraform route, and the OpenAPI entry — `scripts/check-api-spec.mjs` (in CI) fails on drift.
 - **Accessibility is a release gate.** WCAG 2.2 AA, enforced by axe + Lighthouse in CI. See [`docs/accessibility.md`](docs/accessibility.md).

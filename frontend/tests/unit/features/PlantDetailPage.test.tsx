@@ -268,4 +268,89 @@ describe('PlantDetailPage', () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe('pet toxicity is not carried by the care-guide fetch (#350)', () => {
+    function serveEnrichedPlant() {
+      server.use(
+        http.get(`${API}/plants/p1`, () =>
+          HttpResponse.json({
+            id: 'p1',
+            householdId: 'hh',
+            name: 'Monstera',
+            species: 'Monstera deliciosa',
+            perenualSpeciesId: 42,
+            location: null,
+            imageUrl: null,
+            notes: null,
+            createdAt: '',
+            createdBy: '',
+            updatedAt: '',
+            upcomingTasks: [],
+            recentCompletions: [],
+          })
+        )
+      );
+    }
+
+    /** `/species/:id` — the toxicity lookup, on its own read. */
+    function serveToxicity(poisonousToPets: boolean | null) {
+      server.use(
+        http.get(`${API}/species/42`, () =>
+          HttpResponse.json({
+            status: 'found',
+            result: {
+              id: 42,
+              commonName: 'Monstera',
+              scientificName: 'Monstera deliciosa',
+              thumbnailUrl: null,
+              family: null,
+              cycle: null,
+              watering: null,
+              sunlight: [],
+              hardinessZone: null,
+              indoor: true,
+              edible: false,
+              poisonousToPets,
+              defaultImageUrl: null,
+            },
+          })
+        )
+      );
+    }
+
+    it('still warns about a toxic species when the care-guide read fails', async () => {
+      // The page used to show toxicity ONLY inside CareGuideCard, which
+      // returned null on a failed fetch. A Perenual outage therefore removed
+      // the warning with no trace — the same silence as "this species has no
+      // guide" — for a plant already living in the household.
+      useAuthStore.setState({ accessToken: 'access-1' });
+      serveEnrichedPlant();
+      serveToxicity(true);
+      server.use(
+        http.get(`${API}/species/42/guide`, () =>
+          HttpResponse.json({ message: 'upstream down' }, { status: 502 })
+        )
+      );
+      renderDetail('p1');
+
+      expect(await screen.findByText('Toxic to pets')).toBeInTheDocument();
+      expect(screen.getByText(/keep it out of reach/i)).toBeInTheDocument();
+      // The add-plant reassurance must not follow a plant that is already here.
+      expect(screen.queryByText(/You can still add it/i)).not.toBeInTheDocument();
+    });
+
+    it('says toxicity could not be checked when the toxicity read itself fails', async () => {
+      useAuthStore.setState({ accessToken: 'access-1' });
+      serveEnrichedPlant();
+      server.use(
+        http.get(`${API}/species/42`, () =>
+          HttpResponse.json({ message: 'boom' }, { status: 500 })
+        ),
+        http.get(`${API}/species/42/guide`, () => HttpResponse.json({ result: null }))
+      );
+      renderDetail('p1');
+
+      expect(await screen.findByText(/Couldn.?t check pet toxicity/i)).toBeInTheDocument();
+    });
+  });
 });

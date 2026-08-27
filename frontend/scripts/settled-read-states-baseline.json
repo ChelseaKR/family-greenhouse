@@ -1,0 +1,9 @@
+{
+  "$comment": "Accepted occurrences of the settled-read-state shape (see scripts/check-settled-read-states.mjs and docs/adr/0010-settled-read-states.md). Each entry states why this component's absence cannot be mistaken for an all-clear. The list may only SHRINK: adding an entry admits new debt and needs the reason to hold up in review; a stale entry fails the gate so a fix must delete its line. Do not add a component that carries a warning, a safety fact, or a count a reader would act on.",
+  "accepted": {
+    "components/HouseholdSwitcher.tsx::memberships": "A navigation control, not a report. Its absence removes the ability to switch households; it does not assert anything about the household's plants, and a user who cannot see the switcher has not been told that everything is fine.",
+    "features/dashboard/YearInReviewCard.tsx::review": "A retrospective recap of a year already lived. It carries no warning and nothing time-sensitive, and the component documents hiding rather than drawing empty bars. A missing recap makes no claim about today.",
+    "features/plants/PhotoTimeline.tsx::photos": "Decorative history. The plant's current photo is rendered by PlantImage regardless, so a missing strip removes no fact from the page, and the component already documents hiding at one photo or fewer.",
+    "features/plants/SuggestedCareCard.tsx::data": "A pre-save suggestion on the AddPlant form, adjacent to the fields it would fill. Absence means no suggestion was offered, which is what the user sees either way; the plant's real schedule is created explicitly afterwards. Pet toxicity on this same form is NOT here: PetToxicityNote carries it on its own read, precisely because that one is a safety fact."
+  }
+}

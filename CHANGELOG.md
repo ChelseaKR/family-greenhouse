@@ -16,6 +16,58 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- A settled read with no data is now a decision the repo has written down, not
+  one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
+  states the rule sixteen previous fixes (#319, #320, #326, #327, #328, #338,
+  #339, #341, #347, #348) were each arriving at separately: a query is in
+  flight, settled with data, or settled with none, and the third state must be
+  rendered as itself rather than as a `0`, an empty list, or an absent card.
+- `npm run reads:check` (`frontend/scripts/check-settled-read-states.mjs`),
+  wired into `npm run verify` and CI's required `Lint` job. It is a
+  two-directional ratchet over `settled-read-states-baseline.json`: a new
+  occurrence of the shape fails, and a baseline entry that no longer matches
+  anything also fails, so a fix cannot leave its own permission behind. Four
+  occurrences are accepted, each with the reason its absence asserts nothing a
+  reader would act on. The gate detects one shape and the ADR says plainly
+  which shapes it does not.
+
+### Fixed
+
+- The dashboard climate card no longer renders a failed read as a calm night
+  (#351). `if (!data) return null` put a failed climate read in the same
+  silence as "no household active" and "no location saved with the integration
+  off", so a household that would have seen the freeze warning — "Low of X°C
+  tonight. Bring tender plants indoors.", the only place the product carries
+  it — saw nothing at all, and nothing is what a night with no warning looks
+  like. A settled read with no data now says the local climate could not be
+  read and that tonight's frost, heat, and rain warnings are unchecked rather
+  than clear. Still-in-flight stays silent, and the genuine "no location"
+  states are unchanged.
+- Pet toxicity no longer rides on the care-guide fetch (#350). `CareGuideCard`
+  was the only surface on the plant detail page carrying pet toxicity — the one
+  fact its own docstring called "actively dangerous to miss" — and its
+  `if (isLoading || !data) return null` discarded a failed or slow
+  `/species/:id/guide` read in a way indistinguishable from "this species has
+  no guide". Toxicity moved to `PetToxicityNote`, which the plant page now
+  mounts on its own read, and which already distinguishes "couldn't check" from
+  "unknown" from "toxic" so none of them can resemble confirmed-safe. The note
+  takes a `context` so a plant already in the household is not told it can
+  still be added. `CareGuideCard` keeps only the long-form guide, and now
+  separates a failed read (says so) from a provider `null` (renders nothing,
+  because that is a real answer).
+- A failed API-key read no longer renders as "Active keys (0)" / "No keys yet."
+  (#349). Only `isLoading` was ever checked, so an admin hitting a transient
+  read failure saw the zero-state while keys issued earlier still granted
+  programmatic read/write access to household data, with no error shown and no
+  Revoke control to reach them. The list now says the read failed and that any
+  key issued earlier is still active until revoked; the count is published only
+  when it was actually read. A genuine empty is unchanged.
+- `docs/testing.md`'s test-case snapshot was five cases stale for the frontend
+  unit layer (the file-count gate does not check cases). Re-measured and
+  re-dated.
+
 ## [0.23.2] - 2026-08-18
 
 ### Changed

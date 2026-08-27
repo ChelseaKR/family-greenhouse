@@ -25,5 +25,6 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 | [0007](0007-i18n-json-catalogs-native-format.md)     | i18n: JSON catalogs, i18next-native format | Accepted |
 | [0008](0008-unit-aware-rag-grounding.md)             | Unit-aware quantitative RAG grounding      | Accepted |
 | [0009](0009-three-state-grounding-verdict.md)        | Three-state grounding verdict              | Accepted |
+| [0010](0010-settled-read-states.md)                  | Settled read states                        | Accepted |
 
 > Several earlier decisions (Cognito for auth, React+Vite+TanStack Query, gated external integrations) are documented inline in `docs/architecture.md` / `docs/strategy-review.md` and could be backfilled as ADRs when next touched.

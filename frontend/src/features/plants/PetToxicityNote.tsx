@@ -5,6 +5,14 @@ import { Alert } from '@/components/Alert';
 
 interface PetToxicityNoteProps {
   perenualSpeciesId: number | null;
+  /**
+   * Which surface is asking. `add` (the default) is the AddPlant form, where
+   * the note ends with a reassurance that a toxic species can still be saved.
+   * `owned` is a plant already living in the household, where that sentence
+   * would be nonsense — only the placement advice applies. Every other state's
+   * copy is context-neutral and shared.
+   */
+  context?: 'add' | 'owned';
 }
 
 /**
@@ -21,8 +29,13 @@ interface PetToxicityNoteProps {
  * unknown state is conservative: provider unavailability gets a retryable
  * "couldn't check" notice, while a real no-result or null toxicity field gets
  * an "unknown" notice. Neither can silently resemble confirmed-safe.
+ *
+ * `PlantDetailPage` mounts this too (`context="owned"`). Toxicity used to be
+ * shown there only inside `CareGuideCard`, whose failed fetch dropped it
+ * silently; carrying it on its own query means an outage in the long-form
+ * guide can no longer take the safety fact with it. See ADR 0010.
  */
-export function PetToxicityNote({ perenualSpeciesId }: PetToxicityNoteProps) {
+export function PetToxicityNote({ perenualSpeciesId, context = 'add' }: PetToxicityNoteProps) {
   const { t } = useTranslation();
   const { data, isError } = useQuery({
     queryKey: ['species', 'detail', perenualSpeciesId],
@@ -62,7 +75,9 @@ export function PetToxicityNote({ perenualSpeciesId }: PetToxicityNoteProps) {
 
   return (
     <Alert variant="warning" title={t('plants.petToxicity.toxicTitle')}>
-      {t('plants.petToxicity.toxicBody')}
+      {context === 'owned'
+        ? t('plants.petToxicity.toxicBodyOwned')
+        : t('plants.petToxicity.toxicBody')}
     </Alert>
   );
 }

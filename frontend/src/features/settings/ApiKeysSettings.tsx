@@ -59,6 +59,14 @@ export function ApiKeysSettings() {
     staleTime: 60_000,
   });
 
+  // A settled read with no rows is not the same as "no keys issued". Only
+  // `isLoading` was ever checked, so a failed list read fell through to
+  // `Active keys (0)` / "No keys yet." — an admin saw the zero-state while
+  // live keys still granted programmatic read/write access to household data,
+  // with no error and no Revoke control to reach them. The count is only
+  // publishable when it was actually read. See ADR 0010.
+  const keysUnavailable = !keysQuery.isLoading && keysQuery.data === undefined;
+
   const createMutation = useMutation({
     mutationFn: (vars: { label: string; scopes: ApiScope[] }) =>
       apiKeyService.create(vars.label, vars.scopes),
@@ -205,7 +213,7 @@ export function ApiKeysSettings() {
       <Card padding="none">
         <div className="px-6 py-4 border-b border-gray-200">
           <CardHeader
-            title={`Active keys (${keysQuery.data?.length ?? 0})`}
+            title={keysUnavailable ? 'Active keys' : `Active keys (${keysQuery.data?.length ?? 0})`}
             description="Revoking is immediate — clients using the key will start getting 401 on the next request."
           />
         </div>
@@ -214,7 +222,11 @@ export function ApiKeysSettings() {
             {getErrorMessage(revokeMutation.error)}
           </Alert>
         )}
-        {!keysQuery.data || keysQuery.data.length === 0 ? (
+        {keysUnavailable ? (
+          <Alert variant="error" className="mx-6 my-4">
+            {t('settings.apiKeys.loadFailed')} {getErrorMessage(keysQuery.error)}
+          </Alert>
+        ) : !keysQuery.data || keysQuery.data.length === 0 ? (
           <p className="p-6 text-sm text-gray-600">No keys yet.</p>
         ) : (
           <ul className="divide-y divide-gray-200">

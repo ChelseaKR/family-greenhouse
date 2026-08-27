@@ -69,6 +69,14 @@ jobs:
       - name: Verify observability and SLO contract
         run: npm run observability:check
 
+      - name: Settled-read-state ratchet (a failed read must not render as an all-clear)
+        # ADR 0010. Shared with `npm run verify` (root `reads:check`) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27). Lives in the required
+        # `Lint` job rather than the unrequired `i18n Gates` job, so it can
+        # actually block a merge.
+        run: npm run reads:check
+
       - name: Validate commits
         if: github.event_name == 'pull_request'
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
