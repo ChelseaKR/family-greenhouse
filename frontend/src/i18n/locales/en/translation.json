@@ -284,7 +284,8 @@
       "unknownTitle": "Pet toxicity unknown",
       "unknownBody": "No reliable pet-toxicity result is available for this species. Treat it as potentially unsafe and keep it out of reach until you can check the ASPCA’s plant list or ask your veterinarian.",
       "unavailableTitle": "Couldn’t check pet toxicity",
-      "unavailableBody": "We couldn’t verify pet-safety data for this species just now. Until you can check a trusted source such as the ASPCA’s plant list, keep it out of reach of cats and dogs."
+      "unavailableBody": "We couldn’t verify pet-safety data for this species just now. Until you can check a trusted source such as the ASPCA’s plant list, keep it out of reach of cats and dogs.",
+      "toxicBodyOwned": "Toxic to cats and dogs if chewed — keep it out of reach."
     },
     "backToPlants": "Back to plants",
     "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
@@ -417,6 +418,10 @@
       "goToOnboarding": "Set up my household",
       "metaTitle": "{{name}} — a cutting on Family Greenhouse",
       "metaDescription": "A cutting of {{name}}, shared by {{household}}. Grow your own and keep its story going on Family Greenhouse."
+    },
+    "careGuide": {
+      "unavailableTitle": "Care guide unavailable.",
+      "unavailableBody": "We couldn’t load this species’ care guide just now. Nothing about the plant has changed — try again in a little while."
     }
   },
   "importPlants": {
@@ -531,7 +536,8 @@
       "language": "Language"
     },
     "apiKeys": {
-      "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust."
+      "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust.",
+      "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Any key issued earlier is still active until you revoke it."
     },
     "billing": {
       "usageTitle": "Usage",
@@ -640,5 +646,9 @@
       "unknown": "We couldn’t check which plants are at risk just now.",
       "allClear": "Nothing is overdue — every plant is on schedule."
     }
+  },
+  "climate": {
+    "unavailableTitle": "Local climate unavailable.",
+    "unavailableBody": "We couldn’t read your local weather just now, so any frost, heat, or rain warning for tonight is unchecked rather than clear."
   }
 }

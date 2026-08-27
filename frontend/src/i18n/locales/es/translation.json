@@ -294,7 +294,8 @@
       "unknownTitle": "Toxicidad para mascotas desconocida",
       "unknownBody": "No hay un resultado fiable sobre la toxicidad de esta especie para las mascotas. Trátala como potencialmente peligrosa y mantenla fuera de su alcance hasta que puedas consultar la lista de plantas de la ASPCA o preguntar a tu veterinario.",
       "unavailableTitle": "No se pudo comprobar la toxicidad para mascotas",
-      "unavailableBody": "No pudimos verificar ahora mismo los datos de seguridad para mascotas de esta especie. Hasta que puedas consultar una fuente fiable como la lista de plantas de la ASPCA, mantenla fuera del alcance de gatos y perros."
+      "unavailableBody": "No pudimos verificar ahora mismo los datos de seguridad para mascotas de esta especie. Hasta que puedas consultar una fuente fiable como la lista de plantas de la ASPCA, mantenla fuera del alcance de gatos y perros.",
+      "toxicBodyOwned": "Tóxica para perros y gatos si la mastican: mantenla fuera de su alcance."
     },
     "backToPlants": "Volver a plantas",
     "deleteConfirm": "¿Seguro que quieres eliminar \"{{name}}\"?",
@@ -428,6 +429,10 @@
       "goToOnboarding": "Configurar mi hogar",
       "metaTitle": "{{name}} — un esqueje en Family Greenhouse",
       "metaDescription": "Un esqueje de {{name}}, compartido por {{household}}. Cultiva el tuyo y continúa su historia en Family Greenhouse."
+    },
+    "careGuide": {
+      "unavailableTitle": "Guía de cuidados no disponible.",
+      "unavailableBody": "No pudimos cargar la guía de cuidados de esta especie en este momento. Nada ha cambiado en la planta: inténtalo de nuevo más tarde."
     }
   },
   "importPlants": {
@@ -545,7 +550,8 @@
       "language": "Idioma"
     },
     "apiKeys": {
-      "writeScopeWarning": "Esta clave podrá completar y posponer tareas de tu hogar. Concede acceso de escritura solo a integraciones de confianza."
+      "writeScopeWarning": "Esta clave podrá completar y posponer tareas de tu hogar. Concede acceso de escritura solo a integraciones de confianza.",
+      "loadFailed": "No pudimos cargar tus claves de API, así que esta lista no refleja lo que existe. Cualquier clave emitida antes sigue activa hasta que la revoques."
     },
     "billing": {
       "usageTitle": "Uso",
@@ -655,5 +661,9 @@
       "unknown": "No hemos podido comprobar qué plantas están en riesgo en este momento.",
       "allClear": "No hay nada atrasado: todas tus plantas van al día."
     }
+  },
+  "climate": {
+    "unavailableTitle": "Clima local no disponible.",
+    "unavailableBody": "No pudimos consultar el clima de tu zona en este momento, así que los avisos de helada, calor o lluvia de esta noche están sin comprobar, no descartados."
   }
 }

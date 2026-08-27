@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import {
   ExclamationTriangleIcon,
@@ -14,14 +15,27 @@ import { EmptyClimate } from '@/components/illustrations/EmptyClimate';
  * Dashboard card surfacing local weather + derived care tips for the active
  * household. Suppresses entirely when:
  *   - no household is active
+ *   - the read is still in flight (an unsettled read is not an answer)
  *   - the integration is disabled (no OPENWEATHER_API_KEY) AND no location
  *     is saved (no value in nudging)
  *
  * When a location is saved but the integration is disabled, we still show
  * the card with a small "climate insights are off" hint so the user knows
  * their saved city isn't doing anything yet.
+ *
+ * A *settled* read that produced no data is its own state, and it is not any
+ * of the above. `if (!data) return null` used to collapse it into the same
+ * silence as "no household" and "no location + integration off", so a
+ * household whose climate read had failed saw exactly what a household with
+ * nothing to report saw. The card's tips include a freeze warning ("Low of
+ * X°C tonight. Bring tender plants indoors." — `deriveClimateTips`), and this
+ * card is the only place on the dashboard that carries it, so its absence
+ * reads as "nothing to worry about tonight". Absence of a warning is not
+ * evidence of safety — the same rule the analytics "Plants at risk" card
+ * follows. See ADR 0010.
  */
 export function ClimateCard() {
+  const { t } = useTranslation();
   const { householdId, householdQuery } = useActiveHousehold();
 
   const { data, isLoading } = useQuery(
@@ -33,7 +47,24 @@ export function ClimateCard() {
   );
 
   if (!householdId || isLoading) return null;
-  if (!data) return null;
+
+  // Settled with no data = the read failed. Say so; never render it as calm.
+  if (data === undefined) {
+    return (
+      <Card>
+        <div className="flex items-start gap-2 text-sm text-gray-700">
+          <ExclamationTriangleIcon
+            className="mt-0.5 h-4 w-4 flex-none text-gray-500"
+            aria-hidden="true"
+          />
+          <p>
+            <span className="font-semibold text-gray-900">{t('climate.unavailableTitle')}</span>{' '}
+            {t('climate.unavailableBody')}
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const hasLocation = !!data.location;
 

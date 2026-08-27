@@ -35,6 +35,7 @@ import { PlantImageUpload } from './PlantImageUpload';
 import { PhotoTimeline } from './PhotoTimeline';
 import { CareGuidanceCard } from './CareGuidanceCard';
 import { CareGuideCard } from './CareGuideCard';
+import { PetToxicityNote } from './PetToxicityNote';
 import { NoCareDataNotice } from './NoCareDataNotice';
 import { CareReportCard } from './CareReportCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -399,6 +400,15 @@ export function PlantDetailPage() {
           </Link>
         </Alert>
       )}
+
+      {/* Pet toxicity, on its own read. This page used to show toxicity only
+          inside CareGuideCard, so a failed or slow `/species/:id/guide` fetch
+          removed the warning with no trace — the same silence as "this species
+          has no guide". A fact this page's own copy calls dangerous to miss
+          does not ride on the fetch for long-form prose. PetToxicityNote
+          states "couldn't check" and "unknown" as their own outcomes, so
+          neither can resemble confirmed-safe. See ADR 0010. */}
+      <PetToxicityNote perenualSpeciesId={plant.perenualSpeciesId ?? null} context="owned" />
 
       {(plant.status ?? 'active') === 'active' && (
         <PlacementFitCard

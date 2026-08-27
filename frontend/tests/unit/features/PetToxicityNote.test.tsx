@@ -31,13 +31,13 @@ function makeDetail(overrides: Partial<PerenualSpeciesDetail>): PerenualSpeciesD
   };
 }
 
-function renderNote(perenualSpeciesId: number | null) {
+function renderNote(perenualSpeciesId: number | null, context?: 'add' | 'owned') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <PetToxicityNote perenualSpeciesId={perenualSpeciesId} />
+      <PetToxicityNote perenualSpeciesId={perenualSpeciesId} context={context} />
     </QueryClientProvider>
   );
 }
@@ -121,5 +121,40 @@ describe('PetToxicityNote', () => {
 
     expect(detailLookup).not.toHaveBeenCalled();
     expect(screen.queryByText(/keep it out of reach/i)).not.toBeInTheDocument();
+  });
+
+  describe('context', () => {
+    it('offers the add-flow reassurance by default', async () => {
+      detailLookup.mockResolvedValue({
+        status: 'found',
+        result: makeDetail({ id: 42, poisonousToPets: true }),
+      });
+      renderNote(42);
+
+      expect(await screen.findByText(/You can still add it/i)).toBeInTheDocument();
+    });
+
+    it('drops the add-flow reassurance for a plant already in the household', async () => {
+      // PlantDetailPage mounts this note for a plant that is already here, so
+      // "You can still add it" would be nonsense there. Only the placement
+      // advice carries over.
+      detailLookup.mockResolvedValue({
+        status: 'found',
+        result: makeDetail({ id: 42, poisonousToPets: true }),
+      });
+      renderNote(42, 'owned');
+
+      expect(await screen.findByText(/keep it out of reach/i)).toBeInTheDocument();
+      expect(screen.getByText('Toxic to pets')).toBeInTheDocument();
+      expect(screen.queryByText(/You can still add it/i)).not.toBeInTheDocument();
+    });
+
+    it('uses the same context-neutral copy for the unknown state either way', async () => {
+      detailLookup.mockResolvedValue({ status: 'not_found', result: null });
+      renderNote(10, 'owned');
+
+      expect(await screen.findByText(/pet toxicity unknown/i)).toBeInTheDocument();
+      expect(screen.getByText(/keep it out of reach/i)).toBeInTheDocument();
+    });
   });
 });

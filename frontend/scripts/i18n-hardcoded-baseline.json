@@ -31,7 +31,7 @@
     "features/plants/AddTaskModal.tsx": 11,
     "features/plants/BulkApplyTemplateDialog.tsx": 10,
     "features/plants/CareGuidanceCard.tsx": 4,
-    "features/plants/CareGuideCard.tsx": 3,
+    "features/plants/CareGuideCard.tsx": 1,
     "features/plants/CareReportCard.tsx": 4,
     "features/plants/EditPlantModal.tsx": 5,
     "features/plants/EditTaskModal.tsx": 11,
