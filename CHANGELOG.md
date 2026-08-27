@@ -20,10 +20,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 - A settled read with no data is now a decision the repo has written down, not
   one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
-  states the rule sixteen previous fixes (#319, #320, #326, #327, #328, #338,
-  #339, #341, #347, #348) were each arriving at separately: a query is in
-  flight, settled with data, or settled with none, and the third state must be
-  rendered as itself rather than as a `0`, an empty list, or an absent card.
+  states the rule that ten previous pull requests (#319, #320, #326, #327, #328,
+  #338, #339, #341, #347, #348 — two of which fixed "six more places" and "five
+  more" at a time) were each arriving at separately: a query is in flight,
+  settled with data, or settled with none, and the third state must be rendered
+  as itself rather than as a `0`, an empty list, or an absent card.
 - `npm run reads:check` (`frontend/scripts/check-settled-read-states.mjs`),
   wired into `npm run verify` and CI's required `Lint` job. It is a
   two-directional ratchet over `settled-read-states-baseline.json`: a new

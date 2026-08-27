@@ -11,11 +11,14 @@ the grounding guard's verdict rather than to a read)
 
 ## Context
 
-The same defect has now been found and fixed sixteen times, in four separate
-audits, and it has never been written down. #319, #320, #326, #327, #328, #338,
-#339, #341, #347 and #348 are all one bug: a value that was never read is
-published as though it had been, because the code has two states where the
-world has three.
+The same defect keeps being found and fixed, and it has never been written
+down. #319, #320, #326, #327, #328, #338, #339, #341, #347 and #348 are all one
+bug: a value that was never read is published as though it had been, because
+the code has two states where the world has three. Ten pull requests
+understates it, because several batched the same bug in several places at once
+— #341's subject line is "six more places", #347's is "five more" — so the
+count of individual fixes is comfortably past twenty, spread over four audits,
+with no shared rule between them.
 
 A TanStack Query result is in exactly one of three situations:
 
@@ -108,6 +111,7 @@ leaves to people.
   household on a flaky connection will see "Local climate unavailable" instead
   of a clean dashboard. That is the intended change. A clean dashboard was not
   a better experience, it was a wrong one.
-- **The rule is now citable.** Sixteen fixes were made without one, which is why
-  there were sixteen. The next reviewer can point at a decision instead of
-  re-deriving the argument.
+- **The rule is now citable.** Every one of those fixes was made without a rule
+  to cite, which is a large part of why there were so many of them. The next
+  reviewer points at a decision instead of re-deriving the argument from the
+  particular card in front of them.
