@@ -1035,7 +1035,10 @@ app.get('/me/calendar.ics', authMiddleware, async (req, res) => {
       (db.plants.get(t.plantId)?.status ?? 'active') === 'active'
   );
   const { buildIcs } = await import('./services/icsExport.js');
-  const ics = buildIcs(tasks);
+  // Mirrors handlers/me/handler.ts: all-day DTSTART dates are floating
+  // calendar days and must be resolved in the recipient's zone (#342 item 3).
+  const timeZone = (db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId)).timezone;
+  const ics = buildIcs(tasks, new Date(), timeZone || 'UTC');
   res
     .status(200)
     .type('text/calendar; charset=utf-8')

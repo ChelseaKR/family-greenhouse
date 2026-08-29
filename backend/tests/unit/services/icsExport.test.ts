@@ -49,8 +49,60 @@ describe('buildIcs', () => {
   });
 
   it('emits an all-day DTSTART (no time of day)', () => {
-    const ics = buildIcs([task({ nextDue: '2026-04-26T00:00:00Z' })], now);
+    // Zone stated explicitly. This assertion used to rely on the implicit UTC
+    // reading of `nextDue`, which made it a statement about the
+    // implementation rather than about a user: `2026-04-26T00:00:00Z` is
+    // Apr 25, 20:00 in America/New_York, so `20260426` is the RIGHT answer
+    // only for a recipient in UTC. Naming the zone is what makes the
+    // expectation checkable (#342 item 3).
+    const ics = buildIcs([task({ nextDue: '2026-04-26T00:00:00Z' })], now, 'UTC');
     expect(ics).toMatch(/DTSTART;VALUE=DATE:20260426/);
+  });
+
+  describe("DTSTART is the recipient's calendar day, not UTC's (#342 item 3)", () => {
+    // `DTSTART;VALUE=DATE` is a floating date: it names a calendar day and
+    // every client shows exactly that day. The only correct value is the day
+    // the app itself calls the task due.
+    it('resolves an evening-UTC instant to the previous day west of UTC', () => {
+      // 2026-06-09T00:00:00Z is Mon Jun 8, 20:00 EDT. The task list says
+      // "Mon, Jun 8"; the feed must not say Tue Jun 9.
+      const ics = buildIcs([task({ nextDue: '2026-06-09T00:00:00Z' })], now, 'America/New_York');
+      expect(ics).toMatch(/DTSTART;VALUE=DATE:20260608/);
+      expect(ics).not.toMatch(/DTSTART;VALUE=DATE:20260609/);
+    });
+
+    it('resolves a morning-UTC instant to the next day east of UTC', () => {
+      // 2026-06-08T22:00:00Z is Tue Jun 9, 08:00 in Australia/Sydney.
+      const ics = buildIcs([task({ nextDue: '2026-06-08T22:00:00Z' })], now, 'Australia/Sydney');
+      expect(ics).toMatch(/DTSTART;VALUE=DATE:20260609/);
+    });
+
+    it('keeps the UTC reading when the recipient is in UTC', () => {
+      const ics = buildIcs([task({ nextDue: '2026-06-09T00:00:00Z' })], now, 'UTC');
+      expect(ics).toMatch(/DTSTART;VALUE=DATE:20260609/);
+    });
+
+    it("honours the DST offset in effect at the due instant, not today's", () => {
+      // 2026-01-15T02:00:00Z is Jan 14, 21:00 EST (UTC-5). Using the summer
+      // offset would land on Jan 15.
+      const ics = buildIcs([task({ nextDue: '2026-01-15T02:00:00Z' })], now, 'America/New_York');
+      expect(ics).toMatch(/DTSTART;VALUE=DATE:20260114/);
+    });
+
+    it('falls back to UTC on an unrecognized zone instead of throwing', () => {
+      // The zone comes from stored user preferences; a bad value must not
+      // 500 the whole feed.
+      expect(() =>
+        buildIcs([task({ nextDue: '2026-06-09T00:00:00Z' })], now, 'Not/AZone')
+      ).not.toThrow();
+      const ics = buildIcs([task({ nextDue: '2026-06-09T00:00:00Z' })], now, 'Not/AZone');
+      expect(ics).toMatch(/DTSTART;VALUE=DATE:20260609/);
+    });
+
+    it('leaves DTSTAMP in UTC, which is what RFC 5545 requires of it', () => {
+      const ics = buildIcs([task()], new Date('2026-04-25T12:00:00Z'), 'America/New_York');
+      expect(ics).toMatch(/DTSTAMP:20260425T120000Z/);
+    });
   });
 
   it('emits a single occurrence at nextDue — no RRULE (re-anchored server-side)', () => {

@@ -215,7 +215,18 @@ export const calendarIcs = createHandler(
       throw createHttpError(403, 'No household selected');
     }
     const tasks = await taskService.getTasks(user.householdId);
-    const ics = buildIcs(tasks);
+    // All-day DTSTART dates are floating calendar days, so they have to be
+    // resolved in the recipient's zone or the feed disagrees with the task
+    // list the recipient is looking at (#342 item 3). A failed prefs read
+    // must not take the whole feed down: fall back to UTC, which is the
+    // stored default anyway and reproduces the previous output.
+    let timeZone: string;
+    try {
+      timeZone = (await notificationPrefs.getPreferences(user.userId)).timezone || 'UTC';
+    } catch {
+      timeZone = 'UTC';
+    }
+    const ics = buildIcs(tasks, new Date(), timeZone);
     return {
       statusCode: 200,
       headers: {

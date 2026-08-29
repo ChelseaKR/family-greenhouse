@@ -27,15 +27,53 @@ function pad(n: number): string {
 }
 
 /**
- * Format a Date as a DTSTART;VALUE=DATE — the all-day form per RFC 5545
- * §3.3.4. Local timezone of the user's calendar app handles display.
+ * The calendar date of an instant, in a given IANA zone, as `YYYYMMDD`.
+ *
+ * `DTSTART;VALUE=DATE` (RFC 5545 §3.3.4) is a FLOATING date: it names a
+ * calendar day, with no zone attached, and every calendar client renders it
+ * as that day. So the only correct thing to put there is the day the user
+ * believes the task is due.
+ *
+ * This used to read the UTC components of `nextDue` unconditionally, which is
+ * right only for a user in UTC. `nextDue = 2026-06-09T00:00:00Z` is Jun 8,
+ * 20:00 for a user in America/New_York — the app's task list says "Mon Jun 8"
+ * and the subscribed calendar said Tue Jun 9. Every zone behind UTC (all of
+ * the Americas) got a date one day late whenever `nextDue` fell in the
+ * evening, which is most of them, because a task completed in the evening
+ * re-anchors to that hour (#342 item 3).
+ *
+ * An unrecognized zone falls back to UTC rather than throwing: the stored
+ * value comes from user preferences, and a bad one must not 500 the whole
+ * feed.
  */
-function formatDate(d: Date): string {
-  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+function formatDateInZone(d: Date, timeZone: string): string {
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(d);
+  } catch {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(d);
+  }
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('year')}${get('month')}${get('day')}`;
 }
 
-function formatDateTime(d: Date): string {
-  return `${formatDate(d)}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+/**
+ * DTSTAMP is a UTC timestamp by definition (RFC 5545 §3.3.5, the `Z` form),
+ * so this one stays on UTC components deliberately — it is not a local date.
+ */
+function formatDateTimeUtc(d: Date): string {
+  const date = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+  return `${date}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
 }
 
 /** RFC 5545 line folding: lines over 75 octets must be broken with CRLF + space. */
@@ -60,7 +98,7 @@ function escapeText(text: string): string {
     .replace(/\r?\n/g, '\\n');
 }
 
-function eventLines(task: Task, now: Date): string[] {
+function eventLines(task: Task, now: Date, timeZone: string): string[] {
   const due = new Date(task.nextDue);
   // Legacy rows can have an empty `type`; `type[0].toUpperCase()` threw on
   // those and 500'd the whole feed. Fall back to a generic label.
@@ -82,8 +120,8 @@ function eventLines(task: Task, now: Date): string[] {
   return [
     'BEGIN:VEVENT',
     `UID:${task.id}@familygreenhouse.app`,
-    `DTSTAMP:${formatDateTime(now)}`,
-    `DTSTART;VALUE=DATE:${formatDate(due)}`,
+    `DTSTAMP:${formatDateTimeUtc(now)}`,
+    `DTSTART;VALUE=DATE:${formatDateInZone(due, timeZone)}`,
     `SUMMARY:${escapeText(summary)}`,
     `DESCRIPTION:${escapeText(descriptionParts.join(' '))}`,
     'END:VEVENT',
@@ -94,8 +132,13 @@ function eventLines(task: Task, now: Date): string[] {
  * Build a complete VCALENDAR document from a list of tasks. Caller is
  * responsible for restricting to tasks the requesting user is allowed
  * to see.
+ *
+ * `timeZone` is the IANA zone the all-day DTSTART dates are resolved in — the
+ * recipient's, since the feed is per-user (`GET /me/calendar.ics`). It
+ * defaults to `'UTC'`, which reproduces the pre-#342 output exactly, so a
+ * caller that does not know the zone is no worse off than before.
  */
-export function buildIcs(tasks: Task[], now: Date = new Date()): string {
+export function buildIcs(tasks: Task[], now: Date = new Date(), timeZone: string = 'UTC'): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -108,7 +151,7 @@ export function buildIcs(tasks: Task[], now: Date = new Date()): string {
     'X-WR-CALDESC:Recurring plant care tasks from Family Greenhouse',
   ];
   for (const task of tasks) {
-    lines.push(...eventLines(task, now));
+    lines.push(...eventLines(task, now, timeZone));
   }
   lines.push('END:VCALENDAR');
   // RFC 5545 mandates CRLF line endings + line folding for over-75 lines.
