@@ -18,6 +18,38 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- Every public route now serves its own HTML. `frontend/scripts/prerender.mjs`
+  runs as `postbuild` and writes one copy of the built shell per route with
+  that route's title, description, absolute apex canonical, `og:url`, single
+  `<h1>` and schema.org graph baked in, so a crawler that runs no JavaScript
+  sees the page it asked for. Before this, all 25 sitemap URLs answered with
+  one shell: one title, one description, zero `<h1>`, no canonical, no
+  `og:url`, no structured data. `useMetaTags` had all of it right and ran too
+  late for anything that does not execute JS. `/support` and
+  `/account-deletion` join the sitemap, bringing it to 27 URLs. See
+  [ADR 0011](docs/adr/0011-build-time-prerendering-of-public-routes.md).
+- `src/config/publicRoutes.ts`: one manifest naming each fixed public route's
+  title, description and `<h1>`, read by the pages, the prerenderer and the
+  sitemap generator alike, so a route's head is written once. The landing
+  page's prerendered `<h1>` is imported from the hero's own headline data
+  (`heroHeadlines.ts`) rather than repeated, and `src/config/structuredData.ts`
+  now holds the JSON-LD graphs the pages used to build inline.
+- `npm run seo:check` (`scripts/check-seo-build.mjs`), wired into
+  `npm run verify` and CI's required `Build` job. It reads only build output —
+  never the manifest the build came from — and fails on: a sitemap URL with no
+  prerendered page (or the reverse), a prerendered page for a route robots.txt
+  disallows, a missing/duplicate/out-of-bounds title or description, anything
+  other than exactly one `<h1>`, a missing or non-self-referencing canonical,
+  an `og:url` that disagrees with it, more than one manifest link, a `lastmod`
+  that is malformed or in the future, a fallback shell that carries a canonical
+  or is missing its `noindex`, and any loopback address or unsubstituted build
+  marker in built HTML.
+- `aws_cloudfront_function.rewrite_uri` maps `/care/pothos` to
+  `/care/pothos/index.html`. The frontend bucket is a REST (OAC) origin and
+  resolves no directory index, so without it the prerendered files are
+  unreachable. Its behavior is pinned by a unit test that runs the shipped
+  file, since it sits in front of every request to the site.
+
 - A settled read with no data is now a decision the repo has written down, not
   one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
   states the rule that ten previous pull requests (#319, #320, #326, #327, #328,
@@ -36,6 +68,41 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- Production HTML no longer ships a developer's loopback address. `index.html`
+  carried `<link rel="preconnect" href="http://localhost:4000" crossorigin />`
+  and named the same origin in the meta CSP's `img-src` and `connect-src`, next
+  to a comment promising a build-time override that nothing performed — so a
+  plaintext-http resource hint pointing at a developer's machine shipped on an
+  https page. The origin now comes from `VITE_API_URL` through a Vite plugin
+  that emits the hint only for an https origin and only names the API in the
+  CSP while the dev server is running.
+- The manifest link is no longer served twice: `index.html` hand-wrote one and
+  `vite-plugin-pwa` injected another. The plugin owns it.
+- `/changelog`, `/status`, `/legal/privacy` and `/legal/terms` set a canonical
+  (they set none at all before), and `/support` and `/account-deletion` set one
+  too. Every canonical is absolute and apex-hosted, so both `familygreenhouse.net`
+  and `www.familygreenhouse.net` name the apex as the real URL. A www→apex 301
+  still has to be added at CloudFront; this is the half the repo owns.
+- The plant-sitting page (`/sit/:token`) and the shared-cutting page
+  (`/shared/:code`) are `noindex, nofollow`. The token in those URLs is the
+  credential, robots.txt disallows neither prefix, and link unfurls are
+  unaffected.
+- The SPA fallback shell is `noindex`. The origin answers 200 for every path,
+  including ones with no route, so `/typo` and `/this-does-not-exist` render a
+  page; without the tag that is an unbounded soft-404 space any stale or
+  hostile link can add indexable URLs to. A real 404 **status** still has to
+  come from CloudFront.
+- Sitemap `lastmod` comes from real content change dates. The nine fixed routes
+  carried no `lastmod` at all, and the sixteen content routes carried their
+  publication or review date, which never moved when the page itself was
+  edited — so the live sitemap advertised May and June dates in late August.
+  Each route is now dated from the last commit that touched its own sources,
+  floored by its hand-maintained content date, and a checkout with no usable
+  history omits the tag rather than guessing. `frontend/public/sitemap.xml` is
+  a generated artifact and is no longer committed.
+- Deploys no longer put a one-year browser cache on an HTML shell. The S3 sync
+  excluded only `index.html`; every prerendered route file would have inherited
+  `max-age=31536000`, pinning visitors to an old title and canonical.
 - The dashboard climate card no longer renders a failed read as a calm night
   (#351). `if (!data) return null` put a failed climate read in the same
   silence as "no household active" and "no location saved with the integration
