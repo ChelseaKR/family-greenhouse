@@ -14,17 +14,18 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 
 ## Index
 
-| #                                                    | Title                                      | Status   |
-| ---------------------------------------------------- | ------------------------------------------ | -------- |
-| [0000](0000-record-architecture-decisions.md)        | Record architecture decisions              | Accepted |
-| [0002](0002-serverless-on-aws.md)                    | Serverless on AWS, single region           | Accepted |
-| [0003](0003-single-table-dynamodb.md)                | Single-table DynamoDB                      | Accepted |
-| [0004](0004-no-waf-on-http-api.md)                   | No WAF on the HTTP API (it's unsupported)  | Accepted |
-| [0005](0005-npm-workspaces-monorepo.md)              | npm-workspaces monorepo layout             | Accepted |
-| [0006](0006-standards-applicability-declarations.md) | Standards applicability declarations       | Accepted |
-| [0007](0007-i18n-json-catalogs-native-format.md)     | i18n: JSON catalogs, i18next-native format | Accepted |
-| [0008](0008-unit-aware-rag-grounding.md)             | Unit-aware quantitative RAG grounding      | Accepted |
-| [0009](0009-three-state-grounding-verdict.md)        | Three-state grounding verdict              | Accepted |
-| [0010](0010-settled-read-states.md)                  | Settled read states                        | Accepted |
+| #                                                        | Title                                      | Status   |
+| -------------------------------------------------------- | ------------------------------------------ | -------- |
+| [0000](0000-record-architecture-decisions.md)            | Record architecture decisions              | Accepted |
+| [0002](0002-serverless-on-aws.md)                        | Serverless on AWS, single region           | Accepted |
+| [0003](0003-single-table-dynamodb.md)                    | Single-table DynamoDB                      | Accepted |
+| [0004](0004-no-waf-on-http-api.md)                       | No WAF on the HTTP API (it's unsupported)  | Accepted |
+| [0005](0005-npm-workspaces-monorepo.md)                  | npm-workspaces monorepo layout             | Accepted |
+| [0006](0006-standards-applicability-declarations.md)     | Standards applicability declarations       | Accepted |
+| [0007](0007-i18n-json-catalogs-native-format.md)         | i18n: JSON catalogs, i18next-native format | Accepted |
+| [0008](0008-unit-aware-rag-grounding.md)                 | Unit-aware quantitative RAG grounding      | Accepted |
+| [0009](0009-three-state-grounding-verdict.md)            | Three-state grounding verdict              | Accepted |
+| [0010](0010-settled-read-states.md)                      | Settled read states                        | Accepted |
+| [0011](0011-build-time-prerendering-of-public-routes.md) | Build-time prerendering of public routes   | Accepted |
 
 > Several earlier decisions (Cognito for auth, React+Vite+TanStack Query, gated external integrations) are documented inline in `docs/architecture.md` / `docs/strategy-review.md` and could be backfilled as ADRs when next touched.

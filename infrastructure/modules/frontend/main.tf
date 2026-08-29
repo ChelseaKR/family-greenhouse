@@ -178,6 +178,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "images" {
 }
 
 # CloudFront Origin Access Control
+# Maps page URLs onto the prerendered `<route>/index.html` objects. A REST S3
+# origin resolves no directory index, so without this the build's per-route
+# HTML is unreachable and every public URL falls through to the SPA shell.
+resource "aws_cloudfront_function" "rewrite_uri" {
+  name    = "${var.project_name}-rewrite-uri-${var.environment}"
+  runtime = "cloudfront-js-2.0"
+  comment = "Resolve directory and extensionless URLs to <route>/index.html"
+  publish = true
+  code    = file("${path.module}/functions/rewrite-uri.js")
+}
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "${var.project_name}-frontend-oac-${var.environment}"
   origin_access_control_origin_type = "s3"
@@ -216,6 +227,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3.id
 
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite_uri.arn
+    }
   }
 
   # Cache behavior for plant photos. S3 keys in the images bucket are
@@ -236,17 +252,22 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3.id
   }
 
-  # SPA fallback
+  # SPA fallback. Points at app.html, NOT index.html: index.html is now the
+  # prerendered landing page and carries `<link rel="canonical" href="…/">`,
+  # which served here would tell search engines that every unmatched URL is
+  # really the homepage. app.html is the same shell with no canonical and a
+  # `noindex` — necessary because this rule answers 200 for ANY path, so
+  # /typo and /this-does-not-exist render a page rather than 404ing.
   custom_error_response {
     error_code         = 404
     response_code      = 200
-    response_page_path = "/index.html"
+    response_page_path = "/app.html"
   }
 
   custom_error_response {
     error_code         = 403
     response_code      = 200
-    response_page_path = "/index.html"
+    response_page_path = "/app.html"
   }
 
   restrictions {

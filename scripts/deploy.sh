@@ -65,15 +65,21 @@ VITE_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
 
 # Deploy frontend
 echo "Deploying frontend to S3..."
+# Every .html file is a shell that must revalidate: index.html, the SPA
+# fallback app.html, and one prerendered <route>/index.html per public route.
+# A year-long browser cache on those would pin a visitor to an old title,
+# description and canonical long after a deploy.
 aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
     --delete \
     --cache-control "max-age=31536000,public" \
-    --exclude "index.html" \
+    --exclude "*.html" \
     --exclude "sw.js" \
     --exclude "push-handler.js" \
     --exclude "*.json"
 
-aws s3 cp frontend/dist/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
+    --exclude "*" \
+    --include "*.html" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 aws s3 cp frontend/dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"

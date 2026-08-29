@@ -29,4 +29,9 @@ Disallow: /forgot-password
 Disallow: /join/
 Disallow: /coming-soon
 
+# The SPA fallback shell. CloudFront serves this file's CONTENT at every route
+# with no prerendered page of its own; it is not a page in its own right, so
+# keep its own URL out of the index.
+Disallow: /app.html
+
 Sitemap: https://familygreenhouse.net/sitemap.xml

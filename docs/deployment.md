@@ -16,6 +16,23 @@ Route 53 ── CloudFront ┬─ S3 (static frontend bundle)
 EventBridge cron ── runReminders Lambda ── SES + SNS + Web Push
 ```
 
+The frontend distribution runs one CloudFront viewer-request function,
+`infrastructure/modules/frontend/functions/rewrite-uri.js`. The frontend bucket
+is a REST (OAC) origin, which resolves no directory index, so the function maps
+`/care/pothos` to the object that actually holds that page,
+`/care/pothos/index.html`. Requests with a file extension pass through
+untouched, and a route with no prerendered file still misses at S3 and falls
+through to the distribution's SPA fallback exactly as before.
+
+That fallback is `/app.html`, **not** `/index.html`: since the build
+prerenders the public routes, `index.html` is the landing page and carries
+`rel="canonical" href="https://familygreenhouse.net/"`. Served for every
+unmatched URL, that canonical would tell search engines all of them are the
+homepage. `app.html` is the same shell with no canonical and a `noindex` — the
+`noindex` matters because this rule answers **200 for any path**, so `/typo`
+renders a page rather than 404ing. Changing `response_page_path` back to
+`/index.html` reintroduces both problems.
+
 Both environments use the root `infrastructure/` configuration with separate
 `environments/{staging,production}/terraform.tfvars` files and separate remote
 state keys (`staging/terraform.tfstate` versus the production backend default).
@@ -207,8 +224,15 @@ After Terraform completes, build + deploy the application bundles. CI does this 
 # Backend bundle (esbuild → /backend/dist/)
 npm --workspace backend run build
 
-# Frontend bundle (vite → /frontend/dist/)
+# Frontend bundle (vite → /frontend/dist/). `prebuild` regenerates
+# public/sitemap.xml (a build artifact, not committed) and `postbuild`
+# prerenders one HTML file per public route plus the app.html fallback.
+# Run it from a full clone: the sitemap dates each URL from the last commit
+# that touched the route's sources, and a shallow clone silently loses that.
 npm --workspace frontend run build
+
+# Gate the built output before it goes anywhere (CI's Build job runs this too).
+node scripts/check-seo-build.mjs
 
 # Push backend artifacts: the CD workflow publishes each esbuild bundle to its
 # unqualified Lambda function and archives the published zip for rollback.

@@ -141,6 +141,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.version }}
+          # `prebuild` dates each sitemap URL from the last commit that touched
+          # the route's own sources. A shallow clone has no such history, and
+          # the generator then omits <lastmod> rather than guessing.
+          fetch-depth: 0
 
       - name: Setup Node.js
         # No `cache: 'npm'` here (CICD-24 / §8c): this job builds the exact
@@ -376,15 +380,21 @@ jobs:
 
       - name: Sync to S3
         run: |
+          # Every .html file is a shell that must revalidate: index.html, the SPA
+          # fallback app.html, and one prerendered <route>/index.html per public
+          # route. A year-long browser cache on those would pin a visitor to an
+          # old title, description and canonical long after a deploy.
           aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
             --delete \
             --cache-control "max-age=31536000,public" \
-            --exclude "index.html" \
+            --exclude "*.html" \
             --exclude "sw.js" \
             --exclude "push-handler.js" \
             --exclude "*.json"
 
-          aws s3 cp dist/index.html s3://${{ needs.terraform.outputs.frontend_bucket }}/index.html \
+          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+            --exclude "*" \
+            --include "*.html" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
           aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"

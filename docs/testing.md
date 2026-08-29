@@ -13,7 +13,7 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 | Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 90    | 1,286      |
 | Backend integration       | vitest + supertest | `backend/tests/integration/`                                              | 8     | 199        |
 | Backend RAG eval          | vitest             | `backend/tests/eval/`                                                     | 1     | 7          |
-| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 100   | 714        |
+| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 104   | 731        |
 | Frontend colocated unit   | vitest             | `frontend/src/**/*.test.ts`                                               | 11    | 44         |
 | Frontend integration      | vitest + RTL + MSW | `frontend/tests/integration/`                                             | 1     | 1          |
 | Frontend e2e              | Playwright         | `frontend/tests/e2e/`                                                     | 24    | see below  |
@@ -21,11 +21,11 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,251 vitest cases** across 211 files — 1,492 backend, 759 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,268 vitest cases** across 215 files — 1,492 backend, 776 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
 
 Of the 24 Playwright specs, 22 run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 
-The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (measured 2026-08-27, Node 26.7.0 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites; reproduce with:
+The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (measured 2026-08-28, Node 26.7.0 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites; reproduce with:
 
 ```bash
 npm --workspace backend exec vitest list | wc -l
@@ -125,6 +125,7 @@ The seed data is reset between tests via `resetDb()` from `local-server.ts`. Use
 3. **Service layer** — `services/` — axios clients tested against MSW handlers, including the 401-refresh interceptor.
 4. **Features** — `features/` — whole pages and cards rendered inside their routes and providers. The largest group by far.
 5. **Hooks, store, i18n, a11y, lib, config** — `hooks/`, `store/`, `i18n/`, `a11y/`, `lib/`, `config/`.
+6. **SEO** — `seo/` — the route manifest's invariants, the prerenderer's substitution and escaping, the fact that React's first commit clears the prerendered heading out of `#root`, and the CloudFront URI-rewrite function (run verbatim from the file Terraform ships, because it sits in front of every request to the site). These cover the build-time half of what the served HTML says; the gate over the built output is `scripts/check-seo-build.mjs`, which `npm run seo:check` and CI's `Build` job run.
 
 A smaller set of unit tests live **beside the code** as `frontend/src/**/*.test.ts`
 (the vitest `include` covers both locations). Prefer `tests/unit/` for new work;
