@@ -47,6 +47,12 @@ playwright-report/
 test-results/
 .lighthouseci/
 
+# Generated SEO artifact. `frontend/scripts/build-sitemap.mjs` writes it on
+# every `prebuild`, dating each URL from real content change dates, so a
+# committed copy is stale the moment anything ships. It was tracked once and
+# advertised June dates for pages edited in August.
+frontend/public/sitemap.xml
+
 # Capacitor (native shells): the web bundle copied in by `npx cap sync` is a
 # build artifact of frontend/dist — regenerate it, never commit it. The native
 # projects themselves (frontend/android, frontend/ios) ARE source and are

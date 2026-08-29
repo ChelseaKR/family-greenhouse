@@ -8,6 +8,7 @@ dist
 build
 coverage
 .lighthouseci
+frontend/public/sitemap.xml
 
 # Compiled config artifacts (emitted from *.config.ts — never hand-edited)
 frontend/vite.config.js
