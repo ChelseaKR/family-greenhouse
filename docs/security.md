@@ -77,8 +77,16 @@ or support signal.
 - `script-src 'self'` (no `unsafe-eval` or `unsafe-inline`)
 - `style-src 'self' 'unsafe-inline'` (required for our inline `style=` attributes)
 - `img-src 'self' data: https:` (S3 image bucket + identicons)
-- `connect-src 'self' http://localhost:4000 https:` (API + Stripe)
+- `connect-src 'self' https:` (API + Stripe)
 - `object-src 'none'`, `base-uri 'self'`, `form-action 'self' https:`
+
+The dev API origin is plain http, which `https:` does not cover, so
+`apiOriginHtml()` in `frontend/vite.config.ts` adds it to `img-src` and
+`connect-src` **only while `vite dev` is serving**. A build never names it: the
+deployed API is an https origin `https:` already allows. This used to be a
+hardcoded loopback address in the committed `index.html`, shipped to production
+in the meta CSP and in a `preconnect` hint; `scripts/check-seo-build.mjs` now
+fails the build if any built HTML names a loopback address.
 
 ## A06:2021 — Vulnerable and Outdated Components
 

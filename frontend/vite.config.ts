@@ -1,11 +1,65 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
-export default defineConfig({
+/**
+ * Resolve the API origin from VITE_API_URL (process env first, so CI's build
+ * env wins over any checked-in .env), or null when it is not configured.
+ */
+function apiOrigin(mode: string): string | null {
+  const raw = process.env.VITE_API_URL || loadEnv(mode, __dirname, 'VITE_').VITE_API_URL || '';
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    throw new Error(`VITE_API_URL is not an absolute URL: ${raw}`);
+  }
+}
+
+/**
+ * Substitute the API origin into index.html's two markers.
+ *
+ * index.html used to hardcode the dev loopback API address in a `preconnect`
+ * hint and in the meta CSP, with a comment promising a build-time override
+ * that nothing performed — so production shipped a plaintext-http resource
+ * hint pointing at a developer's machine, on an https page.
+ *
+ * The rules here make that unrepresentable:
+ *   - `preconnect` is emitted only for an https origin, so a build can never
+ *     hint at a loopback address (and there is nothing to preconnect to when
+ *     the API origin is unknown);
+ *   - the CSP marker takes the origin only while the dev server is running,
+ *     where the API is plain http and the policy's `https:` source expression
+ *     does not cover it. In a build the deployed API is https, which `https:`
+ *     already allows, so the marker resolves to nothing.
+ *
+ * `scripts/check-seo-build.mjs` fails the build if either marker survives
+ * unsubstituted, or if any built HTML names a loopback address.
+ */
+function apiOriginHtml(mode: string): Plugin {
+  return {
+    name: 'family-greenhouse:api-origin-html',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html, ctx) {
+        const serving = ctx.server != null;
+        const origin = apiOrigin(mode) ?? (serving ? 'http://localhost:4000' : null);
+        const https = origin?.startsWith('https://') ?? false;
+        const preconnect = https ? `<link rel="preconnect" href="${origin}" crossorigin />` : '';
+        const cspOrigin = serving && origin && !https ? `${origin} ` : '';
+        return html
+          .replace('<!-- __API_PRECONNECT__ -->', preconnect)
+          .replaceAll('__API_ORIGIN__ ', cspOrigin);
+      },
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    apiOriginHtml(mode),
     VitePWA({
       registerType: 'autoUpdate',
       // Registration is imported from services/pwaRegistration so rejected
@@ -128,4 +182,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

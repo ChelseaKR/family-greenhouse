@@ -13,18 +13,21 @@
       content="A collaborative plant care app for households. Free accounts include up to 10 plants, shared tasks, reminders, and care history."
     />
 
-    <!-- NOTE: no static <link rel="canonical"> or og:url here. This single
-         index.html serves every SPA route, so a hardcoded homepage canonical
-         would wrongly canonicalize /pricing, /care, /blog, … to "/" and drop
-         them from the index. Canonical + og:url are set PER ROUTE via
-         useMetaTags; routes that don't set one fall back to URL-as-canonical
-         (the safe default). -->
+    <!-- NOTE: no static canonical link or og:url element here. This single
+         index.html is the SPA shell and also the fallback every unknown route
+         falls back to, so a hardcoded homepage canonical would wrongly
+         canonicalize any un-prerendered route to "/". The public routes in
+         src/config/publicRoutes.ts DO get a per-route canonical: scripts/
+         prerender.mjs writes a copy of this shell per route at build time with
+         that route's title, description, canonical, og:url and <h1> baked in,
+         and useMetaTags keeps the same values correct after hydration and on
+         client-side navigation. -->
 
     <!-- Open Graph + Twitter Card. The brand renderer ships purpose-built PNGs
          (1200×630 OG, 1200×600 Twitter) in /brand/. Image URLs are ABSOLUTE —
          social scrapers (Facebook/LinkedIn/Slack) reject a relative og:image.
-         These are HOMEPAGE defaults; per-route pages override title/description
-         via useMetaTags. -->
+         These are HOMEPAGE defaults; the prerenderer and useMetaTags override
+         title/description/og:url per route. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Family Greenhouse" />
     <meta
@@ -59,16 +62,25 @@
 
     <!-- Icons. v2 brand kit covers favicon (.ico + 32px PNG), apple-touch
          (180×180), and the PWA manifest icons (192/512). All ship from
-         /brand/ so they're cleanly grouped with the rest of the kit. -->
+         /brand/ so they're cleanly grouped with the rest of the kit.
+         There is deliberately no manifest link element here: vite-plugin-pwa
+         injects one, and hand-writing a second shipped that tag twice in the
+         served HTML. The plugin owns it. -->
     <link rel="icon" type="image/svg+xml" href="/brand/icon.svg" />
     <link rel="icon" type="image/x-icon" href="/brand/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Performance: preconnect to the API origin so the first XHR is faster.
-         Override at build time by replacing this with the real API origin. -->
-    <link rel="preconnect" href="http://localhost:4000" crossorigin />
+         The origin is NOT written here. `apiOriginHtml()` in vite.config.ts
+         substitutes the two markers below from VITE_API_URL at build time, and
+         emits the preconnect only for an https origin. This file used to hard-
+         code the dev loopback API address here and in the meta CSP, and the
+         build-time override the comment promised never happened — so a
+         developer's loopback address shipped to production on an https page.
+         Markers cannot silently ship either: check-seo-build.mjs fails the
+         build if an unsubstituted marker survives into dist. -->
+    <!-- __API_PRECONNECT__ -->
 
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="format-detection" content="telephone=no" />
@@ -83,16 +95,25 @@
           `style` attributes for progress bars + marketing clipPath.
         - connect-src includes https: so Stripe Checkout + plant-id can call
           out. Tighten to specific origins once the prod domain is final.
+        - the API-origin marker in img-src/connect-src resolves to the dev API
+          origin while `vite dev` is serving (a plain-http loopback address,
+          which the `https:` source expression does not cover) and to the empty
+          string in a build, where the deployed API is an https origin `https:`
+          already allows. Production HTML never names a loopback address.
         - We don't allow `frame-src` because we don't embed iframes; Stripe
           Checkout runs as a redirect, not an embedded iframe.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://localhost:4000 https:; connect-src 'self' http://localhost:4000 https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
+      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https:; connect-src 'self' __API_ORIGIN__ https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
     />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   </head>
   <body>
+    <!-- The prerenderer replaces this element's contents per route with that
+         route's <h1> and summary, so a crawler that runs no JavaScript still
+         gets page-specific content. React's first commit clears the container,
+         which is what removes it for everyone else. -->
     <div id="root"></div>
     <noscript>
       <p style="padding: 2rem; text-align: center; font-family: sans-serif">
