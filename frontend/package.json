@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "lint": "eslint src --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint src --fix",
+    "lint:scripts": "eslint scripts --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

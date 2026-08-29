@@ -6,6 +6,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import i18next from 'eslint-plugin-i18next';
+import * as espree from 'espree';
 
 // Flat config (ESLint 10). Mirrors the previous .eslintrc.cjs:
 //   eslint:recommended + @typescript-eslint recommended + react/recommended +
@@ -21,6 +22,30 @@ export default tseslint.config(
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
   jsxA11y.flatConfigs.strict,
+  // ---- Gate + build scripts: scripts/**/*.mjs ----
+  //
+  // `check-i18n-catalogs`, `check-hardcoded-strings`, `check-settled-read-states`
+  // and `check-brand-assets` ARE gates (npm run i18n:check / reads:check /
+  // brand:check, and CI's Lint + i18n jobs). Until 2026-08-28 nothing linted
+  // them: `npm run lint` here is `eslint src`, and `tsc --noEmit` never sees a
+  // .mjs. An undefined identifier in a gate's failure branch passed
+  // format:check, lint and typecheck — verified by experiment. The parser is
+  // pinned because the unscoped tseslint configs above otherwise claim these
+  // files and then demand a tsconfig project they have none.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      parser: espree,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-undef': 'error',
+      'no-console': 'off',
+    },
+  },
   {
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: {

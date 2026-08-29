@@ -36,7 +36,8 @@
   ],
   "scripts": {
     "prepare": "husky",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present && npm run lint:scripts",
+    "lint:scripts": "eslint scripts --report-unused-disable-directives --max-warnings 0 && npm run lint:scripts --workspace frontend",
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -73,6 +74,12 @@
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
+      "eslint --fix"
+    ],
+    "scripts/**/*.mjs": [
+      "eslint --fix"
+    ],
+    "frontend/scripts/**/*.mjs": [
       "eslint --fix"
     ],
     "frontend/src/**/*.{ts,tsx}": [

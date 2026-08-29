@@ -8,6 +8,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import i18next from 'eslint-plugin-i18next';
+import * as espree from 'espree';
 
 // Root flat config (ESLint 10).
 //
@@ -31,6 +32,42 @@ export default tseslint.config(
       'backend/esbuild.config.js',
       'frontend/**/*.config.{js,ts}',
     ],
+  },
+
+  // ---- Build/gate scripts: scripts/**, frontend/scripts/** ----
+  //
+  // These .mjs files ARE the gates (`check-api-spec`, `check-docs-testing`,
+  // `check-no-bare-markers`, `check-no-silenced-gates`, `check-observability`,
+  // `check-settled-read-states`, `check-i18n-catalogs`,
+  // `check-hardcoded-strings`) plus the store/sitemap/brand helpers. Before
+  // this block they were linted by nothing: the workspace `lint` scripts are
+  // `eslint src`, `tsc --noEmit` never sees a `.mjs`, and the root config's
+  // only `files` globs were `backend/src` and `frontend/src`. A gate script
+  // could reference an undefined identifier and every static check in
+  // `npm run verify` stayed green, because the only code path that would
+  // throw is the failure branch — the branch a green build never runs.
+  // Verified 2026-08-28 by injecting an undefined identifier into
+  // scripts/check-no-silenced-gates.mjs: format:check, lint and typecheck all
+  // exited 0. `no-undef` from js.configs.recommended is the rule that matters
+  // here; type-aware linting is deliberately not enabled (no tsconfig covers
+  // these files).
+  {
+    files: ['scripts/**/*.mjs', 'frontend/scripts/**/*.mjs', 'backend/scripts/**/*.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      // Pin the default parser explicitly. `tseslint.config()` otherwise
+      // leaves the TypeScript parser in scope for files no `files` glob
+      // claims, and it then demands a tsconfigRootDir these .mjs files have
+      // no project for.
+      parser: espree,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-console': 'off',
+    },
   },
 
   // ---- Backend: src/**/*.ts ----
