@@ -32,7 +32,7 @@ concluded `success`. Nothing in this queue is red because `main` is red.
 
 | PR   | Base   | Real merge state                                                                    | CI classification                                                                                | Recommendation                                         |
 | ---- | ------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| #361 | `main` | `DIRTY` — branch reused after its own squash merge (see below)                      | **No checks at all.** `refs/pull/361/merge` does not exist, so no run was dispatched             | **Rework** — re-cut off current `main`                 |
+| #361 | `main` | `DIRTY` — branch reused after its own squash merge (see below)                      | **No checks at all.** `refs/pull/361/merge` does not exist, so no run was dispatched             | **Do not merge** — rework, then re-cut off `main`      |
 | #360 | `main` | `CLEAN`, based on current `main`                                                    | All 13 required contexts green                                                                   | **Merge**                                              |
 | #358 | `main` | `CLEAN`, one commit behind `main`                                                   | All 13 required contexts green                                                                   | **Merge after** fixing the inert second test           |
 | #357 | `main` | `CLEAN`, one commit behind `main`                                                   | All 13 required contexts green                                                                   | **Merge**                                              |
@@ -162,14 +162,105 @@ the prose numbers are not.
 `e3b233e`, `12aaf78` and `add4956` are **not on `main`** — they are #361's own
 commits and exist on no other ref. What is already on `main` is `7e10b07`'s
 _content_, via the #359 squash: ADR 0010, `check-settled-read-states.mjs` and
-its baseline. Everything else in #361 — the ICS zone fix, the digest calendar-day
-fix, `localDate.ts`, `timezoneSet`, the gitleaks working-tree scan, the gate-script
-lint, `check-api-spec` in `verify` — is new.
+its baseline. Everything else in #361 is new.
 
-`backend/src/utils/localDate.ts` is DST-safe by construction: it resolves each
-instant to its calendar date via `Intl.DateTimeFormat` in the named zone and
-subtracts dates, never adding hours, and it degrades an unrecognised zone to UTC
-inside a `try`/`catch` rather than throwing inside a scheduled scan.
+**All three defect claims are real, and all three fixes are correct in the
+abstract.** Verified by rebuilding a probe tree — #361's `backend/` with
+`icsExport.ts`, `digest.ts`, `reminders.ts`, `notificationPrefs.ts`,
+`taskService.ts` and `handlers/me/handler.ts` reverted to `main` and
+`localDate.ts` deleted — and running #361's test files against it. Six of the
+eleven genuinely new backend assertions fail there and pass on the branch.
+`localDate.ts` is DST-safe by construction: it resolves each instant to a
+`YYYY-MM-DD` key in the named zone and subtracts keys, never adding hours, and
+its tests exercise spring-forward, fall-back and a leap day.
+
+But three findings materially qualify the PR, and one is a regression.
+
+**The digest zone fix does not reach production.** `computePlantsAtRisk` gained
+a `timeZone = 'UTC'` parameter, but the only non-test caller,
+`backend/src/services/digest.ts:292`, is still
+`await computePlantsAtRisk(householdId, now)`. So the digest still computes
+calendar days in UTC while `TasksPage` uses the browser's zone, and the exact
+scenario the PR describes still reproduces for any non-UTC household. The
+`floor`-versus-calendar half is fixed; the zone half is not. #361's sentence
+that the two surfaces "cannot drift on what a 'day' means" is **not true as
+written**. There is a plausible structural reason — at-risk is computed once per
+household, before per-member preferences are read, and members can sit in
+different zones — but the PR does not disclose it, and the new parameter is
+exercised only by a unit test.
+
+**`timezoneSet` misses most of the users it is meant to rescue.**
+`getPreferences` derives the flag from the presence of the `timezone` attribute,
+but `main`'s `setPreferences` already wrote `timezone` on **every** save
+(`const timezone = prefs.timezone || 'UTC'`). So any user who ever saved any
+preference panel — including merely granting browser notifications — already
+carries `timezone: 'UTC'` and now reads back `timezoneSet: true`. #361's own
+test pins that outcome. The claim that the DynamoDB item "can already tell them
+apart, since the attribute is simply absent" holds only for users with no
+preferences row at all. Combined with the previous finding, the ICS fix reaches
+considerably fewer users than the PR implies.
+
+**The gitleaks change weakens the history scan while advertising a stronger
+one.** The two-mode scan itself is real and correct: `.github/workflows/ci.yml`
+runs `set -euo pipefail` then two separate un-piped `gitleaks detect` commands,
+history and `--no-git`, each gating on its own exit code. But the new
+`[allowlist] paths` entry in `.gitleaks.toml` applies to **both** modes, and
+`'''(^|/)frontend/(android|ios)/'''` removes **76 tracked files** from the
+history scan — including `frontend/android/gradle.properties`,
+`frontend/android/app/build.gradle` and the iOS `project.pbxproj` and `.plist`
+files, which is precisely where mobile signing credentials live. The config
+comment describes the exclusions as "build output and vendored trees that are
+not source"; these are committed source. Narrowing to
+`frontend/(android|ios)/(build|Pods|\.gradle)/` would keep the intent without
+the loss. **This is the one change in the queue that makes a security gate
+weaker than it is on `main` today.**
+
+**The gate-script lint claim is over-stated.** All 17 tracked `.mjs` files were
+genuinely unlinted by any command. The new `lint:scripts` covers **12**. Five
+remain uncovered: `backend/scripts/build-corpus-embeddings.mjs`,
+`infrastructure/modules/email/lambda/forwarder.mjs`, and the three
+`eslint.config.mjs` files. Worse, the root config's `backend/scripts/**/*.mjs`
+glob is dead twice over — no npm script targets `backend/scripts`, and ESLint 10
+resolves config from the linted file's location, so `backend/eslint.config.mjs`
+wins there and its type-aware rules hard-crash on a `.mjs`. The config comment
+lists `backend/scripts` as covered when it is not.
+
+**Two of the claimed catches do not distinguish fixed from unfixed.** Of the six
+new ICS tests, three fail on `main` (the two zone-offset cases and the DST case)
+and three pass in both states. Two of those are deliberate regression locks and
+are fine; the third, `falls back to UTC on an unrecognized zone instead of
+throwing`, cannot fail on `main` because `main`'s `buildIcs` silently ignores
+the extra third argument. The digest file has the same shape: two of three new
+tests fail on `main`, the third is labelled "still" and is a lock.
+
+**#361 does pin arguably-defective behaviour as correct — deliberately and with
+notice.** Its `reminders.test.ts` (32 tests) and `taskService.test.ts` (54
+tests) both pass **unchanged against `main`'s implementation**: they freeze
+today's behaviour rather than catch anything. A fix for #343 or #346 must delete
+or rewrite assertions such as
+`it('is then silent for the WHOLE due day, including the moment it comes due')`
+and `expect(task.nextDue).toBe('2026-05-15T12:00:00.000Z')`. This is textbook
+characterization testing and every block carries an explicit
+`CHARACTERIZATION, not endorsement` comment naming the issue, which is the
+honest way to do it. The objection is narrower: the **titles** read as
+specifications — `'getTasks overdue filter turns on the instant, not the
+calendar day (#346)'` — and titles travel further than comments into a failure
+report. Moving `CHARACTERIZATION:` into the title string would fix it.
+
+**Claims that held up under check:** the `set -euo pipefail` and no-piping
+structure; the `--no-git` semantics against gitleaks 8.30.1; `check-api-spec.mjs`
+being CI-only on `main` and now in `verify` (exit 0, 105 routes); the
+`icsExport` test that "pinned the bug" asserting `DTSTART;VALUE=DATE:20260426`;
+the `NotificationSettings.test.tsx` timezone assertion passing only because
+`frontend/vitest.config.ts` pins `TZ` to `America/New_York`; and the 26-year-apart
+bound being non-exercising. That last one was reproduced directly: mutating
+`getTasks`' predicate from `t.nextDue < now` to
+`t.nextDue.slice(0, 10) < now.slice(0, 10)` leaves **all 48** of `main`'s tests
+in that file passing, while #361's version fails exactly one.
+
+All new tests pass on the branch: 157 backend cases across the six touched
+files, 1,321 in the full backend unit suite (matching `docs/testing.md`), and 24
+frontend cases across the two touched files.
 
 ## Type coverage: the numbers, measured here
 
@@ -317,10 +408,16 @@ both are worth knowing.
    `patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]` would
    prevent the recurrence. If the root `overrides` floors are meant to track, they
    need bumping in the same change.
-5. **#361 last, and only after being re-cut.** Its remedy is not a conflict
-   resolution in place: the branch is rooted before its own squash merge. Cut a
-   fresh branch from current `main` and carry over the nine post-`7e10b07`
-   commits, which reduces the PR to its real 27 files. `docs/testing.md` will then
+5. **#361 last, and only after rework.** Do not merge it as it stands. Three
+   substantive items come first: restore the `frontend/android` and
+   `frontend/ios` trees to the gitleaks scan (narrow the allowlist to their build
+   directories), give `computePlantsAtRisk` a caller that actually supplies a
+   zone or drop the parameter and say why, and decide what `timezoneSet` should
+   report for the users who already carry a written `timezone: 'UTC'`. Then the
+   mechanical part: the remedy is not a conflict resolution in place, because the
+   branch is rooted before its own squash merge. Cut a fresh branch from current
+   `main` and carry over the nine post-`7e10b07` commits, which reduces the PR to
+   its real 27 files. `docs/testing.md` will then
    need its counts regenerated against the post-merge tree (the file-count gate
    will enforce this; the case counts must be re-measured by hand), and the
    `package.json` `lint`/`verify` script chains re-applied on top of `main`'s
@@ -353,21 +450,21 @@ any Dependabot PR, and its overlap with #361 auto-merges.
 - CI classification: `statusCheckRollup`, per-job step counts and durations,
   annotations, and `--log-failed` output for #355 and #354.
 - Lockfile/manifest agreement for #360, #357, #356 and #353, entry by entry.
+- #361's substance: its new tests were executed against a probe tree holding
+  `main`'s implementations, so the pass/fail split above is measured, not
+  inferred; the `getTasks` predicate mutation was applied and re-run; the
+  gitleaks allowlist's 76-file effect was counted against the tracked tree; the
+  `.mjs` lint coverage was counted and `backend/eslint.config.mjs` was observed
+  crashing on a `.mjs` input.
 
 **Taken on trust, or not established:**
 
 - Runtime behaviour of the React 19.2.8 upgrade beyond what the frontend suite
   exercises. The dependency analysis is static plus the existing CI logs; no
   build or e2e run was performed with both bumps applied together.
-- **#361's three timezone defects were not re-executed.** Its ancestry, size,
-  conflicts, `tsc` counts and `localDate.ts` were verified directly, but its new
-  tests were not run against `main`'s implementations, so the claim that each
-  "failed before and passes after" is taken on trust. The same applies to its
-  gate-hole experiments (the gitleaks working-tree scan, the newly linted `.mjs`
-  gate scripts) and to its two deliberately "pinned, not changed" behaviours
-  (#343, #346) — whether those new tests assert today's arguably wrong behaviour
-  as correct, such that a future fix must rewrite them, is **not established
-  here** and is the first thing to check when the PR is re-cut.
+- Whether the three timezone defects reproduce against a live deployment. The
+  analysis is from source, from executed tests, and from a probe tree, not from
+  a running system.
 - Lighthouse, Playwright e2e, Semgrep, CodeQL and gitleaks results are read from
   their CI conclusions; none was re-run locally.
 - The live ruleset was read through the API at one moment in time; it can change.
