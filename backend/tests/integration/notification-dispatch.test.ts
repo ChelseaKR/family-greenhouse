@@ -95,6 +95,7 @@ function seedPrefs(userId: string, over: Partial<NotificationPreferences>): void
     dndStart: '',
     dndEnd: '',
     timezone: 'UTC',
+    timezoneSet: false,
     pestAlerts: false,
     weeklyDigest: false,
     phoneVerified: false,

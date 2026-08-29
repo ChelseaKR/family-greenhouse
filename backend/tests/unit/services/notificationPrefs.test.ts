@@ -99,6 +99,70 @@ describe('notificationPrefs', () => {
     expect((await getPreferences('user-1')).weeklyDigest).toBe(false);
   });
 
+  describe('timezoneSet distinguishes a stored zone from the UTC fallback (#342)', () => {
+    it('is false when no row exists at all', async () => {
+      await mockStore(undefined);
+      const { getPreferences } = await import('../../../src/services/notificationPrefs.js');
+      const result = await getPreferences('user-1');
+      // The read-time default is 'UTC', which is why the flag has to exist:
+      // without it a user in Los Angeles who never opened quiet hours is
+      // indistinguishable from a user who deliberately chose UTC, and the
+      // reminder dedupe key, the ICS feed and the digest all treat them as
+      // being in London.
+      expect(result.timezone).toBe('UTC');
+      expect(result.timezoneSet).toBe(false);
+    });
+
+    it('is false for a legacy row written before the timezone field existed', async () => {
+      await mockStore({ ...STORED_VERIFIED, timezone: undefined });
+      const { getPreferences } = await import('../../../src/services/notificationPrefs.js');
+      const result = await getPreferences('user-1');
+      expect(result.timezone).toBe('UTC');
+      expect(result.timezoneSet).toBe(false);
+    });
+
+    it('is true when a zone was actually stored, including a deliberate UTC', async () => {
+      const { getPreferences } = await import('../../../src/services/notificationPrefs.js');
+
+      await mockStore({ ...STORED_VERIFIED, timezone: 'America/Los_Angeles' });
+      const la = await getPreferences('user-1');
+      expect(la.timezone).toBe('America/Los_Angeles');
+      expect(la.timezoneSet).toBe(true);
+
+      // A user who really did pick UTC must be protected from having it
+      // overwritten by the client's browser zone.
+      await mockStore({ ...STORED_VERIFIED, timezone: 'UTC' });
+      const utc = await getPreferences('user-1');
+      expect(utc.timezoneSet).toBe(true);
+    });
+
+    it('setPreferences records the zone, so the next read reports it as set', async () => {
+      await mockStore(undefined);
+      const { setPreferences } = await import('../../../src/services/notificationPrefs.js');
+      const result = await setPreferences({
+        ...BASE_INPUT,
+        timezone: 'America/New_York',
+      });
+      expect(result.timezone).toBe('America/New_York');
+      expect(result.timezoneSet).toBe(true);
+    });
+
+    it('is server-derived: a client cannot assert it', async () => {
+      await mockStore(undefined);
+      const { setPreferences } = await import('../../../src/services/notificationPrefs.js');
+      // `timezoneSet` is omitted from PreferencesInput, so this cast is the
+      // only way to smuggle it in — which is exactly what a hostile client
+      // would do. The stored/returned value must come from the write, not
+      // from the payload.
+      const result = await setPreferences({
+        ...BASE_INPUT,
+        timezone: 'Europe/Madrid',
+        timezoneSet: false,
+      } as never);
+      expect(result.timezoneSet).toBe(true);
+    });
+  });
+
   it('setPreferences keeps the phone number when SMS is toggled off (verification lifecycle)', async () => {
     const puts = await mockStore(STORED_VERIFIED);
     const { setPreferences } = await import('../../../src/services/notificationPrefs.js');

@@ -37,6 +37,23 @@ export interface NotificationPreferences {
   dndEnd: string;
   /** IANA timezone (e.g. "America/New_York") to evaluate DND against. */
   timezone: string;
+  /**
+   * Whether `timezone` was ever actually WRITTEN for this user, as opposed to
+   * being the read-time `'UTC'` fallback below.
+   *
+   * Server-derived, never accepted from a client (it is omitted from
+   * `PreferencesInput`). It exists because `'UTC'` is ambiguous: it is both a
+   * legitimate choice and the value every user has who has never opened the
+   * quiet-hours panel — until 2026-08-28 the ONLY control that persisted a
+   * zone. Reminder dedupe, the ICS feed and the digest all key off this zone,
+   * so a user in Los Angeles was silently being treated as UTC, and nothing
+   * downstream could tell that apart from a deliberate UTC user (#342).
+   *
+   * With this flag the client can adopt the browser's resolved zone on the
+   * next preferences save of any kind, without ever overriding a zone the
+   * user actually chose.
+   */
+  timezoneSet: boolean;
   /** Opt-in to seasonal pest pressure heads-ups. Off by default — these
    *  alerts are coarse and we want explicit consent before adding to the
    *  notification volume. */
@@ -64,6 +81,7 @@ const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   dndStart: '',
   dndEnd: '',
   timezone: 'UTC',
+  timezoneSet: false,
   pestAlerts: false,
   weeklyDigest: true, // default-on iff email is on; DEFAULTS.email is true
   phoneVerified: false,
@@ -98,6 +116,10 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
     dndStart: (item.dndStart as string) ?? '',
     dndEnd: (item.dndEnd as string) ?? '',
     timezone: (item.timezone as string) ?? 'UTC',
+    // Absent attribute = never written. Rows created before the timezone
+    // field existed, and rows written by a client that never sent one, both
+    // land here and are correctly reported as unset rather than as UTC.
+    timezoneSet: item.timezone !== undefined && item.timezone !== null && item.timezone !== '',
     pestAlerts: Boolean(item.pestAlerts),
     // Read-time defaulting for rows written before the digest pref existed:
     // default-on only when the user already accepts email notifications.
@@ -173,7 +195,7 @@ export function isInDndWindow(prefs: NotificationPreferences, now = new Date()):
  *  `weeklyDigest` is optional so older clients keep the stored/derived value. */
 export type PreferencesInput = Omit<
   NotificationPreferences,
-  'updatedAt' | 'phoneVerified' | 'weeklyDigest'
+  'updatedAt' | 'phoneVerified' | 'weeklyDigest' | 'timezoneSet'
 > & { weeklyDigest?: boolean };
 
 /**
@@ -210,6 +232,9 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
     weeklyDigest: prefs.weeklyDigest ?? existing.weeklyDigest,
     phoneVerified,
     timezone,
+    // Any successful save writes the attribute, so from here on the stored
+    // zone is a real one. Server-derived: never read from the input.
+    timezoneSet: true,
     updatedAt: new Date().toISOString(),
   };
   await dynamodb.send(

@@ -14,6 +14,11 @@ import {
   requestPermission,
 } from '@/utils/notifications';
 import { notificationService, type NotificationPreferences } from '@/services/notificationService';
+import {
+  buildPreferencesUpdate,
+  resolveBrowserTimeZone,
+  type PreferencesUpdate,
+} from './preferencesUpdate';
 import { getErrorMessage } from '@/services/api';
 import { isNativeApp } from '@/lib/platform';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -42,25 +47,6 @@ async function registerPushSubscription(): Promise<PushSubscription | null> {
 }
 
 const E164 = /^\+[1-9]\d{6,14}$/;
-type PreferencesUpdate = Parameters<typeof notificationService.updatePreferences>[0];
-
-function buildPreferencesUpdate(
-  current: NotificationPreferences,
-  overrides: Partial<PreferencesUpdate>
-): PreferencesUpdate {
-  return {
-    browser: current.browser,
-    email: current.email,
-    sms: current.sms,
-    phone: current.phone,
-    dndStart: current.dndStart,
-    dndEnd: current.dndEnd,
-    timezone: current.timezone,
-    pestAlerts: current.pestAlerts ?? false,
-    weeklyDigest: current.weeklyDigest ?? true,
-    ...overrides,
-  };
-}
 
 export function NotificationSettings() {
   const { t } = useTranslation();
@@ -78,9 +64,7 @@ export function NotificationSettings() {
   const [dndEndDraft, setDndEndDraft] = useState('');
   // Default to the user's actual timezone if the server doesn't have one
   // recorded yet — far better UX than UTC for first-time DND setup.
-  const [tzDraft, setTzDraft] = useState(
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-  );
+  const [tzDraft, setTzDraft] = useState(resolveBrowserTimeZone());
 
   const prefsQuery = useQuery({
     // Preferences are stored per household membership — scope by household.
@@ -144,7 +128,9 @@ export function NotificationSettings() {
     mutationFn: (overrides: Partial<PreferencesUpdate>) => {
       const current = currentPreferences();
       if (!current) throw new Error(t('notifications.preferencesUnavailable'));
-      return notificationService.updatePreferences(buildPreferencesUpdate(current, overrides));
+      return notificationService.updatePreferences(
+        buildPreferencesUpdate(current, overrides, resolveBrowserTimeZone())
+      );
     },
     onMutate: () => {
       setInfo(null);
@@ -236,7 +222,7 @@ export function NotificationSettings() {
 
       try {
         const updated = await notificationService.updatePreferences(
-          buildPreferencesUpdate(current, { browser: true })
+          buildPreferencesUpdate(current, { browser: true }, resolveBrowserTimeZone())
         );
         return { updated, backgroundPush, backgroundPushFailed };
       } catch (cause) {
@@ -327,7 +313,7 @@ export function NotificationSettings() {
       const updated =
         remainingSubscriptions === 0
           ? await notificationService.updatePreferences(
-              buildPreferencesUpdate(current, { browser: false })
+              buildPreferencesUpdate(current, { browser: false }, resolveBrowserTimeZone())
             )
           : current;
       disableLocally();

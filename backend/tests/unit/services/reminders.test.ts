@@ -101,6 +101,7 @@ function notificationPreferences(
     dndStart: '',
     dndEnd: '',
     timezone: 'UTC',
+    timezoneSet: false,
     pestAlerts: false,
     weeklyDigest: true,
     phoneVerified: false,

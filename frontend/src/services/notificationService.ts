@@ -19,6 +19,13 @@ export interface NotificationPreferences {
   dndEnd: string;
   /** IANA timezone name, e.g. "America/New_York". Defaults to UTC server-side. */
   timezone: string;
+  /**
+   * Server-derived: whether `timezone` was ever actually written, as opposed
+   * to being the read-time 'UTC' fallback. Read-only — `updatePreferences`
+   * does not accept it. Lets the UI adopt the browser's resolved zone on the
+   * next save without overriding a zone the user chose (#342).
+   */
+  timezoneSet: boolean;
   /** Opt-in seasonal pest pressure alerts. Defaults false. */
   pestAlerts: boolean;
   /** Weekly "plants at risk" digest email. Defaults on when email is enabled. */

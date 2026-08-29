@@ -237,6 +237,8 @@ interface NotificationPrefsRecord {
   dndStart: string;
   dndEnd: string;
   timezone: string;
+  /** Mirrors services/notificationPrefs.ts: server-derived, never client-set. */
+  timezoneSet: boolean;
   pestAlerts: boolean;
   weeklyDigest: boolean;
   phoneVerified: boolean;
@@ -3649,6 +3651,7 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     dndStart: '',
     dndEnd: '',
     timezone: 'UTC',
+    timezoneSet: false,
     pestAlerts: false,
     // Mirrors production read-defaulting: weeklyDigest on iff email is on.
     weeklyDigest: true,
@@ -3771,6 +3774,9 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     dndStart: body.dndStart,
     dndEnd: body.dndEnd,
     timezone: body.timezone,
+    // Mirrors notificationPrefs.setPreferences: any successful save records a
+    // real zone, so the read-time 'UTC' fallback stops applying (#342).
+    timezoneSet: true,
     pestAlerts: body.pestAlerts,
     weeklyDigest: body.weeklyDigest ?? current.weeklyDigest,
     phoneVerified,

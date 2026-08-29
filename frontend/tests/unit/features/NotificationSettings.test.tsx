@@ -46,6 +46,9 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
     dndStart: '',
     dndEnd: '',
     timezone: 'UTC',
+    // Server-derived: false = the stored 'UTC' above is the read-time
+    // fallback, not a zone the user picked (#342).
+    timezoneSet: false,
     pestAlerts: false,
     weeklyDigest: true,
     phoneVerified: false,
@@ -175,7 +178,16 @@ describe('NotificationSettings', () => {
   it('does not submit an unsaved quiet-hours draft when an unrelated toggle is flipped', async () => {
     const user = userEvent.setup();
     const { notificationService } = await renderSettings(
-      prefs({ dndStart: '22:00', dndEnd: '07:00', timezone: 'America/New_York' })
+      prefs({
+        dndStart: '22:00',
+        dndEnd: '07:00',
+        timezone: 'America/New_York',
+        // This user set quiet hours, which is the panel that persists a zone.
+        // Without this the assertion below passed only because the vitest
+        // config happens to pin TZ to America/New_York, so the adopted
+        // browser zone coincided with the stored one.
+        timezoneSet: true,
+      })
     );
     vi.mocked(notificationService.updatePreferences).mockResolvedValue(
       prefs({
