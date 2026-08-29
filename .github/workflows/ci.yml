@@ -298,7 +298,17 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        # `prebuild` regenerates the sitemap and `postbuild` prerenders the
+        # public routes, so the artifact uploaded below is the one the SEO gate
+        # below inspects.
         run: npm run build
+
+      - name: SEO gate on the built frontend
+        # Shared with `npm run verify` (root `seo:check`, which builds first) so
+        # local pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27). Lives here rather than
+        # in `Lint` because it needs dist/ to exist.
+        run: node scripts/check-seo-build.mjs
 
       - name: Build backend
         working-directory: backend
