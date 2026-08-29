@@ -64,6 +64,11 @@ variable "ses_configuration_set_name" {
   default     = ""
 }
 
+variable "billing_lambda_log_group_name" {
+  description = "CloudWatch log group for the billing Lambda, whose Stripe webhook receiver emits the no-grant log lines this module alarms on"
+  type        = string
+}
+
 variable "lambda_function_names" {
   description = "List of Lambda function names"
   type        = list(string)

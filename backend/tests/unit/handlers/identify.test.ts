@@ -399,6 +399,46 @@ describe('plants identify handler', () => {
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'meters an %s Garden household on the SEEDLING allowance — Plant.id calls cost money',
+    async (status) => {
+      const plantIdentification = await import('../../../src/services/plantIdentification.js');
+      const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+      const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+      __resetMembershipCacheForTests();
+      setCachedMembership('user-1', 'hh-1', 'member');
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+        planId: 'garden',
+        status,
+      });
+      vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
+      vi.mocked(identifyBudget.reserveIdentification).mockResolvedValue({
+        used: 1,
+        source: 'allowance',
+      });
+      vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+        configured: true,
+        suggestions: [],
+      });
+
+      const event = buildEvent({
+        requestContext: {
+          authorizer: {
+            claims: { sub: 'user-1', email: 'a@b.com', 'custom:household_id': 'hh-1' },
+          },
+          identity: { sourceIp: '127.0.0.1' },
+        } as APIGatewayProxyEvent['requestContext'],
+      });
+      await identify(event, ctx, () => {});
+      // Seedling's allowance is 1, not Garden's 30 (ADR 0012 decision 2):
+      // the reservation the paid call is made against is the one entitlement
+      // resolves to.
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 1, 'hh-1');
+    }
+  );
+
   it('surfaces upstream failures as an exposed 502 message', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');

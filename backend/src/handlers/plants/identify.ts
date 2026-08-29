@@ -9,7 +9,7 @@ import { IMAGE_BODY_MAX_BYTES } from '../../middleware/bodySize.js';
 import * as plantIdentification from '../../services/plantIdentification.js';
 import * as identifyBudget from '../../services/identifyBudget.js';
 import * as billing from '../../services/billing.js';
-import { getPlan } from '../../models/plans.js';
+import { getEntitledPlan, getPlan } from '../../models/plans.js';
 import {
   PLANT_ID_CREDITS_PER_IDENTIFICATION,
   PLANT_ID_USD_PER_CREDIT,
@@ -47,7 +47,10 @@ export const identify = createHandler(
     // (default off — beta is unaffected).
     const bucketId = user.householdId ?? `user:${user.userId}`;
     const plan = user.householdId
-      ? getPlan((await billing.getHouseholdSubscription(user.householdId)).planId)
+      ? // Entitlement, not the plan row — Plant.id calls cost real money, and
+        // an unpaid subscription should not buy a larger allowance. See
+        // getEntitledPlan.
+        getEntitledPlan(await billing.getHouseholdSubscription(user.householdId))
       : getPlan('seedling');
     const allowance = identifyBudget.allowanceForPlan(plan.id);
     const meteringEnabled = identifyBudget.meteringEnabled();

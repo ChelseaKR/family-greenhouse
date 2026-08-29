@@ -13,7 +13,7 @@ import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
 import * as billing from '../billing.js';
 import { askSprout, isSproutIntegrationEnabled, type SproutCitation } from '../sprout.js';
-import { getPlan } from '../../models/plans.js';
+import { getEntitledPlan } from '../../models/plans.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -505,7 +505,10 @@ async function* turnEvents(
   // both the sync (runChatTurn) and streaming (streamChatTurn) entry points
   // share, before any idempotency/budget/Bedrock work — no future caller of
   // either entry point can accidentally skip it.
-  const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+  // Entitlement, not the plan row: each turn spends Bedrock tokens, so a
+  // past_due/unpaid household resolves to Seedling and hits the 402 above the
+  // same as a household that never paid. See getEntitledPlan.
+  const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
   if (plan.id === 'seedling') {
     throw createHttpError(
       402,

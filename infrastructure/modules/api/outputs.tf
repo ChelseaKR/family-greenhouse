@@ -38,6 +38,11 @@ output "digests_lambda_log_group_name" {
   value       = aws_cloudwatch_log_group.lambda["digests"].name
 }
 
+output "billing_lambda_log_group_name" {
+  description = "CloudWatch log group for the billing Lambda (Stripe webhook receiver)"
+  value       = aws_cloudwatch_log_group.lambda["billing"].name
+}
+
 output "api_gateway_arn" {
   description = "API Gateway ARN"
   value       = aws_apigatewayv2_api.main.arn

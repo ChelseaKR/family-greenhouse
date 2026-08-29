@@ -19,7 +19,7 @@ import * as apiKeys from '../services/apiKeys.js';
 import type { ApiScope } from '../services/apiKeys.js';
 import * as billing from '../services/billing.js';
 import * as householdService from '../services/householdService.js';
-import { getPlan } from '../models/plans.js';
+import { getEntitledPlan } from '../models/plans.js';
 import { getCachedMembership, setCachedMembership } from '../utils/membershipCache.js';
 import type { AuthenticatedEvent } from './auth.js';
 
@@ -65,7 +65,10 @@ export const apiKeyMiddleware = (): middy.MiddlewareObj<
     // mint. Re-check on every use so a downgrade revokes access immediately
     // instead of leaving already-issued keys live forever.
     const sub = await billing.getHouseholdSubscription(record.householdId);
-    if (getPlan(sub.planId).id !== 'greenhouse') {
+    // Entitlement, not the plan row: a Greenhouse household that stopped
+    // paying resolves to Seedling here, so an unpaid subscription revokes API
+    // access on the same terms a downgrade does. See getEntitledPlan.
+    if (getEntitledPlan(sub).id !== 'greenhouse') {
       throw createHttpError(
         403,
         'API access requires the Greenhouse plan. This household has downgraded — upgrade to keep using this key.'

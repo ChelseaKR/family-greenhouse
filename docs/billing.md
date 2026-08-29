@@ -41,6 +41,35 @@ Caps are enforced in:
 - `POST /plants` → counts existing plants in the household, refuses creation with HTTP **402 Payment Required** if at the cap
 - `POST /households/join/:inviteCode` → counts existing members, same 402 if full
 
+### Entitlement vs. plan
+
+A household's `planId` says which plan it is **on**. It does not say whether it
+is **paying** for it. `getEntitledPlan` (`backend/src/models/plans.ts`) resolves
+the second question, and every paid-feature gate uses it rather than
+`getPlan(sub.planId)`:
+
+| Stripe `subscription.status`                                                   | Caps resolve to  |
+| ------------------------------------------------------------------------------ | ---------------- |
+| `active`, `trialing`                                                           | the paid plan    |
+| none recorded (free tier, one-time lifetime grant)                             | the plan on file |
+| `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused`, `canceled` | Seedling         |
+
+**There is no grace period, and that is an assumption, not a published policy.**
+Nothing in this repository states one — not this file, not
+[`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not the ADRs — so any number
+of days would have been invented. Entitlement therefore ends when good standing
+does. If the owner decides a grace window is the right product behaviour, it
+belongs here first and in `ENTITLED_SUBSCRIPTION_STATUSES` second.
+
+This is deliberately the same shape as a downgrade, not a lockout: see
+"Plan caps and downgrades" below. Existing plants and members stay readable and
+editable; only new creations pause. The gates it covers are plant create, plant
+reactivate, shared-plant accept, bulk import, household join, the public read
+API (`middleware/apiKey.ts`), the Plant.id allowance, and the care assistant.
+`GET /billing/me` reports the same entitled caps in its meters, so the numbers
+the UI shows are the numbers the API enforces; `planId` in that response stays
+the plan the household is on.
+
 The 402 response body carries a friendly explanation referencing the plan name; the frontend shows it as an error toast and links to `/settings/billing`.
 
 ## Frontend flow
@@ -65,14 +94,22 @@ Stripe webhook → POST /billing/webhook
 DDB household row updated (planId, status, stripeCustomerId, ...)
 ```
 
-The "Upgrade to X" button on `BillingSettings` does:
+**The client half of this flow no longer exists.** `billingService`
+(`frontend/src/services/billingService.ts`) exports exactly `listPlans` and
+`getCurrentSubscription`; the purchase UI and its `startCheckout` / `openPortal`
+callers were removed with the paid-plan surfaces. The diagram above therefore
+describes the retained BACKEND path plus the frontend that would have to be
+rebuilt, not code you can call today. Restoring it is part of the UI-restoration
+step in [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not a loose end.
 
-1. `billingService.startCheckout(planId)` → backend creates a Stripe Checkout Session and returns its URL
+Historically, the "Upgrade to X" button on `BillingSettings` did:
+
+1. Call the backend `POST /billing/checkout`, which creates a Stripe Checkout Session and returns its URL
 2. Frontend `window.location.href = result.url` → user lands on Stripe-hosted checkout
 3. After success/cancel, Stripe redirects to `${FRONTEND_URL}/settings/billing?status={success|cancel}`
 4. The settings page reads the query string and shows a friendly notice
 
-The portal flow ("Manage subscription") is the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI.
+The portal flow ("Manage subscription") was the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI. Both endpoints answer 503 while the hold is active.
 
 ### Members ask, admins buy
 
@@ -152,11 +189,33 @@ deltaForStripeEvent(event): SubscriptionDelta | null      // pure: webhook event
 applyStripeEvent(event): Promise                          // calls deltaForStripeEvent then writes
 ```
 
+### The free trial is once per household
+
+`subscription_data.trial_period_days` is set only when the household has no
+`trialConsumedAt` on its metadata row. That marker is written write-once by the
+webhook the first time Stripe confirms a trial (a `trialing` subscription, a
+subscription carrying trial dates, or a subscription-mode Session that required
+no payment) and is never cleared by cancellation. Re-subscribing after
+cancelling stays deliberately possible; collecting a second 14 free days does
+not. The marker is internal and is not exposed by `GET /billing/me`.
+
+### Price reconciliation
+
+`backend/src/services/stripePrices.ts` compares the amounts this repository
+PUBLISHES against the Price objects Stripe would CHARGE.
+`createCheckoutSession` retrieves the price it is about to charge and refuses
+unless `unit_amount`, `currency`, and the recurring interval match
+`models/plans.ts` — and refuses when the price cannot be retrieved at all.
+`reconcileConfiguredPrices` sweeps every configured cadence for an ops check.
+This is the only thing in the stack that would catch two transposed `price_…`
+ids in tfvars: price ids encode neither amount nor cadence, and
+`stripe_price_ids_are_live` only guards test-vs-live mode.
+
 `deltaForStripeEvent` is intentionally pure. The webhook handler verifies the Stripe signature, calls `deltaForStripeEvent`, and applies whatever (if anything) it returns. This keeps the test surface small — `billing.test.ts` exercises the delta logic for every Stripe event type without ever touching DDB.
 
 Webhook events we handle:
 
-- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs and planId from the session metadata. The async event completes delayed one-time payment methods. **Status is deliberately not written here** — the session references the subscription by id and does not carry its state, so the subscription events own the field (otherwise every trialing household was recorded as `active`). A lifetime (`mode: 'payment'`) session is the exception: it has no subscription, so it writes `active` and clears the subscription ids.
+- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs and planId from the session metadata, **but only once Stripe says the money settled**. A completed Session is not proof of payment: when a first subscription invoice fails, Stripe still completes the Session with `payment_status: 'unpaid'` while the subscription itself is `incomplete`. `payment_status === 'paid'` implies `active`; `no_payment_required` (a trial) implies `trialing`; anything else grants nothing at all, logs `stripe_checkout_session_unsettled_no_grant`, and waits for the subscription events. **Status is still never guessed** — where Stripe expanded the subscription onto the Session, its status wins over the value implied by `payment_status`, and the subscription events remain the authoritative source afterwards (otherwise every trialing household was recorded as `active`). The async event completes delayed one-time payment methods. A lifetime (`mode: 'payment'`) session is the exception: it has no subscription, so it writes `active` and clears the subscription ids.
 - `customer.subscription.created` / `customer.subscription.updated` → record latest status + period-end + planId
 - `customer.subscription.deleted` → reset to seedling, status canceled
 

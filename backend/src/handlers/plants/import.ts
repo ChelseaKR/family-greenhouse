@@ -25,7 +25,7 @@ import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
-import { getPlan, limitOf } from '../../models/plans.js';
+import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -61,7 +61,10 @@ export const importPlants = createHandler(
     const { validatedBody } = event as ValidatedEvent<ImportPlantsInput>;
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    const plan = getPlan(sub.planId);
+    // Entitlement, not the plan row. Import shares POST /plants' cap, so
+    // resolving it differently would let a past_due household import its way
+    // past the limit that single-plant creation refuses. See getEntitledPlan.
+    const plan = getEntitledPlan(sub);
     const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive existing plants before importing more.`;
 
     const results: ImportRowResult[] = [];

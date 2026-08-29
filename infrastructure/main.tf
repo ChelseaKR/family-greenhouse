@@ -340,9 +340,11 @@ module "monitoring" {
   auth_lambda_log_group_name  = module.api.auth_lambda_log_group_name
   # Scheduled-job log groups: the run-summary metric filters read these. Without
   # them a run where every household failed is indistinguishable from a quiet
-  # week (see the filters in modules/monitoring/main.tf).
+  # week (see the filters in modules/monitoring/main.tf). The billing log group
+  # is the source of the Stripe no-grant filters added alongside them.
   reminders_lambda_log_group_name = module.api.reminders_lambda_log_group_name
   digests_lambda_log_group_name   = module.api.digests_lambda_log_group_name
+  billing_lambda_log_group_name   = module.api.billing_lambda_log_group_name
   lambda_function_names           = module.api.lambda_function_names
   alert_email                     = var.alert_email
   alert_sms_number                = var.alert_sms_number
