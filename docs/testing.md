@@ -10,7 +10,7 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 
 | Layer                     | Tool               | Where                                                                     | Files | Test cases |
 | ------------------------- | ------------------ | ------------------------------------------------------------------------- | ----- | ---------- |
-| Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 90    | 1,286      |
+| Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 91    | 1,299      |
 | Backend integration       | vitest + supertest | `backend/tests/integration/`                                              | 8     | 199        |
 | Backend RAG eval          | vitest             | `backend/tests/eval/`                                                     | 1     | 7          |
 | Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 100   | 714        |
@@ -21,11 +21,11 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,251 vitest cases** across 211 files — 1,492 backend, 759 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,264 vitest cases** across 212 files — 1,505 backend, 759 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
 
 Of the 24 Playwright specs, 22 run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 
-The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (measured 2026-08-27, Node 26.7.0 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites; reproduce with:
+The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (re-measured 2026-08-29, Node 26.7.0 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites; reproduce with:
 
 ```bash
 npm --workspace backend exec vitest list | wc -l
@@ -80,6 +80,8 @@ it('createPlant writes a Put with the right key', async () => {
 For handler tests, mock the **service** layer rather than DynamoDB directly — that way you're testing the handler's HTTP behaviour, not re-testing the service.
 
 For middleware tests, build minimal `APIGatewayProxyEvent` shapes and run them through a `middy(handler).use(yourMiddleware)` pipeline.
+
+Not every file there mocks something. `backend/tests/unit/config/` also holds structural tests over committed repository artifacts — `commercialStatus.test.ts` reads the production Terraform and workflows, and `branchRuleset.test.ts` reads `.github/rulesets/main.json` and fails if the committed branch ruleset would lock the repository owner out when applied (empty, absent, wrong-type, wrong-actor, or PR-only `bypass_actors`). Its loader fails closed on a missing or unparseable file, because a guard that passes when its subject is absent is the defect it exists to catch; see [`.github/rulesets/README.md`](../.github/rulesets/README.md).
 
 ## Backend integration tests
 

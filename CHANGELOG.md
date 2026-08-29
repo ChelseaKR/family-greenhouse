@@ -34,6 +34,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   reader would act on. The gate detects one shape and the ADR says plainly
   which shapes it does not.
 
+- `backend/tests/unit/config/branchRuleset.test.ts`, a lockout guard on the
+  committed branch ruleset, running in `npm run verify` and in CI's required
+  `Test Backend` check. `lockoutRisk(document)` is a pure function of the
+  parsed `.github/rulesets/main.json` and refuses the five shapes that drop the
+  owner's break-glass path — empty list, absent key, wrong type, wrong actor,
+  and `bypass_mode: "pull_request"` on the right actor — with a positive
+  control so it cannot pass by refusing everything. Its loader fails on a
+  missing or unparseable file rather than vouching for nothing: the parse is
+  what catches a truncated ruleset, because a truncated file still contains the
+  literal string `bypass_actors` and a grep would wave it through.
+
 ### Fixed
 
 - The dashboard climate card no longer renders a failed read as a calm night
@@ -65,9 +76,30 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Revoke control to reach them. The list now says the read failed and that any
   key issued earlier is still active until revoked; the count is published only
   when it was actually read. A genuine empty is unchanged.
+- The committed branch ruleset would have locked the repository owner out if
+  anyone applied it. `.github/rulesets/main.json` carried `"bypass_actors": []`,
+  and the file is a complete, postable ruleset document, so following this
+  repository's own artifact — `gh api -X POST .../rulesets --input` — would
+  have left `main` with required checks, blocked force-push, and blocked
+  deletion applying to the owner with no exception, including the rule that
+  would let her repair it. GitHub returns 201 for such an apply, so nothing
+  warns you; this exact mistake locked the owner out of eighteen repositories
+  in this portfolio. The file now carries the owner's standing bypass,
+  `{ "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" }` —
+  the admin role, `always` rather than `pull_request`, because a bypass that
+  only works inside a pull request is no use when the pull request is the thing
+  that is wedged. `.github/rulesets/README.md` reverses its previous "no bypass
+  actors" reading explicitly rather than deleting it, records the deliberate
+  divergence from the vendored `CI-CD-STANDARD.md` CICD-15 and §5.1, and states
+  that the live ruleset still disagrees (it names the owner as a user with a
+  PR-only bypass) along with the owner-only command that reconciles it. No live
+  setting was changed by this repository.
 - `docs/testing.md`'s test-case snapshot was five cases stale for the frontend
   unit layer (the file-count gate does not check cases). Re-measured and
   re-dated.
+- `docs/testing.md`'s backend-unit snapshot was in turn one case stale for the
+  same reason. Re-measured and re-dated alongside the file counts the ruleset
+  guard adds.
 
 ## [0.23.2] - 2026-08-18
 
