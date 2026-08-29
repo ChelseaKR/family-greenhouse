@@ -16,6 +16,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- The committed branch ruleset recorded no bypass actors and
+  `.github/rulesets/README.md` called that "no admin bypass on `main`" as though
+  it were the strong posture. It is not: an agent once applied a ruleset with no
+  bypass and locked the owner out of her own repository, and restoring access
+  took a sweep across eighteen repositories. `.github/rulesets/main.json` now
+  records the owner's standing bypass (`RepositoryRole` 5, `bypass_mode:
+always`) as the intended state.
+- **Recorded, not fixed here:** the live ruleset `18752847` is missing that
+  bypass — it grants only `{"actor_id": 3114598, "actor_type": "User",
+"bypass_mode": "pull_request"}`, so `current_user_can_bypass` reads
+  `"pull_requests_only"` and the owner cannot get past a wedged required check on
+  a direct push. Repairing live is a repository-settings change left to the
+  owner. Because of that gap, `bypass_actors` is the one field where `main.json`
+  deliberately is not a mirror of live, and the "regenerate from the API" command
+  in `.github/rulesets/README.md` now warns against being run blind — it would
+  overwrite the intent with the defect and erase the finding.
+
 ### Added
 
 - A settled read with no data is now a decision the repo has written down, not
