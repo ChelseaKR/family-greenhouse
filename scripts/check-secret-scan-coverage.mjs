@@ -61,11 +61,33 @@ if (!/\[extend\][\s\S]*?useDefault\s*=\s*true/.test(live)) {
 
 // ---- (2) no path exclusion may match a tracked file ------------------------
 // Collect every `paths = [ ... ]` array, covering both `[allowlist]` and any
-// `[[allowlists]]` blocks, and every '''literal''' inside them.
+// `[[allowlists]]` blocks, and every string literal inside them. TOML spells a
+// string four ways and gitleaks accepts all of them, so all four are read here
+// rather than only the '''literal''' form this config happens to use.
+//
+// Then check the residue. A gate that quietly skips a pattern it cannot parse
+// is the same class of failure it exists to prevent, and counting parsed
+// literals is not enough to notice: one unreadable element sitting among eight
+// readable ones still yields eight. So every literal is blanked out of the
+// array body and what is left must be nothing but commas and whitespace.
+// Anything else means an element went unchecked, and that fails the build.
+const LITERAL = /'''([\s\S]*?)'''|"""([\s\S]*?)"""|'([^']*)'|"((?:[^"\\]|\\.)*)"/g;
 const patterns = [];
 for (const block of live.matchAll(/^\s*paths\s*=\s*\[([\s\S]*?)\]/gm)) {
-  for (const literal of block[1].matchAll(/'''([\s\S]*?)'''/g)) {
-    patterns.push(literal[1]);
+  const body = block[1];
+  let residue = body;
+  for (const literal of body.matchAll(LITERAL)) {
+    patterns.push(literal[1] ?? literal[2] ?? literal[3] ?? literal[4]);
+    residue = residue.replace(literal[0], '');
+  }
+  const leftover = residue.replace(/[,\s]/g, '');
+  if (leftover !== '') {
+    failures.push(
+      `${CONFIG}: a \`paths = [...]\` array holds an element this gate could not parse, so\n` +
+        '  that element was never checked against the tracked file list. Write every entry\n' +
+        `  as a TOML string literal, or teach this script the spelling used.\n` +
+        `  Unparsed: ${leftover}`
+    );
   }
 }
 
