@@ -49,8 +49,12 @@
     "reads:check": "npm run reads:check --workspace frontend",
     "mobile:validate": "node scripts/validate-store-release.mjs",
     "observability:check": "node scripts/check-observability.mjs",
+    "api:check": "node scripts/check-api-spec.mjs",
+    "sitemap:check": "npm run sitemap:check --workspace frontend",
+    "brand:check": "npm run brand:check --workspace frontend",
+    "figures:check": "node scripts/check-doc-figures.mjs",
     "mobile:release": "frontend/scripts/build-mobile-release.sh",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run i18n:check && npm run reads:check && npm run observability:check && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs && node scripts/check-docs-testing.mjs"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run i18n:check && npm run reads:check && npm run observability:check && npm audit --omit=dev --audit-level=high && node scripts/check-no-bare-markers.mjs && node scripts/check-no-silenced-gates.mjs && node scripts/check-docs-testing.mjs && npm run figures:check && npm run api:check && npm run sitemap:check && npm run brand:check"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",

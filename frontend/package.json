@@ -10,6 +10,7 @@
     "prebuild": "node scripts/build-sitemap.mjs",
     "build": "tsc -b && vite build",
     "sitemap": "node scripts/build-sitemap.mjs",
+    "sitemap:check": "node scripts/build-sitemap.mjs --check",
     "brand:render": "./scripts/render-brand-assets.sh",
     "brand:check": "node scripts/check-brand-assets.mjs",
     "preview": "vite preview",
