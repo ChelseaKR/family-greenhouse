@@ -1,6 +1,9 @@
 # Pull request triage — 2026-08-28
 
-Triage of the eight open pull requests against `main` at `5655398`. Every claim
+Triage of the eight open pull requests against `main` at `5655398`, as the
+queue stood on 2026-08-28 (#361, #360, #358, #357, #356, #355, #354, #353).
+#362 was opened after this snapshot and is out of scope; see the note under
+non-diff hazards. Every claim
 below was checked against the repository or the GitHub API; the closing section
 separates what was verified from what was taken on trust.
 
@@ -366,13 +369,23 @@ silently becomes 1,494 — a documented limitation, not a gate failure. #361 add
 test files and updates the table in the same change, which is why the table is a
 conflict rather than a breakage.
 
-**Ruleset artifact drift** (context, not a defect, and no PR here changes it).
-The live `protect-main` ruleset carries one bypass actor. The committed copy at
-`.github/rulesets/main.json` records `"bypass_actors": []` and its README asserts
-there is no admin bypass on `main`; live `updated_at` is ten days later than the
-snapshot. The 13 required contexts match live exactly. **No open PR touches
-`.github/rulesets/`, so nothing here removes the bypass.** The reviewable
-in-tree artifact is simply stale and should be regenerated.
+**Ruleset artifact drift** (context, not a defect). Three states disagree. The
+committed copy at `.github/rulesets/main.json` records `"bypass_actors": []` and
+its README asserts there is no admin bypass on `main`. The live `protect-main`
+ruleset carries one bypass actor, `actor_type: User` (the owner) with
+`bypass_mode: pull_request`, and its `updated_at` is ten days later than the
+committed snapshot. The 13 required contexts match live exactly. **None of the
+eight PRs triaged here touches `.github/rulesets/`, so nothing in this queue
+removes the bypass.**
+
+Noted after this triage was written: **#362, opened while this document was
+being prepared, is exactly the fix for that drift** — it restores
+`RepositoryRole` 5 / `bypass_mode: always` to the committed artifact as the
+intended permanent state, documents why an empty `bypass_actors` list is not a
+safe default, and records that the live ruleset has drifted to the weaker
+`User` / `pull_request` form. It **adds** the bypass record rather than removing
+it. #362 is outside the eight-PR scope of this triage and was not reviewed
+here.
 
 **Skipped required checks count as satisfied.** On #355 and #354, `Build`,
 `Bundle size` and `E2E + accessibility (Playwright)` reported `skipped` because
