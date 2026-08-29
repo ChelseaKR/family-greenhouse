@@ -29,6 +29,7 @@ import { randomUUID } from 'node:crypto';
 import { GetCommand, PutCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
+import { localDateKey } from '../utils/localDate.js';
 import type { Task } from '../models/types.js';
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
@@ -44,17 +45,12 @@ const MARKER_TTL_SECONDS = 48 * 60 * 60;
 // Lambda is retried during the next hourly scan rather than suppressing a day.
 const DELIVERY_LEASE_SECONDS = 5 * 60;
 
-export function localDateKey(now: Date, timeZone = 'UTC'): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((item) => item.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
+// Single implementation, shared with the digest's calendar-day math so the
+// two surfaces cannot drift apart on what "day" means (see
+// utils/localDate.ts). Re-exported because callers and tests import it from
+// here. Behaviour is unchanged, with one addition: an unrecognized zone now
+// degrades to UTC instead of throwing inside a scheduled scan.
+export { localDateKey };
 
 function aggregateReminderMarkerKeys(
   userId: string,

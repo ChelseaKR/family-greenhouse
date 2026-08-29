@@ -25,6 +25,7 @@ import { randomUUID } from 'node:crypto';
 import { PutCommand, GetCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
+import { calendarDaysBetween } from '../utils/localDate.js';
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
 import * as plantService from './plantService.js';
@@ -75,7 +76,8 @@ function taskTypeLabel(t: { type: string; customType: string | null }): string {
  */
 export async function computePlantsAtRisk(
   householdId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timeZone = 'UTC'
 ): Promise<PlantAtRisk[]> {
   const overdue = await taskService.getTasksDueBy(householdId, now.toISOString());
   if (overdue.length === 0) return [];
@@ -90,9 +92,13 @@ export async function computePlantsAtRisk(
   for (const task of overdue) {
     const plantName = activePlants.get(task.plantId);
     if (plantName === undefined) continue;
-    const daysOverdue = Math.floor(
-      (now.getTime() - new Date(task.nextDue).getTime()) / (24 * 60 * 60 * 1000)
-    );
+    // CALENDAR days, not elapsed 24h spans. `floor(elapsed / 24h)` disagreed
+    // with the task list for every task whose due instant and the digest run
+    // sit on different calendar days less than 24 hours apart — a task due
+    // 23:00 and digested at 08:00 the next morning scored 0 and was phrased
+    // "ready for a little care today" while the app said "1 day overdue".
+    // Under-reporting is the dangerous direction here (#342 item 4).
+    const daysOverdue = calendarDaysBetween(new Date(task.nextDue), now, timeZone);
     const current = byPlant.get(task.plantId);
     if (!current || daysOverdue > current.daysOverdue) {
       byPlant.set(task.plantId, {

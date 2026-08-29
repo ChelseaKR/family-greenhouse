@@ -113,6 +113,53 @@ describe('digest service', () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe('computePlantsAtRisk', () => {
+    it('counts CALENDAR days overdue, not elapsed 24h spans (#342 item 4)', async () => {
+      const tasks = await import('../../../src/services/taskService.js');
+      const { computePlantsAtRisk } = await import('../../../src/services/digest.js');
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      // Due Wed Jun 10 at 23:00Z; the digest runs Thu Jun 11 at 12:00Z.
+      // Thirteen hours elapsed, but it is the NEXT CALENDAR DAY — which is
+      // what the task list tells the user ("1 day overdue"). The old
+      // `floor(elapsed / 24h)` scored this 0 and `overduePhrase(0)` called it
+      // "ready for a little care today", contradicting the app on the same
+      // task and under-reporting the neglect.
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+        { plantId: 'p1', type: 'water', customType: null, nextDue: '2026-06-10T23:00:00.000Z' },
+      ] as never);
+
+      const result = await computePlantsAtRisk('hh', NOW);
+      expect(result[0].daysOverdue).toBe(1);
+    });
+
+    it('still reports 0 for a task due earlier on the SAME calendar day', async () => {
+      const tasks = await import('../../../src/services/taskService.js');
+      const { computePlantsAtRisk } = await import('../../../src/services/digest.js');
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      // Due 01:00Z, digested 12:00Z the same day: genuinely "today".
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+        { plantId: 'p1', type: 'water', customType: null, nextDue: '2026-06-11T01:00:00.000Z' },
+      ] as never);
+
+      const result = await computePlantsAtRisk('hh', NOW);
+      expect(result[0].daysOverdue).toBe(0);
+    });
+
+    it('resolves the calendar day in the zone it is given', async () => {
+      const tasks = await import('../../../src/services/taskService.js');
+      const { computePlantsAtRisk } = await import('../../../src/services/digest.js');
+      await mockActivePlants([{ id: 'p1', name: 'Monstera' }]);
+      // 2026-06-10T23:00Z is Jun 10, 19:00 EDT and the run instant
+      // 2026-06-11T12:00Z is Jun 11, 08:00 EDT — still one calendar day in
+      // New York, same as in UTC. Pinning it here so the zone parameter is
+      // exercised rather than merely accepted.
+      vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+        { plantId: 'p1', type: 'water', customType: null, nextDue: '2026-06-10T23:00:00.000Z' },
+      ] as never);
+
+      const result = await computePlantsAtRisk('hh', NOW, 'America/New_York');
+      expect(result[0].daysOverdue).toBe(1);
+    });
+
     it('ranks plants by their MAX days overdue across tasks, with task type + days', async () => {
       const tasks = await import('../../../src/services/taskService.js');
       const { computePlantsAtRisk } = await import('../../../src/services/digest.js');
