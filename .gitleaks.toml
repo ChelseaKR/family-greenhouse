@@ -7,7 +7,30 @@
 useDefault = true
 
 [allowlist]
-description = "Dev/test mock bearer tokens (local-server.ts auth shim) — not real secrets"
+description = "Dev/test mock bearer tokens (local-server.ts auth shim) — not real secrets — plus build output and vendored trees that are not source"
+# `paths` exists for the WORKING-TREE scan (`gitleaks detect --no-git`, added
+# to CI on 2026-08-28). That mode walks the filesystem, so it sees build
+# output and local worktrees that the history scan never sees because they
+# are gitignored and were never committed. Without these, the working-tree
+# scan reported 96 findings, every one of them inside `backend/dist` or
+# `.claude/worktrees/*/backend/dist` — bundled third-party code, no secret of
+# ours. A permanently-red gate gets ignored and then removed, so the noise is
+# excluded by path rather than by lowering the rules.
+#
+# Deliberately NOT excluded: `package-lock.json` and anything under
+# `backend/src`, `frontend/src`, `infrastructure/`, `docs/` or `scripts/`.
+# Those are source and must stay in scope for both scan modes.
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)build/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\.claude/worktrees/''',
+  '''(^|/)frontend/(android|ios)/''',
+  '''(^|/)\.lighthouseci/''',
+  '''(^|/)playwright-report/''',
+  '''(^|/)test-results/''',
+]
 regexes = [
   '''mock-token-[0-9a-fA-F-]+''',
 ]
