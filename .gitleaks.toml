@@ -7,7 +7,7 @@
 useDefault = true
 
 [allowlist]
-description = "Dev/test mock bearer tokens (local-server.ts auth shim) — not real secrets — plus build output and vendored trees that are not source"
+description = "Dev/test mock bearer tokens (local-server.ts auth shim), not real secrets, plus generated build output that is never committed"
 # `paths` exists for the WORKING-TREE scan (`gitleaks detect --no-git`, added
 # to CI on 2026-08-28). That mode walks the filesystem, so it sees build
 # output and local worktrees that the history scan never sees because they
@@ -17,16 +17,32 @@ description = "Dev/test mock bearer tokens (local-server.ts auth shim) — not r
 # ours. A permanently-red gate gets ignored and then removed, so the noise is
 # excluded by path rather than by lowering the rules.
 #
-# Deliberately NOT excluded: `package-lock.json` and anything under
-# `backend/src`, `frontend/src`, `infrastructure/`, `docs/` or `scripts/`.
-# Those are source and must stay in scope for both scan modes.
+# CAUTION, and the reason scripts/check-secret-scan-coverage.mjs exists:
+# gitleaks has ONE allowlist, not one per scan mode. Every pattern below
+# applies to `detect --source .` (history) exactly as much as it applies to
+# `detect --no-git` (working tree). So a pattern that matches a TRACKED file
+# does not merely quieten filesystem noise, it deletes that file from the only
+# secret gate this repo has, in both directions at once.
+#
+# That is not hypothetical. An earlier revision of this branch also listed
+# `(^|/)frontend/(android|ios)/`, which matches 76 tracked files, including
+# `frontend/android/gradle.properties` and `frontend/ios/debug.xcconfig` —
+# precisely where signing credentials and mobile API keys live. Measured with
+# gitleaks 8.30.1, the version CI installs: a synthetic GitHub PAT committed
+# to `frontend/android/gradle.properties` was caught by `main`'s config
+# (exit 1) and reported "no leaks found" (exit 0) by that revision, in BOTH
+# scan modes. The pattern also suppressed nothing: with it removed, the
+# working-tree scan still finds 0 findings.
+#
+# The invariant every pattern here must satisfy: it may match only paths that
+# are gitignored and therefore never tracked. `npm run secrets:coverage`
+# fails the build if any pattern below matches a file `git ls-files` reports.
 paths = [
   '''(^|/)node_modules/''',
   '''(^|/)dist/''',
   '''(^|/)build/''',
   '''(^|/)coverage/''',
   '''(^|/)\.claude/worktrees/''',
-  '''(^|/)frontend/(android|ios)/''',
   '''(^|/)\.lighthouseci/''',
   '''(^|/)playwright-report/''',
   '''(^|/)test-results/''',

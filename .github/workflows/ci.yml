@@ -214,6 +214,21 @@ jobs:
         # the vite-6 migration). Critical CVEs in runtime deps still block.
         run: npm audit --omit=dev --audit-level=high
 
+      - name: Secret-scan coverage (no tracked file may be allowlisted out)
+        # Runs BEFORE gitleaks, because it checks the thing gitleaks itself
+        # cannot report: how much of the repo the config still asks it to look
+        # at. `.gitleaks.toml` has one allowlist shared by both scan modes, so
+        # a `paths` pattern aimed at gitignored build output silently deletes
+        # any tracked file it also matches from the history scan AND the
+        # working-tree scan, while both keep exiting 0. It also asserts
+        # `[extend] useDefault = true`, without which the upstream ruleset
+        # never loads and gitleaks runs with zero detectors.
+        #
+        # Shared with `npm run verify` (root `secrets:coverage`) so local
+        # pre-push and CI run the identical check, the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
+        run: npm run secrets:coverage
+
       - name: Run Gitleaks (license-free CLI, blocking)
         # Run the MIT-licensed binary directly so the gate stays independent
         # of repository visibility and action-wrapper licensing. A non-zero

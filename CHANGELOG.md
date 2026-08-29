@@ -18,6 +18,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- `npm run secrets:coverage` (`scripts/check-secret-scan-coverage.mjs`), wired
+  into `npm run verify` and CI's required `Security Scan` job, ahead of
+  gitleaks itself. It checks the one thing a green gitleaks run cannot tell
+  you: how much of the repo the config still asks it to look at. It fails if
+  `.gitleaks.toml` drops `[extend] useDefault = true` (gitleaks treats a config
+  it finds as the whole configuration, so without that line the upstream
+  ruleset never loads and the scan exits 0 with zero detectors), and it fails
+  if any allowlist `paths` pattern matches a file `git ls-files` reports.
+  `main` excludes zero tracked files, so that second rule is exactly the
+  statement that coverage can never drop below what `main` covers, and unlike a
+  hard-coded file count it does not false-fire as the tree grows or shrinks.
+
 - A settled read with no data is now a decision the repo has written down, not
   one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
   states the rule that ten previous pull requests (#319, #320, #326, #327, #328,
@@ -35,6 +47,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   which shapes it does not.
 
 ### Fixed
+
+- The working-tree secret scan added on this branch had been paid for by
+  narrowing the history scan. Its `.gitleaks.toml` allowlist listed
+  `(^|/)frontend/(android|ios)/` alongside the genuinely gitignored build-output
+  patterns, and gitleaks has one allowlist rather than one per scan mode, so
+  that pattern removed 76 tracked files from **both** scans. Among them were
+  `frontend/android/gradle.properties` and `frontend/ios/debug.xcconfig`,
+  which is where signing credentials and mobile API keys live. Measured with
+  gitleaks 8.30.1, the version CI installs: a synthetic GitHub PAT committed to
+  `frontend/android/gradle.properties` was caught by `main`'s config (exit 1)
+  and reported "no leaks found" (exit 0) with the pattern present, in history
+  mode and working-tree mode alike. The pattern also suppressed nothing: with
+  it removed the working-tree scan still reports 0 findings, so it was cost
+  without benefit. Removed, and the remaining exclusions are now held to
+  gitignored-only by the coverage gate above rather than by a comment.
 
 - The dashboard climate card no longer renders a failed read as a calm night
   (#351). `if (!data) return null` put a failed climate read in the same
