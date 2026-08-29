@@ -111,6 +111,48 @@ describe('taskService', () => {
     expect(sentCommand.input.Item.GSI2PK).toBeUndefined();
   });
 
+  it('createTask defaults nextDue to the creation instant (#346)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { createTask } = await import('../../../src/services/taskService.js');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T12:00:00.000Z'));
+    try {
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+      const task = await createTask(
+        { plantId: 'p1', type: 'water', frequency: 7 },
+        'hh-1',
+        'user-1',
+        'Pothos'
+      );
+      // Previously asserted nowhere — not the value, not even its presence in
+      // the Put. This is the single line that makes every task created
+      // through the app due at the instant of creation, and therefore
+      // "overdue" to `getTasks({ overdue: true })`, `getSitterTasks` and the
+      // weekly digest one second later, while TasksPage says "Today".
+      // CHARACTERIZATION: pinned so a change is deliberate.
+      expect(task.nextDue).toBe('2026-05-15T12:00:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('createTask honours an explicit nextDue when the caller supplies one', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { createTask } = await import('../../../src/services/taskService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    // `nextDue` IS an accepted optional input (models/schemas.ts), but no
+    // caller in the app ever sets it — AddTaskModal, ProposalCard,
+    // AddPlantPage and the server-side template apply all omit it. Pinning
+    // the supported path so a fix for #346 has somewhere to land.
+    const task = await createTask(
+      { plantId: 'p1', type: 'water', frequency: 7, nextDue: '2026-06-01T09:00:00.000Z' },
+      'hh-1',
+      'user-1',
+      'Pothos'
+    );
+    expect(task.nextDue).toBe('2026-06-01T09:00:00.000Z');
+  });
+
   it('createTask sets GSI2 keys and assignee name when assignedTo provided', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const householdService = await import('../../../src/services/householdService.js');
@@ -256,6 +298,109 @@ describe('taskService', () => {
       .mockResolvedValueOnce({ Items: [] }); // vacation lookup
     const tasks = await getTasks('hh-1', { overdue: true });
     expect(tasks.map((t) => t.id)).toEqual(['t1']);
+  });
+
+  // The overdue filter above is asserted with fixtures 26 years either side of
+  // `now` ('2000-01-01' vs '2099-01-01'). Nothing between those two dates is
+  // tested, so the assertion holds for almost any implementation of "overdue"
+  // — instant-based, calendar-day-based, or an off-by-a-day mistake. These
+  // add the boundary the predicate actually turns on, which is where #346
+  // lives.
+  it('getTasks overdue filter turns on the instant, not the calendar day (#346)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getTasks } = await import('../../../src/services/taskService.js');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T12:00:00.000Z'));
+    try {
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({
+          Items: [
+            // One second in the past — overdue under an instant comparison,
+            // NOT overdue under a calendar-day one. This is the fixture that
+            // distinguishes them.
+            { ...baseTask, id: 'past1s', nextDue: '2026-05-15T11:59:59.000Z' },
+            // Exactly now: the comparison is strict `<`, so this is not
+            // overdue. A task created this instant lands here.
+            { ...baseTask, id: 'exactly-now', nextDue: '2026-05-15T12:00:00.000Z' },
+            // One second ahead.
+            { ...baseTask, id: 'future1s', nextDue: '2026-05-15T12:00:01.000Z' },
+            // Earlier the same calendar day.
+            { ...baseTask, id: 'earlier-today', nextDue: '2026-05-15T00:30:00.000Z' },
+          ],
+        })
+        .mockResolvedValueOnce({ Items: activePlantRows })
+        .mockResolvedValueOnce({ Items: [] }); // vacation lookup
+      const tasks = await getTasks('hh-1', { overdue: true });
+      // CHARACTERIZATION, not endorsement. This pins today's behaviour so
+      // that changing it is a deliberate act: the backend calls a task
+      // overdue the moment its due instant passes, while TasksPage groups by
+      // browser-local CALENDAR DAY and shows both 'past1s' and
+      // 'earlier-today' under "Today". #346 is that disagreement. Whichever
+      // way it is resolved, this assertion has to be edited on purpose.
+      expect(tasks.map((t) => t.id)).toEqual(['past1s', 'earlier-today']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // `getSitterTasks` had NO unit test of any kind before 2026-08-28. It is
+  // only ever mocked (handlers/sitter.test.ts) or mirrored (the integration
+  // suite hits a reimplementation in local-server.ts), so the real
+  // projection — including the `overdue` flag a plant sitter acts on — was
+  // asserted nowhere.
+  describe('getSitterTasks', () => {
+    async function sitterTasksAt(systemTime: string, rows: Record<string, unknown>[]) {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { getSitterTasks } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send)
+        // getTasks: task query, active-plant query, vacation lookup
+        .mockResolvedValueOnce({ Items: rows })
+        .mockResolvedValueOnce({ Items: activePlantRows })
+        .mockResolvedValueOnce({ Items: [] })
+        // plantService.getPlants, spaceService.getSpaces
+        .mockResolvedValueOnce({ Items: activePlantRows })
+        .mockResolvedValueOnce({ Items: [] });
+      return getSitterTasks('hh-1', new Date(systemTime));
+    }
+
+    it('projects the fields the sitter view renders, sorted by due date', async () => {
+      const result = await sitterTasksAt('2026-05-15T12:00:00.000Z', [
+        { ...baseTask, id: 'later', nextDue: '2026-05-17T09:00:00.000Z' },
+        { ...baseTask, id: 'sooner', nextDue: '2026-05-16T09:00:00.000Z' },
+      ]);
+      expect(result.map((t) => t.taskId)).toEqual(['sooner', 'later']);
+      expect(result[0]).toMatchObject({
+        plantName: 'Pothos',
+        taskType: 'water',
+        dueDate: '2026-05-16T09:00:00.000Z',
+        overdue: false,
+      });
+    });
+
+    it('flags a task overdue the instant its due time passes (#346)', async () => {
+      const result = await sitterTasksAt('2026-05-15T12:00:00.000Z', [
+        // Due one second ago. A task created through the app defaults to
+        // `nextDue = creation instant` (taskService.createTask), so a task
+        // added a minute before the sitter opens the page looks exactly like
+        // this row.
+        { ...baseTask, id: 'past1s', nextDue: '2026-05-15T11:59:59.000Z' },
+        // Exactly now: the comparison is strict `<`.
+        { ...baseTask, id: 'exactly-now', nextDue: '2026-05-15T12:00:00.000Z' },
+      ]);
+      // CHARACTERIZATION. SitPage renders `overdue: true` as "Overdue" in
+      // amber, while TasksPage puts the same task under "Today". Pinned so
+      // that resolving #346 has to change this line deliberately.
+      expect(result.find((t) => t.taskId === 'past1s')?.overdue).toBe(true);
+      expect(result.find((t) => t.taskId === 'exactly-now')?.overdue).toBe(false);
+    });
+
+    it('excludes tasks due beyond the window', async () => {
+      const result = await sitterTasksAt('2026-05-15T12:00:00.000Z', [
+        { ...baseTask, id: 'inside', nextDue: '2026-05-20T09:00:00.000Z' },
+        { ...baseTask, id: 'outside', nextDue: '2026-06-30T09:00:00.000Z' },
+      ]);
+      expect(result.map((t) => t.taskId)).toEqual(['inside']);
+    });
   });
 
   it('getTasks hides tasks whose plant is not active (died / gave_away)', async () => {
