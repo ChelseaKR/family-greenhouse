@@ -37,34 +37,37 @@ import { RootLockIcon } from '@/components/icons/RootLockIcon';
 import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment';
 import { track, registerSuperProperties } from '@/services/analytics';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { SITE_URL, siteUrl } from '@/config/site';
+import { siteUrl } from '@/config/site';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
+import { landingJsonLd } from '@/config/structuredData';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import clsx from 'clsx';
+import { HERO_HEADLINES, type HeroHeadline } from './heroHeadlines';
 
 // Hero copy for the two framings under test. Variant A (control) is the
 // existing household / shared-care-journal hero. Variant B leads with
 // keeping your own plants alive and names the solo case first, mentioning
 // sharing second — same voice, same layout, same CTAs. The headline is
 // split into an optional pre-quote / emphasized / post-quote so A can keep
-// its italic "you" without giving B fake quotation marks.
+// its italic "you" without giving B fake quotation marks. The headline strings
+// themselves live in heroHeadlines.ts, which publicRoutes.ts also reads so the
+// prerendered <h1> for "/" cannot drift from the rendered one.
 //
 // Removing the experiment: delete variant B below, inline variant A's copy
 // back into the hero, and drop the variant plumbing in LandingPage.
+const ROUTE = publicRoute('/');
+
 const heroCopy: Record<
   Variant,
   {
     eyebrow: string;
-    headlinePre: string;
-    headlineEmphasis: string;
-    headlinePost: string;
+    headline: HeroHeadline;
     subhead: React.ReactNode;
   }
 > = {
   A: {
     eyebrow: 'A garden journal for the whole house',
-    headlinePre: '“I thought ',
-    headlineEmphasis: 'you',
-    headlinePost: ' watered it.”',
+    headline: HERO_HEADLINES.A,
     subhead: (
       <>
         Family Greenhouse is a shared care journal for the plants in your house. Everyone sees
@@ -75,9 +78,7 @@ const heroCopy: Record<
   },
   B: {
     eyebrow: 'A care journal for your plants',
-    headlinePre: 'Keep ',
-    headlineEmphasis: 'every',
-    headlinePost: ' plant alive.',
+    headline: HERO_HEADLINES.B,
     subhead: (
       <>
         Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing
@@ -533,53 +534,12 @@ export function LandingPage() {
   const variant = useHeroVariant();
 
   useMetaTags({
-    title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
-    description: PUBLIC_REGISTRATION_AVAILABLE
-      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for up to 10 plants and 6 members.'
-      : 'A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in.',
-    canonical: siteUrl('/'),
-    ogType: 'website',
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
     ogImage: siteUrl('/brand/og-image.png'),
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@graph': [
-        {
-          '@type': 'Organization',
-          '@id': `${SITE_URL}/#organization`,
-          name: 'Family Greenhouse',
-          url: SITE_URL,
-          logo: siteUrl('/brand/icon-512.png'),
-        },
-        {
-          '@type': 'WebSite',
-          '@id': `${SITE_URL}/#website`,
-          name: 'Family Greenhouse',
-          url: SITE_URL,
-          publisher: { '@id': `${SITE_URL}/#organization` },
-        },
-        {
-          '@type': 'SoftwareApplication',
-          '@id': `${SITE_URL}/#app`,
-          name: 'Family Greenhouse',
-          applicationCategory: 'LifestyleApplication',
-          operatingSystem: 'Web',
-          description:
-            'A collaborative plant care app for household watering schedules, reminders, tasks, and care logs.',
-          url: SITE_URL,
-          ...(PUBLIC_REGISTRATION_AVAILABLE
-            ? {
-                offers: {
-                  '@type': 'Offer',
-                  price: '0',
-                  priceCurrency: 'USD',
-                  description: 'Free for up to 10 plants and 6 household members',
-                },
-              }
-            : {}),
-          publisher: { '@id': `${SITE_URL}/#organization` },
-        },
-      ],
-    },
+    jsonLd: landingJsonLd(),
   });
 
   useEffect(() => {
@@ -656,11 +616,11 @@ export function LandingPage() {
                     `--tw-leading`, which makes `leading-[1.05]` win at every
                     breakpoint — pinning keeps the shipped rendering unchanged. */}
                 <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
-                  {heroCopy[variant].headlinePre}
+                  {heroCopy[variant].headline.pre}
                   <span className="italic text-primary-700">
-                    {heroCopy[variant].headlineEmphasis}
+                    {heroCopy[variant].headline.emphasis}
                   </span>
-                  {heroCopy[variant].headlinePost}
+                  {heroCopy[variant].headline.post}
                 </h1>
                 <div className="mt-4 flex justify-center lg:justify-start">
                   <TitleUnderline className="h-4 w-56 text-primary-600" />

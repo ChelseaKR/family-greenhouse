@@ -5,13 +5,20 @@ import LowWaterPlants from './low-water-plants';
 import MovingWithPlants from './moving-with-plants';
 import PetSafeHardToKill from './pet-safe-hard-to-kill';
 import CommonToxicHouseplants from './common-toxic-houseplants';
+import { POST_META, type BlogPostMeta } from './meta.ts';
 
 /**
  * Blog post manifest. Adding a post means dropping a TSX file in this
- * directory, importing it here, and appending to the array. The slug is
- * the URL fragment (`/blog/<slug>`), the date is ISO-8601, and the
- * description double-duties as the meta-description and the listing
- * preview text.
+ * directory, importing it here, appending its metadata to `POST_META` in
+ * `meta.ts` (whose `body` field names that file), and adding the file's
+ * basename to `BODIES` below. The slug is the URL
+ * fragment (`/blog/<slug>`), the date is ISO-8601, and the description
+ * double-duties as the listing preview text and (unless a shorter
+ * `metaDescription` is given) the meta description.
+ *
+ * Metadata lives in `meta.ts` rather than here because the build-time
+ * prerenderer and the sitemap generator run under plain Node and must read a
+ * post's title, description and date without importing React components.
  *
  * Posts ship as React components rather than markdown so:
  *  - they share the app's design tokens (no MDX runtime / theming gap),
@@ -19,73 +26,29 @@ import CommonToxicHouseplants from './common-toxic-houseplants';
  *  - Claude can author TSX as readily as markdown per the marketing
  *    plan's content pipeline.
  */
-export interface BlogPost {
-  slug: string;
-  title: string;
-  description: string;
-  /** ISO date string. Drives sort order on the index. */
-  date: string;
-  /** Reading time in minutes — rough estimate, shown on the index. */
-  readingMinutes: number;
+export type { BlogPostMeta } from './meta.ts';
+export { POST_META, postMetaDescription } from './meta.ts';
+
+export interface BlogPost extends BlogPostMeta {
   Component: ComponentType;
 }
 
-export const POSTS: BlogPost[] = [
-  {
-    slug: 'how-to-remember-to-water-plants',
-    title: 'How to actually remember to water your plants',
-    description:
-      'Why most people forget to water their plants — and the three systems that actually work, ranked from worst to best.',
-    date: '2026-05-05',
-    readingMinutes: 5,
-    Component: RememberingToWater,
-  },
-  {
-    slug: 'sharing-plant-care-without-becoming-the-nag',
-    title: 'Sharing plant care without becoming the household nag',
-    description:
-      "Almost every couple I've talked to has the same plant-care argument. Here's the structural fix that doesn't require either of you to remember more.",
-    date: '2026-05-13',
-    readingMinutes: 6,
-    Component: SharingPlantCare,
-  },
-  {
-    slug: 'low-maintenance-houseplants-for-forgetful-people',
-    title: 'Seven houseplants that survive being forgotten',
-    description:
-      "Most 'low maintenance plant' lists are repeats of each other. Here are seven that genuinely fail in recoverable ways — ranked by how forgiving they are when life gets busy.",
-    date: '2026-05-21',
-    readingMinutes: 5,
-    Component: LowWaterPlants,
-  },
-  {
-    slug: 'how-to-move-plants-without-killing-them',
-    title: 'How to move with houseplants without killing them',
-    description:
-      "I've moved with thirty-seven plants three times. Here's what changed between losing eight, losing three, and losing none — plus the long-distance freeze problem nobody warns you about.",
-    date: '2026-05-28',
-    readingMinutes: 6,
-    Component: MovingWithPlants,
-  },
-  {
-    slug: 'pet-safe-houseplants-that-are-hard-to-kill',
-    title: 'Pet-safe houseplants that are genuinely hard to kill',
-    description:
-      '“Pet-safe” and “hard to kill” knock out most of the plants the listicles name — pothos, ZZ, snake plant, aloe are all toxic. Here’s the shorter, honest list that clears both bars, ranked by how much neglect it forgives.',
-    date: '2026-06-15',
-    readingMinutes: 6,
-    Component: PetSafeHardToKill,
-  },
-  {
-    slug: 'most-common-toxic-houseplants-and-safer-swaps',
-    title: 'The most common toxic houseplants (and safer swaps)',
-    description:
-      'A list of scary plant names is useless if your cat chews leaves. Here are the most common toxic houseplants, what each actually does, and a genuinely pet-safe plant to buy instead — grounded in ASPCA data.',
-    date: '2026-06-16',
-    readingMinutes: 6,
-    Component: CommonToxicHouseplants,
-  },
-];
+const BODIES: Record<string, ComponentType> = {
+  'remembering-to-water': RememberingToWater,
+  'sharing-plant-care': SharingPlantCare,
+  'low-water-plants': LowWaterPlants,
+  'moving-with-plants': MovingWithPlants,
+  'pet-safe-hard-to-kill': PetSafeHardToKill,
+  'common-toxic-houseplants': CommonToxicHouseplants,
+};
+
+export const POSTS: BlogPost[] = POST_META.map((meta) => {
+  const Component = BODIES[meta.body];
+  // A post with metadata but no body would render an empty article at a URL
+  // the sitemap advertises. Fail at import time instead.
+  if (!Component) throw new Error(`Blog post "${meta.slug}" has no body module "${meta.body}"`);
+  return { ...meta, Component };
+});
 
 export function findPost(slug: string): BlogPost | undefined {
   return POSTS.find((p) => p.slug === slug);

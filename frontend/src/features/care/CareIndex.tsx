@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { siteUrl } from '@/config/site';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
 import { CARE_GUIDES } from './careGuides';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
@@ -10,19 +10,21 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
  * passes authority to the individual `/care/:slug` pages and gives the crawler
  * a single page that links them all. Public, no auth.
  */
+const ROUTE = publicRoute('/care');
+
 export function CareIndex() {
   useMetaTags({
-    title: 'Plant Care Guides — How Often to Water Common Houseplants',
-    description:
-      'Straight, no-nonsense care guides for common houseplants: how often to water, how much light, and why yours might be dying.',
-    canonical: siteUrl('/care'),
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   return (
     <PublicShell>
       <PageIntro
         eyebrow="Before the plant comes home"
-        title="Plant care guides"
+        title={ROUTE.heading}
         lede="How often to water it, how much light it wants, and why yours is doing that. Honest, specific, no “lush green companion” filler."
       />
 

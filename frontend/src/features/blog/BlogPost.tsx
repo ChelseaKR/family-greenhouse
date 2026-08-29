@@ -2,9 +2,10 @@ import { Link, Navigate, useParams } from 'react-router';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
 import { buttonStyles } from '@/components/buttonStyles';
-import { findPost, POSTS } from './posts';
+import { findPost, POSTS, postMetaDescription } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { SITE_URL } from '@/config/site';
+import { siteUrl } from '@/config/site';
+import { blogPostJsonLd } from '@/config/structuredData';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
@@ -20,46 +21,10 @@ export function BlogPost() {
     post
       ? {
           title: `${post.title} — Family Greenhouse`,
-          description: post.description,
-          canonical: `${SITE_URL}/blog/${post.slug}`,
+          description: postMetaDescription(post),
+          canonical: siteUrl(`/blog/${post.slug}`),
           ogType: 'article',
-          // Article schema makes the post eligible for Google's article
-          // rich-results treatment. We don't have author photos or a
-          // publisher logo URL set up yet — those are nice-to-haves that
-          // strengthen eligibility but aren't required.
-          jsonLd: {
-            '@context': 'https://schema.org',
-            '@graph': [
-              {
-                '@type': 'Article',
-                headline: post.title,
-                description: post.description,
-                datePublished: post.date,
-                dateModified: post.date,
-                author: { '@type': 'Organization', name: 'Family Greenhouse' },
-                publisher: {
-                  '@type': 'Organization',
-                  name: 'Family Greenhouse',
-                  logo: {
-                    '@type': 'ImageObject',
-                    url: `${SITE_URL}/brand/icon-512.png`,
-                  },
-                },
-                mainEntityOfPage: {
-                  '@type': 'WebPage',
-                  '@id': `${SITE_URL}/blog/${post.slug}`,
-                },
-              },
-              {
-                '@type': 'BreadcrumbList',
-                itemListElement: [
-                  { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
-                  { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
-                  { '@type': 'ListItem', position: 3, name: post.title },
-                ],
-              },
-            ],
-          },
+          jsonLd: blogPostJsonLd(post),
         }
       : {}
   );

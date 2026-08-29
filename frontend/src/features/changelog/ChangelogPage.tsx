@@ -1,6 +1,9 @@
 import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
+
+const ROUTE = publicRoute('/changelog');
 
 /**
  * Public changelog. Lightweight transparency move — show what changed,
@@ -248,8 +251,10 @@ function groupByMonth(entries: Entry[]): Map<string, Entry[]> {
 
 export function ChangelogPage() {
   useMetaTags({
-    title: 'Changelog — Family Greenhouse',
-    description: "What's new in Family Greenhouse, in plain language.",
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   const grouped = groupByMonth(ENTRIES);
@@ -258,7 +263,7 @@ export function ChangelogPage() {
     <PublicShell>
       <PageIntro
         eyebrow="Changelog"
-        title={'What’s new'}
+        title={ROUTE.heading}
         lede={'Things we’ve shipped, in plain language. Most recent first.'}
       />
 

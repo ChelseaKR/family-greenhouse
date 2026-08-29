@@ -3,7 +3,7 @@ import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Input } from '@/components/Input';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { siteUrl } from '@/config/site';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
 import { Link } from 'react-router';
@@ -20,13 +20,15 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
  * endpoint, which resolves a hand-curated, ASPCA-grounded table server-side.
  * No PII, no auth, read-only.
  */
+const ROUTE = publicRoute('/pet-safe');
+
 export function PetSafePage() {
   const { t } = useTranslation();
   useMetaTags({
-    title: 'Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker',
-    description:
-      'Free, no-signup checker: type a houseplant name and see whether it’s toxic to cats and dogs, in plain language. Based on the ASPCA’s plant safety data.',
-    canonical: siteUrl('/pet-safe'),
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   const [query, setQuery] = useState('');
@@ -66,7 +68,7 @@ export function PetSafePage() {
     <PublicShell>
       <PageIntro
         eyebrow="Pet safety"
-        title="Is this plant safe for pets?"
+        title={ROUTE.heading}
         lede={
           <>
             Type a houseplant name and we’ll tell you, plainly, whether it’s toxic to cats and dogs.

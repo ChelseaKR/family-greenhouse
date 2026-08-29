@@ -9,7 +9,10 @@ import {
 } from '@heroicons/react/24/outline';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
 import { healthService, type ComponentStatus, type OverallStatus } from '@/services/healthService';
+
+const ROUTE = publicRoute('/status');
 
 /**
  * Public status page. Pulls /health every 60s and surfaces component-by-
@@ -79,8 +82,10 @@ export function StatusPage() {
   const { t } = useTranslation();
 
   useMetaTags({
-    title: 'Status — Family Greenhouse',
-    description: 'Current operational status of Family Greenhouse and recent incidents.',
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   const { data, isLoading, isError, error } = useQuery({
@@ -106,7 +111,7 @@ export function StatusPage() {
     <PublicShell>
       <PageIntro
         eyebrow="Health check"
-        title="System status"
+        title={ROUTE.heading}
         lede="Live state of the services that keep Family Greenhouse running."
       />
 

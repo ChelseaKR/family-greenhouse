@@ -1,18 +1,23 @@
 import { Link } from 'react-router';
 import { LegalShell } from './LegalShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
+
+const ROUTE = publicRoute('/account-deletion');
 import { useAuthStore } from '@/store/authStore';
 
 /** Public, stable URL for Google Play's account-deletion web-link field. */
 export function AccountDeletionPage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   useMetaTags({
-    title: 'Delete your account — Family Greenhouse',
-    description: 'How to permanently delete a Family Greenhouse account and associated data.',
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   return (
-    <LegalShell title="Delete your account" effectiveDate="July 12, 2026">
+    <LegalShell title={ROUTE.heading} effectiveDate="July 12, 2026">
       <p className="lead">
         You can permanently delete your Family Greenhouse account in the app, even if you have not
         created or joined a household.

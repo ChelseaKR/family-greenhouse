@@ -1,5 +1,8 @@
 import { LegalShell } from './LegalShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
+
+const ROUTE = publicRoute('/legal/privacy');
 
 /**
  * Privacy policy. Honest, plain-language version — not the
@@ -14,12 +17,14 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  */
 export function PrivacyPage() {
   useMetaTags({
-    title: 'Privacy — Family Greenhouse',
-    description: 'How Family Greenhouse handles your data. Plain language.',
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   return (
-    <LegalShell title="Privacy" effectiveDate="July 12, 2026">
+    <LegalShell title={ROUTE.heading} effectiveDate="July 12, 2026">
       <p className="lead">
         This page explains what data Family Greenhouse collects, why, and what you can do about it.
         We&rsquo;ve deliberately written it as plain text rather than a template — if anything is

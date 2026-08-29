@@ -2,24 +2,23 @@ import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { buttonStyles } from '@/components/buttonStyles';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { siteUrl } from '@/config/site';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
 import { PricingGrid } from './PricingGrid';
 import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+
+const ROUTE = publicRoute('/pricing');
 
 /** Standalone public status page retained at /pricing for stable links. */
 export function PricingPage() {
   const { t } = useTranslation();
   const native = isNativeApp();
   useMetaTags({
-    title: PUBLIC_REGISTRATION_AVAILABLE
-      ? 'Free accounts and plan status — Family Greenhouse'
-      : 'Plan status — Family Greenhouse',
-    description: PUBLIC_REGISTRATION_AVAILABLE
-      ? 'Create a free Family Greenhouse account for up to 10 plants. Paid plans, purchases, and plan changes remain paused.'
-      : 'Paid plans, purchases, plan changes, and new account registration are paused.',
-    canonical: siteUrl('/pricing'),
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   if (native) {
@@ -45,9 +44,7 @@ export function PricingPage() {
       <PageIntro
         align="center"
         eyebrow="Plans"
-        title={
-          PUBLIC_REGISTRATION_AVAILABLE ? 'Start with a free account' : 'Paid plans are paused'
-        }
+        title={ROUTE.heading}
         lede={
           PUBLIC_REGISTRATION_AVAILABLE
             ? 'Free accounts include up to 10 plants and 6 household members. Paid plans, purchases, and plan changes remain paused.'

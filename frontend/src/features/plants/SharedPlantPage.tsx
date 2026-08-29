@@ -81,6 +81,9 @@ export function SharedPlantPage() {
           // A public plant photo makes the best card; otherwise the branded
           // default OG image baked into index.html keeps the unfurl on-brand.
           ogImage: preview.plant.imageUrl ?? '/brand/og-image.png',
+          // One share code, one recipient. Unfurls still work — noindex only
+          // keeps a private cutting link out of the search index.
+          robots: 'noindex, nofollow',
         }
       : {}
   );

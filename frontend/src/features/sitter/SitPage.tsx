@@ -55,6 +55,9 @@ export function SitPage() {
   useMetaTags({
     title: 'Plant-sitting — Family Greenhouse',
     description: 'See which plants need care and check them off. No sign-up needed.',
+    // The token in this URL is the credential. Sharing the link is the point;
+    // having it turn up in a search result is not.
+    robots: 'noindex, nofollow',
   });
 
   const [label, setLabel] = useState<string | null>(null);

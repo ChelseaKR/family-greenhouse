@@ -8,11 +8,10 @@ import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
 import { MistLeafIcon } from '@/components/icons/MistLeafIcon';
 import { PawLeafIcon } from '@/components/icons/PawLeafIcon';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { SITE_URL } from '@/config/site';
+import { siteUrl } from '@/config/site';
+import { careGuideJsonLd } from '@/config/structuredData';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
-
-const SITE = SITE_URL;
 
 function Paragraphs({ items }: { items: string[] }) {
   return (
@@ -41,54 +40,9 @@ export function CareGuidePage() {
       ? {
           title: guide.metaTitle,
           description: guide.metaDescription,
-          canonical: `${SITE}/care/${guide.slug}`,
+          canonical: siteUrl(`/care/${guide.slug}`),
           ogType: 'article',
-          jsonLd: {
-            '@context': 'https://schema.org',
-            '@graph': [
-              {
-                '@type': 'Article',
-                headline: `${guide.commonName} Care Guide`,
-                description: guide.metaDescription,
-                datePublished: guide.reviewed,
-                dateModified: guide.reviewed,
-                author: { '@type': 'Organization', name: 'Family Greenhouse' },
-                publisher: {
-                  '@type': 'Organization',
-                  name: 'Family Greenhouse',
-                  logo: {
-                    '@type': 'ImageObject',
-                    url: `${SITE}/brand/icon-512.png`,
-                  },
-                },
-                mainEntityOfPage: {
-                  '@type': 'WebPage',
-                  '@id': `${SITE}/care/${guide.slug}`,
-                },
-                about: {
-                  '@type': 'Thing',
-                  name: guide.commonName,
-                  alternateName: [guide.scientificName, ...guide.alsoKnownAs],
-                },
-              },
-              {
-                '@type': 'FAQPage',
-                mainEntity: guide.faqs.map((f) => ({
-                  '@type': 'Question',
-                  name: f.q,
-                  acceptedAnswer: { '@type': 'Answer', text: f.a },
-                })),
-              },
-              {
-                '@type': 'BreadcrumbList',
-                itemListElement: [
-                  { '@type': 'ListItem', position: 1, name: 'Home', item: SITE },
-                  { '@type': 'ListItem', position: 2, name: 'Plant care', item: `${SITE}/care` },
-                  { '@type': 'ListItem', position: 3, name: `${guide.commonName} care` },
-                ],
-              },
-            ],
-          },
+          jsonLd: careGuideJsonLd(guide),
         }
       : {}
   );

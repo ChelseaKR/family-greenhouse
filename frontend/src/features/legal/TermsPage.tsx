@@ -1,5 +1,8 @@
 import { LegalShell } from './LegalShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
+
+const ROUTE = publicRoute('/legal/terms');
 
 /**
  * Terms of service. Plain-language, beta-honest. App stores require a
@@ -11,12 +14,14 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  */
 export function TermsPage() {
   useMetaTags({
-    title: 'Terms — Family Greenhouse',
-    description: 'The terms of using Family Greenhouse. Plain language.',
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   return (
-    <LegalShell title="Terms of Service" effectiveDate="July 19, 2026">
+    <LegalShell title={ROUTE.heading} effectiveDate="July 19, 2026">
       <p className="lead">
         These terms govern your use of Family Greenhouse. We&rsquo;ve kept them readable. If
         anything is unclear, email{' '}

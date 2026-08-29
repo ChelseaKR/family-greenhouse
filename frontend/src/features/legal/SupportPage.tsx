@@ -1,16 +1,21 @@
 import { Link } from 'react-router';
 import { LegalShell } from './LegalShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
+
+const ROUTE = publicRoute('/support');
 
 /** Public support URL used by both store listings and app review. */
 export function SupportPage() {
   useMetaTags({
-    title: 'Support — Family Greenhouse',
-    description: 'Get help with your Family Greenhouse account and plant-care workspace.',
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   return (
-    <LegalShell title="Support" effectiveDate="July 12, 2026">
+    <LegalShell title={ROUTE.heading} effectiveDate="July 12, 2026">
       <p className="lead">
         Need help with Family Greenhouse? Email{' '}
         <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a>. Include the

@@ -2,11 +2,9 @@ import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { siteUrl } from '@/config/site';
+import { canonicalUrl, publicRoute } from '@/config/publicRoutes';
 
-const PAGE_TITLE = 'Blog — Family Greenhouse';
-const PAGE_DESCRIPTION =
-  'Notes on plant care, shared chores, and not letting your fiddle leaf die. From the team building Family Greenhouse.';
+const ROUTE = publicRoute('/blog');
 
 /**
  * Blog index. Public, no auth required. Shares the marketing-page layout
@@ -15,16 +13,17 @@ const PAGE_DESCRIPTION =
  */
 export function BlogIndex() {
   useMetaTags({
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
-    canonical: siteUrl('/blog'),
+    title: ROUTE.title,
+    description: ROUTE.description,
+    canonical: canonicalUrl(ROUTE.path),
+    ogType: ROUTE.ogType,
   });
 
   return (
     <PublicShell>
       <PageIntro
         eyebrow="The journal"
-        title="Notes on growing things"
+        title={ROUTE.heading}
         lede="Plant care, shared chores, and the occasional unsolicited opinion."
       />
 
