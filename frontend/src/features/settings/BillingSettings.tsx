@@ -12,6 +12,7 @@ import {
   type PlanLimitEvaluation,
   type PlanUsageDetail,
 } from '@/services/billingService';
+import { formatDate } from '@/i18n/format';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { Card, CardHeader } from '@/components/Card';
@@ -181,6 +182,24 @@ export function BillingSettings() {
           plan
           {subQuery.data?.status === 'trialing' && ' (free trial)'}.
         </p>
+        {/* Stripe keeps a cancelled subscription serving until the period
+            ends, so `status` stays active/trialing and nothing else on this
+            page changes. Without this line a household that cancelled sees no
+            acknowledgement at all and reasonably assumes it failed. */}
+        {subQuery.data?.cancelAtPeriodEnd && (
+          <Alert variant="warning" className="mt-4">
+            <p>
+              {subQuery.data.currentPeriodEnd
+                ? t('settings.billing.cancelPending', {
+                    plan: plans.find((p) => p.id === currentPlanId)?.name ?? currentPlanId,
+                    date: formatDate(subQuery.data.currentPeriodEnd),
+                  })
+                : t('settings.billing.cancelPendingNoDate', {
+                    plan: plans.find((p) => p.id === currentPlanId)?.name ?? currentPlanId,
+                  })}
+            </p>
+          </Alert>
+        )}
         {usage && <UsageMeters usage={usage} limits={limits} />}
         {native && (
           <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>

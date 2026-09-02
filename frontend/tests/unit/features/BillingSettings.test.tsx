@@ -468,6 +468,39 @@ describe('purchase controls once payment activity is available', () => {
     ).toBeInTheDocument();
   });
 
+  it('tells a cancelled household when its plan actually ends', async () => {
+    // Stripe keeps a cancelled subscription serving until the period ends, so
+    // status stays trialing/active and nothing else on the page changes.
+    // Without this notice the cancellation is completely invisible.
+    await renderBilling(
+      {
+        planId: 'greenhouse',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'trialing',
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: '2026-09-16T05:19:51.000Z',
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText(/Cancelled/)).toBeInTheDocument();
+    expect(screen.getByText(/returns to Seedling/)).toBeInTheDocument();
+  });
+
+  it('shows no cancellation notice for a household that has not cancelled', async () => {
+    await renderBilling(
+      {
+        planId: 'greenhouse',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+      },
+      { paid: true }
+    );
+    expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
+  });
+
   it('never offers a tier the household already owns outright', async () => {
     // A lifetime purchase has no stripeSubscriptionId, so hasLiveSubscription
     // is false and the double-billing guard cannot see it. Without an
