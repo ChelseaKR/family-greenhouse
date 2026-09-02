@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.iam]
+    }
+  }
+}
+
 # Account id for scoping IAM resource ARNs (e.g. the SES send fallback below).
 data "aws_caller_identity" "current" {}
 
@@ -101,6 +110,8 @@ data "aws_region" "current" {}
 
 # Lambda IAM Role
 resource "aws_iam_role" "lambda" {
+  provider = aws.iam
+
   name = "${var.project_name}-lambda-${var.environment}"
 
   assume_role_policy = jsonencode({
@@ -523,6 +534,8 @@ resource "aws_lambda_permission" "api_gateway" {
 # in-handler 401) could exfiltrate secrets or escalate household roles. This
 # role carries ONLY what chat actually needs, so that blast radius is gone.
 resource "aws_iam_role" "chat_stream" {
+  provider = aws.iam
+
   name = "${var.project_name}-chat-stream-${var.environment}"
 
   assume_role_policy = jsonencode({
