@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { getVariant, useHeroVariant, HERO_EXPERIMENT } from '@/lib/experiment';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LandingPage } from '@/features/landing/LandingPage';
 
 const KEY = `fg_exp_${HERO_EXPERIMENT}`;
@@ -58,10 +59,17 @@ describe('LandingPage renders both hero variants', () => {
   });
 
   function renderLanding() {
+    // The landing page reaches the plan catalog through PricingGrid now that
+    // the commercial hold is lifted, so it needs a query client in the tree.
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     return render(
-      <MemoryRouter>
-        <LandingPage />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <LandingPage />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
   }
 

@@ -1,6 +1,6 @@
 {
-  "commercialHoldActive": true,
+  "commercialHoldActive": false,
   "publicRegistrationAvailable": true,
-  "effectiveDate": "2026-07-14",
-  "publicMessage": "Free account registration is open. Paid plans, payment collection, purchases, upgrades, and plan changes remain unavailable."
+  "effectiveDate": "2026-09-01",
+  "publicMessage": "Free account registration is open. Paid plans are available on the web; purchases and plan changes are made by a household admin in Settings."
 }

@@ -168,14 +168,21 @@ the repository status must be inactive and `PAYMENTS_ENABLED` must be exactly
 | `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml) |
 | `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`         |
 | `commercial-status.json`                                         | committed shared status; currently keeps the hold active       |
-| `PAYMENTS_ENABLED`                                               | intentionally absent from repository deployment configuration  |
+| `PAYMENTS_ENABLED`                                               | Terraform `payments_enabled`; defaults `"0"`, committed `"0"`  |
 
 Empty values keep Stripe inert (the pre-billing behavior), so a half-finished
 setup never breaks the app. An empty MONTHLY id makes a plan unbuyable; an empty
 annual/lifetime id just hides that cadence.
 
-The following is a historical reactivation checklist, not an instruction to
-execute work during the hold:
+`payments_enabled` is per-environment, but `commercial-status.json` is shared
+across both. Staging can therefore be opened for verification while production
+stays shut, and the fail-closed client behaviour covers the gap: with the
+status file lifted but production `payments_enabled` still `"0"`, the
+production API keeps reporting `paymentsAvailable: false` and the paid UI
+renders the paused notice rather than a price.
+
+See `docs/COMMERCIAL-STATUS.md` for the ordered reactivation runbook. The
+checklist below is the Stripe-side detail those steps refer to:
 
 1. Create a Stripe account; do the whole flow in **test mode** first, then repeat in live mode.
 2. Create two **products** — Garden and Greenhouse (Seedling is free → no Stripe object). Add prices:

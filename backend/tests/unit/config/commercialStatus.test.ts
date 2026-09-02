@@ -10,9 +10,15 @@ import {
 } from '../../../src/config/commercialStatus.js';
 
 describe('repository commercial status', () => {
-  it('keeps the commercial hold active while allowing free public registration', () => {
-    expect(COMMERCIAL_HOLD_ACTIVE).toBe(true);
-    expect(COMMERCIAL_HOLD_EFFECTIVE_DATE).toBe('2026-07-14');
+  it('lifts the repository hold without that alone enabling payments', () => {
+    // The hold was lifted by the dated decision of 2026-09-01. The property
+    // that matters most is the LAST assertion: lifting the repository gate is
+    // necessary but not sufficient. This process has no PAYMENTS_ENABLED, so
+    // payment activity is still refused — which is exactly the state every
+    // environment is in until its own runtime gate is deliberately opened.
+    expect(COMMERCIAL_HOLD_ACTIVE).toBe(false);
+    expect(COMMERCIAL_HOLD_EFFECTIVE_DATE).toBe('2026-09-01');
+    expect(process.env.PAYMENTS_ENABLED).toBeUndefined();
     expect(paymentsAreAvailable()).toBe(false);
     expect(publicRegistrationIsAvailable()).toBe(true);
   });
@@ -51,9 +57,21 @@ describe('production IaC commercial-hold invariants', () => {
     'utf8'
   );
   const rootModule = readFileSync(new URL('infrastructure/main.tf', root), 'utf8');
+  const frontendModule = readFileSync(
+    new URL('infrastructure/modules/frontend/main.tf', root),
+    'utf8'
+  );
   const rootVariables = readFileSync(new URL('infrastructure/variables.tf', root), 'utf8');
+  const apiVariables = readFileSync(
+    new URL('infrastructure/modules/api/variables.tf', root),
+    'utf8'
+  );
   const productionVars = readFileSync(
     new URL('infrastructure/environments/production/terraform.tfvars', root),
+    'utf8'
+  );
+  const stagingVars = readFileSync(
+    new URL('infrastructure/environments/staging/terraform.tfvars', root),
     'utf8'
   );
   const productionWorkflow = readFileSync(
@@ -66,8 +84,96 @@ describe('production IaC commercial-hold invariants', () => {
     'utf8'
   );
 
-  it('does not wire PAYMENTS_ENABLED into any Lambda environment', () => {
-    expect(apiModule).not.toMatch(/\bPAYMENTS_ENABLED\b/);
+  // PAYMENTS_ENABLED is now wired, because a paid launch needs a runtime gate
+  // an operator can actually open — and, just as importantly, slam shut
+  // without a code change or a frontend deploy. The invariant that replaced
+  // "this variable must not exist" is "this variable must default closed and
+  // must not be open anywhere yet", which is what these three assertions pin.
+  it('wires PAYMENTS_ENABLED into the Lambda environment from a variable', () => {
+    expect(apiModule).toMatch(/PAYMENTS_ENABLED\s*=\s*var\.payments_enabled/);
+    // Never a literal: an inlined "1" would enable payments for every
+    // environment at once and leave no per-environment kill switch.
+    expect(apiModule).not.toMatch(/PAYMENTS_ENABLED\s*=\s*"1"/);
+  });
+
+  it('defaults payments_enabled closed at both the module and root layer', () => {
+    expect(apiVariables).toMatch(/variable "payments_enabled"[\s\S]*?default\s*=\s*"0"[\s\S]*?\n}/);
+    expect(rootVariables).toMatch(
+      /variable "payments_enabled"[\s\S]*?default\s*=\s*"0"[\s\S]*?\n}/
+    );
+  });
+
+  it('constrains payments_enabled to the exact strings the backend compares against', () => {
+    // The backend tests above prove '01', ' 1', 'true' and friends fail
+    // closed. This proves Terraform rejects them outright, so a typo in
+    // tfvars is a failed plan rather than a silently disabled launch that
+    // looks enabled.
+    expect(rootVariables).toMatch(
+      /condition\s*=\s*contains\(\["0", "1"\], var\.payments_enabled\)/
+    );
+  });
+
+  it('opens payment activity in staging only, and keeps production closed', () => {
+    // Staging is deliberately open so the paid flow can be exercised against
+    // Stripe TEST mode. Production is the assertion that actually matters:
+    // it must stay shut until its own separately reviewed change.
+    expect(stagingVars).toMatch(/^payments_enabled\s*=\s*"1"\s*$/m);
+    expect(productionVars).toMatch(/^payments_enabled\s*=\s*"0"\s*$/m);
+  });
+
+  it('never pairs an open staging gate with live-mode price confirmation', () => {
+    // Staging runs on sk_test_ keys and test-mode price ids. If this ever
+    // flipped true while staging was open, a live key could reach the
+    // environment we deliberately point real people at for testing.
+    expect(stagingVars).toMatch(/^stripe_price_ids_are_live\s*=\s*false\s*$/m);
+  });
+
+  it('populates the staging price ids that an open gate requires', () => {
+    // The Terraform precondition refuses payments_enabled="1" with blank
+    // monthly ids; this keeps the tfvars side of that contract honest.
+    for (const key of ['stripe_price_id_garden', 'stripe_price_id_greenhouse']) {
+      expect(stagingVars).toMatch(new RegExp(`^${key}\\s*=\\s*"price_[A-Za-z0-9]+"\\s*$`, 'm'));
+    }
+  });
+
+  it('blocks, rather than warns about, a misconfigured payment launch', () => {
+    // These MUST be preconditions, not `check` blocks. A check block only
+    // emits a warning and lets `terraform apply` proceed — and CI runs
+    // `plan -out` then `apply tfplan`, so nobody would ever read it. A failed
+    // precondition fails the plan, so the apply never happens.
+    const guard = rootModule.slice(
+      rootModule.indexOf('resource "terraform_data" "commercial_gate_guard"'),
+      rootModule.indexOf('check "web_push_vapid_configuration_complete"')
+    );
+    expect(guard).not.toBe('');
+    expect(guard.match(/precondition\s*{/g) ?? []).toHaveLength(3);
+
+    // Opening the runtime gate while the committed status file still holds.
+    expect(guard).toMatch(/commercialHoldActive == false/);
+    // Opening it with blank Stripe configuration (buy buttons that 502).
+    expect(guard).toMatch(/var\.stripe_price_id_garden != ""/);
+    expect(guard).toMatch(/var\.stripe_webhook_secret != ""/);
+    // Opening it with a live key against unverified price ids.
+    expect(guard).toMatch(/var\.stripe_price_ids_are_live/);
+
+    // Every precondition must be inert while payments are off, so the guard
+    // never blocks an ordinary deploy of the held configuration.
+    for (const condition of guard.match(/condition\s*=[\s\S]*?\n\s*error_message/g) ?? []) {
+      expect(condition).toContain('var.payments_enabled != "1"');
+    }
+  });
+
+  it('makes staging buckets disposable while leaving production undestroyable', () => {
+    // Staging is stood up per verification run and torn down after, so a
+    // non-empty bucket must not block `terraform destroy`. Production must
+    // never gain that property: there, an accidental destroy should hit the
+    // wall a non-empty bucket puts up.
+    const forceDestroys = frontendModule.match(/force_destroy\s*=\s*[^\n]+/g) ?? [];
+    expect(forceDestroys).toHaveLength(2);
+    for (const line of forceDestroys) {
+      expect(line).toMatch(/var\.environment\s*!=\s*"production"/);
+      expect(line).not.toMatch(/=\s*true\s*$/);
+    }
   });
 
   it('keeps every committed production Stripe price id blank and the live gate false', () => {

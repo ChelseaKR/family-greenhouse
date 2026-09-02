@@ -19,6 +19,12 @@ locals {
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.project_name}-frontend-${var.environment}-${random_id.bucket_suffix.hex}"
 
+  # Non-production environments are meant to be stood up for a verification
+  # run and torn down again, so `terraform destroy` must not fail on a bucket
+  # that still holds the deployed site. Production is deliberately NOT
+  # force-destroyable: there, an accidental destroy should hit a wall.
+  force_destroy = var.environment != "production"
+
   tags = {
     Name = "${var.project_name}-frontend-${var.environment}"
   }
@@ -92,6 +98,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
 # Images S3 Bucket
 resource "aws_s3_bucket" "images" {
   bucket = "${var.project_name}-images-${var.environment}-${random_id.bucket_suffix.hex}"
+
+  # Same reasoning as the frontend bucket: throwaway outside production, and
+  # user-uploaded plant photos in a staging run are test data by definition.
+  force_destroy = var.environment != "production"
 
   tags = {
     Name = "${var.project_name}-images-${var.environment}"

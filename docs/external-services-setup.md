@@ -93,9 +93,12 @@ is unavailable and the dashboard suppresses weather tips.
 **What we use it for:** `POST /billing/checkout` for plan upgrades, `POST /billing/webhook` for subscription state updates, `POST /billing/portal` for self-service management.
 
 **Currently:** paid activity is disabled by the shared commercial-status hold,
-the absence of `PAYMENTS_ENABLED=1`, blank production price IDs, and hidden paid
-controls. `VITE_BETA_MODE` is presentation-only and is not a commerce safety
-gate. See `docs/COMMERCIAL-STATUS.md` before changing any of these controls.
+`payments_enabled = "0"` in every environment, and blank production price IDs.
+The paid-plan UI is built but renders the paused notice until the API reports
+`paymentsAvailable: true`. `VITE_BETA_MODE` is presentation-only and is not a
+commerce safety gate. Terraform preconditions fail the plan on a half-open or
+under-configured gate. See `docs/COMMERCIAL-STATUS.md` for the ordered
+reactivation runbook before changing any of these controls.
 
 ### Setup (test mode first)
 

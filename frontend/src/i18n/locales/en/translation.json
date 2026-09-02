@@ -198,8 +198,10 @@
   "commercialHold": {
     "statusLabel": "Commercial status",
     "headline": "Paid plans are paused",
-    "message": "Free account registration is open. Paid plans, payment collection, purchases, upgrades, and plan changes remain unavailable.",
-    "effectiveDate": "Commercial hold effective {{date}}."
+    "message": "Free account registration is open. Paid plans are available on the web; purchases and plan changes are made by a household admin in Settings.",
+    "effectiveDate": "Commercial hold effective {{date}}.",
+    "unavailableHeadline": "Payments are temporarily unavailable",
+    "unavailableMessage": "Paid plans cannot be purchased or changed right now. Your existing plants, household, and care history are unaffected, and nothing has been charged."
   },
   "auth": {
     "signIn": "Sign in to your account",
@@ -254,7 +256,22 @@
   },
   "pricingStatus": {
     "freeAccountQuestion": "Can I create an account?",
-    "freeAccountAnswer": "Yes. Free accounts support up to 10 plants and 6 household members without a credit card."
+    "freeAccountAnswer": "Yes. Free accounts support up to 10 plants and 6 household members without a credit card.",
+    "headingHeld": "What remains available",
+    "headingOpen": "Common questions",
+    "paidOfferQuestion": "Is this a paid offer?",
+    "paidOfferAnswer": "No. Free accounts are available, but the hosted site does not currently accept purchases or offer paid plans.",
+    "reactivationQuestion": "Can billing be reactivated automatically?",
+    "reactivationAnswer": "No. Reactivation requires a dated status decision, reviewed source and infrastructure changes, non-production verification, and a separately approved deployment.",
+    "trialQuestion": "How does the trial work?",
+    "trialAnswer": "Every paid subscription begins with a 14-day trial. You are not charged until it ends, and cancelling before then costs nothing. Lifetime purchases are a one-time charge and have no trial.",
+    "changeQuestion": "Can I change or cancel later?",
+    "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Billing, which opens our payment provider's portal. Cancelling returns your household to the free Seedling tier at the end of the paid period.",
+    "whereQuestion": "Where do I buy?",
+    "whereAnswer": "Plan changes happen inside your account, under Settings → Billing, and are made by a household admin. Purchases are not offered in the mobile apps.",
+    "dataQuestion": "What happens to existing data?",
+    "dataAnswerHeld": "Existing plants, household records, tasks, and care history remain available under the current plan limits. The hold does not delete user data.",
+    "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants and members stay readable and editable — only adding more is blocked until you are back under the limit."
   },
   "petSafeSignup": {
     "title": "Keeping a pet-safe home is easier when everyone’s on the same page",
@@ -549,7 +566,26 @@
       "overLimitTitle": "Over your plan limit",
       "overLimitBody": "Your household has more plants or members than your current plan includes. Everything you have keeps working — you can still view, edit, and remove — but adding new plants or members is paused until you are back under the limit.",
       "limitUnknownTitle": "We couldn't check your plan usage",
-      "limitUnknownBody": "At least one of your counts didn't load, so we can't tell whether this household is within its plan limits right now. Nothing about your plants has changed. Try again in a moment — and if you add a plant or member meanwhile, the server still applies your plan's limits."
+      "limitUnknownBody": "At least one of your counts didn't load, so we can't tell whether this household is within its plan limits right now. Nothing about your plants has changed. Try again in a moment — and if you add a plant or member meanwhile, the server still applies your plan's limits.",
+      "holdTitle": "Paid plan changes are paused",
+      "holdEffective": "Hold effective {{date}}.",
+      "noActionAvailable": "No purchase, upgrade, or billing-management action is currently available.",
+      "managePlan": "Manage subscription",
+      "adminOnlyBilling": "Only a household admin can manage billing.",
+      "adminOnlyPlan": "Only a household admin can change the plan.",
+      "changePlanTitle": "Change plan",
+      "changePlanDescription": "Upgrades take effect immediately. Paid plans start with a 14-day free trial.",
+      "currentPlanNote": "This is your current plan.",
+      "cancelToReturn": "Cancel in the billing portal to return to Seedling.",
+      "usePortalToSwitch": "Use “Manage subscription” above to switch to {{plan}}.",
+      "switchTo": "Switch to {{plan}}",
+      "buyLifetime": "Buy {{plan}} for life",
+      "convertToLifetime": "Switch {{plan}} to lifetime",
+      "purchaseErrorTitle": "Plan change could not be started",
+      "errorAlreadySubscribed": "This household already has an active subscription. Use “Manage subscription” to change plans.",
+      "errorPaymentsPaused": "Payments are currently paused. No charge was made.",
+      "errorNotAdmin": "Only a household admin can change the plan.",
+      "errorProviderUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly."
     }
   },
   "notifications": {
@@ -650,5 +686,32 @@
   "climate": {
     "unavailableTitle": "Local climate unavailable.",
     "unavailableBody": "We couldn’t read your local weather just now, so any frost, heat, or rain warning for tonight is unchecked rather than clear."
+  },
+  "pricing": {
+    "intervalLabel": "Billing interval",
+    "intervalMonthly": "Monthly",
+    "intervalYearly": "Yearly",
+    "intervalLifetime": "Lifetime",
+    "hintAnnualSaving": "Save ~33%",
+    "hintOneTime": "One-time",
+    "currentPlanBadge": "Current plan",
+    "notAvailableOneTime": "Not available as a one-time purchase",
+    "notAvailableInterval": "Not available at this interval",
+    "perMonth": "per month",
+    "perYear": "per year",
+    "onceOff": "once",
+    "planCaps": "Up to {{plants}} plants and {{members}} household members.",
+    "startFree": "Start free",
+    "choosePlan": "Choose {{plan}}",
+    "featureReminders": "Care reminders",
+    "featureIdentification": "Plant identification",
+    "featureSharedHousehold": "Shared household",
+    "featureEverythingSeedling": "Everything in Seedling",
+    "featureCareHistory": "Care history and streaks",
+    "featurePriorityIdentification": "Priority plant identification",
+    "featureEverythingGarden": "Everything in Garden",
+    "featureApiAccess": "API access for automation",
+    "featureBulkImport": "Bulk import and export",
+    "featurePrioritySupport": "Priority support"
   }
 }

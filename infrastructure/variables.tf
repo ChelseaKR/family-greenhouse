@@ -336,6 +336,20 @@ variable "stripe_automatic_tax_enabled" {
   default     = ""
 }
 
+# Runtime half of the two-key commercial gate; commercial-status.json is the
+# other half and both must open. Defaults closed, so enabling payments is
+# always an explicit, reviewable per-environment tfvars change.
+variable "payments_enabled" {
+  description = "Set to the exact string \"1\" to permit Stripe Checkout and billing-portal session creation. Any other value keeps payment activity disabled."
+  type        = string
+  default     = "0"
+
+  validation {
+    condition     = contains(["0", "1"], var.payments_enabled)
+    error_message = "payments_enabled must be exactly \"0\" or \"1\". The backend compares this to the literal string \"1\"; near-misses such as \"true\", \"01\", or a padded value silently disable payments."
+  }
+}
+
 # Manual confirmation gate: Stripe price ids look identical in test and live
 # mode, so Terraform can't verify stripe_price_id_* actually match the mode of
 # stripe_secret_key. This must be deliberately flipped to true (see the check

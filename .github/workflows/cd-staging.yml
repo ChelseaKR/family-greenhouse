@@ -107,6 +107,12 @@ jobs:
           TF_VAR_sentry_traces_sample_rate: ${{ vars.STAGING_SENTRY_TRACES_SAMPLE_RATE || '0.1' }}
           TF_VAR_posthog_key: ${{ secrets.STAGING_POSTHOG_KEY }}
           TF_VAR_posthog_host: ${{ vars.STAGING_POSTHOG_HOST || 'https://us.i.posthog.com' }}
+          # Stripe TEST-mode credentials. Staging is where the paid flow is
+          # verified before production is considered; these must be sk_test_ /
+          # whsec_ values from the same Stripe test mode as the price ids in
+          # environments/staging/terraform.tfvars.
+          TF_VAR_stripe_secret_key: ${{ secrets.STAGING_STRIPE_SECRET_KEY }}
+          TF_VAR_stripe_webhook_secret: ${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}
         run: terraform plan -var-file=environments/staging/terraform.tfvars -out=tfplan
 
       - name: Terraform Apply

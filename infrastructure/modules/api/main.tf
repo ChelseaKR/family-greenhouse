@@ -349,6 +349,7 @@ locals {
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
     STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
+    PAYMENTS_ENABLED                  = var.payments_enabled
     POSTHOG_KEY                       = var.posthog_key
     POSTHOG_HOST                      = var.posthog_host
   }

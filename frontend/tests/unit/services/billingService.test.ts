@@ -18,7 +18,7 @@ describe('billingService.listPlans', () => {
     vi.mocked(api.get).mockResolvedValueOnce({
       data: {
         paymentsAvailable: false,
-        commercialHold: { active: true, effectiveDate: '2026-07-14' },
+        commercialHold: { active: false, effectiveDate: '2026-09-01' },
         plans: [
           {
             id: 'garden',
@@ -56,7 +56,7 @@ describe('billingService.listPlans', () => {
     const catalog = await billingService.listPlans();
     expect(catalog).toMatchObject({
       paymentsAvailable: false,
-      commercialHold: { active: true, effectiveDate: '2026-07-14' },
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
     });
     expect(catalog.plans).toEqual([
       {

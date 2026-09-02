@@ -1975,9 +1975,11 @@ describe('billing', () => {
   it('GET /billing/plans is public and lists three tiers', async () => {
     const res = await request(app).get('/billing/plans');
     expect(res.status).toBe(200);
+    // Hold lifted, but the local server sets no PAYMENTS_ENABLED — prices
+    // must still be withheld end to end, not just at the unit boundary.
     expect(res.body).toMatchObject({
       paymentsAvailable: false,
-      commercialHold: { active: true, effectiveDate: '2026-07-14' },
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
     });
     expect(res.body.plans.map((p: { id: string }) => p.id)).toEqual([
       'seedling',

@@ -208,8 +208,10 @@
   "commercialHold": {
     "statusLabel": "Estado comercial",
     "headline": "Los planes de pago están en pausa",
-    "message": "El registro de cuentas gratuitas está abierto. Los planes de pago, el cobro de pagos, las compras, las mejoras y los cambios de plan siguen sin estar disponibles.",
-    "effectiveDate": "Pausa comercial vigente desde {{date}}."
+    "message": "El registro de cuentas gratuitas está abierto. Los planes de pago están disponibles en la web; las compras y los cambios de plan los realiza una persona administradora del hogar en Ajustes.",
+    "effectiveDate": "Pausa comercial vigente desde {{date}}.",
+    "unavailableHeadline": "Los pagos no están disponibles temporalmente",
+    "unavailableMessage": "Ahora mismo no se pueden comprar ni cambiar los planes de pago. Tus plantas, tu hogar y tu historial de cuidados no se ven afectados, y no se ha realizado ningún cargo."
   },
   "auth": {
     "signIn": "Inicia sesión",
@@ -264,7 +266,22 @@
   },
   "pricingStatus": {
     "freeAccountQuestion": "¿Puedo crear una cuenta?",
-    "freeAccountAnswer": "Sí. Las cuentas gratuitas permiten hasta 10 plantas y 6 miembros del hogar sin tarjeta de crédito."
+    "freeAccountAnswer": "Sí. Las cuentas gratuitas permiten hasta 10 plantas y 6 miembros del hogar sin tarjeta de crédito.",
+    "headingHeld": "Qué sigue disponible",
+    "headingOpen": "Preguntas frecuentes",
+    "paidOfferQuestion": "¿Es esta una oferta de pago?",
+    "paidOfferAnswer": "No. Las cuentas gratuitas están disponibles, pero el sitio no acepta compras ni ofrece planes de pago por ahora.",
+    "reactivationQuestion": "¿Se puede reactivar la facturación automáticamente?",
+    "reactivationAnswer": "No. La reactivación requiere una decisión de estado con fecha, cambios revisados en el código y la infraestructura, verificación fuera de producción y un despliegue aprobado por separado.",
+    "trialQuestion": "¿Cómo funciona la prueba gratuita?",
+    "trialAnswer": "Toda suscripción de pago empieza con una prueba de 14 días. No se te cobra hasta que termina, y cancelar antes no cuesta nada. Las compras de por vida son un pago único y no incluyen prueba.",
+    "changeQuestion": "¿Puedo cambiar o cancelar más adelante?",
+    "changeAnswer": "Sí. Los cambios de plan y la cancelación se gestionan desde Ajustes → Facturación, que abre el portal de nuestro proveedor de pagos. Al cancelar, tu hogar vuelve al plan gratuito Plántula al final del periodo pagado.",
+    "whereQuestion": "¿Dónde se compra?",
+    "whereAnswer": "Los cambios de plan se hacen dentro de tu cuenta, en Ajustes → Facturación, y los realiza una persona administradora del hogar. Las compras no están disponibles en las aplicaciones móviles.",
+    "dataQuestion": "¿Qué pasa con los datos existentes?",
+    "dataAnswerHeld": "Las plantas, los registros del hogar, las tareas y el historial de cuidados siguen disponibles dentro de los límites del plan actual. La pausa no elimina datos.",
+    "dataAnswerOpen": "No se elimina nada al cambiar de plan. Si al bajar de plan superas los nuevos límites, las plantas y los miembros existentes se pueden seguir viendo y editando; solo se bloquea añadir más hasta que vuelvas a estar por debajo del límite."
   },
   "petSafeSignup": {
     "title": "Mantener un hogar seguro para las mascotas es más fácil cuando todos están coordinados",
@@ -563,7 +580,26 @@
       "overLimitTitle": "Por encima del límite de tu plan",
       "overLimitBody": "Tu hogar tiene más plantas o miembros de los que incluye tu plan actual. Todo lo que tienes sigue funcionando — puedes ver, editar y eliminar — pero añadir nuevas plantas o miembros queda en pausa hasta que vuelvas a estar dentro del límite.",
       "limitUnknownTitle": "No pudimos comprobar el uso de tu plan",
-      "limitUnknownBody": "Al menos uno de tus recuentos no se cargó, así que ahora mismo no podemos saber si este hogar está dentro de los límites de su plan. Nada ha cambiado en tus plantas. Inténtalo de nuevo en un momento — y si añades una planta o un miembro mientras tanto, el servidor sigue aplicando los límites de tu plan."
+      "limitUnknownBody": "Al menos uno de tus recuentos no se cargó, así que ahora mismo no podemos saber si este hogar está dentro de los límites de su plan. Nada ha cambiado en tus plantas. Inténtalo de nuevo en un momento — y si añades una planta o un miembro mientras tanto, el servidor sigue aplicando los límites de tu plan.",
+      "holdTitle": "Los cambios de plan de pago están en pausa",
+      "holdEffective": "Pausa vigente desde el {{date}}.",
+      "noActionAvailable": "No hay ninguna acción de compra, mejora o gestión de facturación disponible por ahora.",
+      "managePlan": "Gestionar suscripción",
+      "adminOnlyBilling": "Solo una persona administradora del hogar puede gestionar la facturación.",
+      "adminOnlyPlan": "Solo una persona administradora del hogar puede cambiar el plan.",
+      "changePlanTitle": "Cambiar de plan",
+      "changePlanDescription": "Las mejoras se aplican de inmediato. Los planes de pago empiezan con una prueba gratuita de 14 días.",
+      "currentPlanNote": "Este es tu plan actual.",
+      "cancelToReturn": "Cancela en el portal de facturación para volver a Plántula.",
+      "usePortalToSwitch": "Usa “Gestionar suscripción” arriba para cambiar a {{plan}}.",
+      "switchTo": "Cambiar a {{plan}}",
+      "buyLifetime": "Comprar {{plan}} de por vida",
+      "convertToLifetime": "Pasar {{plan}} a de por vida",
+      "purchaseErrorTitle": "No se pudo iniciar el cambio de plan",
+      "errorAlreadySubscribed": "Este hogar ya tiene una suscripción activa. Usa “Gestionar suscripción” para cambiar de plan.",
+      "errorPaymentsPaused": "Los pagos están en pausa. No se ha realizado ningún cargo.",
+      "errorNotAdmin": "Solo una persona administradora del hogar puede cambiar el plan.",
+      "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos."
     }
   },
   "notifications": {
@@ -665,5 +701,32 @@
   "climate": {
     "unavailableTitle": "Clima local no disponible.",
     "unavailableBody": "No pudimos consultar el clima de tu zona en este momento, así que los avisos de helada, calor o lluvia de esta noche están sin comprobar, no descartados."
+  },
+  "pricing": {
+    "intervalLabel": "Intervalo de facturación",
+    "intervalMonthly": "Mensual",
+    "intervalYearly": "Anual",
+    "intervalLifetime": "De por vida",
+    "hintAnnualSaving": "Ahorra ~33 %",
+    "hintOneTime": "Pago único",
+    "currentPlanBadge": "Plan actual",
+    "notAvailableOneTime": "No disponible como pago único",
+    "notAvailableInterval": "No disponible en este intervalo",
+    "perMonth": "al mes",
+    "perYear": "al año",
+    "onceOff": "pago único",
+    "planCaps": "Hasta {{plants}} plantas y {{members}} miembros del hogar.",
+    "startFree": "Empezar gratis",
+    "choosePlan": "Elegir {{plan}}",
+    "featureReminders": "Recordatorios de cuidado",
+    "featureIdentification": "Identificación de plantas",
+    "featureSharedHousehold": "Hogar compartido",
+    "featureEverythingSeedling": "Todo lo de Plántula",
+    "featureCareHistory": "Historial de cuidados y rachas",
+    "featurePriorityIdentification": "Identificación de plantas prioritaria",
+    "featureEverythingGarden": "Todo lo de Jardín",
+    "featureApiAccess": "Acceso a la API para automatizar",
+    "featureBulkImport": "Importación y exportación masiva",
+    "featurePrioritySupport": "Soporte prioritario"
   }
 }

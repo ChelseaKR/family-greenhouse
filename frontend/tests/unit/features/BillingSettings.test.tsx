@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillingSettings } from '@/features/settings/BillingSettings';
@@ -22,14 +23,20 @@ vi.mock('@/services/billingService', async () => {
     billingService: {
       listPlans: vi.fn(),
       getCurrentSubscription: vi.fn(),
-      startCheckout: vi.fn(),
-      openPortal: vi.fn(),
+      createCheckout: vi.fn(),
+      createPortalSession: vi.fn(),
     },
   };
 });
 
 vi.mock('@/hooks/useActiveHouseholdId', () => ({
   useActiveHouseholdId: () => 'hh-1',
+}));
+
+const isAdmin = vi.fn(() => true);
+vi.mock('@/hooks/useActiveHouseholdRole', () => ({
+  useIsHouseholdAdmin: () => isAdmin(),
+  useActiveHouseholdRole: () => (isAdmin() ? 'admin' : 'member'),
 }));
 
 const PLANS: Plan[] = [
@@ -64,12 +71,21 @@ function legacyUsage(over: Partial<PlanUsage> = {}): PlanUsage {
   return { plantCount: 4, maxPlants: 10, memberCount: 1, maxMembers: 1, ...over };
 }
 
-async function renderBilling(sub: SubscriptionState) {
+/** Catalog as the API projects it once both commercial gates are open: the
+ *  same tiers, now carrying the price fields the server withholds while
+ *  payment activity is disabled. */
+const PRICED_PLANS: Plan[] = [
+  { ...PLANS[0], monthlyPrice: 0, annualPrice: null, lifetimePrice: null },
+  { ...PLANS[1], monthlyPrice: 4.99, annualPrice: 39.99, lifetimePrice: 149 },
+  { ...PLANS[2], monthlyPrice: 9.99, annualPrice: 79.99, lifetimePrice: null },
+];
+
+async function renderBilling(sub: SubscriptionState, { paid = false } = {}) {
   const { billingService } = await import('@/services/billingService');
   vi.mocked(billingService.listPlans).mockResolvedValue({
-    paymentsAvailable: false,
-    commercialHold: { active: true, effectiveDate: '2026-07-14' },
-    plans: PLANS,
+    paymentsAvailable: paid,
+    commercialHold: { active: !paid, effectiveDate: '2026-07-14' },
+    plans: paid ? PRICED_PLANS : PLANS,
   });
   vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
   useAuthStore.setState({
@@ -312,9 +328,7 @@ describe('BillingSettings', () => {
       // cadence toggle, no Stripe portal button.
       expect(screen.queryByText('Greenhouse')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Upgrade to/ })).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('radiogroup', { name: 'Billing interval' })
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Billing interval' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Manage subscription' })).not.toBeInTheDocument();
       // Read-only state: current plan + usage still visible, plus the notice.
       expect(screen.getByText("Plan changes aren't available in the app.")).toBeInTheDocument();
@@ -338,5 +352,125 @@ describe('BillingSettings', () => {
     expect(
       screen.queryByText(/monthly|annual|lifetime|billed yearly|pay once/i)
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('purchase controls once payment activity is available', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  it('follows the API, not the build-time flag, when deciding to show prices', async () => {
+    // A frontend deployed ahead of its backend must not advertise amounts the
+    // server is still refusing to honour.
+    await renderBilling({ planId: 'seedling' }, { paid: false });
+    expect(screen.getByText('Paid plan changes are paused')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\$\s*\d/);
+
+    cleanup();
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+    expect(screen.queryByText('Paid plan changes are paused')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
+  });
+
+  it('starts checkout with a fresh idempotency key per click', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s1' });
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
+
+    expect(billingService.createCheckout).toHaveBeenCalledWith({
+      planId: 'garden',
+      interval: 'month',
+      checkoutAttemptId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      ),
+    });
+  });
+
+  it('carries the selected interval into checkout', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s1' });
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+
+    await userEvent.click(screen.getByRole('button', { name: /Yearly/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
+
+    expect(billingService.createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ planId: 'garden', interval: 'year' })
+    );
+  });
+
+  it('offers lifetime on Garden only, and never renders a paid tier as free', async () => {
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+    await userEvent.click(screen.getByRole('button', { name: /Lifetime/ }));
+
+    expect(screen.getByRole('button', { name: 'Buy Garden for life' })).toBeInTheDocument();
+    // Greenhouse has no lifetime price: it must read as unavailable, never $0.
+    expect(screen.queryByRole('button', { name: /Greenhouse/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Not available as a one-time purchase/)).toBeInTheDocument();
+  });
+
+  it('routes a household with a live subscription to the portal instead of a second purchase', async () => {
+    // The API answers 409 here precisely to avoid billing twice; the UI should
+    // not put the user in a position to earn that error.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+      },
+      { paid: true }
+    );
+
+    expect(screen.queryByRole('button', { name: 'Switch to Greenhouse' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Manage subscription.*to switch to Greenhouse/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage subscription' })).toBeInTheDocument();
+  });
+
+  it('still allows a lifetime purchase alongside a live subscription', async () => {
+    // Exempt by design: the lifetime webhook cancels the prior subscription.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+      },
+      { paid: true }
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Lifetime/ }));
+    // Same tier, so this is a conversion rather than a new purchase.
+    expect(screen.getByRole('button', { name: 'Switch Garden to lifetime' })).toBeInTheDocument();
+  });
+
+  it('withholds purchase and portal controls from a non-admin member', async () => {
+    isAdmin.mockReturnValue(false);
+    await renderBilling({ planId: 'seedling', stripeCustomerId: 'cus_1' }, { paid: true });
+
+    expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Only a household admin can/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Manage subscription' })).toBeDisabled();
+  });
+
+  it('surfaces an actionable message instead of a raw failure', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockRejectedValue({ response: { status: 503 } });
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
+
+    expect(
+      await screen.findByText(/Payments are currently paused\. No charge was made\./)
+    ).toBeInTheDocument();
+  });
+
+  it("does not offer a purchase path for the household's current plan", async () => {
+    await renderBilling({ planId: 'garden' }, { paid: true });
+    expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
+    expect(screen.getByText('This is your current plan.')).toBeInTheDocument();
   });
 });
