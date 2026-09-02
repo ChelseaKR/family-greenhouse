@@ -9,7 +9,18 @@ export interface Plan {
   description: string;
   maxPlants: number;
   maxMembers: number;
+  /** Price fields are present ONLY when the API reports paymentsAvailable —
+   *  see planSummary() in backend/src/models/plans.ts, which omits them
+   *  entirely while payment activity is disabled. `null` is the explicit
+   *  "this tier has no such cadence" signal (free tier, or Greenhouse
+   *  lifetime); `undefined` means prices are being withheld altogether. */
+  monthlyPrice?: number;
+  annualPrice?: number | null;
+  lifetimePrice?: number | null;
 }
+
+/** Billing cadence accepted by POST /billing/checkout. */
+export type BillingInterval = 'month' | 'year' | 'lifetime';
 
 export interface PlanCatalog {
   paymentsAvailable: boolean;
@@ -131,6 +142,37 @@ export const billingService = {
 
   async getCurrentSubscription(): Promise<SubscriptionState> {
     const response = await api.get<SubscriptionState>('/billing/me');
+    return response.data;
+  },
+
+  /**
+   * Start a Stripe Checkout session and return the URL to redirect to.
+   *
+   * `checkoutAttemptId` is generated once per click and forwarded as Stripe's
+   * idempotency key, so a retried request (flaky network, double-click, the
+   * browser replaying a request) returns the SAME session instead of opening
+   * a second one. Callers must generate it at click time, not per render.
+   *
+   * The server re-checks both commercial gates before touching Stripe and
+   * answers 503 when payment activity is off, so a stale client that still
+   * shows a buy button cannot originate a charge.
+   */
+  async createCheckout(input: {
+    planId: Exclude<PlanId, 'seedling'>;
+    interval: BillingInterval;
+    checkoutAttemptId: string;
+  }): Promise<{ url: string }> {
+    const response = await api.post<{ url: string }>('/billing/checkout', input);
+    return response.data;
+  },
+
+  /**
+   * Create a Stripe billing-portal session for the household's existing
+   * customer record. Only meaningful after a completed checkout — the API
+   * answers 400 when no Stripe customer is on file.
+   */
+  async createPortalSession(): Promise<{ url: string }> {
+    const response = await api.post<{ url: string }>('/billing/portal', {});
     return response.data;
   },
 };

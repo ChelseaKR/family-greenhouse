@@ -50,10 +50,12 @@ sms_notifications_enabled = ""
 # live keys charge real cards (the 4242 test card is rejected); test prices +
 # sk_test_ let you verify with 4242.
 #
-# Commercial hold effective 2026-07-14: all price ids remain empty. The API
-# also requires PAYMENTS_ENABLED=1, which this repository's infrastructure
-# intentionally does not supply. Do not add live-mode ids while the hold is in
-# effect.
+# Price ids stay empty until the reviewed reactivation change supplies
+# LIVE-mode ids (see docs/COMMERCIAL-STATUS.md). Payment activity additionally
+# requires payments_enabled = "1" below AND commercialHoldActive = false in
+# commercial-status.json; a check block in main.tf refuses an apply that opens
+# one gate without the other, or that enables payments with blank Stripe
+# configuration.
 stripe_price_id_garden            = ""
 stripe_price_id_garden_annual     = ""
 stripe_price_id_garden_lifetime   = ""
@@ -68,3 +70,13 @@ stripe_price_ids_are_live = false
 
 # Enable only after Stripe Tax registrations and product tax codes are live.
 stripe_automatic_tax_enabled = ""
+
+# Runtime commercial gate. The backend compares this to the literal string
+# "1"; every other value disables Checkout and billing-portal creation before
+# any configuration, DynamoDB, or Stripe access. Flip to "1" only in the same
+# reviewed change that sets commercialHoldActive = false, and only once the
+# five price ids above are populated with verified LIVE-mode ids.
+#
+# This is also the fastest kill switch: returning it to "0" and applying stops
+# all new payment activity without a code change or a frontend deploy.
+payments_enabled = "0"

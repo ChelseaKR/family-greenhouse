@@ -161,6 +161,7 @@ module "api" {
   stripe_price_id_greenhouse        = var.stripe_price_id_greenhouse
   stripe_price_id_greenhouse_annual = var.stripe_price_id_greenhouse_annual
   stripe_automatic_tax_enabled      = var.stripe_automatic_tax_enabled
+  payments_enabled                  = var.payments_enabled
 }
 
 # Price ids are visually identical in test and live Stripe mode, so this is
@@ -171,6 +172,48 @@ check "stripe_price_mode_confirmed" {
   assert {
     condition     = !startswith(var.stripe_secret_key, "sk_live_") || var.stripe_price_ids_are_live
     error_message = "STRIPE_SECRET_KEY looks like a live key (sk_live_...) but stripe_price_ids_are_live is still false. Stripe price ids don't encode test/live mode, so Terraform can't detect a mismatch on its own — manually confirm every stripe_price_id_* was created in Stripe LIVE mode, then set stripe_price_ids_are_live = true."
+  }
+}
+
+# The two commercial gates guard real charges to real cards, so they are
+# enforced with preconditions rather than `check` blocks: a check block only
+# emits a WARNING and lets `terraform apply` proceed, which in CI (plan -out
+# then apply tfplan) means nobody ever sees it. A failed precondition fails the
+# plan outright, so a misconfigured launch cannot reach an apply at all.
+resource "terraform_data" "commercial_gate_guard" {
+  input = var.payments_enabled
+
+  lifecycle {
+    # Enabling payments with a blank secret key or blank MONTHLY price id would
+    # publish buy buttons that fail at Stripe (502) for every household. The
+    # annual and lifetime ids are deliberately not required: a blank one only
+    # hides that cadence, which is a valid partial launch.
+    precondition {
+      condition = var.payments_enabled != "1" || (
+        var.stripe_secret_key != "" &&
+        var.stripe_webhook_secret != "" &&
+        var.stripe_price_id_garden != "" &&
+        var.stripe_price_id_greenhouse != ""
+      )
+      error_message = "payments_enabled is \"1\" but Stripe configuration is incomplete. Checkout needs stripe_secret_key, stripe_webhook_secret, stripe_price_id_garden, and stripe_price_id_greenhouse to all be non-empty; without them every checkout attempt returns a 502."
+    }
+
+    # The two gates are independent by design, but opening the runtime half
+    # while the committed status file still holds is always a mistake: the
+    # backend keeps refusing checkout and the paid UI stays hidden, so the
+    # environment looks enabled while behaving exactly as if it were not.
+    precondition {
+      condition     = var.payments_enabled != "1" || jsondecode(file("${path.module}/../commercial-status.json")).commercialHoldActive == false
+      error_message = "payments_enabled is \"1\" but commercial-status.json still has commercialHoldActive = true. Payment activity requires BOTH gates open (see docs/COMMERCIAL-STATUS.md); set commercialHoldActive to false in the same reviewed change, or leave payments_enabled at \"0\"."
+    }
+
+    # Live keys must never be paired with unverified price ids. This mirrors
+    # the warn-only stripe_price_mode_confirmed check above, but blocks when
+    # payments are actually being switched on.
+    precondition {
+      condition     = var.payments_enabled != "1" || !startswith(var.stripe_secret_key, "sk_live_") || var.stripe_price_ids_are_live
+      error_message = "payments_enabled is \"1\" with a live Stripe key, but stripe_price_ids_are_live is still false. Confirm every stripe_price_id_* was created in Stripe LIVE mode, then set stripe_price_ids_are_live = true."
+    }
   }
 }
 

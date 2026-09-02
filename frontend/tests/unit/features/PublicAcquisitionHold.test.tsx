@@ -91,17 +91,38 @@ describe('free registration with paid activity on hold', () => {
     }
   });
 
-  it('keeps the English paid-hold notice identical to repository status', () => {
+  it('keeps the English status copy identical to, and consistent with, repository status', () => {
     const repositoryRoot = resolve(process.cwd(), '..');
     const status = JSON.parse(
       readFileSync(resolve(repositoryRoot, 'commercial-status.json'), 'utf8')
-    ) as { publicMessage: string; publicRegistrationAvailable: boolean };
+    ) as {
+      publicMessage: string;
+      publicRegistrationAvailable: boolean;
+      commercialHoldActive: boolean;
+    };
     const english = JSON.parse(
       readFileSync(resolve(repositoryRoot, 'frontend/src/i18n/locales/en/translation.json'), 'utf8')
-    ) as { commercialHold: { message: string } };
+    ) as { commercialHold: { message: string; headline: string; unavailableMessage: string } };
 
     expect(status.publicRegistrationAvailable).toBe(true);
+    // The repository's public statement and the copy the app renders for it
+    // must never drift apart.
     expect(english.commercialHold.message).toBe(status.publicMessage);
+
+    if (status.commercialHoldActive) {
+      // Guards a specific way this pairing can go wrong: re-activating the
+      // hold without rewriting publicMessage would pair the "paid plans are
+      // paused" headline with a message saying they are available. Worse than
+      // showing no notice at all.
+      expect(status.publicMessage).toMatch(/unavailable|paused|remain|not currently/i);
+    } else {
+      // With no hold in force, the fallback notice carries its own copy and
+      // must not cite a hold that no longer exists.
+      expect(english.commercialHold.unavailableMessage).toBeTruthy();
+      // Word-bounded: an unbounded /hold/ also matches "household", which
+      // legitimately appears in this copy.
+      expect(english.commercialHold.unavailableMessage).not.toMatch(/\b(?:hold|paused)\b/i);
+    }
   });
 
   it('describes retained paid-plan entitlements without promising them to free accounts', () => {
@@ -110,14 +131,23 @@ describe('free registration with paid activity on hold', () => {
       resolve(repositoryRoot, 'frontend/src/features/settings/ApiKeysSettings.tsx'),
       'utf8'
     );
-    const pricing = readFileSync(
-      resolve(repositoryRoot, 'frontend/src/features/pricing/PricingPage.tsx'),
-      'utf8'
+    // The pricing copy now lives in the translation catalogs rather than in
+    // JSX, so the claim is checked where it is actually authored. Both locales
+    // are checked: a mistranslation that promised paid entitlements to free
+    // accounts would be just as wrong in Spanish.
+    const pricingCopy = ['en', 'es'].map((locale) =>
+      readFileSync(
+        resolve(repositoryRoot, `frontend/src/i18n/locales/${locale}/translation.json`),
+        'utf8'
+      )
     );
 
     expect(apiKeys).toMatch(/existing API-key entitlement/i);
     expect(apiKeys).not.toMatch(/free-account entitlement/i);
-    expect(pricing).toMatch(/current plan limits/i);
-    expect(pricing).not.toMatch(/current free-account limits/i);
+    expect(pricingCopy[0]).toMatch(/current plan limits/i);
+    for (const copy of pricingCopy) {
+      expect(copy).not.toMatch(/current free-account limits/i);
+      expect(copy).not.toMatch(/l[íi]mites de la cuenta gratuita actual/i);
+    }
   });
 });

@@ -80,7 +80,9 @@ describe('billing handler', () => {
   });
 
   describe('listPlans', () => {
-    it('returns a cacheable, explicitly unavailable catalog with no public prices', async () => {
+    it('publishes a cacheable priced catalog once both commercial gates are open', async () => {
+      // This suite sets PAYMENTS_ENABLED=1 and the repository hold is lifted,
+      // so both gates are open and the catalog may carry amounts.
       const { listPlans } = await import('../../../src/handlers/billing/handler.js');
       const res = (await listPlans(
         buildEvent({ httpMethod: 'GET' }),
@@ -92,8 +94,8 @@ describe('billing handler', () => {
       expect(res.headers?.['Cache-Control']).toMatch(/public.*max-age=300/);
       const body = JSON.parse(res.body);
       expect(body).toMatchObject({
-        paymentsAvailable: false,
-        commercialHold: { active: true, effectiveDate: '2026-07-14' },
+        paymentsAvailable: true,
+        commercialHold: { active: false, effectiveDate: '2026-09-01' },
       });
       expect(body.plans).toHaveLength(3);
       expect(body.plans.map((p: { id: string }) => p.id).sort()).toEqual([
@@ -101,6 +103,48 @@ describe('billing handler', () => {
         'greenhouse',
         'seedling',
       ]);
+
+      const byId = Object.fromEntries(body.plans.map((p: { id: string }) => [p.id, p])) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      // `null` (not absent) is the explicit "this tier has no such cadence"
+      // signal the client relies on to render "not available" rather than $0.
+      expect(byId.seedling).toMatchObject({
+        monthlyPrice: 0,
+        annualPrice: null,
+        lifetimePrice: null,
+      });
+      expect(byId.garden).toMatchObject({
+        monthlyPrice: 4.99,
+        annualPrice: 39.99,
+        lifetimePrice: 149,
+      });
+      expect(byId.greenhouse).toMatchObject({
+        monthlyPrice: 9.99,
+        annualPrice: 79.99,
+        lifetimePrice: null,
+      });
+    });
+
+    it('withholds every price when the runtime gate alone is shut', async () => {
+      // Lifting the repository hold is necessary but not sufficient. With no
+      // PAYMENTS_ENABLED the catalog must publish no amounts at all — the
+      // state production stays in until its own gate is opened.
+      delete process.env.PAYMENTS_ENABLED;
+      const { listPlans } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await listPlans(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      const body = JSON.parse(res.body);
+      expect(body).toMatchObject({
+        paymentsAvailable: false,
+        commercialHold: { active: false, effectiveDate: '2026-09-01' },
+      });
+      expect(body.plans).toHaveLength(3);
       for (const plan of body.plans) {
         expect(plan).not.toHaveProperty('monthlyPrice');
         expect(plan).not.toHaveProperty('annualPrice');

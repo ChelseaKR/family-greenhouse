@@ -143,6 +143,17 @@ variable "stripe_automatic_tax_enabled" {
   default     = ""
 }
 
+# Second, independent commercial gate. The repository status file
+# (commercial-status.json) is the first; payment activity requires BOTH. Kept
+# a string, not a bool, because the backend compares it to the exact value "1"
+# — see backend/src/config/commercialStatus.ts. Defaults closed so a new
+# environment never inherits live payment collection.
+variable "payments_enabled" {
+  description = "Set to the exact string \"1\" to permit Stripe Checkout and billing-portal session creation. Any other value keeps payment activity disabled. Requires commercialHoldActive=false in commercial-status.json to take effect."
+  type        = string
+  default     = "0"
+}
+
 # --- Notification delivery ---
 variable "ses_identity_arn" {
   description = "ARN of the verified SES identity (domain) reminder emails are sent from. Used to scope the Lambda role's ses:SendEmail/SendRawEmail grant. Empty (no domain provisioned) falls back to Resource \"*\"."
