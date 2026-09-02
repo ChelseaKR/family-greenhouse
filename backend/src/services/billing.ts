@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { UpdateCommand, GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
-import { PlanId, getPlan, isPlanId, PLANS } from '../models/plans.js';
+import { PlanId, getPlan, isPlanId, planRank, PLANS } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
@@ -34,6 +34,20 @@ export interface HouseholdSubscription {
   stripeSubscriptionId?: string;
   status?: string;
   currentPeriodEnd?: string;
+  /**
+   * Tier the household owns permanently through a one-time lifetime purchase.
+   *
+   * Recorded separately from `planId` because every other billing field
+   * describes a SUBSCRIPTION, and a lifetime purchase has none — it clears
+   * `stripeSubscriptionId` and `currentPeriodEnd` by design. That left
+   * lifetime ownership invisible to both guards that prevent double-paying,
+   * each of which keys off "has a live subscription": a lifetime owner was
+   * offered a subscription for a tier they already owned, and cancelling it
+   * later dropped them to seedling rather than back to what they had paid
+   * for permanently. This attribute is never cleared by subscription events,
+   * so it survives as the household's entitlement floor.
+   */
+  lifetimePlanId?: PlanId;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -56,6 +70,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     stripeSubscriptionId: item.stripeSubscriptionId as string | undefined,
     status: item.subscriptionStatus as string | undefined,
     currentPeriodEnd: item.subscriptionCurrentPeriodEnd as string | undefined,
+    lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
   };
 }
@@ -70,6 +85,7 @@ export async function getHouseholdSubscription(
     stripeSubscriptionId: state.stripeSubscriptionId,
     status: state.status,
     currentPeriodEnd: state.currentPeriodEnd,
+    lifetimePlanId: state.lifetimePlanId,
   };
 }
 
@@ -109,6 +125,7 @@ export async function updateHouseholdSubscription(
     stripeSubscriptionId: 'stripeSubscriptionId',
     status: 'subscriptionStatus',
     currentPeriodEnd: 'subscriptionCurrentPeriodEnd',
+    lifetimePlanId: 'lifetimePlanId',
     pendingStripeCancellationId: 'pendingStripeCancellationId',
   };
 
@@ -215,6 +232,18 @@ export async function createCheckoutSession(args: {
   if (!priceId) throw new Error(`Missing ${priceEnv} for plan ${plan.id}`);
 
   const sub = await getHouseholdSubscription(args.householdId);
+  // A lifetime purchase is an entitlement FLOOR, and it is invisible to the
+  // live-subscription guard below because a one-time purchase has no
+  // subscription id. Without this check a household that paid outright for
+  // Garden would be sold Garden again, or sold a Garden subscription that
+  // adds nothing to what it already owns permanently. Upgrading to a strictly
+  // higher tier stays allowed; the lifetime marker survives it, so cancelling
+  // that upgrade later returns the household to what it bought.
+  if (sub.lifetimePlanId && planRank(plan.id) <= planRank(sub.lifetimePlanId)) {
+    throw new Error(
+      `LIFETIME_ALREADY_OWNED: This household already owns ${getPlan(sub.lifetimePlanId).name} permanently.`
+    );
+  }
   // A household with a live recurring subscription must change plans through
   // the Stripe billing portal (createPortalSession below), not by checking
   // out again: Stripe customers can hold multiple concurrent subscriptions,
@@ -416,6 +445,11 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
             status: 'active',
             stripeSubscriptionId: null,
             currentPeriodEnd: null,
+            // Durable record of what was bought outright. Every other field
+            // here describes a subscription and is cleared or overwritten by
+            // later subscription events; this one is what lets the household
+            // fall back to the tier it actually paid for.
+            lifetimePlanId: planId,
           },
         };
       }
@@ -664,6 +698,22 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   if (event.type === 'customer.subscription.deleted') {
     const deletedSubId = (event.data.object as unknown as { id?: string }).id;
     const current = await getHouseholdSubscription(delta.householdId);
+    // A household that bought a tier outright keeps it forever. Cancelling a
+    // subscription taken out ON TOP of a lifetime purchase must fall back to
+    // what was paid for permanently, never to seedling — otherwise a
+    // one-time purchase is silently destroyed by a later, unrelated
+    // cancellation, with no refund path.
+    if (current.lifetimePlanId) {
+      logger.info(
+        {
+          stripeEventId: event.id,
+          householdId: delta.householdId,
+          lifetimePlanId: current.lifetimePlanId,
+        },
+        'stripe_event_cancellation_restored_lifetime_tier'
+      );
+      delta.fields.planId = current.lifetimePlanId;
+    }
     if (!current.stripeSubscriptionId || current.stripeSubscriptionId !== deletedSubId) {
       logger.info(
         {

@@ -585,7 +585,9 @@
       "errorAlreadySubscribed": "This household already has an active subscription. Use “Manage subscription” to change plans.",
       "errorPaymentsPaused": "Payments are currently paused. No charge was made.",
       "errorNotAdmin": "Only a household admin can change the plan.",
-      "errorProviderUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly."
+      "errorProviderUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly.",
+      "ownedForLife": "You own this plan permanently.",
+      "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier."
     }
   },
   "notifications": {

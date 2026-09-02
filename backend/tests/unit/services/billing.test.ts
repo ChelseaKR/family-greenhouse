@@ -128,8 +128,47 @@ describe('deltaForStripeEvent', () => {
         // linger and a later subscription.deleted can't revoke the grant.
         stripeSubscriptionId: null,
         currentPeriodEnd: null,
+        // Durable record of what was bought outright. Every other field here
+        // describes a subscription and is cleared or overwritten by later
+        // subscription events; this is the household's entitlement floor.
+        lifetimePlanId: 'garden',
       },
     });
+  });
+
+  it('records the lifetime tier durably so it survives a later subscription', async () => {
+    // Regression: a lifetime purchase has no subscription id, which made
+    // ownership invisible to both guards that prevent paying twice. A
+    // lifetime owner could be sold a subscription, and cancelling it later
+    // dropped them to seedling — destroying a one-time purchase with no
+    // refund path.
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const delta = deltaForStripeEvent({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_123',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(delta?.fields.lifetimePlanId).toBe('garden');
+    // Never written by a subscription checkout — only an outright purchase
+    // may set the floor.
+    const subDelta = deltaForStripeEvent({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          metadata: { householdId: 'hh-1', planId: 'greenhouse', interval: 'month' },
+          customer: 'cus_123',
+          subscription: 'sub_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(subDelta?.fields).not.toHaveProperty('lifetimePlanId');
   });
 
   it('does NOT grant entitlement on an unpaid lifetime (mode=payment) checkout', async () => {
@@ -488,6 +527,39 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       {},
       { idempotencyKey: 'lifetime-cancel:evt_lifetime' }
     );
+  });
+
+  it('restores the lifetime tier when a subscription taken out on top of it is cancelled', async () => {
+    // The defect this pins: a lifetime household has no stripeSubscriptionId,
+    // so it could still be sold a subscription for a higher tier. Cancelling
+    // that subscription used to set planId='seedling', destroying a one-time
+    // purchase outright — no refund, no warning, no way back.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      // billing-state read: owns Garden for life, currently subscribed to
+      // Greenhouse on top of it.
+      .mockResolvedValueOnce({
+        Item: {
+          planId: 'greenhouse',
+          stripeSubscriptionId: 'sub_gh',
+          lifetimePlanId: 'garden',
+        },
+      })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_cancel',
+      created: 1_700_000_100,
+      type: 'customer.subscription.deleted',
+      data: { object: { id: 'sub_gh', metadata: { householdId: 'hh-1' } } },
+    } as unknown as Stripe.Event);
+
+    const writes = vi.mocked(dynamodb.send).mock.calls.map((c) => JSON.stringify(c[0]));
+    const update = writes.find((w) => w.includes('planId'));
+    expect(update).toBeDefined();
+    // Falls back to what was actually paid for, NOT seedling.
+    expect(update).toContain('garden');
+    expect(update).not.toContain('seedling');
   });
 
   it('stages the exact cancellation target before clearing the public subscription id', async () => {
@@ -1179,6 +1251,48 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
       expect(sessionsCreate).not.toHaveBeenCalled();
     }
   );
+
+  async function runAsLifetimeOwner(
+    planId: 'garden' | 'greenhouse',
+    interval?: 'month' | 'lifetime'
+  ) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { planId: 'garden', stripeCustomerId: 'cus_1', lifetimePlanId: 'garden' },
+    });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    return createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId,
+      interval,
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+  }
+
+  it.each([['month' as const], ['lifetime' as const]])(
+    'refuses to sell a tier the household already owns outright (%s)',
+    async (interval) => {
+      // A lifetime purchase has no subscription id, so the ALREADY_SUBSCRIBED
+      // guard above cannot see it. Without this check the household would be
+      // sold Garden a second time — or a Garden subscription that adds nothing
+      // to what it already owns permanently.
+      await expect(runAsLifetimeOwner('garden', interval)).rejects.toThrow(
+        'LIFETIME_ALREADY_OWNED'
+      );
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still allows a lifetime owner to upgrade to a strictly higher tier', async () => {
+    // Lifetime is a floor, not a ceiling. The marker survives the upgrade, so
+    // cancelling it later returns the household to Garden rather than seedling.
+    process.env.STRIPE_PRICE_ID_GREENHOUSE = 'price_greenhouse_monthly';
+    const result = await runAsLifetimeOwner('greenhouse', 'month');
+    expect(result.url).toBe('https://checkout.stripe.test/cs');
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+  });
 
   it('still allows checkout when the prior subscription is canceled (re-subscribing is fine)', async () => {
     const result = await runWithExistingSub('canceled', 'month');
