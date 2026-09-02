@@ -127,6 +127,16 @@ export const checkout = createHandler(
       });
       return successResponse(session);
     } catch (err) {
+      // Client-correctable: the household already owns this tier outright.
+      // A 502 here would read as "our payment provider broke" for what is
+      // actually a correct refusal to sell the same thing twice.
+      if ((err as Error).message?.startsWith('LIFETIME_ALREADY_OWNED')) {
+        throw createHttpError(
+          409,
+          'Your household already owns this plan permanently. There is nothing more to buy at this tier.',
+          { expose: true }
+        );
+      }
       // Client-correctable: already has a live subscription. Map to a clear
       // 409 pointing at the portal, rather than the generic Stripe-failure
       // 502 below (see createCheckoutSession's ALREADY_SUBSCRIBED guard).

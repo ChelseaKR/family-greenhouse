@@ -82,6 +82,18 @@ export function getPlan(id: string | undefined | null): Plan {
   return PLANS.seedling;
 }
 
+/**
+ * Tiers in ascending entitlement order. Used to compare what a household
+ * already owns against what it is trying to buy — a lifetime purchase is an
+ * entitlement FLOOR, so a tier at or below it must never be sold again.
+ */
+export const PLAN_ORDER: readonly PlanId[] = ['seedling', 'garden', 'greenhouse'];
+
+/** Rank of a tier in PLAN_ORDER; higher means strictly more entitlement. */
+export function planRank(id: PlanId): number {
+  return PLAN_ORDER.indexOf(id);
+}
+
 /** True iff `id` names a real plan in the catalog. */
 export function isPlanId(id: unknown): id is PlanId {
   return typeof id === 'string' && Object.hasOwn(PLANS, id);

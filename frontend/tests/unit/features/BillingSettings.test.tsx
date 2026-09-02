@@ -468,6 +468,29 @@ describe('purchase controls once payment activity is available', () => {
     ).toBeInTheDocument();
   });
 
+  it('never offers a tier the household already owns outright', async () => {
+    // A lifetime purchase has no stripeSubscriptionId, so hasLiveSubscription
+    // is false and the double-billing guard cannot see it. Without an
+    // explicit check the UI would invite the household to buy Garden again.
+    await renderBilling(
+      { planId: 'garden', stripeCustomerId: 'cus_1', lifetimePlanId: 'garden' },
+      { paid: true }
+    );
+
+    expect(screen.queryByRole('button', { name: /Garden/ })).not.toBeInTheDocument();
+    expect(screen.getByText('You own this plan permanently.')).toBeInTheDocument();
+  });
+
+  it('still offers a strictly higher tier to a lifetime owner', async () => {
+    // Lifetime is a floor, not a ceiling — Greenhouse is genuinely more than
+    // what they bought, and the marker survives the upgrade.
+    await renderBilling(
+      { planId: 'garden', stripeCustomerId: 'cus_1', lifetimePlanId: 'garden' },
+      { paid: true }
+    );
+    expect(screen.getByRole('button', { name: 'Switch to Greenhouse' })).toBeInTheDocument();
+  });
+
   it("does not offer a purchase path for the household's current plan", async () => {
     await renderBilling({ planId: 'garden' }, { paid: true });
     expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();

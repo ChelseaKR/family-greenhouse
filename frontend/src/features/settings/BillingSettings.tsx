@@ -8,6 +8,7 @@ import {
   resolvePlanUsage,
   type BillingInterval,
   type Plan,
+  type PlanId,
   type PlanLimitEvaluation,
   type PlanUsageDetail,
 } from '@/services/billingService';
@@ -22,6 +23,11 @@ import { isNativeApp } from '@/lib/platform';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
 
+/** Ascending entitlement order, mirroring PLAN_ORDER in backend/src/models/plans.ts.
+ *  A lifetime purchase is a floor: tiers at or below it are already owned. */
+const PLAN_ORDER: PlanId[] = ['seedling', 'garden', 'greenhouse'];
+const planRank = (id: PlanId) => PLAN_ORDER.indexOf(id);
+
 /** Statuses that mean Stripe considers the subscription live, mirroring
  *  LIVE_SUBSCRIPTION_STATUSES in backend/src/services/billing.ts. A household
  *  in one of these must change plans through the portal: the API rejects a
@@ -33,7 +39,17 @@ const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
  *  retrying the same request unchanged. */
 function purchaseErrorKey(error: unknown): string {
   const status = (error as { response?: { status?: number } })?.response?.status;
-  if (status === 409) return 'settings.billing.errorAlreadySubscribed';
+  if (status === 409) {
+    // Two different 409s: already subscribed (fix: use the portal) and already
+    // owned outright (fix: nothing, there is nothing left to buy). Telling a
+    // lifetime owner to "use Manage subscription to change plans" would send
+    // them somewhere that cannot help them.
+    const detail = (error as { response?: { data?: { error?: string; message?: string } } })
+      ?.response?.data;
+    return /permanently/i.test(`${detail?.error ?? ''} ${detail?.message ?? ''}`)
+      ? 'settings.billing.errorLifetimeOwned'
+      : 'settings.billing.errorAlreadySubscribed';
+  }
   if (status === 503) return 'settings.billing.errorPaymentsPaused';
   if (status === 403) return 'settings.billing.errorNotAdmin';
   return 'settings.billing.errorProviderUnreachable';
@@ -208,6 +224,7 @@ export function BillingSettings() {
                 interval,
                 price,
                 currentPlanId,
+                lifetimePlanId: subQuery.data?.lifetimePlanId,
                 isAdmin,
                 hasLiveSubscription,
                 t,
@@ -237,6 +254,7 @@ function renderPlanCta({
   interval,
   price,
   currentPlanId,
+  lifetimePlanId,
   isAdmin,
   hasLiveSubscription,
   isPending,
@@ -248,6 +266,7 @@ function renderPlanCta({
   interval: BillingInterval;
   price: number | null;
   currentPlanId: string;
+  lifetimePlanId?: PlanId;
   isAdmin: boolean;
   hasLiveSubscription: boolean;
   isPending: boolean;
@@ -261,6 +280,14 @@ function renderPlanCta({
     return currentPlanId === 'seedling' ? null : (
       <p className="text-sm text-gray-600">{t('settings.billing.cancelToReturn')}</p>
     );
+  }
+  // Owned outright already — at this tier or a lower one. The server refuses
+  // these with a 409, but the UI must not offer them at all: a lifetime
+  // purchase has no subscription id, so the live-subscription guard below
+  // cannot see it, and without this a household would be invited to buy again
+  // something it has already paid for permanently.
+  if (lifetimePlanId && planRank(plan.id) <= planRank(lifetimePlanId)) {
+    return <p className="text-sm text-gray-600">{t('settings.billing.ownedForLife')}</p>;
   }
   // Converting a live subscription to a one-time lifetime purchase on the SAME
   // tier is a real upgrade the API supports on purpose (the lifetime webhook

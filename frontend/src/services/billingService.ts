@@ -53,6 +53,11 @@ export interface SubscriptionState {
   stripeSubscriptionId?: string;
   status?: string;
   currentPeriodEnd?: string;
+  /** Tier owned permanently via a one-time purchase. Distinct from every
+   *  other field here, which describes a subscription — a lifetime purchase
+   *  has none, so this is the only durable record that the household already
+   *  paid for this tier outright. */
+  lifetimePlanId?: PlanId;
   /** Legacy shape: present only when both counters are known. */
   usage?: PlanUsage;
   /** Additive nullable shape. Older backends do not send it. */

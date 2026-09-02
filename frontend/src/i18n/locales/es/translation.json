@@ -599,7 +599,9 @@
       "errorAlreadySubscribed": "Este hogar ya tiene una suscripción activa. Usa “Gestionar suscripción” para cambiar de plan.",
       "errorPaymentsPaused": "Los pagos están en pausa. No se ha realizado ningún cargo.",
       "errorNotAdmin": "Solo una persona administradora del hogar puede cambiar el plan.",
-      "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos."
+      "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos.",
+      "ownedForLife": "Ya tienes este plan de forma permanente.",
+      "errorLifetimeOwned": "Tu hogar ya posee este plan de forma permanente. No hay nada más que comprar en este nivel."
     }
   },
   "notifications": {
