@@ -587,7 +587,9 @@
       "errorNotAdmin": "Only a household admin can change the plan.",
       "errorProviderUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly.",
       "ownedForLife": "You own this plan permanently.",
-      "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier."
+      "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier.",
+      "cancelPending": "Cancelled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
+      "cancelPendingNoDate": "Cancelled — your {{plan}} plan ends when the current period does, then your household returns to Seedling."
     }
   },
   "notifications": {

@@ -132,8 +132,55 @@ describe('deltaForStripeEvent', () => {
         // describes a subscription and is cleared or overwritten by later
         // subscription events; this is the household's entitlement floor.
         lifetimePlanId: 'garden',
+        // No subscription remains, so a pending-cancellation notice from the
+        // replaced one must not linger.
+        cancelAtPeriodEnd: false,
       },
     });
+  });
+
+  it('tracks a pending cancellation, and clears it when the household re-subscribes', async () => {
+    // Stripe does not delete a cancelled subscription immediately — it sets
+    // cancel_at_period_end and keeps status active/trialing until the period
+    // ends. Without carrying that flag the app shows a cancelled household
+    // exactly what it showed before, so the cancellation looks like it failed.
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const build = (cancelAtPeriodEnd: boolean) =>
+      deltaForStripeEvent({
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_1',
+            status: 'trialing',
+            cancel_at_period_end: cancelAtPeriodEnd,
+            metadata: { householdId: 'hh-1', planId: 'greenhouse' },
+            items: { data: [{ price: 'price_x', current_period_end: 1_800_000_000 }] },
+          },
+        },
+      } as unknown as Stripe.Event);
+
+    expect(build(true)?.fields.cancelAtPeriodEnd).toBe(true);
+    // Explicitly false, never undefined: re-subscribing must clear a stale
+    // true, and `undefined` is simply not written by updateHouseholdSubscription.
+    expect(build(false)?.fields.cancelAtPeriodEnd).toBe(false);
+  });
+
+  it('clears a pending cancellation when a lifetime purchase replaces the subscription', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const delta = deltaForStripeEvent({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    // No subscription remains, so a cancellation notice from the replaced one
+    // must not linger on a household that now owns its tier outright.
+    expect(delta?.fields.cancelAtPeriodEnd).toBe(false);
   });
 
   it('records the lifetime tier durably so it survives a later subscription', async () => {

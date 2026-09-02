@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -80,7 +80,10 @@ const PRICED_PLANS: Plan[] = [
   { ...PLANS[2], monthlyPrice: 9.99, annualPrice: 79.99, lifetimePrice: null },
 ];
 
-async function renderBilling(sub: SubscriptionState, { paid = false } = {}) {
+async function renderBilling(
+  sub: SubscriptionState,
+  { paid = false, route = '/settings/billing' } = {}
+) {
   const { billingService } = await import('@/services/billingService');
   vi.mocked(billingService.listPlans).mockResolvedValue({
     paymentsAvailable: paid,
@@ -102,7 +105,7 @@ async function renderBilling(sub: SubscriptionState, { paid = false } = {}) {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
         <BillingSettings />
       </MemoryRouter>
     </QueryClientProvider>
@@ -466,6 +469,62 @@ describe('purchase controls once payment activity is available', () => {
     expect(
       await screen.findByText(/Payments are currently paused\. No charge was made\./)
     ).toBeInTheDocument();
+  });
+
+  it('re-reads entitlement after returning from checkout, since only the webhook knows', async () => {
+    // The app-wide query defaults (5-minute staleTime, refetchOnWindowFocus
+    // off) are right for data this client mutates. Entitlement is not: Stripe
+    // tells the server via webhook and this client is never informed, so
+    // without an override a household that just paid keeps seeing its old
+    // plan — and reasonably tries paying again.
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.getCurrentSubscription)
+      .mockResolvedValueOnce({ planId: 'seedling' })
+      .mockResolvedValue({ planId: 'garden', stripeCustomerId: 'cus_1', status: 'active' });
+
+    await renderBilling(
+      { planId: 'seedling' },
+      { paid: true, route: '/settings/billing?status=success' }
+    );
+
+    // The first read still shows the pre-purchase row; polling picks up the
+    // webhook's write shortly after.
+    await waitFor(() => expect(billingService.getCurrentSubscription).toHaveBeenCalledTimes(2), {
+      timeout: 6000,
+    });
+  });
+
+  it('tells a cancelled household when its plan actually ends', async () => {
+    // Stripe keeps a cancelled subscription serving until the period ends, so
+    // status stays trialing/active and nothing else on the page changes.
+    // Without this notice the cancellation is completely invisible.
+    await renderBilling(
+      {
+        planId: 'greenhouse',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'trialing',
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: '2026-09-16T05:19:51.000Z',
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText(/Cancelled/)).toBeInTheDocument();
+    expect(screen.getByText(/returns to Seedling/)).toBeInTheDocument();
+  });
+
+  it('shows no cancellation notice for a household that has not cancelled', async () => {
+    await renderBilling(
+      {
+        planId: 'greenhouse',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+      },
+      { paid: true }
+    );
+    expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
   });
 
   it('never offers a tier the household already owns outright', async () => {

@@ -48,6 +48,15 @@ export interface HouseholdSubscription {
    * so it survives as the household's entitlement floor.
    */
   lifetimePlanId?: PlanId;
+  /**
+   * True once the household has cancelled but the paid period has not yet
+   * elapsed. Stripe does not delete a cancelled subscription immediately — it
+   * sets `cancel_at_period_end` and keeps serving until the period ends, so
+   * `status` stays `active`/`trialing` throughout. Without surfacing this, a
+   * household that cancels sees nothing change anywhere in the app and
+   * reasonably concludes the cancellation failed.
+   */
+  cancelAtPeriodEnd?: boolean;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -71,6 +80,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     status: item.subscriptionStatus as string | undefined,
     currentPeriodEnd: item.subscriptionCurrentPeriodEnd as string | undefined,
     lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
+    cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
   };
 }
@@ -86,6 +96,7 @@ export async function getHouseholdSubscription(
     status: state.status,
     currentPeriodEnd: state.currentPeriodEnd,
     lifetimePlanId: state.lifetimePlanId,
+    cancelAtPeriodEnd: state.cancelAtPeriodEnd,
   };
 }
 
@@ -126,6 +137,7 @@ export async function updateHouseholdSubscription(
     status: 'subscriptionStatus',
     currentPeriodEnd: 'subscriptionCurrentPeriodEnd',
     lifetimePlanId: 'lifetimePlanId',
+    cancelAtPeriodEnd: 'subscriptionCancelAtPeriodEnd',
     pendingStripeCancellationId: 'pendingStripeCancellationId',
   };
 
@@ -450,6 +462,9 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
             // later subscription events; this one is what lets the household
             // fall back to the tier it actually paid for.
             lifetimePlanId: planId,
+            // No subscription remains, so any pending cancellation notice
+            // from the replaced one must not linger.
+            cancelAtPeriodEnd: false,
           },
         };
       }
@@ -494,6 +509,12 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
           stripeSubscriptionId: sub.id,
           status: sub.status,
           currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : undefined,
+          // Always written, never left undefined: re-subscribing after a
+          // cancellation must clear the flag, and `undefined` would leave the
+          // stale `true` in place and keep telling the household its plan is
+          // ending when it no longer is.
+          cancelAtPeriodEnd:
+            (sub as unknown as { cancel_at_period_end?: boolean }).cancel_at_period_end === true,
         },
       };
     }

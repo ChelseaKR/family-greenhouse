@@ -58,6 +58,10 @@ export interface SubscriptionState {
    *  has none, so this is the only durable record that the household already
    *  paid for this tier outright. */
   lifetimePlanId?: PlanId;
+  /** Cancelled, but the paid period has not elapsed yet. `status` stays
+   *  active/trialing throughout, so this is the only signal that the plan is
+   *  ending — without it a cancellation is invisible in the UI. */
+  cancelAtPeriodEnd?: boolean;
   /** Legacy shape: present only when both counters are known. */
   usage?: PlanUsage;
   /** Additive nullable shape. Older backends do not send it. */
