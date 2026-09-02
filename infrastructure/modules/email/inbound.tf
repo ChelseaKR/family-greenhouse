@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.iam]
+    }
+  }
+}
+
 # Inbound mail for the domain: MX -> SES receiving -> S3 (raw MIME) -> Lambda
 # forward to the maintainer's real mailbox. Before this existed, support@ /
 # security@ / hello@ / dmarc@ were advertised (tfvars, SECURITY.md, DMARC rua)
@@ -121,6 +130,8 @@ data "archive_file" "forwarder" {
 }
 
 resource "aws_iam_role" "forwarder" {
+  provider = aws.iam
+
   name = "${var.project_name}-mail-forwarder-${var.environment}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

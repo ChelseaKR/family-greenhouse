@@ -47,6 +47,25 @@ locals {
     project     = "family-greenhouse"
     environment = var.environment
   }
+
+  # IAM is the one service that compares tag KEYS case-insensitively, so the
+  # deliberate Project/project and Environment/environment pairs above are
+  # rejected outright by CreateRole:
+  #
+  #   InvalidInput: Duplicate tag keys found. Please note that Tag keys are
+  #   case insensitive.
+  #
+  # This only bites on a fresh create, which is why it stayed latent: existing
+  # roles are never re-created, so it surfaced the first time staging was
+  # rebuilt from an empty state. Nothing is lost by dropping the lowercase
+  # pair here — IAM roles and policies are free, so they never appear in a
+  # cost-allocation report, and the lowercase keys exist purely for the
+  # per-project budgets. The TitleCase pair the console filters use is kept.
+  iam_safe_tags = {
+    Project     = "family-greenhouse"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
 
 provider "aws" {
@@ -67,12 +86,29 @@ provider "aws" {
   }
 }
 
+# Provider for IAM resources only. Identical to the default provider except
+# that its default_tags carry a single spelling of each key — see
+# local.iam_safe_tags for why IAM cannot take the case-duplicated pair.
+provider "aws" {
+  alias  = "iam"
+  region = var.aws_region
+
+  default_tags {
+    tags = local.iam_safe_tags
+  }
+}
+
 # Email module (SES domain identity + DKIM + SPF + DMARC).
 # Only created when a domain is set — otherwise Cognito falls back to its
 # default no-DKIM service mailbox (fine for dev/staging).
 module "email" {
   source = "./modules/email"
-  count  = var.domain_name == "" ? 0 : 1
+
+  providers = {
+    aws     = aws
+    aws.iam = aws.iam
+  }
+  count = var.domain_name == "" ? 0 : 1
 
   environment     = var.environment
   project_name    = var.project_name
@@ -110,6 +146,11 @@ module "database" {
 # API module (API Gateway + Lambda)
 module "api" {
   source = "./modules/api"
+
+  providers = {
+    aws     = aws
+    aws.iam = aws.iam
+  }
 
   environment          = var.environment
   project_name         = var.project_name
@@ -285,7 +326,12 @@ module "monitoring" {
 # provision an OIDC provider before the repo exists.
 module "cicd" {
   source = "./modules/cicd"
-  count  = var.github_org == "" || var.github_repo == "" ? 0 : 1
+
+  providers = {
+    aws     = aws
+    aws.iam = aws.iam
+  }
+  count = var.github_org == "" || var.github_repo == "" ? 0 : 1
 
   project_name = var.project_name
   github_org   = var.github_org

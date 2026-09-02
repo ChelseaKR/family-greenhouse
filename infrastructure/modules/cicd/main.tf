@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.iam]
+    }
+  }
+}
+
 # GitHub Actions OIDC trust for AWS — replaces long-lived AWS access keys
 # in CI with short-lived assumed-role credentials.
 #
@@ -20,6 +29,8 @@
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_openid_connect_provider" "github" {
+  provider = aws.iam
+
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
   thumbprint_list = [
@@ -36,6 +47,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 resource "aws_iam_role" "github_deploy" {
+  provider = aws.iam
+
   name = "${var.project_name}-github-deploy"
 
   assume_role_policy = jsonencode({
@@ -98,6 +111,8 @@ resource "aws_iam_role" "github_deploy" {
 # unrestricted iam:* is equivalent to admin.
 # ============================================================================
 resource "aws_iam_policy" "deploy" {
+  provider = aws.iam
+
   name        = "${var.project_name}-github-deploy"
   description = "Scoped deploy permissions for the GitHub Actions CD role: full access within the services this stack manages, IAM limited to project-prefixed roles/policies."
 
