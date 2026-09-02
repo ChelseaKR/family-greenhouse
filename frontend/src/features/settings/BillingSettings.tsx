@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import {
   billingService,
@@ -23,6 +24,11 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { isNativeApp } from '@/lib/platform';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
+
+/** How long to poll for entitlement after returning from Stripe. Long enough
+ *  to cover normal webhook delivery, short enough that a user who lingers on
+ *  the page is not polled indefinitely. */
+const CHECKOUT_POLL_MS = 20_000;
 
 /** Ascending entitlement order, mirroring PLAN_ORDER in backend/src/models/plans.ts.
  *  A lifetime purchase is a floor: tiers at or below it are already owned. */
@@ -66,6 +72,13 @@ export function BillingSettings() {
   const householdId = useActiveHouseholdId();
   const isAdmin = useIsHouseholdAdmin();
   const [purchaseErrorKeyState, setPurchaseErrorKey] = useState<string | null>(null);
+  // Stripe redirects back to ?status=success after a completed checkout.
+  const [searchParams] = useSearchParams();
+  // Captured once, on the render that first sees the redirect, so the window
+  // does not restart on every re-render while polling.
+  const [pollUntil] = useState(() =>
+    searchParams.get('status') === 'success' ? Date.now() + CHECKOUT_POLL_MS : 0
+  );
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
   const subQuery = useQuery({
     // Plan state is per-household; the backend resolves the ACTIVE household
@@ -73,6 +86,19 @@ export function BillingSettings() {
     queryKey: ['subscription', householdId],
     queryFn: billingService.getCurrentSubscription,
     enabled: !!householdId,
+    // Entitlement is the one piece of state a webhook changes behind the
+    // user's back: Stripe tells the server, never this client. The app-wide
+    // defaults (5-minute staleTime, refetchOnWindowFocus off) are right for
+    // data only this client mutates, but here they mean a household that just
+    // paid — or just cancelled — keeps seeing its old plan with no way to
+    // learn otherwise. Both are overridden for this query alone.
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    // Returning from Stripe is a strong signal that entitlement is about to
+    // change, but the webhook may land a moment after the redirect does, so a
+    // single refetch can easily read the pre-purchase row. Poll briefly, then
+    // stop — an unbounded interval would hammer the API for every open tab.
+    refetchInterval: () => (Date.now() < pollUntil ? 2000 : false),
   });
 
   // Both mutations hand off to Stripe by full-page navigation rather than
