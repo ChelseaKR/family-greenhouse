@@ -43,6 +43,7 @@ The switcher exposes a "+ Add a household" affordance that links to `/onboarding
 
 - If the user is the lone admin in a multi-member household, refuse the entire deletion. The error tells them which household to promote a co-admin in. We don't allow partial deletion across households — it's all or nothing.
 - If they're the only member, the household, plants, tasks, and completion records are wiped before the user row is removed.
+- If they're the only member and the household has a Stripe subscription, it is cancelled immediately — before anything is deleted. Subscriptions are per household, so leaving a household that keeps other members never touches billing; but an abandoned household is erased together with the only login that could reach the billing portal, so its subscription has to go first. If Stripe can't confirm the subscription is dead, the deletion is refused with a 502 and nothing has been touched; retrying is safe (an already-cancelled or missing subscription counts as done).
 
 Past activity events and task completion records intentionally retain the user's name as a snapshot, same as documented in `docs/profile.md`.
 
