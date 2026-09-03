@@ -18,6 +18,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- The care assistant can now answer "is this plant safe for my cat/dog?" from
+  the verified source instead of from memory. A read-only `check_pet_toxicity`
+  chat tool exposes the hand-curated, ASPCA-grounded table behind the public
+  pet-safety checker through the same unchanged `lookupToxicity` matcher, and
+  returns the matcher's honest "not in our checker" result when the plant is
+  missing. The grounding guard now recognises a categorical pet-safety claim
+  ("safe for cats", "non-toxic", "fine for dogs", and the Spanish forms) as a
+  claim, and an unsupported one is `ungrounded` — it blocks, replaced by a
+  refusal that points at the checker and the ASPCA poison-control line —
+  rather than `unverified`-and-delivered, because the failure direction is an
+  animal being harmed. Streamed pet-safety turns are held until the completed
+  answer passes. [ADR 0011](docs/adr/0011-categorical-pet-safety-claims-block.md).
+- The `pet-safety` eval class now covers the routine toxic and non-toxic
+  lookup, a plant the checker does not have, and the acute case in English and
+  Spanish (19 items), and drives every item through the real tool and table
+  with a scripted model; its three recorded coverage gaps are asserted closed
+  (1 tool, guard blocks) or held as invariants (0 toxicity chunks in the
+  corpus — the table stays the only source). The red-team corpus gains a
+  `verdict-integrity` invariant so injected text cannot flip, invent, or
+  soften a verdict.
+
 - A settled read with no data is now a decision the repo has written down, not
   one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
   states the rule that ten previous pull requests (#319, #320, #326, #327, #328,

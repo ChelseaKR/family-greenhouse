@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   checkGrounding,
+  checkSafetyClaims,
   isBlockingVerdict,
+  mentionsPetSafety,
+  normalizeEvidenceName,
   type RetrievedSpan,
 } from '../../../src/services/chat/groundingGuard.js';
+import { PET_TOXICITY, normalizeName } from '../../../src/models/petToxicity.js';
 
 const HUMIDITY_SPAN: RetrievedSpan = {
   source: 'humidity-tropicals.md',
@@ -322,5 +326,259 @@ describe('checkGrounding (AIEV-12 citation/grounding guard)', () => {
     const result = checkGrounding('This is the best houseplant in the entire world.', []);
     expect(result.verdict).toBe('unverified');
     expect(isBlockingVerdict(result)).toBe(false);
+  });
+});
+
+describe('categorical pet-safety claims (ADR 0011)', () => {
+  const SPIDER: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'Spider plant (Chlorophytum comosum): cats non-toxic; dogs non-toxic.',
+    petSafety: [
+      {
+        names: [
+          'spider plant',
+          'chlorophytum comosum',
+          'airplane plant',
+          'ribbon plant',
+          'chlorophytum',
+        ],
+        cats: 'non-toxic',
+        dogs: 'non-toxic',
+      },
+    ],
+  };
+  const POTHOS: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'Pothos (Epipremnum aureum): cats toxic; dogs toxic.',
+    petSafety: [
+      {
+        names: ['pothos', 'epipremnum aureum', 'devils ivy', 'golden pothos', 'money plant'],
+        cats: 'toxic',
+        dogs: 'toxic',
+      },
+    ],
+  };
+  const NOT_IN_CHECKER: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'No pet-toxicity verdict for "string of hearts": not in our checker.',
+    petSafety: [],
+  };
+  const MIXED: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'Calathea: non-toxic. ZZ plant: toxic.',
+    petSafety: [
+      { names: ['calathea', 'prayer plant'], cats: 'non-toxic', dogs: 'non-toxic' },
+      { names: ['zz plant', 'zamioculcas', 'zz'], cats: 'toxic', dogs: 'toxic' },
+    ],
+  };
+  const FERNS: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'Boston fern: non-toxic. Asparagus fern: toxic.',
+    petSafety: [
+      { names: ['boston fern', 'sword fern', 'fern'], cats: 'non-toxic', dogs: 'non-toxic' },
+      { names: ['asparagus fern', 'emerald fern'], cats: 'toxic', dogs: 'toxic' },
+    ],
+  };
+
+  describe('an ungrounded safety claim is `ungrounded` and blocks — never merely `unverified`', () => {
+    it.each([
+      'Pothos is completely safe for cats, so there is no need to move it out of reach.',
+      'Snake plants are non-toxic to dogs.',
+      'String of hearts is pet-safe.',
+      'There is no danger to cats from a peace lily.',
+      'Your cat should be fine after a small nibble.',
+      'El potus es seguro para los gatos.',
+      'La sansevieria no es tóxica para perros.',
+      'Es una planta apta para mascotas.',
+    ])('with no evidence at all: %s', (answer) => {
+      const result = checkGrounding(answer, []);
+
+      expect(result.verdict).toBe('ungrounded');
+      expect(isBlockingVerdict(result)).toBe(true);
+      expect(result.safetyClaimsChecked).toEqual([answer]);
+      expect(result.ungroundedSafetyClaims).toEqual([answer]);
+    });
+
+    it('with unrelated RAG spans only — the gap #388 measured as "unverified, delivered"', () => {
+      const result = checkGrounding(
+        'Pothos is completely safe for cats, so there is no need to move it out of reach.',
+        [HUMIDITY_SPAN, FERTILIZING_SPAN]
+      );
+
+      expect(result.verdict).toBe('ungrounded');
+      expect(isBlockingVerdict(result)).toBe(true);
+    });
+
+    it('when the checker had no entry — the model may not fill the gap with its own belief', () => {
+      const result = checkGrounding('String of hearts is safe for cats.', [NOT_IN_CHECKER]);
+
+      expect(result.verdict).toBe('ungrounded');
+      expect(result.ungroundedSafetyClaims).toHaveLength(1);
+    });
+
+    it('when the verdict for the named plant is toxic', () => {
+      expect(checkGrounding('Pothos is safe for cats.', [POTHOS]).verdict).toBe('ungrounded');
+      expect(checkGrounding("Devil's ivy is harmless to cats.", [POTHOS]).verdict).toBe(
+        'ungrounded'
+      );
+    });
+
+    it('is per species: a dogs verdict does not ground a claim about cats, and "pets" needs both', () => {
+      const dogsOnly: RetrievedSpan = {
+        source: 'tool:check_pet_toxicity',
+        text: '',
+        petSafety: [{ names: ['example plant'], cats: 'toxic', dogs: 'non-toxic' }],
+      };
+
+      expect(checkGrounding('Example plant is safe for dogs.', [dogsOnly]).verdict).toBe(
+        'verified'
+      );
+      expect(checkGrounding('Example plant is safe for cats.', [dogsOnly]).verdict).toBe(
+        'ungrounded'
+      );
+      expect(checkGrounding('Example plant is pet-safe.', [dogsOnly]).verdict).toBe('ungrounded');
+      expect(checkGrounding('Example plant is non-toxic.', [dogsOnly]).verdict).toBe('ungrounded');
+    });
+
+    it('"toxic to dogs but safe for cats" is still a safety claim about cats', () => {
+      expect(checkGrounding('Pothos is toxic to dogs but safe for cats.', [POTHOS]).verdict).toBe(
+        'ungrounded'
+      );
+    });
+
+    it('an unnamed subject against mixed evidence blocks — the conservative reading', () => {
+      expect(checkGrounding('It is safe for your cat.', [MIXED]).verdict).toBe('ungrounded');
+    });
+
+    it('blocks even when every quantitative claim in the same answer is supported', () => {
+      const result = checkGrounding('Keep humidity at 50% or above. Calatheas are safe for cats.', [
+        HUMIDITY_SPAN,
+      ]);
+
+      expect(result.claimsChecked).toHaveLength(1);
+      expect(result.ungroundedClaims).toHaveLength(0);
+      expect(result.ungroundedSafetyClaims).toEqual(['Calatheas are safe for cats.']);
+      expect(result.verdict).toBe('ungrounded');
+    });
+  });
+
+  describe('a safety claim the tool result supports verifies', () => {
+    it.each([
+      'Spider plant is safe for cats.',
+      'Spider plants are non-toxic to cats and dogs per our checker.',
+      'Chlorophytum is harmless to kittens.',
+      'Spider plant is fine for cats.',
+      'Yes — spider plant is pet-safe.',
+      'Cats will be fine around a spider plant.',
+      'La planta araña no es tóxica para gatos ni perros.',
+      'Es segura para gatos.',
+    ])('%s', (answer) => {
+      const result = checkGrounding(answer, [SPIDER]);
+
+      expect(result.verdict).toBe('verified');
+      expect(result.safetyClaimsChecked).toEqual([answer]);
+      expect(result.ungroundedSafetyClaims).toHaveLength(0);
+    });
+
+    it('matches the plant the clause names, not the longest name in the sentence', () => {
+      expect(
+        checkGrounding('Boston fern is safe for cats, unlike asparagus fern.', [FERNS]).verdict
+      ).toBe('verified');
+      expect(
+        checkGrounding('Asparagus fern is safe for cats, unlike Boston fern.', [FERNS]).verdict
+      ).toBe('ungrounded');
+    });
+
+    it('matches aliases through the same normalization the matcher uses', () => {
+      expect(checkGrounding('Airplane plant is safe for cats.', [SPIDER]).verdict).toBe('verified');
+      for (const entry of PET_TOXICITY) {
+        for (const name of [entry.commonName, entry.scientificName, ...entry.aliases]) {
+          expect(normalizeEvidenceName(name)).toBe(normalizeName(name));
+        }
+      }
+    });
+
+    it('checks each clause on its own terms against mixed evidence', () => {
+      expect(
+        checkGrounding('Calathea is safe for cats; the ZZ plant is not.', [MIXED]).verdict
+      ).toBe('verified');
+      expect(
+        checkGrounding('ZZ plant is safe for cats; the calathea is too.', [MIXED]).verdict
+      ).toBe('ungrounded');
+    });
+  });
+
+  describe('what is NOT a categorical safety claim (over-block guards)', () => {
+    it.each([
+      'Is pothos safe for cats?',
+      '¿Es seguro el potus para gatos?',
+      "String of hearts isn't in our checker, so I can't confirm whether it's safe for cats — check the ASPCA list.",
+      'I cannot confirm that it is safe for dogs.',
+      'Pothos is not safe for cats.',
+      'Pothos is unsafe for cats.',
+      'Check the ASPCA toxic and non-toxic plant list or ask your vet.',
+      'Consulta la lista de plantas tóxicas y no tóxicas de la ASPCA.',
+      'No es seguro para gatos.',
+      'No puedo confirmar si el potus es seguro para gatos.',
+      'Pothos is toxic to cats, so keep it out of reach.',
+      'Pothos is toxic to cats, so it is only safe out of reach.',
+      'It is safe to repot now.',
+      'Keep the fertilizer somewhere safe where the dog cannot get it.',
+      'Bright indirect light is best for pothos.',
+      'The soil is fine; water when the top inch is dry.',
+      'Use the pet-safe checker at /pet-safe to confirm.',
+      'If your cat is fine after an hour, keep watching her anyway.',
+      'Do not assume your dog will be fine — call the vet.',
+      'Please call your vet or the ASPCA Animal Poison Control Center (888-426-4435) right away rather than waiting to see if she is okay.',
+    ])('%s', (answer) => {
+      const result = checkGrounding(answer, [POTHOS]);
+
+      expect(result.safetyClaimsChecked).toHaveLength(0);
+      expect(result.ungroundedSafetyClaims).toHaveLength(0);
+      expect(isBlockingVerdict(result)).toBe(false);
+    });
+
+    it('the danger direction is not gated: a false "toxic" is a scare, not a harm', () => {
+      const result = checkGrounding('Spider plant is toxic to cats.', [SPIDER]);
+
+      expect(result.safetyClaimsChecked).toHaveLength(0);
+      expect(isBlockingVerdict(result)).toBe(false);
+    });
+  });
+
+  describe('checkSafetyClaims stands alone for answers with no retrieved context', () => {
+    it('finds and fails the from-memory all-clear', () => {
+      expect(checkSafetyClaims('Pothos is safe for cats.', [])).toEqual({
+        safetyClaimsChecked: ['Pothos is safe for cats.'],
+        ungroundedSafetyClaims: ['Pothos is safe for cats.'],
+      });
+    });
+
+    it('finds nothing in ordinary care advice', () => {
+      expect(checkSafetyClaims('Water when the top inch of soil is dry.', [])).toEqual({
+        safetyClaimsChecked: [],
+        ungroundedSafetyClaims: [],
+      });
+    });
+  });
+
+  describe('mentionsPetSafety (decides whether a streamed turn is held)', () => {
+    it.each([
+      'Is a spider plant safe to keep around my cat?',
+      '¿El potus es seguro para gatos?',
+      'My dog just chewed a sago palm leaf',
+      'Which houseplants are pet-friendly?',
+      'Are orchids poisonous to kittens?',
+    ])('holds: %s', (message) => {
+      expect(mentionsPetSafety(message)).toBe(true);
+    });
+
+    it.each([
+      'How often should I water my monstera?',
+      'Why are the leaves on my calathea curling?',
+      'Set up a reminder to water the pothos every 10 days.',
+    ])('does not hold: %s', (message) => {
+      expect(mentionsPetSafety(message)).toBe(false);
+    });
   });
 });

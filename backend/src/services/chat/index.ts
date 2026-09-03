@@ -23,12 +23,23 @@ import {
 import {
   findTool,
   MAX_PROPOSALS_PER_TURN,
+  PET_TOXICITY_TOOL_NAME,
   sanitizeToolResultForModel,
   TOOL_REGISTRY,
+  type PetToxicityToolResult,
   type ProposeReminderResult,
   type ReminderProposal,
 } from './tools.js';
-import { checkGrounding, isBlockingVerdict, type RetrievedSpan } from './groundingGuard.js';
+import {
+  checkGrounding,
+  checkSafetyClaims,
+  isBlockingVerdict,
+  mentionsPetSafety,
+  normalizeEvidenceName,
+  type PetSafetyEvidence,
+  type RetrievedSpan,
+} from './groundingGuard.js';
+import { PET_TOXICITY } from '../../models/petToxicity.js';
 import {
   appendMessage,
   appendMessagePair,
@@ -60,6 +71,15 @@ const MAX_HISTORY_MESSAGES = 24;
 
 export const GROUNDING_BLOCK_MESSAGE =
   "I couldn't verify every quantitative detail in that answer against the care knowledge I retrieved. Please rephrase the question or check a trusted horticultural source before acting.";
+
+/**
+ * Replaces an answer that asserted a plant is safe for pets without a
+ * non-toxic verdict from the curated table behind it (ADR 0011). A
+ * refusal-with-pointer rather than a bare refusal: the verified checker is
+ * one click away, and the acute case needs a phone number, not a chat.
+ */
+export const PET_SAFETY_BLOCK_MESSAGE =
+  "I can't confirm that plant is safe for pets: this answer didn't come from our verified pet-toxicity table, so I've held it back. Please use the pet-safety checker at /pet-safe (grounded in the ASPCA toxic and non-toxic plant list) or ask your vet. If an animal has already eaten or chewed a plant, or is showing symptoms, contact your vet or the ASPCA Animal Poison Control Center (888-426-4435) right away.";
 
 // Tokens reserved up front by the atomic budget gate (reserveBudget), then
 // reconciled to actual usage when the turn finishes. A modest representative
@@ -106,6 +126,17 @@ Rules:
    the user to confirm via the card, and NEVER say the reminder/task was
    created or scheduled — it wasn't. Propose at most ${MAX_PROPOSALS_PER_TURN}
    reminders in a single reply.
+8. Pet safety. For ANY question about whether a plant is safe, toxic,
+   poisonous or pet-friendly for a cat, dog or other pet — including routine
+   "is X ok around my cat?" lookups — call ${PET_TOXICITY_TOOL_NAME} first and
+   answer ONLY from its result: give the cats/dogs verdict and the note. Never
+   state or imply that a plant is safe, non-toxic or fine for pets from
+   memory. If the result says the plant is not in our checker, say exactly
+   that, do not guess a verdict, and point the user to the ASPCA toxic and
+   non-toxic plant list or their vet. If an animal has ALREADY eaten or
+   chewed a plant, or is showing symptoms, do not assess or reassure: tell
+   the user to contact their vet or the ASPCA Animal Poison Control Center
+   (888-426-4435) right away.
 
 Output: plain text. No markdown headers. Lightweight bullet points are okay.`;
 
@@ -233,6 +264,47 @@ function quantitativeSpanFromToolResult(toolName: string, value: unknown): Retri
   return facts.length > 0 ? { source: `tool:${toolName}`, text: facts.join('\n') } : null;
 }
 
+/**
+ * The structured evidence a `check_pet_toxicity` result contributes (ADR
+ * 0011). Names come from the curated table by slug so aliases ("devil's ivy")
+ * match too; a match whose slug the table no longer knows falls back to the
+ * names on the result itself. A `not_in_checker` or `invalid` result yields a
+ * span with EMPTY evidence: it keeps the guard active (and the stream held)
+ * without grounding anything, which is exactly the "model must not fill the
+ * gap with its own belief" contract. The span text carries no digits, so it
+ * cannot accidentally ground an unrelated numeric claim.
+ */
+function spanFromPetToxicityResult(value: unknown): RetrievedSpan {
+  const result = (value ?? {}) as Partial<PetToxicityToolResult>;
+  if (result.status === 'found' && Array.isArray(result.matches)) {
+    const petSafety: PetSafetyEvidence[] = result.matches.map((match) => {
+      const entry = PET_TOXICITY.find((e) => e.slug === match.slug);
+      const names = entry
+        ? [entry.commonName, entry.scientificName, ...entry.aliases]
+        : [match.commonName, match.scientificName];
+      return {
+        names: names.map(normalizeEvidenceName).filter(Boolean),
+        cats: match.cats,
+        dogs: match.dogs,
+      };
+    });
+    return {
+      source: `tool:${PET_TOXICITY_TOOL_NAME}`,
+      text: result.matches
+        .map(
+          (m) => `${m.commonName} (${m.scientificName}): cats ${m.cats}; dogs ${m.dogs}. ${m.note}`
+        )
+        .join('\n'),
+      petSafety,
+    };
+  }
+  const label =
+    result.status === 'not_in_checker'
+      ? `No pet-toxicity verdict for "${String(result.query ?? '')}": not in our checker.`
+      : 'Pet-toxicity lookup returned no verdict.';
+  return { source: `tool:${PET_TOXICITY_TOOL_NAME}`, text: label, petSafety: [] };
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value !== null && typeof value === 'object') {
@@ -244,20 +316,36 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
-/** Collect RAG context already present in the trimmed model history. */
+/**
+ * Collect RAG context — and pet-toxicity verdicts — already present in the
+ * trimmed model history. Both keep the guard active on a follow-up turn
+ * ("and is it ok for dogs too?") so an answer drawn from an earlier tool
+ * result is checked against that result rather than waved through.
+ */
 function collectHistoryRagSpans(history: ChatMessageRecord[]): RetrievedSpan[] {
   const ragToolUseIds = new Set<string>();
+  const toxicityToolUseIds = new Set<string>();
   const spans: RetrievedSpan[] = [];
   for (const message of history) {
     for (const block of message.content) {
       if (block.type === 'tool_use' && block.name === 'search_care_knowledge') {
         ragToolUseIds.add(block.id);
       }
+      if (block.type === 'tool_use' && block.name === PET_TOXICITY_TOOL_NAME) {
+        toxicityToolUseIds.add(block.id);
+      }
       if (block.type === 'tool_result' && ragToolUseIds.has(block.tool_use_id)) {
         try {
           spans.push(...spansFromToolResult(JSON.parse(block.content) as unknown));
         } catch {
           // A malformed historical tool result cannot provide grounding.
+        }
+      }
+      if (block.type === 'tool_result' && toxicityToolUseIds.has(block.tool_use_id)) {
+        try {
+          spans.push(spanFromPetToxicityResult(JSON.parse(block.content) as unknown));
+        } catch {
+          // Likewise: no parse, no evidence — and no all-clear.
         }
       }
     }
@@ -616,6 +704,11 @@ async function* turnEvents(
 
   let messagesForModel: BedrockMessage[];
   const retrievedSpans: RetrievedSpan[] = [];
+  // A pet-safety question holds streamed text until the completed answer
+  // passes the guard, for the same reason RAG answers are held: a from-memory
+  // "that one's fine" that has already streamed cannot be retracted, and the
+  // client keeps streamed text over the final result (ADR 0011).
+  const petSafetyTurn = mentionsPetSafety(message);
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCost = 0;
@@ -676,7 +769,7 @@ async function* turnEvents(
         // otherwise an unsupported claim could be visible before we retract it.
         const stream = invokeChatModelStream(modelArgs);
         let sawText = false;
-        heldStreamForGrounding = retrievedSpans.length > 0;
+        heldStreamForGrounding = retrievedSpans.length > 0 || petSafetyTurn;
         for (;;) {
           const next = await stream.next();
           if (next.done) {
@@ -706,19 +799,30 @@ async function* turnEvents(
         const grounding = checkGrounding(extractAssistantText(response.content), retrievedSpans);
         const sourceCount = new Set(retrievedSpans.map((span) => span.source)).size;
         if (isBlockingVerdict(grounding)) {
+          const blockedOnSafety = grounding.ungroundedSafetyClaims.length > 0;
           // Never log the claim text: chat content can itself contain PII.
           logger.warn(
             {
               conversationId,
               claimsChecked: grounding.claimsChecked.length,
               ungroundedClaimCount: grounding.ungroundedClaims.length,
+              safetyClaimsChecked: grounding.safetyClaimsChecked.length,
+              ungroundedSafetyClaimCount: grounding.ungroundedSafetyClaims.length,
+              blockedOn: blockedOnSafety ? 'safety' : 'quantitative',
               sourceCount,
             },
             'chat_grounding_blocked'
           );
+          // A pet-safety block takes precedence: its message carries the
+          // pointer to the verified checker and the poison-control line.
           response = {
             ...response,
-            content: [{ type: 'text', text: GROUNDING_BLOCK_MESSAGE }],
+            content: [
+              {
+                type: 'text',
+                text: blockedOnSafety ? PET_SAFETY_BLOCK_MESSAGE : GROUNDING_BLOCK_MESSAGE,
+              },
+            ],
           };
         } else if (grounding.verdict === 'verified') {
           // Counts only: never log answer or source text, which can contain
@@ -727,6 +831,7 @@ async function* turnEvents(
             {
               conversationId,
               claimsChecked: grounding.claimsChecked.length,
+              safetyClaimsChecked: grounding.safetyClaimsChecked.length,
               sourceCount,
             },
             'chat_grounding_checked'
@@ -739,11 +844,37 @@ async function* turnEvents(
             {
               conversationId,
               claimsChecked: grounding.claimsChecked.length,
+              safetyClaimsChecked: grounding.safetyClaimsChecked.length,
               unclassifiedNumericCount: grounding.unclassifiedNumericSentences.length,
               sourceCount,
             },
             'chat_grounding_unverified'
           );
+        }
+      } else if (response.stopReason !== 'tool_use') {
+        // No retrieved context at all. The quantitative guard stays inactive
+        // here by design (ADR 0009), but a categorical pet-safety claim with
+        // nothing behind it is the primary failure mode this turn can have —
+        // the model answered from memory instead of calling the tool — so the
+        // safety dimension is checked regardless (ADR 0011).
+        const safety = checkSafetyClaims(extractAssistantText(response.content), []);
+        if (safety.ungroundedSafetyClaims.length > 0) {
+          logger.warn(
+            {
+              conversationId,
+              claimsChecked: 0,
+              ungroundedClaimCount: 0,
+              safetyClaimsChecked: safety.safetyClaimsChecked.length,
+              ungroundedSafetyClaimCount: safety.ungroundedSafetyClaims.length,
+              blockedOn: 'safety',
+              sourceCount: 0,
+            },
+            'chat_grounding_blocked'
+          );
+          response = {
+            ...response,
+            content: [{ type: 'text', text: PET_SAFETY_BLOCK_MESSAGE }],
+          };
         }
       }
 
@@ -842,8 +973,14 @@ async function* turnEvents(
           if (use.name === 'search_care_knowledge') {
             retrievedSpans.push(...spansFromToolResult(out));
           }
+          if (use.name === PET_TOXICITY_TOOL_NAME) {
+            // Structured verdicts, not derived numbers: a safety claim is
+            // grounded by a non-toxic verdict for the plant and species it
+            // names, and by nothing else (ADR 0011).
+            retrievedSpans.push(spanFromPetToxicityResult(out));
+          }
           const serialized = JSON.stringify(out);
-          if (use.name !== 'search_care_knowledge') {
+          if (use.name !== 'search_care_knowledge' && use.name !== PET_TOXICITY_TOOL_NAME) {
             // Historical RAG context keeps the quantitative guard active on a
             // follow-up turn. Add the current turn's authoritative tool result
             // to the same evidence set so a real plant count, temperature, or

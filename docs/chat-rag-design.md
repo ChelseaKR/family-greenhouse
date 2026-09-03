@@ -50,15 +50,16 @@ A chat companion inside Family Greenhouse that answers plant care questions with
 
 ## Tool catalog (V1, all read-only)
 
-| Tool                             | Purpose                    | Reads                                                    |
-| -------------------------------- | -------------------------- | -------------------------------------------------------- |
-| `list_household_plants()`        | "Tell me about my plants"  | DDB `Plant` items for the active household               |
-| `get_plant_details(plantId)`     | Drill in on one plant      | Plant + photo timeline + recent tasks                    |
-| `list_upcoming_tasks(days?)`     | "What needs attention?"    | DDB Task items, default 7-day window                     |
-| `list_recent_completions(days?)` | "When did I last water X?" | DDB completion items                                     |
-| `get_household_climate()`        | Climate-aware answers      | DDB climate item; lat/lon + saved zone                   |
-| `lookup_species(query)`          | Generic species info       | Perenual API (already wrapped in `services/perenual.ts`) |
-| `search_care_knowledge(query)`   | Hand-curated articles      | DDB RAG embeddings (see above)                           |
+| Tool                             | Purpose                    | Reads                                                                 |
+| -------------------------------- | -------------------------- | --------------------------------------------------------------------- |
+| `list_household_plants()`        | "Tell me about my plants"  | DDB `Plant` items for the active household                            |
+| `get_plant_details(plantId)`     | Drill in on one plant      | Plant + photo timeline + recent tasks                                 |
+| `list_upcoming_tasks(days?)`     | "What needs attention?"    | DDB Task items, default 7-day window                                  |
+| `list_recent_completions(days?)` | "When did I last water X?" | DDB completion items                                                  |
+| `get_household_climate()`        | Climate-aware answers      | DDB climate item; lat/lon + saved zone                                |
+| `lookup_species(query)`          | Generic species info       | Perenual API (already wrapped in `services/perenual.ts`)              |
+| `search_care_knowledge(query)`   | Hand-curated articles      | DDB RAG embeddings (see above)                                        |
+| `check_pet_toxicity(plantName)`  | "Is X safe for my cat?"    | `PET_TOXICITY` (static, ASPCA-grounded; no household data) — ADR 0011 |
 
 **Out of scope for V1 (deferred to V2):**
 
