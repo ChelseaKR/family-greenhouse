@@ -847,6 +847,7 @@ locals {
     # call, expose only a PII-free due-task projection, and are IP-rate-limited.
     # Served by the tasks group (it owns task listing + completion).
     "GET /sitter/{token}"                          = { group = "tasks", auth = "none" }
+    "GET /sitter/{token}/brief"                    = { group = "tasks", auth = "none" }
     "POST /sitter/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
 
     # --- households (invite preview is public) ---

@@ -7,6 +7,10 @@ import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../midd
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit, rateLimit } from '../../middleware/rateLimit.js';
 import * as sitterService from '../../services/sitterService.js';
+import { buildSitterBrief } from '../../services/sitterBrief.js';
+import { sitterBriefIncluded } from '../../services/sitterPlanGate.js';
+import * as billing from '../../services/billing.js';
+import { getPlan } from '../../models/plans.js';
 import {
   createTaskSchema,
   updateTaskSchema,
@@ -604,6 +608,36 @@ export const getSitterView = createHandler(
   // page-load + a few completions while blunting token scraping.
 ).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
 
+// GET /sitter/{token}/brief
+//
+// The handoff brief: the same household, seen plant by plant instead of task
+// by task — space, placement, the household's own care words, the verified
+// pet-toxicity entry, the latest photo, and the tasks due inside the window.
+// Same token, same generic 404, same PII posture as the task view: no member
+// identity, no household id, no saved climate location, no task notes.
+//
+// The brief is the paid half of the Away Kit (ADR 0015). On a plan that does
+// not include it we answer the SAME generic 404 as an invalid token rather
+// than a 402: the sitter is not the buyer, and an anonymous caller should not
+// be told which tier a household is on. The creating member sees the upsell
+// on the management side, where they can act on it.
+export const getSitterBrief = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const token = event.pathParameters?.token ?? '';
+    const link = await sitterService.getActiveLink(token);
+    if (!link) {
+      throw createHttpError(404, 'This sitter link is invalid or has expired.');
+    }
+    const plan = getPlan((await billing.getHouseholdSubscription(link.householdId)).planId);
+    if (!sitterBriefIncluded(plan)) {
+      throw createHttpError(404, 'This sitter link is invalid or has expired.');
+    }
+    return successResponse(await buildSitterBrief(link));
+  }
+  // Anonymous, like the task view. The brief is a heavier read (plants +
+  // spaces + tasks), so the per-IP allowance is tighter than the 60/min list.
+).use(rateLimit({ perWindowMs: 60_000, max: 30 }));
+
 // POST /sitter/{token}/tasks/{taskId}/complete
 //
 // Complete a single task on behalf of the sitter. We re-validate the token
@@ -727,5 +761,6 @@ export const handler = createRouter({
   'DELETE /tasks/vacation/{userId}': deleteVacation,
   'GET /tasks/vacation': listVacations,
   'GET /sitter/{token}': getSitterView,
+  'GET /sitter/{token}/brief': getSitterBrief,
   'POST /sitter/{token}/tasks/{taskId}/complete': completeSitterTask,
 });

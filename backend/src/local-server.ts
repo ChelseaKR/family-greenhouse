@@ -49,8 +49,10 @@ import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
+  sitterBriefIncluded,
   sitterWindowDays,
 } from './services/sitterPlanGate.js';
+import { resolveCareNote, resolvePetSafety } from './services/sitterBrief.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
@@ -2726,6 +2728,82 @@ app.get('/sitter/:token', (req, res) => {
     expiresAt: link.expiresAt,
     tasks: sitterTasksFor(link.householdId, link.expiresAt),
   });
+});
+
+/** The handoff brief for one household over one link window. Mirrors
+ *  services/sitterBrief.buildSitterBrief — plant by plant instead of task by
+ *  task, with the household's own care words, the VERIFIED pet-toxicity entry
+ *  (never generated, null when the curated table has no match), the latest
+ *  photo, and the tasks due inside the window. */
+function sitterBriefFor(link: SitterLink) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const cutoffIso = link.expiresAt > nowIso ? link.expiresAt : nowIso;
+
+  const plants = [...db.plants.values()].filter(
+    (p) => p.householdId === link.householdId && (p.status ?? 'active') === 'active'
+  );
+  const tasksByPlant = new Map<
+    string,
+    Array<{ taskId: string; taskType: string; dueDate: string; overdue: boolean }>
+  >();
+  for (const task of db.tasks.values()) {
+    if (task.householdId !== link.householdId || task.nextDue > cutoffIso) continue;
+    const list = tasksByPlant.get(task.plantId) ?? [];
+    list.push({
+      taskId: task.id,
+      taskType: task.customType || task.type,
+      dueDate: task.nextDue,
+      overdue: task.nextDue < nowIso,
+    });
+    tasksByPlant.set(task.plantId, list);
+  }
+  for (const list of tasksByPlant.values()) {
+    list.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+  }
+
+  const entries = plants.map((plant) => ({
+    plantId: plant.id,
+    name: plant.name,
+    spaceName: plant.spaceId
+      ? (db.spaces.get(plant.spaceId)?.name ?? plant.location ?? null)
+      : (plant.location ?? null),
+    placementNote: plant.placementNote?.trim() || null,
+    ...resolveCareNote(plant),
+    photoUrl: plant.imageUrl ?? null,
+    petSafety: resolvePetSafety(plant),
+    tasks: tasksByPlant.get(plant.id) ?? [],
+  }));
+  entries.sort((a, b) => {
+    const aDue = a.tasks[0]?.dueDate;
+    const bDue = b.tasks[0]?.dueDate;
+    if (aDue && bDue) return aDue < bDue ? -1 : aDue > bDue ? 1 : a.name.localeCompare(b.name);
+    if (aDue) return -1;
+    if (bDue) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return {
+    label: link.label,
+    startsAt: link.startsAt,
+    expiresAt: link.expiresAt,
+    plants: entries,
+  };
+}
+
+// GET /sitter/:token/brief
+app.get('/sitter/:token/brief', (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  // Paid half of the Away Kit. A plan without it answers the SAME generic 404
+  // as a bad token — an anonymous sitter is never told the household's tier.
+  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
+  if (!sitterBriefIncluded(plan)) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  res.json(sitterBriefFor(link));
 });
 
 const sitterCompleteTaskSchema = z

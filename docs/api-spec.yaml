@@ -367,6 +367,64 @@ paths:
                         overdue: { type: boolean }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /sitter/{token}/brief:
+    get:
+      summary: Public plant-sitter handoff brief — the same household plant by plant (space, placement note, the household's own care words, the verified pet-toxicity entry, latest photo, and tasks due inside the link window). No auth; the token is the only credential. Included from the Garden plan up; on a plan without it, and for an invalid/expired token alike, the response is the same generic 404.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The handoff brief (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  label: { type: string, nullable: true }
+                  startsAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  plants:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        plantId: { type: string }
+                        name: { type: string }
+                        spaceName: { type: string, nullable: true }
+                        placementNote: { type: string, nullable: true }
+                        careNote:
+                          {
+                            type: string,
+                            nullable: true,
+                            description: The household's own care words; null when they wrote none — never generated.,
+                          }
+                        careNoteSource: { type: string, nullable: true, enum: [rule, notes] }
+                        photoUrl: { type: string, nullable: true }
+                        petSafety:
+                          type: object
+                          nullable: true
+                          description: Entry from the curated, ASPCA-grounded table. Null means no verdict, never "safe".
+                          properties:
+                            slug: { type: string }
+                            commonName: { type: string }
+                            scientificName: { type: string }
+                            cats: { type: string, enum: [toxic, non-toxic] }
+                            dogs: { type: string, enum: [toxic, non-toxic] }
+                            note: { type: string }
+                            matchedOn: { type: string }
+                        tasks:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              taskId: { type: string }
+                              taskType: { type: string }
+                              dueDate: { type: string, format: date-time }
+                              overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /sitter/{token}/tasks/{taskId}/complete:
     post:
       summary: Public plant-sitter task completion. Validates the token and that the task belongs to the token's household; attributed as "a plant sitter". No auth, no PII.

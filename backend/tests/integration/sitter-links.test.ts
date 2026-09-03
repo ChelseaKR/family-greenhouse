@@ -405,3 +405,89 @@ describe('sitter links are open to every member; revocation is creator-or-admin'
     expect((await request(app).get(`/sitter/${theirs.body.token}`)).status).toBe(404);
   });
 });
+
+describe('sitter handoff brief (public, paid half of the Away Kit)', () => {
+  async function link(planId: 'seedling' | 'garden' = 'garden'): Promise<string> {
+    db.households.get(seedHouseholdId)!.planId = planId;
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(planId === 'garden' ? 21 : 7), label: 'Our plants' });
+    expect(res.status).toBe(201);
+    return res.body.token as string;
+  }
+
+  it('renders the household’s own notes, place, photo and window tasks — no auth, no PII', async () => {
+    const plant = db.plants.get(seedPlantId)!;
+    plant.placementNote = 'east window, top shelf';
+    plant.notes = 'Bottom-water this one';
+    plant.species = 'Monstera deliciosa';
+    db.tasks.get(seedTaskId)!.notes = 'Use the private measuring cup';
+    db.households.get(seedHouseholdId)!.location = { city: 'Private Climate City', lat: 1, lon: 2 };
+
+    const token = await link();
+    const res = await request(app).get(`/sitter/${token}/brief`); // no Authorization
+    expect(res.status).toBe(200);
+    expect(res.body.label).toBe('Our plants');
+
+    const entry = res.body.plants.find((p: { plantId: string }) => p.plantId === seedPlantId);
+    expect(entry).toMatchObject({
+      name: 'Monstera',
+      spaceName: 'Living Room',
+      placementNote: 'east window, top shelf',
+      careNote: 'Bottom-water this one',
+      careNoteSource: 'notes',
+    });
+    // Verdicts come from the curated table, never generated.
+    expect(entry.petSafety).toMatchObject({ slug: 'monstera', cats: 'toxic', dogs: 'toxic' });
+    expect(entry.tasks.map((t: { taskId: string }) => t.taskId)).toContain(seedTaskId);
+
+    const blob = JSON.stringify(res.body);
+    expect(blob).not.toContain(SEED_EMAIL);
+    expect(blob).not.toContain('Test User');
+    expect(blob).not.toContain(seedHouseholdId);
+    expect(blob).not.toContain('Private Climate City');
+    expect(blob).not.toContain('Use the private measuring cup');
+  });
+
+  it('renders a plant with no notes as having none, and no toxicity verdict it cannot source', async () => {
+    const plant = db.plants.get(seedPlantId)!;
+    plant.placementNote = null;
+    plant.notes = null;
+    plant.species = 'Nothing recognisable here';
+    plant.name = 'Doris';
+
+    const token = await link();
+    const res = await request(app).get(`/sitter/${token}/brief`);
+    expect(res.status).toBe(200);
+    const entry = res.body.plants.find((p: { plantId: string }) => p.plantId === seedPlantId);
+    expect(entry.careNote).toBeNull();
+    expect(entry.careNoteSource).toBeNull();
+    expect(entry.placementNote).toBeNull();
+    expect(entry.petSafety).toBeNull();
+  });
+
+  it('answers the same generic 404 on a free plan as it does for a bad token', async () => {
+    const token = await link('seedling');
+    const onFree = await request(app).get(`/sitter/${token}/brief`);
+    const onGarbage = await request(app).get(`/sitter/${'f'.repeat(64)}/brief`);
+    expect(onFree.status).toBe(404);
+    expect(onGarbage.status).toBe(404);
+    expect(onFree.body.message).toBe(onGarbage.body.message);
+    // The task list itself still works on the free tier.
+    expect((await request(app).get(`/sitter/${token}`)).status).toBe(200);
+  });
+
+  it('404s the brief once the link is revoked', async () => {
+    const token = await link();
+    const auth = await loginAsSeed();
+    const listed = await request(app)
+      .get(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${auth}`);
+    await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${listed.body[0].id}`)
+      .set('Authorization', `Bearer ${auth}`);
+    expect((await request(app).get(`/sitter/${token}/brief`)).status).toBe(404);
+  });
+});
