@@ -14,6 +14,7 @@ import { formatDate } from '@/i18n/format';
 import { useAuthStore } from '@/store/authStore';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { groupSitterLinks, sitterLinkState } from './sitterLinkState';
+import { SitterGapPrompt } from './SitterGapPrompt';
 import { SITTER_LINK_MAX_DAYS_CEILING, sitterLinkLimitsFor } from './sitterPlanLimits';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
 
@@ -261,6 +262,10 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
           )}
         </form>
       )}
+
+      {/* Before the trip, not after: the brief is only as good as the notes,
+          so name the gaps while there is still time to fill them. */}
+      {!created && <SitterGapPrompt householdId={householdId} />}
 
       {createMutation.isError && (
         <Alert variant="error" className="mt-4">

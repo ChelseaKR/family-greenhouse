@@ -642,6 +642,18 @@
       "sharedBy": "Shared by {{name}}",
       "anotherMember": "another member",
       "revokeNotYours": "Only its creator or an admin can revoke this"
+    },
+    "sitterGaps": {
+      "heading": "Before you go: your sitter can only read what you wrote down.",
+      "noCareNote_one": "{{count}} plant has no watering note — your sitter will be guessing:",
+      "noCareNote_other": "{{count}} plants have no watering note — your sitter will be guessing:",
+      "noPlacement_one": "{{count}} plant has no placement note — your sitter has to find it:",
+      "noPlacement_other": "{{count}} plants have no placement note — your sitter has to find them:",
+      "andMore_one": "and {{count}} more",
+      "andMore_other": "and {{count}} more",
+      "help": "Open a plant to add its note. A sentence each is enough — it is what the brief shows your sitter.",
+      "allCovered": "Every plant has a care note and a placement note. Your sitter has what they need.",
+      "checkFailed": "We couldn’t check which plants are missing notes just now, so this list may be incomplete. Your sitter only sees notes you have written."
     }
   },
   "sitter": {

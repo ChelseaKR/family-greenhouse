@@ -657,6 +657,21 @@
       "sharedBy": "Compartido por {{name}}",
       "anotherMember": "otro miembro",
       "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo"
+    },
+    "sitterGaps": {
+      "heading": "Antes de irte: tu cuidador solo puede leer lo que hayas escrito.",
+      "noCareNote_one": "{{count}} planta no tiene nota de riego; tu cuidador tendrá que adivinar:",
+      "noCareNote_many": "{{count}} plantas no tienen nota de riego; tu cuidador tendrá que adivinar:",
+      "noCareNote_other": "{{count}} plantas no tienen nota de riego; tu cuidador tendrá que adivinar:",
+      "noPlacement_one": "{{count}} planta no tiene nota de ubicación; tu cuidador tendrá que buscarla:",
+      "noPlacement_many": "{{count}} plantas no tienen nota de ubicación; tu cuidador tendrá que buscarlas:",
+      "noPlacement_other": "{{count}} plantas no tienen nota de ubicación; tu cuidador tendrá que buscarlas:",
+      "andMore_one": "y {{count}} más",
+      "andMore_many": "y {{count}} más",
+      "andMore_other": "y {{count}} más",
+      "help": "Abre una planta para añadir su nota. Con una frase basta: es lo que la guía le mostrará a tu cuidador.",
+      "allCovered": "Todas las plantas tienen nota de cuidado y de ubicación. Tu cuidador tiene lo que necesita.",
+      "checkFailed": "No pudimos comprobar qué plantas no tienen notas en este momento, así que esta lista puede estar incompleta. Tu cuidador solo ve las notas que hayas escrito."
     }
   },
   "sitter": {

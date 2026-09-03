@@ -47,6 +47,8 @@ function renderCard(
 ) {
   signInAs(role);
   server.use(
+    // The card now also renders the pre-trip gap prompt, which reads plants.
+    http.get(`${API}/plants`, () => HttpResponse.json([])),
     http.get(`${API}/households/hh-1/sitter-links`, () =>
       links === 'fail' ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(links)
     ),
@@ -251,7 +253,10 @@ describe('SitterLinksCard creation window', () => {
         );
       })
     );
-    server.use(http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'garden' })));
+    server.use(
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'garden' })),
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
