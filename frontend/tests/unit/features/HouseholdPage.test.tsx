@@ -65,6 +65,10 @@ describe('HouseholdPage', () => {
         })
       ),
       http.get(`${API}/tasks/vacation`, () => HttpResponse.json([])),
+      // The care-split card reads the household's own activity feed and task
+      // list — both already member-visible, neither previously fetched here.
+      http.get(`${API}/households/hh-1/activity`, () => HttpResponse.json([])),
+      http.get(`${API}/tasks`, () => HttpResponse.json([])),
       http.get(`${API}/me/households`, () =>
         HttpResponse.json([
           { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'member', joinedAt: '' },
@@ -81,6 +85,16 @@ describe('HouseholdPage', () => {
     expect(screen.queryByText('alice@example.com')).not.toBeInTheDocument();
     expect(screen.queryByText('bob@example.com')).not.toBeInTheDocument();
     expect(screen.queryByText(/@example\.com/)).not.toBeInTheDocument();
+  });
+
+  it('shows every member the same care split, admin or not', async () => {
+    renderPage();
+
+    // The caller here is a plain member: the split is shared visibility, not
+    // an admin report.
+    expect(await screen.findByText('Who’s carrying the care')).toBeInTheDocument();
+    const rows = await screen.findAllByRole('rowheader');
+    expect(rows.map((row) => row.textContent)).toEqual(['Alice (you)', 'Bob']);
   });
 
   it('does not offer a dead location form when the climate provider is unavailable', async () => {

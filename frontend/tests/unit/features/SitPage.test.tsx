@@ -68,6 +68,16 @@ describe('SitPage', () => {
     expect(getView).toHaveBeenCalledWith('a'.repeat(64), expect.anything());
   });
 
+  it('tells the sitter how long they are covering for', async () => {
+    // The window is the whole scope of what a sitter has been handed, and the
+    // API has always returned it — the page just never said.
+    getView.mockResolvedValue(view);
+    renderPage();
+
+    expect(await screen.findByText(/You’re covering until/)).toBeInTheDocument();
+    expect(screen.getByText(/stops working on its own/)).toBeInTheDocument();
+  });
+
   it('checks a task off and removes it from the list (optimistic)', async () => {
     getView.mockResolvedValue(view);
     completeTask.mockResolvedValue({ ...waterTask, overdue: false });

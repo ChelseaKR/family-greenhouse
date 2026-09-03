@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { PublicShell } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { sitterService, SitterLinkInactiveError, type SitterTask } from '@/services/sitterService';
+import { formatDate } from '@/i18n/format';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 
 /**
@@ -51,6 +53,7 @@ function dueLabel(task: SitterTask, now: number): string {
 
 export function SitPage() {
   const { token = '' } = useParams<{ token: string }>();
+  const { t } = useTranslation();
 
   useMetaTags({
     title: 'Plant-sitting — Family Greenhouse',
@@ -58,6 +61,10 @@ export function SitPage() {
   });
 
   const [label, setLabel] = useState<string | null>(null);
+  // The end of the coverage window. The API has always returned it; nothing
+  // showed it, so a sitter had no way to know how long they were on the hook
+  // — or that their access stops on its own.
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [tasks, setTasks] = useState<SitterTask[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'inactive' | 'error'>('loading');
   // taskIds currently being completed (optimistic in-flight), and ones done.
@@ -71,6 +78,7 @@ export function SitPage() {
       .getView(token, controller.signal)
       .then((view) => {
         setLabel(view.label);
+        setExpiresAt(view.expiresAt);
         setTasks(view.tasks);
         setStatus('ready');
       })
@@ -149,6 +157,11 @@ export function SitPage() {
             Here’s what needs a little care while they’re away. Tap <strong>Done</strong> once
             you’ve looked after each one — no account needed.
           </p>
+          {expiresAt && (
+            <p className="mt-2 text-sm text-gray-600">
+              {t('sitter.coveringUntil', { date: formatDate(expiresAt) })}
+            </p>
+          )}
 
           {/* Live region announces completions to screen readers. */}
           <div className="mt-10 space-y-3" aria-live="polite">
