@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { NotFoundPage } from '@/components/NotFoundPage';
 import { Toaster } from '@/components/Toaster';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -154,10 +155,12 @@ function App() {
           <div id="main-content" tabIndex={-1}>
             <Routes>
               {/* Public routes */}
-              <Route
-                path="/"
-                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />}
-              />
+              {/* `/` is where household creation and invite acceptance both
+                  land, so it is the one place that can route a brand-new
+                  household into the first run without either of those flows
+                  knowing it exists. HomeRedirect is imported eagerly (it is a
+                  few lines and does no I/O) so this hop stays instant. */}
+              <Route path="/" element={isAuthenticated ? <HomeRedirect /> : <LandingPage />} />
               <Route
                 path="/login"
                 element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
