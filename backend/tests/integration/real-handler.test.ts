@@ -299,12 +299,12 @@ describe('real-handler: task create → complete idempotency', () => {
 });
 
 describe('real-handler: plan-cap enforcement (402)', () => {
-  it('enforces the free seedling plan 10-plant cap with a real 402 from the real handler', async () => {
+  it('enforces the free seedling plan 20-plant cap with a real 402 from the real handler', async () => {
     const plantsHandler = await import('../../src/handlers/plants/handler.js');
     const { householdId } = await seedHousehold(store, { admin: ADMIN });
-    // Default plan is "seedling" (10 plants). Fill it via the real create
-    // handler so the transactional counter increments exactly as in prod.
-    for (let i = 0; i < 10; i++) {
+    // Default plan is "seedling" (20 plants, ADR 0014). Fill it via the real
+    // create handler so the transactional counter increments as in prod.
+    for (let i = 0; i < 20; i++) {
       const res = await invokeHandler(plantsHandler.createPlant, {
         method: 'POST',
         routeKey: 'POST /plants',
@@ -314,7 +314,7 @@ describe('real-handler: plan-cap enforcement (402)', () => {
       expect(res.statusCode).toBe(201);
     }
 
-    // The 11th create must trip the cap. The service throws PlanLimitError;
+    // The 21st create must trip the cap. The service throws PlanLimitError;
     // the REAL handler maps it to a 402 with the upgrade copy.
     const overflow = await invokeHandler(plantsHandler.createPlant, {
       method: 'POST',
@@ -324,7 +324,7 @@ describe('real-handler: plan-cap enforcement (402)', () => {
     });
     expect(overflow.statusCode).toBe(402);
     expect(overflow.body).toMatchObject({
-      message: expect.stringMatching(/limited to 10 plants/),
+      message: expect.stringMatching(/limited to 20 plants/),
     });
   });
 

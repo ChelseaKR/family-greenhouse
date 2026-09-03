@@ -241,8 +241,16 @@ export type DoubleCareMonthly =
   | { status: 'not_in_plan' };
 
 export interface DailyAnalytics {
+  /** The window actually served — may be shorter than asked for (below). */
   days: number;
   series: Array<{ date: string; count: number }>;
+  /**
+   * The plan's analytics window in days (ADR 0014): a number means the
+   * series was clamped to that trailing window; `null` means the plan has no
+   * ceiling. `undefined` is an older backend that did not say — unknown, and
+   * rendered as neither.
+   */
+  historyLimitDays?: number | null;
   /** Absent on a backend that predates double-care — treat as unavailable. */
   doubleCare?: DoubleCareMonthly;
 }
@@ -430,4 +438,10 @@ export interface YearInReview {
   /** Every plant with ≥1 completion this year, most-completed first — NOT a
    *  capped top-N, so absence from this list is a genuine zero. */
   topPlants: Array<{ plantId: string; count: number }>;
+  /** Same three-state meaning as `DailyAnalytics.historyLimitDays`. When a
+   *  number, the aggregates cover `windowStart`–`windowEnd` (the year
+   *  intersected with the trailing window), not the whole year. */
+  historyLimitDays?: number | null;
+  windowStart?: string;
+  windowEnd?: string;
 }

@@ -122,7 +122,7 @@ export default function SharingPlantCare() {
       <p>
         You don&rsquo;t need our app. You need a shared system that meets the three criteria above.{' '}
         <a href="/">Family Greenhouse</a> happens to be the one I built &mdash; collaborative by
-        default and structured around exactly this dynamic. It is free for households with up to 10
+        default and structured around exactly this dynamic. It is free for households with up to 20
         plants. If a Google Sheet works for you, use the Google Sheet.
       </p>
       <p>

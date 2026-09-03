@@ -16,7 +16,7 @@ const planBandCopy = {
   open: {
     title: 'One plan covers the whole household',
     description:
-      'Family Greenhouse is priced per household, not per person. Up to 6 household members share a single plan, and the free tier holds 10 plants with no credit card. Paid plans raise both limits and begin with a 14-day trial.',
+      'Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 3 people and 20 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. Paid plans begin with a 14-day trial.',
     footerNote: 'Trial terms, cancellation, and how plan changes work are covered in full on the',
     footerLink: 'plans page',
   },
@@ -30,7 +30,7 @@ const planBandCopy = {
   held: {
     title: 'Start free; paid plans are paused',
     description:
-      'Free accounts include up to 10 plants and 6 household members, with no credit card. Paid plans, purchases, and plan changes remain unavailable.',
+      'Free accounts include one home, up to 3 household members and 20 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.',
     footerNote: 'Read the full',
     footerLink: 'plan-status notice',
   },

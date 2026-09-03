@@ -5,6 +5,7 @@ import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { householdService } from '@/services/householdService';
 import { taskService } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
+import { Alert } from '@/components/Alert';
 import { Card, CardHeader } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -92,6 +93,17 @@ export function AnalyticsPage() {
 
   if (!householdId) return null;
 
+  // The plan's analytics window (ADR 0014). A number means the free tier's
+  // trailing window applied and the cards below describe THAT, not the year;
+  // `null` is a paid tier with no ceiling; `undefined` is an older backend
+  // that did not say — treated as no window rather than invented.
+  const windowDays =
+    typeof review?.historyLimitDays === 'number'
+      ? review.historyLimitDays
+      : typeof daily?.historyLimitDays === 'number'
+        ? daily.historyLimitDays
+        : null;
+
   // KPI tiles use already-fetched data — no extra round-trip.
   const overdueTasks = (tasks ?? []).filter((t) => isOverdue(t.nextDue));
 
@@ -154,6 +166,19 @@ export function AnalyticsPage() {
 
       {/* Double-care this month (household toolkit) */}
       <DoubleCareCard loading={dailyLoading} daily={daily} />
+      {/* Why the window is what it is. The data behind it is never deleted —
+          only the rendered range is the plan's — and the note says so, and
+          where to go. */}
+      {windowDays !== null && (
+        <Alert variant="info">
+          <p>
+            {t('analytics.historyWindow.note', { days: windowDays })}{' '}
+            <Link to="/settings/billing" className="font-medium underline">
+              {t('analytics.historyWindow.upgrade')}
+            </Link>
+          </p>
+        </Alert>
+      )}
 
       {/* 30-day trend */}
       <Card padding="none">
@@ -183,8 +208,12 @@ export function AnalyticsPage() {
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
-              title={`By task type in ${yearNow}`}
-              description="What kind of care your household has put in this year."
+              title={
+                windowDays !== null
+                  ? t('analytics.historyWindow.byTaskTypeWindow', { days: windowDays })
+                  : t('analytics.historyWindow.byTaskTypeYear', { year: yearNow })
+              }
+              description="What kind of care your household has put in."
             />
           </div>
           <ul className="divide-y divide-primary-100/60">
@@ -260,8 +289,12 @@ export function AnalyticsPage() {
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
-              title={`Top contributors in ${yearNow}`}
-              description="Tasks each member has completed this year."
+              title={
+                windowDays !== null
+                  ? t('analytics.historyWindow.topContributorsWindow', { days: windowDays })
+                  : t('analytics.historyWindow.topContributorsYear', { year: yearNow })
+              }
+              description="Tasks each member has completed."
             />
           </div>
           <ul className="divide-y divide-primary-100/60">

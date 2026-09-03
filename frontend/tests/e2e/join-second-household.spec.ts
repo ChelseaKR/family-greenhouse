@@ -34,7 +34,16 @@ test('a user with an existing household can accept an invite to a second househo
     emailPrefix: 'join-second-inviter',
     householdName: 'The Second House',
   });
-  const joiner = await provisionAccount({ emailPrefix: 'join-second-joiner' });
+  // Greenhouse, because since ADR 0014 belonging to several households is a
+  // paid capability: `limits.homes` is 1 on Seedling and Garden and unlimited
+  // on Greenhouse, resolved against the strongest plan the user would hold
+  // after the join. A Greenhouse member may help at any number of homes, and
+  // that is the flow this spec drives. The free tier's refusal is the next
+  // test, so the cap is covered in both directions.
+  const joiner = await provisionAccount({
+    emailPrefix: 'join-second-joiner',
+    plan: 'greenhouse',
+  });
 
   // Mint a real invite for the inviter's household via the API (no UI
   // dependency on where "create invite" lives in Household settings).
@@ -76,6 +85,54 @@ test('a user with an existing household can accept an invite to a second househo
     const ids = memberships.map((m) => m.householdId);
     expect(ids).toContain(joiner.householdId);
     expect(ids).toContain(inviter.householdId);
+  } finally {
+    await verify.dispose();
+  }
+});
+
+test('a free-tier user with a home is told why a second one is refused, and keeps the one they have', async ({
+  page,
+}) => {
+  const inviter = await provisionAccount({
+    emailPrefix: 'join-second-capped-inviter',
+    householdName: 'The Capped House',
+  });
+  // No `plan`: both households stay on Seedling, whose `limits.homes` is 1.
+  const joiner = await provisionAccount({ emailPrefix: 'join-second-capped-joiner' });
+
+  const api = await playwrightRequest.newContext();
+  const loginRes = await api.post(`${API_URL}/auth/login`, {
+    data: { email: inviter.email, password: inviter.password },
+  });
+  const { idToken } = (await loginRes.json()) as { idToken: string };
+  await api.dispose();
+  const code = await createInvite(idToken, inviter.householdId);
+
+  await uiLogin(page, joiner.email, joiner.password);
+  await page.goto(`/join/${code}`);
+
+  // The invite screen still renders — the cap gates the JOIN, not the view,
+  // so the regression guard above holds on the free tier too.
+  await expect(page.getByText('The Capped House')).toBeVisible({ timeout: 15000 });
+  await page.getByRole('button', { name: /join household/i }).click();
+
+  // Refused, and told which plan and why (ADR 0014) rather than failing silently.
+  await expect(page.getByText(/Seedling plan includes 1 home/i)).toBeVisible({ timeout: 15000 });
+  await expect(page).toHaveURL(new RegExp(`/join/${code}$`));
+
+  // Nothing was taken away: the joiner still has exactly their own household.
+  const verify = await playwrightRequest.newContext();
+  try {
+    const meRes = await verify.post(`${API_URL}/auth/login`, {
+      data: { email: joiner.email, password: joiner.password },
+    });
+    const { idToken: joinerToken } = (await meRes.json()) as { idToken: string };
+    const householdsRes = await verify.get(`${API_URL}/me/households`, {
+      headers: { Authorization: `Bearer ${joinerToken}` },
+    });
+    const memberships = (await householdsRes.json()) as Array<{ householdId: string }>;
+    const ids = memberships.map((m) => m.householdId);
+    expect(ids).toEqual([joiner.householdId]);
   } finally {
     await verify.dispose();
   }

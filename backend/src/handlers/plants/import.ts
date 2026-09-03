@@ -25,7 +25,7 @@ import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
-import { getPlan } from '../../models/plans.js';
+import { getPlan, limitOf } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -62,7 +62,7 @@ export const importPlants = createHandler(
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
     const plan = getPlan(sub.planId);
-    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive existing plants before importing more.`;
+    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive existing plants before importing more.`;
 
     const results: ImportRowResult[] = [];
     let created = 0;
@@ -95,7 +95,7 @@ export const importPlants = createHandler(
           plantInput,
           user.householdId!,
           user.userId,
-          plan.maxPlants
+          limitOf(plan, 'plants')
         );
 
         // Tasks are best-effort per row: the plant exists either way, so a

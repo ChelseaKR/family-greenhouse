@@ -48,7 +48,7 @@ export function CareIndex() {
           <p className="font-serif text-xl text-ink">Knowing the schedule is the easy part</p>
           <p className="mt-2 text-sm text-gray-600">
             The hard part is remembering — and not assuming someone else did it. Family Greenhouse
-            handles both. Free for up to 10 plants.
+            handles both. Free for up to 20 plants.
           </p>
           <div className="mt-4">
             <Link

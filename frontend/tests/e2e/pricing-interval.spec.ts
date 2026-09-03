@@ -1,6 +1,42 @@
 import { test, expect } from '@playwright/test';
 import { provisionAccount, uiLogin, ProvisionedAccount } from './helpers';
 
+/** The catalog's capability flags per tier (backend/src/models/plans.ts). */
+const OFF = {
+  awayKit: false,
+  householdToolkit: false,
+  plantTags: false,
+  crossHomeToday: false,
+  kiosk: false,
+  caretakerSeats: false,
+  moveDay: false,
+  chat: false,
+  apiKeys: false,
+};
+const FEATURES = {
+  seedling: { ...OFF },
+  garden: {
+    ...OFF,
+    awayKit: true,
+    householdToolkit: true,
+    plantTags: true,
+    moveDay: true,
+    chat: true,
+  },
+  greenhouse: {
+    ...OFF,
+    awayKit: true,
+    householdToolkit: true,
+    plantTags: true,
+    crossHomeToday: true,
+    kiosk: true,
+    caretakerSeats: true,
+    moveDay: true,
+    chat: true,
+    apiKeys: true,
+  },
+};
+
 /**
  * Regression coverage for the two states the public plan surface can be in.
  * The filename stays stable so existing CI project filters continue to
@@ -55,9 +91,19 @@ test.describe('Public plan-status page', () => {
             {
               id: 'seedling',
               name: 'Seedling',
-              description: 'Free, perfect for getting started',
-              maxPlants: 10,
-              maxMembers: 6,
+              description: 'A couple and their plants',
+              maxPlants: 20,
+              maxMembers: 3,
+              limits: {
+                homes: 1,
+                members: 3,
+                plants: 20,
+                tags: 0,
+                analyticsHistoryDays: 30,
+                sitterLinkMaxDays: 7,
+                sitterLinksActive: 1,
+              },
+              features: FEATURES.seedling,
               monthlyPrice: 0,
               annualPrice: null,
               lifetimePrice: null,
@@ -65,9 +111,19 @@ test.describe('Public plan-status page', () => {
             {
               id: 'garden',
               name: 'Garden',
-              description: 'For growing families',
-              maxPlants: 500,
-              maxMembers: 6,
+              description: 'A household that has to coordinate',
+              maxPlants: 200,
+              maxMembers: null,
+              limits: {
+                homes: 1,
+                members: null,
+                plants: 200,
+                tags: 50,
+                analyticsHistoryDays: null,
+                sitterLinkMaxDays: 90,
+                sitterLinksActive: null,
+              },
+              features: FEATURES.garden,
               monthlyPrice: 4.99,
               annualPrice: null,
               lifetimePrice: null,
@@ -75,9 +131,19 @@ test.describe('Public plan-status page', () => {
             {
               id: 'greenhouse',
               name: 'Greenhouse',
-              description: 'For serious plant parents',
+              description: 'Many homes, many hands',
               maxPlants: 5000,
-              maxMembers: 50,
+              maxMembers: null,
+              limits: {
+                homes: null,
+                members: null,
+                plants: 5000,
+                tags: null,
+                analyticsHistoryDays: null,
+                sitterLinkMaxDays: 90,
+                sitterLinksActive: null,
+              },
+              features: FEATURES.greenhouse,
               monthlyPrice: 9.99,
               annualPrice: null,
               lifetimePrice: null,

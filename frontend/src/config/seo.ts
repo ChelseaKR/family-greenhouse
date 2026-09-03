@@ -65,12 +65,12 @@ export const TWITTER_IMAGE_ALT = 'Family Greenhouse — every plant, every perso
 export const DEFAULT_META = {
   title: 'Family Greenhouse — Grow together',
   description:
-    'A collaborative plant care app for households. Free accounts include up to 10 plants, shared tasks, reminders, and care history.',
+    'A collaborative plant care app for households. Free accounts include one home, up to 3 people and 20 plants, with shared tasks, reminders, and care history.',
   ogTitle: 'Family Greenhouse — collaborative plant care for households',
   ogDescription:
-    'Collaborative plant care for households — share tasks, get reminders, and keep a care log everyone can see. Free for up to 10 plants.',
+    'Collaborative plant care for households — share tasks, get reminders, and keep a care log everyone can see. Free for up to 20 plants.',
   twitterDescription:
-    'Share tasks, get reminders, and keep a care log everyone can see. Free for up to 10 plants.',
+    'Share tasks, get reminders, and keep a care log everyone can see. Free for up to 20 plants.',
 } as const;
 
 /** The fully-resolved head of one page — no optionals left to interpret. */

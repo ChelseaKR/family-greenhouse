@@ -51,6 +51,19 @@ const FIXED_MINIMUM_PLAN: Partial<Record<UpgradeFeature, PaidPlanId>> = {
  * — and `null` is also the answer while the catalog is unknown, because a
  * tier name should never be guessed.
  */
+/**
+ * Is `candidate` a strictly higher ceiling than `current`? A published cap is
+ * `number | null` since ADR 0014, where `null` is UNLIMITED — the largest
+ * value there is, not a missing one. `>` would coerce it to 0 and hide the
+ * unlimited tier from "room for more plants". Mirrors the server's
+ * `raisesCap` in backend/src/models/upgradeFeatures.ts.
+ */
+function raisesCap(candidate: number | null, current: number | null): boolean {
+  if (candidate === null) return current !== null;
+  if (current === null) return false;
+  return candidate > current;
+}
+
 export function resolveTargetPlan(
   feature: UpgradeFeature,
   currentPlanId: PlanId,
@@ -65,7 +78,7 @@ export function resolveTargetPlan(
   for (const id of PLAN_ORDER) {
     if (id === 'seedling' || rank(id) <= rank(currentPlanId)) continue;
     const candidate = plans.find((p) => p.id === id);
-    if (candidate && candidate[cap] > current[cap]) return id;
+    if (candidate && raisesCap(candidate[cap], current[cap])) return id;
   }
   return null;
 }

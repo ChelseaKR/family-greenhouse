@@ -117,15 +117,22 @@ describe('resolveTargetPlan', () => {
 
   it('resolves cap features against the live catalog, skipping tiers that do not raise the cap', async () => {
     const { resolveTargetPlan } = await import('../../../src/services/upgradeRequests.js');
-    const { PLANS } = await import('../../../src/models/plans.js');
+    const { PLANS, isUnlimited } = await import('../../../src/models/plans.js');
     expect(resolveTargetPlan('plant_cap', 'seedling')).toBe('garden');
     expect(resolveTargetPlan('plant_cap', 'garden')).toBe('greenhouse');
     expect(resolveTargetPlan('plant_cap', 'greenhouse')).toBeNull();
-    // Garden's member cap equals Seedling's today, so the first tier that
-    // actually adds seats is the answer — whichever that is in the catalog.
-    const firstSeatRaise =
-      PLANS.garden.maxMembers > PLANS.seedling.maxMembers ? 'garden' : 'greenhouse';
-    expect(resolveTargetPlan('member_cap', 'seedling')).toBe(firstSeatRaise);
+    // The first tier that actually adds seats is the answer — whichever that
+    // is in the catalog. Since ADR 0014 a cap is a `Limit`, so `null`
+    // (unlimited) is the HIGHEST ceiling, not a missing one: Garden's
+    // unlimited membership genuinely raises Seedling's three.
+    const seedlingMembers = PLANS.seedling.limits.members;
+    const gardenMembers = PLANS.garden.limits.members;
+    const gardenAddsSeats = isUnlimited(gardenMembers)
+      ? !isUnlimited(seedlingMembers)
+      : !isUnlimited(seedlingMembers) && gardenMembers > seedlingMembers;
+    expect(resolveTargetPlan('member_cap', 'seedling')).toBe(
+      gardenAddsSeats ? 'garden' : 'greenhouse'
+    );
     expect(resolveTargetPlan('member_cap', 'greenhouse')).toBeNull();
   });
 });

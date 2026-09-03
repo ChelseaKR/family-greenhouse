@@ -177,9 +177,9 @@ const featureCardVariants = [
 // exist, they belong in this list — sourced from analytics, not vibes.
 const productFacts = [
   PUBLIC_REGISTRATION_AVAILABLE
-    ? { value: 'Free', label: 'Up to 10 plants — no credit card' }
+    ? { value: 'Free', label: 'Up to 20 plants — no credit card' }
     : { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
-  { value: '6 people', label: 'Share care across the household' },
+  { value: '3 people', label: 'Share one home free — unlimited on Garden' },
   { value: '5 minutes', label: 'From signup to first task' },
   { value: 'Portable', label: 'Export your data any time' },
 ];
@@ -538,7 +538,7 @@ export function LandingPage() {
   useMetaTags({
     title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
     description: PUBLIC_REGISTRATION_AVAILABLE
-      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for up to 10 plants and 6 members.'
+      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 3 people and 20 plants.'
       : 'A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in.',
     canonical: siteUrl('/'),
     ogType: 'website',
@@ -575,7 +575,7 @@ export function LandingPage() {
                   '@type': 'Offer',
                   price: '0',
                   priceCurrency: 'USD',
-                  description: 'Free for up to 10 plants and 6 household members',
+                  description: 'Free for one home, up to 3 household members and 20 plants',
                 },
               }
             : {}),

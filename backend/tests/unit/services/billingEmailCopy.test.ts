@@ -313,7 +313,7 @@ describe('cancellation', () => {
   it('names the tier the household actually holds now, not a guess', () => {
     const { text } = composeBillingEmail(complete, ctx('en', { currentPlan: getPlan('seedling') }));
     expect(text).toContain('Your household is on the Seedling plan');
-    expect(text).toContain('up to 10 plants and 6 members');
+    expect(text).toContain('20 plants and 3 members');
     expect(text).toContain('You will not be charged again');
   });
 

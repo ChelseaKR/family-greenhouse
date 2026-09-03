@@ -269,11 +269,12 @@ describe('billing handler', () => {
 
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
+      // Garden: 200 plants, unlimited members (`null`, ADR 0014).
       const expectedUsage = {
         plantCount: 42,
-        maxPlants: 500,
+        maxPlants: 200,
         memberCount: 3,
-        maxMembers: 6,
+        maxMembers: null,
       };
       expect(body.usage).toEqual(expectedUsage);
       expect(body.usageDetail).toEqual(expectedUsage);
@@ -295,7 +296,7 @@ describe('billing handler', () => {
 
       const body = JSON.parse(res.body);
       const usage = body.usage;
-      expect(usage).toEqual({ plantCount: 25, maxPlants: 10, memberCount: 8, maxMembers: 6 });
+      expect(usage).toEqual({ plantCount: 25, maxPlants: 20, memberCount: 8, maxMembers: 3 });
       expect(body.usageDetail).toEqual(usage);
       expect(usage.plantCount).toBeGreaterThan(usage.maxPlants);
       expect(usage.memberCount).toBeGreaterThan(usage.maxMembers);
@@ -321,9 +322,9 @@ describe('billing handler', () => {
       expect(body).not.toHaveProperty('usage');
       expect(body.usageDetail).toEqual({
         plantCount: 25,
-        maxPlants: 10,
+        maxPlants: 20,
         memberCount: null,
-        maxMembers: 6,
+        maxMembers: 3,
       });
     });
 

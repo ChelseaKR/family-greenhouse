@@ -42,6 +42,13 @@ export async function provisionAccount(opts: {
   /** Display name; defaults to the seed account's "Test User". */
   name?: string;
   householdName?: string;
+  /**
+   * Seed the new household's plan. Checkout is a 503 in the local server (it
+   * mirrors production's commercial hold), so a spec that needs a paid
+   * entitlement — a Greenhouse `limits.homes` of unlimited, say — asks the
+   * `__test__` fixture route for it. Defaults to the free tier.
+   */
+  plan?: 'seedling' | 'garden' | 'greenhouse';
   space?: {
     name: string;
     environment: 'inside' | 'outside';
@@ -83,6 +90,14 @@ export async function provisionAccount(opts: {
       name,
       householdId: household.id,
     };
+
+    if (opts.plan && opts.plan !== 'seedling') {
+      res = await api.post(`${API_URL}/__test__/households/${household.id}/plan`, {
+        headers,
+        data: { planId: opts.plan },
+      });
+      expect(res.status(), 'local test plan seeding should succeed').toBe(200);
+    }
 
     if (opts.space) {
       res = await api.post(`${API_URL}/spaces`, { headers, data: opts.space });

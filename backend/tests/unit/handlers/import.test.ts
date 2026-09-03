@@ -139,13 +139,13 @@ describe('POST /plants/import', () => {
       { index: 0, status: 'created', plantId: 'p1' },
       { index: 1, status: 'created', plantId: 'p2' },
     ]);
-    // Reuses the single-create path — seedling plan cap (10) handed down.
+    // Reuses the single-create path — seedling plan cap (20) handed down.
     expect(plantService.createPlant).toHaveBeenNthCalledWith(
       1,
       { name: 'Pothos', tags: ['trailing'] },
       'hh-1',
       'user-1',
-      10
+      20
     );
   });
 

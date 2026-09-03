@@ -519,6 +519,9 @@ describe('GET /households/{id}/analytics/daily doubleCare field', () => {
     expect(JSON.parse(res.body)).toEqual({
       days: 30,
       series: [],
+      // A toolkit tier has no analytics ceiling (ADR 0014): null is "no
+      // limit", never "unknown".
+      historyLimitDays: null,
       doubleCare: { status: 'ok', month: '2026-09', confirmedDuplicates: 3 },
     });
   });

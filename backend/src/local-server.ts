@@ -56,6 +56,9 @@ import {
   planIncludesAwayKit,
   planIncludesCrossHomeToday,
   planHasMoveDay,
+  atCap,
+  limitOf,
+  strongestPlan,
 } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
@@ -92,6 +95,7 @@ import {
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
 import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import { analyticsWindow } from './services/analyticsWindow.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -782,6 +786,27 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
 }
 
 /** Production HouseholdMember row shape for a household's roster. */
+/**
+ * Mirrors services/homesGate.ts (ADR 0014): the strongest plan across every
+ * household the user is in — plus the one being joined — decides the homes
+ * cap. A user already above it keeps every home and is refused only the next
+ * one. Returns the 402 message, or null when the add is allowed.
+ */
+function homesRefusal(
+  dbUser: { memberships: Membership[] },
+  joiningHouseholdId: string | null
+): string | null {
+  const ids = new Set(dbUser.memberships.map((m) => m.householdId));
+  if (joiningHouseholdId) ids.add(joiningHouseholdId);
+  const plan = strongestPlan([...ids].map((id) => db.households.get(id)?.planId));
+  const limit = limitOf(plan, 'homes');
+  const count = dbUser.memberships.length;
+  if (!atCap(count, limit)) return null;
+  const homes = limit === 1 ? '1 home' : `${limit} homes`;
+  const belongs = count === 1 ? '1 household' : `${count} households`;
+  return `Your ${plan.name} plan includes ${homes} and you already belong to ${belongs}. Upgrade to Greenhouse for unlimited homes.`;
+}
+
 function membersOf(householdId: string) {
   const members: Array<{
     householdId: string;
@@ -906,6 +931,28 @@ app.post('/__test__/accounts', validateBody(signupSchema), (req, res) => {
   } catch (error) {
     return res.status(400).json({ message: (error as Error).message });
   }
+});
+
+const testPlanSchema = z.object({
+  planId: z.enum(['seedling', 'garden', 'greenhouse']),
+});
+
+// Browser-test entitlement fixture, behind the same opt-in and the same
+// indistinguishable-from-unknown 404 as the account route above. A paid tier
+// cannot be BOUGHT here — /billing/checkout mirrors production's commercial
+// hold with a 503 — so an in-process test seeds `db` directly and a browser
+// test, which has no such access, seeds it through this. It sets the plan and
+// nothing else: no Stripe ids, no subscription row, so it can never stand in
+// for the webhook path those tests cover.
+app.post('/__test__/households/:id/plan', validateBody(testPlanSchema), (req, res) => {
+  if (process.env.ALLOW_TEST_ACCOUNT_PROVISIONING !== '1') {
+    return res.status(404).json({ message: 'Not found' });
+  }
+
+  const household = db.households.get(req.params.id);
+  if (!household) return res.status(404).json({ message: 'Household not found' });
+  household.planId = (req as any).validatedBody.planId;
+  return res.json({ id: household.id, planId: household.planId });
 });
 
 app.post('/auth/confirm', validateBody(confirmEmailSchema), (req, res) => {
@@ -1486,6 +1533,14 @@ app.post('/households', authMiddleware, validateBody(createHouseholdSchema), (re
 
   if (!dbUser) {
     return res.status(404).json({ message: 'User not found' });
+  }
+
+  // Homes gate — mirrors handlers/households/handler.ts (ADR 0014). The first
+  // household is always allowed; a user already above the cap keeps every
+  // home and is refused only this next one.
+  if (dbUser.memberships.length > 0) {
+    const refused = homesRefusal(dbUser, null);
+    if (refused) return res.status(402).json({ message: refused });
   }
 
   const now = new Date().toISOString();
@@ -2276,11 +2331,16 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
     return res.status(400).json({ message: 'You are already a member of this household' });
   }
 
+  // Homes gate — the joined household's plan counts, so a Greenhouse home
+  // always takes another hand (ADR 0014).
+  const refusedHome = homesRefusal(dbUser, invite.householdId);
+  if (refusedHome) return res.status(402).json({ message: refusedHome });
+
   const plan = PLANS[household.planId ?? 'seedling'];
   const existingMembers = membersOf(invite.householdId);
-  if (existingMembers.length >= plan.maxMembers) {
+  if (atCap(existingMembers.length, limitOf(plan, 'members'))) {
     return res.status(402).json({
-      message: `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`,
+      message: `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`,
     });
   }
 
@@ -2698,9 +2758,9 @@ app.post(
     const existing = [...db.plants.values()].filter(
       (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
     );
-    if (existing.length >= plan.maxPlants) {
+    if (atCap(existing.length, limitOf(plan, 'plants'))) {
       return res.status(402).json({
-        message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`,
+        message: `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`,
       });
     }
 
@@ -2821,7 +2881,7 @@ app.post(
 
     const h = db.households.get(user.householdId);
     const plan = PLANS[h?.planId ?? 'seedling'];
-    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive existing plants before importing more.`;
+    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive existing plants before importing more.`;
 
     const results: Array<{
       index: number;
@@ -2841,7 +2901,7 @@ app.post(
       const active = [...db.plants.values()].filter(
         (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
       );
-      if (active.length >= plan.maxPlants) {
+      if (atCap(active.length, limitOf(plan, 'plants'))) {
         planLimitHit = true;
         results.push({ index, status: 'skipped', error: planLimitMessage });
         continue;
@@ -3099,7 +3159,7 @@ const identifySchema = z.object({
 // Mirrors services/identifyBudget.ts: in-memory monthly identification usage
 // keyed `${yyyy-mm}#${householdId | user:userId}`. Enforcement only when
 // IDENTIFY_METERING_ENABLED=1, matching production (default off for beta).
-const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 3, garden: 30, greenhouse: 100 };
+const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 1, garden: 30, greenhouse: 100 };
 const identifyUsage = new Map<string, number>();
 
 function identifyMeterFor(user: { userId: string; householdId: string | null }) {
@@ -3776,9 +3836,9 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
   const existing = [...db.plants.values()].filter(
     (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
   );
-  if (existing.length >= plan.maxPlants) {
+  if (atCap(existing.length, limitOf(plan, 'plants'))) {
     return res.status(402).json({
-      message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`,
+      message: `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`,
     });
   }
 
@@ -4465,10 +4525,15 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     return res.status(403).json({ message: 'Access denied' });
   }
   const daysRaw = req.query.days;
-  const days = Math.max(
+  const requestedDays = Math.max(
     1,
     Math.min(180, typeof daysRaw === 'string' ? parseInt(daysRaw, 10) || 30 : 30)
   );
+  // Analytics window — mirrors handlers/households/handler.ts (ADR 0014).
+  const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'];
+  const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
+  const days =
+    historyLimitDays === null ? requestedDays : Math.min(requestedDays, historyLimitDays);
   const now = new Date();
   const start = new Date(now);
   start.setDate(start.getDate() - days + 1);
@@ -4504,6 +4569,7 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     days,
     series: [...buckets.entries()].map(([date, count]) => ({ date, count })),
     doubleCare,
+    historyLimitDays,
   });
 });
 
@@ -4517,8 +4583,15 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
   if (!Number.isFinite(year) || year < 2020 || year > 2100) {
     return res.status(400).json({ message: 'year must be between 2020 and 2100' });
   }
-  const start = `${year}-01-01T00:00:00.000Z`;
-  const end = `${year + 1}-01-01T00:00:00.000Z`;
+  // Analytics window — mirrors handlers/households/handler.ts (ADR 0014):
+  // the free tier gets the year intersected with its trailing window.
+  const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'];
+  const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
+  const window =
+    historyLimitDays === null
+      ? { start: `${year}-01-01T00:00:00.000Z`, end: `${year + 1}-01-01T00:00:00.000Z` }
+      : analyticsWindow(year, historyLimitDays);
+  const { start, end } = window;
   const items = [...db.completions.values()].filter(
     (c) => c.householdId === req.params.id && c.completedAt >= start && c.completedAt < end
   );
@@ -4533,6 +4606,8 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
   }
   res.json({
     year,
+    historyLimitDays,
+    ...(historyLimitDays === null ? {} : { windowStart: start, windowEnd: end }),
     totalCompletions: items.length,
     byMember: [...memberCounts.entries()]
       .map(([userId, v]) => ({ userId, name: v.name, count: v.count }))
@@ -4675,9 +4750,9 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
   const memberCount = membersOf(user.householdId).length;
   const usage = {
     plantCount,
-    maxPlants: plan.maxPlants,
+    maxPlants: limitOf(plan, 'plants'),
     memberCount,
-    maxMembers: plan.maxMembers,
+    maxMembers: limitOf(plan, 'members'),
   };
   res.json({
     planId,

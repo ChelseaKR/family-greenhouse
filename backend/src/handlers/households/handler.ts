@@ -31,13 +31,19 @@ import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as escalation from '../../services/escalation.js';
-import { getPlan, hasHouseholdToolkit } from '../../models/plans.js';
+import { getPlan, hasHouseholdToolkit, limitOf, type Plan } from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
   sitterWindowDays,
 } from '../../services/sitterPlanGate.js';
 import * as doubleCare from '../../services/doubleCare.js';
+import {
+  assertCanAddHome,
+  homesLimitMessage,
+  type HomesLimitError,
+} from '../../services/homesGate.js';
+import { analyticsWindow } from '../../services/analyticsWindow.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
@@ -112,6 +118,21 @@ export const createHousehold = createHandler(
       );
       await sendFirstHouseholdWelcome(user.userId, user.email, userName);
       return createdResponse(existingHousehold);
+    }
+
+    // Homes gate (ADR 0014): a second home needs a plan that includes one.
+    // The first household is always allowed — `memberships` is empty — and a
+    // user already above the cap keeps every home they have and can act in
+    // all of them; only this next one is refused.
+    if (memberships.length > 0) {
+      try {
+        await assertCanAddHome(user.userId, { memberships });
+      } catch (err) {
+        if (err instanceof Error && err.name === 'HomesLimitError') {
+          throw createHttpError(402, homesLimitMessage(err as HomesLimitError));
+        }
+        throw err;
+      }
     }
 
     const household = await householdService.createHousehold(
@@ -425,6 +446,22 @@ export const joinHousehold = createHandler(
       throw createHttpError(400, 'You are already a member of this household');
     }
 
+    // Homes gate (ADR 0014): joining counts the joined household's plan, so
+    // a Greenhouse home always takes another hand, and a Seedling / Garden
+    // home takes one only from someone who has no other home yet. A joiner
+    // already above the cap keeps every home they have.
+    try {
+      await assertCanAddHome(user.userId, {
+        joiningHouseholdId: invite.householdId,
+        joiningPlanId: sub.planId,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'HomesLimitError') {
+        throw createHttpError(402, homesLimitMessage(err as HomesLimitError));
+      }
+      throw err;
+    }
+
     // Member-cap enforcement is atomic in the service (formerly a known
     // check-then-write race here): the member Put rides a transaction with a
     // conditional increment of the household's memberCount against the
@@ -435,7 +472,7 @@ export const joinHousehold = createHandler(
         user.userId,
         userName,
         user.email,
-        plan.maxMembers
+        limitOf(plan, 'members')
       );
     } catch (err) {
       // A concurrent double-join (two tabs, double-tap) loses the race on
@@ -449,7 +486,7 @@ export const joinHousehold = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`
+          `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`
         );
       }
       throw err;
@@ -530,17 +567,31 @@ export const getActivity = createHandler(
  * or `unavailable` when either the plan or the log could not be read — so
  * the analytics page never renders a failed read as "0 duplicates".
  */
-async function confirmedDoubleCareThisMonth(
-  householdId: string
-): Promise<doubleCare.DoubleCareMonthly> {
-  let plan;
+/**
+ * The household's plan as a SETTLED read (ADR 0010): either the plan, or an
+ * explicit `unavailable`. Deliberately not `Plan | null` — a bare null would
+ * be indistinguishable from "no plan / free tier" at the call site, which is
+ * exactly the collapse that turns a failed read into a confident answer.
+ */
+type PlanRead = { status: 'ok'; plan: Plan } | { status: 'unavailable' };
+
+async function readHouseholdPlan(householdId: string): Promise<PlanRead> {
   try {
-    plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    const { planId } = await billing.getHouseholdSubscription(householdId);
+    return { status: 'ok', plan: getPlan(planId) };
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
     return { status: 'unavailable' };
   }
-  if (!hasHouseholdToolkit(plan)) return { status: 'not_in_plan' };
+}
+
+async function confirmedDoubleCareThisMonth(
+  planRead: PlanRead,
+  householdId: string
+): Promise<doubleCare.DoubleCareMonthly> {
+  // A plan we could not read is an explicit absence, never a silent 0.
+  if (planRead.status !== 'ok') return { status: 'unavailable' };
+  if (!hasHouseholdToolkit(planRead.plan)) return { status: 'not_in_plan' };
   return doubleCare.countConfirmedDuplicatesThisMonth(householdId);
 }
 
@@ -554,12 +605,30 @@ export const getDailyAnalytics = createHandler(
       throw createHttpError(403, 'Access denied');
     }
     const daysRaw = event.queryStringParameters?.days;
-    const days = daysRaw ? Math.max(1, Math.min(180, parseInt(daysRaw, 10) || 30)) : 30;
+    const requestedDays = daysRaw ? Math.max(1, Math.min(180, parseInt(daysRaw, 10) || 30)) : 30;
+    // ONE settled plan read serves both answers below — the analytics window
+    // and the double-care roll-up — so a failed read is decided once, here,
+    // and explicitly in both directions.
+    const planRead = await readHouseholdPlan(householdId);
+    // Analytics window (ADR 0014): the free tier renders the trailing
+    // `analyticsHistoryDays`; paid tiers have no ceiling. Only the window a
+    // request may ask for is narrowed — the completion rows are never
+    // trimmed — and the response says which window applied so the client can
+    // say why. `null` means "no limit". An unreadable plan is FAIL-OPEN on
+    // this field: `undefined`, omitted from the body and read by the client
+    // as "unknown", because publishing a guessed ceiling would silently
+    // narrow a paid household's history. The roll-up below fails the other
+    // way — `unavailable`, never a 0 — because there a guess reads as a real
+    // count.
+    const historyLimitDays =
+      planRead.status === 'ok' ? limitOf(planRead.plan, 'analyticsHistoryDays') : undefined;
+    const days =
+      historyLimitDays == null ? requestedDays : Math.min(requestedDays, historyLimitDays);
     const [series, doubleCareMonthly] = await Promise.all([
       taskService.getDailyCompletionCounts(householdId, days),
-      confirmedDoubleCareThisMonth(householdId),
+      confirmedDoubleCareThisMonth(planRead, householdId),
     ]);
-    return successResponse({ days, series, doubleCare: doubleCareMonthly });
+    return successResponse({ days, series, historyLimitDays, doubleCare: doubleCareMonthly });
   }
 )
   .use(authMiddleware())
@@ -579,8 +648,24 @@ export const getYearInReview = createHandler(
     if (!Number.isFinite(year) || year < 2020 || year > 2100) {
       throw createHttpError(400, 'year must be between 2020 and 2100');
     }
-    const review = await taskService.getYearInReview(householdId, year);
-    return successResponse(review);
+    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
+    if (historyLimitDays === null) {
+      const review = await taskService.getYearInReview(householdId, year);
+      return successResponse({ ...review, historyLimitDays });
+    }
+    // Windowed (ADR 0014): the calendar year intersected with the trailing
+    // window, so a past year on the free tier is honestly empty rather than
+    // silently relabelled as "the last 30 days". The rows are never trimmed.
+    const window = analyticsWindow(year, historyLimitDays);
+    const review = await taskService.getCompletionReview(householdId, window.start, window.end);
+    return successResponse({
+      year,
+      ...review,
+      historyLimitDays,
+      windowStart: window.start,
+      windowEnd: window.end,
+    });
   }
 )
   .use(authMiddleware())

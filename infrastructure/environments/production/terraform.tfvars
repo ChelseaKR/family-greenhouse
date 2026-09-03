@@ -28,7 +28,7 @@ monthly_budget_usd = "30"
 
 # --- AI inference cost caps (per household per UTC month) ---
 #
-# Enforce the Plant.id identify monthly meter (3 / 30 / 100 by plan) in
+# Enforce the Plant.id identify monthly meter (1 / 30 / 100 by plan) in
 # production: block once a household exceeds its allowance, so the real
 # per-call Plant.id credit can't be cost-amplified by concurrency. This is the
 # ONLY environment that enforces it — the code default and staging are

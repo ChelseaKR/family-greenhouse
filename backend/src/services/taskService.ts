@@ -895,6 +895,20 @@ export interface YearInReview {
 export async function getYearInReview(householdId: string, year: number): Promise<YearInReview> {
   const start = `${year}-01-01T00:00:00.000Z`;
   const end = `${year + 1}-01-01T00:00:00.000Z`;
+  return { year, ...(await getCompletionReview(householdId, start, end)) };
+}
+
+/**
+ * The same aggregation over an arbitrary ISO window. The free tier's
+ * analytics window (ADR 0014) is a calendar year intersected with the
+ * trailing N days — not a year — so the year-shaped wrapper above delegates
+ * here rather than the other way round.
+ */
+export async function getCompletionReview(
+  householdId: string,
+  start: string,
+  end: string
+): Promise<Omit<YearInReview, 'year'>> {
   // Paginated: an active household easily logs >200 completions/year, and a
   // single-page query silently undercounted everything past the first page.
   const allItems = await queryAllPages({
@@ -928,7 +942,6 @@ export async function getYearInReview(householdId: string, year: number): Promis
   }
 
   return {
-    year,
     totalCompletions: items.length,
     byMember: [...memberCounts.entries()]
       .map(([userId, v]) => ({ userId, name: v.name, count: v.count }))

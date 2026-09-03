@@ -19,6 +19,7 @@ import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { atCap, type Limit } from '../models/plans.js';
 import { Plant, PlantStatus, DynamoDBItem } from '../models/types.js';
 import { CreatePlantInput, MovePlantsInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
@@ -53,7 +54,7 @@ export async function createPlant(
   input: CreatePlantInput & { canonicalSpecies?: string | null },
   householdId: string,
   userId: string,
-  maxPlants: number
+  maxPlants: Limit
 ): Promise<Plant> {
   const id = uuid();
   const now = new Date().toISOString();
@@ -127,10 +128,13 @@ export async function createPlant(
   if (typeof meta.Item.plantCount !== 'number') {
     const active = await getPlants(householdId, 'active');
     base = active.length;
-    if (base >= maxPlants) {
+    if (atCap(base, maxPlants)) {
       throw new PlanLimitError(`Plant limit of ${maxPlants} reached`);
     }
   }
+  // An unlimited cap (`null`, models/plans.ts) carries no condition and no
+  // `:max` value — DynamoDB rejects an unreferenced ExpressionAttributeValue.
+  const capped = maxPlants !== null;
 
   try {
     await dynamodb.send(
@@ -141,9 +145,12 @@ export async function createPlant(
               TableName: TABLE_NAME,
               Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
               UpdateExpression: 'SET plantCount = if_not_exists(plantCount, :base) + :one',
-              ConditionExpression:
-                'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)',
-              ExpressionAttributeValues: { ':base': base, ':one': 1, ':max': maxPlants },
+              ConditionExpression: capped
+                ? 'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
+                : 'attribute_exists(PK)',
+              ExpressionAttributeValues: capped
+                ? { ':base': base, ':one': 1, ':max': maxPlants }
+                : { ':base': base, ':one': 1 },
             },
           },
           { Put: { TableName: TABLE_NAME, Item: item } },
@@ -286,7 +293,7 @@ export async function updatePlant(
   householdId: string,
   plantId: string,
   input: UpdatePlantInput & { canonicalSpecies?: string | null },
-  maxPlants: number
+  maxPlants: Limit
 ): Promise<Plant | null> {
   const updateExpressions: string[] = [];
   const expressionAttributeNames: Record<string, string> = {};
@@ -528,12 +535,19 @@ export async function updatePlant(
                 // Reactivation (delta===1) is cap-checked, same as createPlant;
                 // the decrement (delta===-1) is never capped — leaving 'active'
                 // can only reduce the count.
+                // An unlimited cap (`null`) carries no condition and no `:max`.
                 ConditionExpression:
-                  delta === 1
+                  delta === 1 && maxPlants !== null
                     ? 'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
                     : 'attribute_exists(PK)',
                 ExpressionAttributeValues:
-                  delta === 1 ? { ':zero': 0, ':one': 1, ':max': maxPlants } : { ':one': 1 },
+                  delta === 1
+                    ? {
+                        ':zero': 0,
+                        ':one': 1,
+                        ...(maxPlants !== null ? { ':max': maxPlants } : {}),
+                      }
+                    : { ':one': 1 },
               },
             },
           ],

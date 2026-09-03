@@ -385,3 +385,72 @@ describe('analytics plants at risk', () => {
     expect(screen.queryByText(/couldn.t check which plants are at risk/i)).not.toBeInTheDocument();
   });
 });
+
+describe('analytics history window (ADR 0014)', () => {
+  it('says why the window is 30 days and links to plans when the plan carries a ceiling', async () => {
+    renderAnalytics({
+      failing: false,
+      overrides: {
+        daily: { days: 30, series: [], historyLimitDays: 30 },
+        review: { ...EMPTY_REVIEW, historyLimitDays: 30, totalCompletions: 3 },
+      },
+    });
+
+    expect(
+      await screen.findByText(/Analytics on the free plan cover the last 30 days/)
+    ).toBeInTheDocument();
+    // The promise that matters: the data is not gone, only the rendered range.
+    expect(screen.getByText(/Nothing older is deleted/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+  });
+
+  it('says nothing about a window when the plan has no ceiling', async () => {
+    renderAnalytics({
+      failing: false,
+      overrides: {
+        daily: { days: 30, series: [], historyLimitDays: null },
+        review: { ...EMPTY_REVIEW, historyLimitDays: null },
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText('Plants')).toBeInTheDocument());
+    expect(screen.queryByText(/cover the last/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+  });
+
+  it('claims no window when an older backend omits the field entirely', async () => {
+    // `undefined` is "we were not told", which is not the same as a ceiling.
+    // Inventing one here would tell a paying household its history is capped.
+    renderAnalytics({
+      failing: false,
+      overrides: { daily: { days: 30, series: [] }, review: EMPTY_REVIEW },
+    });
+
+    await waitFor(() => expect(screen.getByText('Plants')).toBeInTheDocument());
+    expect(screen.queryByText(/cover the last/)).not.toBeInTheDocument();
+  });
+
+  it('labels the year-derived cards with the window, not the year, when one applies', async () => {
+    renderAnalytics({
+      failing: false,
+      overrides: {
+        daily: { days: 30, series: [], historyLimitDays: 30 },
+        review: {
+          ...EMPTY_REVIEW,
+          historyLimitDays: 30,
+          totalCompletions: 4,
+          byTaskType: [{ type: 'water', count: 4 }],
+          byMember: [{ userId: 'u-1', name: 'Alex', count: 4 }],
+        },
+      },
+    });
+
+    // Calling a 30-day slice "in 2026" would misdescribe what it counted.
+    expect(await screen.findByText('By task type, last 30 days')).toBeInTheDocument();
+    expect(screen.getByText('Top contributors, last 30 days')).toBeInTheDocument();
+    expect(screen.queryByText(/By task type in 20/)).not.toBeInTheDocument();
+  });
+});

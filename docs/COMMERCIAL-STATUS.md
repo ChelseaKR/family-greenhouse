@@ -6,12 +6,12 @@
 **Production payment gate opened:** September 2, 2026 — `payments_enabled = "1"` in the production tfvars (PR #377, release 0.23.3)
 **Status:** Free accounts open; paid Garden and Greenhouse plans on sale on the web
 
-Family Greenhouse accepts free Seedling accounts for households with up to 10
-plants; no credit card is required. Paid Garden and Greenhouse plans are sold on
-the hosted web app through Stripe Checkout — monthly or annual subscriptions
-that start with a 14-day trial, plus a one-time Garden lifetime purchase — and a
-household admin manages the plan from Settings → Billing via the Stripe customer
-portal. Paid plans are not sold inside the mobile apps.
+Family Greenhouse accepts free Seedling accounts for one home with up to 3
+people and 20 plants; no credit card is required. Paid Garden and Greenhouse
+plans are sold on the hosted web app through Stripe Checkout — monthly or annual
+subscriptions that start with a 14-day trial, plus a one-time Garden lifetime
+purchase — and a household admin manages the plan from Settings → Billing via
+the Stripe customer portal. Paid plans are not sold inside the mobile apps.
 
 The source repository and its history remain public portfolio artifacts.
 Pricing, launch, and customer-acquisition documents written during the hold are

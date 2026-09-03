@@ -1637,9 +1637,11 @@ describe('planSummary', () => {
     expect(planSummary(PLANS.garden)).toEqual({
       id: 'garden',
       name: 'Garden',
-      description: 'For growing families',
-      maxPlants: 500,
-      maxMembers: 6,
+      description: 'A household that has to coordinate',
+      maxPlants: 200,
+      maxMembers: null,
+      limits: PLANS.garden.limits,
+      features: PLANS.garden.features,
       // Entitlement, not a price: the client needs it to render a locked
       // control while prices are withheld (ADR 0018).
       householdToolkit: true,
@@ -1849,7 +1851,9 @@ describe('existing annual and lifetime subscribers are untouched by the withdraw
         },
       } as unknown as Stripe.Event);
       expect(delta?.fields.planId).toBe('garden');
-      expect(getPlan(delta?.fields.planId)).toMatchObject({ maxPlants: 500, maxMembers: 6 });
+      expect(getPlan(delta?.fields.planId)).toMatchObject({
+        limits: { plants: 200, members: null },
+      });
     } finally {
       delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
     }
@@ -1875,7 +1879,9 @@ describe('existing annual and lifetime subscribers are untouched by the withdraw
         },
       } as unknown as Stripe.Event);
       expect(delta?.fields.planId).toBe('greenhouse');
-      expect(getPlan(delta?.fields.planId)).toMatchObject({ maxPlants: 5000, maxMembers: 50 });
+      expect(getPlan(delta?.fields.planId)).toMatchObject({
+        limits: { plants: 5000, members: null },
+      });
     } finally {
       delete process.env.STRIPE_PRICE_ID_GREENHOUSE_ANNUAL;
     }
@@ -1891,7 +1897,7 @@ describe('existing annual and lifetime subscribers are untouched by the withdraw
     const sub = await getHouseholdSubscription('hh-life');
     expect(sub.planId).toBe('garden');
     expect(sub.lifetimePlanId).toBe('garden');
-    expect(getPlan(sub.planId)).toMatchObject({ maxPlants: 500, maxMembers: 6 });
+    expect(getPlan(sub.planId)).toMatchObject({ limits: { plants: 200, members: null } });
   });
 });
 
