@@ -48,6 +48,7 @@ import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
+import { formatRelativeDay } from '@/i18n/format';
 import { toast } from '@/store/toastStore';
 import { PlantImage } from '@/components/PlantImage';
 import { spaceService } from '@/services/spaceService';
@@ -106,6 +107,11 @@ export function PlantDetailPage() {
   // Title reflects the plant once it's loaded; falls back to a generic
   // "Plant" label during the loading flash.
   useDocumentTitle(plant?.name ?? 'Plant');
+
+  // Newest watering inside the recent-completions window the API returns.
+  const lastWatered = plant?.recentCompletions.find(
+    (completion) => completion.taskType === 'water'
+  );
 
   const deleteMutation = useMutation({
     mutationFn: () => plantService.deletePlant(plantId!),
@@ -540,6 +546,21 @@ export function PlantDetailPage() {
       {/* Care history */}
       <Card>
         <CardHeader title="Care History" description="Recent task completions" />
+
+        {/* Who last watered this — the household question the app could
+            already answer and never did (ADR 0016). Read off the plant
+            payload's own `recentCompletions`, so it costs no extra request
+            and inherits this page's existing error state: if the plant read
+            failed we are on the error branch above, never here claiming
+            nobody has watered it. */}
+        <p className="mb-4 text-sm text-gray-700" data-testid="last-watered">
+          {lastWatered
+            ? t('plants.lastWateredBy', {
+                when: formatRelativeDay(lastWatered.completedAt),
+                name: lastWatered.completedByName,
+              })
+            : t('plants.noWateringYet')}
+        </p>
 
         {plant.recentCompletions.length === 0 ? (
           <p className="text-sm text-gray-500">No care history yet.</p>

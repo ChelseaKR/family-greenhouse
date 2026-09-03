@@ -41,7 +41,11 @@ export type AuditEvent =
   | 'chat.message_sent'
   | 'chat.tools_called'
   | 'chat.response_reported'
-  | 'sitter.photo_uploaded';
+  | 'sitter.photo_uploaded'
+  | 'planttag.issued'
+  | 'planttag.revoked'
+  | 'planttag.pin_changed'
+  | 'planttag.task_completed';
 
 export interface AuditFields {
   actorId?: string;

@@ -6,17 +6,28 @@ import { BillingSettings } from './BillingSettings';
 import { PreferencesSettings } from './PreferencesSettings';
 import { ApiKeysSettings } from './ApiKeysSettings';
 import { KioskSettings } from './KioskSettings';
+import { TagPinSettings } from '@/features/tags/TagPinSettings';
 import { AccountSettings } from './AccountSettings';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
-type Tab = 'preferences' | 'notifications' | 'billing' | 'kiosk' | 'api-keys' | 'account';
+type Tab =
+  'preferences' | 'notifications' | 'plant-tags' | 'billing' | 'kiosk' | 'api-keys' | 'account';
 
-const TABS: Tab[] = ['preferences', 'notifications', 'billing', 'kiosk', 'api-keys', 'account'];
+const TABS: Tab[] = [
+  'preferences',
+  'notifications',
+  'plant-tags',
+  'billing',
+  'kiosk',
+  'api-keys',
+  'account',
+];
 
 const TAB_LABEL: Record<Tab, string> = {
   preferences: 'settings.tabs.preferences',
   notifications: 'settings.tabs.notifications',
+  'plant-tags': 'settings.tabs.plantTags',
   billing: 'settings.tabs.billing',
   kiosk: 'settings.tabs.kiosk',
   'api-keys': 'settings.tabs.apiKeys',
@@ -115,6 +126,7 @@ export function SettingsPage() {
       <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
         {tab === 'preferences' && <PreferencesSettings />}
         {tab === 'notifications' && <NotificationSettings />}
+        {tab === 'plant-tags' && <TagPinSettings />}
         {tab === 'billing' && <BillingSettings />}
         {tab === 'kiosk' && <KioskSettings />}
         {tab === 'api-keys' && <ApiKeysSettings />}

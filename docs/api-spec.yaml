@@ -1246,6 +1246,165 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  # --- Plant Tags (ADR 0016) ---
+  /plants/{plantId}/tag:
+    post:
+      summary: Issue (or re-issue) a printable QR tag for one plant. Any member; gated on the plan (Seedling none, Garden 50, Greenhouse unlimited). An existing active tag for the plant is revoked first, so this is also the one-click rotation. Returns the token + scan URL.
+      tags: [Plants]
+      parameters:
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      responses:
+        '201':
+          description: Tag issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantTag'
+        '402': { description: Plan does not include plant tags, or the active-tag cap is reached }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Plant is not active (died / given away / archived) }
+    delete:
+      summary: Revoke the plant's active tag. The printed label stops working on the next scan.
+      tags: [Plants]
+      parameters:
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Tag revoked }
+        '404': { description: The plant has no active tag }
+
+  /households/{id}/plant-tags:
+    get:
+      summary: The household's active plant tags (with tokens, for the print sheet), whether the scan PIN is on, and the plan allowance.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: Tags + settings + allowance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tags:
+                    type: array
+                    items: { $ref: '#/components/schemas/PlantTag' }
+                  pinEnabled: { type: boolean }
+                  allowance:
+                    type: object
+                    properties:
+                      enabled: { type: boolean }
+                      max: { type: integer, nullable: true, description: null = unlimited }
+                      used: { type: integer }
+                  planId: { type: string, enum: [seedling, garden, greenhouse] }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{id}/plant-tags/pin:
+    put:
+      summary: Set (four digits) or clear (null) the household PIN that scan pages must present. Admin only. Only a salted hash is stored.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin: { type: string, pattern: '^\d{4}$', nullable: true }
+      responses:
+        '200':
+          description: Current PIN state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pinEnabled: { type: boolean }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tag/{token}:
+    get:
+      summary: Public plant-tag scan view. No auth; the 256-bit token is the only credential and is scoped to ONE plant. Returns the plant's name, species, photo, care notes, this plant's due tasks, and a settled-read `history` (last care / last watering by first name, or `unavailable` when the read failed — never "never watered"). When the household set a PIN it must be sent in `X-Tag-Pin`.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - {
+            name: X-Tag-Pin,
+            in: header,
+            required: false,
+            schema: { type: string, pattern: '^\d{4}$' },
+          }
+      responses:
+        '200':
+          description: Scan view (one plant, no member ids / emails / location)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plantName: { type: string }
+                  species: { type: string, nullable: true }
+                  imageUrl: { type: string, nullable: true }
+                  careNotes: { type: string, nullable: true }
+                  history:
+                    type: object
+                    properties:
+                      status: { type: string, enum: [ok, unavailable] }
+                      lastCare: { $ref: '#/components/schemas/PlantTagCare' }
+                      lastWatered: { $ref: '#/components/schemas/PlantTagCare' }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        taskType: { type: string }
+                        dueDate: { type: string, format: date-time }
+                        overdue: { type: boolean }
+        '401': { description: PIN required or wrong (`details.reason` = required | wrong) }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { description: Locked after too many wrong PINs (`details.lockedUntil`) }
+
+  /tag/{token}/tasks/{taskId}/complete:
+    post:
+      summary: Public "I just did this". Completes one of the TAGGED PLANT's tasks (a task on any other plant is not found), attributed to the display name the scanner typed with a `tag:{id}` actor and `viaTag` on the activity event. PIN enforced like the scan view.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: taskId, in: path, required: true, schema: { type: string } }
+        - { name: X-Tag-Pin, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [displayName]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 40 }
+                expectedNextDue: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Completed (or already completed for this occurrence — `alreadyDone`)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  taskType: { type: string }
+                  dueDate: { type: string, format: date-time }
+                  completedByName: { type: string }
+                  alreadyDone: { type: boolean }
+        '401': { description: PIN required or wrong }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { description: Locked after too many wrong PINs }
+
   /households/{id}/kiosk-link:
     post:
       summary: Issue (or re-issue) the household's kiosk wall-display link (admin only, Greenhouse plan). Returns the token/URL exactly once and revokes any previous link in the same call.
@@ -2641,3 +2800,30 @@ components:
           type: string
         details:
           type: object
+
+    # Plant Tags (ADR 0016)
+    PlantTagCare:
+      type: object
+      nullable: true
+      description: One completion as the scan page shows it — first name only for members; the typed display name for tag completions.
+      properties:
+        taskType: { type: string }
+        completedAt: { type: string, format: date-time }
+        completedByName: { type: string }
+        viaTag: { type: boolean }
+    PlantTag:
+      type: object
+      description: A household-side view of one active tag. Includes the token because the household needs it to print the QR label (see ADR 0016).
+      properties:
+        id: { type: string }
+        householdId: { type: string }
+        plantId: { type: string }
+        plantName: { type: string }
+        plantSpecies: { type: string, nullable: true }
+        plantStatus: { type: string, enum: [active, died, gave_away, archived] }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        status: { type: string, enum: [active, revoked] }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        token: { type: string, description: 64 lowercase hex chars (256 bits) }
+        url: { type: string, description: The scan URL the QR code encodes }

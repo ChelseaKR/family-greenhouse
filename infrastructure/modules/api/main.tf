@@ -49,7 +49,7 @@ resource "aws_apigatewayv2_api" "main" {
     # declared here or strict browsers (Safari, Firefox) reject the
     # preflight before the request reaches Lambda — failure mode is a
     # silent CORS block with no log on our side.
-    allow_headers     = ["Content-Type", "Authorization", "X-Household-Id", "X-Cognito-Access-Token"]
+    allow_headers     = ["Content-Type", "Authorization", "X-Household-Id", "X-Cognito-Access-Token", "X-Tag-Pin"]
     allow_credentials = true
     max_age           = 300
   }
@@ -312,6 +312,8 @@ locals {
     "climate"       = "climate"
     "apiKeys"       = "apiKeys"
     "api"           = "api"
+    # Plant Tags (ADR 0016): per-plant QR labels, public scan + complete.
+    "plantTags" = "plantTags"
     # Not an HTTP group — invoked by EventBridge (see the schedule below). It
     # gets an unused API integration/permission from the for_each, which is
     # harmless since no route targets it.
@@ -466,6 +468,9 @@ locals {
     climate = local.weather_environment
     apiKeys = {}
     api     = {}
+    # Plant Tags (ADR 0016) talks to DynamoDB only — no third-party
+    # integration values beyond the shared lambda_environment.
+    plantTags = {}
     # Reminders also get weather: services/reminders.ts adds a rain/frost line
     # to the daily reminder ("Rain is forecast — outdoor plants likely don't
     # need watering today"), which is the exact case that advice exists for.
@@ -941,6 +946,17 @@ locals {
     # Away Kit return recap (authed, any member): replays sitter-attributed
     # activity inside a link's window — handlers/households/awayRecap.ts.
     "GET /households/{id}/away-recap" = { group = "households", auth = "jwt" }
+
+    # Plant Tags (ADR 0016). Management is any-member (a tag grants strictly
+    # less than a member already holds); the PIN is admin-only. The two /tag
+    # routes are PUBLIC: the 256-bit token in the path is the only credential,
+    # scoped to ONE plant + complete-task-only, PIN-checkable, IP-rate-limited.
+    "POST /plants/{plantId}/tag"                = { group = "plantTags", auth = "jwt" }
+    "DELETE /plants/{plantId}/tag"              = { group = "plantTags", auth = "jwt" }
+    "GET /households/{id}/plant-tags"           = { group = "plantTags", auth = "jwt" }
+    "PUT /households/{id}/plant-tags/pin"       = { group = "plantTags", auth = "jwt" }
+    "GET /tag/{token}"                          = { group = "plantTags", auth = "none" }
+    "POST /tag/{token}/tasks/{taskId}/complete" = { group = "plantTags", auth = "none" }
 
     # --- me ---
     "DELETE /me"                = { group = "me", auth = "jwt" }

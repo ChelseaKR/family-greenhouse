@@ -15,6 +15,8 @@ export const CORS_ALLOWED_HEADERS = [
   'Authorization',
   'X-Household-Id',
   'X-Cognito-Access-Token',
+  // Plant-tag scan pages present the household PIN here (ADR 0016).
+  'X-Tag-Pin',
 ] as const;
 
 export const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
