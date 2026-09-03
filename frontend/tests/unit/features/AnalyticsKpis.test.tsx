@@ -63,6 +63,11 @@ function renderAnalytics({
     http.get(`${API}/tasks`, ok([], overrides.tasks)),
     http.get(`${API}/households/hh-1/analytics/daily`, ok({ series: [] }, overrides.daily)),
     http.get(`${API}/households/hh-1/year-in-review`, ok(EMPTY_REVIEW, overrides.review)),
+    // The coverage card owns its own states (CoverageCard.test.tsx); here it
+    // only needs a settled answer so the page's spinner-free signal holds.
+    http.get(`${API}/households/hh-1/analytics/coverage`, () =>
+      HttpResponse.json({ message: 'Garden plan and up' }, { status: 402 })
+    ),
     http.get(`${API}/households/hh-1`, () =>
       HttpResponse.json({
         id: 'hh-1',

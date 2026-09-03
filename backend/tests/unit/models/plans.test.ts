@@ -428,3 +428,13 @@ describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden life
     expect(isIntervalOffered(noLifetime, 'lifetime')).toBe(false);
   });
 });
+
+describe('household toolkit gate', () => {
+  // The per-tier truth table is already pinned above ('the household toolkit
+  // (auto-handoff) is ...'), which also checks the published summary. What is
+  // NOT covered there is the unknown-id path, so that is what stays here.
+  it('fails closed on an unknown plan id (resolves to the free tier)', () => {
+    expect(hasHouseholdToolkit(getPlan('not-a-plan'))).toBe(false);
+    expect(hasHouseholdToolkit(getPlan(undefined))).toBe(false);
+  });
+});

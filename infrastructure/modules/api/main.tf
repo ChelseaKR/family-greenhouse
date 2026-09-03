@@ -938,6 +938,7 @@ locals {
     "POST /households/join/{inviteCode}"                  = { group = "households", auth = "jwt" }
     "GET /households/{id}/activity"                       = { group = "households", auth = "jwt" }
     "GET /households/{id}/analytics/daily"                = { group = "households", auth = "jwt" }
+    "GET /households/{id}/analytics/coverage"             = { group = "households", auth = "jwt" }
     "GET /households/{id}/year-in-review"                 = { group = "households", auth = "jwt" }
     "PUT /households/{householdId}/members/{userId}/role" = { group = "households", auth = "jwt" }
     "DELETE /households/{householdId}/members/{userId}"   = { group = "households", auth = "jwt" }

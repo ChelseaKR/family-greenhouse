@@ -13,17 +13,20 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { calendarDaysBetween } from '@/utils/date';
 import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
+import { CoverageCard } from './CoverageCard';
 
 /**
  * Care analytics — KPI tiles + four views over the same data feed:
  *   - 30-day completion trend (bars + 7-day moving average)
  *   - By task type (water vs fertilize vs prune vs …)
  *   - Plants at risk (overdue tasks, ranked)
+ *   - Coverage (which plants rest on one person — a fragility view, not a
+ *     leaderboard; see CoverageCard.tsx)
  *   - Per-member contribution this year
  *
- * No new endpoints beyond /analytics/daily, /year-in-review, /tasks, and
- * /plants — everything is computed client-side from data the dashboard
- * already needs anyway.
+ * No new endpoints beyond /analytics/daily, /analytics/coverage,
+ * /year-in-review, /tasks, and /plants — everything else is computed
+ * client-side from data the dashboard already needs anyway.
  */
 
 const TASK_TYPE_LABELS: Record<string, string> = {
@@ -283,6 +286,11 @@ export function AnalyticsPage() {
           )}
         </Card>
       )}
+
+      {/* Coverage — the bus-factor view. Owns its own three settled states
+          (unavailable / locked / needs a second member) so a failed read can
+          never look like "every plant is covered". */}
+      <CoverageCard />
 
       {/* Per-member */}
       {review && review.byMember.length > 0 && (
