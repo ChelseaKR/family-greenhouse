@@ -2,7 +2,7 @@
 
 Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI systems" (NIST AI RMF **MAP** function). Seeded from `docs/chat-rag-design.md`'s non-goals and open-risks sections plus the tool-guard threat notes already in the codebase — this is a consolidation of existing, real design decisions into the register format the standard requires, not new analysis invented for this document.
 
-**Owner:** Chelsea Kelly-Reif. **Reviewed:** 2026-08-09 (first version 2026-07-05; quantitative grounding scope and observability re-verified 2026-08-09). **Recheck cadence:** quarterly, and immediately on any new tool added to `TOOL_REGISTRY`, a system-prompt rewrite, a grounding-guard change, or a model swap.
+**Owner:** Chelsea Kelly-Reif. **Reviewed:** 2026-09-02 (first version 2026-07-05; quantitative grounding scope and observability re-verified 2026-08-09; `check_pet_toxicity` tool + categorical pet-safety guard added 2026-09-02, ADR 0011). **Recheck cadence:** quarterly, and immediately on any new tool added to `TOOL_REGISTRY`, a system-prompt rewrite, a grounding-guard change, or a model swap.
 
 ---
 
@@ -41,6 +41,8 @@ Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI sys
 - `groundingGuard.ts`: a quantitative-claim grounding heuristic wired into both sync and streaming RAG turns. It recognizes care-relevant frequencies, percentages, temperatures, durations, lengths, volumes, masses, doses, dilution/repetition forms, fertilizer ratios, and word-quantity dose instructions ("half strength", "double the dose"). Recognized evidence is matched by number and, for safety-sensitive doses, canonical units and denominators expressed with `per` or `/`; unsupported claims are replaced before persistence or display. Streaming RAG output is buffered until the same check passes.
 - The guard reports `verified` / `unverified` / `ungrounded`, never a bare boolean pass, and each verdict has its own content-free log event (`chat_grounding_checked` / `chat_grounding_unverified` / `chat_grounding_blocked`) carrying `claimsChecked`, `unclassifiedNumericCount`, and `sourceCount`. An answer the guard recognized nothing in is `unverified` — delivered, but never counted as evidence that anything in it was checked. See [ADR 0009](../adr/0009-three-state-grounding-verdict.md) and [ADR 0008](../adr/0008-unit-aware-rag-grounding.md).
 
+- Pet safety (ADR 0011): the `check_pet_toxicity` tool exposes the curated, ASPCA-grounded `PET_TOXICITY` table through the unchanged public matcher, returning an honest `not_in_checker` on a miss; the guard treats a categorical safety claim ("safe for cats", "non-toxic", Spanish forms) as a claim that only a matching `non-toxic` verdict from that tool can ground, and an unsupported one blocks — replaced by a refusal-with-pointer — even when no other retrieved context exists. Streamed pet-safety turns are held until the guard passes. The danger direction ("toxic") is not gated: a false alarm is the cheaper failure. Residual: a safety claim volunteered on a turn whose question mentions no pet streams before the persisted answer is replaced, and the client keeps streamed text (frontend follow-up).
+
 **Residual, deliberately open:** an `unverified` answer carrying numeric content that fits no checkable claim shape is delivered without blocking. It is counted (`unclassifiedNumericCount`), and whether it should block is a decision waiting on that count — see ADR 0009's consequences.
 
 **Gap:** no live faithfulness/hallucination-rate measurement against real model output exists (`evals/README.md` limitation). **Tracked, dated waiver:** `docs/RESPONSIBLE-TECH-AUDITS.md`.
@@ -65,7 +67,7 @@ Per `STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` "Governance scaffolding for AI sys
 
 **Risk:** a user (or, via RAG, a future untrusted corpus source) tries to get the model to ignore its instructions, call a tool with attacker-chosen input, or exceed the confirm-before-write boundary.
 
-**Mitigations:** fixed, server-defined tool catalog (the model can't invent new tools); hallucinated-plant-ID rejection (server re-validates by name, never trusts the model's raw ID); per-turn tool-call cap (5); the RAG corpus is first-party authored content (not user- or web-sourced), so classic "indirect injection via untrusted retrieved content" has a much smaller attack surface than a general web-RAG system.
+**Mitigations:** fixed, server-defined tool catalog (the model can't invent new tools); `check_pet_toxicity` reads no household data and its verdicts are byte-identical to the table whatever text arrives as `plantName` (red-team `verdict-integrity` invariant); hallucinated-plant-ID rejection (server re-validates by name, never trusts the model's raw ID); per-turn tool-call cap (5); the RAG corpus is first-party authored content (not user- or web-sourced), so classic "indirect injection via untrusted retrieved content" has a much smaller attack surface than a general web-RAG system.
 
 **Residual gap:** the committed red-team exercise covers the offline tool/data
 layer with mapped prompt-injection fixtures, but no live-model

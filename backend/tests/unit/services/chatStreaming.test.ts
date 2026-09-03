@@ -48,6 +48,7 @@ vi.mock('../../../src/services/billing.js', () => ({
 import {
   streamChatTurn,
   GROUNDING_BLOCK_MESSAGE,
+  PET_SAFETY_BLOCK_MESSAGE,
   type ChatStreamEvent,
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
@@ -386,5 +387,81 @@ describe('streamChatTurn', () => {
     ).rejects.toMatchObject({ statusCode: 402 });
     expect(vi.mocked(persistence.reserveBudget)).not.toHaveBeenCalled();
     expect(vi.mocked(invokeChatModelStream)).not.toHaveBeenCalled();
+  });
+});
+
+describe('pet-safety turns are held until the guard passes (ADR 0011)', () => {
+  const deltasOf = (events: ChatStreamEvent[]) =>
+    events.filter((event) => event.type === 'delta').map((event) => event.text);
+
+  it('never streams a from-memory all-clear on a pet-safety question', async () => {
+    vi.mocked(invokeChatModelStream).mockReturnValueOnce(
+      mockedStream(['Pothos is ', 'completely safe for cats.'], {
+        content: [{ type: 'text', text: 'Pothos is completely safe for cats.' }],
+        stopReason: 'end_turn',
+        inputTokens: 100,
+        outputTokens: 10,
+        costUsd: 0.0003,
+      })
+    );
+
+    const events = await collect({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'Is pothos safe around my cat?',
+    });
+    const delivered = deltasOf(events).join('');
+
+    expect(delivered).toBe(PET_SAFETY_BLOCK_MESSAGE);
+    expect(delivered).not.toContain('completely safe');
+    const done = events.at(-1);
+    expect(done?.type).toBe('done');
+    if (done?.type === 'done') {
+      expect(done.result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+    }
+  });
+
+  it('streams a tool-grounded verdict only after the completed answer passes', async () => {
+    vi.mocked(invokeChatModelStream)
+      .mockReturnValueOnce(
+        mockedStream(['Let me check. '], {
+          content: [
+            { type: 'text', text: 'Let me check. ' },
+            {
+              type: 'tool_use',
+              id: 'tu-tox',
+              name: 'check_pet_toxicity',
+              input: { plantName: 'spider plant' },
+            },
+          ],
+          stopReason: 'tool_use',
+          inputTokens: 100,
+          outputTokens: 10,
+          costUsd: 0.0003,
+        })
+      )
+      .mockReturnValueOnce(
+        mockedStream(['Spider plant is ', 'non-toxic to cats.'], {
+          content: [{ type: 'text', text: 'Spider plant is non-toxic to cats.' }],
+          stopReason: 'end_turn',
+          inputTokens: 120,
+          outputTokens: 15,
+          costUsd: 0.0004,
+        })
+      );
+
+    const events = await collect({
+      userId: 'u1',
+      householdId: 'hh-1',
+      message: 'Is a spider plant safe for my cat?',
+    });
+    const deltas = deltasOf(events);
+
+    // Held from the first token: no preamble before the tool ran, and the
+    // final answer arrives as one guarded emission, not as raw deltas.
+    expect(events.findIndex((e) => e.type === 'delta')).toBeGreaterThan(
+      events.findIndex((e) => e.type === 'tool_start')
+    );
+    expect(deltas).toEqual(['Spider plant is non-toxic to cats.']);
   });
 });

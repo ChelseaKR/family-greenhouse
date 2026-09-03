@@ -98,11 +98,25 @@ verdict (see [ADR 0009](adr/0009-three-state-grounding-verdict.md)). The event
 name carries the verdict so a query for "answers the guard verified" cannot
 sweep up answers it merely didn't recognize:
 
-| event                       | meaning                                                                   |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `chat_grounding_checked`    | verified: ≥1 quantitative claim checked, all traced to a retrieved span   |
-| `chat_grounding_unverified` | the guard checked nothing it can vouch for; the answer was still returned |
-| `chat_grounding_blocked`    | a recognized claim was unsupported; the answer was replaced               |
+| event                       | meaning                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| `chat_grounding_checked`    | verified: ≥1 quantitative or pet-safety claim checked, all traced to a retrieved span/verdict |
+| `chat_grounding_unverified` | the guard checked nothing it can vouch for; the answer was still returned                     |
+| `chat_grounding_blocked`    | a recognized claim was unsupported; the answer was replaced                                   |
+
+Every event carries `claimsChecked` (quantitative) and `safetyClaimsChecked`
+(categorical pet-safety claims, [ADR 0011](adr/0011-categorical-pet-safety-claims-block.md)).
+`chat_grounding_blocked` additionally carries `blockedOn` (`safety` |
+`quantitative`) and `ungroundedSafetyClaimCount`. A safety block with
+`sourceCount: 0` is the model asserting a plant is safe for pets without
+having called `check_pet_toxicity` at all — the primary failure mode the
+tool exists to remove, and the row to watch after a model or prompt change:
+
+```text
+fields @timestamp, blockedOn, sourceCount, safetyClaimsChecked, conversationId
+| filter msg = "chat_grounding_blocked" and blockedOn = "safety"
+| stats count(*) as blocked by sourceCount, bin(1d)
+```
 
 ```text
 fields @timestamp, claimsChecked, unclassifiedNumericCount, sourceCount, conversationId

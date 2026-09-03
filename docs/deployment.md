@@ -95,6 +95,19 @@ The Lambdas read everything from environment variables that Terraform sets at de
 | ------------------ | ------------------------------------- |
 | `PLANT_ID_API_KEY` | Real Plant.id calls. Demo without it. |
 
+### AI inference cost caps
+
+Per-household, per-UTC-month ceilings on the paid AI calls. Each is a Terraform variable of the same name in lower case, declared in `infrastructure/variables.tf` and set per environment in `environments/{staging,production}/terraform.tfvars`. Blank means "use the code default", which is exactly what ran before the variables existed, so an all-blank deploy changes nothing.
+
+| Variable                                                       | Guard                                                         | Blank means                    | Notes                                                                                                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IDENTIFY_METERING_ENABLED`                                    | `services/identifyBudget.ts` — 3 / 30 / 100 per month by plan | track only, never block        | `1` enforces. **Production sets `1`; staging and the code default only track.**                                                                       |
+| `LEAF_HEALTH_MONTHLY_CAP`                                      | `services/leafHealthBudget.ts`                                | `200`, every tier              | Applies to every tier without a per-tier value. `0` = unlimited.                                                                                      |
+| `LEAF_HEALTH_MONTHLY_CAP_SEEDLING` / `_GARDEN` / `_GREENHOUSE` | same                                                          | inherit the flat cap           | Setting any one makes the guard tier-aware, which adds one household read per check (the read identify already makes). `0` = unlimited for that tier. |
+| `CHAT_BUDGET_INPUT_TOKENS` / `CHAT_BUDGET_OUTPUT_TOKENS`       | `services/chat/`                                              | `250000` / `50000`, every tier | Not tier-aware. `0` is **not** unlimited — it blocks every turn — so leave blank rather than zero.                                                    |
+
+All three guards reserve through a conditional DynamoDB `ADD` before the paid call, so concurrent requests cannot overshoot a cap. Caps are read per request: a tfvars change takes effect on the next apply with no code deploy, and a household already past a newly lowered cap is blocked until the month rolls over — lower caps on the 1st.
+
 ### Billing
 
 | Variable                     | Effect                                          |

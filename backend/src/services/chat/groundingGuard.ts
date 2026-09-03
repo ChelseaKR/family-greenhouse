@@ -45,6 +45,21 @@
  * dated waiver in docs/RESPONSIBLE-TECH-AUDITS.md). Such an answer is
  * reported `unverified`, not passed as checked.
  *
+ * ONE EXCEPTION to the "unverified does not block" rule (ADR 0011): a
+ * CATEGORICAL PET-SAFETY CLAIM — a clause asserting a plant is safe /
+ * non-toxic / harmless / fine for cats, dogs or pets, in English or Spanish —
+ * is a recognized claim, and an ungrounded one is `ungrounded`, not
+ * `unverified`. It blocks. The reasoning that lets a qualitative care answer
+ * through ("the corpus is largely qualitative; the guard just didn't
+ * recognize anything") does not transfer to an all-clear about an animal:
+ * a verified source exists (`models/petToxicity.ts`, reachable through the
+ * `check_pet_toxicity` tool), so "no evidence" here means "the source was
+ * not consulted", and the failure direction is an animal being harmed. The
+ * danger direction ("toxic to cats") is deliberately not gated — a false
+ * alarm costs a needless scare, a false all-clear can cost a pet. Evidence is
+ * structured (`RetrievedSpan.petSafety`), per-species, and matched to the
+ * plant the clause names where it names one. See `checkSafetyClaims`.
+ *
  * This module is unit-tested against synthetic fixtures
  * (chatGroundingGuard.test.ts) and wired into the live turnEvents() response
  * path. When RAG context is present, the completed answer is checked before
@@ -53,9 +68,32 @@
  * check completes so ungrounded text is never transiently shown.
  */
 
+export type PetSpecies = 'cats' | 'dogs';
+export type PetSafetyVerdict = 'toxic' | 'non-toxic';
+
+/**
+ * One curated-table entry carried on a `check_pet_toxicity` span. This is the
+ * ONLY evidence a categorical safety claim can trace to: the corpus carries no
+ * toxicity content by design (the table is the single source, and a second
+ * source is how two sources drift apart), and a verdict is a fact about a
+ * named plant and a species, not a number that could be matched by digits.
+ */
+export interface PetSafetyEvidence {
+  /** Every name the entry answers to, normalized with `normalizeEvidenceName`. */
+  names: string[];
+  cats: PetSafetyVerdict;
+  dogs: PetSafetyVerdict;
+}
+
 export interface RetrievedSpan {
   source: string;
   text: string;
+  /**
+   * Structured verdicts from the pet-toxicity tool. Present (possibly empty)
+   * on every `check_pet_toxicity` span; an empty array is a "not in our
+   * checker" result, which keeps the guard active without grounding anything.
+   */
+  petSafety?: PetSafetyEvidence[];
 }
 
 /**
@@ -79,6 +117,15 @@ export interface GroundingResult {
    * unrecognized number as clean.
    */
   unclassifiedNumericSentences: string[];
+  /** Sentences carrying a categorical pet-safety claim, grounded or not (ADR 0011). */
+  safetyClaimsChecked: string[];
+  /**
+   * Safety-claim sentences with no supporting non-toxic verdict for the plant
+   * and species they vouch for. Each one blocks: this is the one place the
+   * guard blocks on "nothing to check", because here nothing-to-check means
+   * the verified table was not consulted.
+   */
+  ungroundedSafetyClaims: string[];
 }
 
 /**
@@ -234,6 +281,283 @@ function extractNumbers(text: string): string[] {
   return text.match(/\d+(\.\d+)?/g) ?? [];
 }
 
+// ---------------------------------------------------------------------------
+// Categorical pet-safety claims (ADR 0011)
+// ---------------------------------------------------------------------------
+
+/**
+ * Accent-fold and lowercase for matching. Spanish predicates are matched on
+ * the folded form ("tóxico" → "toxico", "está" → "esta") so the patterns
+ * below stay ASCII and `\b` behaves; curly apostrophes are straightened for
+ * the same reason. Per-character length is preserved for precomposed input,
+ * but nothing below relies on mapping offsets back to the original text.
+ */
+function foldText(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’‘]/g, "'")
+    .toLowerCase();
+}
+
+/**
+ * Same normalization the toxicity matcher applies to its own names
+ * (lowercase, accents folded, apostrophes dropped, non-alphanumerics to single
+ * spaces). Evidence names AND the claim text are normalized with this one
+ * function so "devil's ivy", "Devil’s Ivy" and "devils ivy" compare equal.
+ */
+export function normalizeEvidenceName(raw: string): string {
+  return foldText(raw)
+    .replace(/'/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+const PET_NOUN_CATS = String.raw`(?:cats?|kittens?|kitt(?:y|ies)|felines?|gat[ao]s?|gatit[ao]s?|felin[ao]s?)`;
+const PET_NOUN_DOGS = String.raw`(?:dogs?|pupp(?:y|ies)|pups?|canines?|perr[ao]s?|perrit[ao]s?|cachorr[ao]s?|canin[ao]s?)`;
+const PET_NOUN_GENERIC = String.raw`(?:pets?|animals?|mascotas?|animal(?:es)?)`;
+const PET_NOUN = String.raw`(?:${PET_NOUN_CATS}|${PET_NOUN_DOGS}|${PET_NOUN_GENERIC})`;
+const CATS_PATTERN = new RegExp(String.raw`\b${PET_NOUN_CATS}\b`);
+const DOGS_PATTERN = new RegExp(String.raw`\b${PET_NOUN_DOGS}\b`);
+const PET_NOUN_PATTERN = new RegExp(String.raw`\b${PET_NOUN}\b`);
+
+// A positive predicate needs either a copula before it or a preposition after
+// it: "somewhere safe where the dog can't reach it" is neither, "is safe",
+// "safe for cats", "es seguro", "segura para gatos" all are. Up to two
+// intervening words absorb intensifiers ("is completely safe"). "fine" /
+// "okay" are common enough in ordinary care advice that they only count when
+// a pet noun follows the preposition directly ("fine for cats").
+const SAFE_WORD_EN = String.raw`(?:safe|harmless)`;
+const SOFT_WORD_EN = String.raw`(?:fine|okay|ok)`;
+const SAFE_WORD_ES = String.raw`(?:segur[ao]s?|inofensiv[ao]s?|apt[ao]s?)`;
+const COPULA_EN = String.raw`(?:is|are|was|were|be|been|being|remains?|stays?|seems?|considered|deemed|rated|listed|classified|'s|'re)`;
+const COPULA_ES = String.raw`(?:es|son|era|eran|esta|estan|sea|sean|resulta|resultan|seria|serian|considerad[ao]s?|considera)`;
+const PREP_EN = String.raw`(?:for|around|with|to|near)`;
+const PREP_ES = String.raw`(?:para|con)`;
+const FILLER = String.raw`(?:[a-z0-9%'-]+\s+){0,2}?`;
+const DETERMINER = String.raw`(?:(?:the|your|my|our|a|an|most|all|los|las|tus|mis|un|una)\s+)?`;
+// `(?<!pet[-\s])` keeps the generic forms off "pet-safe": that compound is
+// handled by its own alternation below, with the checker/URL exclusions.
+const NOT_PET_COMPOUND = String.raw`(?<!pet[-\s])`;
+const POSITIVE_PREDICATE = new RegExp(
+  [
+    String.raw`\b${COPULA_EN}\s+${FILLER}${NOT_PET_COMPOUND}${SAFE_WORD_EN}\b`,
+    String.raw`\b${NOT_PET_COMPOUND}${SAFE_WORD_EN}(?:\s+[a-z-]+){0,2}?\s+${PREP_EN}\b`,
+    String.raw`\b${COPULA_EN}\s+${FILLER}${SOFT_WORD_EN}\s+${PREP_EN}\s+${DETERMINER}${PET_NOUN}\b`,
+    // A prognosis with the pet as subject ("your cat should be fine after a
+    // nibble", "dogs will be okay") is an all-clear about that animal too.
+    String.raw`\b${PET_NOUN}\s+(?:should|will|would|'ll|is|are|was|were|be|should\s+be|will\s+be|would\s+be)\s+${FILLER}(?:fine|okay|ok|alright|all\s+right|safe)\b`,
+    String.raw`\b${COPULA_ES}\s+${FILLER}${SAFE_WORD_ES}\b`,
+    String.raw`\b${SAFE_WORD_ES}(?:\s+[a-z-]+){0,2}?\s+${PREP_ES}\b`,
+    // "pet-safe" / "pet-friendly" carry their own noun — but not when they
+    // name the checker itself ("use the pet-safe checker") or sit in a URL.
+    String.raw`(?<![/\w])pet[-\s]?(?:safe|friendly)\b(?!\s*(?:checker|check|page|list|tool|lookup|search|section|guide|table))`,
+  ].join('|'),
+  'g'
+);
+
+// Negated danger is itself an all-clear ("non-toxic", "not poisonous", "no
+// danger to cats", "no es tóxico", "sin riesgo") and needs no copula or noun:
+// in a plant-care assistant these words are only ever about toxicity.
+const DANGER_WORD_EN = String.raw`(?:toxic|poisonous|poison|dangerous|harmful|hazardous|a\s+(?:danger|risk|threat|hazard|problem))`;
+const DANGER_WORD_ES = String.raw`(?:toxic[ao]s?|venenos[ao]s?|peligros[ao]s?|danin[ao]s?|nociv[ao]s?|un\s+(?:peligro|riesgo|problema))`;
+const NEGATED_DANGER_PREDICATE = new RegExp(
+  [
+    // "non-toxic" — except as part of the ASPCA list's own name ("the toxic
+    // and non-toxic plant list"), which the honest not-in-checker answer
+    // points the user at and must not be read as an all-clear.
+    String.raw`(?<!toxic\s(?:and|or)\s)\bnon[-\s]?toxic\b(?!\s+(?:plants?\s+)?(?:list|database|lookup|table|checker|page))`,
+    String.raw`\bnontoxic\b(?!\s+(?:plants?\s+)?(?:list|database|lookup|table|checker|page))`,
+    String.raw`\b(?:not|isn't|aren't|isnt|arent|never)\s+${FILLER}${DANGER_WORD_EN}\b`,
+    String.raw`\b(?:nothing|no)\s+(?:[a-z]+\s+)?(?:toxic|poisonous|dangerous|harmful|danger|risk|threat|hazard)\b`,
+    String.raw`\bwon'?t\s+(?:hurt|harm|poison)\b`,
+    String.raw`\bposes?\s+no\s+(?:risk|threat|danger)\b`,
+    // Likewise "lista de plantas tóxicas y no tóxicas" names the ASPCA list.
+    String.raw`(?<!toxic[ao]s?\s(?:y|o)\s)\bno\s+(?:${COPULA_ES}\s+)?${FILLER}${DANGER_WORD_ES}\b`,
+    String.raw`\b(?:nada|ningun[ao]?)\s+(?:[a-z]+\s+)?(?:toxic[ao]?|venenos[ao]?|peligros[ao]?|peligro|riesgo|dano)\b`,
+    String.raw`\bsin\s+(?:riesgo|peligro|toxicidad)\b`,
+    String.raw`\bno\s+(?:hace|hara|causa|causara)\s+dano\b`,
+  ].join('|'),
+  'g'
+);
+
+// A negation or hedge in the window before the predicate turns an assertion
+// into its opposite or into an admission — "not safe", "unsafe" (no word
+// boundary, never matches), "I can't confirm whether it's safe for cats",
+// "no es seguro", "no puedo confirmar si es segura". The window runs back to
+// the nearest contrastive boundary, so "pothos isn't safe, but spider plant
+// is safe for cats" still checks the second clause on its own terms.
+const NEGATION_PATTERN =
+  /\b(?:not|never|no|cannot|neither|nor|nothing|none|unable|impossible|isnt|arent|dont|doesnt|cant|wont|couldnt|wouldnt|shouldnt|nunca|jamas|tampoco|ni|sin|nada|ningun[ao]?|imposible)\b|\w+n't\b/;
+const HEDGE_PATTERN =
+  /\b(?:if|whether|unless|until|unsure|uncertain|wonder(?:ing)?|question(?:able)?|hasta|incierto|insegur[ao])\b|\bsi\b(?!,)/;
+const ONLY_BEFORE_PREDICATE = /\b(?:only|solo|solamente)\s+\S*$/;
+const CONTRAST_BOUNDARY = /\b(?:but|however|yet|although|though|whereas|pero|sino|aunque)\b|[;:]/g;
+// Clauses are the unit a claim names a plant and a species in: "calathea is
+// safe for cats, unlike the ZZ plant" must be matched to calathea, not to
+// whichever name in the sentence happens to be longest.
+const CLAUSE_BOUNDARY =
+  /[,;:()[\]—–]|\s-\s|\s+(?:but|so|though|although|unless|if|when|while|whereas|however|except|yet|pero|aunque|si|cuando|mientras|sino|excepto|salvo)\s+/;
+
+/** A recognized categorical safety claim (reported at sentence granularity). */
+interface SafetyClaim {
+  sentence: string;
+  /** Species the clause vouches for; both when unspecified or generic ("pets"). */
+  species: PetSpecies[];
+  /** The clause, normalized like evidence names, for plant-name matching. */
+  normalizedClause: string;
+}
+
+function speciesIn(text: string): PetSpecies[] {
+  const cats = CATS_PATTERN.test(text);
+  const dogs = DOGS_PATTERN.test(text);
+  if (cats && !dogs) return ['cats'];
+  if (dogs && !cats) return ['dogs'];
+  return ['cats', 'dogs'];
+}
+
+function isHedged(
+  foldedSentence: string,
+  predicateStart: number,
+  predicateText: string,
+  kind: 'positive' | 'negated-danger'
+): boolean {
+  let windowStart = 0;
+  for (const boundary of foldedSentence.matchAll(CONTRAST_BOUNDARY)) {
+    if (boundary.index >= predicateStart) break;
+    windowStart = boundary.index + boundary[0].length;
+  }
+  const window = foldedSentence.slice(windowStart, predicateStart);
+  // A positive predicate can carry its own negation inside the copula form
+  // ("is not safe", "no es seguro"); a negated-danger predicate carries its
+  // negation by construction ("not toxic"), so only the window counts there.
+  const negationScope = kind === 'positive' ? `${window} ${predicateText}` : window;
+  return (
+    NEGATION_PATTERN.test(negationScope) ||
+    HEDGE_PATTERN.test(window) ||
+    ONLY_BEFORE_PREDICATE.test(`${window} ${predicateText}`.replace(/\s+/g, ' '))
+  );
+}
+
+/**
+ * Finds every categorical pet-safety claim in an answer. Questions ("is it
+ * safe for cats?") are never claims. A positive predicate ("is safe", "safe
+ * for") also needs a pet noun somewhere in the sentence; a negated-danger
+ * predicate ("non-toxic") does not.
+ */
+function detectSafetyClaims(answerText: string): SafetyClaim[] {
+  const claims: SafetyClaim[] = [];
+  for (const sentence of splitSentences(answerText)) {
+    if (/[?¿]/.test(sentence)) continue;
+    const folded = foldText(sentence);
+    const sentenceHasPetNoun = PET_NOUN_PATTERN.test(folded);
+    const clauses = folded.split(CLAUSE_BOUNDARY);
+    let cursor = 0;
+    const found: SafetyClaim[] = [];
+    for (const clause of clauses) {
+      const start = folded.indexOf(clause, cursor);
+      cursor = start + clause.length;
+      if (!clause.trim()) continue;
+      const predicates = [
+        ...[...clause.matchAll(POSITIVE_PREDICATE)].map((m) => ({
+          m,
+          kind: 'positive' as const,
+        })),
+        ...[...clause.matchAll(NEGATED_DANGER_PREDICATE)].map((m) => ({
+          m,
+          kind: 'negated-danger' as const,
+        })),
+      ];
+      for (const { m, kind } of predicates) {
+        const needsNoun = kind === 'positive' && !/\bpet[-\s]?(?:safe|friendly)\b/.test(m[0]);
+        if (needsNoun && !sentenceHasPetNoun) continue;
+        if (isHedged(folded, start + m.index, m[0], kind)) continue;
+        const clauseSpecies = PET_NOUN_PATTERN.test(clause) ? speciesIn(clause) : speciesIn(folded);
+        found.push({
+          sentence,
+          species: clauseSpecies,
+          normalizedClause: normalizeEvidenceName(clause),
+        });
+      }
+    }
+    claims.push(...found);
+  }
+  return claims;
+}
+
+/**
+ * The evidence entry a clause is about: the entry whose (longest) name occurs
+ * in the clause as whole words. "boston fern is safe for cats" resolves to
+ * Boston fern even when the asparagus-fern entry (which shares "fern") is
+ * also in evidence. Undefined when the clause names no known plant.
+ */
+function evidenceNamedIn(
+  clause: string,
+  evidence: PetSafetyEvidence[]
+): PetSafetyEvidence | undefined {
+  const padded = ` ${clause} `;
+  let best: { entry: PetSafetyEvidence; length: number } | undefined;
+  for (const entry of evidence) {
+    for (const name of entry.names) {
+      if (name.length < 3 || !padded.includes(` ${name} `)) continue;
+      if (!best || name.length > best.length) best = { entry, length: name.length };
+    }
+  }
+  return best?.entry;
+}
+
+function supportsSafety(entry: PetSafetyEvidence, species: PetSpecies[]): boolean {
+  return species.every((s) => entry[s] === 'non-toxic');
+}
+
+/**
+ * Checks every categorical pet-safety claim against the structured verdicts
+ * carried on the retrieved spans. A claim is grounded only by a `non-toxic`
+ * verdict for the species it vouches for, from the entry it names — or, when
+ * it names none ("it's safe for your cat"), from EVERY entry in evidence.
+ * Mixed evidence with an unnamed subject is therefore ungrounded: the
+ * conservative reading, because the cost of the two errors is not symmetric.
+ * With no evidence at all, every claim is ungrounded — that is the case this
+ * check exists for.
+ *
+ * Exported separately from `checkGrounding` so the orchestrator can run the
+ * safety dimension on an answer with NO retrieved context, where the
+ * quantitative guard deliberately stays inactive (ADR 0009) but a
+ * from-memory "pothos is safe for cats" must still not reach the user.
+ */
+export function checkSafetyClaims(
+  answerText: string,
+  retrievedSpans: RetrievedSpan[]
+): Pick<GroundingResult, 'safetyClaimsChecked' | 'ungroundedSafetyClaims'> {
+  const evidence = retrievedSpans.flatMap((span) => span.petSafety ?? []);
+  const checked = new Set<string>();
+  const ungrounded = new Set<string>();
+  for (const claim of detectSafetyClaims(answerText)) {
+    checked.add(claim.sentence);
+    const named = evidenceNamedIn(claim.normalizedClause, evidence);
+    const targets = named ? [named] : evidence;
+    const grounded =
+      targets.length > 0 && targets.every((entry) => supportsSafety(entry, claim.species));
+    if (!grounded) ungrounded.add(claim.sentence);
+  }
+  return { safetyClaimsChecked: [...checked], ungroundedSafetyClaims: [...ungrounded] };
+}
+
+const PET_SAFETY_TOPIC_PATTERN =
+  /\b(?:safe|safety|toxic\w*|poison\w*|harm\w*|danger\w*|hazard\w*|chew\w*|nibbl\w*|ate|eat\w*|eaten|swallow\w*|ingest\w*|vomit\w*|sick|segur\w*|venen\w*|peligr\w*|danin\w*|mordi\w*|mastic\w*|comi[od]\w*|comer|trag\w*|enferm\w*)\b|\bpet[-\s]?(?:safe|friendly)\b/;
+
+/**
+ * Does a USER message look like a pet-safety question? Used to hold streamed
+ * output until the completed answer passes the guard — a from-memory
+ * all-clear that has already streamed cannot be retracted, and the client
+ * keeps streamed text over the final result. Deliberately broad: the cost of
+ * a false positive is buffered delivery, not a wrong answer.
+ */
+export function mentionsPetSafety(text: string): boolean {
+  const folded = foldText(text);
+  return PET_NOUN_PATTERN.test(folded) && PET_SAFETY_TOPIC_PATTERN.test(folded);
+}
+
 /**
  * Checks whether an answer's numeric/quantitative claims are each backed by
  * at least one retrieved span containing the same number.
@@ -275,13 +599,18 @@ export function checkGrounding(
     if (!hasSupport) ungroundedClaims.push(claim);
   }
 
+  // Categorical pet-safety claims (ADR 0011) are checked against the
+  // structured verdicts on the spans, never against numbers.
+  const safety = checkSafetyClaims(answerText, retrievedSpans);
+
   // Verified requires positive evidence: something was checked, all of it
   // held, and no number was left unaccounted for. Anything else that isn't
   // an outright contradiction is "the guard cannot vouch for this answer".
+  const anythingChecked = claimSentences.length > 0 || safety.safetyClaimsChecked.length > 0;
   const verdict: GroundingVerdict =
-    ungroundedClaims.length > 0
+    ungroundedClaims.length > 0 || safety.ungroundedSafetyClaims.length > 0
       ? 'ungrounded'
-      : claimSentences.length > 0 && unclassifiedNumericSentences.length === 0
+      : anythingChecked && unclassifiedNumericSentences.length === 0
         ? 'verified'
         : 'unverified';
 
@@ -290,5 +619,7 @@ export function checkGrounding(
     ungroundedClaims,
     claimsChecked: claimSentences,
     unclassifiedNumericSentences,
+    safetyClaimsChecked: safety.safetyClaimsChecked,
+    ungroundedSafetyClaims: safety.ungroundedSafetyClaims,
   };
 }

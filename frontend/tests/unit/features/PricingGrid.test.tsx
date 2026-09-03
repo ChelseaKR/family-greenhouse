@@ -111,3 +111,48 @@ describe('PricingGrid', () => {
     expect(document.body.textContent).not.toMatch(/\$\s*\d/);
   });
 });
+
+describe('PricingGrid with the withdrawn catalog', () => {
+  // The shape GET /billing/plans publishes since annual and lifetime were
+  // withdrawn from sale: paymentsAvailable, monthly amounts on both paid
+  // tiers, and null for every other cadence. The page must read as a plain
+  // monthly price list — no toggle, no unavailable tabs, no "coming back".
+  const WITHDRAWN_CATALOG: PlanCatalog = {
+    paymentsAvailable: true,
+    commercialHold: { active: false, effectiveDate: '2026-09-01' },
+    plans: [
+      PRICED_PLANS[0],
+      { ...PRICED_PLANS[1], annualPrice: null, lifetimePrice: null },
+      {
+        id: 'greenhouse',
+        name: 'Greenhouse',
+        description: 'Serious plant parents',
+        maxPlants: 5000,
+        maxMembers: 50,
+        monthlyPrice: 9.99,
+        annualPrice: null,
+        lifetimePrice: null,
+      },
+    ],
+  };
+
+  it('publishes monthly prices only, with no interval toggle', async () => {
+    await renderGrid(WITHDRAWN_CATALOG);
+
+    expect(await screen.findByText('$4.99')).toBeInTheDocument();
+    expect(screen.getByText('$9.99')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Billing interval' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Yearly|Lifetime/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/per year|\$39\.99|\$79\.99|\$149/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Not available/)).not.toBeInTheDocument();
+    // The public CTA is still a link to registration for each paid tier.
+    expect(screen.getByRole('link', { name: /Choose Garden/ })).toHaveAttribute(
+      'href',
+      '/register'
+    );
+    expect(screen.getByRole('link', { name: /Choose Greenhouse/ })).toHaveAttribute(
+      'href',
+      '/register'
+    );
+  });
+});

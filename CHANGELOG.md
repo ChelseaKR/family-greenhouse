@@ -18,6 +18,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- The care assistant can now answer "is this plant safe for my cat/dog?" from
+  the verified source instead of from memory. A read-only `check_pet_toxicity`
+  chat tool exposes the hand-curated, ASPCA-grounded table behind the public
+  pet-safety checker through the same unchanged `lookupToxicity` matcher, and
+  returns the matcher's honest "not in our checker" result when the plant is
+  missing. The grounding guard now recognises a categorical pet-safety claim
+  ("safe for cats", "non-toxic", "fine for dogs", and the Spanish forms) as a
+  claim, and an unsupported one is `ungrounded` — it blocks, replaced by a
+  refusal that points at the checker and the ASPCA poison-control line —
+  rather than `unverified`-and-delivered, because the failure direction is an
+  animal being harmed. Streamed pet-safety turns are held until the completed
+  answer passes. [ADR 0011](docs/adr/0011-categorical-pet-safety-claims-block.md).
+- The `pet-safety` eval class now covers the routine toxic and non-toxic
+  lookup, a plant the checker does not have, and the acute case in English and
+  Spanish (19 items), and drives every item through the real tool and table
+  with a scripted model; its three recorded coverage gaps are asserted closed
+  (1 tool, guard blocks) or held as invariants (0 toxicity chunks in the
+  corpus — the table stays the only source). The red-team corpus gains a
+  `verdict-integrity` invariant so injected text cannot flip, invent, or
+  soften a verdict.
+
 - A settled read with no data is now a decision the repo has written down, not
   one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
   states the rule that ten previous pull requests (#319, #320, #326, #327, #328,
@@ -45,6 +66,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   what catches a truncated ruleset, because a truncated file still contains the
   literal string `bypass_actors` and a grep would wave it through.
 
+### Changed
+
+- Garden annual, Greenhouse annual, and Garden lifetime are withdrawn from
+  sale; both monthly plans remain. At the verified Plant.id cost ($0.0585 per
+  identification) the per-household AI-cost ceiling — $3.48 on Garden, $7.58
+  on Greenhouse — exceeds what an annual subscription earns per month ($3.33
+  and $6.67), and a $149 lifetime purchase is fully consumed after roughly 41
+  months. Withdrawal is an availability decision, not a deletion: plans carry
+  a `withdrawnIntervals` list, `GET /billing/plans` publishes a withdrawn
+  cadence as a `null` price (the signal the pricing grid and Settings already
+  render as "not available", so the interval toggle disappears on its own),
+  and `POST /billing/checkout` refuses a withdrawn cadence with a 400 at both
+  the schema and the service so a stale client or crafted request cannot start
+  one. Nothing changes for households already on an annual or lifetime plan:
+  the prices and their Stripe ids stay on the catalog so renewals still
+  resolve to the right tier, the billing portal keeps managing them, and
+  entitlement, which reads `planId` alone, is untouched. No Stripe object was
+  archived.
+
 ### Fixed
 
 - Deleting an account now cancels the Stripe subscription of every household
@@ -57,6 +97,33 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   is dead the deletion is refused with a 502 and nothing has been touched, and
   a retry is safe because an already-cancelled or missing subscription counts
   as done.
+- Quiet hours are now evaluated in the browser's timezone for a user who never
+  touched the Timezone field (#398). `GET /notifications/prefs` answers
+  `timezone: 'UTC'` for an account that has never chosen one, and the reminder
+  run evaluates the do-not-disturb window in that zone, so "22:00–07:00" saved
+  by a user who filled in only the two times was a UTC window — the field's
+  own helper text, "24-hour, your local time", was not true. The settings page
+  only ever defaulted its _draft_ to the browser zone, and the server's `'UTC'`
+  overwrote even that on load. On the first load that still carries the server
+  default, the browser's `Intl` zone is now written through the same mutation
+  Save uses — built from the persisted record, so no half-edited quiet hours
+  are committed — quietly (no "saved" banner) and at most once per mount, so a
+  deliberate choice of UTC in the same session is kept. A browser that cannot
+  name its zone writes nothing and the field shows the stored `UTC`; a
+  rejected write is shown, not hidden. The draft-sync effect now overwrites
+  only the fields the server actually changed, so the background write cannot
+  wipe a Start time being typed.
+- The pricing grid no longer sells "Bulk import and export" as a Greenhouse
+  feature (#398). `POST /plants/import` is open to every tier and bounded only by the
+  plan's plant cap (which the caps line already states), and `GET /me/export`
+  requires only a login — the "Nothing locked away" band on the same page
+  already promises export to everyone. Because the bullets are cumulative
+  ("Everything in Garden"), listing it under Greenhouse claimed the lower tiers
+  lack it. The bullet moves to Seedling as "Import and export (CSV and JSON)"
+  (es: "Importación y exportación (CSV y JSON)"). Nothing is gated — whether
+  export should be restricted is a product decision this change does not make.
+  API access, the adjacent Greenhouse bullet, is enforced
+  (`backend/src/handlers/apiKeys/handler.ts`) and stays.
 - The dashboard climate card no longer renders a failed read as a calm night
   (#351). `if (!data) return null` put a failed climate read in the same
   silence as "no household active" and "no location saved with the integration

@@ -39,8 +39,10 @@ vi.mock('../../../src/services/householdService.js');
 import {
   findTool,
   sanitizeToolResultForModel,
+  type PetToxicityToolResult,
   type ProposeReminderResult,
 } from '../../../src/services/chat/tools.js';
+import { PET_TOXICITY } from '../../../src/models/petToxicity.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as householdService from '../../../src/services/householdService.js';
 import type { Plant, HouseholdMember } from '../../../src/models/types.js';
@@ -53,7 +55,7 @@ interface InjectionPayload {
   owasp: string;
   vector: string;
   payload: string;
-  probes: 'household-scope' | 'pii-redaction' | 'write-gate';
+  probes: 'household-scope' | 'pii-redaction' | 'write-gate' | 'verdict-integrity';
   note: string;
 }
 interface InjectionCorpus {
@@ -215,6 +217,85 @@ describe('red-team: prompt-injection corpus over the chat tool layer (AIEV §2 o
       expect(serialized).not.toContain('sub-123');
       expect(serialized).toContain('Bertha');
       expect(serialized).toContain(smuggle.payload);
+    });
+  });
+
+  describe('verdict-integrity: check_pet_toxicity answers only from the curated table', () => {
+    const bySlug = new Map(PET_TOXICITY.map((e) => [e.slug, e]));
+    const VERDICT = /^(?:toxic|non-toxic)$/;
+
+    // The tool inherits the WHOLE corpus, not just its own probe class: any
+    // stored or supplied string can end up as a plantName argument.
+    it.each(CORPUS.payloads.map((p) => [p.id, p] as const))(
+      'a payload as plantName cannot alter, invent, or leak a verdict (%s)',
+      async (_id, p) => {
+        const tool = findTool('check_pet_toxicity')!;
+        const out = (await tool.execute(
+          { plantName: p.payload, householdId: 'hh-ATTACKER' } as never,
+          { userId: 'u-caller', householdId: VICTIM_HH, toolCallNumber: 1 }
+        )) as PetToxicityToolResult;
+
+        expect(['found', 'not_in_checker', 'invalid']).toContain(out.status);
+        // Reads no household data at all, so a forged scope has nothing to widen.
+        expect(plantService.getPlants).not.toHaveBeenCalled();
+        expect(plantService.getPlant).not.toHaveBeenCalled();
+        expect(householdService.getHousehold).not.toHaveBeenCalled();
+        expect(householdService.getHouseholdMembers).not.toHaveBeenCalled();
+
+        if (out.status === 'found') {
+          expect(out.matches.length).toBeGreaterThan(0);
+          for (const match of out.matches) {
+            const entry = bySlug.get(match.slug);
+            expect(entry, `match "${match.slug}" is not a PET_TOXICITY entry`).toBeDefined();
+            // Byte-identical to the table: the payload cannot flip or soften it.
+            expect(match.cats).toBe(entry!.cats);
+            expect(match.dogs).toBe(entry!.dogs);
+            expect(match.note).toBe(entry!.note);
+            expect(match.cats).toMatch(VERDICT);
+            expect(match.dogs).toMatch(VERDICT);
+          }
+        } else {
+          // A miss is a miss — never a verdict shaped from the injected text.
+          expect(JSON.stringify(out)).not.toMatch(/"cats"|"dogs"/);
+        }
+        assertNoPiiKeys(sanitizeToolResultForModel(out));
+      }
+    );
+
+    it('the override payload leaves pothos toxic (inj-toxicity-override-01)', async () => {
+      const p = CORPUS.payloads.find((x) => x.id === 'inj-toxicity-override-01')!;
+      const tool = findTool('check_pet_toxicity')!;
+      const out = (await tool.execute({ plantName: p.payload } as never, {
+        userId: 'u-caller',
+        householdId: VICTIM_HH,
+        toolCallNumber: 1,
+      })) as PetToxicityToolResult;
+
+      // Either outcome upholds the invariant; neither is "non-toxic".
+      if (out.status === 'found') {
+        for (const match of out.matches) {
+          expect(match.cats).toBe('toxic');
+          expect(match.dogs).toBe('toxic');
+        }
+      } else {
+        expect(out.status).toBe('not_in_checker');
+      }
+      expect(JSON.stringify(out)).not.toMatch(/"cats":"non-toxic"/);
+    });
+
+    it('the delimiter payload cannot make the true lily read as safe (inj-toxicity-delimiter-01)', async () => {
+      const p = CORPUS.payloads.find((x) => x.id === 'inj-toxicity-delimiter-01')!;
+      const tool = findTool('check_pet_toxicity')!;
+      const out = (await tool.execute({ plantName: p.payload } as never, {
+        userId: 'u-caller',
+        householdId: VICTIM_HH,
+        toolCallNumber: 1,
+      })) as PetToxicityToolResult;
+
+      expect(JSON.stringify(out)).not.toMatch(/"cats":"non-toxic"/);
+      if (out.status === 'found') {
+        expect(out.matches.every((m) => m.cats === 'toxic')).toBe(true);
+      }
     });
   });
 

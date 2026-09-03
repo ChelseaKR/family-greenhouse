@@ -16,7 +16,7 @@ import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import * as billing from '../../services/billing.js';
 import { ALL_PLANS } from '../../services/billing.js';
 import { getHouseholdCounters } from '../../services/householdUsage.js';
-import { getPlan } from '../../models/plans.js';
+import { getPlan, isIntervalOffered } from '../../models/plans.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 import {
@@ -39,6 +39,16 @@ const checkoutSchema = z
   })
   .refine((v) => v.interval !== 'lifetime' || v.planId === 'garden', {
     message: 'The lifetime plan is only available for the Garden tier.',
+    path: ['interval'],
+  })
+  // Withdrawn cadences. The plan catalog is the single authority on what may
+  // be STARTED today (`withdrawnIntervals` in models/plans.ts): a cadence can
+  // exist for households already on it and still be refused here. The same
+  // rule publishes as a null price in GET /billing/plans, so a current client
+  // never shows the option, and a stale or crafted request gets a clear 400
+  // rather than a Stripe session for something we no longer sell.
+  .refine((v) => isIntervalOffered(getPlan(v.planId), v.interval), {
+    message: 'That billing option is no longer offered. Existing subscriptions are unaffected.',
     path: ['interval'],
   });
 
@@ -127,6 +137,16 @@ export const checkout = createHandler(
       });
       return successResponse(session);
     } catch (err) {
+      // Client-correctable: the cadence has been withdrawn from sale. The
+      // schema above refuses a well-formed request first; this maps the
+      // service-level guard for any path that reaches it around the schema.
+      if ((err as Error).message?.startsWith('INTERVAL_WITHDRAWN')) {
+        throw createHttpError(
+          400,
+          'That billing option is no longer offered. Existing subscriptions are unaffected.',
+          { expose: true }
+        );
+      }
       // Client-correctable: the household already owns this tier outright.
       // A 502 here would read as "our payment provider broke" for what is
       // actually a correct refusal to sell the same thing twice.

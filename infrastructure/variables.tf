@@ -208,6 +208,93 @@ variable "identify_metering_enabled" {
   default     = ""
 }
 
+# --- AI inference cost caps (per household per UTC calendar month) ---
+#
+# Strings, so "" can mean "use the code default" (same convention as
+# perenual_daily_budget / chat_budget_*). With every one of these blank the
+# Lambdas behave exactly as they did before the variables existed: a flat 200
+# leaf-health checks for every tier and 250k input / 50k output chat tokens
+# for every tier. Caps are per household and divide across its members
+# (Greenhouse allows 50), so choose them per tier, not per person.
+#
+# Leaf-health (services/leafHealthBudget.ts). A blank per-tier value inherits
+# the flat one; setting ANY per-tier value switches the handler to a plan
+# lookup (one extra DynamoDB read per check — the same read identify already
+# makes). "0" disables the cap for that tier.
+variable "leaf_health_monthly_cap" {
+  description = "Flat monthly leaf-health check cap per household, applied to every tier without a per-tier override. Blank = code default (200). '0' = unlimited."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.leaf_health_monthly_cap == "" || can(regex("^[0-9]+$", var.leaf_health_monthly_cap))
+    error_message = "leaf_health_monthly_cap must be blank or a non-negative integer."
+  }
+}
+
+variable "leaf_health_monthly_cap_seedling" {
+  description = "Monthly leaf-health check cap for Seedling (free) households. Blank = inherit leaf_health_monthly_cap. '0' = unlimited."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.leaf_health_monthly_cap_seedling == "" || can(regex("^[0-9]+$", var.leaf_health_monthly_cap_seedling))
+    error_message = "leaf_health_monthly_cap_seedling must be blank or a non-negative integer."
+  }
+}
+
+variable "leaf_health_monthly_cap_garden" {
+  description = "Monthly leaf-health check cap for Garden households. Blank = inherit leaf_health_monthly_cap. '0' = unlimited."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.leaf_health_monthly_cap_garden == "" || can(regex("^[0-9]+$", var.leaf_health_monthly_cap_garden))
+    error_message = "leaf_health_monthly_cap_garden must be blank or a non-negative integer."
+  }
+}
+
+variable "leaf_health_monthly_cap_greenhouse" {
+  description = "Monthly leaf-health check cap for Greenhouse households. Blank = inherit leaf_health_monthly_cap. '0' = unlimited."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.leaf_health_monthly_cap_greenhouse == "" || can(regex("^[0-9]+$", var.leaf_health_monthly_cap_greenhouse))
+    error_message = "leaf_health_monthly_cap_greenhouse must be blank or a non-negative integer."
+  }
+}
+
+# Chat (services/chat/). These have been declared in modules/api/variables.tf
+# since the chat budget shipped, but never at this level and never passed
+# through main.tf — so a tfvars value was silently dropped (an undeclared
+# variable is only a warning) and the code default always ran. Declared here
+# so the cap is settable per environment; blank keeps today's default. Not
+# tier-aware. NOTE: unlike the leaf-health caps, "0" here is NOT unlimited —
+# the code reads it as a zero budget and 429s every turn — so the validation
+# refuses it; leave blank instead.
+variable "chat_budget_input_tokens" {
+  description = "Per-household monthly chat input-token cap. Blank = code default (250000). Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_input_tokens == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_input_tokens))
+    error_message = "chat_budget_input_tokens must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_output_tokens" {
+  description = "Per-household monthly chat output-token cap. Blank = code default (50000). Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_output_tokens == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_output_tokens))
+    error_message = "chat_budget_output_tokens must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
 variable "sms_notifications_enabled" {
   description = "Set to '1' only after this region has SMS production access and an approved origination identity. Blank keeps paid SMS disabled."
   type        = string

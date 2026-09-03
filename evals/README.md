@@ -10,7 +10,7 @@ real decision.
 
 ## What's here
 
-- **`benchmark.jsonl`** — 134 items (expanded 2026-07-17 from the original 22) in four classes, each carrying `category` + `expectedBehavior`:
+- **`benchmark.jsonl`** — 153 items (22 → 134 on 2026-07-17, → 147 and then 153 on 2026-09-02) in five classes, each carrying `category` + `expectedBehavior`:
   - **102 `corpus` / `answer`** — real-user-phrased plant-care questions,
     8–10 per corpus article (all 11 files under
     `backend/src/data/plant-care-corpus/`), each naming the exact corpus
@@ -29,6 +29,69 @@ real decision.
     the household tools; `expectedTools` names the `TOOL_REGISTRY` tools
     whose data supports the answer (validated against the registry so a tool
     rename breaks the build).
+  - **19 `pet-safety`** — "is this plant safe for my cat/dog?" (added
+    2026-09-02, extended the same day). Three subclasses: **15 `verdict` /
+    `answer`** routine lookups (12 toxic, 5 non-toxic across the class, so a
+    constant answer cannot pass; English and Spanish; one alias trap), each
+    naming a `toxicitySlug` + `expectedVerdict` bound to
+    `backend/src/models/petToxicity.ts` — the hand-curated, ASPCA-grounded
+    table behind the public `GET /species/toxicity` lookup; **2
+    `not-in-checker` / `answer`** plants the table does not have (asserted at
+    runtime), where the only honest answer is "not in our checker, here is
+    where to look"; and **2 `acute` / `refuse`** ingestion cases (EN + ES)
+    that must be refused and pointed at a vet / the ASPCA poison-control
+    line. Gated by `backend/tests/eval/petSafety.eval.test.ts`; see "The
+    pet-safety gap" below.
+
+### The pet-safety gap (measured 2026-09-02, closed the same day)
+
+A wrong pet-safety verdict is the largest harm surface this assistant has.
+When the class was added (#388) it measured four mechanisms missing it, all
+in the same direction — towards a confident, wrong "that one's fine":
+
+1. The RAG corpus had **0** chunks containing any toxicity vocabulary, so
+   retrieval could not supply a verdict.
+2. **0** tools in `TOOL_REGISTRY` exposed `PET_TOXICITY` to the model, even
+   though the app publishes that table to the open web. The verified answer
+   existed; the assistant could not reach it.
+3. `groundingGuard.checkGrounding` recognised only numeric claims (ADR
+   0008/0009). "Pothos is completely safe for cats" carries no number, so the
+   guard returned `unverified` — which deliberately does not block.
+4. `should-refuse` covered the acute case ("my cat ate a lily an hour ago")
+   and text-only ID-plus-verdict, not the routine lookup.
+
+What closed it ([ADR 0011](../docs/adr/0011-categorical-pet-safety-claims-block.md)):
+
+- **Gap 2 → 1 tool.** `check_pet_toxicity` exposes the table through the
+  same, unchanged `lookupToxicity` matcher the public route uses, reads no
+  household data, and returns the matcher's honest `not_in_checker` on a
+  miss. The system prompt (rule 8) routes every pet-safety question through
+  it and forbids stating safety from memory.
+- **Gap 3 → `ungrounded`.** A categorical pet-safety claim ("safe for cats",
+  "non-toxic", "fine for dogs", and the Spanish forms) is now a recognised
+  claim. It is grounded only by a `non-toxic` verdict from the tool for the
+  plant and species it names; an unsupported one is `ungrounded` — the one
+  verdict that blocks — and is replaced by a refusal that points at the
+  verified checker and the ASPCA poison-control line. This is checked even
+  when no other retrieved context exists, and streamed pet-safety turns are
+  held until it passes. The danger direction is deliberately not gated.
+- **Gap 1 stays 0, as an invariant.** The corpus must not gain toxicity
+  content: the table is the product's only toxicity source, and a second
+  source is how two drift apart. The eval fails if that count changes.
+- **Gap 4 → covered.** The routine lookup, the missing plant, and the acute
+  case are all in the class, and every item is driven through `runChatTurn`
+  with a scripted model, the **real** tool, and the **real** table.
+
+The three recorded numbers (`corpusToxicityChunks: 0`,
+`chatToolsExposingToxicity: 1`, `groundingGuardVerdictOnUnsupportedSafetyClaim:
+"ungrounded"`) are re-measured on every backend test run. Verdict drift
+between the table and the benchmark still fails the build in either direction.
+
+**What is still not measured:** whether the _live_ model actually calls the
+tool and relays its verdict. The offline eval proves the assistant _can_
+reach the verified answer and _cannot_ deliver an unverified all-clear; the
+generation-layer job below is what would prove it _does_.
+
 - **`eval-baseline.json`** — the committed baseline `backend/tests/eval/ragRetrieval.eval.test.ts`
   regresses against. Runs as part of the normal backend test suite (`npm test`
   in `backend/`, which CI's existing `test-backend` job already runs on every
@@ -47,6 +110,12 @@ real decision.
 
 Run it directly: `npm run eval` (root) or `npm run eval --workspace backend`
 — both alias to `vitest run tests/eval` in the backend workspace.
+
+- **[`UNIT-ECONOMICS.md`](./UNIT-ECONOMICS.md)** — what each AI call costs,
+  what the budget caps let one household spend per month, and how that
+  compares to the subscription price now that paid plans are live. Quality
+  and cost are the two ways an AI feature fails a subscription business;
+  this directory now covers both.
 
 ## Method — and its honest limitation
 

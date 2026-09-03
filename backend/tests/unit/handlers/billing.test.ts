@@ -108,8 +108,12 @@ describe('billing handler', () => {
         string,
         Record<string, unknown>
       >;
-      // `null` (not absent) is the explicit "this tier has no such cadence"
-      // signal the client relies on to render "not available" rather than $0.
+      // `null` (not absent) is the explicit "not sold at this cadence" signal
+      // the client relies on to render "not available" rather than $0. Since
+      // 2026-09-02 that is also how a WITHDRAWN cadence publishes: annual on
+      // both paid tiers and Garden lifetime stay on the catalog for existing
+      // subscribers but are no longer offered, so only monthly carries an
+      // amount here.
       expect(byId.seedling).toMatchObject({
         monthlyPrice: 0,
         annualPrice: null,
@@ -117,12 +121,12 @@ describe('billing handler', () => {
       });
       expect(byId.garden).toMatchObject({
         monthlyPrice: 4.99,
-        annualPrice: 39.99,
-        lifetimePrice: 149,
+        annualPrice: null,
+        lifetimePrice: null,
       });
       expect(byId.greenhouse).toMatchObject({
         monthlyPrice: 9.99,
-        annualPrice: 79.99,
+        annualPrice: null,
         lifetimePrice: null,
       });
     });
@@ -319,27 +323,84 @@ describe('billing handler', () => {
       );
     });
 
-    it('passes interval=year through to the checkout session', async () => {
+    it('still sells the monthly cadence on both paid tiers', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');
 
-      vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
-        url: 'https://checkout.stripe.test/annual',
-      });
+      for (const planId of ['garden', 'greenhouse'] as const) {
+        vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
+          url: `https://checkout.stripe.test/${planId}-monthly`,
+        });
+        const res = (await checkout(
+          buildEvent({
+            body: JSON.stringify({ planId, interval: 'month' }),
+            headers: { 'content-type': 'application/json' },
+          }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+
+        expect(res.statusCode, planId).toBe(200);
+        expect(billing.createCheckoutSession).toHaveBeenCalledWith(
+          expect.objectContaining({ planId, interval: 'month' })
+        );
+      }
+    });
+
+    // Withdrawn from sale 2026-09-02: Garden annual, Greenhouse annual, and
+    // Garden lifetime (`withdrawnIntervals` in models/plans.ts). A body that a
+    // live button once sent — or that anyone can craft — must be refused
+    // before the service is even called. The message has to be clear about
+    // what happened, and clear that existing subscribers are not affected.
+    it.each([
+      ['garden', 'year'],
+      ['garden', 'lifetime'],
+      ['greenhouse', 'year'],
+    ] as const)(
+      'refuses the withdrawn %s/%s cadence with a 400 before touching the service',
+      async (planId, interval) => {
+        const billing = await import('../../../src/services/billing.js');
+        const { checkout } = await import('../../../src/handlers/billing/handler.js');
+
+        const res = (await checkout(
+          buildEvent({
+            body: JSON.stringify({ planId, interval }),
+            headers: { 'content-type': 'application/json' },
+          }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toMatch(/no longer offered/i);
+        expect(res.body).toMatch(/existing subscriptions are unaffected/i);
+        expect(billing.createCheckoutSession).not.toHaveBeenCalled();
+      }
+    );
+
+    it('maps the service-level INTERVAL_WITHDRAWN guard to the same 400, for any path around the schema', async () => {
+      // Defence in depth: if a caller ever reaches createCheckoutSession with
+      // a withdrawn cadence (a future route, a schema regression), the
+      // service refuses too, and that refusal must not surface as the
+      // generic "Stripe checkout failed" 502.
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(
+        new Error("INTERVAL_WITHDRAWN: Garden is no longer sold at the 'year' cadence.")
+      );
 
       const res = (await checkout(
         buildEvent({
-          body: JSON.stringify({ planId: 'greenhouse', interval: 'year' }),
+          body: JSON.stringify({ planId: 'garden', interval: 'month' }),
           headers: { 'content-type': 'application/json' },
         }),
         ctx,
         () => {}
       )) as APIGatewayProxyResult;
 
-      expect(res.statusCode).toBe(200);
-      expect(billing.createCheckoutSession).toHaveBeenCalledWith(
-        expect.objectContaining({ planId: 'greenhouse', interval: 'year' })
-      );
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).message).toMatch(/no longer offered/i);
+      expect(JSON.parse(res.body).message).not.toMatch(/stripe checkout failed/i);
     });
 
     it('scopes the client checkout attempt id to the household', async () => {
@@ -365,27 +426,27 @@ describe('billing handler', () => {
       );
     });
 
-    it('passes interval=lifetime through to the checkout session for Garden', async () => {
+    it('refuses a stale client that still sends the Garden lifetime body, even with a valid attempt id', async () => {
+      // The exact request the "Buy Garden for life" button sent before the
+      // withdrawal. A cached bundle can still send it; it must not buy.
       const billing = await import('../../../src/services/billing.js');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');
 
-      vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
-        url: 'https://checkout.stripe.test/lifetime',
-      });
-
       const res = (await checkout(
         buildEvent({
-          body: JSON.stringify({ planId: 'garden', interval: 'lifetime' }),
+          body: JSON.stringify({
+            planId: 'garden',
+            interval: 'lifetime',
+            checkoutAttemptId: '123e4567-e89b-42d3-a456-426614174000',
+          }),
           headers: { 'content-type': 'application/json' },
         }),
         ctx,
         () => {}
       )) as APIGatewayProxyResult;
 
-      expect(res.statusCode).toBe(200);
-      expect(billing.createCheckoutSession).toHaveBeenCalledWith(
-        expect.objectContaining({ planId: 'garden', interval: 'lifetime' })
-      );
+      expect(res.statusCode).toBe(400);
+      expect(billing.createCheckoutSession).not.toHaveBeenCalled();
     });
 
     it('rejects interval=lifetime for a non-Garden tier (Greenhouse) with a 400', async () => {
