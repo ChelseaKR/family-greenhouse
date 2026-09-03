@@ -77,6 +77,19 @@ jobs:
         # actually block a merge.
         run: npm run reads:check
 
+      - name: Store release readiness (native version parity + listing metadata)
+        # `npm run mobile:validate` existed but nothing ran it, so the only
+        # thing keeping the native projects in step with package.json was
+        # remembering to do it by hand. That failed: v0.23.1/.2/.3 each bumped
+        # the workspaces and left android/build.gradle + the Xcode project on
+        # 0.23.0 (build 2300), so the script was red on main and nobody saw it.
+        # A stale versionCode is not a cosmetic drift — Play rejects a reused
+        # one, and it is discovered at upload time, after the release build.
+        # Runs the default (non-`--production`, non-`--synced`) mode, which
+        # needs no signing material, no populated .env, and no `cap sync`
+        # output, so it is safe on a plain CI checkout.
+        run: npm run mobile:validate
+
       - name: Validate commits
         if: github.event_name == 'pull_request'
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}

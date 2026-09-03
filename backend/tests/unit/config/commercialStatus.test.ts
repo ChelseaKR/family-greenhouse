@@ -447,6 +447,22 @@ describe('production IaC commercial-hold invariants', () => {
     expect(stagingWorkflow).not.toMatch(/\$\{\{ vars\.STAGING_(?:URL|COGNITO)/);
   });
 
+  it('collapses paginated Lambda version queries to a single maximum', () => {
+    // The AWS CLI paginates list-versions-by-function at 50 and applies
+    // --query to EACH page, concatenating the results. Past 50 versions the
+    // rollback snapshot therefore read one maximum per page ("49\n50") and
+    // get-function rejected it as an invalid qualifier — which is exactly how
+    // the v0.23.4 deploy failed, the first time a function crossed the page
+    // boundary. Several functions now sit near it, so this stays pinned.
+    const snapshot = productionWorkflow.slice(
+      productionWorkflow.indexOf('Capture previous Lambda versions and packages for rollback'),
+      productionWorkflow.indexOf('Mark Lambda rollback snapshot ready')
+    );
+    expect(snapshot).not.toBe('');
+    expect(snapshot).toMatch(/list-versions-by-function/);
+    expect(snapshot).toMatch(/--output text \| sort -n \| tail -1/);
+  });
+
   it('restricts manual production dispatches to main', () => {
     expect(productionWorkflow).toMatch(/Require main for manual production dispatch/);
     expect(productionWorkflow).toMatch(/refs\/heads\/main/);

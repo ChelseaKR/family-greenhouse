@@ -99,7 +99,8 @@ describe('deltaForStripeEvent', () => {
         planId: 'garden',
         stripeCustomerId: 'cus_123',
         stripeSubscriptionId: 'sub_456',
-        status: 'active',
+        // No `status`: this event references the subscription by id and does
+        // not carry its state. customer.subscription.created/.updated own it.
       },
     });
   });
@@ -181,6 +182,47 @@ describe('deltaForStripeEvent', () => {
     // No subscription remains, so a cancellation notice from the replaced one
     // must not linger on a household that now owns its tier outright.
     expect(delta?.fields.cancelAtPeriodEnd).toBe(false);
+  });
+
+  it('lets the subscription events own status, rather than guessing active at checkout', async () => {
+    // checkout.session.completed references the subscription by id and does
+    // not carry its status, so the old hardcoded 'active' was a guess — and
+    // wrong for every checkout that starts a trial, which is all of them.
+    // Whichever of the two events landed last won, so a trialing household
+    // could be recorded as active and never be told it was on a trial or when
+    // its first charge would land.
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const delta = deltaForStripeEvent({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+          customer: 'cus_1',
+          subscription: 'sub_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+
+    expect(delta?.fields.stripeSubscriptionId).toBe('sub_1');
+    expect(delta?.fields).not.toHaveProperty('status');
+  });
+
+  it('uses the subscription status when Stripe expanded it for us', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const delta = deltaForStripeEvent({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+          customer: 'cus_1',
+          subscription: { id: 'sub_1', status: 'trialing' },
+        },
+      },
+    } as unknown as Stripe.Event);
+
+    expect(delta?.fields.status).toBe('trialing');
   });
 
   it('records the lifetime tier durably so it survives a later subscription', async () => {
@@ -273,7 +315,8 @@ describe('deltaForStripeEvent', () => {
         planId: 'garden',
         stripeCustomerId: 'cus_123',
         stripeSubscriptionId: 'sub_456',
-        status: 'active',
+        // No `status`: this event references the subscription by id and does
+        // not carry its state. customer.subscription.created/.updated own it.
       },
     });
   });
@@ -971,7 +1014,11 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
     expect(captureMock).not.toHaveBeenCalled();
   });
 
-  it('emits on customer.subscription.created when it becomes active', async () => {
+  it('does NOT emit on customer.subscription.created — the checkout event already counted it', async () => {
+    // Every subscription this app creates originates from a checkout, so
+    // subscription.created always accompanies checkout.session.completed.
+    // Counting both would double-count one conversion. A subscription created
+    // outside checkout records nothing, which is correct: nobody converted.
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValue({});
     const { applyStripeEvent } = await import('../../../src/services/billing.js');
@@ -987,10 +1034,7 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
         },
       },
     } as unknown as Stripe.Event);
-    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_activated', {
-      plan: 'greenhouse',
-      interval: 'month',
-    });
+    expect(captureMock).not.toHaveBeenCalled();
   });
 
   it('records interval=lifetime for a one-time (mode=payment) Garden purchase', async () => {

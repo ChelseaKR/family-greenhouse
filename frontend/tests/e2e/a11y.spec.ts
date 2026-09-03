@@ -66,6 +66,17 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
     await expectNoA11yViolations(page, 'landing');
   });
 
+  test('pricing page', async ({ page }) => {
+    // /pricing is a conversion surface carrying the plan grid, the interval
+    // toggle, trial terms, and the FAQ, and it was the one public route with
+    // no axe scan. Locally the API withholds payment activity, so this scans
+    // the fail-closed status-notice state; the priced grid is covered by the
+    // PaidPlanGrid unit tests.
+    await page.goto('/pricing');
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'pricing');
+  });
+
   test('login page', async ({ page }) => {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
