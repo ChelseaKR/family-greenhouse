@@ -281,7 +281,11 @@
     "whereAnswer": "Los cambios de plan se hacen dentro de tu cuenta, en Ajustes → Facturación, y los realiza una persona administradora del hogar. Las compras no están disponibles en las aplicaciones móviles.",
     "dataQuestion": "¿Qué pasa con los datos existentes?",
     "dataAnswerHeld": "Las plantas, los registros del hogar, las tareas y el historial de cuidados siguen disponibles dentro de los límites del plan actual. La pausa no elimina datos.",
-    "dataAnswerOpen": "No se elimina nada al cambiar de plan. Si al bajar de plan superas los nuevos límites, las plantas y los miembros existentes se pueden seguir viendo y editando; solo se bloquea añadir más hasta que vuelvas a estar por debajo del límite."
+    "dataAnswerOpen": "No se elimina nada al cambiar de plan. Si al bajar de plan superas los nuevos límites, las plantas y los miembros existentes se pueden seguir viendo y editando; solo se bloquea añadir más hasta que vuelvas a estar por debajo del límite.",
+    "householdQuestion": "¿Cada persona de mi hogar necesita su propio plan?",
+    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados, hasta el límite de miembros que indica cada plan.",
+    "cardQuestion": "¿Necesito tarjeta de crédito?",
+    "cardAnswer": "Para una cuenta gratuita no: el plan Plántula no pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta antes de empezar la prueba; no se cobra nada hasta que terminan los 14 días."
   },
   "petSafeSignup": {
     "title": "Mantener un hogar seguro para las mascotas es más fácil cuando todos están coordinados",
@@ -732,6 +736,15 @@
     "featureEverythingGarden": "Todo lo de Jardín",
     "featureApiAccess": "Acceso a la API para automatizar",
     "featureBulkImport": "Importación y exportación masiva",
-    "featurePrioritySupport": "Soporte prioritario"
+    "featurePrioritySupport": "Soporte prioritario",
+    "trialNote": "Los planes mensuales y anuales empiezan con una prueba de 14 días. El proceso de pago pide una tarjeta por adelantado, no se te cobra hasta que pasan los 14 días y cancelar antes no cuesta nada. El plan de por vida es un pago único y no incluye prueba.",
+    "howToBuyNote": "Los planes se eligen dentro de tu cuenta: primero crea una cuenta gratuita y después una persona administradora del hogar activa el plan de pago en Ajustes → Facturación. En esta página no se compra nada.",
+    "whyHeading": "Por qué un plan de pago",
+    "whyHouseholdTitle": "Una sola factura para toda la casa",
+    "whyHouseholdBody": "Un plan cubre todo el hogar con una única suscripción. Las personas con las que compartes tus plantas son miembros de tu plan, no puestos adicionales que haya que comprar.",
+    "whyRoomTitle": "Espacio para la colección que tienes",
+    "whyRoomBody": "Un plan de pago es al que pasas cuando el límite de plantas del plan gratuito se queda corto. Cada planta conserva su propio calendario, sus fotos y su historial de cuidados, por muchas que añadas.",
+    "whyLeaveTitle": "Nada queda bloqueado si te vas",
+    "whyLeaveBody": "Al cancelar, tu hogar vuelve al plan gratuito al final del periodo pagado. Los registros que superen el límite gratuito se pueden seguir viendo y editando; solo se bloquea añadir más. Y puedes exportar tus datos cuando quieras."
   }
 }
