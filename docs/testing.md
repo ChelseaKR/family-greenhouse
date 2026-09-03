@@ -5,27 +5,30 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 ## Counts at a glance
 
 <!-- prettier-ignore-start -->
-<!-- BEGIN:TEST-COUNTS (checked by scripts/check-docs-testing.mjs — update the
-     file counts here when you add or remove a test FILE, or the gate fails) -->
+<!-- BEGIN:TEST-COUNTS (checked by scripts/check-docs-testing.mjs — every layer the
+     script counts must have a row here naming the path it lives at. File counts
+     are deliberately not written down; see the note below the table) -->
 
-| Layer                     | Tool               | Where                                                                     | Files | Test cases |
-| ------------------------- | ------------------ | ------------------------------------------------------------------------- | ----- | ---------- |
-| Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 91    | 1,501           |
-| Backend integration       | vitest + supertest | `backend/tests/integration/`                                              | 8     | 199        |
-| Backend RAG + pet-safety eval | vitest         | `backend/tests/eval/`                                                     | 2     | 73         |
-| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 104   | 781        |
-| Frontend colocated unit   | vitest             | `frontend/src/**/*.test.ts`                                               | 14    | 78         |
-| Frontend integration      | vitest + RTL + MSW | `frontend/tests/integration/`                                             | 1     | 1          |
-| Frontend e2e              | Playwright         | `frontend/tests/e2e/`                                                     | 24    | see below  |
+| Layer                         | Tool               | Where                                                                   | Test cases |
+| ----------------------------- | ------------------ | ----------------------------------------------------------------------- | ---------- |
+| Backend unit                  | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}` | 1,501      |
+| Backend integration           | vitest + supertest | `backend/tests/integration/`                                            | 199        |
+| Backend RAG + pet-safety eval | vitest             | `backend/tests/eval/`                                                   | 73         |
+| Frontend unit + component     | vitest + RTL + MSW | `frontend/tests/unit/`                                                  | 781        |
+| Frontend colocated unit       | vitest             | `frontend/src/**/*.test.ts`                                             | 78         |
+| Frontend integration          | vitest + RTL + MSW | `frontend/tests/integration/`                                           | 1          |
+| Frontend e2e                  | Playwright         | `frontend/tests/e2e/`                                                   | see below  |
 
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,633 vitest cases** across 220 files — 1,773 backend, 860 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,633 vitest cases** — 1,773 backend, 860 frontend — as of 2026-09-02. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
 
-Of the 24 Playwright specs, 22 run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
+All Playwright specs but two run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 
-The **file** counts above are enforced by `scripts/check-docs-testing.mjs` (part of `npm run verify` and of CI's Lint job), so this table cannot silently rot the way it did before — it once claimed ~300 total cases against an actual 2,176, and described the integration layer as a single file when there were eight. The **test-case** counts are a dated snapshot (re-measured 2026-09-02, Node 26.8.1 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites; reproduce with:
+**File counts are derived, not documented.** `node scripts/check-docs-testing.mjs --print` prints the live per-layer file counts from the filesystem. They used to be written into this table and enforced by the gate, which kept them honest but made every PR that added a test file rewrite the same two lines: on 2026-09-03 nine open PRs were unmergeable on this file alone, and the correct post-merge number was on none of them. The gate (part of `npm run verify` and of CI's Lint job) now enforces the part a reader relies on — every layer the script counts has a row here at the path it actually lives at, and the coverage floors and enforcement claims below match the configs — and refuses a `Files` column or an "across N files" total so the conflict surface cannot come back. That row-per-layer check is what stops the drift this table used to have, when it described the integration layer as a single file while there were eight, and claimed ~300 total cases against an actual 2,176.
+
+The **test-case** counts are a dated snapshot (re-measured 2026-09-02, Node 26.8.1 locally — CI pins Node 22 via .nvmrc, vitest 4.1.11) because collecting them means running the suites. Don't bump them per PR — that is the other half of the same conflict surface. Re-measure them when cutting a release, with:
 
 ```bash
 npm --workspace backend exec vitest list | wc -l
