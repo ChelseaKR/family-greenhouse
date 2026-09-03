@@ -4,6 +4,47 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
 /**
+ * Strip HTML comments, repeatedly, until the output stops changing.
+ *
+ * One `replace` pass is not enough, and CodeQL is right to flag it
+ * (js/incomplete-multi-character-sanitization). Two ways a `<!--` survives a
+ * single pass, both measured rather than assumed:
+ *
+ *   1. Removing a comment can JUXTAPOSE the text on either side into a new one.
+ *      `<!-<!-- x -->-a-->` loses `<!-- x -->` and the remains close up into
+ *      `<!--a-->` — a comment that was not in the input and is still there when
+ *      the single pass ends. Looping to a fixpoint removes what the previous
+ *      pass created.
+ *   2. An UNTERMINATED `<!--` matches nothing, so no number of passes removes
+ *      it. Shipping it would comment out every byte after it, silently
+ *      truncating the served document. That is what the assertion below
+ *      refuses: the build fails instead of emitting a half-swallowed page.
+ *
+ * `head:start` / `head:end` are exempt: scripts/prerender.mjs needs those two
+ * markers in dist/index.html to splice each route's <head> in, and consumes
+ * them there — they never reach a served page.
+ */
+const COMMENTS = /<!--(?!head:start|head:end)[\s\S]*?-->\s*/g;
+
+function stripHtmlComments(html: string): string {
+  let out = html;
+  let previous;
+  do {
+    previous = out;
+    out = out.replace(COMMENTS, '');
+  } while (out !== previous);
+
+  const leftover = out.replace(/<!--head:(?:start|end)-->/g, '');
+  if (leftover.includes('<!--')) {
+    throw new Error(
+      'api-origin: an unterminated HTML comment survived stripping. Refusing to ' +
+        'emit a document whose markup a stray `<!--` could truncate.'
+    );
+  }
+  return out;
+}
+
+/**
  * Substitute `__API_ORIGIN__` in index.html with the origin of VITE_API_URL.
  *
  * index.html used to hardcode `http://localhost:4000` in the preconnect hint
@@ -16,9 +57,6 @@ import { resolve } from 'path';
  */
 function apiOrigin(): Plugin {
   const FALLBACK = 'http://localhost:4000';
-  // Everything except the prerender's own splice markers, which
-  // scripts/prerender.mjs needs in dist/index.html and then consumes.
-  const COMMENTS = /<!--(?!head:start|head:end)[\s\S]*?-->\s*/g;
 
   let origin = FALLBACK;
   let isBuild = false;
@@ -48,7 +86,7 @@ function apiOrigin(): Plugin {
         // so the file reads the same way it does on disk. Strip BEFORE
         // substituting, so a comment that names the placeholder doesn't get
         // rewritten into nonsense on its way out.
-        const stripped = isBuild ? html.replace(COMMENTS, '') : html;
+        const stripped = isBuild ? stripHtmlComments(html) : html;
         return stripped.replaceAll('__API_ORIGIN__', origin);
       },
     },
