@@ -21,6 +21,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://familygreenhouse.net/help</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://familygreenhouse.net/pet-safe</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -188,5 +193,50 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-17</lastmod>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/getting-started</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/plants</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/tasks</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/reminders</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/households</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/sitters</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/billing</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/data</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/help/limits</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>

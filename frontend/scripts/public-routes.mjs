@@ -36,6 +36,7 @@ export const FRONTEND_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '.
 
 const POSTS = join(FRONTEND_ROOT, 'src', 'features', 'blog', 'posts', 'index.ts');
 const CARE = join(FRONTEND_ROOT, 'src', 'features', 'care', 'careGuides.ts');
+const HELP = join(FRONTEND_ROOT, 'src', 'features', 'help', 'helpContent.tsx');
 
 /**
  * Canonical production origin. MUST match `src/config/site.ts` (SITE_URL) —
@@ -55,6 +56,7 @@ export const STATIC_ROUTES = [
   { path: '/pricing', priority: 0.9, changefreq: 'monthly' },
   { path: '/blog', priority: 0.8, changefreq: 'weekly' },
   { path: '/care', priority: 0.8, changefreq: 'weekly' },
+  { path: '/help', priority: 0.8, changefreq: 'monthly' },
   { path: '/pet-safe', priority: 0.8, changefreq: 'monthly' },
   { path: '/changelog', priority: 0.5, changefreq: 'weekly' },
   { path: '/status', priority: 0.3, changefreq: 'daily' },
@@ -79,6 +81,28 @@ export function readCareGuides() {
   const out = new Map();
   let m;
   while ((m = re.exec(src)) !== null) out.set(m[1], m[2]);
+  return out;
+}
+
+/**
+ * Help topic ids, read from `helpContent.tsx` in declaration order.
+ *
+ * Matched on `id:` immediately followed by `title:`, which is the section
+ * shape; an article inside a section is `id:` followed by `q:`, so the two
+ * cannot be confused. Reading the manifest rather than restating the nine ids
+ * here is what stops `/help/:topicId` from drifting: a section added to the
+ * file is advertised and prerendered without anyone remembering to edit this
+ * script, and a section removed stops being advertised for the same reason.
+ *
+ * Every section is public on the web. `webOnly` hides a section inside the
+ * iOS/Android shells only, and the store builds are not what a crawler reads.
+ */
+export function readHelpTopics() {
+  const src = readFileSync(HELP, 'utf8');
+  const re = /id:\s*'([^']+)',\s*title:\s*'/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(src)) !== null) out.push(m[1]);
   return out;
 }
 
@@ -110,7 +134,17 @@ export function publicRoutes() {
     ...(reviewed ? {} : { undated: 'no `reviewed:` in careGuides.ts' }),
   }));
 
-  return [...STATIC_ROUTES, ...blogEntries, ...careEntries];
+  // No `lastmod`: help answers are edited continuously and carry no review
+  // date in the manifest. Falling back to today would make the committed
+  // sitemap change at midnight and `--check` unverifiable, so these routes
+  // advertise no date at all — which is honest, and reproducible.
+  const helpEntries = readHelpTopics().map((topic) => ({
+    path: `/help/${topic}`,
+    priority: 0.6,
+    changefreq: 'monthly',
+  }));
+
+  return [...STATIC_ROUTES, ...blogEntries, ...careEntries, ...helpEntries];
 }
 
 /** Just the paths — what the prerenderer and the coverage gate compare. */
