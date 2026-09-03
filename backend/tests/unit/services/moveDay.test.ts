@@ -463,6 +463,18 @@ describe('evaluateMoveDay', () => {
     );
   });
 
+  it('aborts before claiming the season when the task scan fails — an unreadable list is not an empty one', async () => {
+    const { evaluateMoveDay, taskService } = await setup({});
+    vi.mocked(taskService.getTasks).mockRejectedValueOnce(new Error('ddb throttled'));
+
+    await expect(evaluateMoveDay(household, 'u-a', NOW)).rejects.toThrow('ddb throttled');
+    // Nothing written: no season claimed, so the next load retries cleanly
+    // instead of duplicating every move task the household already has.
+    expect(sent().filter((c) => c.kind === 'Put')).toHaveLength(0);
+    expect(taskService.createTask).not.toHaveBeenCalled();
+    expect(taskService.updateTask).not.toHaveBeenCalled();
+  });
+
   it('surfaces a failed records read as an error, not as calm', async () => {
     const { evaluateMoveDay, dynamodb } = await setup({});
     vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('ddb down'));

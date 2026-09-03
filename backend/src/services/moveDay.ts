@@ -41,7 +41,7 @@ import {
   planMoves,
 } from './moveDayPlan.js';
 import type { MoveDayItem, MoveDayList, MoveDayTenderPlant } from './moveDayPlan.js';
-import type { Household, Plant, PlantSpace } from '../models/types.js';
+import type { Household, Plant, PlantSpace, Task } from '../models/types.js';
 
 /** A seasonal move recurs yearly; the next fire re-arms the same task. */
 export const MOVE_DAY_TASK_FREQUENCY_DAYS = 365;
@@ -179,22 +179,22 @@ async function tenderWithoutWinterHome(
 /**
  * One claimable task per move, through the existing task path. A move is a
  * yearly recurrence, so a task with the same label from an earlier season is
- * re-armed (nextDue = now) instead of duplicated. Failures are logged per
- * item and never abort the list — the card still shows who moves what.
+ * re-armed (nextDue = now) instead of duplicated.
+ *
+ * `existing` is read by the CALLER, before the season is claimed, and a
+ * failure there propagates: an unreadable task list is not an empty one, and
+ * treating it as empty would recreate every move task the household already
+ * has. Per-item write failures are different — they are logged and leave that
+ * item's `taskId` null, so the card still shows who moves what.
  */
 async function materializeTasks(
   householdId: string,
   actorUserId: string,
   list: MoveDayList,
-  now: Date
+  now: Date,
+  existing: ReadonlyArray<Task>
 ): Promise<void> {
   const nowIso = now.toISOString();
-  let existing: Awaited<ReturnType<typeof taskService.getTasks>> = [];
-  try {
-    existing = await taskService.getTasks(householdId);
-  } catch (err) {
-    logger.warn({ err: (err as Error).message, householdId }, 'move_day.task_scan_failed');
-  }
 
   for (const item of list.items) {
     const label = moveTaskLabel(item.toSpaceName);
@@ -296,6 +296,12 @@ export async function evaluateMoveDay(
 
   assignRoundRobin(items, await availableAssignees(household.id, now));
 
+  // Read the current tasks BEFORE claiming the season. A failed read must not
+  // look like "this household has no move tasks yet" — that would duplicate
+  // last year's. Letting it throw leaves the season unclaimed and nothing
+  // written, so the next dashboard load retries cleanly.
+  const existingTasks = await taskService.getTasks(household.id);
+
   const list: MoveDayList = {
     season,
     firedAt: now.toISOString(),
@@ -316,7 +322,7 @@ export async function evaluateMoveDay(
     return theirs ? { status: 'ready', list: theirs } : { status: 'quiet' };
   }
 
-  await materializeTasks(household.id, actorUserId, list, now);
+  await materializeTasks(household.id, actorUserId, list, now, existingTasks);
   logger.info({ householdId: household.id, season, moves: items.length }, 'move_day.fired');
   return { status: 'ready', list };
 }
