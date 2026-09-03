@@ -45,6 +45,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   what catches a truncated ruleset, because a truncated file still contains the
   literal string `bypass_actors` and a grep would wave it through.
 
+### Changed
+
+- Garden annual, Greenhouse annual, and Garden lifetime are withdrawn from
+  sale; both monthly plans remain. At the verified Plant.id cost ($0.0585 per
+  identification) the per-household AI-cost ceiling — $3.48 on Garden, $7.58
+  on Greenhouse — exceeds what an annual subscription earns per month ($3.33
+  and $6.67), and a $149 lifetime purchase is fully consumed after roughly 41
+  months. Withdrawal is an availability decision, not a deletion: plans carry
+  a `withdrawnIntervals` list, `GET /billing/plans` publishes a withdrawn
+  cadence as a `null` price (the signal the pricing grid and Settings already
+  render as "not available", so the interval toggle disappears on its own),
+  and `POST /billing/checkout` refuses a withdrawn cadence with a 400 at both
+  the schema and the service so a stale client or crafted request cannot start
+  one. Nothing changes for households already on an annual or lifetime plan:
+  the prices and their Stripe ids stay on the catalog so renewals still
+  resolve to the right tier, the billing portal keeps managing them, and
+  entitlement, which reads `planId` alone, is untouched. No Stripe object was
+  archived.
+
 ### Fixed
 
 - The dashboard climate card no longer renders a failed read as a calm night

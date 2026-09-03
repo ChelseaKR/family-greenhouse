@@ -7,7 +7,14 @@ import { randomUUID } from 'node:crypto';
 import { UpdateCommand, GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
-import { PlanId, getPlan, isPlanId, planRank, PLANS } from '../models/plans.js';
+import {
+  PlanId,
+  getPlan,
+  isPlanId,
+  planRank,
+  PLANS,
+  isIntervalWithdrawn,
+} from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
@@ -198,17 +205,11 @@ export interface CheckoutSessionResult {
   url: string;
 }
 
-/**
- * Billing cadence. The same `planId` (and therefore the same caps/entitlements)
- * is sold at either cadence — only the Stripe price and the headline number
- * differ — so the entire webhook/entitlement path stays cadence-agnostic and
- * resolves access off `planId` alone.
- *
- * `lifetime` is a one-time payment (Stripe `mode:'payment'`) rather than a
- * recurring subscription — it grants the same `planId` permanently with no
- * subscription to renew or cancel. Only the Garden tier offers it.
- */
-export type BillingInterval = 'month' | 'year' | 'lifetime';
+// Billing cadence lives with the plan catalog (models/plans.ts) so the
+// catalog can name which cadences it has withdrawn from sale. Re-exported
+// here so existing importers keep working.
+import type { BillingInterval } from '../models/plans.js';
+export type { BillingInterval } from '../models/plans.js';
 
 // Stripe subscription statuses that represent a live, billing subscription —
 // as opposed to 'canceled'/'incomplete_expired', which are terminal. Used to
@@ -233,6 +234,17 @@ export async function createCheckoutSession(args: {
   assertPaymentActivityAllowed();
   const plan = getPlan(args.planId);
   const interval: BillingInterval = args.interval ?? 'month';
+  // Withdrawn from sale: the cadence still exists for households already on
+  // it (renewals, the portal and entitlement all keep working), but a new
+  // checkout must not start one — a stale client or a crafted request reaches
+  // here with exactly the body a live button once sent. Refuse before reading
+  // configuration or touching Stripe. The handler's schema refuses it first
+  // for a well-formed request; this is the guard for any path around it.
+  if (isIntervalWithdrawn(plan, interval)) {
+    throw new Error(
+      `INTERVAL_WITHDRAWN: ${plan.name} is no longer sold at the '${interval}' cadence.`
+    );
+  }
   const priceEnv =
     interval === 'lifetime'
       ? plan.lifetimeStripePriceEnv

@@ -6,6 +6,18 @@
  */
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
 
+/**
+ * Billing cadence. The same `planId` (and therefore the same caps and
+ * entitlements) is sold at each cadence — only the Stripe price and the
+ * headline number differ — so the whole webhook/entitlement path stays
+ * cadence-agnostic and resolves access off `planId` alone.
+ *
+ * `lifetime` is a one-time payment (Stripe `mode:'payment'`) rather than a
+ * recurring subscription: it grants the same `planId` permanently with no
+ * subscription to renew or cancel.
+ */
+export type BillingInterval = 'month' | 'year' | 'lifetime';
+
 export interface Plan {
   id: PlanId;
   name: string;
@@ -17,9 +29,9 @@ export interface Plan {
    *  staging/prod keys stay separate. Free tier has none. */
   stripePriceEnv?: string;
   /** Annual price in dollars/year (a discount vs 12× monthly). Undefined on the
-   *  free tier. The category monetizes primarily on annual plans, and annual
-   *  subscriptions retain markedly better than monthly — so every paid tier
-   *  offers one. */
+   *  free tier. Present on every paid tier because households already on an
+   *  annual subscription keep renewing at it; whether a NEW one may be started
+   *  is `withdrawnIntervals`, not this field. */
   annualPrice?: number;
   /** Env var name where the Stripe ANNUAL price ID lives. Paired with
    *  `annualPrice`; absent on the free tier. */
@@ -27,11 +39,30 @@ export interface Plan {
   /** Lifetime price in dollars for a one-time payment that grants this tier's
    *  entitlement permanently. Modeled as a one-time billing interval on the
    *  existing tier (NOT a new planId), so entitlement resolution and the
-   *  3-plan catalog stay unchanged. Only the Garden tier offers one. */
+   *  3-plan catalog stay unchanged. Only the Garden tier has one. */
   lifetimePrice?: number;
   /** Env var name where the Stripe LIFETIME (one-time) price ID lives. Paired
    *  with `lifetimePrice`; absent on tiers without a lifetime option. */
   lifetimeStripePriceEnv?: string;
+  /**
+   * Cadences that EXIST on this tier but may no longer be STARTED.
+   *
+   * Withdrawal is an availability decision, not a deletion. The price and its
+   * Stripe env stay on the plan so that (a) the webhook can still resolve a
+   * renewing annual/lifetime price id back to its tier, (b) the billing
+   * portal keeps managing the subscriptions already on it, and (c)
+   * entitlement — which reads `planId` alone — is untouched. What changes is
+   * the OFFER: `planSummary` publishes `null` for a withdrawn cadence, which
+   * the client already renders as "not available", and checkout refuses it
+   * (`isIntervalOffered`). Stripe prices are never archived for this; the
+   * subscriptions on them must keep renewing.
+   *
+   * Withdrawn 2026-09-02: at the verified per-ID cost the AI-cost ceiling
+   * per household ($3.48 Garden, $7.58 Greenhouse) exceeds what an annual
+   * subscription earns per month ($3.33 / $6.67), and a $149 lifetime
+   * purchase is fully consumed after roughly 41 months. Monthly remains.
+   */
+  withdrawnIntervals?: readonly BillingInterval[];
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -59,6 +90,9 @@ export const PLANS: Record<PlanId, Plan> = {
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
     lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
+    // Annual ($3.33/mo) and lifetime ($149 once) both earn less per month
+    // than the tier's $3.48 AI-cost ceiling. Existing subscribers keep them.
+    withdrawnIntervals: ['year', 'lifetime'],
   },
   greenhouse: {
     id: 'greenhouse',
@@ -71,6 +105,9 @@ export const PLANS: Record<PlanId, Plan> = {
     maxMembers: 50,
     stripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE_ANNUAL',
+    // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
+    // ceiling. Existing subscribers keep it.
+    withdrawnIntervals: ['year'],
   },
 };
 
@@ -97,6 +134,29 @@ export function planRank(id: PlanId): number {
 /** True iff `id` names a real plan in the catalog. */
 export function isPlanId(id: unknown): id is PlanId {
   return typeof id === 'string' && Object.hasOwn(PLANS, id);
+}
+
+/** True when this cadence exists on the tier but has been withdrawn from sale. */
+export function isIntervalWithdrawn(plan: Plan, interval: BillingInterval): boolean {
+  return plan.withdrawnIntervals?.includes(interval) ?? false;
+}
+
+/** Amount for a tier at one cadence, or undefined when the tier has no such cadence. */
+function priceAt(plan: Plan, interval: BillingInterval): number | undefined {
+  if (interval === 'lifetime') return plan.lifetimePrice;
+  if (interval === 'year') return plan.annualPrice;
+  return plan.monthlyPrice;
+}
+
+/**
+ * True when a household may START this cadence today: the tier has a price
+ * at it AND that cadence has not been withdrawn. This is the single authority
+ * checkout consults, and `planSummary` publishes the same answer as a null
+ * price — so a current client never shows an option the API would refuse,
+ * and a stale or crafted request is refused on the same rule.
+ */
+export function isIntervalOffered(plan: Plan, interval: BillingInterval): boolean {
+  return priceAt(plan, interval) !== undefined && !isIntervalWithdrawn(plan, interval);
 }
 
 export interface PlanSummary {
@@ -129,9 +189,15 @@ export function planSummary(plan: Plan, includePrices = false): PlanSummary {
   if (includePrices) {
     summary.monthlyPrice = plan.monthlyPrice;
     // null (not undefined) survives JSON serialization as an explicit
-    // "no annual option" signal when payment activity is enabled.
-    summary.annualPrice = plan.annualPrice ?? null;
-    summary.lifetimePrice = plan.lifetimePrice ?? null;
+    // "no annual option" signal when payment activity is enabled. A WITHDRAWN
+    // cadence publishes as null too — the same "not sold at this cadence"
+    // signal the client already renders as "not available" — so a tier keeps
+    // its annual/lifetime price for the households already on it without the
+    // page offering it to new ones.
+    summary.annualPrice = isIntervalOffered(plan, 'year') ? (plan.annualPrice ?? null) : null;
+    summary.lifetimePrice = isIntervalOffered(plan, 'lifetime')
+      ? (plan.lifetimePrice ?? null)
+      : null;
   }
 
   return summary;

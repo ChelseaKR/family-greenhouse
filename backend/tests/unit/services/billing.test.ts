@@ -1132,20 +1132,47 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
 });
 
 describe('planSummary', () => {
-  it('exposes annualPrice (null for the free tier, the dollar figure for paid tiers)', async () => {
+  it('publishes a WITHDRAWN annual cadence as null — the same signal as "no such cadence"', async () => {
+    // Annual is withdrawn from sale on both paid tiers (2026-09-02). The
+    // price stays on the catalog for existing subscribers, but the public
+    // projection must not offer it: null is what the client already renders
+    // as "not available", so the interval toggle disappears on its own.
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
     expect(planSummary(PLANS.seedling, true).annualPrice).toBeNull();
-    expect(planSummary(PLANS.garden, true).annualPrice).toBe(39.99);
-    expect(planSummary(PLANS.greenhouse, true).annualPrice).toBe(79.99);
+    expect(planSummary(PLANS.garden, true).annualPrice).toBeNull();
+    expect(planSummary(PLANS.greenhouse, true).annualPrice).toBeNull();
+    // ...while the catalog itself still knows the amount.
+    expect(PLANS.garden.annualPrice).toBe(39.99);
+    expect(PLANS.greenhouse.annualPrice).toBe(79.99);
   });
 
-  it('exposes lifetimePrice (149 for Garden, null for tiers without a lifetime option)', async () => {
+  it('publishes the WITHDRAWN Garden lifetime as null, and still null where there never was one', async () => {
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
-    expect(planSummary(PLANS.garden, true).lifetimePrice).toBe(149);
+    expect(planSummary(PLANS.garden, true).lifetimePrice).toBeNull();
     expect(planSummary(PLANS.seedling, true).lifetimePrice).toBeNull();
     expect(planSummary(PLANS.greenhouse, true).lifetimePrice).toBeNull();
+    expect(PLANS.garden.lifetimePrice).toBe(149);
+  });
+
+  it('still publishes the monthly amount on both paid tiers', async () => {
+    const { planSummary } = await import('../../../src/services/billing.js');
+    const { PLANS } = await import('../../../src/models/plans.js');
+    expect(planSummary(PLANS.garden, true).monthlyPrice).toBe(4.99);
+    expect(planSummary(PLANS.greenhouse, true).monthlyPrice).toBe(9.99);
+  });
+
+  it('follows withdrawnIntervals, not the mere presence of a price', async () => {
+    // A tier with an annual price and NO withdrawal publishes the amount; the
+    // same tier with 'year' withdrawn publishes null. This pins the switch to
+    // the flag, so re-listing a cadence is a one-line catalog change.
+    const { planSummary } = await import('../../../src/services/billing.js');
+    const { PLANS } = await import('../../../src/models/plans.js');
+    const offered = { ...PLANS.garden, withdrawnIntervals: undefined };
+    expect(planSummary(offered, true)).toMatchObject({ annualPrice: 39.99, lifetimePrice: 149 });
+    const withdrawn = { ...PLANS.garden, withdrawnIntervals: ['year'] as const };
+    expect(planSummary(withdrawn, true)).toMatchObject({ annualPrice: null, lifetimePrice: 149 });
   });
 
   it('omits every price field unless a caller explicitly enables them', async () => {
@@ -1269,38 +1296,143 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     }
   });
 
-  it('uses the ANNUAL price id when interval=year', async () => {
-    await runCheckout('year');
-    expect(sessionsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        line_items: [{ price: 'price_garden_annual', quantity: 1 }],
-        metadata: expect.objectContaining({ interval: 'year' }),
-      })
-    );
-  });
+  // Withdrawn from sale 2026-09-02: Garden annual, Garden lifetime, and
+  // Greenhouse annual. The service is the second line of defence behind the
+  // handler's schema; it must refuse on the catalog's own rule — before it
+  // reads price configuration, before it reads the household's billing row,
+  // and long before it reaches Stripe. These calls deliberately queue NO
+  // DynamoDB response: the guard has to throw before `dynamodb.send` runs,
+  // and a queued-but-unconsumed mock would leak into the next test.
+  async function attemptWithdrawnCheckout(
+    planId: 'garden' | 'greenhouse',
+    interval: 'year' | 'lifetime'
+  ) {
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    return createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId,
+      interval,
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+  }
 
-  it('throws a clear error when the requested cadence has no configured price env', async () => {
+  it.each([
+    ['garden', 'year'],
+    ['garden', 'lifetime'],
+    ['greenhouse', 'year'],
+  ] as const)(
+    'refuses the withdrawn %s/%s cadence before DynamoDB, configuration, or Stripe',
+    async (planId, interval) => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      await expect(attemptWithdrawnCheckout(planId, interval)).rejects.toThrow(
+        /^INTERVAL_WITHDRAWN:/
+      );
+      expect(dynamodb.send).not.toHaveBeenCalled();
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    }
+  );
+
+  it('refuses a withdrawn cadence BEFORE reading price configuration', async () => {
+    // With the annual env deleted, the old "Missing STRIPE_PRICE_ID_..."
+    // error would fire if configuration were read first. The withdrawal
+    // guard must win: the answer is "not sold", not "misconfigured".
     delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
-    await expect(runCheckout('year')).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN_ANNUAL');
+    const err = await attemptWithdrawnCheckout('garden', 'year').catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/^INTERVAL_WITHDRAWN:/);
+    expect((err as Error).message).not.toMatch(/Missing STRIPE_PRICE_ID/);
     expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
-  it('uses mode=payment + the lifetime price id and sends NO subscription_data when interval=lifetime', async () => {
-    await runCheckout('lifetime');
-    expect(sessionsCreate).toHaveBeenCalledTimes(1);
-    const arg = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(arg.mode).toBe('payment');
-    expect(arg.line_items).toEqual([{ price: 'price_garden_lifetime', quantity: 1 }]);
-    expect(arg.metadata).toMatchObject({ planId: 'garden', interval: 'lifetime' });
-    // A one-time payment must NOT carry subscription_data / a trial.
-    expect(arg.subscription_data).toBeUndefined();
+  it('throws a clear error when the requested (offered) cadence has no configured price env', async () => {
+    delete process.env.STRIPE_PRICE_ID_GARDEN;
+    await expect(runCheckout('month')).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN');
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
-  it('keeps mode=subscription (with subscription_data) for the monthly/annual cadences', async () => {
+  it('keeps mode=subscription (with subscription_data) for the monthly cadence', async () => {
     await runCheckout('month');
     const arg = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(arg.mode).toBe('subscription');
     expect(arg.subscription_data).toMatchObject({ trial_period_days: 14 });
+  });
+});
+
+describe('existing annual and lifetime subscribers are untouched by the withdrawal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('a renewing GARDEN ANNUAL subscription still resolves to the Garden tier and its caps', async () => {
+    // The webhook resolves the tier from the price the subscription
+    // carries. Withdrawal keeps the annual price env on the catalog for
+    // exactly this reason: a renewal on the withdrawn cadence must keep
+    // landing on the right tier, or the household loses its caps at the
+    // first renewal after the change.
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
+    try {
+      const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+      const { getPlan } = await import('../../../src/models/plans.js');
+      const delta = deltaForStripeEvent({
+        id: 'evt_renewal_annual',
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_annual',
+            status: 'active',
+            metadata: { householdId: 'hh-1', planId: 'garden' },
+            items: {
+              data: [{ price: { id: 'price_garden_annual' }, current_period_end: 1_800_000_000 }],
+            },
+          },
+        },
+      } as unknown as Stripe.Event);
+      expect(delta?.fields.planId).toBe('garden');
+      expect(getPlan(delta?.fields.planId)).toMatchObject({ maxPlants: 500, maxMembers: 6 });
+    } finally {
+      delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
+    }
+  });
+
+  it('a renewing GREENHOUSE ANNUAL subscription still resolves to the Greenhouse tier and its caps', async () => {
+    process.env.STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = 'price_gh_annual';
+    try {
+      const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+      const { getPlan } = await import('../../../src/models/plans.js');
+      const delta = deltaForStripeEvent({
+        id: 'evt_renewal_gh_annual',
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_gh_annual',
+            status: 'active',
+            metadata: { householdId: 'hh-2', planId: 'greenhouse' },
+            items: {
+              data: [{ price: { id: 'price_gh_annual' }, current_period_end: 1_800_000_000 }],
+            },
+          },
+        },
+      } as unknown as Stripe.Event);
+      expect(delta?.fields.planId).toBe('greenhouse');
+      expect(getPlan(delta?.fields.planId)).toMatchObject({ maxPlants: 5000, maxMembers: 50 });
+    } finally {
+      delete process.env.STRIPE_PRICE_ID_GREENHOUSE_ANNUAL;
+    }
+  });
+
+  it('a household that already owns Garden for life keeps it: entitlement reads planId, not the offer', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { planId: 'garden', lifetimePlanId: 'garden', stripeCustomerId: 'cus_life' },
+    });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    const { getPlan } = await import('../../../src/models/plans.js');
+    const sub = await getHouseholdSubscription('hh-life');
+    expect(sub.planId).toBe('garden');
+    expect(sub.lifetimePlanId).toBe('garden');
+    expect(getPlan(sub.planId)).toMatchObject({ maxPlants: 500, maxMembers: 6 });
   });
 });
 
@@ -1362,19 +1494,15 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     });
   }
 
-  it.each([['month' as const], ['lifetime' as const]])(
-    'refuses to sell a tier the household already owns outright (%s)',
-    async (interval) => {
-      // A lifetime purchase has no subscription id, so the ALREADY_SUBSCRIBED
-      // guard above cannot see it. Without this check the household would be
-      // sold Garden a second time — or a Garden subscription that adds nothing
-      // to what it already owns permanently.
-      await expect(runAsLifetimeOwner('garden', interval)).rejects.toThrow(
-        'LIFETIME_ALREADY_OWNED'
-      );
-      expect(sessionsCreate).not.toHaveBeenCalled();
-    }
-  );
+  it('refuses to sell a tier the household already owns outright (monthly)', async () => {
+    // A lifetime purchase has no subscription id, so the ALREADY_SUBSCRIBED
+    // guard above cannot see it. Without this check the household would be
+    // sold a Garden subscription that adds nothing to what it already owns
+    // permanently. Monthly is the only Garden cadence still sold; the
+    // lifetime cadence is refused earlier as withdrawn (see below).
+    await expect(runAsLifetimeOwner('garden', 'month')).rejects.toThrow('LIFETIME_ALREADY_OWNED');
+    expect(sessionsCreate).not.toHaveBeenCalled();
+  });
 
   it('still allows a lifetime owner to upgrade to a strictly higher tier', async () => {
     // Lifetime is a floor, not a ceiling. The marker survives the upgrade, so
@@ -1391,13 +1519,30 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     expect(sessionsCreate).toHaveBeenCalledTimes(1);
   });
 
-  it('exempts the lifetime cadence — its webhook already cancels any prior recurring subscription', async () => {
-    const result = await runWithExistingSub('active', 'lifetime');
-    expect(result.url).toBe('https://checkout.stripe.test/cs');
-    expect(sessionsCreate).toHaveBeenCalledTimes(1);
-    const params = sessionsCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(params.mode).toBe('payment');
-    expect(params.metadata).toMatchObject({ replacesSubscriptionId: 'sub_existing' });
+  it('refuses the withdrawn lifetime cadence to a live subscriber as WITHDRAWN, before reading the household row', async () => {
+    // Before 2026-09-02 a live monthly subscriber could convert to lifetime
+    // (exempt from the ALREADY_SUBSCRIBED guard because the lifetime webhook
+    // cancels the prior subscription — that exemption and its webhook half
+    // are retained for a future re-listing, and the webhook side is tested
+    // in the applyStripeEvent suite). Now that Garden lifetime is withdrawn,
+    // the answer is "not sold", and it must come first: no DynamoDB read, no
+    // Stripe call, and not the misleading "already subscribed" refusal.
+    // Deliberately queues NO DynamoDB response, so the guard must throw
+    // before `dynamodb.send` runs.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    const err = await createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      interval: 'lifetime',
+      successUrl: 's',
+      cancelUrl: 'c',
+    }).catch((e: Error) => e);
+    expect((err as Error).message).toMatch(/^INTERVAL_WITHDRAWN:/);
+    expect((err as Error).message).not.toMatch(/ALREADY_SUBSCRIBED/);
+    expect(dynamodb.send).not.toHaveBeenCalled();
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 });
 

@@ -174,6 +174,16 @@ Empty values keep Stripe inert (the pre-billing behavior), so a half-finished
 setup never breaks the app. An empty MONTHLY id makes a plan unbuyable; an empty
 annual/lifetime id just hides that cadence.
 
+A cadence can also be withdrawn from sale in code while its Stripe price stays
+live: `withdrawnIntervals` on a plan (`backend/src/models/plans.ts`) makes
+`GET /billing/plans` publish that cadence as `null` — the client already renders
+that as "not available" — and makes `POST /billing/checkout` refuse it. The
+price and its env var stay on the plan so that renewals on an existing
+subscription still resolve to the right tier and the portal keeps managing
+them. As of 2026-09-02 both annual cadences and Garden lifetime are withdrawn
+(their AI-cost ceiling per household exceeds their monthly revenue); do not
+archive those Stripe prices — existing subscriptions renew against them.
+
 `payments_enabled` is per-environment, but `commercial-status.json` is shared
 across both. Staging can therefore be opened for verification while production
 stays shut, and the fail-closed client behaviour covers the gap: with the
@@ -188,6 +198,8 @@ checklist below is the Stripe-side detail those steps refer to:
 2. Create two **products** — Garden and Greenhouse (Seedling is free → no Stripe object). Add prices:
    - **Garden**: monthly $4.99, annual $39.99, one-time **lifetime** $149
    - **Greenhouse**: monthly $9.99, annual $79.99 (no lifetime)
+   - Annual and lifetime prices are kept for existing subscribers but are
+     withdrawn from sale (`withdrawnIntervals`); only monthly can be started.
 3. Paste the five `price_…` ids into `infrastructure/environments/production/terraform.tfvars`.
 4. Add `STRIPE_SECRET_KEY` (the `sk_…` key) as a GitHub Actions **repo secret**.
 5. Create a Stripe **webhook endpoint** at `<API_URL>/billing/webhook` and subscribe it to the four events above. Production URL:

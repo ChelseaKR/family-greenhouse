@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { PLANS, getPlan, isPlanId } from '../../../src/models/plans.js';
+import {
+  PLANS,
+  getPlan,
+  isPlanId,
+  isIntervalOffered,
+  isIntervalWithdrawn,
+  planSummary,
+  type Plan,
+} from '../../../src/models/plans.js';
 
 describe('plan catalog', () => {
   it('exposes exactly the three known tiers', () => {
@@ -96,5 +104,77 @@ describe('isPlanId', () => {
     expect(isPlanId(null)).toBe(false);
     expect(isPlanId(42)).toBe(false);
     expect(isPlanId({ id: 'garden' })).toBe(false);
+  });
+});
+
+describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden lifetime)', () => {
+  it('pins exactly which cadences are withdrawn on each tier', () => {
+    expect(PLANS.seedling.withdrawnIntervals).toBeUndefined();
+    expect(PLANS.garden.withdrawnIntervals).toEqual(['year', 'lifetime']);
+    expect(PLANS.greenhouse.withdrawnIntervals).toEqual(['year']);
+  });
+
+  it('offers monthly on both paid tiers and nothing else', () => {
+    expect(isIntervalOffered(PLANS.garden, 'month')).toBe(true);
+    expect(isIntervalOffered(PLANS.greenhouse, 'month')).toBe(true);
+    expect(isIntervalOffered(PLANS.garden, 'year')).toBe(false);
+    expect(isIntervalOffered(PLANS.garden, 'lifetime')).toBe(false);
+    expect(isIntervalOffered(PLANS.greenhouse, 'year')).toBe(false);
+    expect(isIntervalOffered(PLANS.greenhouse, 'lifetime')).toBe(false);
+  });
+
+  it('distinguishes "withdrawn" from "never existed"', () => {
+    // Greenhouse lifetime was never a thing; Garden lifetime was, and is
+    // withdrawn. Both are unoffered, but only one is a withdrawal — the
+    // difference is what tells the webhook to keep resolving the price.
+    expect(isIntervalWithdrawn(PLANS.garden, 'lifetime')).toBe(true);
+    expect(isIntervalWithdrawn(PLANS.greenhouse, 'lifetime')).toBe(false);
+    expect(isIntervalWithdrawn(PLANS.garden, 'month')).toBe(false);
+    expect(isIntervalWithdrawn(PLANS.seedling, 'year')).toBe(false);
+  });
+
+  it("keeps every withdrawn cadence's price AND Stripe env on the catalog for existing subscribers", () => {
+    // Withdrawal must not delete anything the webhook or the portal needs:
+    // planIdFromPriceId maps a renewing annual/lifetime price id back to its
+    // tier through these env names, so removing them would drop an existing
+    // annual household to the free tier at its next renewal.
+    expect(PLANS.garden.annualPrice).toBe(39.99);
+    expect(PLANS.garden.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_ANNUAL');
+    expect(PLANS.garden.lifetimePrice).toBe(149);
+    expect(PLANS.garden.lifetimeStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_LIFETIME');
+    expect(PLANS.greenhouse.annualPrice).toBe(79.99);
+    expect(PLANS.greenhouse.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE_ANNUAL');
+  });
+
+  it('leaves the caps and monthly prices exactly where they were', () => {
+    // Entitlement reads planId alone, so an annual or lifetime household
+    // resolves to the same tier object with the same caps as before.
+    expect(PLANS.garden).toMatchObject({ monthlyPrice: 4.99, maxPlants: 500, maxMembers: 6 });
+    expect(PLANS.greenhouse).toMatchObject({ monthlyPrice: 9.99, maxPlants: 5000, maxMembers: 50 });
+  });
+
+  it('publishes a withdrawn cadence as null while still publishing monthly', () => {
+    expect(planSummary(PLANS.garden, true)).toMatchObject({
+      monthlyPrice: 4.99,
+      annualPrice: null,
+      lifetimePrice: null,
+    });
+    expect(planSummary(PLANS.greenhouse, true)).toMatchObject({
+      monthlyPrice: 9.99,
+      annualPrice: null,
+      lifetimePrice: null,
+    });
+  });
+
+  it('is switched by the flag, not by the presence of a price: clearing it re-offers the cadence', () => {
+    const reListed: Plan = { ...PLANS.garden, withdrawnIntervals: [] };
+    expect(isIntervalOffered(reListed, 'year')).toBe(true);
+    expect(isIntervalOffered(reListed, 'lifetime')).toBe(true);
+    expect(planSummary(reListed, true)).toMatchObject({ annualPrice: 39.99, lifetimePrice: 149 });
+  });
+
+  it('never offers a cadence the tier has no price for, withdrawn or not', () => {
+    const noLifetime: Plan = { ...PLANS.greenhouse, withdrawnIntervals: [] };
+    expect(isIntervalOffered(noLifetime, 'lifetime')).toBe(false);
   });
 });
