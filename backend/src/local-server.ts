@@ -44,7 +44,13 @@ import {
   createSitterLinkSchema,
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
-import { PLANS, planSummary, planHasFeature, hasHouseholdToolkit } from './models/plans.js';
+import {
+  PLANS,
+  planSummary,
+  planHasFeature,
+  hasHouseholdToolkit,
+  planIncludesAwayKit,
+} from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
 // would take this whole dev server down before it could serve a request.
@@ -83,6 +89,16 @@ import type { ActivityEvent, RecordActivityInput } from './services/activity.js'
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
 import {
+  SITTER_PHOTO_BODY_MAX_BYTES,
+  SITTER_PHOTO_EXTENSIONS,
+  SITTER_PHOTO_MAX_PER_LINK,
+  admitSitterPhoto,
+  sitterActorId,
+  sitterPhotoUploadSchema,
+  takeSitterPhotoToken,
+} from './services/sitterPhotoPolicy.js';
+import { buildAwayRecap, pickRecapLink, recapWindow } from './services/awayRecapModel.js';
+import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
   paymentsAreAvailable,
@@ -104,7 +120,10 @@ const PORT = process.env.PORT || 4000;
 // explicitly keeps the mock and production route surfaces in lockstep.
 app.options('/*proxy', cors());
 app.use(cors());
-app.use(express.json());
+// Production caps bodies per route (middleware/bodySize.ts); the largest is
+// the sitter photo-back upload (SITTER_PHOTO_BODY_MAX_BYTES). Express's
+// 100 KB default would reject that route's in-spec bodies before it ran.
+app.use(express.json({ limit: SITTER_PHOTO_BODY_MAX_BYTES }));
 
 // In-memory storage for local development
 interface Membership {
@@ -236,6 +255,9 @@ interface SitterLink {
   expiresAt: string;
   status: 'active' | 'revoked';
   label: string | null;
+  /** Photos stored through this link (Away Kit photo-back). Mirrors the
+   *  `photoCount` attribute the production row carries. */
+  photoCount?: number;
 }
 
 /** Mirrors kioskService.KioskLink (KIOSK#{token} row). Long-lived by design —
@@ -312,6 +334,9 @@ interface PlantPhoto {
   uploadedBy: string;
   uploadedAt: string;
   caption: string | null;
+  /** Mirrors plantService.PlantPhoto: set on sitter photo-back uploads. */
+  viaSitter?: boolean;
+  sitterLinkId?: string;
 }
 
 /** Mirrors taskService.VacationWindow (PK=HOUSEHOLD#{id}, SK=VACATION#{userId}). */
@@ -5216,6 +5241,178 @@ app.post(
     res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
   }
 );
+
+// ============ AWAY KIT: SITTER PHOTO-BACK + RETURN RECAP ============
+// Mirrors handlers/tasks/sitterPhotos.ts and handlers/households/awayRecap.ts.
+// The admission policy (sizes, magic bytes, schema, per-token brake) and the
+// recap folding are the SAME modules production uses, so the mock can't
+// drift on what is refused or what a recap contains; only storage differs
+// (the in-memory mock image store instead of S3/DynamoDB).
+
+function awayKitEnabledFor(householdId: string): boolean {
+  const h = db.households.get(householdId);
+  return planIncludesAwayKit(PLANS[h?.planId ?? 'seedling']);
+}
+
+// GET /sitter/:token/photos
+app.get('/sitter/:token/photos', (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  if (!awayKitEnabledFor(link.householdId)) {
+    return res.json({
+      enabled: false,
+      max: SITTER_PHOTO_MAX_PER_LINK,
+      used: null,
+      remaining: null,
+    });
+  }
+  const used = link.photoCount ?? 0;
+  res.json({
+    enabled: true,
+    max: SITTER_PHOTO_MAX_PER_LINK,
+    used,
+    remaining: Math.max(0, SITTER_PHOTO_MAX_PER_LINK - used),
+  });
+});
+
+// POST /sitter/:token/photos
+app.post('/sitter/:token/photos', validateBody(sitterPhotoUploadSchema), (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  if (!takeSitterPhotoToken(link.token)) {
+    return res
+      .status(429)
+      .json({ message: 'Too many photos at once. Please wait a minute and try again.' });
+  }
+  if (!awayKitEnabledFor(link.householdId)) {
+    return res
+      .status(402)
+      .json({ message: 'Photo-back is not included in this household’s plan.' });
+  }
+  const body = (req as any).validatedBody;
+  const task = db.tasks.get(body.taskId);
+  // Cross-household guard: the task must live in the token's household.
+  if (!task || task.householdId !== link.householdId) {
+    return res.status(404).json({ message: 'Task not found' });
+  }
+  const plant = db.plants.get(task.plantId);
+  if (!plant || plant.householdId !== link.householdId) {
+    return res.status(404).json({ message: 'Task not found' });
+  }
+  const admitted = admitSitterPhoto(body.image);
+  if (!admitted.ok) {
+    return res.status(admitted.status).json({ message: admitted.message });
+  }
+  const used = link.photoCount ?? 0;
+  if (used >= SITTER_PHOTO_MAX_PER_LINK) {
+    return res
+      .status(409)
+      .json({ message: `This link has reached its ${SITTER_PHOTO_MAX_PER_LINK}-photo limit.` });
+  }
+  link.photoCount = used + 1;
+
+  const key = `plants/${link.householdId}/${plant.id}/${uuidv4()}.${SITTER_PHOTO_EXTENSIONS[admitted.contentType]}`;
+  db.mockImages.set(key, { body: admitted.bytes, contentType: admitted.contentType });
+  const imageUrl = `${imageBaseUrl()}/${key}`;
+  const now = new Date().toISOString();
+  const photoId = uuidv4();
+  const caption = body.caption?.trim() ? body.caption.trim() : null;
+  // Timeline-only: a sitter never replaces the plant's primary image.
+  db.photos.set(photoId, {
+    id: photoId,
+    plantId: plant.id,
+    householdId: link.householdId,
+    imageUrl,
+    uploadedBy: sitterActorId(link.id),
+    uploadedAt: now,
+    caption,
+    viaSitter: true,
+    sitterLinkId: link.id,
+  });
+  recordActivity({
+    type: 'photo.uploaded',
+    householdId: link.householdId,
+    actorId: sitterActorId(link.id),
+    actorName: 'a plant sitter',
+    payload: {
+      plantId: plant.id,
+      photoId,
+      plantName: plant.name,
+      imageUrl,
+      caption,
+      viaSitter: true,
+      sitterLinkId: link.id,
+    },
+  });
+  // PII-free acknowledgement — the stored URL (household + plant ids in the
+  // key path) is deliberately not returned to the sitter.
+  res.status(201).json({
+    photoId,
+    plantName: plant.name,
+    caption,
+    uploadedAt: now,
+    used: used + 1,
+    remaining: Math.max(0, SITTER_PHOTO_MAX_PER_LINK - (used + 1)),
+  });
+});
+
+// GET /households/:id/away-recap
+app.get('/households/:id/away-recap', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  if (!awayKitEnabledFor(req.params.id)) {
+    return res
+      .status(402)
+      .json({ message: 'The Away Kit is included with Garden and Greenhouse.' });
+  }
+  const rawLinkId = req.query.linkId;
+  const linkId =
+    typeof rawLinkId === 'string' && rawLinkId.trim().length > 0 ? rawLinkId.trim() : undefined;
+  const now = new Date();
+  const links = [...db.sitterLinks.values()].filter((l) => l.householdId === req.params.id);
+  const link = pickRecapLink(links, linkId, now);
+  if (!link) {
+    return res
+      .status(404)
+      .json({ message: linkId ? 'Sitter link not found' : 'No sitter window has ended yet' });
+  }
+  const { from, to } = recapWindow(link, now);
+  const actor = sitterActorId(link.id);
+  const inWindow = (at: string) => at >= from && at <= to;
+  // Same two row kinds production's activity partition holds: typed events
+  // plus completions folded into the envelope (dedupeCompletions handles
+  // the pair a sitter completion produces).
+  const events = [
+    ...[...db.activity.values()].filter(
+      (e) => e.householdId === req.params.id && e.actorId === actor && inWindow(e.occurredAt)
+    ),
+    ...[...db.completions.values()]
+      .filter(
+        (c) => c.householdId === req.params.id && c.completedBy === actor && inWindow(c.completedAt)
+      )
+      .map((c) => ({
+        id: c.id,
+        type: 'task.completed' as const,
+        householdId: c.householdId,
+        actorId: c.completedBy,
+        actorName: c.completedByName,
+        occurredAt: c.completedAt,
+        payload: {
+          plantId: c.plantId,
+          taskId: c.taskId,
+          taskType: c.taskType,
+          notes: c.notes ?? null,
+        },
+      })),
+  ];
+  res.json(buildAwayRecap(link, events, false, now));
+});
 
 // ============ MOCK IMAGE OBJECT STORE ============
 

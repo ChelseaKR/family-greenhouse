@@ -40,6 +40,7 @@ import { audit } from '../../utils/auditLog.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { logger } from '../../utils/logger.js';
 import { createUpgradeRequest } from './upgradeRequests.js';
+import { getAwayRecap } from './awayRecap.js';
 
 async function sendFirstHouseholdWelcome(
   userId: string,
@@ -932,4 +933,5 @@ export const handler = createRouter({
   'DELETE /households/{id}/kiosk-link': revokeKioskLink,
   // Member → admin upgrade ask; documented in ./upgradeRequests.ts.
   'POST /households/{id}/upgrade-requests': createUpgradeRequest,
+  'GET /households/{id}/away-recap': getAwayRecap,
 });

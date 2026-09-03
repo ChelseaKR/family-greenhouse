@@ -43,6 +43,14 @@ export interface PlanFeatures {
    * shared household can produce, served at $0 marginal cost.
    */
   householdToolkit: boolean;
+  /**
+   * The Away Kit's non-metered half: sitter photo-back and the return recap
+   * (ideation brief §4.1) — a coordination feature that costs
+   * ~$0.0004/household/month to serve, so it sits at Garden, not on a cap.
+   * The metered half stays in `limits` (`sitterLinkMaxDays`,
+   * `sitterLinksActive`).
+   */
+  awayKit: boolean;
 }
 
 export interface Plan {
@@ -108,7 +116,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxMembers: 6,
     // One live sitter link, a week long: the task list for a weekend away.
     limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1 },
-    features: { kiosk: false, householdToolkit: false },
+    features: { kiosk: false, householdToolkit: false, awayKit: false },
   },
   garden: {
     id: 'garden',
@@ -131,7 +139,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // Annual ($3.33/mo) and lifetime ($149 once) both earn less per month
     // than the tier's $3.48 AI-cost ceiling. Existing subscribers keep them.
     withdrawnIntervals: ['year', 'lifetime'],
-    features: { kiosk: false, householdToolkit: true },
+    features: { kiosk: false, householdToolkit: true, awayKit: true },
   },
   greenhouse: {
     id: 'greenhouse',
@@ -148,13 +156,18 @@ export const PLANS: Record<PlanId, Plan> = {
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
     // ceiling. Existing subscribers keep it.
     withdrawnIntervals: ['year'],
-    features: { kiosk: true, householdToolkit: true },
+    features: { kiosk: true, householdToolkit: true, awayKit: true },
   },
 };
 
 /** True when the tier includes the household toolkit (double-care, drift). */
 export function hasHouseholdToolkit(plan: Plan): boolean {
   return plan.features.householdToolkit;
+}
+
+/** True when the tier includes the Away Kit (sitter photo-back + return recap). */
+export function planIncludesAwayKit(plan: Plan): boolean {
+  return plan.features.awayKit;
 }
 
 export function getPlan(id: string | undefined | null): Plan {

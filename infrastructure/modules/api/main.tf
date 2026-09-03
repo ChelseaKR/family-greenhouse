@@ -872,6 +872,12 @@ locals {
     "GET /sitter/{token}"                          = { group = "tasks", auth = "none" }
     "GET /sitter/{token}/brief"                    = { group = "tasks", auth = "none" }
     "POST /sitter/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+    # Away Kit photo-back (auth=none, same token). The upload is the one
+    # unauthenticated WRITE into the photo store: 300 KB/file, 60/link
+    # (atomic DynamoDB counter), image magic bytes verified, IP + per-token
+    # rate limits, refused after expiresAt — handlers/tasks/sitterPhotos.ts.
+    "GET /sitter/{token}/photos"  = { group = "tasks", auth = "none" }
+    "POST /sitter/{token}/photos" = { group = "tasks", auth = "none" }
 
     # Kiosk (wall display) PUBLIC endpoints (auth=none). Same token model as
     # the sitter routes above, but LONG-LIVED: the token sits on a screen in a
@@ -908,6 +914,9 @@ locals {
     # A member asks the household's admins to upgrade for a locked feature
     # (email + push + activity row; once per member per feature per week).
     "POST /households/{id}/upgrade-requests" = { group = "households", auth = "jwt" }
+    # Away Kit return recap (authed, any member): replays sitter-attributed
+    # activity inside a link's window — handlers/households/awayRecap.ts.
+    "GET /households/{id}/away-recap" = { group = "households", auth = "jwt" }
 
     # --- me ---
     "DELETE /me"                = { group = "me", auth = "jwt" }

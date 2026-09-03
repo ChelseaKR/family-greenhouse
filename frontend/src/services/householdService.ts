@@ -287,7 +287,16 @@ export interface ActivityPayloadByType {
     overall: 'healthy' | 'monitor' | 'concern';
     demo: boolean;
   };
-  'photo.uploaded': { plantId: string; photoId: string };
+  'photo.uploaded': {
+    plantId: string;
+    photoId: string;
+    /** Set on sitter photo-back uploads (Away Kit); absent on member uploads. */
+    plantName?: string;
+    imageUrl?: string;
+    caption?: string | null;
+    viaSitter?: boolean;
+    sitterLinkId?: string;
+  };
   'member.joined': { role: 'admin' | 'member' };
   'member.left': { role?: 'admin' | 'member' };
   'sitter_link.created': SitterLinkActivityPayload;
