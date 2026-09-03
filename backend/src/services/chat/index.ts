@@ -57,13 +57,13 @@ import {
   type TurnBudgetReconciliation,
 } from './persistence.js';
 import type {
-  BudgetConfig,
   BudgetState,
   ChatMessageRecord,
   ContentBlock,
   TextBlock,
   ToolUseBlock,
 } from './types.js';
+import { BUDGET_CONFIG, budgetConfigForPlan } from './budget.js';
 
 const MAX_TOOL_CALLS_PER_TURN = 5;
 const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
@@ -89,14 +89,6 @@ export const PET_SAFETY_BLOCK_MESSAGE =
 // self-correcting on the next turn.
 export const RESERVE_INPUT_TOKENS = 8000;
 export const RESERVE_OUTPUT_TOKENS = 2048;
-
-// `||` (not `??`) — the Terraform variable defaults to "" to signal "use code
-// default", and `??` only treats null/undefined as missing. With `??`, an
-// empty-string env var becomes `Number("") = 0` and every chat request 429s.
-const BUDGET_CONFIG: BudgetConfig = {
-  maxInputTokensPerMonth: Number(process.env.CHAT_BUDGET_INPUT_TOKENS || '250000'),
-  maxOutputTokensPerMonth: Number(process.env.CHAT_BUDGET_OUTPUT_TOKENS || '50000'),
-};
 
 const SYSTEM_PROMPT = `\
 You are the Family Greenhouse plant care assistant. You help the user care for
@@ -516,6 +508,12 @@ async function* turnEvents(
     );
   }
 
+  // The token budget this household's tier is enforced against (./budget.ts).
+  // Derived from the plan already in hand, so tiering adds no read to the
+  // turn; until a per-tier value is configured this is the flat BUDGET_CONFIG
+  // object itself.
+  const budgetConfig = budgetConfigForPlan(plan.id);
+
   // Idempotency (#3): replay an already-completed turn instead of running it
   // again. Closes the stream→sync fallback double-charge — a stream that
   // finishes server-side but whose client falls back to the sync endpoint with
@@ -627,8 +625,8 @@ async function* turnEvents(
         citations: sprout.citations,
         provider: 'sprout',
         budgetRemaining: {
-          inputTokens: Math.max(0, BUDGET_CONFIG.maxInputTokensPerMonth - budget.inputTokens),
-          outputTokens: Math.max(0, BUDGET_CONFIG.maxOutputTokensPerMonth - budget.outputTokens),
+          inputTokens: Math.max(0, budgetConfig.maxInputTokensPerMonth - budget.inputTokens),
+          outputTokens: Math.max(0, budgetConfig.maxOutputTokensPerMonth - budget.outputTokens),
         },
       };
       if (turnId && turnAttemptId) {
@@ -665,7 +663,7 @@ async function* turnEvents(
     const reserved = await reserveBudget(
       householdId,
       { inputTokens: RESERVE_INPUT_TOKENS, outputTokens: RESERVE_OUTPUT_TOKENS },
-      BUDGET_CONFIG
+      budgetConfig
     );
     // Committed-before = post-reservation totals minus our own reservation.
     budgetBefore = {
@@ -1115,11 +1113,11 @@ async function* turnEvents(
     budgetRemaining: {
       inputTokens: Math.max(
         0,
-        BUDGET_CONFIG.maxInputTokensPerMonth - (budgetBefore.inputTokens + totalInputTokens)
+        budgetConfig.maxInputTokensPerMonth - (budgetBefore.inputTokens + totalInputTokens)
       ),
       outputTokens: Math.max(
         0,
-        BUDGET_CONFIG.maxOutputTokensPerMonth - (budgetBefore.outputTokens + totalOutputTokens)
+        budgetConfig.maxOutputTokensPerMonth - (budgetBefore.outputTokens + totalOutputTokens)
       ),
     },
   };

@@ -312,7 +312,10 @@ variable "git_sha" {
   default     = ""
 }
 
-# --- Chat budget tuning ---
+# --- Chat budget tuning (services/chat/budget.ts) ---
+# The flat pair applies to every tier without a per-tier value; a per-tier
+# value that is empty inherits the flat one for that counter. '0' is a zero
+# budget on every one of these (the root validation refuses it).
 variable "chat_budget_input_tokens" {
   description = "Per-household monthly input-token cap for chat. Empty = code default (250000)."
   type        = string
@@ -321,6 +324,42 @@ variable "chat_budget_input_tokens" {
 
 variable "chat_budget_output_tokens" {
   description = "Per-household monthly output-token cap for chat. Empty = code default (50000)."
+  type        = string
+  default     = ""
+}
+
+variable "chat_budget_input_tokens_seedling" {
+  description = "Monthly chat input-token cap for Seedling households. Empty = inherit chat_budget_input_tokens. '0' is a zero budget, not unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "chat_budget_output_tokens_seedling" {
+  description = "Monthly chat output-token cap for Seedling households. Empty = inherit chat_budget_output_tokens. '0' is a zero budget, not unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "chat_budget_input_tokens_garden" {
+  description = "Monthly chat input-token cap for Garden households. Empty = inherit chat_budget_input_tokens. '0' is a zero budget, not unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "chat_budget_output_tokens_garden" {
+  description = "Monthly chat output-token cap for Garden households. Empty = inherit chat_budget_output_tokens. '0' is a zero budget, not unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "chat_budget_input_tokens_greenhouse" {
+  description = "Monthly chat input-token cap for Greenhouse households. Empty = inherit chat_budget_input_tokens. '0' is a zero budget, not unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "chat_budget_output_tokens_greenhouse" {
+  description = "Monthly chat output-token cap for Greenhouse households. Empty = inherit chat_budget_output_tokens. '0' is a zero budget, not unlimited."
   type        = string
   default     = ""
 }

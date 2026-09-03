@@ -33,6 +33,14 @@ leaf_health_monthly_cap_garden     = ""
 leaf_health_monthly_cap_greenhouse = ""
 chat_budget_input_tokens           = ""
 chat_budget_output_tokens          = ""
+# Per-tier chat caps: blank inherits the flat pair above. Production's tfvars
+# explains the lever (and why "0" is never the answer).
+chat_budget_input_tokens_seedling    = ""
+chat_budget_output_tokens_seedling   = ""
+chat_budget_input_tokens_garden      = ""
+chat_budget_output_tokens_garden     = ""
+chat_budget_input_tokens_greenhouse  = ""
+chat_budget_output_tokens_greenhouse = ""
 
 # --- Stripe billing (TEST MODE ONLY) ---
 # Staging exists to exercise the full checkout -> webhook -> entitlement loop

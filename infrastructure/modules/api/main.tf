@@ -410,6 +410,13 @@ locals {
     SPROUT_INTEGRATION_SECRET_ID = var.sprout_integration_secret_id
     CHAT_BUDGET_INPUT_TOKENS     = var.chat_budget_input_tokens
     CHAT_BUDGET_OUTPUT_TOKENS    = var.chat_budget_output_tokens
+    # Per-tier chat budgets (services/chat/budget.ts). Empty inherits the flat pair above.
+    CHAT_BUDGET_INPUT_TOKENS_SEEDLING    = var.chat_budget_input_tokens_seedling
+    CHAT_BUDGET_OUTPUT_TOKENS_SEEDLING   = var.chat_budget_output_tokens_seedling
+    CHAT_BUDGET_INPUT_TOKENS_GARDEN      = var.chat_budget_input_tokens_garden
+    CHAT_BUDGET_OUTPUT_TOKENS_GARDEN     = var.chat_budget_output_tokens_garden
+    CHAT_BUDGET_INPUT_TOKENS_GREENHOUSE  = var.chat_budget_input_tokens_greenhouse
+    CHAT_BUDGET_OUTPUT_TOKENS_GREENHOUSE = var.chat_budget_output_tokens_greenhouse
   })
 
   handler_integration_environment = {
