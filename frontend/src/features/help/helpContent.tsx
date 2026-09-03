@@ -780,28 +780,26 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Can I pay yearly, or once?',
         a: (
           <p>
-            Both tiers offer monthly or annual billing, and annual is roughly a third cheaper than
-            twelve monthly payments. Garden additionally offers a one-off <strong>lifetime</strong>{' '}
-            purchase: you pay once, there is nothing to renew or cancel, and the tier is yours
-            permanently. If you later subscribe to Greenhouse on top and then cancel it, you drop
-            back to the Garden you own outright, not to the free plan.
+            Not any more. Both tiers are sold <strong>monthly only</strong> — Garden at $4.99 a
+            month and Greenhouse at $9.99 a month. Annual billing and the one-off Garden lifetime
+            purchase have been withdrawn from sale. If you already hold an annual or lifetime plan
+            you keep it on the terms and the price you bought it at: annual subscriptions go on
+            renewing, and a lifetime tier stays yours permanently.
           </p>
         ),
-        text: 'Both tiers offer monthly or annual billing, and annual is roughly a third cheaper than twelve monthly payments. Garden additionally offers a one-off lifetime purchase: you pay once, there is nothing to renew or cancel, and the tier is yours permanently. If you later subscribe to Greenhouse on top and then cancel it, you drop back to the Garden you own outright, not to the free plan.',
+        text: 'Not any more. Both tiers are sold monthly only: Garden at $4.99 a month and Greenhouse at $9.99 a month. Annual billing and the one-off Garden lifetime purchase have been withdrawn from sale. If you already hold an annual or lifetime plan you keep it on the terms and the price you bought it at: annual subscriptions go on renewing, and a lifetime tier stays yours permanently.',
       },
       {
         id: 'free-trial',
         q: 'Is there a free trial?',
         a: (
           <p>
-            Yes — new monthly and annual subscriptions start with a{' '}
-            <strong>14-day free trial</strong>. Checkout collects a card up front, and billing
-            begins when the trial ends unless you cancel before then. Cancelling during the trial
-            leaves you on the free Seedling plan. Lifetime purchases have no trial, because there is
-            no subscription to trial.
+            Yes — every new subscription starts with a <strong>14-day free trial</strong>. Checkout
+            collects a card up front, and billing begins when the trial ends unless you cancel
+            before then. Cancelling during the trial leaves you on the free Seedling plan.
           </p>
         ),
-        text: 'Yes. New monthly and annual subscriptions start with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. Lifetime purchases have no trial, because there is no subscription to trial.',
+        text: 'Yes. Every new subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan.',
       },
       {
         id: 'cancel',
@@ -858,12 +856,12 @@ export const HELP_SECTIONS: HelpSection[] = [
             Because a second checkout would start a second subscription alongside the first and bill
             you twice. While you have a live subscription, tier changes go through{' '}
             <strong>Manage subscription</strong> instead, and the app refuses a second purchase
-            rather than risking the double charge. If you own Garden outright through a lifetime
-            purchase, there is nothing left to buy at that tier and we won&rsquo;t sell it to you
-            again.
+            rather than risking the double charge. If you own Garden outright through one of the
+            earlier lifetime purchases, there is nothing left to buy at that tier and we won&rsquo;t
+            sell it to you again.
           </p>
         ),
-        text: 'Because a second checkout would start a second subscription alongside the first and bill you twice. While you have a live subscription, tier changes go through Manage subscription instead, and the app refuses a second purchase rather than risking the double charge. If you own Garden outright through a lifetime purchase, there is nothing left to buy at that tier and we will not sell it to you again.',
+        text: 'Because a second checkout would start a second subscription alongside the first and bill you twice. While you have a live subscription, tier changes go through Manage subscription instead, and the app refuses a second purchase rather than risking the double charge. If you own Garden outright through one of the earlier lifetime purchases, there is nothing left to buy at that tier and we will not sell it to you again.',
       },
       {
         id: 'billing-questions',

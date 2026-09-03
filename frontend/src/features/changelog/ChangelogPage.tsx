@@ -38,10 +38,10 @@ const ENTRIES: Entry[] = [
     title: 'Paid plans are open',
     body: (
       <>
-        Garden and Greenhouse can now be bought on the web, monthly or annually, with a one-off
-        lifetime option on Garden. A household admin buys and manages the plan in Settings, and new
-        subscriptions start with a 14-day free trial. The free Seedling plan is unchanged and stays
-        free. <Link to="/pricing">See the plans</Link>, or read{' '}
+        Garden ($4.99 a month) and Greenhouse ($9.99 a month) can now be bought on the web. A
+        household admin buys and manages the plan in Settings, and new subscriptions start with a
+        14-day free trial, with a card collected at checkout. The free Seedling plan is unchanged
+        and stays free. <Link to="/pricing">See the plans</Link>, or read{' '}
         <Link to="/help/billing">how billing and cancelling work</Link>.
       </>
     ),
@@ -54,7 +54,7 @@ const ENTRIES: Entry[] = [
       <>
         Cancelling leaves you on the paid plan until the period you already paid for runs out, so
         nothing on screen used to change and cancelling looked like it had failed. Billing now shows
-        the date your plan ends. A separate fix protects lifetime purchases: a tier you bought
+        the date your plan ends. A separate fix protects existing lifetime plans: a tier you bought
         outright can no longer be sold to you twice, or lost when a later subscription is cancelled.
       </>
     ),
