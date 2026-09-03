@@ -646,6 +646,846 @@ export const CARE_GUIDES: CareGuide[] = [
       },
     ],
   },
+  {
+    slug: 'fiddle-leaf-fig',
+    commonName: 'Fiddle Leaf Fig',
+    scientificName: 'Ficus lyrata',
+    alsoKnownAs: ['Fiddle-Leaf Fig', 'Banjo Fig', 'Ficus lyrata'],
+    metaTitle: 'Fiddle Leaf Fig Care: How Often to Water (and Why It Drops Leaves)',
+    metaDescription:
+      'How often to water a fiddle leaf fig, the light it actually needs, why the leaves get brown spots or drop, and how to keep one alive in a shared home.',
+    reviewed: '2026-09-02',
+    summary:
+      'The fiddle leaf fig is the most photographed and most returned houseplant there is. It isn’t difficult so much as inflexible: it wants one bright spot and the same routine every week, and it registers a complaint about anything else.',
+    quickFacts: {
+      water: 'Every 7–10 days, when the top 2 inches of soil are dry',
+      light: 'Bright light, including a few hours of direct morning sun',
+      difficulty: 'Moderate — fussy about change, not about care',
+      toxicity: 'Toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic)',
+      humidity: 'Prefers moderate humidity; dislikes cold draughts more',
+    },
+    sections: {
+      watering: [
+        'Water a fiddle leaf fig roughly every 7–10 days, once the top two inches of soil have gone dry. Water thoroughly — until it runs out of the drainage hole — then let it drain properly and tip away whatever is left in the saucer. Half-hearted splashes wet only the top of the pot and leave the roots at the bottom bone dry.',
+        'The thing that kills them is inconsistency, not the interval. A big drink one week, nothing for three, then a panic-soak is far worse than a slightly wrong schedule kept steadily. In winter it wants less; check the soil rather than the calendar and it will forgive you.',
+      ],
+      light: [
+        'This is the one plant on this site that genuinely wants a lot of light. A bright window — south or west facing, with a few hours of gentle direct sun in the morning — is what keeps the leaves large and dark. In a dim corner it doesn’t die dramatically; it just stops growing and sheds a leaf now and then until there’s nothing left.',
+        'Once it’s happy, leave it there. Fiddle leaf figs acclimatise to a specific light level and sulk when moved, which is why so many drop leaves in the fortnight after coming home from the shop. Rotate the pot a quarter-turn each time you water so it grows evenly, but don’t keep relocating it.',
+      ],
+      problems: [
+        'Brown spots in the middle of a leaf, with a dark edge, usually mean root rot from too much water or a pot with no drainage. Brown patches that start at the leaf edge and creep inward are more often underwatering or dry air. It’s worth looking closely before you reach for the watering can, because the two look similar and the fixes are opposite.',
+        'Sudden leaf drop after you move it, repot it, or turn the heating on is a stress response, not a death sentence. Put it somewhere bright and stable, water on your normal schedule, and stop fussing. Most recover once the conditions stop changing.',
+        'Bare, leggy stems with leaves only at the top mean not enough light. New growth won’t fill in the bottom on its own — you can prune the top to force branching, but the real fix is a brighter spot.',
+      ],
+      sharedCare: [
+        'The fiddle leaf fig is the plant most likely to be killed by two people caring for it kindly. It only wants water every week or so, so if you each water it “when it looks a bit dry,” it gets twice what it needs and rots quietly from the bottom.',
+        'Make it a one-owner plant, or write down the date every time it gets watered so the second person can see it’s been done. This is the plant where a shared log earns its keep — the damage from double-watering takes weeks to show, and by then the cause is invisible.',
+      ],
+      honestBit: [
+        'My honest take: don’t buy one first. A fiddle leaf fig is a plant for someone who already knows how their home behaves in winter — where the draughts are, which window still gets light in February, how fast a pot dries out. Learn that on a pothos, then buy the fig.',
+        'And if yours drops a few leaves in the first month home, that’s normal and almost everybody panics about it. Give it one bright spot, a steady week, and no interventions. The plant isn’t asking for more attention; it’s asking for less change.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a fiddle leaf fig?',
+        a: 'About every 7–10 days, once the top two inches of soil are dry. Water thoroughly until it drains out the bottom, then empty the saucer. Consistency matters more than the exact interval — steady beats a soak-and-forget cycle.',
+      },
+      {
+        q: 'Why is my fiddle leaf fig dropping leaves?',
+        a: 'Usually stress from a change: it was moved, repotted, hit by a cold draught, or the heating came on. Give it one bright, stable spot, water on a regular schedule, and stop moving it. Leaf drop paired with brown spotting is more likely a watering problem.',
+      },
+      {
+        q: 'Are fiddle leaf figs toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists Ficus species as toxic to both cats and dogs — the milky sap irritates the mouth and stomach and causes drooling and vomiting, and it can irritate skin too. Unpleasant rather than an emergency, but keep it away from pets that chew, and wash your hands after pruning.',
+      },
+      {
+        q: 'What kind of light does a fiddle leaf fig need?',
+        a: 'Bright light, more than most houseplants — ideally a south or west window with a few hours of direct morning sun. Low light won’t kill it quickly; it just stalls and slowly sheds leaves from the bottom up.',
+      },
+    ],
+  },
+  {
+    slug: 'rubber-plant',
+    commonName: 'Rubber Plant',
+    scientificName: 'Ficus elastica',
+    alsoKnownAs: ['Rubber Tree', 'Rubber Fig', 'Ficus elastica'],
+    metaTitle: 'Rubber Plant Care: How Often to Water a Ficus Elastica',
+    metaDescription:
+      'How often to water a rubber plant, how much light it needs, why the leaves drop or yellow, and how to share the care of one without overwatering it.',
+    reviewed: '2026-09-02',
+    summary:
+      'A rubber plant is what you buy when you want the drama of a fiddle leaf fig without the temperament. Same big glossy leaves, same architectural shape, a fraction of the sulking — it’s the easiest large statement plant you can own.',
+    quickFacts: {
+      water: 'Every 7–14 days, when the top inch or two of soil is dry',
+      light: 'Bright, indirect light; tolerates medium light',
+      difficulty: 'Easy',
+      toxicity: 'Toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic)',
+      humidity: 'Average household humidity is fine',
+    },
+    sections: {
+      watering: [
+        'Water a rubber plant every 7–14 days, when the top inch or two of soil is dry. It’s a wide range because it depends on pot size and light: a big plant in a bright room drinks weekly, the same plant in a dim corner in January might go three weeks. Check with a finger, water thoroughly, let it drain.',
+        'Rubber plants would rather be slightly dry than slightly wet. If you’ve inherited one and have no idea what its schedule was, err on the side of waiting — a thirsty rubber plant recovers in a day, a waterlogged one takes months.',
+      ],
+      light: [
+        'Bright, indirect light gives you the best leaves: large, thick and glossy. It copes with medium light and a spot a few feet from a window, just with slower growth and more space between leaves. The variegated ones — the pink and cream types — need more light than the plain burgundy ones to hold their colour.',
+        'Direct midday sun through glass can scorch the leaves, so a sheer curtain helps in a very bright window. Wipe the leaves with a damp cloth every month or so; they’re big enough to collect real dust, and dusty leaves genuinely take in less light.',
+      ],
+      problems: [
+        'Leaves dropping from the bottom of the plant is the classic rubber plant complaint, and it’s usually overwatering — soggy soil starves the roots of air and the plant sheds from the bottom up. Let it dry out properly and check the pot actually drains.',
+        'Yellow leaves point the same way: too much water, too often. A single yellow leaf at the base of an otherwise healthy plant is just ageing, and nothing to worry about.',
+        'Brown, crispy edges mean the opposite — it got too dry, or it’s sitting next to a radiator. Curling leaves that don’t relax after a drink usually mean cold: rubber plants dislike draughty spots and doorways in winter.',
+      ],
+      sharedCare: [
+        'A rubber plant is a good shared plant precisely because its schedule is loose. Anywhere in the 7-to-14-day window is fine, so it doesn’t much matter which of you gets to it — as long as somebody does and nobody doubles up in the same week.',
+        'The one rule worth agreeing out loud: whoever waters, waters properly and empties the saucer. The failure mode in a shared house is two small top-ups plus a full soak in the same week, which reads as attentive care and lands as root rot.',
+      ],
+      honestBit: [
+        'My take: the rubber plant is the most underrated big houseplant there is. People walk straight past it to buy a fiddle leaf fig they’ll kill within the year, when this thing gives you the same look, forgives a missed fortnight, and grows into a proper tree if you let it.',
+        'One warning that has nothing to do with the plant and everything to do with your floors: the sap is milky, sticky and it stains. When you prune it — and you will, they get tall fast — put something down first and wear old clothes.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a rubber plant?',
+        a: 'Every 7–14 days, once the top inch or two of soil is dry. Bright rooms and summer push it toward weekly; dim corners and winter stretch it to every two or three weeks. When in doubt, wait — it handles dry far better than soggy.',
+      },
+      {
+        q: 'Why is my rubber plant losing its bottom leaves?',
+        a: 'Almost always overwatering. Soggy soil starves the roots of air and the plant drops leaves from the bottom up. Let it dry out fully, make sure the pot has a drainage hole, and stop watering on a fixed calendar.',
+      },
+      {
+        q: 'Are rubber plants toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists Ficus species as toxic to cats and dogs — the milky sap irritates the mouth and gut, causing drooling and vomiting, and it can cause a skin reaction on contact. Keep it out of reach of pets that chew, and wipe up sap from broken leaves.',
+      },
+      {
+        q: 'Do rubber plants need direct sunlight?',
+        a: 'No — bright indirect light is ideal, and harsh midday sun through glass can scorch the leaves. Variegated varieties need more light than the plain dark ones to keep their pink and cream markings.',
+      },
+    ],
+  },
+  {
+    slug: 'bird-of-paradise',
+    commonName: 'Bird of Paradise',
+    scientificName: 'Strelitzia reginae',
+    alsoKnownAs: ['Crane Flower', 'Strelitzia', 'Bird of Paradise Flower'],
+    metaTitle: 'Bird of Paradise Care: How Often to Water + Is It Pet-Safe?',
+    metaDescription:
+      'How often to water a bird of paradise, how much light it needs indoors, why the leaves split or brown, and whether it is safe around cats and dogs.',
+    reviewed: '2026-09-02',
+    summary:
+      'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
+    quickFacts: {
+      water: 'Every 7–10 days in summer, every 2–3 weeks in winter',
+      light: 'As much bright light as you can give it, including some direct sun',
+      difficulty: 'Easy to keep, hard to flower indoors',
+      toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
+      humidity: 'Likes moderate to high humidity; tolerates average',
+    },
+    sections: {
+      watering: [
+        'Water thoroughly every 7–10 days through spring and summer, letting the top inch or two dry out first. These are big plants with big leaves and they genuinely drink — a mature one in a bright room can empty its pot in a week. Water until it runs from the bottom, then let it drain.',
+        'In winter, back right off to every two or three weeks. Growth slows, the plant uses far less, and the most common winter death is a summer schedule carried on into December.',
+      ],
+      light: [
+        'Give it the brightest spot you have. Bird of paradise is a full-sun plant outdoors, and indoors it wants a south or west window with a few hours of direct sun. This is not one to tuck into a corner — it will survive there and look progressively worse.',
+        'If you’re hoping for the orange-and-blue flower, light is most of the answer and patience is the rest: plants usually need to be mature, four or five years old, and snug in their pot before they bloom, and plenty of indoor plants never do. Treat the flower as a bonus and the leaves as the point.',
+      ],
+      problems: [
+        'Split leaves are normal and not a problem. In the wild the splits let wind through instead of tearing the whole leaf off; indoors they happen from handling, draughts and simple age. A split leaf isn’t damaged, and cutting them off just leaves you with less plant.',
+        'Brown, crispy leaf edges usually mean dry air, underwatering, or minerals building up in the soil. Water more thoroughly — a proper flush through the pot, not a sip — and consider filtered water if your tap is hard.',
+        'Yellowing lower leaves with damp soil is overwatering, the most likely cause in winter. Yellowing across the whole plant with dry soil means it’s thirsty and probably needs a bigger pot.',
+      ],
+      sharedCare: [
+        'This is a plant that changes what it wants twice a year, which is exactly the sort of thing that gets lost between two people. The summer routine and the winter routine are genuinely different, and a housemate who learned “water it weekly” in July will drown it in January.',
+        'The fix is to write down the rule and not just the date: weekly in summer, fortnightly-to-monthly in winter, always check the soil first. A shared note attached to the plant beats one person privately remembering the seasonal switch.',
+      ],
+      honestBit: [
+        'My take: buy it for the leaves. Almost every bird of paradise sold as a houseplant is bought by somebody imagining the flower, and most of them will never see one indoors. That’s fine — the foliage alone is the best value-per-pound of any large houseplant.',
+        'Worth being straight about the pet question too, because it comes up constantly and the internet is split: the ASPCA lists Strelitzia reginae as toxic to both cats and dogs. It’s a mild toxicity, mostly from the fruit and seeds, but it is not one of the pet-safe options. If that’s your deciding factor, a parlor palm gives you a similar shape with a clean record.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a bird of paradise?',
+        a: 'Every 7–10 days in spring and summer, once the top inch or two is dry, and every two to three weeks in winter. They’re thirsty in growth and barely drink in the cold — carrying the summer schedule into winter is the usual way people kill them.',
+      },
+      {
+        q: 'Why are my bird of paradise leaves splitting?',
+        a: 'That’s normal. The splits are how the leaves survive wind in the wild, and indoors they come from handling, draughts and age. It isn’t a sign of poor care and there’s nothing to fix.',
+      },
+      {
+        q: 'Is bird of paradise toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists Strelitzia reginae (bird of paradise flower) as toxic to cats and dogs — mainly the fruit and seeds, causing mild nausea, vomiting and drowsiness. Not usually dangerous, but not a pet-safe pick either.',
+      },
+      {
+        q: 'Why won’t my bird of paradise flower indoors?',
+        a: 'Usually not enough light, or the plant is still too young. They typically need several years of maturity, a snug pot and hours of direct sun to bloom, and many indoor plants never do. Grow it for the leaves and treat a flower as a surprise.',
+      },
+    ],
+  },
+  {
+    slug: 'anthurium',
+    commonName: 'Anthurium',
+    scientificName: 'Anthurium andraeanum',
+    alsoKnownAs: ['Flamingo Flower', 'Flamingo Lily', 'Painter’s Palette', 'Tail Flower'],
+    metaTitle: 'Anthurium Care: How Often to Water + Why It Stopped Flowering',
+    metaDescription:
+      'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
+    reviewed: '2026-09-02',
+    summary:
+      'The anthurium is the houseplant that actually keeps flowering — those waxy red or pink blooms hold for weeks and come back for months on end. The catch is that it stops the moment the light isn’t good enough, and most people blame the water.',
+    quickFacts: {
+      water: 'Every 7–10 days, when the top inch of soil is dry',
+      light: 'Bright, indirect light — essential if you want flowers',
+      difficulty: 'Easy to keep alive, moderate to keep flowering',
+      toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals, per the ASPCA)',
+      humidity: 'Likes higher humidity; copes with average, with browner tips',
+    },
+    sections: {
+      watering: [
+        'Water every 7–10 days, when the top inch of soil has dried. Anthuriums grow on trees in the wild rather than in the ground, so their roots want air as much as water — a chunky, well-draining mix and a pot that empties properly matter more here than the exact interval.',
+        'They are very sensitive to standing wet. If the pot sits inside a decorative outer cover, tip the water out of it after every watering; the single most common anthurium killer is a plastic pot standing in an inch of leftover water inside a nice ceramic sleeve.',
+      ],
+      light: [
+        'Bright, indirect light is the whole game with anthuriums. In medium or low light the plant stays perfectly healthy and simply stops producing flowers — which is how you end up with a green plant that somebody insists is “not doing anything.” Move it near a window, out of the direct beam, and the blooms come back.',
+        'Direct midday sun scorches the leaves and bleaches the flowers, so bright-but-filtered is the target: an east window, or a metre back from a south one. If it hasn’t flowered in six months and everything else looks fine, light is almost certainly your answer.',
+      ],
+      problems: [
+        'Flowers turning green as they age is normal. Anthurium blooms fade to green before they finish, so a green “flower” is an old one rather than a sick plant. Cut the stem back to the base and let the plant put its energy into the next one.',
+        'Yellowing leaves usually mean too much water or a pot that won’t drain. Brown, crispy tips point the other way: dry air, or minerals from hard tap water building up in the mix.',
+        'No flowers at all, on a plant with healthy leaves, is a light problem nine times out of ten. The tenth time it’s a plant that needs feeding — a diluted, high-phosphorus feed every few weeks in spring and summer makes a real difference.',
+      ],
+      sharedCare: [
+        'Anthuriums make a good shared plant because they’re visibly expressive: when it’s happy it flowers, and everybody in the house can see that. That’s a lot more motivating than an evergreen which looks identical whether you’re doing well or badly by it.',
+        'The bit to agree on is the outer pot. If one person waters and another tips out the cover, neither of you knows whether it’s standing in water right now. Make emptying the cover part of watering, not a separate job somebody else might have done.',
+      ],
+      honestBit: [
+        'My take: an anthurium is the best gift plant on this list. It flowers for months, the blooms look almost artificial in a good way, and it survives the sort of care a brand-new plant owner gives. Just don’t put it on a shelf away from the window and then wonder why it stopped performing.',
+        'And be honest about the pet side before it goes anywhere low: the ASPCA lists anthurium as toxic to cats and dogs. It’s the same calcium oxalate irritation as pothos and peace lily — a painful mouth rather than an emergency — but with a plant this vividly coloured at coffee-table height, it’s worth deciding where it lives before it arrives.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an anthurium?',
+        a: 'Every 7–10 days, when the top inch of soil is dry. Water thoroughly, and always tip out any water left standing in the decorative outer pot — that is the most common way anthuriums are killed.',
+      },
+      {
+        q: 'Why has my anthurium stopped flowering?',
+        a: 'Almost always not enough light. Anthuriums stay green and healthy in medium light but stop producing blooms. Move it to bright, indirect light near a window and feed it through spring and summer, and flowers usually return.',
+      },
+      {
+        q: 'Are anthuriums toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists anthurium (flamingo flower) as toxic to both — it contains insoluble calcium oxalate crystals that cause mouth pain, swelling, drooling and difficulty swallowing if chewed. Keep it out of reach of pets that nibble.',
+      },
+      {
+        q: 'Why are my anthurium flowers turning green?',
+        a: 'That’s the normal way the bloom ages, not a problem. Each flower fades to green after several weeks. Cut the spent stem back to the base so the plant can put its energy into the next one.',
+      },
+    ],
+  },
+  {
+    slug: 'chinese-evergreen',
+    commonName: 'Chinese Evergreen',
+    scientificName: 'Aglaonema',
+    alsoKnownAs: ['Aglaonema', 'Silver Bay', 'Chinese Evergreen Plant'],
+    metaTitle: 'Chinese Evergreen (Aglaonema) Care: Watering, Light, Pet Safety',
+    metaDescription:
+      'How often to water a Chinese evergreen, why it thrives in low light, what yellow or curling leaves mean, and whether aglaonema is safe for pets.',
+    reviewed: '2026-09-02',
+    summary:
+      'If you have a room with bad light and you’ve already killed something in it, this is the plant. Aglaonema is the best-looking thing that genuinely tolerates a dim corner, and it comes in pink and red varieties that look like they ought to be much harder.',
+    quickFacts: {
+      water: 'Every 7–14 days, when the top inch or two of soil is dry',
+      light: 'Low to medium indirect light; no direct sun',
+      difficulty: 'Very easy',
+      toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals, per the ASPCA)',
+      humidity: 'Average household humidity is fine',
+    },
+    sections: {
+      watering: [
+        'Water when the top inch or two of soil is dry, which lands somewhere around every 7–14 days depending on how bright and warm the room is. In a genuinely dim corner it can go much longer — a Chinese evergreen in low light in winter might want water once a month, and will be perfectly happy about it.',
+        'These are far more likely to be overwatered than underwatered, because they look lush and people assume lush means thirsty. It stores water in those thick stems; if the soil is damp, put the can down.',
+      ],
+      light: [
+        'Low to medium indirect light is what it’s famous for, and it’s one of the few plants where “low light” is a real recommendation rather than marketing. A north window, an interior wall, an office with no window of its own — it copes with all of them.',
+        'The exception is the coloured varieties. The pink, red and heavily silver-marked aglaonemas need more light to hold their colour and drift back toward plain green in a dark spot. Keep the plain dark-green types for the worst corners and the colourful ones nearer a window. Direct sun burns all of them.',
+      ],
+      problems: [
+        'Yellow leaves are overwatering, nearly always. Chinese evergreens are slow, quiet plants, so a soggy pot shows up as gradual yellowing rather than sudden collapse — which means it can go on for weeks before anybody notices.',
+        'Curling leaves with brown edges point at dry air, cold, or hard tap water. They dislike being next to a draughty door or above a radiator, and a spot below about 15°C makes them unhappy fast.',
+        'Leggy growth with long bare stems means either not enough light or simply age — older plants naturally lose their lower leaves and go a bit trunk-like. You can cut a leggy stem back hard in spring and it will resprout.',
+      ],
+      sharedCare: [
+        'The Chinese evergreen is the ideal plant for the shared room nobody quite owns: a hallway, a landing, a home office two people use. It goes weeks without complaint, so it survives the gap where everyone assumes somebody else has it in hand.',
+        'That same forgiveness is the trap. Because it never looks urgent, it can quietly go two months without water and then decline all at once. Pin it to a rough monthly check rather than a tight schedule, and it will outlast almost everything else in the house.',
+      ],
+      honestBit: [
+        'My take: aglaonema is the answer to the question people actually ask, which is not “what’s the prettiest plant” but “what will survive in this specific bad corner.” It’s what I recommend when somebody describes a room with one small north-facing window.',
+        'Be aware of the toxicity before you put one at ankle height, though. It’s an aroid, the same family as dieffenbachia and peace lily, and the ASPCA lists it as toxic to cats and dogs. A chewed leaf means a burning mouth and drooling — unpleasant enough that a shelf is a better home than the floor if you have a cat that samples things.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Chinese evergreen?',
+        a: 'Every 7–14 days, when the top inch or two of soil is dry — and considerably less in a dim room in winter, sometimes as little as once a month. It is far easier to overwater one than to underwater it.',
+      },
+      {
+        q: 'Can a Chinese evergreen live in low light?',
+        a: 'Yes, genuinely. It’s one of the few houseplants that does well in a dim corner or a windowless office. The plain dark-green varieties handle the least light; the pink and red ones need more to keep their colour.',
+      },
+      {
+        q: 'Is aglaonema toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists Chinese evergreen (Aglaonema) as toxic to both cats and dogs. It contains insoluble calcium oxalate crystals that cause mouth pain, swelling, drooling and vomiting if chewed. Keep it above a curious pet.',
+      },
+      {
+        q: 'Why are my Chinese evergreen leaves turning yellow?',
+        a: 'Overwatering is the usual cause. Let the soil dry out further between waterings and check the pot drains. Yellowing paired with a cold or draughty spot is also common in winter.',
+      },
+    ],
+  },
+  {
+    slug: 'jade-plant',
+    commonName: 'Jade Plant',
+    scientificName: 'Crassula ovata',
+    alsoKnownAs: ['Money Plant', 'Lucky Plant', 'Friendship Tree', 'Crassula'],
+    metaTitle: 'Jade Plant Care: How Often to Water (Less Than You Think)',
+    metaDescription:
+      'How often to water a jade plant, the light it needs, why the leaves drop or wrinkle, and why it is not a pet-safe choice.',
+    reviewed: '2026-09-02',
+    summary:
+      'A jade plant is a slow-growing succulent tree that will happily outlive you if you leave it alone. Almost every jade plant that dies was loved to death with a weekly watering it never asked for.',
+    quickFacts: {
+      water: 'Every 2–3 weeks in summer, monthly or less in winter',
+      light: 'Bright light, including several hours of direct sun',
+      difficulty: 'Very easy, if you can resist watering it',
+      toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
+      humidity: 'Dry household air is ideal',
+    },
+    sections: {
+      watering: [
+        'Water a jade plant every two to three weeks in summer, and roughly monthly or less in winter — and only once the soil is dry all the way through. When you do water, soak it properly and let everything drain away. The pattern is drought, then flood, then drought again: that’s how it lives in the wild.',
+        'The wrinkle test beats any schedule. Plump, firm leaves mean it has plenty of water stored and needs nothing from you. Slightly soft or wrinkled leaves mean it’s ready for a drink. If you learn one thing about jade plants, learn to look at the leaves instead of the calendar.',
+      ],
+      light: [
+        'Jade wants real light — several hours of direct sun a day if you can manage it. A south or west windowsill is ideal. Good light keeps the growth compact and can bring out a red blush on the leaf edges, which is a sign of a happy plant rather than a stressed one.',
+        'In low light it stretches: long floppy stems, widely spaced leaves, and a plant that leans toward the window until it eventually tips over. If yours has gone lanky, that’s a light problem, and no amount of water or feeding will fix it.',
+      ],
+      problems: [
+        'Leaves dropping at the slightest touch is the classic overwatering signal, and so are soft, yellowing, translucent leaves at the base. Stop watering entirely, let it dry out hard, and it usually recovers — jade is remarkably resilient once the soil is dry again.',
+        'Wrinkled, shrivelled leaves are the far rarer opposite: it’s genuinely thirsty. Give it a thorough soak and they plump back up within a few days.',
+        'White powdery patches or cottony spots in the leaf joints are mealybugs, which love jade plants. Dab them off with a cotton bud dipped in rubbing alcohol and check again a week later — they hide in the crevices and come straight back if you only do it once.',
+      ],
+      sharedCare: [
+        'Jade is the plant most likely to be killed by a well-meaning housemate. It looks like a normal leafy plant rather than obviously a succulent, so the instinct is to water it weekly like everything else — and weekly watering will kill it within a season.',
+        'If it lives in a shared space, label it or say it plainly: this one gets water once a month, and it’s meant to look dry. It’s one of the few plants where “do nothing” is the correct instruction, and it needs saying out loud precisely because it’s so counterintuitive.',
+      ],
+      honestBit: [
+        'My take: a jade plant is a fifty-year plant. People buy them as small desk succulents and don’t realise they’re looking at something that becomes a proper miniature tree with a thick trunk if it’s simply left to get on with it. The main skill is patience and the main danger is enthusiasm.',
+        'The pet answer disappoints people, because jade looks so innocuous: the ASPCA lists it as toxic to both cats and dogs, causing vomiting, depression and an unsteady, wobbly gait. Unusually, nobody is quite sure which compound is responsible. If a pet has eaten a real mouthful, that’s worth a call to the vet rather than a wait-and-see.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a jade plant?',
+        a: 'Every two to three weeks in summer and about monthly in winter, only once the soil is completely dry. Better still, go by the leaves: firm and plump means wait, slightly soft or wrinkled means water.',
+      },
+      {
+        q: 'Why is my jade plant dropping leaves?',
+        a: 'Overwatering is the usual cause — leaves that fall at a touch, or go soft and translucent at the base, mean soggy soil. Stop watering, let it dry out completely, and check the pot drains. Leaf drop can also follow a sudden move or a cold draught.',
+      },
+      {
+        q: 'Are jade plants toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists jade plant (Crassula) as toxic to both cats and dogs — eating it causes vomiting, depression and incoordination, and the responsible toxin has never been identified. Worth a vet call if a pet has had a real mouthful.',
+      },
+      {
+        q: 'Why is my jade plant leggy and floppy?',
+        a: 'Not enough light. Jade needs several hours of direct sun to stay compact; in a dim spot it stretches toward the window with long bare stems. Move it somewhere brighter and prune the stretched growth — new growth comes in tighter.',
+      },
+    ],
+  },
+  {
+    slug: 'english-ivy',
+    commonName: 'English Ivy',
+    scientificName: 'Hedera helix',
+    alsoKnownAs: ['Common Ivy', 'Hedera', 'Needlepoint Ivy', 'Glacier Ivy'],
+    metaTitle: 'English Ivy Indoor Care: Watering, Light, and Pet Safety',
+    metaDescription:
+      'How often to water English ivy indoors, the cool bright conditions it prefers, how to deal with spider mites, and why it is not pet-safe.',
+    reviewed: '2026-09-02',
+    summary:
+      'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants cool, bright and humid, and in a warm dry living room it gets spider mites and sulks.',
+    quickFacts: {
+      water: 'Every 5–10 days; keep lightly moist, never soggy',
+      light: 'Bright, indirect light',
+      difficulty: 'Moderate indoors — easy in a cool, bright room',
+      toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
+      humidity: 'Prefers higher humidity; dry heated air invites spider mites',
+    },
+    sections: {
+      watering: [
+        'Keep the soil lightly moist — water when the top half-inch to inch is dry, usually every 5–10 days. Ivy doesn’t want to dry out hard like a succulent, and equally won’t tolerate sitting in a wet pot. Even and moderate is the target.',
+        'It drinks noticeably more in a warm room and much less in a cool one. If yours is on a cool bright windowsill or in an unheated porch, which is where it does best, expect to water considerably less often than the same plant in the living room.',
+      ],
+      light: [
+        'Bright, indirect light keeps ivy full and keeps the variegated types variegated. Plain green ivies cope with medium light; the cream and white marbled ones fade and revert to green if the light is poor.',
+        'Direct hot sun through glass scorches the leaves, but ivy genuinely loves being cool. A bright unheated room, a hallway, or a north-facing porch suits it far better than a warm living room — this is one of the very few houseplants that prefers the chilly end of your home.',
+      ],
+      problems: [
+        'Fine webbing between the leaves, and a dusty, stippled, faded look, is spider mites — and English ivy indoors is a magnet for them. Warm dry air is what invites them in. Rinse the whole plant thoroughly in the shower, raise the humidity, and check weekly, because mites rebound fast from a single treatment.',
+        'Brown, dry leaf edges and steady leaf drop usually mean the air is too dry or the room too warm. Moving it somewhere cooler often fixes more than any watering change will.',
+        'Bare, straggly stems with leaves only at the ends mean not enough light. Cut the stems back by a third in spring; ivy responds well to a hard trim and comes back bushier.',
+      ],
+      sharedCare: [
+        'Ivy is the plant that most rewards somebody actually looking at it. Spider mites are invisible for a fortnight and obvious once they’ve won, so it needs a person who turns a leaf over now and then rather than a person who waters on a timer.',
+        'If two of you share it, the useful habit isn’t splitting the watering but agreeing that whoever waters also gives it ten seconds of inspection — undersides of leaves, new growth at the tips. That’s the whole maintenance routine, and it only works if it belongs to the job rather than to a particular person.',
+      ],
+      honestBit: [
+        'My honest take: most people would be happier with a pothos. Ivy looks like the easy trailing plant and isn’t — it wants cool, humid and bright all at once, which describes very few centrally heated homes. It’s genuinely lovely in a cold bright hallway and genuinely miserable above a radiator.',
+        'And a real warning if you have pets: the ASPCA lists English ivy as toxic to cats and dogs, with the foliage more toxic than the berries. Trailing plants are exactly the ones a cat can reach, because the plant comes down to them. If you want the trailing look with a clean pet record, a spider plant or a hoya does the same job.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water English ivy indoors?',
+        a: 'Every 5–10 days, when the top half-inch to inch of soil is dry. Keep it lightly and evenly moist — not bone dry, not soggy. Cool rooms need watering much less often than warm ones.',
+      },
+      {
+        q: 'Why does my English ivy keep getting spider mites?',
+        a: 'Warm, dry indoor air, and ivy is unusually prone to them. Rinse the whole plant in the shower, raise the humidity, move it somewhere cooler, and re-check weekly — one treatment is rarely enough.',
+      },
+      {
+        q: 'Is English ivy toxic to cats and dogs?',
+        a: 'Yes. The ASPCA lists English ivy (Hedera helix) as toxic to both — it contains triterpenoid saponins that cause vomiting, abdominal pain, drooling and diarrhoea. The leaves are more toxic than the berries, and trailing stems are easy for a cat to reach.',
+      },
+      {
+        q: 'Why is my English ivy going brown and dropping leaves?',
+        a: 'Usually dry air or too much heat. Ivy prefers cool, humid conditions and struggles near radiators. Move it somewhere cooler and brighter, raise the humidity, and check for spider mites while you’re at it.',
+      },
+    ],
+  },
+  {
+    slug: 'boston-fern',
+    commonName: 'Boston Fern',
+    scientificName: 'Nephrolepis exaltata',
+    alsoKnownAs: ['Sword Fern', 'Nephrolepis', 'Boston Sword Fern'],
+    metaTitle: 'Boston Fern Care: How Often to Water + Is It Pet-Safe?',
+    metaDescription:
+      'How often to water a Boston fern, the humidity it needs, why the fronds go brown and shed everywhere, and why it is a genuinely pet-safe choice.',
+    reviewed: '2026-09-02',
+    summary:
+      'A Boston fern is one of the few genuinely pet-safe plants that also looks like something. It’s also the plant most likely to shed brown fronds across your floor in January, and those two facts are worth weighing against each other honestly.',
+    quickFacts: {
+      water: 'Every 3–7 days; keep the soil consistently damp, never dry',
+      light: 'Bright, indirect light; no direct sun',
+      difficulty: 'Moderate — easy to keep alive, harder to keep beautiful',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'High humidity is essential; dry air is the main killer',
+    },
+    sections: {
+      watering: [
+        'Boston ferns want the soil consistently damp — not wet, not dry. Check every few days and water when the surface starts to feel dry to the touch, which in practice is often every three to five days in summer and closer to weekly in winter. A fern that dries out completely, even once, browns off a batch of fronds and doesn’t forgive you.',
+        'Because they dry from the top, a light watering can leave the middle of a dense root ball bone dry. Every few weeks it’s worth standing the pot in a sink of water for twenty minutes and letting it drink from the bottom, then draining it fully.',
+      ],
+      light: [
+        'Bright but indirect. A north or east window is ideal, or a spot just out of the beam of a brighter one. Direct sun scorches the fronds quickly — this is a forest-floor plant and it shows.',
+        'Too little light gives you a thin, sparse fern that sheds more than it grows. If yours is looking gappy and you’ve got the watering right, light is the next thing to change.',
+      ],
+      problems: [
+        'Brown, crispy fronds and leaflets shedding all over the floor is the signature Boston fern complaint, and it’s almost always dry air. Central heating in winter is brutal on them. Grouping plants together, a pebble tray, a humidifier, or a bright bathroom all help far more than misting does.',
+        'Yellowing fronds with soggy soil is overwatering — the one direction people don’t expect from a fern. Damp is the target; waterlogged still causes rot.',
+        'A fern that looks fine on top and dead underneath usually just needs its old fronds cut out. Boston ferns constantly renew from the centre, and clearing the browned-off outer fronds at the base is normal maintenance rather than surgery.',
+      ],
+      sharedCare: [
+        'This is a plant with a short fuse: three or four days late and it starts browning off. That makes it a bad candidate for “whoever gets to it,” and a good candidate for one named owner with a recurring reminder.',
+        'If it does live in a shared house, the honest advice is to put it somewhere the humidity does the work for you — a bright bathroom is the classic answer — so the schedule matters less. A fern in a steamy bathroom forgives a forgetful household in a way that a fern in a heated living room never will.',
+      ],
+      honestBit: [
+        'My take: the Boston fern is the plant I most often recommend and most often warn about in the same breath. If pet safety is your hard constraint, it’s one of the best-looking safe options there is. If you also want low effort, it’s the wrong plant, and a spider plant or a parlor palm will serve you better.',
+        'One thing worth knowing that has genuinely caught people out: not everything sold as a “fern” is one. Asparagus fern isn’t a true fern at all, and the ASPCA lists it as toxic to cats and dogs. True ferns like this one are the safe group — but check the actual plant, not the word on the label.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Boston fern?',
+        a: 'Every three to seven days — keep the soil consistently damp and never let it dry out fully. Check by touch rather than by calendar, and soak the pot from the bottom every few weeks so the middle of the root ball actually gets wet.',
+      },
+      {
+        q: 'Why is my Boston fern turning brown and dropping everywhere?',
+        a: 'Dry air, almost always, and central heating in winter is the usual culprit. Raise the humidity with a pebble tray, a humidifier, or a move to a bright bathroom. Letting the soil dry out completely will do it too.',
+      },
+      {
+        q: 'Are Boston ferns safe for cats and dogs?',
+        a: 'Yes. The ASPCA lists Boston fern (Nephrolepis) as non-toxic to both cats and dogs — true ferns are one of the more reliably safe groups. Note that asparagus fern is not a true fern and is toxic, so check what you actually have.',
+      },
+      {
+        q: 'Does misting a Boston fern help?',
+        a: 'Barely. Misting raises the humidity for a few minutes and then it’s gone. A pebble tray, grouping plants together, a humidifier, or a naturally humid room all do far more, and none of them need you to remember anything daily.',
+      },
+    ],
+  },
+  {
+    slug: 'money-tree',
+    commonName: 'Money Tree',
+    scientificName: 'Pachira aquatica',
+    alsoKnownAs: ['Pachira', 'Guiana Chestnut', 'Malabar Chestnut', 'Braided Money Tree'],
+    metaTitle: 'Money Tree (Pachira) Care: Watering, Light, and Pet Safety',
+    metaDescription:
+      'How often to water a money tree, the light it needs, why the leaves go yellow or drop, and why Pachira aquatica is one of the pet-safe options.',
+    reviewed: '2026-09-02',
+    summary:
+      'The braided money tree is a genuinely good houseplant hiding behind a gimmicky presentation. It’s easy, it’s forgiving, and — unusually for a plant this size — the ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Every 1–2 weeks, when the top 2 inches of soil are dry',
+      light: 'Bright, indirect light; tolerates medium',
+      difficulty: 'Easy',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Likes moderate humidity; copes with average',
+    },
+    sections: {
+      watering: [
+        'Water every one to two weeks, once the top two inches of soil are dry. Water thoroughly until it drains, then leave it alone until it’s dry again. Pachira stores water in that swollen trunk base, so it handles a missed week far better than a doubled-up one.',
+        'In winter, stretch it out — every two to three weeks is plenty. The commonest money tree death is a well-meaning fortnightly routine kept identical all year, which is about right in July and much too much in January.',
+      ],
+      light: [
+        'Bright, indirect light is ideal, and it does fine a few feet back from a window or in a medium-light room. Direct afternoon sun scorches the leaves, so a sheer curtain or a bit of distance from a south window helps.',
+        'Turn the pot a quarter-turn every time you water. Money trees lean hard toward the light, and with a braided trunk that can’t correct itself, a plant that spent a year facing one way ends up permanently lopsided.',
+      ],
+      problems: [
+        'Yellow leaves dropping off is the classic sign of too much water. The trunk should feel firm; if the base is soft or spongy, that’s rot and the watering needs to stop immediately.',
+        'Brown, crispy leaf edges usually mean dry air or underwatering, and sometimes minerals from hard tap water. It’s a milder complaint than yellowing and much easier to correct.',
+        'Leaf drop right after you bring it home is normal acclimation, not a crisis. Give it a stable bright spot and a consistent schedule and it settles within a few weeks. Repeated leaf drop later on is usually a light or watering problem.',
+      ],
+      sharedCare: [
+        'Money trees are frequently office plants and gift plants, which means they are frequently nobody’s plant — everyone likes it, nobody waters it, and it dies slowly in a corner. A plant that only needs attention every couple of weeks is exactly the kind that falls through the gaps.',
+        'It’s a good candidate for a shared reminder rather than a shared habit. Fortnightly in summer, monthly in winter, and one person confirming it was actually done is enough to keep it alive indefinitely.',
+      ],
+      honestBit: [
+        'My take: if you want a floor-standing plant and you have a cat that chews, this is the one. Most large statement plants — fiddle leaf figs, rubber plants, bird of paradise, dracaenas — are toxic. Pachira is on the ASPCA non-toxic list and gets to five or six feet indoors. That combination is rarer than it should be.',
+        'A naming warning worth taking seriously, though. “Money plant” is used for at least three different plants — this one, pothos, and jade — and the other two are both toxic to pets. If somebody hands you a “money plant,” find out what it actually is before you decide where it can live.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a money tree?',
+        a: 'Every one to two weeks in the growing season, when the top two inches of soil are dry, and every two to three weeks in winter. It stores water in the swollen trunk base and copes much better with being late than with being early.',
+      },
+      {
+        q: 'Are money trees safe for cats and dogs?',
+        a: 'Yes — the ASPCA lists money tree (Pachira aquatica) as non-toxic to cats and dogs. Eating a lot of any plant can cause nausea or loose stool, but there is nothing poisonous in it. Beware the name, though: “money plant” is also used for pothos and jade, and both of those are toxic.',
+      },
+      {
+        q: 'Why are my money tree leaves turning yellow and falling off?',
+        a: 'Overwatering is the most likely cause. Let the soil dry down two inches before watering again and check the pot drains. If the base of the trunk feels soft or spongy, that is rot, and you should stop watering entirely.',
+      },
+      {
+        q: 'Why is my money tree leaning to one side?',
+        a: 'It’s growing toward the light. Rotate the pot a quarter-turn each time you water so every side gets its share — braided trunks can’t straighten themselves out later.',
+      },
+    ],
+  },
+  {
+    slug: 'christmas-cactus',
+    commonName: 'Christmas Cactus',
+    scientificName: 'Schlumbergera',
+    alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
+    metaTitle: 'Christmas Cactus Care: Watering, Light, and How to Make It Flower',
+    metaDescription:
+      'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
+    reviewed: '2026-09-02',
+    summary:
+      'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
+    quickFacts: {
+      water: 'Every 1–2 weeks, when the top inch of soil is dry',
+      light: 'Bright, indirect light; no direct sun',
+      difficulty: 'Easy to grow, moderate to re-flower',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Likes moderate humidity; average is fine',
+    },
+    sections: {
+      watering: [
+        'Water when the top inch of soil is dry, roughly every one to two weeks. Despite the name this is not a desert cactus: it grows in the crooks of trees in Brazilian rainforest and doesn’t want to be baked dry between drinks. Let it get slightly dry, then water thoroughly.',
+        'It drinks more while it’s budding and flowering, and less afterwards while it rests. A dry spell during budding is the single most common reason buds drop off before they ever open.',
+      ],
+      light: [
+        'Bright, indirect light. Direct sun bleaches and reddens the flat segments and can burn them outright. An east window, or a shaded spot in a brighter room, is about right.',
+        'Light is also how you get it to flower. Schlumbergera sets buds in response to long nights and cool temperatures — roughly six to eight weeks of twelve-plus hours of uninterrupted darkness each night, at around 10–15°C. A spare room where nobody switches a lamp on in the evening, from about October, does it with no special effort at all.',
+      ],
+      problems: [
+        'Buds forming and then dropping before they open is the classic complaint, and the cause is almost always change: it got moved, the temperature swung, or it dried out at the wrong moment. Once it’s budding, put it where it will stay and keep the watering steady.',
+        'Limp, wrinkled, floppy segments can mean either extreme, which is unhelpful but true. Check the soil: dry means water it, soggy means root rot, and you should let it dry out hard and consider repotting.',
+        'Reddish or purple segment edges are usually too much direct sun, occasionally cold. Move it out of the beam and the new growth comes back green.',
+      ],
+      sharedCare: [
+        'Christmas cactus is the plant most likely to be inherited. They live for decades and get handed down, which means the one in your house may well have a routine that predates you — worth asking about, because these plants really do settle into a spot.',
+        'The shared-care rule here is a seasonal one: from autumn, don’t move it and don’t leave a light on in its room at night. That’s a request other people in the house cannot possibly guess at, so it needs saying rather than assuming. Once the buds are set, it can come back somewhere everyone can see it.',
+      ],
+      honestBit: [
+        'My take: the reason your Christmas cactus doesn’t flower is almost never the watering. It’s that its room has a lamp on in the evening. Six weeks of genuinely dark nights in autumn is the whole trick, and it costs nothing.',
+        'The other good news is the pet one. The ASPCA lists Christmas cactus as non-toxic to cats and dogs, which puts it in a very small group of plants that flower reliably indoors and are safe at floor level. If you want winter colour in a house with animals, this is the pick.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Christmas cactus?',
+        a: 'Every one to two weeks, when the top inch of soil is dry. It’s a rainforest plant, not a desert one, so don’t treat it like a succulent — but don’t leave it soggy either. It drinks more while budding and flowering.',
+      },
+      {
+        q: 'Why is my Christmas cactus dropping its buds?',
+        a: 'Usually a change of some kind — it was moved, the temperature swung, or the soil dried out while it was budding. Once buds appear, leave it in place and keep the watering steady.',
+      },
+      {
+        q: 'How do I make a Christmas cactus bloom again?',
+        a: 'Give it long, uninterrupted dark nights and cool temperatures for about six to eight weeks in autumn — twelve or more hours of darkness at roughly 10–15°C. A spare room where nobody turns a lamp on in the evening does it.',
+      },
+      {
+        q: 'Is a Christmas cactus safe for cats and dogs?',
+        a: 'Yes. The ASPCA lists Christmas cactus (Schlumbergera) as non-toxic to both cats and dogs. It’s one of the few reliably flowering houseplants you can keep at floor level in a home with pets.',
+      },
+    ],
+  },
+  {
+    slug: 'parlor-palm',
+    commonName: 'Parlor Palm',
+    scientificName: 'Chamaedorea elegans',
+    alsoKnownAs: ['Parlour Palm', 'Neanthe Bella Palm', 'Good Luck Palm', 'Chamaedorea'],
+    metaTitle: 'Parlor Palm Care: Watering, Low Light, and Pet Safety',
+    metaDescription:
+      'How often to water a parlor palm, why it works in low light, what brown tips mean, and why it is one of the best pet-safe plants you can buy.',
+    reviewed: '2026-09-02',
+    summary:
+      'The parlor palm has been the standard indoor palm since the Victorians, and for good reason: it handles low light, it’s genuinely pet-safe, and it looks tropical while asking for almost nothing.',
+    quickFacts: {
+      water: 'Every 7–10 days, when the top inch of soil is dry',
+      light: 'Low to medium indirect light; no direct sun',
+      difficulty: 'Easy',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Prefers moderate humidity; browns at the tips in very dry air',
+    },
+    sections: {
+      watering: [
+        'Water every 7–10 days, when the top inch of soil is dry. Parlor palms like their soil lightly moist, but they’re far more tolerant of a missed watering than of a soggy pot — the roots are fine and they rot easily if they stay wet.',
+        'In a low-light spot, or in winter, stretch it to every two weeks or more. A dim corner plus a damp pot is the combination that kills them; if it’s somewhere dark, it needs water noticeably less often than you’d think.',
+      ],
+      light: [
+        'Low to medium indirect light. This is a genuine low-light plant — it grows in the understorey of Central American rainforest and never sees direct sun there. A north window, an interior corner, or a shaded spot in a brighter room all work.',
+        'Direct sun scorches the fronds and turns them a bleached yellow-green, so the one mistake to avoid is putting it on a sunny windowsill because it looks tropical. Shade isn’t a compromise for this plant; it’s the preference.',
+      ],
+      problems: [
+        'Brown, crispy frond tips are the most common complaint and usually mean dry air, though hard tap water and inconsistent watering both contribute. Trim the brown off with scissors if it bothers you, raise the humidity, and judge by the new growth.',
+        'Yellowing fronds across the whole plant point at overwatering. Parlor palms grow slowly and a rotting root system shows up gradually, so it’s worth checking the soil actually dries out between waterings.',
+        'Fine webbing and stippled, dusty-looking fronds are spider mites, which like the same warm dry air that causes the brown tips. Rinse the plant in the shower and raise the humidity — conveniently, the two fixes are the same fix.',
+      ],
+      sharedCare: [
+        'A parlor palm is one of the best plants for a household that isn’t very good at plants. It goes over a week without water, it doesn’t need a bright window, and it doesn’t die dramatically when the routine slips — which makes it forgiving of the gap where everybody assumed somebody else had it.',
+        'It’s also a good one for the room the pets live in, precisely because it’s safe. Households often end up with every plant exiled to a high shelf; this is one you can put on the floor and stop thinking about.',
+      ],
+      honestBit: [
+        'My take: the parlor palm is the most useful plant on this whole site. It’s the answer to “low light AND pet-safe AND low effort,” which is the combination most people actually need and very few plants satisfy. It isn’t exciting. It’s just right almost every time.',
+        'Buy a full pot rather than a single stem if you have the choice. Parlor palms don’t branch — each stem grows on its own — so a sparse plant stays sparse forever. Nurseries plant several together for a fuller look, and that’s what you want.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a parlor palm?',
+        a: 'Every 7–10 days, when the top inch of soil is dry, and less in winter or in a dim spot — sometimes every two weeks or more. They tolerate a missed watering much better than a soggy pot.',
+      },
+      {
+        q: 'Are parlor palms safe for cats and dogs?',
+        a: 'Yes. The ASPCA lists parlor palm (Chamaedorea elegans) as non-toxic to both cats and dogs. It’s one of the few plants that is simultaneously pet-safe, low-light tolerant and easy, which is why it gets recommended so often.',
+      },
+      {
+        q: 'Why are my parlor palm tips turning brown?',
+        a: 'Dry air is the usual cause, with hard tap water and uneven watering contributing. Raise the humidity, keep the watering consistent, and trim the brown tips off if you want it tidy — the existing damage won’t turn green again.',
+      },
+      {
+        q: 'Can a parlor palm live in low light?',
+        a: 'Yes, genuinely. It grows in rainforest understorey and prefers shade to sun, and direct sunlight scorches the fronds. Just remember that a plant in low light needs watering less often, not more.',
+      },
+    ],
+  },
+  {
+    slug: 'orchid',
+    commonName: 'Moth Orchid',
+    scientificName: 'Phalaenopsis',
+    alsoKnownAs: ['Phalaenopsis', 'Phal', 'Moon Orchid', 'Supermarket Orchid'],
+    metaTitle: 'Orchid Care: How Often to Water a Moth Orchid (and Rebloom It)',
+    metaDescription:
+      'How often to water a phalaenopsis orchid, what the roots are telling you, how to get it to flower again, and why orchids are pet-safe.',
+    reviewed: '2026-09-02',
+    summary:
+      'The supermarket orchid is not a delicate specialist plant — it’s an easy plant that almost everybody waters wrong. Get the watering right and a phalaenopsis will flower for months, rest, and then do it again for years.',
+    quickFacts: {
+      water: 'Roughly every 7–10 days; soak, then drain completely',
+      light: 'Bright, indirect light — an east window is ideal',
+      difficulty: 'Easy, once you stop watering it like a normal plant',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Likes moderate to high humidity; average is workable',
+    },
+    sections: {
+      watering: [
+        'An orchid isn’t growing in soil, it’s growing in bark, and its roots are meant to be wet briefly and then dry with air around them. Water roughly every 7–10 days by taking the plastic inner pot to the sink, running water through the bark for a minute, then letting it drain completely before it goes back in its cover. Never leave it standing in water.',
+        'The roots tell you when. Firm, silvery-green roots mean it’s fine; roots that have gone plain silver-white and slightly shrivelled mean it’s thirsty. That’s far more reliable than a schedule, and it’s the reason clear plastic pots are standard — you’re supposed to look.',
+      ],
+      light: [
+        'Bright, indirect light. An east-facing window is close to perfect: gentle morning sun, shade for the rest of the day. The leaves should be a medium grass green — very dark green means not enough light, and yellow-green or red-tinged means too much.',
+        'Light is also the flowering lever. An orchid that hasn’t reflowered is usually in a spot that’s too dim. That, plus a cool spell — a few weeks with night temperatures around 15°C, which an autumn windowsill provides by itself — is what triggers a new flower spike.',
+      ],
+      problems: [
+        'Wrinkled, floppy, leathery leaves mean the plant can’t take up water, and confusingly the usual cause is overwatering that has rotted the roots. Tip it out and look: healthy roots are firm and green or silver, dead ones are brown, flat and mushy. Cut the dead ones off and repot into fresh bark.',
+        'Flowers dropping after a couple of months isn’t a failure — that’s the end of a normal flowering cycle. The plant isn’t dying, it’s resting. Keep watering it, keep it in good light, and it will spike again.',
+        'Roots wandering out of the pot into the air are completely normal and should be left alone. Phalaenopsis are epiphytes and aerial roots are simply how they live; stuffing them back into the pot does more harm than leaving them be.',
+      ],
+      sharedCare: [
+        'Orchids get given as gifts, and gift plants are the ones that fall between people. Worse, an orchid that has finished flowering looks like it’s finished full stop, so it quietly gets abandoned on a shelf while still perfectly alive.',
+        'The thing worth sharing isn’t the schedule, it’s the fact that a spent orchid is not a dead orchid. Enormous numbers of them are binned in month three by somebody who didn’t know they reflower. And while we’re dispelling things: the ice-cube trick people pass around isn’t a good idea — a proper soak and a full drain is.',
+      ],
+      honestBit: [
+        'My take: three things fix nearly every orchid problem, and none of them are complicated. Take it out of the decorative pot to water it. Let it drain completely. Put it in an east window. That’s genuinely most of orchid care, and everything else is refinement.',
+        'And a nice bonus if you have animals: the ASPCA lists the moth orchid as non-toxic to cats and dogs. Given how many houseplants that flower this dramatically are toxic, an orchid on a low table in a house with a cat is a rare, easy yes.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an orchid?',
+        a: 'Roughly every 7–10 days. Take the inner pot to the sink, run water through the bark for a minute, and let it drain completely before returning it to its cover pot. Better still, go by the roots: silvery and shrivelled means water, firm and green means wait.',
+      },
+      {
+        q: 'Are orchids safe for cats and dogs?',
+        a: 'Yes — the ASPCA lists the phalaenopsis (moth) orchid as non-toxic to both cats and dogs. Eating a flower or leaf might cause a mild stomach upset like any plant, but there is nothing poisonous in it.',
+      },
+      {
+        q: 'How do I get my orchid to flower again?',
+        a: 'More light and a cool spell. Move it to a bright east window, and let it experience a few weeks of cooler nights in autumn, around 15°C. A dim spot is the usual reason an otherwise healthy orchid never spikes again.',
+      },
+      {
+        q: 'Why are my orchid leaves wrinkled and floppy?',
+        a: 'The roots can’t take up water, and the usual cause is root rot from overwatering or a pot that stays wet. Tip it out and inspect: firm green or silver roots are healthy, brown mushy ones are dead. Trim the dead roots and repot into fresh bark.',
+      },
+    ],
+  },
+  {
+    slug: 'hoya',
+    commonName: 'Hoya',
+    scientificName: 'Hoya carnosa',
+    alsoKnownAs: ['Wax Plant', 'Porcelain Flower', 'Hindu Rope Plant', 'Wax Flower'],
+    metaTitle: 'Hoya Care: How Often to Water a Wax Plant + Pet Safety',
+    metaDescription:
+      'How often to water a hoya, the light it needs to flower, why the leaves wrinkle or yellow, and why Hoya carnosa is a pet-safe trailing plant.',
+    reviewed: '2026-09-02',
+    summary:
+      'A hoya is a trailing plant with thick, almost plastic-feeling leaves that stores its own water and asks very little of you. It’s slow, it’s nearly indestructible, and Hoya carnosa is on the ASPCA non-toxic list — which makes it the pet-safe answer to a hanging pothos.',
+    quickFacts: {
+      water: 'Every 2–3 weeks; let the soil dry out most of the way first',
+      light: 'Bright, indirect light; some gentle direct sun helps it flower',
+      difficulty: 'Very easy',
+      toxicity: 'Non-toxic to cats and dogs (the ASPCA lists Hoya carnosa as non-toxic)',
+      humidity: 'Average household humidity is fine',
+    },
+    sections: {
+      watering: [
+        'Water every two to three weeks, once the soil has dried out most of the way. Those thick waxy leaves are water storage — a hoya is closer to a succulent than to a fern in how it wants to be treated, and it genuinely prefers being forgotten to being fussed over.',
+        'In winter, once a month is often enough. The wrinkle test works here as well as it does on a jade plant: firm leaves mean it’s fine, slightly soft or dimpled leaves mean it’s time.',
+      ],
+      light: [
+        'Bright, indirect light keeps it healthy, and a bit of gentle direct sun — morning, or a west window through a curtain — is what gets it to flower. A hoya in medium light will live happily for years and simply never bloom.',
+        'If you want the flowers, and they’re worth wanting, there’s one rule that catches everybody out: don’t cut off the bare little stalk a flower cluster grew from. Hoyas rebloom from the same spur year after year, and pruning it off means starting over.',
+      ],
+      problems: [
+        'Yellowing leaves that feel soft mean too much water. It’s the main way hoyas are killed, and it takes a while to show because the plant is so slow — by the time leaves yellow, the roots have usually been sitting wet for weeks.',
+        'Wrinkled, dimpled leaves are the honest thirst signal, and a thorough soak fixes them within a couple of days. If a soak doesn’t fix them, check the roots, because rot produces the same symptom.',
+        'No flowers on an otherwise healthy plant usually means not enough light, or a plant that’s still too young — hoyas often need a few years before they bloom. Repotting frequently also delays it; they flower better when slightly root-bound.',
+      ],
+      sharedCare: [
+        'Hoyas are ideal for households that travel or forget. A three-week interval means a fortnight away does no damage at all, and there’s no realistic scenario in which two people miss it badly enough to matter.',
+        'The one thing worth telling everybody is the flower spur rule. A tidy-minded housemate deadheading the spent flowers and snipping off the “dead-looking twig” underneath will cost you next year’s blooms — and it’s a completely reasonable mistake to make if nobody has ever mentioned it.',
+      ],
+      honestBit: [
+        'My take: if you want the trailing look of a pothos but you have a cat that chews, this is the swap. Pothos is toxic and hoya is not, they live happily in similar spots, and the hoya asks for less water. The only real difference is that hoyas grow slowly, so buy one bigger than you think you need.',
+        'And the flowers are genuinely strange in a good way — tight clusters of small waxy stars that look machine-made and, on many varieties, smell strongly of chocolate or vanilla at night. It takes patience to get there. It’s worth it.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a hoya?',
+        a: 'Every two to three weeks, once the soil has dried out most of the way, and about monthly in winter. The leaves are the best guide: firm means wait, slightly soft or wrinkled means water.',
+      },
+      {
+        q: 'Are hoyas safe for cats and dogs?',
+        a: 'The ASPCA lists Hoya carnosa (wax plant) as non-toxic to cats and dogs, which covers the common trailing hoya sold as a houseplant. It’s a good pet-safe alternative to a pothos, which is toxic. Hoya is a large genus, so check the label if yours is an unusual species.',
+      },
+      {
+        q: 'Why won’t my hoya flower?',
+        a: 'Usually not enough light, or the plant is still young — many hoyas take a few years. Give it bright light with a little gentle direct sun, avoid repotting it often since they bloom better slightly root-bound, and never cut off the bare spur a flower cluster grew from, because it reblooms from the same one.',
+      },
+      {
+        q: 'Why are my hoya leaves wrinkled?',
+        a: 'That’s the thirst signal — give it a thorough soak and they should plump up within a couple of days. If they don’t, check the roots: root rot from overwatering causes the same wrinkling, because the damaged roots can’t take up water.',
+      },
+    ],
+  },
+  {
+    slug: 'nerve-plant',
+    commonName: 'Nerve Plant',
+    scientificName: 'Fittonia albivenis',
+    alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
+    metaTitle: 'Nerve Plant (Fittonia) Care: Why It Keeps Fainting + Pet Safety',
+    metaDescription:
+      'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
+    reviewed: '2026-09-02',
+    summary:
+      'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Every 3–5 days; keep the soil lightly moist at all times',
+      light: 'Medium, indirect light; no direct sun',
+      difficulty: 'Easy in the right spot, difficult in a dry room',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'High humidity is essential — this is the whole plant',
+    },
+    sections: {
+      watering: [
+        'Keep the soil lightly moist, checking every few days — in practice that usually means watering every three to five days. Fittonias have shallow roots and small pots and they dry out fast, especially in a warm room. They don’t want to be soggy, but they won’t tolerate drying out fully either.',
+        'The famous collapse is your reminder: when it runs dry the whole plant goes limp and flat, as though it has died. Water it and it stands back up within a few hours, usually with no lasting damage. It’s alarming the first time and completely routine after that — though repeatedly letting it faint does eventually cost you leaves.',
+      ],
+      light: [
+        'Medium, indirect light. Fittonia grows on the rainforest floor and burns in direct sun, so a north or east window, or a shaded spot in a brighter room, is what it wants. Under a desk lamp or a grow light works well too.',
+        'Too little light makes it leggy and washes out the pink or white veining that is the entire point of the plant. If yours has gone sparse and dull, move it somewhere brighter but keep it out of the sun beam.',
+      ],
+      problems: [
+        'A collapsed, flat plant means it’s thirsty. Water it thoroughly and check again in a few hours. If it doesn’t stand back up after a good soak, look at the roots — sitting wet causes rot, which produces exactly the same wilting.',
+        'Brown, crispy leaf edges mean the air is too dry. This is the single hardest thing about a fittonia in a normal home: it wants humidity that a heated room simply doesn’t have. A terrarium, a closed jar, a bathroom, or a cluster of plants under a cloche all solve it permanently.',
+        'Yellowing, mushy leaves at the base mean too much water sitting in the pot. Fittonias want moist, not wet, and a pot without a drainage hole is a fast way to lose one.',
+      ],
+      sharedCare: [
+        'A fittonia is a bad plant to share on a rota and a great plant to share as a visible signal, because it announces its own neglect. When it faints, everybody can see it needs water — no note required.',
+        'That said, three to five days is a short leash for a shared household. If nobody in the house is reliable on that timescale, put it in a closed terrarium or a big jar with a lid, where it keeps itself humid and goes weeks without you. That isn’t a compromise; it’s genuinely how these plants grow best indoors.',
+      ],
+      honestBit: [
+        'My take: buy a fittonia for a terrarium or a bathroom, not for a shelf in a heated living room. In the right microclimate it’s one of the prettiest and easiest small plants there is. In dry air it’s a slow, sad, crispy-edged disappointment, and no amount of misting will fix that.',
+        'It also earns its place if you have pets, because it’s small, it’s safe, and it can live at any height. The ASPCA lists nerve plant as non-toxic to cats and dogs, which means it can sit on a low table or a bedside without you thinking about it — rare for something this decorative.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a nerve plant?',
+        a: 'Every three to five days — keep the soil lightly moist and never let it dry out fully. Small pots and shallow roots mean fittonias dry fast, especially in a warm room.',
+      },
+      {
+        q: 'Why does my fittonia keep collapsing?',
+        a: 'It’s thirsty. Nerve plants wilt dramatically flat when the soil dries out, and recover within hours of watering. It’s normal behaviour rather than damage, though repeated faints will eventually cost leaves. If a good soak doesn’t revive it, check the roots for rot.',
+      },
+      {
+        q: 'Are nerve plants safe for cats and dogs?',
+        a: 'Yes. The ASPCA lists nerve plant (Fittonia) as non-toxic to both cats and dogs, so it’s fine at floor level or on a bedside table in a home with pets.',
+      },
+      {
+        q: 'Why are my fittonia leaves going brown and crispy at the edges?',
+        a: 'Dry air. Fittonias need genuinely high humidity, more than a heated room provides. A terrarium, a covered jar, a bathroom, or grouping it with other plants under a cloche fixes it far more effectively than misting.',
+      },
+    ],
+  },
 ];
 
 export function findCareGuide(slug: string): CareGuide | undefined {
