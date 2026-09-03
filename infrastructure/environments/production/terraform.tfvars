@@ -26,10 +26,36 @@ github_repo = "family-greenhouse"
 # Anomaly Detection (monitoring module) handles spend *spikes* separately.
 monthly_budget_usd = "30"
 
-# Enforce the Plant.id identify monthly meter in production (block once a
-# household exceeds its cap) so the real per-call Plant.id credit can't be
-# cost-amplified by concurrency. Beta default is tracking-only ("").
+# --- AI inference cost caps (per household per UTC month) ---
+#
+# Enforce the Plant.id identify monthly meter (3 / 30 / 100 by plan) in
+# production: block once a household exceeds its allowance, so the real
+# per-call Plant.id credit can't be cost-amplified by concurrency. This is the
+# ONLY environment that enforces it — the code default and staging are
+# tracking-only ("") — so an identify-cap bug is invisible everywhere but here.
 identify_metering_enabled = "1"
+
+# Leaf-health checks (Bedrock vision, a fraction of a cent each) and chat
+# tokens. Blank = the code default, which is EXACTLY what ran before these
+# variables existed: 200 checks and 250k/50k tokens per household per month,
+# identical for the free tier and the $9.99 tier. Nothing changes until a
+# value is filled in.
+#
+#   leaf_health_monthly_cap            flat cap, every tier without an override
+#   leaf_health_monthly_cap_<tier>     per tier; blank inherits the flat cap;
+#                                      "0" = unlimited for that tier
+#   chat_budget_{input,output}_tokens  NOT tier-aware; "0" is NOT unlimited
+#                                      (it would 429 every turn — leave blank)
+#
+# Setting any per-tier leaf-health value adds one household read per check
+# (the same read identify already makes). A household already past a newly
+# lowered cap is blocked until the month rolls over, so lower caps on the 1st.
+leaf_health_monthly_cap            = ""
+leaf_health_monthly_cap_seedling   = ""
+leaf_health_monthly_cap_garden     = ""
+leaf_health_monthly_cap_greenhouse = ""
+chat_budget_input_tokens           = ""
+chat_budget_output_tokens          = ""
 
 # Keep SMS fail-closed until AWS approves SMS Production Access in us-east-1
 # and the required origination identity/registration is active. Once both are
