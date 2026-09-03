@@ -67,12 +67,34 @@ describe('buildIcs', () => {
     expect(ics).toMatch(/SUMMARY:Care task — Monstera/);
   });
 
-  it('escapes commas, semicolons, and newlines in description', () => {
-    const ics = buildIcs([task({ notes: 'mist, gently; not\nover' })], now);
+  it('escapes commas, semicolons, and newlines in free text', () => {
+    const ics = buildIcs([task({ type: 'custom', customType: 'mist, gently; not\nover' })], now);
     // Each special char gets a backslash prefix.
     expect(ics).toMatch(/\\,/);
     expect(ics).toMatch(/\\;/);
     expect(ics).toMatch(/\\n/);
+  });
+
+  it('emits titles, cadence, and dates only — never task notes or the assignee name', () => {
+    // The subscription URL is a capability URL (services/calendarTokens.ts):
+    // whoever holds it can read the feed, so a leaked link must not reveal
+    // the household's private notes or which member a task is assigned to.
+    const ics = buildIcs(
+      [
+        task({
+          notes: 'spare key is under the blue pot',
+          assignedTo: 'user-2',
+          assignedToName: 'Mel Member',
+        }),
+      ],
+      now
+    );
+    expect(ics).toMatch(/SUMMARY:Water — Monstera/);
+    expect(ics).toMatch(/DESCRIPTION:Recurring every 7 days\./);
+    expect(ics).not.toContain('spare key');
+    expect(ics).not.toContain('Mel Member');
+    expect(ics).not.toContain('Assigned to');
+    expect(ics).not.toContain('user-2');
   });
 
   it('uses the customType label when present', () => {
@@ -82,7 +104,7 @@ describe('buildIcs', () => {
 
   it('folds long lines (>75 octets) per RFC 5545', () => {
     const long = 'a'.repeat(200);
-    const ics = buildIcs([task({ notes: long })], now);
+    const ics = buildIcs([task({ plantName: long })], now);
     // Folded continuation lines start with a single space.
     expect(/\r\n /.test(ics)).toBe(true);
   });
@@ -124,8 +146,8 @@ describe('buildIcs', () => {
     // An astral character (2 UTF-16 code units) landing exactly on a fold
     // boundary must move whole to the next line, not be bisected into an
     // unpaired surrogate.
-    const notes = 'x'.repeat(73) + '🌱' + 'y'.repeat(20);
-    const ics = buildIcs([task({ notes })], now);
+    const plantName = 'x'.repeat(73) + '🌱' + 'y'.repeat(20);
+    const ics = buildIcs([task({ plantName })], now);
     // A lone surrogate serializes as the U+FFFD replacement character (or
     // throws) — neither of which can appear here if the pair stayed intact.
     expect(ics).not.toMatch(/�/);

@@ -17,6 +17,12 @@
  *  - Stable UID per task (`<taskId>@familygreenhouse.app`) so updates
  *    on our side replace the existing calendar event rather than
  *    duplicating.
+ *  - Titles and dates ONLY. The subscription URL is a capability URL (see
+ *    services/calendarTokens.ts): whoever holds it can read the feed, so
+ *    the feed carries nothing a leaked link should reveal. Task notes and
+ *    the assignee's name are deliberately NOT emitted — a calendar needs
+ *    "Water — Monstera, due Tuesday", not the household's private notes or
+ *    which member is on the hook. Both are still visible in the app.
  */
 import type { Task } from '../models/types.js';
 
@@ -92,11 +98,10 @@ function eventLines(task: Task, now: Date): string[] {
   const summary = task.customType
     ? `${task.customType} — ${task.plantName}`
     : `${typeLabel} — ${task.plantName}`;
-  const descriptionParts = [
-    `Recurring every ${task.frequency} day${task.frequency === 1 ? '' : 's'}.`,
-  ];
-  if (task.notes) descriptionParts.push(task.notes);
-  if (task.assignedToName) descriptionParts.push(`Assigned to ${task.assignedToName}.`);
+  // Cadence only. `task.notes` and `task.assignedToName` are intentionally
+  // left out — see the module doc: the feed URL is a bearer credential, so
+  // the feed must not carry private notes or member names.
+  const description = `Recurring every ${task.frequency} day${task.frequency === 1 ? '' : 's'}.`;
 
   // Deliberately NO RRULE here: completing/snoozing a task re-anchors its
   // nextDue server-side, so a client-extrapolated recurrence anchored at
@@ -109,7 +114,7 @@ function eventLines(task: Task, now: Date): string[] {
     `DTSTAMP:${formatDateTime(now)}`,
     `DTSTART;VALUE=DATE:${formatDate(due)}`,
     `SUMMARY:${escapeText(summary)}`,
-    `DESCRIPTION:${escapeText(descriptionParts.join(' '))}`,
+    `DESCRIPTION:${escapeText(description)}`,
     'END:VEVENT',
   ];
 }

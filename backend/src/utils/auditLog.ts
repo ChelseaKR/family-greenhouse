@@ -26,6 +26,8 @@ export type AuditEvent =
   | 'billing.subscription_changed'
   | 'apikey.created'
   | 'apikey.revoked'
+  | 'calendar_token.created'
+  | 'calendar_token.revoked'
   | 'api.task_completed'
   | 'api.task_snoozed'
   | 'plant.deleted'
