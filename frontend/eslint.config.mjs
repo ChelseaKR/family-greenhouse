@@ -84,10 +84,11 @@ export default tseslint.config(
   {
     // i18n enforcement is opt-in per-folder while we migrate. Areas in
     // this allowlist MUST use `t()` for user-visible strings; English
-    // literals in JSX trigger a build-blocking error. The Help FAQ is
+    // literals in JSX trigger a build-blocking error. The legal pages are
+    // enrolled: they render entirely from `legal.*` keys. The Help FAQ is
     // *deliberately* not enrolled — translating curated articles is a
     // separate workstream from translating UI chrome.
-    files: ['src/features/settings/PreferencesSettings.tsx'],
+    files: ['src/features/settings/PreferencesSettings.tsx', 'src/features/legal/**/*.tsx'],
     plugins: {
       i18next,
     },

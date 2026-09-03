@@ -1,37 +1,51 @@
 import { Link } from 'react-router';
+import { Trans, useTranslation } from 'react-i18next';
 import { LegalShell } from './LegalShell';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 
-/** Public support URL used by both store listings and app review. */
+/**
+ * Public support URL used by both store listings and app review.
+ *
+ * `legal.support.help.body` describes the help pages as public and lists the
+ * nine topics `/help/:topicId` serves. That is the state once #389
+ * (feat/help-content) merges and moves `/help` out of ProtectedRoute; on a
+ * `main` without #389 the help pages still require sign-in. If #389 is closed
+ * rather than merged, restore the signed-in wording in both catalogs.
+ */
 export function SupportPage() {
+  const { t } = useTranslation();
   useMetaTags({
-    title: 'Support — Family Greenhouse',
-    description: 'Get help with your Family Greenhouse account and plant-care workspace.',
+    title: t('legal.support.metaTitle'),
+    description: t('legal.support.metaDescription'),
   });
 
   return (
-    <LegalShell title="Support" effectiveDate="September 2, 2026">
+    <LegalShell title={t('legal.support.title')} effectiveDate="2026-09-02">
       <p className="lead">
-        Need help with Family Greenhouse? Email{' '}
-        <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a>. Include the
-        device type and a short description of what happened, but never send a password or sign-in
-        code.
+        <Trans
+          i18nKey="legal.support.lead"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink: <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> }}
+        />
       </p>
-      <h2>Account and privacy</h2>
+      <h2>{t('legal.support.account.heading')}</h2>
       <p>
-        You can change your password, export your data, or delete your account from Account &amp;
-        data. If you cannot sign in, see the public{' '}
-        <Link to="/account-deletion">deletion guide</Link>.
+        <Trans
+          i18nKey="legal.support.account.body"
+          components={{ deletionLink: <Link to="/account-deletion" /> }}
+        />
       </p>
-      <h2>Plant-care help</h2>
+      <h2>{t('legal.support.help.heading')}</h2>
       <p>
-        The public <Link to="/help">help pages</Link> cover plants, tasks, reminders, households,
-        billing, and troubleshooting. You do not need an account or to be signed in to read them.
+        <Trans i18nKey="legal.support.help.body" components={{ helpLink: <Link to="/help" /> }} />
       </p>
-      <h2>Service status</h2>
+      <h2>{t('legal.support.status.heading')}</h2>
       <p>
-        Check the <Link to="/status">service status page</Link> if login, syncing, or uploads appear
-        unavailable.
+        <Trans
+          i18nKey="legal.support.status.body"
+          components={{ statusLink: <Link to="/status" /> }}
+        />
       </p>
     </LegalShell>
   );
