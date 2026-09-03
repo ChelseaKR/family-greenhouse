@@ -16,7 +16,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title="Terms of Service" effectiveDate="July 19, 2026">
+    <LegalShell title="Terms of Service" effectiveDate="September 2, 2026">
       <p className="lead">
         These terms govern your use of Family Greenhouse. We&rsquo;ve kept them readable. If
         anything is unclear, email{' '}
@@ -58,9 +58,9 @@ export function TermsPage() {
           continuously.
         </li>
         <li>
-          <strong>Free registration, no payment collection.</strong> Family Greenhouse currently
-          accepts free accounts for up to 10 plants. It does not offer paid plans or create new
-          Checkout or billing-portal sessions.
+          <strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free
+          Seedling accounts for up to 10 plants. Paid Garden and Greenhouse plans are also
+          available; nothing is charged unless a household admin buys one.
         </li>
       </ul>
 
@@ -93,10 +93,12 @@ export function TermsPage() {
 
       <h2>Plan status</h2>
       <p>
-        Free account registration is open. Paid-plan offers, purchases, upgrades, and plan changes
-        are paused. Historical tier and billing code remains in the project as implementation
-        documentation, but it is not a current offer. If you believe an earlier test or billing
-        event affected you, email us so it can be investigated and resolved directly.
+        Free account registration is open. Paid Garden and Greenhouse plans are available on the
+        web, billed monthly or yearly; Garden is also offered as a one-time lifetime purchase.
+        Purchases, upgrades, and plan changes are made by a household admin in{' '}
+        <em>Settings → Billing</em>, and a new monthly or yearly subscription starts with a 14-day
+        free trial. Paid plans are not sold inside the mobile apps. If you believe a billing event
+        affected you, email us so it can be investigated and resolved directly.
       </p>
 
       <h2>Limitations</h2>
@@ -104,7 +106,7 @@ export function TermsPage() {
         The service is provided &ldquo;as is.&rdquo; We aim for high availability but do not promise
         zero downtime, zero data loss, or that every feature will work in every browser at every
         moment. Our liability is limited to the amount you&rsquo;ve paid us in the previous 12
-        months; paid activity is paused, so the hosted service currently accepts no payments.
+        months.
       </p>
       <p>
         We don&rsquo;t give plant-care advice as a regulated service — the suggestions come from
