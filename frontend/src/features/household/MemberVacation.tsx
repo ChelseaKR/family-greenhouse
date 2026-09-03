@@ -19,23 +19,8 @@ import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
-
-/**
- * YYYY-MM-DD (date input) → ISO datetime; start-of-day / end-of-day in the
- * browser's LOCAL timezone. The local `Date` constructor interprets
- * year/month/day as wall-clock time here, so `.toISOString()` correctly
- * converts the user's actual local midnight to a UTC instant — a hardcoded
- * `Z` suffix would instead mean UTC midnight, several hours off for anyone
- * outside that zone.
- */
-function toStartIso(date: string): string {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
-}
-function toEndIso(date: string): string {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
-}
+// Local-timezone day boundaries, shared with the sitter-link form.
+import { toStartOfDayIso, toEndOfDayIso } from './localDates';
 
 interface MemberVacationProps {
   householdId: string;
@@ -71,8 +56,8 @@ export function MemberVacation({
       taskService.setVacation({
         userId: member.userId,
         coveredBy,
-        startDate: toStartIso(startDate),
-        endDate: toEndIso(endDate),
+        startDate: toStartOfDayIso(startDate),
+        endDate: toEndOfDayIso(endDate),
       }),
     onSuccess: () => {
       invalidate();

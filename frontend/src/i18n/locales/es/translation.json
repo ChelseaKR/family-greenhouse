@@ -549,7 +549,50 @@
       "noCoverOptions": "Añade otro miembro para delegar el cuidado.",
       "description": "Sus recordatorios irán al miembro que cubre hasta que termine el periodo."
     },
-    "sitterLinksLoadFailed": "No pudimos cargar tus enlaces de cuidador existentes en este momento; los enlaces que creaste antes siguen activos."
+    "sitterLinksLoadFailed": "No pudimos cargar tus enlaces de cuidador existentes en este momento; los enlaces que creaste antes siguen activos.",
+    "careLoad": {
+      "title": "Quién carga con los cuidados",
+      "description": "Todo el mundo en la casa ve esto, y está aquí para repartir el trabajo, no para puntuarlo.",
+      "loading": "Calculando cómo se reparten los cuidados…",
+      "loadFailed": "No pudimos calcular cómo se reparten los cuidados ahora mismo. Eso no significa que nadie haya hecho nada; inténtalo de nuevo en un momento.",
+      "periodDays": "Cuidados registrados en los últimos {{days}} días.",
+      "periodSince": "Cuidados registrados desde el {{date}}: hasta ahí llega el historial de actividad compartido.",
+      "tableCaption": "Cuidados completados y tareas asignadas actualmente, por persona",
+      "personColumn": "Persona",
+      "doneColumn": "Cuidados hechos",
+      "assignedColumn": "Asignadas ahora",
+      "you": "tú",
+      "sitterLabel": "Cuidador de plantas",
+      "formerMember": "ya no está en la casa",
+      "unnamedMember": "Alguien que ya se fue",
+      "nothingLogged": "Todavía no se han registrado cuidados en este periodo.",
+      "lopsided": "Últimamente la mayor parte de los cuidados ha recaído en {{name}}.",
+      "lopsidedBody": "Repartir algunas plantas —o dejarlas libres para que las tome quien quiera— alivia la carga sin que nadie tenga que pedirlo.",
+      "upForGrabs": "Libres para tomar: {{total}}",
+      "upForGrabsBody": "Nadie las tiene asignadas. Cualquiera de la casa puede encargarse.",
+      "upForGrabsAction": "Verlas en la lista de tareas",
+      "allSpokenFor": "Todas las tareas tienen a alguien asignado."
+    },
+    "sitterLinks": {
+      "startsLabel": "Empieza (opcional)",
+      "startsHelp": "Déjalo vacío para empezar ahora. Indica el día en que empieza tu viaje y el enlace no funcionará hasta entonces.",
+      "lengthLabel": "Dura (días)",
+      "lengthHelp": "Hasta 60 días, contados desde el día de inicio.",
+      "labelLabel": "Etiqueta (opcional)",
+      "labelHelp": "Un nombre amable que verá tu cuidador. Sin datos personales.",
+      "currentHeading": "Enlaces que has compartido",
+      "untitled": "Enlace de cuidador",
+      "windowActive": "Funciona hasta el {{end}}",
+      "windowScheduled": "Se abre el {{start}} y funciona hasta el {{end}}",
+      "badgeActive": "Activo",
+      "badgeScheduled": "Programado",
+      "endedHeading": "Terminados hace poco",
+      "endedBody": "Estos periodos se cerraron solos. Ya no dan acceso a nada.",
+      "endedOn": "{{label}}: terminó el {{date}}"
+    }
+  },
+  "sitter": {
+    "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola."
   },
   "settings": {
     "title": "Ajustes",

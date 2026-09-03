@@ -77,6 +77,48 @@ describe('me handler', () => {
       vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
       vi.mocked(accountCleanup.deleteAbandonedHouseholdData).mockResolvedValue(undefined);
       vi.mocked(accountCleanup.deleteUserScopedData).mockResolvedValue(undefined);
+      vi.mocked(accountCleanup.cancelAbandonedHouseholdSubscription).mockResolvedValue({
+        outcome: 'no_subscription',
+      });
+    }
+
+    // One household, one member, one plant: the shape in which account
+    // deletion erases the household row that records its subscription.
+    async function mockSoloHousehold() {
+      const householdService = await import('../../../src/services/householdService.js');
+      const plantService = await import('../../../src/services/plantService.js');
+      const apiKeys = await import('../../../src/services/apiKeys.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([
+        { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '' },
+      ]);
+      vi.mocked(householdService.getHouseholdMembers).mockResolvedValue([
+        {
+          householdId: 'hh-1',
+          userId: 'user-1',
+          name: 'Test User',
+          email: 'test@example.com',
+          role: 'admin',
+          joinedAt: '',
+        },
+      ]);
+      vi.mocked(plantService.getPlants).mockResolvedValue([
+        {
+          id: 'p1',
+          householdId: 'hh-1',
+          name: 'Pothos',
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      ]);
+      vi.mocked(plantService.deletePlant).mockResolvedValue(undefined);
+      vi.mocked(apiKeys.listApiKeys).mockResolvedValue([]);
+      vi.mocked(cognitoUsers.deleteUser).mockResolvedValue(undefined);
     }
 
     it('returns 204 when the lone member deletes their account (cascades plant + key cleanup)', async () => {
@@ -154,6 +196,7 @@ describe('me handler', () => {
       const apiKeys = await import('../../../src/services/apiKeys.js');
       const accountCleanup = await import('../../../src/services/accountCleanup.js');
       const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
 
       // hh-1: solo household (full wipe). hh-2: multi-member household where
       // the caller is a plain member (just remove the row).
@@ -217,6 +260,142 @@ describe('me handler', () => {
       expect(accountCleanup.anonymizeUserInHousehold).not.toHaveBeenCalledWith('hh-1', 'user-1');
       expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-2', 'user-1');
       expect(accountCleanup.deleteUserScopedData).toHaveBeenCalledWith('user-1');
+      expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
+      // Subscriptions are per household: the abandoned solo household's is
+      // cancelled, the retained household's is left alone.
+      expect(accountCleanup.cancelAbandonedHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+      expect(accountCleanup.cancelAbandonedHouseholdSubscription).not.toHaveBeenCalledWith('hh-2');
+    });
+
+    it('cancels the abandoned household subscription before anything is destroyed', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      await mockSoloHousehold();
+      vi.mocked(accountCleanup.cancelAbandonedHouseholdSubscription).mockResolvedValue({
+        outcome: 'canceled',
+        subscriptionId: 'sub_1',
+      });
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(204);
+      expect(accountCleanup.cancelAbandonedHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+      // Ordering is the point: the subscription is dead before the household
+      // row that records it and before the identity that could reach the
+      // billing portal are erased.
+      const cancelledAt = vi.mocked(accountCleanup.cancelAbandonedHouseholdSubscription).mock
+        .invocationCallOrder[0];
+      for (const later of [
+        plantService.deletePlant,
+        accountCleanup.deleteAbandonedHouseholdData,
+        accountCleanup.deleteUserScopedData,
+        cognitoUsers.deleteUser,
+      ]) {
+        expect(vi.mocked(later).mock.invocationCallOrder[0]).toBeGreaterThan(cancelledAt);
+      }
+    });
+
+    it('never touches billing when a member leaves a household that keeps other members', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-2', role: 'member', name: 'Cabin', joinedAt: '' },
+      ]);
+      vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+        {
+          householdId: 'hh-2',
+          userId: 'user-1',
+          name: 'Test User',
+          email: 'test@example.com',
+          role: 'member',
+          joinedAt: '',
+        },
+        {
+          householdId: 'hh-2',
+          userId: 'user-9',
+          name: 'Owner',
+          email: 'o@x.com',
+          role: 'admin',
+          joinedAt: '',
+        },
+      ]);
+      vi.mocked(householdService.removeMember).mockResolvedValueOnce(undefined);
+      vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(204);
+      // The household — and its subscription — carry on without this member.
+      expect(accountCleanup.cancelAbandonedHouseholdSubscription).not.toHaveBeenCalled();
+      expect(householdService.removeMember).toHaveBeenCalledWith('hh-2', 'user-1');
+      expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
+    });
+
+    it('refuses the deletion and destroys nothing when Stripe cannot confirm the cancellation', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const plantService = await import('../../../src/services/plantService.js');
+      const apiKeys = await import('../../../src/services/apiKeys.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      await mockSoloHousehold();
+      vi.mocked(accountCleanup.cancelAbandonedHouseholdSubscription).mockRejectedValue(
+        new Error('Stripe is down')
+      );
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      // Fail closed: a deleted user who is still being charged has no way to
+      // stop it, so the account stays until Stripe confirms the cancellation.
+      expect(res.statusCode).toBe(502);
+      expect(res.body).toMatch(/not deleted/i);
+      expect(plantService.deletePlant).not.toHaveBeenCalled();
+      expect(apiKeys.listApiKeys).not.toHaveBeenCalled();
+      expect(accountCleanup.deleteAbandonedHouseholdData).not.toHaveBeenCalled();
+      expect(accountCleanup.anonymizeUserInHousehold).not.toHaveBeenCalled();
+      expect(householdService.removeMember).not.toHaveBeenCalled();
+      expect(accountCleanup.deleteUserScopedData).not.toHaveBeenCalled();
+      expect(cognitoUsers.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('still deletes the account when the subscription was already cancelled (safe retry)', async () => {
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      await mockSoloHousehold();
+      vi.mocked(accountCleanup.cancelAbandonedHouseholdSubscription).mockResolvedValue({
+        outcome: 'already_canceled',
+        subscriptionId: 'sub_1',
+      });
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(204);
+      expect(accountCleanup.deleteAbandonedHouseholdData).toHaveBeenCalledWith('hh-1');
       expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
     });
 

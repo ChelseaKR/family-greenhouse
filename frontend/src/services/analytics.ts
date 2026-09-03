@@ -145,6 +145,10 @@ let telemetryToken: string | null = null;
  * singleton (which would create an analytics → authStore → analytics cycle). */
 export function setTelemetryAuthToken(token: string | null): void {
   telemetryToken = token;
+  // `authStore` sets the token and calls `identify()` together, in either
+  // order depending on the path (login vs. session restore); whichever
+  // completes the pair releases anything queued while anonymous.
+  flushPendingPreIdentity();
 }
 
 /**
@@ -181,6 +185,65 @@ let activeHouseholdId: string | null = null;
 /** Households we've already `$groupidentify`-ed this session, so we only emit
  *  the group-identify event once per household rather than on every switch. */
 const groupIdentified = new Set<string>();
+
+/**
+ * Events fired before any identity existed, held until one does.
+ *
+ * Every rail here is identity-gated — PostHog needs a `distinct_id` and the
+ * first-party `/telemetry/product` endpoint needs a JWT — so an event fired by
+ * a signed-out visitor previously evaporated. Two events do exactly that:
+ * `experiment_viewed` (the landing hero A/B test) and `cutting_graft_started`
+ * (the graft CTA on a public cutting card). Both were dead instrumentation:
+ * present in the code, documented in the vocabulary, and producing zero rows.
+ *
+ * The fix is deferral, not anonymous beaconing. Nothing is sent while the
+ * visitor is anonymous — the privacy posture is unchanged, and the
+ * characterization tests in analytics.test.ts still assert zero network
+ * traffic before `identify()`. The event is replayed once the SAME browser
+ * signs in, which is the only point at which we have an identity to attach it
+ * to.
+ *
+ * What this buys and what it does not: the numerator becomes measurable
+ * ("of the people who signed up, how many saw variant B?"), the denominator
+ * does not ("how many people saw variant B?"). Impressions by visitors who
+ * never sign in remain unmeasurable, and making them measurable is the
+ * top-of-funnel privacy decision in docs/analytics.md, not this change.
+ */
+interface PendingEvent {
+  event: EventName;
+  properties: Record<string, unknown>;
+}
+let pendingPreIdentity: PendingEvent[] = [];
+
+/**
+ * Small on purpose. A visitor can bounce around anonymous pages indefinitely;
+ * this holds a handful of distinct funnel steps, not a session recording. When
+ * full we keep the OLDEST entries — the landing impression that started the
+ * journey is the one worth attributing, not the tenth re-render.
+ */
+const MAX_PENDING_PRE_IDENTITY = 5;
+
+/**
+ * Replay anything queued while anonymous, once BOTH identity halves exist.
+ *
+ * Both are required. `distinctId` alone opens only the PostHog rail, and
+ * flushing then would consume the queue before the first-party rail — the only
+ * rail configured in production — could ever see it. `authStore` sets the
+ * token and calls `identify()` together on login and on session restore, so
+ * whichever lands second triggers the flush.
+ */
+function flushPendingPreIdentity(): void {
+  if (!distinctId || !telemetryToken) return;
+  if (pendingPreIdentity.length === 0) return;
+  const queued = pendingPreIdentity;
+  pendingPreIdentity = [];
+  for (const item of queued) {
+    // `replay: true` suppresses a second GTM dataLayer push: the anonymous
+    // `track()` already pushed there (that rail is not identity-gated), and
+    // pushing again would double-count the event for a configured container.
+    void send(item.event, item.properties, { replay: true });
+  }
+}
 
 /**
  * Pin subsequent events to a household group. Call on login/session restore
@@ -223,7 +286,11 @@ function isEnabled(): boolean {
   return true;
 }
 
-async function send(event: EventName, properties: Record<string, unknown>): Promise<void> {
+async function send(
+  event: EventName,
+  properties: Record<string, unknown>,
+  options: { replay?: boolean } = {}
+): Promise<void> {
   if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return;
   const withSuper = { ...superProps, ...properties };
   // The household group key rides on both rails: `$groups.household` for
@@ -233,8 +300,19 @@ async function send(event: EventName, properties: Record<string, unknown>): Prom
     ? { ...withSuper, household: activeHouseholdId }
     : withSuper;
   // GTM dataLayer push runs whether or not PostHog is configured — they're
-  // independent rails. The DNT check is inside pushToDataLayer.
-  pushToDataLayer(event, dataLayerProps);
+  // independent rails. The DNT check is inside pushToDataLayer. Skipped on a
+  // replay, which already pushed here when it was first fired.
+  if (!options.replay) pushToDataLayer(event, dataLayerProps);
+
+  // No identity yet: both remaining rails are identity-gated, so this event
+  // would vanish. Hold it for replay after sign-in instead of dropping it —
+  // and send NOTHING now (see pendingPreIdentity: no anonymous beaconing).
+  if (!distinctId) {
+    if (pendingPreIdentity.length < MAX_PENDING_PRE_IDENTITY) {
+      pendingPreIdentity.push({ event, properties });
+    }
+    return;
+  }
 
   // First-party product analytics is the default rail. Identity and household
   // come from the verified JWT server-side; neither is accepted in this body.
@@ -296,6 +374,11 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
     ...(traits ?? {}),
     ...(activeHouseholdId ? { household: activeHouseholdId } : {}),
   });
+  // Release anything the visitor generated before identity existed. This runs
+  // BEFORE the PostHog gate below: PostHog is not configured in production, so
+  // flushing after `isEnabled()` would mean the replay never happens on the one
+  // rail (first-party) that is actually live.
+  flushPendingPreIdentity();
   if (!isEnabled()) return;
   void fetch(`${HOST}/capture/`, {
     method: 'POST',
@@ -324,6 +407,10 @@ export function reset(): void {
   telemetryToken = null;
   superProps = {};
   activeHouseholdId = null;
+  // Anything still queued was generated by the departing session. Replaying it
+  // against the NEXT user would attribute one person's landing impression to
+  // another, so logout drops it.
+  pendingPreIdentity = [];
   // Allow a re-login to re-`$groupidentify`; cheap and keeps logout total.
   groupIdentified.clear();
 }

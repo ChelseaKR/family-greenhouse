@@ -535,7 +535,50 @@
       "noCoverOptions": "Add another member to hand off care.",
       "description": "Their reminders go to the covering member until the window ends."
     },
-    "sitterLinksLoadFailed": "We couldn’t load your existing sitter links just now — any links you created earlier are still active."
+    "sitterLinksLoadFailed": "We couldn’t load your existing sitter links just now — any links you created earlier are still active.",
+    "careLoad": {
+      "title": "Who’s carrying the care",
+      "description": "Everyone in the household sees this, and it’s here so the work can be shared out — not scored.",
+      "loading": "Working out how care is shared…",
+      "loadFailed": "We couldn’t work out how care is shared just now. That isn’t the same as nobody having done anything — try again in a moment.",
+      "periodDays": "Care logged in the last {{days}} days.",
+      "periodSince": "Care logged since {{date}} — as far back as the shared activity feed reaches.",
+      "tableCaption": "Care completed and tasks currently assigned, by person",
+      "personColumn": "Person",
+      "doneColumn": "Care done",
+      "assignedColumn": "Assigned now",
+      "you": "you",
+      "sitterLabel": "Plant sitter",
+      "formerMember": "no longer in the household",
+      "unnamedMember": "Someone who has left",
+      "nothingLogged": "No care has been logged in this period yet.",
+      "lopsided": "Most of the care has landed on {{name}} lately.",
+      "lopsidedBody": "Sharing a few plants out — or leaving them up for grabs — spreads the load without anyone having to ask.",
+      "upForGrabs": "Up for grabs: {{total}}",
+      "upForGrabsBody": "Nobody is holding these. Anyone in the household can pick one up.",
+      "upForGrabsAction": "See them on the task list",
+      "allSpokenFor": "Every task has someone’s name on it."
+    },
+    "sitterLinks": {
+      "startsLabel": "Starts (optional)",
+      "startsHelp": "Leave empty to start now. Set the day your trip starts and the link stays shut until then.",
+      "lengthLabel": "Lasts for (days)",
+      "lengthHelp": "Up to 60 days, counted from the start day.",
+      "labelLabel": "Label (optional)",
+      "labelHelp": "A friendly name your sitter sees. No personal details.",
+      "currentHeading": "Links you’ve shared",
+      "untitled": "Sitter link",
+      "windowActive": "Works until {{end}}",
+      "windowScheduled": "Opens {{start}}, then works until {{end}}",
+      "badgeActive": "Active",
+      "badgeScheduled": "Scheduled",
+      "endedHeading": "Recently ended",
+      "endedBody": "These windows closed on their own. They no longer open anything.",
+      "endedOn": "{{label}} — ended {{date}}"
+    }
+  },
+  "sitter": {
+    "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own."
   },
   "settings": {
     "title": "Settings",
