@@ -43,6 +43,7 @@ import {
   applyTemplateSchema,
   applyTemplateBulkSchema,
   createSitterLinkSchema,
+  setEscalationRuleSchema,
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import {
@@ -184,6 +185,8 @@ interface Household {
   name: string;
   /** Optional saved location for climate-aware care tips. */
   location?: { city: string; lat: number; lon: number } | null;
+  /** Auto-handoff rule (ADR 0018); null/absent = off. */
+  escalateAfterDays?: number | null;
   createdAt: string;
   createdBy: string;
   planId?: 'seedling' | 'garden' | 'greenhouse';
@@ -270,6 +273,10 @@ interface Task {
   assignedToName: string | null;
   assignmentSource: 'space_default' | 'move_day' | null;
   notes: string | null;
+  /** Auto-handoff marker; mirrors models/types.ts. */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  escalatedFrom?: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -1684,6 +1691,38 @@ app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res
   moveDayRecords.set(key, list);
   res.json({ status: 'ready', list });
 });
+
+// PUT /households/:id/escalation — mirrors handlers/households setEscalationRule:
+// admin-only, plan-gated (402 without the household toolkit), 5-day floor via
+// the shared schema. Stored on the household so GET /households/:id returns it.
+app.put(
+  '/households/:id/escalation',
+  authMiddleware,
+  requireHousehold,
+  validateBody(setEscalationRuleSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (user.householdRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin role required' });
+    }
+    const household = db.households.get(req.params.id);
+    if (!household) return res.status(404).json({ message: 'Household not found' });
+    const plan = PLANS[household.planId ?? 'seedling'];
+    if (!plan.householdToolkit) {
+      return res.status(402).json({
+        message: `Auto-handoff is part of the household toolkit, which the ${plan.name} plan does not include. Upgrade to turn it on.`,
+      });
+    }
+    const { escalateAfterDays } = (req as any).validatedBody as {
+      escalateAfterDays: number | null;
+    };
+    household.escalateAfterDays = escalateAfterDays;
+    res.json({ escalateAfterDays });
+  }
+);
 
 app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
   const user = (req as any).user;

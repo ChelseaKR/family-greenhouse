@@ -124,6 +124,15 @@ export interface ActivityPayloadByType {
   /** A member asked the household's admins to upgrade for a locked feature
    *  (services/upgradeRequests.ts). `plan` is the tier the ask resolves to. */
   'upgrade.requested': { feature: string; plan: 'garden' | 'greenhouse' };
+  /** Auto-handoff (ADR 0018): the scan put an overdue task up for grabs. The
+   *  actor is the system, so renderers must not lead with `actorName`. */
+  'task.escalated': TaskAssignmentActivityPayload & {
+    previousAssigneeId: string | null;
+    previousAssigneeName: string | null;
+    daysOverdue: number;
+    /** How many members were told; 0 is a real outcome (all away / in DND). */
+    notified: number;
+  };
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -151,6 +160,7 @@ export const ACTIVITY_TYPES = [
   'sitter_link.revoked',
   'task.schedule_matched',
   'upgrade.requested',
+  'task.escalated',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

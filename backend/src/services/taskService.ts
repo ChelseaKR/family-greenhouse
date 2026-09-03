@@ -1254,6 +1254,9 @@ function itemToTask(item: Record<string, unknown>): Task {
     assignedToName: item.assignedToName as string | null,
     assignmentSource: (item.assignmentSource as Task['assignmentSource'] | undefined) ?? null,
     notes: item.notes as string | null,
+    escalatedAt: (item.escalatedAt as string | null | undefined) ?? null,
+    escalatedForDue: (item.escalatedForDue as string | null | undefined) ?? null,
+    escalatedFrom: (item.escalatedFrom as string | null | undefined) ?? null,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
   };

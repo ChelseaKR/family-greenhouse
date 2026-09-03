@@ -1242,6 +1242,45 @@ paths:
               schema: { $ref: '#/components/schemas/MoveDayResult' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /households/{id}/escalation:
+    put:
+      summary: Set (or clear with `null`) the household's auto-handoff rule
+      description: |
+        Auto-handoff (ADR 0018). When `escalateAfterDays` is set, a task that many
+        days overdue is put up for grabs by the hourly scan and the other members
+        are told once; the previous holder is never nagged, and nobody away or
+        inside their DND window is notified. The floor is 5 days and is enforced
+        server-side. Admin-only; requires a plan with the household toolkit (402
+        otherwise, the same upgrade signal the plant cap uses).
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [escalateAfterDays]
+              properties:
+                escalateAfterDays:
+                  type: integer
+                  minimum: 5
+                  maximum: 60
+                  nullable: true
+                  description: Days overdue before a task goes up for grabs; null turns the rule off.
+      responses:
+        '200':
+          description: The stored rule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  escalateAfterDays: { type: integer, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402': { description: The household's plan does not include the household toolkit }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /households/{householdId}/members/{userId}:
     delete:
       summary: Remove a member from a household (admin only)
@@ -2788,6 +2827,21 @@ components:
         notes:
           type: string
           nullable: true
+        escalatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When auto-handoff last put this task up for grabs (ADR 0018); absent on never-escalated tasks.
+        escalatedForDue:
+          type: string
+          format: date-time
+          nullable: true
+          description: The `nextDue` the escalation fired for. Equal to `nextDue` while the escalated occurrence is still open; a completion advances `nextDue` and re-arms the rule.
+        escalatedFrom:
+          type: string
+          format: uuid
+          nullable: true
+          description: The member the task was taken from, or null if it was unassigned.
 
     TaskCompletion:
       type: object
@@ -2845,6 +2899,10 @@ components:
           format: uuid
         name:
           type: string
+        escalateAfterDays:
+          type: integer
+          nullable: true
+          description: Auto-handoff rule (days overdue before a task goes up for grabs); null or absent means off.
         createdAt:
           type: string
           format: date-time

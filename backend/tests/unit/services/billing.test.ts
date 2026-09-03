@@ -1504,6 +1504,9 @@ describe('planSummary', () => {
       description: 'For growing families',
       maxPlants: 500,
       maxMembers: 6,
+      // Entitlement, not a price: the client needs it to render a locked
+      // control while prices are withheld (ADR 0018).
+      householdToolkit: true,
     });
   });
 });

@@ -279,6 +279,20 @@ export const createSitterLinkSchema = z
     }
   });
 
+// Auto-handoff rule (ADR 0018). The 5-day floor is the brief's own guardrail
+// against notification volume; it is enforced HERE (server-side) and again in
+// escalation.setEscalationRule so no client path can lower it. null = off.
+export const MIN_ESCALATE_AFTER_DAYS = 5;
+export const MAX_ESCALATE_AFTER_DAYS = 60;
+export const setEscalationRuleSchema = z.object({
+  escalateAfterDays: z
+    .number()
+    .int()
+    .min(MIN_ESCALATE_AFTER_DAYS)
+    .max(MAX_ESCALATE_AFTER_DAYS)
+    .nullable(),
+});
+
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1).max(80),
 });
@@ -359,5 +373,6 @@ export type CompleteTaskInput = z.infer<typeof completeTaskSchema>;
 export type SnoozeTaskInput = z.infer<typeof snoozeTaskSchema>;
 export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
 export type SetVacationInput = z.infer<typeof setVacationSchema>;
+export type SetEscalationRuleInput = z.infer<typeof setEscalationRuleSchema>;
 export type CreateSitterLinkInput = z.infer<typeof createSitterLinkSchema>;
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;

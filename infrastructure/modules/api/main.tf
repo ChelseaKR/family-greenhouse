@@ -955,6 +955,9 @@ locals {
     # activity inside a link's window — handlers/households/awayRecap.ts.
     "GET /households/{id}/away-recap" = { group = "households", auth = "jwt" }
 
+    # Auto-handoff rule (ADR 0018): admin-only, plan-gated in the handler.
+    "PUT /households/{id}/escalation" = { group = "households", auth = "jwt" }
+
     # Plant Tags (ADR 0016). Management is any-member (a tag grants strictly
     # less than a member already holds); the PIN is admin-only. The two /tag
     # routes are PUBLIC: the 256-bit token in the path is the only credential,

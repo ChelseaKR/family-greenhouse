@@ -18,6 +18,8 @@ export interface Plan {
   monthlyPrice?: number;
   annualPrice?: number | null;
   lifetimePrice?: number | null;
+  /** Household toolkit (auto-handoff etc.). Optional for rolling-deploy compatibility. */
+  householdToolkit?: boolean;
 }
 
 /** Billing cadence accepted by POST /billing/checkout. */

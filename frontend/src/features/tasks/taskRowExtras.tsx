@@ -14,11 +14,16 @@ import { SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 
-export function UpForGrabsBadge() {
+/**
+ * `escalated` marks an occurrence that auto-handoff put up for grabs (ADR
+ * 0018) — same badge, one extra word, so the reader knows the app asked and
+ * no housemate did.
+ */
+export function UpForGrabsBadge({ escalated = false }: { escalated?: boolean }) {
   const { t } = useTranslation();
   return (
     <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-300/70">
-      {t('tasks.upForGrabs')}
+      {escalated ? t('tasks.upForGrabsEscalated') : t('tasks.upForGrabs')}
     </span>
   );
 }

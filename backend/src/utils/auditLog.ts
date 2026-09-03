@@ -23,6 +23,7 @@ export type AuditEvent =
   | 'household.member_added'
   | 'household.member_removed'
   | 'household.role_changed'
+  | 'household.settings_changed'
   | 'billing.subscription_changed'
   | 'billing.upgrade_requested'
   // Outbound-mail deliverability (services/emailSuppression.ts). Suppressing

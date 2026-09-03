@@ -155,6 +155,11 @@ export interface Task {
    *  another member; null means explicit or unassigned. */
   assignmentSource?: 'space_default' | 'move_day' | null;
   notes: string | null;
+  /** Auto-handoff marker: `escalatedForDue === nextDue` means this occurrence
+   *  was put up for grabs by the app and nobody has claimed it since. */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  escalatedFrom?: string | null;
   createdBy: string;
   createdAt: string;
 }

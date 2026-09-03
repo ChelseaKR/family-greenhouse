@@ -45,8 +45,10 @@ export interface PlanFeatures {
   /**
    * Coordination features gated by tier (brief §7: Garden's line is drawn on
    * homes and hands, not collection size). `householdToolkit` covers
-   * double-care detection and schedule-drift suggestions — signals only a
-   * shared household can produce, served at $0 marginal cost.
+   * auto-handoff escalation, double-care detection and schedule-drift
+   * suggestions — signals only a shared household can produce, served at $0
+   * marginal cost. Rotation (brief §4.6) is deliberately NOT behind this
+   * flag — see ADR 0018.
    */
   householdToolkit: boolean;
   /**
@@ -291,6 +293,7 @@ export interface PlanSummary {
   description: string;
   maxPlants: number;
   maxMembers: number;
+  householdToolkit: boolean;
   monthlyPrice?: number;
   annualPrice?: number | null;
   lifetimePrice?: number | null;
@@ -310,6 +313,7 @@ export function planSummary(plan: Plan, includePrices = false): PlanSummary {
     description: plan.description,
     maxPlants: plan.maxPlants,
     maxMembers: plan.maxMembers,
+    householdToolkit: plan.features.householdToolkit,
   };
 
   if (includePrices) {

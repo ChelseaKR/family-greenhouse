@@ -18,6 +18,7 @@ vi.mock('../../../src/services/sitterService.js');
 vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
 }));
+vi.mock('../../../src/services/escalation.js');
 
 function buildEvent(
   claims: Record<string, unknown> | null,
@@ -1057,6 +1058,123 @@ describe('households handler', () => {
     expect(JSON.parse(retry.body)).toMatchObject({ id: 'hh-9', name: 'Home' });
     expect(householdService.addMember).toHaveBeenCalledOnce();
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('households handler — PUT /households/{id}/escalation (ADR 0018)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Same membership/rate-limit reset as the main block: this describe is a
+    // sibling, so it must warm the admin caller itself.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
+  });
+
+  function escalationEvent(claims: Record<string, unknown>, body: unknown, id = 'hh-1') {
+    return buildEvent(claims, {
+      httpMethod: 'PUT',
+      pathParameters: { id },
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  it('stores a valid rule for an admin on a toolkit plan', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockResolvedValueOnce(7);
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ escalateAfterDays: 7 });
+    expect(escalation.setEscalationRule).toHaveBeenCalledWith('hh-1', 7);
+  });
+
+  it('clears the rule with null', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockResolvedValueOnce(null);
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: null }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(escalation.setEscalationRule).toHaveBeenCalledWith('hh-1', null);
+  });
+
+  it('enforces the 5-day floor at the edge (400) before touching the service', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 4 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it('is admin-only (403 for a member)', async () => {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const escalation = await import('../../../src/services/escalation.js');
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(memberClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it('is plan-gated: 402 without the household toolkit, and nothing is stored', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+    } as never);
+    const escalation = await import('../../../src/services/escalation.js');
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    expect(JSON.parse(res.body).message).toMatch(/household toolkit/);
+    expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it('refuses another household’s id (403)', async () => {
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }, 'hh-other'),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('maps the service range error to 400 (defence in depth)', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockRejectedValueOnce(
+      Object.assign(new Error('too low'), { name: 'EscalationRuleRangeError' })
+    );
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
   });
 });
 

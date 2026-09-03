@@ -22,6 +22,13 @@ export interface Household {
    *  via the household settings page; off by default — we don't ask for
    *  geo without an explicit reason. */
   location?: HouseholdLocation | null;
+  /**
+   * Auto-handoff rule (ADR 0018): a task this many days overdue goes up for
+   * grabs and the rest of the household is told once. null/absent = OFF.
+   * The server enforces a floor of 5 days (escalation.ts) so a client can
+   * never turn the feature into hourly nagging.
+   */
+  escalateAfterDays?: number | null;
   createdAt: string;
   createdBy: string;
 }
@@ -170,6 +177,16 @@ export interface Task {
    *  Seasonal Move Day's round-robin split (services/moveDay.ts). */
   assignmentSource: 'space_default' | 'move_day' | null;
   notes: string | null;
+  /**
+   * Auto-handoff marker (ADR 0018). Set once per occurrence: `escalatedForDue`
+   * pins the `nextDue` the escalation fired for, so the hourly scan can never
+   * escalate the same lapse twice and a completion (which advances nextDue)
+   * naturally re-arms it. Absent on rows that were never escalated.
+   */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  /** Who held the task when it was escalated (null when it was unassigned). */
+  escalatedFrom?: string | null;
   createdBy: string;
   createdAt: string;
 }

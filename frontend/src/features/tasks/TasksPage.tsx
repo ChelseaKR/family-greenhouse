@@ -558,7 +558,9 @@ function TaskSection({
                   <TaskLocation label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {!task.assignedTo && <UpForGrabsBadge />}
+                      {!task.assignedTo && (
+                        <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
+                      )}
                       {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
                       {skipReason && (
                         <ClimateSkipChip

@@ -6,6 +6,7 @@ import {
   isIntervalOffered,
   isIntervalWithdrawn,
   planSummary,
+  hasHouseholdToolkit,
   type Plan,
 } from '../../../src/models/plans.js';
 
@@ -28,6 +29,18 @@ describe('plan catalog', () => {
       sitterLinksActive: 25,
       tags: Number.POSITIVE_INFINITY,
     });
+  });
+
+  it('the household toolkit (auto-handoff) is on both paid tiers and off on the free tier', () => {
+    // ADR 0018: escalation is the paid layer on top of free claiming; rotation
+    // is NOT behind this flag.
+    expect(hasHouseholdToolkit(PLANS.seedling)).toBe(false);
+    expect(hasHouseholdToolkit(PLANS.garden)).toBe(true);
+    expect(hasHouseholdToolkit(PLANS.greenhouse)).toBe(true);
+    // Published on the summary so the client can render a locked control
+    // without hardcoding tier names.
+    expect(planSummary(PLANS.seedling).householdToolkit).toBe(false);
+    expect(planSummary(PLANS.garden).householdToolkit).toBe(true);
   });
 
   it('only paid tiers carry a Stripe price env var; free tier has none', () => {

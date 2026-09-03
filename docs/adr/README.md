@@ -32,6 +32,7 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 | [0015](0015-the-away-kit.md)                                       | The Away Kit: sitter links as the paid differentiator  | Accepted |
 | [0016](0016-plant-tags-account-free-care-actions.md)               | Plant Tags: account-free care actions                  | Accepted |
 | [0017](0017-cross-home-today-is-a-work-queue-not-a-global-view.md) | Cross-home Today is a work queue, not a global view    | Accepted |
+| [0018](0018-one-assignment-resolver-for-escalation-and-rotation.md) | One assignment resolver for escalation and rotation    | Accepted |
 | [0021](0021-email-rendering-and-usefulness.md)                     | HTML email, localized, with one-click unsubscribe      | Accepted |
 | [0022](0022-email-deliverability-and-bounce-handling.md)           | Email deliverability and bounce handling               | Accepted |
 | [0023](0023-billing-lifecycle-emails.md)                           | Billing lifecycle emails                               | Accepted |
