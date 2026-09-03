@@ -101,6 +101,59 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   same reason. Re-measured and re-dated alongside the file counts the ruleset
   guard adds.
 
+## [0.23.3] - 2026-09-02
+
+### Added
+
+- Paid plans are available on the hosted site. The commercial hold recorded in
+  `commercial-status.json` was lifted on 2026-09-01, and this release opens the
+  second, independent gate: `payments_enabled = "1"` in the production
+  environment. Both must be open for any payment activity — the runtime gate
+  alone is the fastest kill switch, since returning it to `"0"` and applying
+  stops all new purchases without a code change or a frontend deploy, and fails
+  before Stripe or DynamoDB is reached.
+- The paid-plan purchase surface itself: `PaidPlanGrid`, the month/year/lifetime
+  interval selector, and admin-gated checkout and billing-portal controls in
+  Settings. The billing API existed but was unreachable — nothing in the
+  frontend called `POST /billing/checkout` or `/billing/portal` — so lifting the
+  flag alone would have produced an empty pricing page rather than a store. The
+  code shipped in `v0.23.2` with both gates shut; this release turns it on.
+- `payments_enabled`, wired root → module → Lambda environment, defaulting `"0"`
+  at every layer and validated to exactly `"0"` or `"1"` so a tfvars typo fails
+  the plan instead of silently disabling a launch that looks enabled. Three
+  preconditions on `terraform_data.commercial_gate_guard` fail the plan when the
+  runtime gate opens without the repository gate, with blank Stripe
+  configuration, or with a live key against unconfirmed price ids. They are
+  preconditions rather than `check` blocks deliberately: a check block only
+  warns, and CI runs `plan -out` then `apply tfplan`, so nobody would read it.
+
+### Fixed
+
+- A lifetime purchase can no longer be destroyed by a later subscription. A
+  one-time purchase has no subscription id, which made lifetime ownership
+  invisible to both guards that prevent paying twice — so a household that paid
+  $149 outright could be sold a subscription for a tier it already owned, and
+  cancelling that subscription dropped it to Seedling with no refund path. The
+  tier is now recorded durably as `lifetimePlanId` and acts as an entitlement
+  floor that subscription events never clear.
+- A cancelled subscription now says so. Stripe does not delete a cancelled
+  subscription immediately — it sets `cancel_at_period_end` and keeps serving
+  until the period ends, so `status` stays `active`/`trialing` throughout.
+  Nothing read that flag, so cancelling produced no visible change anywhere in
+  the app and reasonably looked like it had failed.
+- Entitlement is re-read after returning from checkout. It is the one piece of
+  state a webhook changes behind the user's back, and the app-wide query
+  defaults (five-minute `staleTime`, `refetchOnWindowFocus` off) meant a
+  household that had just paid kept seeing its old plan — which invites paying
+  again.
+- IAM resources get a tag set IAM will accept. The cost-allocation tags
+  deliberately carry both `Project`/`project` and `Environment`/`environment`
+  because Cost Explorer tag keys are case-sensitive; IAM compares them
+  case-insensitively and rejects the pair. It only fires on create, so it stayed
+  latent until an environment was rebuilt from an empty state — and would have
+  failed the same way for a production rebuild, making it a disaster-recovery
+  defect rather than a staging inconvenience.
+
 ## [0.23.2] - 2026-08-18
 
 ### Changed
