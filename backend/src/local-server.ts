@@ -1406,7 +1406,9 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
 
 // --- Plant-sitter links (authed management) -------------------------------
 // Mirrors handlers/households/handler.ts: createSitterLink / listSitterLinks /
-// revokeSitterLink. Admin-gated, like invites.
+// revokeSitterLink. Open to every household member (ADR 0015); an admin can
+// revoke any link, a member only their own; create/revoke are named in the
+// activity feed.
 
 /** Non-secret view of a sitter link (no token). Mirrors toSummary. */
 function sitterSummary(link: SitterLink) {
@@ -1420,7 +1422,6 @@ app.post(
   '/households/:id/sitter-links',
   authMiddleware,
   requireHousehold,
-  requireAdmin,
   validateBody(createSitterLinkSchema),
   (req, res) => {
     const user = (req as any).user;
@@ -1442,6 +1443,18 @@ app.post(
       label: body.label ?? null,
     };
     db.sitterLinks.set(token, link);
+    recordActivity({
+      type: 'sitter_link.created',
+      householdId: req.params.id,
+      actorId: user.userId,
+      actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+      payload: {
+        linkId: link.id,
+        label: link.label,
+        startsAt: link.startsAt,
+        expiresAt: link.expiresAt,
+      },
+    });
 
     const baseUrl =
       process.env.FRONTEND_URL ||
@@ -1453,45 +1466,50 @@ app.post(
 );
 
 // GET /households/:id/sitter-links
-app.get(
-  '/households/:id/sitter-links',
-  authMiddleware,
-  requireHousehold,
-  requireAdmin,
-  (req, res) => {
-    const user = (req as any).user;
-    if (user.householdId !== req.params.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const links = [...db.sitterLinks.values()]
-      .filter((l) => l.householdId === req.params.id)
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-      .map(sitterSummary);
-    res.json(links);
+app.get('/households/:id/sitter-links', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
   }
-);
+  const links = [...db.sitterLinks.values()]
+    .filter((l) => l.householdId === req.params.id)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map(sitterSummary);
+  res.json(links);
+});
 
 // DELETE /households/:id/sitter-links/:linkId
-app.delete(
-  '/households/:id/sitter-links/:linkId',
-  authMiddleware,
-  requireHousehold,
-  requireAdmin,
-  (req, res) => {
-    const user = (req as any).user;
-    if (user.householdId !== req.params.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const target = [...db.sitterLinks.values()].find(
-      (l) => l.householdId === req.params.id && l.id === req.params.linkId
-    );
-    if (!target) {
-      return res.status(404).json({ message: 'Sitter link not found' });
-    }
-    target.status = 'revoked';
-    res.status(204).end();
+app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
   }
-);
+  const target = [...db.sitterLinks.values()].find(
+    (l) => l.householdId === req.params.id && l.id === req.params.linkId
+  );
+  if (!target) {
+    return res.status(404).json({ message: 'Sitter link not found' });
+  }
+  if (user.householdRole !== 'admin' && target.createdBy !== user.userId) {
+    return res.status(403).json({
+      message: 'Only the member who created this sitter link, or a household admin, can revoke it',
+    });
+  }
+  target.status = 'revoked';
+  recordActivity({
+    type: 'sitter_link.revoked',
+    householdId: req.params.id,
+    actorId: user.userId,
+    actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+    payload: {
+      linkId: target.id,
+      label: target.label,
+      startsAt: target.startsAt,
+      expiresAt: target.expiresAt,
+    },
+  });
+  res.status(204).end();
+});
 
 /** Token → link only if active and within [startsAt, expiresAt]. Generic
  *  null on any miss, mirroring sitterService.getActiveLink. */

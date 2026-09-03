@@ -62,6 +62,15 @@ export interface CreateSitterLinkData {
   label?: string;
 }
 
+/** A sitter link opened or closed — the non-secret id, label and window.
+ *  Never the token. Mirrors the backend payload. */
+export interface SitterLinkActivityPayload {
+  linkId: string;
+  label: string | null;
+  startsAt: string;
+  expiresAt: string;
+}
+
 export const householdService = {
   async getHousehold(id: string): Promise<HouseholdWithMembers> {
     const response = await api.get<HouseholdWithMembers>(`/households/${id}`);
@@ -223,6 +232,8 @@ export interface ActivityPayloadByType {
   'photo.uploaded': { plantId: string; photoId: string };
   'member.joined': { role: 'admin' | 'member' };
   'member.left': { role?: 'admin' | 'member' };
+  'sitter_link.created': SitterLinkActivityPayload;
+  'sitter_link.revoked': SitterLinkActivityPayload;
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -246,6 +257,8 @@ export const ACTIVITY_TYPES = [
   'photo.uploaded',
   'member.joined',
   'member.left',
+  'sitter_link.created',
+  'sitter_link.revoked',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

@@ -9,13 +9,18 @@ import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { formatDate } from '@/i18n/format';
+import { useAuthStore } from '@/store/authStore';
+import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { groupSitterLinks, sitterLinkState } from './sitterLinkState';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Admin-only UI to create, copy, and revoke no-account plant-sitter links.
+ * UI for ANY household member to create, copy, and revoke no-account
+ * plant-sitter links (ADR 0015 — the traveller is rarely the admin). The
+ * revocation model is visible here: an admin may revoke every link, a member
+ * only the ones they created, and a link someone else made says who made it.
  * Mirrors the invite-link pattern: the secret token/URL is shown exactly once
  * (right after creation) and never again — the list only shows the link's
  * window + status, so a leaked screenshot of the management page can't be used
@@ -28,9 +33,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * reports each link's real state rather than its revocation flag — see
  * ./sitterLinkState.
  */
-export function SitterLinksCard({ householdId }: { householdId: string }) {
+interface SitterLinksCardProps {
+  householdId: string;
+  /** Household roster, used only to name who created a link. */
+  members?: ReadonlyArray<{ userId: string; name: string }>;
+}
+
+export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const myUserId = useAuthStore((s) => s.user?.id ?? null);
+  const isAdmin = useIsHouseholdAdmin();
+  const creatorName = (userId: string): string =>
+    members.find((m) => m.userId === userId)?.name ?? t('household.sitterLinks.anotherMember');
   const [created, setCreated] = useState<CreatedSitterLink | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -217,12 +232,20 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
           <ul className="mt-2 divide-y divide-primary-100/60 rounded-lg border border-primary-100/70">
             {currentLinks.map((link) => {
               const scheduled = sitterLinkState(link) === 'scheduled';
+              const mine = link.createdBy === myUserId;
+              // Admins revoke anything; a member only what they created.
+              const canRevoke = isAdmin || mine;
               return (
                 <li key={link.id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-900">
                       {link.label || t('household.sitterLinks.untitled')}
                     </p>
+                    {!mine && (
+                      <p className="text-xs text-gray-600">
+                        {t('household.sitterLinks.sharedBy', { name: creatorName(link.createdBy) })}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-600">
                       {scheduled
                         ? t('household.sitterLinks.windowScheduled', {
@@ -250,16 +273,22 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
                         ? t('household.sitterLinks.badgeScheduled')
                         : t('household.sitterLinks.badgeActive')}
                     </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      isLoading={revokeMutation.isPending && revokeMutation.variables === link.id}
-                      onClick={() => revokeMutation.mutate(link.id)}
-                      leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
-                      aria-label={`Revoke sitter link ${link.label || ''}`.trim()}
-                    >
-                      Revoke
-                    </Button>
+                    {canRevoke ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        isLoading={revokeMutation.isPending && revokeMutation.variables === link.id}
+                        onClick={() => revokeMutation.mutate(link.id)}
+                        leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
+                        aria-label={`Revoke sitter link ${link.label || ''}`.trim()}
+                      >
+                        Revoke
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-gray-600">
+                        {t('household.sitterLinks.revokeNotYours')}
+                      </span>
+                    )}
                   </div>
                 </li>
               );

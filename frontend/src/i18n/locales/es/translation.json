@@ -24,6 +24,8 @@
     "anotherPlant": "otra planta",
     "anotherHousehold": "otro hogar",
     "generic": "{{actor}} realizó una actualización",
+    "sitterLinkCreated": "{{actor}} compartió un enlace de cuidador ({{label}}) que funciona hasta el {{end}}",
+    "sitterLinkRevoked": "{{actor}} desactivó un enlace de cuidador ({{label}})",
     "imported_one": "{{actor}} importó {{count}} planta",
     "imported_many": "{{actor}} importó {{count}} plantas",
     "imported_other": "{{actor}} importó {{count}} plantas",
@@ -644,7 +646,10 @@
       "badgeScheduled": "Programado",
       "endedHeading": "Terminados hace poco",
       "endedBody": "Estos periodos se cerraron solos. Ya no dan acceso a nada.",
-      "endedOn": "{{label}}: terminó el {{date}}"
+      "endedOn": "{{label}}: terminó el {{date}}",
+      "sharedBy": "Compartido por {{name}}",
+      "anotherMember": "otro miembro",
+      "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo"
     }
   },
   "sitter": {

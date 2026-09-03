@@ -49,6 +49,16 @@ export interface PlantLifecycleActivityPayload extends PlantIdentityActivityPayl
   previousStatus?: 'active' | 'died' | 'gave_away' | 'archived';
 }
 
+/** A sitter link opened or closed. Never carries the token — only the
+ *  non-secret id, the friendly label and the window, so the feed can say
+ *  WHO opened a door to the household and for how long. */
+export interface SitterLinkActivityPayload {
+  linkId: string;
+  label: string | null;
+  startsAt: string;
+  expiresAt: string;
+}
+
 /**
  * Payload contract keyed by the durable event discriminator. Keeping this as
  * an explicit map lets both the event envelope and producer input be derived
@@ -79,6 +89,8 @@ export interface ActivityPayloadByType {
   'photo.uploaded': { plantId: string; photoId: string };
   'member.joined': { role: 'admin' | 'member' };
   'member.left': { role?: 'admin' | 'member' };
+  'sitter_link.created': SitterLinkActivityPayload;
+  'sitter_link.revoked': SitterLinkActivityPayload;
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -102,6 +114,8 @@ export const ACTIVITY_TYPES = [
   'photo.uploaded',
   'member.joined',
   'member.left',
+  'sitter_link.created',
+  'sitter_link.revoked',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

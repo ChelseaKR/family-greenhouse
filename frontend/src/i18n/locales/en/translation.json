@@ -23,6 +23,8 @@
     "anotherPlant": "another plant",
     "anotherHousehold": "another household",
     "generic": "{{actor}} made an update",
+    "sitterLinkCreated": "{{actor}} shared a sitter link ({{label}}) that works until {{end}}",
+    "sitterLinkRevoked": "{{actor}} turned off a sitter link ({{label}})",
     "imported_one": "{{actor}} imported {{count}} plant",
     "imported_other": "{{actor}} imported {{count}} plants",
     "importedUnknown": "{{actor}} imported plants",
@@ -630,7 +632,10 @@
       "badgeScheduled": "Scheduled",
       "endedHeading": "Recently ended",
       "endedBody": "These windows closed on their own. They no longer open anything.",
-      "endedOn": "{{label}} — ended {{date}}"
+      "endedOn": "{{label}} — ended {{date}}",
+      "sharedBy": "Shared by {{name}}",
+      "anotherMember": "another member",
+      "revokeNotYours": "Only its creator or an admin can revoke this"
     }
   },
   "sitter": {

@@ -1,13 +1,32 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { SitterLinksCard } from '@/features/household/SitterLinksCard';
+import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
 
 const API = 'http://localhost:4000';
 const DAY = 24 * 60 * 60 * 1000;
+
+/** Sign the card's viewer in as `role` of hh-1 (the role the backend resolves). */
+function signInAs(role: 'admin' | 'member', id = 'user-1') {
+  useAuthStore.setState({
+    user: { id, email: 'me@example.com', name: 'Me', householdId: 'hh-1', householdRole: role },
+    isAuthenticated: true,
+    isLoading: false,
+  } as never);
+  server.use(
+    http.get(`${API}/me/households`, () =>
+      HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role, joinedAt: '' }])
+    )
+  );
+}
+
+beforeEach(() => {
+  useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false } as never);
+});
 
 /**
  * The card's shared-links section is the only place an admin can revoke a
@@ -19,7 +38,12 @@ const DAY = 24 * 60 * 60 * 1000;
  * access is open right now, so the state each row reports has to be the real
  * one — a row keeps `status: 'active'` for days after its window closes.
  */
-function renderCard(links: unknown[] | 'fail') {
+function renderCard(
+  links: unknown[] | 'fail',
+  role: 'admin' | 'member' = 'admin',
+  members: Array<{ userId: string; name: string }> = []
+) {
+  signInAs(role);
   server.use(
     http.get(`${API}/households/hh-1/sitter-links`, () =>
       links === 'fail' ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(links)
@@ -30,7 +54,7 @@ function renderCard(links: unknown[] | 'fail') {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SitterLinksCard householdId="hh-1" />
+      <SitterLinksCard householdId="hh-1" members={members} />
     </QueryClientProvider>
   );
 }
@@ -52,6 +76,61 @@ describe('SitterLinksCard existing-links read', () => {
       screen.queryByRole('button', { name: 'Revoke sitter link Old' })
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a member a Revoke control only on links they created, and names other creators', async () => {
+    renderCard(
+      [
+        {
+          id: 'l1',
+          label: 'Mine',
+          status: 'active',
+          createdBy: 'user-1',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+        {
+          id: 'l2',
+          label: 'Theirs',
+          status: 'active',
+          createdBy: 'user-2',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+      ],
+      'member',
+      [{ userId: 'user-2', name: 'Sam' }]
+    );
+
+    expect(await screen.findByText('Links you’ve shared')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke sitter link Mine' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Revoke sitter link Theirs' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Shared by Sam')).toBeInTheDocument();
+    expect(screen.getByText(/only its creator or an admin can revoke/i)).toBeInTheDocument();
+  });
+
+  it('lets an admin revoke every link, including ones other members created', async () => {
+    renderCard(
+      [
+        {
+          id: 'l2',
+          label: 'Theirs',
+          status: 'active',
+          createdBy: 'user-2',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+      ],
+      'admin'
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Revoke sitter link Theirs' })
+    ).toBeInTheDocument();
+    // Roster unknown for that id → honest fallback, never a made-up name.
+    expect(screen.getByText('Shared by another member')).toBeInTheDocument();
   });
 
   it('shows nothing extra for a genuinely empty list', async () => {

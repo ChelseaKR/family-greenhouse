@@ -859,7 +859,7 @@ paths:
 
   /households/{id}/sitter-links:
     post:
-      summary: Create a no-account, time-boxed plant-sitter link (admin only). Returns the token/URL exactly once.
+      summary: Create a no-account, time-boxed plant-sitter link (any household member). Returns the token/URL exactly once. The window and the number of live links are capped by the household's plan (402 over the cap). Every create is named in the activity feed.
       tags: [Households]
       parameters:
         - $ref: '#/components/parameters/HouseholdId'
@@ -891,7 +891,7 @@ paths:
                   label: { type: string, nullable: true }
         '403': { $ref: '#/components/responses/Forbidden' }
     get:
-      summary: List the household's plant-sitter links (admin only). Never returns tokens.
+      summary: List the household's plant-sitter links (any household member). Never returns tokens.
       tags: [Households]
       parameters:
         - $ref: '#/components/parameters/HouseholdId'
@@ -901,7 +901,7 @@ paths:
 
   /households/{id}/sitter-links/{linkId}:
     delete:
-      summary: Revoke a plant-sitter link by its non-secret id (admin only). Idempotent.
+      summary: Revoke a plant-sitter link by its non-secret id. Admins may revoke any of the household's links; a member only the ones they created (403 otherwise). Idempotent.
       tags: [Households]
       parameters:
         - $ref: '#/components/parameters/HouseholdId'

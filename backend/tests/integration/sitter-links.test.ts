@@ -280,3 +280,83 @@ describe('public sitter completion (no auth)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+/** A confirmed non-admin member of the seed household; returns their token. */
+async function loginAsSeedMember(email = 'member@example.com', name = 'Member Person') {
+  const fixture = provisionLocalUserFixture({ email, password: 'password-123', name });
+  fixture.householdId = seedHouseholdId;
+  fixture.householdRole = 'member';
+  fixture.memberships.push({
+    householdId: seedHouseholdId,
+    role: 'member',
+    joinedAt: new Date().toISOString(),
+  });
+  const login = await request(app).post('/auth/login').send({ email, password: 'password-123' });
+  expect(login.status).toBe(200);
+  return login.body.accessToken as string;
+}
+
+describe('sitter links are open to every member; revocation is creator-or-admin', () => {
+  it('a plain member can create and list links, and the feed names them', async () => {
+    const member = await loginAsSeedMember();
+    const created = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${member}`)
+      .send({ expiresAt: inFuture(5), label: 'While I am away' });
+    expect(created.status).toBe(201);
+    expect(created.body.token).toMatch(/^[0-9a-f]{64}$/);
+
+    const listed = await request(app)
+      .get(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(listed.status).toBe(200);
+    expect(listed.body.map((l: { id: string }) => l.id)).toContain(created.body.id);
+
+    const feed = await request(app)
+      .get(`/households/${seedHouseholdId}/activity`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(feed.status).toBe(200);
+    const event = feed.body.find(
+      (e: { type: string; payload: { linkId: string } }) =>
+        e.type === 'sitter_link.created' && e.payload.linkId === created.body.id
+    );
+    expect(event).toBeDefined();
+    expect(event.actorName).toBe('Member Person');
+    expect(JSON.stringify(event)).not.toContain(created.body.token);
+  });
+
+  it('a member can revoke their own link but not another member’s; an admin can revoke any', async () => {
+    const admin = await loginAsSeed();
+    const member = await loginAsSeedMember();
+
+    const mine = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${member}`)
+      .send({ expiresAt: inFuture(5) });
+    const theirs = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ expiresAt: inFuture(5) });
+    expect(mine.status).toBe(201);
+    expect(theirs.status).toBe(201);
+
+    const forbidden = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${theirs.body.id}`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(forbidden.status).toBe(403);
+    // The other member's link still works after the refused attempt.
+    expect((await request(app).get(`/sitter/${theirs.body.token}`)).status).toBe(200);
+
+    const own = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${mine.body.id}`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(own.status).toBe(204);
+    expect((await request(app).get(`/sitter/${mine.body.token}`)).status).toBe(404);
+
+    const byAdmin = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${theirs.body.id}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(byAdmin.status).toBe(204);
+    expect((await request(app).get(`/sitter/${theirs.body.token}`)).status).toBe(404);
+  });
+});

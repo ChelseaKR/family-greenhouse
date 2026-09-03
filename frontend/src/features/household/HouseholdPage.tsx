@@ -202,9 +202,11 @@ export function HouseholdPage() {
         </Card>
       )}
 
-      {/* Plant-sitter links — admin-only, like invites. A separate component
-          so the create/copy/revoke state stays self-contained. */}
-      {isAdmin && householdId && <SitterLinksCard householdId={householdId} />}
+      {/* Plant-sitter links — every member, not only admins (ADR 0015): the
+          traveller is rarely the admin. A separate component so the
+          create/copy/revoke state stays self-contained; it decides per link
+          whether this member may revoke it. */}
+      {householdId && <SitterLinksCard householdId={householdId} members={household.members} />}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

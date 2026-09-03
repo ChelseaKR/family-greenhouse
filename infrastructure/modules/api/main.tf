@@ -860,8 +860,9 @@ locals {
     "GET /households/{id}/year-in-review"                 = { group = "households", auth = "jwt" }
     "PUT /households/{householdId}/members/{userId}/role" = { group = "households", auth = "jwt" }
     "DELETE /households/{householdId}/members/{userId}"   = { group = "households", auth = "jwt" }
-    # Sitter-link management (authed, admin-gated). Create returns the token
-    # once; list/revoke never expose it. The public sitter routes are above.
+    # Sitter-link management (authed, any household member — ADR 0015; the
+    # handler scopes revoke to the creator or an admin). Create returns the
+    # token once; list/revoke never expose it. The public sitter routes are above.
     "POST /households/{id}/sitter-links"            = { group = "households", auth = "jwt" }
     "GET /households/{id}/sitter-links"             = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/sitter-links/{linkId}" = { group = "households", auth = "jwt" }

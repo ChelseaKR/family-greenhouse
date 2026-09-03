@@ -566,8 +566,13 @@ export const removeMember = createHandler(
 // A household member generates a no-account, time-boxed link before they
 // travel; a sitter opens it (the public /sitter/{token} routes live in the
 // tasks group) to see due tasks and check them off. These three routes are
-// the create / list / revoke surface, gated to household ADMINS — same posture
-// as invites, since both mint a credential that grants outside access.
+// the create / list / revoke surface, open to EVERY household member (ADR
+// 0015): the traveller is rarely the admin, and a sitter link grants only a
+// time-boxed, PII-free task view — far less than an invite, which stays
+// admin-only. Widening who can mint tokens is balanced by the revocation
+// model: an admin can revoke any of the household's links, a member only
+// the ones they created, and every create/revoke is an activity event that
+// names the actor so the household sees who opened a door and for how long.
 
 // POST /households/{id}/sitter-links
 //
@@ -610,6 +615,26 @@ export const createSitterLink = createHandler(
       metadata: { stage: 'sitter_link_created', linkId: link.id, expiresAt: link.expiresAt },
     });
 
+    // Name the creator in the household feed. Any member can mint a link now,
+    // so the rest of the household must be able to see who did and until when.
+    const actorName = await cognitoUsers.getUserName(user.userId, user.email);
+    activity
+      .recordActivity({
+        type: 'sitter_link.created',
+        householdId,
+        actorId: user.userId,
+        actorName,
+        payload: {
+          linkId: link.id,
+          label: link.label,
+          startsAt: link.startsAt,
+          expiresAt: link.expiresAt,
+        },
+      })
+      .catch((err) => {
+        logger.warn({ err }, 'activity_record_failed');
+      });
+
     // The token leaves the building exactly once, here.
     return createdResponse({
       ...sitterService.toSummary(link),
@@ -620,7 +645,6 @@ export const createSitterLink = createHandler(
 )
   .use(authMiddleware())
   .use(requireHousehold())
-  .use(requireAdmin())
   .use(validateBody(createSitterLinkSchema));
 
 // GET /households/{id}/sitter-links
@@ -642,13 +666,13 @@ export const listSitterLinks = createHandler(
   }
 )
   .use(authMiddleware())
-  .use(requireHousehold())
-  .use(requireAdmin());
+  .use(requireHousehold());
 
 // DELETE /households/{id}/sitter-links/{linkId}
 //
 // Revoke a link by its non-secret id. Scoped to the household in the service,
-// so one household can never revoke another's link. Idempotent.
+// so one household can never revoke another's link. Admins may revoke any of
+// the household's links; a member only the ones they created. Idempotent.
 export const revokeSitterLink = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -660,6 +684,16 @@ export const revokeSitterLink = createHandler(
     if (user.householdId !== householdId) {
       throw createHttpError(403, 'Access denied');
     }
+    const target = await sitterService.findSitterLink(householdId, linkId);
+    if (!target) {
+      throw createHttpError(404, 'Sitter link not found');
+    }
+    if (user.householdRole !== 'admin' && target.createdBy !== user.userId) {
+      throw createHttpError(
+        403,
+        'Only the member who created this sitter link, or a household admin, can revoke it'
+      );
+    }
     const revoked = await sitterService.revokeSitterLink(householdId, linkId);
     if (!revoked) {
       throw createHttpError(404, 'Sitter link not found');
@@ -670,12 +704,28 @@ export const revokeSitterLink = createHandler(
       householdId,
       metadata: { stage: 'sitter_link_revoked', linkId },
     });
+    const actorName = await cognitoUsers.getUserName(user.userId, user.email);
+    activity
+      .recordActivity({
+        type: 'sitter_link.revoked',
+        householdId,
+        actorId: user.userId,
+        actorName,
+        payload: {
+          linkId: target.id,
+          label: target.label,
+          startsAt: target.startsAt,
+          expiresAt: target.expiresAt,
+        },
+      })
+      .catch((err) => {
+        logger.warn({ err }, 'activity_record_failed');
+      });
     return noContentResponse();
   }
 )
   .use(authMiddleware())
-  .use(requireHousehold())
-  .use(requireAdmin());
+  .use(requireHousehold());
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({

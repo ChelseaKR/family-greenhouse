@@ -182,6 +182,17 @@ export async function listSitterLinks(householdId: string): Promise<SitterLink[]
 }
 
 /**
+ * Look a link up by its non-secret id within ONE household's partition. Used
+ * by the revoke handler to decide whether the caller may revoke it (admins
+ * may revoke any of the household's links; a member only their own). Null
+ * when the household has no such link — never reaches across households.
+ */
+export async function findSitterLink(householdId: string, id: string): Promise<SitterLink | null> {
+  const links = await listSitterLinks(householdId);
+  return links.find((l) => l.id === id) ?? null;
+}
+
+/**
  * Revoke a link by its opaque id, scoped to the household so one household can
  * never revoke another's link. Returns false when no matching active/revoked
  * row exists (→ 404). Idempotent: revoking an already-revoked link succeeds.
