@@ -1,5 +1,10 @@
+import { Link } from 'react-router';
+import { Trans, useTranslation } from 'react-i18next';
 import { LegalShell } from './LegalShell';
+import { HELLO_EMAIL, HELLO_MAILTO, SUPPORT_EMAIL, SUPPORT_MAILTO } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
+
+const AWS_DATA_PRIVACY_URL = 'https://aws.amazon.com/compliance/data-privacy/';
 
 /**
  * Privacy policy. Honest, plain-language version — not the
@@ -11,207 +16,154 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * App-store reviewers (Apple/Google) expect a public privacy URL; this
  * is it. Keep the language readable enough that a non-lawyer can
  * understand what they're agreeing to.
+ *
+ * Every sentence lives in the `legal.privacy.*` catalog keys; this file is
+ * structure only. Wording changes go in both locales (docs/i18n.md).
  */
 export function PrivacyPage() {
+  const { t } = useTranslation();
   useMetaTags({
-    title: 'Privacy — Family Greenhouse',
-    description: 'How Family Greenhouse handles your data. Plain language.',
+    title: t('legal.privacy.metaTitle'),
+    description: t('legal.privacy.metaDescription'),
   });
 
+  const strong = { strong: <strong /> };
+  const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
+
   return (
-    <LegalShell title="Privacy" effectiveDate="September 2, 2026">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-02">
       <p className="lead">
-        This page explains what data Family Greenhouse collects, why, and what you can do about it.
-        We&rsquo;ve deliberately written it as plain text rather than a template — if anything is
-        unclear, email <a href="mailto:hello@familygreenhouse.net">hello@familygreenhouse.net</a>{' '}
-        and we&rsquo;ll fix the wording.
+        <Trans
+          i18nKey="legal.privacy.lead"
+          values={{ helloEmail: HELLO_EMAIL }}
+          components={{ helloLink: <a href={HELLO_MAILTO}>{HELLO_EMAIL}</a> }}
+        />
       </p>
 
-      <h2>What we collect</h2>
-      <p>To run the app, we collect:</p>
+      <h2>{t('legal.privacy.collect.heading')}</h2>
+      <p>{t('legal.privacy.collect.intro')}</p>
       <ul>
         <li>
-          <strong>Account info</strong> — email, password (hashed), and display name. Your password
-          is only ever held by AWS Cognito. Your email and display name are stored in Cognito and
-          also copied onto your membership record in our database, so the app can show who is in a
-          household and reach you about it.
+          <Trans i18nKey="legal.privacy.collect.account" components={strong} />
         </li>
         <li>
-          <strong>Plant + task data</strong> — every plant, task, and completion you record, along
-          with photos you upload. Stored in AWS DynamoDB and S3 in a US region (us-east-1).
+          <Trans i18nKey="legal.privacy.collect.plantData" components={strong} />
         </li>
         <li>
-          <strong>Optional household location</strong> — only if you set one. Used to fetch local
-          weather for climate-aware care tips. We store the city name and the geocoded coordinates
-          we got back from the geocoder; we do not request precise device geolocation.
+          <Trans i18nKey="legal.privacy.collect.location" components={strong} />
         </li>
         <li>
-          <strong>Optional phone number</strong> — only if you opt in to SMS reminders, and only
-          after you verify it. Turning SMS reminders back off stops the messages but keeps the
-          number on file; clear the field in notification settings to remove it.
+          <Trans i18nKey="legal.privacy.collect.phone" components={strong} />
         </li>
         <li>
-          <strong>Notification credentials</strong> — a browser push subscription or native-device
-          notification token only when you explicitly enable a supported notification channel. These
-          credentials identify an app installation for delivery; they are not used for advertising
-          or cross-app tracking.
+          <Trans i18nKey="legal.privacy.collect.notificationCredentials" components={strong} />
         </li>
         <li>
-          <strong>Care-assistant conversations</strong> — the prompts you send, the assistant
-          responses, and any plant/task context needed to answer. Conversation rows expire after 30
-          days. If you report a response, we retain the flagged response, your selected reason, and
-          optional details for up to 90 days so we can investigate it.
+          <Trans i18nKey="legal.privacy.collect.chat" components={strong} />
         </li>
       </ul>
 
-      <p>To understand service reliability and feature use, we also collect:</p>
+      <p>{t('legal.privacy.collect.telemetryIntro')}</p>
       <ul>
         <li>
-          A small set of typed lifecycle events: signup, household created, plant added, task
-          completed, etc. Your verified session supplies a pseudonymous account and household UUID
-          server-side; the event body cannot supply identity. We do not capture page views,
-          autocapture clicks, or session recordings. The full event list is in our repo at{' '}
-          <code>docs/analytics.md</code>.
+          <Trans i18nKey="legal.privacy.collect.telemetryEvents" components={{ code: <code /> }} />
         </li>
-        <li>
-          Sanitized browser error summaries and LCP, CLS, and INP performance measurements with an
-          anonymous session UUID, normalized route, and release id. These go to our own API, not to
-          a vendor. On this rail we do not send stack traces, query strings, account ids, email,
-          phone, tokens, or plant and household names — the error name and message are both
-          restricted to a fixed list of values, so free text cannot ride along.
-        </li>
+        <li>{t('legal.privacy.collect.telemetryRum')}</li>
       </ul>
       <p>
-        Browsers that send <code>DNT: 1</code> have analytics suppressed automatically.
+        <Trans i18nKey="legal.privacy.collect.dnt" components={{ code: <code /> }} />
       </p>
 
-      <h2>Who else sees your data</h2>
-      <p>The third parties involved in running the service:</p>
+      <h2>{t('legal.privacy.thirdParties.heading')}</h2>
+      <p>{t('legal.privacy.thirdParties.intro')}</p>
       <ul>
         <li>
-          <strong>AWS</strong> — hosts our database, file storage, authentication, email, SMS, and
-          serverless functions. Bound by their{' '}
-          <a href="https://aws.amazon.com/compliance/data-privacy/">Data Privacy</a> commitments.
+          <Trans
+            i18nKey="legal.privacy.thirdParties.aws"
+            components={{
+              strong: <strong />,
+              // eslint-disable-next-line jsx-a11y/anchor-has-content -- link text is the <awsLink> span of the catalog string
+              awsLink: <a href={AWS_DATA_PRIVACY_URL} />,
+            }}
+          />
         </li>
         <li>
-          <strong>Amazon Bedrock</strong> (only when you use the care assistant or plant health
-          analysis) — processes your prompt and the relevant plant-care context to generate a
-          response. We use Bedrock through our AWS account; reported responses are reviewed by us,
-          not sent back to the model as training data by Family Greenhouse.
+          <Trans i18nKey="legal.privacy.thirdParties.bedrock" components={strong} />
         </li>
         <li>
-          <strong>Stripe</strong> (only if your household buys or manages a paid plan) — runs
-          checkout, the billing portal, plan changes, and cancellations. Stripe receives your email
-          address and your household&rsquo;s opaque id so it can create and match the customer
-          record. We never see or store a card number. On your household&rsquo;s billing record we
-          store the Stripe customer and subscription ids, the plan, its status, and the current
-          period end.
+          <Trans i18nKey="legal.privacy.thirdParties.stripe" components={strong} />
         </li>
         <li>
-          <strong>Plant.id</strong> (optional, only if you use plant identification) — receives the
-          plant photo you upload for identification.
+          <Trans i18nKey="legal.privacy.thirdParties.plantId" components={strong} />
         </li>
         <li>
-          <strong>Perenual</strong> (optional, only when species enrichment is enabled) — receives
-          only species names (a public botanical fact, not your data).
+          <Trans i18nKey="legal.privacy.thirdParties.perenual" components={strong} />
         </li>
         <li>
-          <strong>OpenWeatherMap</strong> (optional, only when you set a household location) —
-          receives your saved city name and the coordinates we got back from geocoding.
+          <Trans i18nKey="legal.privacy.thirdParties.openWeatherMap" components={strong} />
         </li>
         <li>
-          <strong>PostHog</strong> (optional, when analytics is enabled) — receives the events
-          listed above with your pseudonymous account and household ids.
+          <Trans i18nKey="legal.privacy.thirdParties.posthog" components={strong} />
         </li>
         <li>
-          <strong>Push delivery services</strong> (only if you turn on push notifications) — a
-          browser or device push notification is handed to whichever service your browser or phone
-          nominates, such as Google, Apple, Mozilla, or Microsoft. They deliver the message to your
-          device.
+          <Trans i18nKey="legal.privacy.thirdParties.push" components={strong} />
         </li>
         <li>
-          <strong>Sentry</strong> (optional error monitoring, and switched off on this service
-          today) — the app and the API can each be configured with a Sentry key. When one is set,
-          crash reports go to Sentry, and unlike the measurements described above those reports do
-          include stack traces and browsing breadcrumbs. No Sentry key is configured on the hosted
-          service, so no crash data is sent to Sentry today.
+          <Trans i18nKey="legal.privacy.thirdParties.sentry" components={strong} />
         </li>
         <li>
-          <strong>Google Tag Manager</strong> (optional, and switched off on this service today) —
-          the app can be configured with a Tag Manager container id. When one is set, signing in
-          loads Google Tag Manager from <code>googletagmanager.com</code> and the same lifecycle
-          events, your pseudonymous account id, and your household id are pushed to it; Tag Manager
-          then forwards them to whatever destinations that container is configured for, and can
-          collect further data of its own once loaded. No container id is configured on the hosted
-          service, so nothing is sent to Google today.
+          <Trans
+            i18nKey="legal.privacy.thirdParties.gtm"
+            components={{ strong: <strong />, code: <code /> }}
+          />
         </li>
       </ul>
-      <p>
-        We do not sell your data. We do not run ad networks. Except for a sitter link you
-        deliberately create, we do not share your plant care data with anyone outside the household
-        members you&rsquo;ve invited.
-      </p>
+      <p>{t('legal.privacy.thirdParties.noSale')}</p>
 
-      <h2>Household sharing</h2>
-      <p>
-        When you join a household (yours or someone else&rsquo;s), the other members can see the
-        plants, tasks, completions, and activity in that household. They can see your display name
-        and which tasks you&rsquo;ve completed. They cannot see your email, phone number, or
-        notification preferences.
-      </p>
+      <h2>{t('legal.privacy.household.heading')}</h2>
+      <p>{t('legal.privacy.household.body')}</p>
 
-      <h2>Sitter links</h2>
-      <p>
-        A household member can create a temporary sitter link without creating an account for the
-        sitter. Anyone who has that link can see due care tasks, plant names, each plant&rsquo;s
-        current space, and its short placement note, and can mark those tasks complete during the
-        coverage window you selected. Sitter links do not expose your saved household location,
-        plant or task private notes, or household member identity and contact details. The link is a
-        bearer credential, so only send it to someone you trust. It expires after at most 60 days
-        and a household member can revoke it sooner. We do not ask for or store the sitter&rsquo;s
-        identity.
-      </p>
+      <h2>{t('legal.privacy.sitter.heading')}</h2>
+      <p>{t('legal.privacy.sitter.body')}</p>
 
-      <h2>Your rights</h2>
+      <h2>{t('legal.privacy.rights.heading')}</h2>
       <ul>
         <li>
-          <strong>Export.</strong> From <em>Settings → Account → Download my data</em> you can take
-          a CSV of the plants and tasks in your current household, or a full JSON export covering
-          every household you belong to plus your account details and notification settings. Photos
-          and the completion history are not part of either file today.
+          <Trans
+            i18nKey="legal.privacy.rights.export"
+            components={{ strong: <strong />, em: <em /> }}
+          />
         </li>
         <li>
-          <strong>Delete.</strong> The <em>Delete account</em> button in Settings wipes your login
-          and notification credentials and removes you from every household you&rsquo;re a member
-          of. It is also available from the setup screen before you create or join a household. If
-          you are the only admin of a household that still has other members, deletion is refused
-          until you promote someone else, so the household is not left without an admin. Shared care
-          facts such as a past completion may remain useful to other members, but your name and
-          account id on those records are replaced with &ldquo;Former member.&rdquo; See our{' '}
-          <a href="/account-deletion">account-deletion instructions</a> for the web request path.
+          <Trans
+            i18nKey="legal.privacy.rights.delete"
+            components={{
+              strong: <strong />,
+              em: <em />,
+              deletionLink: <Link to="/account-deletion" />,
+            }}
+          />
         </li>
         <li>
-          <strong>Access / correction.</strong> Email{' '}
-          <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a> and
-          we&rsquo;ll respond within 30 days. We&rsquo;re a small team; this is the same person
-          you&rsquo;d talk to about any other support issue.
+          <Trans
+            i18nKey="legal.privacy.rights.access"
+            values={{ supportEmail: SUPPORT_EMAIL }}
+            components={{ strong: <strong />, supportLink }}
+          />
         </li>
       </ul>
 
-      <h2>Children</h2>
+      <h2>{t('legal.privacy.children.heading')}</h2>
       <p>
-        The service is not intended for users under 13. We don&rsquo;t knowingly collect data from
-        anyone in that age range. If you&rsquo;re a parent and you think your child created an
-        account, email{' '}
-        <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a> and
-        we&rsquo;ll delete the account.
+        <Trans
+          i18nKey="legal.privacy.children.body"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink }}
+        />
       </p>
 
-      <h2>Changes</h2>
-      <p>
-        When we update this policy, we&rsquo;ll bump the effective date at the top and (for material
-        changes) show a one-time banner in the app. The full revision history lives in our repo.
-      </p>
+      <h2>{t('legal.privacy.changes.heading')}</h2>
+      <p>{t('legal.privacy.changes.body')}</p>
     </LegalShell>
   );
 }

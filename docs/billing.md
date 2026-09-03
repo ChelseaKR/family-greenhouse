@@ -1,17 +1,21 @@
-# Billing — historical implementation reference
+# Billing
 
-> **Commercial activity hold — July 14, 2026.** Payments and paid-plan offers
-> are disabled. The prices, Stripe flow, and setup instructions below document a
-> prior product hypothesis; they are not a current offer or an authorization to
-> configure billing. See [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).
+> **Status — paid plans are live.** The commercial hold of July 14, 2026 was
+> lifted on September 1, 2026 (`commercialHoldActive: false` in
+> `commercial-status.json`) and the production runtime gate opened on
+> September 2, 2026 (`payments_enabled = "1"`, release 0.23.3). Stripe
+> Checkout and the customer portal are on for the hosted web app. The two gates
+> below still decide, on every request, whether a session can be created; see
+> [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md) for their current values
+> and the kill switch.
 
-The retained architecture models Stripe-backed subscriptions and three plans
-with per-tier caps. During the hold, plan-cap code may operate for technical
-testing, but public plan responses omit prices, the API refuses to create new
-Checkout or customer-portal Sessions, and production price identifiers remain
-empty. The hold does not gate webhook handling, so a correctly configured
-environment can still process cancellation and other supported,
-already-originated Stripe events; a webhook cannot initiate a purchase.
+The architecture is Stripe-backed subscriptions and three plans with per-tier
+caps. Whenever either gate is shut — the repository hold or an environment's
+runtime gate — public plan responses omit prices and the API refuses to create
+new Checkout or customer-portal Sessions. Neither gate covers webhook handling,
+so a correctly configured environment always processes cancellation and other
+supported, already-originated Stripe events; a webhook cannot initiate a
+purchase.
 
 ## Plans
 
@@ -158,19 +162,18 @@ For this to work in API Gateway:
 
 ## Setup checklist
 
-The retained frontend needs no Stripe key. The historical Stripe implementation
-uses the variables below, but two independent controls remain ahead of them:
-the repository status must be inactive and `PAYMENTS_ENABLED` must be exactly
-`1`.
+The frontend needs no Stripe key. The Stripe integration uses the variables
+below, but two independent controls sit ahead of them on every request: the
+repository hold must be inactive and `PAYMENTS_ENABLED` must be exactly `1`.
 
-| Var(s)                                                           | How it's set                                                   |
-| ---------------------------------------------------------------- | -------------------------------------------------------------- |
-| `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | `environments/<env>/terraform.tfvars` — NOT secret, committed  |
-| `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                    |
-| `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml) |
-| `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`         |
-| `commercial-status.json`                                         | committed shared status; currently keeps the hold active       |
-| `PAYMENTS_ENABLED`                                               | Terraform `payments_enabled`; defaults `"0"`, committed `"0"`  |
+| Var(s)                                                           | How it's set                                                                                    |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | `environments/<env>/terraform.tfvars` — NOT secret, committed                                   |
+| `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                                                     |
+| `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml)                                  |
+| `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`                                          |
+| `commercial-status.json`                                         | committed shared status; `commercialHoldActive: false` since 2026-09-01                         |
+| `PAYMENTS_ENABLED`                                               | Terraform `payments_enabled`; defaults `"0"`, set to `"1"` in the production and staging tfvars |
 
 Empty values keep Stripe inert (the pre-billing behavior), so a half-finished
 setup never breaks the app. An empty MONTHLY id makes a plan unbuyable; an empty
@@ -189,12 +192,14 @@ archive those Stripe prices — existing subscriptions renew against them.
 `payments_enabled` is per-environment, but `commercial-status.json` is shared
 across both. Staging can therefore be opened for verification while production
 stays shut, and the fail-closed client behaviour covers the gap: with the
-status file lifted but production `payments_enabled` still `"0"`, the
-production API keeps reporting `paymentsAvailable: false` and the paid UI
-renders the paused notice rather than a price.
+status file lifted but an environment's `payments_enabled` still `"0"`, that
+environment's API keeps reporting `paymentsAvailable: false` and the paid UI
+renders the unavailable notice rather than a price. Today both environments are
+open — production against live-mode Stripe, staging against test mode.
 
-See `docs/COMMERCIAL-STATUS.md` for the ordered reactivation runbook. The
-checklist below is the Stripe-side detail those steps refer to:
+This checklist was completed for staging (test mode) and production (live
+mode) when the hold was lifted; it is the procedure for any new environment.
+`docs/COMMERCIAL-STATUS.md` holds the ordered runbook these steps sit inside:
 
 1. Create a Stripe account; do the whole flow in **test mode** first, then repeat in live mode.
 2. Create two **products** — Garden and Greenhouse (Seedling is free → no Stripe object). Add prices:
@@ -210,17 +215,18 @@ checklist below is the Stripe-side detail those steps refer to:
    ```
 6. Add the endpoint's signing secret (`whsec_…`) as the `STRIPE_WEBHOOK_SECRET` GitHub Actions repo secret.
 7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices.
-8. Complete the separate status, UI-restoration, runtime-gate, review, and
-   deployment approvals in [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).
+8. Open the two gates — `commercialHoldActive: false` and
+   `payments_enabled = "1"` — with the reviews and approvals in
+   [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).
 
 For staging, repeat with the **test-mode** Stripe account + the staging tfvars/secrets. Use Stripe's test card `4242 4242 4242 4242` for paid flows.
 
 ## Local development
 
-The local Express server mirrors production's hold: Checkout and portal requests
-return 503 and never mutate the in-memory household. Integration tests that need
-to exercise retained entitlement behavior seed an in-memory plan fixture
-directly; they do not reopen a purchase path.
+The local Express server never creates Stripe sessions, whatever the gates say:
+Checkout and portal requests return 503 and never mutate the in-memory
+household. Integration tests that need to exercise entitlement behavior seed an
+in-memory plan fixture directly; they do not open a purchase path.
 
 ```
 POST /billing/checkout -> 503 Payments are currently paused.
@@ -228,9 +234,8 @@ POST /billing/portal   -> 503 Billing access is currently paused.
 ```
 
 This deliberately prevents local-development convenience code from becoming a
-second activation path. Retained Stripe mechanics are covered with isolated
-unit mocks; do not point development UI at an external billing environment
-while the hold remains active.
+second activation path. Stripe mechanics are covered with isolated unit mocks;
+do not point development UI at an external billing environment.
 
 For `GET /billing/me`, the local server computes plant and member totals from
 its in-memory records. Those reads have no unseeded or unavailable state, so

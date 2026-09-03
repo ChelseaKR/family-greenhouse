@@ -774,5 +774,162 @@
     "whyRoomBody": "A paid plan is what you move to when the free plant limit stops being enough. Every plant keeps its own schedule, photos, and care history no matter how many you add.",
     "whyLeaveTitle": "Nothing locked away if you leave",
     "whyLeaveBody": "Cancelling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time."
+  },
+  "legal": {
+    "shell": {
+      "eyebrow": "The fine print",
+      "effective": "Effective {{date}}.",
+      "translationDraft": "This translation is a draft: it has not yet been reviewed by a native speaker or by legal counsel.",
+      "translationGoverning": "It is provided for convenience. If it differs from the English version, the English version governs."
+    },
+    "support": {
+      "metaTitle": "Support — Family Greenhouse",
+      "metaDescription": "Get help with your Family Greenhouse account and plant-care workspace.",
+      "title": "Support",
+      "lead": "Need help with Family Greenhouse? Email <supportLink>{{supportEmail}}</supportLink>. Include the device type and a short description of what happened, but never send a password or sign-in code.",
+      "account": {
+        "heading": "Account and privacy",
+        "body": "You can change your password, export your data, or delete your account from Account & data. If you cannot sign in, see the public <deletionLink>deletion guide</deletionLink>."
+      },
+      "help": {
+        "heading": "Plant-care help",
+        "body": "The public <helpLink>help pages</helpLink> cover getting started, plants, tasks, reminders, households, sitters, billing, data, and limits. You do not need an account or to be signed in to read them."
+      },
+      "status": {
+        "heading": "Service status",
+        "body": "Check the <statusLink>service status page</statusLink> if login, syncing, or uploads appear unavailable."
+      }
+    },
+    "accountDeletion": {
+      "metaTitle": "Delete your account — Family Greenhouse",
+      "metaDescription": "How to permanently delete a Family Greenhouse account and associated data.",
+      "title": "Delete your account",
+      "lead": "You can permanently delete your Family Greenhouse account in the app, even if you have not created or joined a household.",
+      "self": {
+        "heading": "Delete it yourself",
+        "stepOpenAccount": "Open Account & data.",
+        "stepSignIn": "Sign in to your account.",
+        "stepSelect": "Select <strong>Delete my account</strong>.",
+        "stepConfirm": "Confirm the permanent deletion.",
+        "loneAdmin": "If you are the only admin of a household that still has other members, deletion is refused until you promote another member to admin, so the household is not left without one.",
+        "linkOpenAccount": "Open Account & data",
+        "linkSignIn": "Sign in to delete your account"
+      },
+      "request": {
+        "heading": "Ask us to delete it",
+        "body": "If you cannot sign in, email <supportLink>{{supportEmail}}</supportLink> from the address on your account. We may ask you to verify ownership before deleting it and will respond within 30 days."
+      },
+      "effect": {
+        "heading": "What deletion does",
+        "body": "We remove your login, household memberships, notification preferences, browser push subscriptions, and native-device notification tokens. Plants from a household where you were the only member are deleted. Shared care history that other members rely on may remain, but your name and account id are replaced with “Former member.” Care-assistant conversations expire automatically after 30 days; submitted safety reports expire after 90 days."
+      }
+    },
+    "terms": {
+      "metaTitle": "Terms — Family Greenhouse",
+      "metaDescription": "The terms of using Family Greenhouse. Plain language.",
+      "title": "Terms of Service",
+      "lead": "These terms govern your use of Family Greenhouse. We’ve kept them readable. If anything is unclear, email <helloLink>{{helloEmail}}</helloLink> and we’ll explain.",
+      "agreement": {
+        "heading": "The agreement",
+        "body": "By creating an account or using the service, you agree to these terms. If you don’t agree, don’t use the service. Material changes will be announced in-app with at least 14 days’ notice; continued use after that is acceptance of the new terms."
+      },
+      "eligibility": {
+        "heading": "Who may use the service",
+        "body": "You must be at least 13 years old to create an account or accept a household invitation. If you are under the age of legal majority where you live, use the service only with permission from a parent or legal guardian. A parent or guardian who believes a child under 13 created an account can email <supportLink>{{supportEmail}}</supportLink> to have it deleted."
+      },
+      "fromUs": {
+        "heading": "What you can expect from us",
+        "service": "<strong>The service, as described.</strong> We try to keep the app available, accurate, and free of basic bugs. We don’t promise zero downtime; see <em>Limitations</em> below.",
+        "data": "<strong>Your data, treated with care.</strong> See our <privacyLink>Privacy Policy</privacyLink> for the specifics.",
+        "notice": "<strong>Reasonable notice before changes.</strong> Material features and usage limits are stable for at least 14 days from announcement. Bug fixes and improvements ship continuously.",
+        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for up to 10 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
+      },
+      "fromYou": {
+        "heading": "What we expect from you",
+        "abuse": "<strong>Don’t abuse the service.</strong> No spam-running through the API, no scraping, no attempts to break authentication or DDoS the service.",
+        "illegal": "<strong>Don’t upload illegal content.</strong> Plant photos are fine. Anything that violates law or third-party rights is not.",
+        "honest": "<strong>Be honest about who you are.</strong> Use a real email. Don’t impersonate someone else.",
+        "housemates": "<strong>Respect your housemates.</strong> When you invite others to a household, they can see and edit shared plant data. Don’t invite people who shouldn’t see it."
+      },
+      "termination": {
+        "heading": "Account termination",
+        "body": "You can delete your account at any time from <em>Settings → Account → Delete my account</em>. We can suspend or terminate accounts that violate these terms; we’ll try to give you a chance to fix the issue first unless the violation is serious (e.g. abuse of other users)."
+      },
+      "planStatus": {
+        "heading": "Plan status",
+        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly or yearly; Garden is also offered as a one-time lifetime purchase. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>, and a new monthly or yearly subscription starts with a 14-day free trial. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+      },
+      "limitations": {
+        "heading": "Limitations",
+        "asIs": "The service is provided “as is.” We aim for high availability but do not promise zero downtime, zero data loss, or that every feature will work in every browser at every moment. Our liability is limited to the amount you’ve paid us in the previous 12 months.",
+        "advice": "We don’t give plant-care advice as a regulated service — the suggestions come from public botanical databases plus simple heuristics. If a plant matters to you (heirloom, expensive, sentimental), don’t rely on our reminders alone."
+      },
+      "disputes": {
+        "heading": "Disputes",
+        "body": "If something goes wrong, please email us first. We’ll try to resolve it directly. Formal disputes are governed by the laws of the State of California, USA, and resolved in San Francisco County courts."
+      },
+      "changes": {
+        "heading": "Changes to these terms",
+        "body": "Material changes get 14 days of notice in-app. Minor edits (typos, clarifications, additional examples) are made directly and reflected in the effective date at the top."
+      },
+      "counselNote": "We’re a small team with no in-house counsel today. These terms are best-effort plain-language and may not cover every edge case the way a fully lawyered document would. Email us for anything ambiguous."
+    },
+    "privacy": {
+      "metaTitle": "Privacy — Family Greenhouse",
+      "metaDescription": "How Family Greenhouse handles your data. Plain language.",
+      "title": "Privacy",
+      "lead": "This page explains what data Family Greenhouse collects, why, and what you can do about it. We’ve deliberately written it as plain text rather than a template — if anything is unclear, email <helloLink>{{helloEmail}}</helloLink> and we’ll fix the wording.",
+      "collect": {
+        "heading": "What we collect",
+        "intro": "To run the app, we collect:",
+        "account": "<strong>Account info</strong> — email, password (hashed), and display name. Your password is only ever held by AWS Cognito. Your email and display name are stored in Cognito and also copied onto your membership record in our database, so the app can show who is in a household and reach you about it.",
+        "plantData": "<strong>Plant + task data</strong> — every plant, task, and completion you record, along with photos you upload. Stored in AWS DynamoDB and S3 in a US region (us-east-1).",
+        "location": "<strong>Optional household location</strong> — only if you set one. Used to fetch local weather for climate-aware care tips. We store the city name and the geocoded coordinates we got back from the geocoder; we do not request precise device geolocation.",
+        "phone": "<strong>Optional phone number</strong> — only if you opt in to SMS reminders, and only after you verify it. Turning SMS reminders back off stops the messages but keeps the number on file; clear the field in notification settings to remove it.",
+        "notificationCredentials": "<strong>Notification credentials</strong> — a browser push subscription or native-device notification token only when you explicitly enable a supported notification channel. These credentials identify an app installation for delivery; they are not used for advertising or cross-app tracking.",
+        "chat": "<strong>Care-assistant conversations</strong> — the prompts you send, the assistant responses, and any plant/task context needed to answer. Conversation rows expire after 30 days. If you report a response, we retain the flagged response, your selected reason, and optional details for up to 90 days so we can investigate it.",
+        "telemetryIntro": "To understand service reliability and feature use, we also collect:",
+        "telemetryEvents": "A small set of typed lifecycle events: signup, household created, plant added, task completed, etc. Your verified session supplies a pseudonymous account and household UUID server-side; the event body cannot supply identity. We do not capture page views, autocapture clicks, or session recordings. The full event list is in our repo at <code>docs/analytics.md</code>.",
+        "telemetryRum": "Sanitized browser error summaries and LCP, CLS, and INP performance measurements with an anonymous session UUID, normalized route, and release id. These go to our own API, not to a vendor. On this rail we do not send stack traces, query strings, account ids, email, phone, tokens, or plant and household names — the error name and message are both restricted to a fixed list of values, so free text cannot ride along.",
+        "dnt": "Browsers that send <code>DNT: 1</code> have analytics suppressed automatically."
+      },
+      "thirdParties": {
+        "heading": "Who else sees your data",
+        "intro": "The third parties involved in running the service:",
+        "aws": "<strong>AWS</strong> — hosts our database, file storage, authentication, email, SMS, and serverless functions. Bound by their <awsLink>Data Privacy</awsLink> commitments.",
+        "bedrock": "<strong>Amazon Bedrock</strong> (only when you use the care assistant or plant health analysis) — processes your prompt and the relevant plant-care context to generate a response. We use Bedrock through our AWS account; reported responses are reviewed by us, not sent back to the model as training data by Family Greenhouse.",
+        "stripe": "<strong>Stripe</strong> (only if your household buys or manages a paid plan) — runs checkout, the billing portal, plan changes, and cancellations. Stripe receives your email address and your household’s opaque id so it can create and match the customer record. We never see or store a card number. On your household’s billing record we store the Stripe customer and subscription ids, the plan, its status, and the current period end.",
+        "plantId": "<strong>Plant.id</strong> (optional, only if you use plant identification) — receives the plant photo you upload for identification.",
+        "perenual": "<strong>Perenual</strong> (optional, only when species enrichment is enabled) — receives only species names (a public botanical fact, not your data).",
+        "openWeatherMap": "<strong>OpenWeatherMap</strong> (optional, only when you set a household location) — receives your saved city name and the coordinates we got back from geocoding.",
+        "posthog": "<strong>PostHog</strong> (optional, when analytics is enabled) — receives the events listed above with your pseudonymous account and household ids.",
+        "push": "<strong>Push delivery services</strong> (only if you turn on push notifications) — a browser or device push notification is handed to whichever service your browser or phone nominates, such as Google, Apple, Mozilla, or Microsoft. They deliver the message to your device.",
+        "sentry": "<strong>Sentry</strong> (optional error monitoring, and switched off on this service today) — the app and the API can each be configured with a Sentry key. When one is set, crash reports go to Sentry, and unlike the measurements described above those reports do include stack traces and browsing breadcrumbs. No Sentry key is configured on the hosted service, so no crash data is sent to Sentry today.",
+        "gtm": "<strong>Google Tag Manager</strong> (optional, and switched off on this service today) — the app can be configured with a Tag Manager container id. When one is set, signing in loads Google Tag Manager from <code>googletagmanager.com</code> and the same lifecycle events, your pseudonymous account id, and your household id are pushed to it; Tag Manager then forwards them to whatever destinations that container is configured for, and can collect further data of its own once loaded. No container id is configured on the hosted service, so nothing is sent to Google today.",
+        "noSale": "We do not sell your data. We do not run ad networks. Except for a sitter link you deliberately create, we do not share your plant care data with anyone outside the household members you’ve invited."
+      },
+      "household": {
+        "heading": "Household sharing",
+        "body": "When you join a household (yours or someone else’s), the other members can see the plants, tasks, completions, and activity in that household. They can see your display name and which tasks you’ve completed. They cannot see your email, phone number, or notification preferences."
+      },
+      "sitter": {
+        "heading": "Sitter links",
+        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 60 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
+      },
+      "rights": {
+        "heading": "Your rights",
+        "export": "<strong>Export.</strong> From <em>Settings → Account → Download my data</em> you can take a CSV of the plants and tasks in your current household, or a full JSON export covering every household you belong to plus your account details and notification settings. Photos and the completion history are not part of either file today.",
+        "delete": "<strong>Delete.</strong> The <em>Delete account</em> button in Settings wipes your login and notification credentials and removes you from every household you’re a member of. It is also available from the setup screen before you create or join a household. If you are the only admin of a household that still has other members, deletion is refused until you promote someone else, so the household is not left without an admin. Shared care facts such as a past completion may remain useful to other members, but your name and account id on those records are replaced with “Former member.” See our <deletionLink>account-deletion instructions</deletionLink> for the web request path.",
+        "access": "<strong>Access / correction.</strong> Email <supportLink>{{supportEmail}}</supportLink> and we’ll respond within 30 days. We’re a small team; this is the same person you’d talk to about any other support issue."
+      },
+      "children": {
+        "heading": "Children",
+        "body": "The service is not intended for users under 13. We don’t knowingly collect data from anyone in that age range. If you’re a parent and you think your child created an account, email <supportLink>{{supportEmail}}</supportLink> and we’ll delete the account."
+      },
+      "changes": {
+        "heading": "Changes",
+        "body": "When we update this policy, we’ll bump the effective date at the top and (for material changes) show a one-time banner in the app. The full revision history lives in our repo."
+      }
+    }
   }
 }

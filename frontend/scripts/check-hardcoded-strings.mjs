@@ -20,7 +20,7 @@
  *   - text nodes with no run of 2+ letters (numbers, punctuation, `·`, `—`);
  *   - brand/proper-noun and technical exact strings in ALLOWED_EXACT;
  *   - curated long-form English content that is deliberately a separate
- *     translation workstream from UI chrome (blog posts, help FAQ, legal,
+ *     translation workstream from UI chrome (blog posts, help FAQ,
  *     care guides, changelog) — EXCLUDED_DIRS below;
  *   - attributes are out of scope for this scanner: aria-*, alt, title etc.
  *     are covered by eslint-plugin-i18next's `ignoreAttribute` config as files
@@ -40,13 +40,7 @@ const BASELINE_PATH = path.join(FRONTEND_DIR, 'scripts', 'i18n-hardcoded-baselin
 const UPDATE = process.argv.includes('--update-baseline');
 
 /** Curated-content surfaces: translating these is a separate workstream. */
-const EXCLUDED_DIRS = [
-  'features/blog',
-  'features/help',
-  'features/legal',
-  'features/care',
-  'features/changelog',
-];
+const EXCLUDED_DIRS = ['features/blog', 'features/help', 'features/care', 'features/changelog'];
 
 /** Brand names / technical tokens that are correct in every locale. */
 const ALLOWED_EXACT = new Set(['Family Greenhouse', 'CSV', 'JSON', 'API', 'PWA', 'SMS', 'OK']);

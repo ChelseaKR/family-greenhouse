@@ -1,24 +1,39 @@
 # Commercial status
 
 **Paid-activity hold effective:** July 14, 2026
-
 **Free registration reopened:** July 19, 2026
-**Status:** Free accounts open; paid plans and payment collection paused
+**Paid-activity hold lifted:** September 1, 2026 — `commercialHoldActive: false` in `commercial-status.json` (PR #369)
+**Production payment gate opened:** September 2, 2026 — `payments_enabled = "1"` in the production tfvars (PR #377, release 0.23.3)
+**Status:** Free accounts open; paid Garden and Greenhouse plans on sale on the web
 
-Family Greenhouse accepts free accounts for households with up to 10 plants.
-No credit card is required. The hosted app does not currently offer paid plans,
-collect payments, create purchases, process upgrades, or allow plan changes.
+Family Greenhouse accepts free Seedling accounts for households with up to 10
+plants; no credit card is required. Paid Garden and Greenhouse plans are sold on
+the hosted web app through Stripe Checkout — monthly or annual subscriptions
+that start with a 14-day trial, plus a one-time Garden lifetime purchase — and a
+household admin manages the plan from Settings → Billing via the Stripe customer
+portal. Paid plans are not sold inside the mobile apps.
 
 The source repository and its history remain public portfolio artifacts.
-Historical pricing, launch, and customer-acquisition documents are design
-hypotheses, not current offers or evidence of revenue.
+Pricing, launch, and customer-acquisition documents written during the hold are
+design hypotheses from that period, not evidence of revenue. Current prices
+live in `backend/src/models/plans.ts` and on the pricing page.
 
 ## Current controls
 
+Payment activity is allowed only when **both** gates below are open
+(`isPaymentActivityAllowed` in `backend/src/config/commercialStatus.ts`
+requires `commercialHoldActive === false` **and** `PAYMENTS_ENABLED` equal to
+the exact string `"1"`). Both are open in production today.
+
+| Gate            | Source                                                                          | Value today                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Repository hold | `commercialHoldActive` in [`commercial-status.json`](../commercial-status.json) | `false`, `effectiveDate` `2026-09-01`; pinned by `backend/tests/unit/config/commercialStatus.test.ts`                          |
+| Runtime gate    | Terraform `payments_enabled` → Lambda `PAYMENTS_ENABLED`                        | `"1"` in `infrastructure/environments/production/terraform.tfvars` and in staging; default `"0"` at the root and module layers |
+
 - [`commercial-status.json`](../commercial-status.json) is the shared status
   source imported by the frontend and backend. Registration is available only
-  when `publicRegistrationAvailable` is exactly `true`; the paid-activity hold
-  remains independently active.
+  when `publicRegistrationAvailable` is exactly `true` (it is); registration
+  and the paid gates are independent of each other.
 - The `/register` route and public acquisition links offer the Seedling free
   account. `POST /auth/signup` validates the 12-character Cognito password
   policy (uppercase, lowercase, and digit), is rate-limited, and creates an
@@ -26,29 +41,43 @@ hypotheses, not current offers or evidence of revenue.
 - Cognito explicitly permits public self-signup
   (`allow_admin_create_user_only = false`). This is an in-place user-pool policy
   change, not a pool replacement.
-- Public plan surfaces expose no paid prices, billing intervals, purchase or
-  upgrade controls, or customer-portal controls while the hold is active.
-- `GET /billing/plans` reports `paymentsAvailable: false` and omits monthly,
-  annual, and lifetime price fields.
-- Checkout and customer-portal creation fail before configuration, database,
-  or Stripe access unless the paid hold is inactive **and** the runtime
-  `PAYMENTS_ENABLED` value is exactly `1`. That variable is now wired through
-  Terraform (`payments_enabled`) but defaults to `"0"` at both the module and
-  root layer and is committed as `"0"` in every environment. Production price
-  IDs remain blank and `stripe_price_ids_are_live` remains false.
+- `GET /billing/plans` reports `paymentsAvailable` from the two gates. With
+  both open it includes the monthly, annual, and lifetime price fields
+  (`planSummary(plan, includePrices)` in `backend/src/models/plans.ts`); with
+  either shut it reports `false` and omits every price field, and the public
+  plan surfaces show no prices, intervals, purchase, upgrade, or portal
+  controls.
+- `POST /billing/checkout` and `POST /billing/portal` call
+  `assertPaymentActivityAllowed()` before configuration, database, or Stripe
+  access. With either gate shut they fail with 503 (`Payments are currently
+paused.` / `Billing access is currently paused.`) and originate nothing.
+  `payments_enabled` is wired root → module → Lambda environment and defaults
+  to `"0"` at both layers, so a new environment never inherits live payment
+  collection; production and staging each set it to `"1"` explicitly.
+- Production `stripe_price_id_*` values are populated for all five prices and
+  `stripe_price_ids_are_live = true`; staging carries test-mode ids with
+  `stripe_price_ids_are_live = false`. `STRIPE_SECRET_KEY` and
+  `STRIPE_WEBHOOK_SECRET` are GitHub Actions secrets forwarded as `TF_VAR_…`
+  by the deploy workflows, never committed.
 - `terraform_data.commercial_gate_guard` carries three **preconditions** that
   fail the plan — not `check` blocks, which only warn and would let
   `terraform apply` proceed unread in CI. Enabling `payments_enabled` fails
   unless the repository hold is also lifted, the Stripe secret/webhook/monthly
   price IDs are all populated, and a live key is paired with a confirmed
   `stripe_price_ids_are_live`.
-- The paid-plan UI exists and is fully built, but every purchase surface is
-  gated on the API's own `paymentsAvailable` field rather than on the
-  compile-time constant, so a frontend deployed ahead of its backend degrades
-  to the hold notice instead of advertising prices the server will refuse.
-- The paid hold does not gate Stripe webhook verification for already-originated
-  events such as subscription cancellation; it cannot originate a new Checkout
-  or portal session.
+- Every purchase surface in the frontend is gated on the API's own
+  `paymentsAvailable` field rather than on the compile-time constant, so a
+  frontend deployed ahead of its backend — or an environment whose runtime gate
+  is shut — degrades to the "payments unavailable" notice
+  (`CommercialHoldNotice`) instead of advertising prices the server will
+  refuse.
+- Neither gate covers Stripe webhook verification for already-originated
+  events such as subscription cancellation; a webhook can never originate a
+  new Checkout or portal session.
+- The local Express server (`backend/src/local-server.ts`) never creates
+  Stripe sessions: `/billing/checkout` and `/billing/portal` answer 503
+  regardless of the gates, and tests that need a paid entitlement seed the
+  in-memory fixture directly.
 
 ## Closing registration again
 
@@ -61,17 +90,18 @@ Cognito `SignUp` calls bypass the hosted API gate and its per-container limiter
 while pool self-signup is open; the Terraform policy is the authoritative
 emergency-stop control.
 
-## Ending the paid-activity hold
+## Reopening paid activity after a pause
 
-Free registration does not enable payments. Restoring paid activity requires a
+This is the sequence that lifted the hold on 2026-09-01/02 (PRs #369 and #377,
+release 0.23.3), kept as the runbook for reopening after any future pause.
+Free registration does not enable payments. Reopening paid activity requires a
 new dated status decision, ownership/outside-activity review, privacy/security
 and tax review, reviewed price configuration, fresh non-production tests, and a
 separately approved production deployment. Live secrets must remain in a secret
 store and must never be committed.
 
-The engineering work is complete; what remains is configuration and approval.
-The steps below are the whole remaining sequence, in order. Nothing before
-step 6 can charge anyone.
+The steps below are the whole sequence, in order. Nothing before step 6 can
+charge anyone.
 
 ### 1. Record the decision
 
@@ -187,13 +217,14 @@ change, then run the production deployment. `cd-production.yml` already orders
 `deploy-backend` before `deploy-frontend`, so the API accepts checkout before
 the UI offers it.
 
-### Rolling back
+### Pausing again (kill switch)
 
-Returning `payments_enabled` to `"0"` and applying stops all new payment
-activity within one Terraform run — no code change, no frontend deploy. It
-fails before Stripe or DynamoDB access, so nothing new can be originated. It
-does **not** hide the paid UI, which reads the API's `paymentsAvailable` and
-will correctly show the paused notice; and it does not touch existing
-subscriptions, whose cancellation webhooks keep processing by design. To also
-withdraw the offer, set `commercialHoldActive` back to `true` and deploy the
-frontend.
+Returning `payments_enabled` to `"0"` in the production tfvars and applying
+stops all new payment activity within one Terraform run — no code change, no
+frontend deploy. It fails before Stripe or DynamoDB access, so nothing new can
+be originated. It does **not** hide the paid UI, which reads the API's
+`paymentsAvailable` and will correctly show the unavailable notice; and it does
+not touch existing subscriptions, whose cancellation webhooks keep processing
+by design. To also withdraw the offer, set `commercialHoldActive` back to
+`true` with a new dated `effectiveDate` (and update the assertion in
+`commercialStatus.test.ts`), then deploy the frontend.

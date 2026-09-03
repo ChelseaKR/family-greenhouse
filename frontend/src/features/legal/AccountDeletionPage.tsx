@@ -1,57 +1,55 @@
 import { Link } from 'react-router';
+import { Trans, useTranslation } from 'react-i18next';
 import { LegalShell } from './LegalShell';
+import { ACCOUNT_DELETION_MAILTO, SUPPORT_EMAIL } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useAuthStore } from '@/store/authStore';
 
 /** Public, stable URL for Google Play's account-deletion web-link field. */
 export function AccountDeletionPage() {
+  const { t } = useTranslation();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   useMetaTags({
-    title: 'Delete your account — Family Greenhouse',
-    description: 'How to permanently delete a Family Greenhouse account and associated data.',
+    title: t('legal.accountDeletion.metaTitle'),
+    description: t('legal.accountDeletion.metaDescription'),
   });
 
   return (
-    <LegalShell title="Delete your account" effectiveDate="September 2, 2026">
-      <p className="lead">
-        You can permanently delete your Family Greenhouse account in the app, even if you have not
-        created or joined a household.
-      </p>
-      <h2>Delete it yourself</h2>
+    <LegalShell title={t('legal.accountDeletion.title')} effectiveDate="2026-09-02">
+      <p className="lead">{t('legal.accountDeletion.lead')}</p>
+      <h2>{t('legal.accountDeletion.self.heading')}</h2>
       <ol>
-        <li>{isAuthenticated ? 'Open Account & data.' : 'Sign in to your account.'}</li>
         <li>
-          Select <strong>Delete my account</strong>.
+          {isAuthenticated
+            ? t('legal.accountDeletion.self.stepOpenAccount')
+            : t('legal.accountDeletion.self.stepSignIn')}
         </li>
-        <li>Confirm the permanent deletion.</li>
+        <li>
+          <Trans
+            i18nKey="legal.accountDeletion.self.stepSelect"
+            components={{ strong: <strong /> }}
+          />
+        </li>
+        <li>{t('legal.accountDeletion.self.stepConfirm')}</li>
       </ol>
-      <p>
-        If you are the only admin of a household that still has other members, deletion is refused
-        until you promote another member to admin, so the household is not left without one.
-      </p>
+      <p>{t('legal.accountDeletion.self.loneAdmin')}</p>
       <p>
         <Link to={isAuthenticated ? '/account' : '/login'}>
-          {isAuthenticated ? 'Open Account & data' : 'Sign in to delete your account'}
+          {isAuthenticated
+            ? t('legal.accountDeletion.self.linkOpenAccount')
+            : t('legal.accountDeletion.self.linkSignIn')}
         </Link>
       </p>
-      <h2>Ask us to delete it</h2>
+      <h2>{t('legal.accountDeletion.request.heading')}</h2>
       <p>
-        If you cannot sign in, email{' '}
-        <a href="mailto:support@familygreenhouse.net?subject=Account%20deletion%20request">
-          support@familygreenhouse.net
-        </a>{' '}
-        from the address on your account. We may ask you to verify ownership before deleting it and
-        will respond within 30 days.
+        <Trans
+          i18nKey="legal.accountDeletion.request.body"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink: <a href={ACCOUNT_DELETION_MAILTO}>{SUPPORT_EMAIL}</a> }}
+        />
       </p>
-      <h2>What deletion does</h2>
-      <p>
-        We remove your login, household memberships, notification preferences, browser push
-        subscriptions, and native-device notification tokens. Plants from a household where you were
-        the only member are deleted. Shared care history that other members rely on may remain, but
-        your name and account id are replaced with &ldquo;Former member.&rdquo; Care-assistant
-        conversations expire automatically after 30 days; submitted safety reports expire after 90
-        days.
-      </p>
+      <h2>{t('legal.accountDeletion.effect.heading')}</h2>
+      <p>{t('legal.accountDeletion.effect.body')}</p>
     </LegalShell>
   );
 }
