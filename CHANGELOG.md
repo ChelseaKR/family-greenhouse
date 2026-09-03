@@ -58,7 +58,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   a retry is safe because an already-cancelled or missing subscription counts
   as done.
 - Quiet hours are now evaluated in the browser's timezone for a user who never
-  touched the Timezone field. `GET /notifications/prefs` answers
+  touched the Timezone field (#398). `GET /notifications/prefs` answers
   `timezone: 'UTC'` for an account that has never chosen one, and the reminder
   run evaluates the do-not-disturb window in that zone, so "22:00–07:00" saved
   by a user who filled in only the two times was a UTC window — the field's
@@ -74,7 +74,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   only the fields the server actually changed, so the background write cannot
   wipe a Start time being typed.
 - The pricing grid no longer sells "Bulk import and export" as a Greenhouse
-  feature. `POST /plants/import` is open to every tier and bounded only by the
+  feature (#398). `POST /plants/import` is open to every tier and bounded only by the
   plan's plant cap (which the caps line already states), and `GET /me/export`
   requires only a login — the "Nothing locked away" band on the same page
   already promises export to everyone. Because the bullets are cumulative
