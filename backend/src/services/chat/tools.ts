@@ -14,6 +14,7 @@ import * as plantService from '../plantService.js';
 import * as taskService from '../taskService.js';
 import * as climateService from '../climate.js';
 import * as householdService from '../householdService.js';
+import { lookupToxicity, type PetToxicityMatch } from '../../models/petToxicity.js';
 import { searchCorpus } from './corpus.js';
 import type { ToolDefinition, ToolExecutionContext } from './types.js';
 
@@ -217,6 +218,111 @@ const searchCareKnowledge: ToolDefinition<{ query: string }> = {
 };
 
 /**
+ * Read-only pet-toxicity lookup (ADR 0011). Answers "is this plant safe for
+ * my cat/dog?" from `PET_TOXICITY` — the hand-curated, ASPCA-grounded table
+ * already published to anonymous visitors at `GET /species/toxicity` — via
+ * the SAME `lookupToxicity` matcher that route uses. Matching is neither
+ * reimplemented nor loosened here: the matcher's honest result, including an
+ * empty one, is returned unchanged. The table is the only toxicity source in
+ * the product on purpose (the RAG corpus carries none, and an eval asserts it
+ * stays that way): a second source is how two sources drift apart.
+ *
+ * Household scoping is trivially satisfied — the tool reads NO household
+ * data at all (pure, deterministic, no I/O), so `ctx` is unused and a forged
+ * householdId in the input has nothing to widen. The result carries no PII
+ * keys; it still crosses `sanitizeToolResultForModel` like every other tool.
+ *
+ * The `not_in_checker` status is load-bearing: the system prompt forbids the
+ * model from filling that gap from memory, and the grounding guard blocks a
+ * categorical safety claim that no non-toxic verdict supports — so a miss
+ * here cannot become a confident "that one's fine" downstream.
+ */
+export const PET_TOXICITY_TOOL_NAME = 'check_pet_toxicity';
+
+/** Mirrors the public handler's query cap; the matcher is cheap, this is belt-and-braces. */
+const MAX_PLANT_NAME_LENGTH = 80;
+
+export const PET_TOXICITY_SOURCE =
+  'Hand-curated pet-toxicity table grounded in the ASPCA toxic / non-toxic plant database (backend/src/models/petToxicity.ts — the same table behind the public pet-safety checker).';
+
+export const PET_TOXICITY_EMERGENCY_GUIDANCE =
+  'If an animal has ALREADY eaten or chewed a plant, or is showing symptoms, this lookup is not the answer: tell the user to contact their vet or the ASPCA Animal Poison Control Center (888-426-4435) right away, and do not assess or reassure.';
+
+export const PET_TOXICITY_NOT_IN_CHECKER_GUIDANCE =
+  'This plant is not in our checker. Tell the user exactly that. Do NOT guess or state a verdict from memory — say you cannot confirm whether it is safe, and point them to the ASPCA toxic and non-toxic plant list or their vet.';
+
+export type PetToxicityToolResult =
+  | {
+      status: 'found';
+      query: string;
+      source: string;
+      /** The matcher's output, best match first, unchanged. */
+      matches: PetToxicityMatch[];
+      emergency: string;
+    }
+  | {
+      status: 'not_in_checker';
+      query: string;
+      source: string;
+      matches: [];
+      guidance: string;
+      emergency: string;
+    }
+  | { status: 'invalid'; reason: string };
+
+export function lookupPetToxicityForModel(rawPlantName: unknown): PetToxicityToolResult {
+  const trimmed = typeof rawPlantName === 'string' ? rawPlantName.trim() : '';
+  if (trimmed.length < 2) {
+    return {
+      status: 'invalid',
+      reason:
+        "plantName must be at least 2 characters — pass the plant's common or scientific name.",
+    };
+  }
+  const query = trimmed.slice(0, MAX_PLANT_NAME_LENGTH);
+  const matches = lookupToxicity(query);
+  if (matches.length === 0) {
+    return {
+      status: 'not_in_checker',
+      query,
+      source: PET_TOXICITY_SOURCE,
+      matches: [],
+      guidance: PET_TOXICITY_NOT_IN_CHECKER_GUIDANCE,
+      emergency: PET_TOXICITY_EMERGENCY_GUIDANCE,
+    };
+  }
+  return {
+    status: 'found',
+    query,
+    source: PET_TOXICITY_SOURCE,
+    matches,
+    emergency: PET_TOXICITY_EMERGENCY_GUIDANCE,
+  };
+}
+
+const checkPetToxicity: ToolDefinition<{ plantName: string }> = {
+  name: PET_TOXICITY_TOOL_NAME,
+  description:
+    "Look up whether a plant is toxic or non-toxic to cats and dogs, from the app's hand-curated, ASPCA-grounded pet-toxicity table (the same table behind the public pet-safety checker). Use this for ANY question about whether a plant is safe, toxic, poisonous, or pet-friendly for a cat, dog, or other pet — routine lookups included — and answer ONLY from the result: state each match's cats/dogs verdict plus its note. Pass just the plant's common or scientific name (e.g. 'pothos', 'Epipremnum aureum'), never the whole question; translate a non-English plant name to its English common name first. If status is 'not_in_checker', say so plainly, never guess a verdict, and point the user to the ASPCA toxic/non-toxic plant list or their vet. Reads no household data.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      plantName: {
+        type: 'string',
+        minLength: 2,
+        maxLength: MAX_PLANT_NAME_LENGTH,
+        description:
+          "The plant's common or scientific name only, e.g. 'snake plant' or 'Dracaena trifasciata'.",
+      },
+    },
+    required: ['plantName'],
+  },
+  // Pure and synchronous underneath; wrapped so it matches the executor
+  // contract without an `async` function that never awaits.
+  execute: (input) => Promise.resolve(lookupPetToxicityForModel(input.plantName)),
+};
+
+/**
  * Propose-style write tool. The model "proposes" a reminder task; this
  * tool does NOT write to DynamoDB. Instead, the proposal is returned to
  * the model AND captured for the API response so the frontend can render
@@ -405,6 +511,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
   listUpcomingTasks as ToolDefinition,
   getHouseholdClimate,
   searchCareKnowledge as ToolDefinition,
+  checkPetToxicity as ToolDefinition,
   proposeReminderTask as unknown as ToolDefinition,
 ];
 

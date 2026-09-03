@@ -23,18 +23,17 @@ model-index:
             embedding is computed anywhere in this eval.
         dataset:
           name: >-
-            family-greenhouse starter benchmark, 147 items; only the 102
-            corpus-class items are scored here. The 45 adversarial items
+            family-greenhouse starter benchmark, 153 items; only the 102
+            corpus-class items are scored here. The 51 adversarial items
             (should-refuse / out-of-corpus / household-data / pet-safety)
-            are schema- and count-gated but not behaviourally graded. The
-            13 pet-safety items additionally have their expected cats/dogs
-            verdicts hard-gated against the curated ASPCA-grounded table in
-            backend/src/models/petToxicity.ts, so benchmark and table cannot
-            drift apart — but whether the live assistant returns that verdict
-            is still ungraded, and evals/eval-baseline.json records the three
-            measured reasons it could get one wrong unchecked (no toxicity
-            content in the RAG corpus, no chat tool exposing the table, and a
-            grounding guard that only recognises numeric claims).
+            are schema- and count-gated but not behaviourally graded against
+            a live model. The 19 pet-safety items additionally have their
+            expected cats/dogs verdicts hard-gated against the curated
+            ASPCA-grounded table in backend/src/models/petToxicity.ts, and
+            are each driven through the real check_pet_toxicity tool and the
+            grounding guard with a scripted model: the table's verdict is
+            delivered, an unsupported all-clear is blocked. Whether the LIVE
+            model calls the tool is still ungraded.
           type: evals/benchmark.jsonl
         metrics:
           # eval-baseline.json calls this field recallAt3.
@@ -159,6 +158,18 @@ that should run it. This card does not make that call — it surfaces it.
   or delivery; streaming RAG text is buffered until the same check passes.
   Sync, streaming, and mixed-supported/unsupported-number cases are regression
   tested. Qualitative entailment remains outside this heuristic.
+- **Unverified pet-safety all-clears** (mitigated since 2026-09-02, ADR
+  0011): "is this plant safe for my cat?" is the highest-consequence
+  question the assistant gets. `check_pet_toxicity` gives the model the
+  verified, ASPCA-grounded table (with an honest "not in our checker" on a
+  miss), the system prompt forbids stating safety from memory, and the guard
+  blocks a categorical safety claim — "safe for cats", "non-toxic", the
+  Spanish forms — that no matching `non-toxic` verdict from that tool
+  supports, even on a turn with no other retrieved context. Streamed
+  pet-safety turns are held until the guard passes. Not gated: the danger
+  direction (a false "toxic" is a scare, not a harm), and a reassurance that
+  carries no safety predicate; whether the live model refuses the acute case
+  remains a live-eval question.
 - **Answers the guard cannot check** (disclosed, not mitigated): the guard
   reports `verified` / `unverified` / `ungrounded`, and an answer in which it
   recognized no checkable claim — or which carries numeric content fitting no
@@ -208,27 +219,34 @@ published the two 1.0s in machine-readable `model-index` front-matter as
 though they were results.
 
 Scope of the run (verified 2026-09-02 against the committed benchmark and
-corpus): `evals/benchmark.jsonl` holds **147 items**, of which the **102
-corpus-class items** are the only ones scored; the other 45
+corpus): `evals/benchmark.jsonl` holds **153 items**, of which the **102
+corpus-class items** are the only ones scored for retrieval; the other 51
 (`should-refuse` / `out-of-corpus` / `household-data` / `pet-safety`) are
-schema-validated and count-gated but not behaviourally graded, because
-grading them requires the live generation-layer job that does not exist yet.
+schema-validated and count-gated but not graded against a live model,
+because that requires the generation-layer job that does not exist yet.
 The corpus is 74 chunks across 11 articles.
 
-The `pet-safety` class (13 items, added 2026-09-02) is the one place where
-this card can say something stronger than "labelled but ungraded". Its
-expected cats/dogs verdicts are hard-gated against
+The `pet-safety` class (19 items, added and extended 2026-09-02) is the one
+place where this card can say something stronger than "labelled but
+ungraded". Its expected cats/dogs verdicts are hard-gated against
 `backend/src/models/petToxicity.ts` — the hand-curated, ASPCA-grounded table
 the app already publishes at `GET /species/toxicity` — so the benchmark and
 that table cannot drift apart in either direction without failing the build.
-What is still ungraded is whether the live assistant returns that verdict,
-and `evals/eval-baseline.json` now records three measured reasons a wrong
-verdict would pass unchallenged today: the RAG corpus contains **0** chunks
-with any toxicity vocabulary, **0** tools in `TOOL_REGISTRY` expose the
-curated table to the model, and `checkGrounding` returns `unverified`
-(explicitly non-blocking, per ADR 0009) for a purely qualitative safety
-claim, because it only recognises numeric claims. Those three numbers are
-re-measured on every backend test run. The card said "22-question" until 2026-08-15: that
+When the class was added it measured three reasons a wrong verdict would pass
+unchallenged: the RAG corpus contained **0** chunks with any toxicity
+vocabulary, **0** tools in `TOOL_REGISTRY` exposed the curated table, and
+`checkGrounding` returned `unverified` (non-blocking) for a purely
+qualitative safety claim. Two of those changed the same day
+([ADR 0011](docs/adr/0011-categorical-pet-safety-claims-block.md)): the
+`check_pet_toxicity` tool exposes the table through the unchanged public
+matcher, and the guard now returns `ungrounded` — the one verdict that
+blocks — for a safety claim no `non-toxic` verdict supports, replacing it
+with a refusal that points at the verified checker and the ASPCA
+poison-control line. The corpus count stayed **0** on purpose: the table is
+the only toxicity source. Every item is driven through `runChatTurn` with a
+scripted model, the real tool, and the real table, and the three numbers
+are re-measured on every backend test run. What remains ungraded is whether
+the live model actually calls the tool. The card said "22-question" until 2026-08-15: that
 was the original benchmark size, and the claim went stale on 2026-07-17 when
 the benchmark was expanded, four days after this card's previous review date.
 

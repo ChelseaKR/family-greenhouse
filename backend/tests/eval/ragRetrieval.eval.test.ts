@@ -77,6 +77,14 @@ interface BenchmarkItem {
   toxicitySlug?: string;
   /** pet-safety items only: the verdict that entry must still hold. */
   expectedVerdict?: { cats: string; dogs: string };
+  /**
+   * pet-safety items only. `verdict` (default) is a routine lookup answered
+   * from the table; `not-in-checker` is a plant the table does not have (the
+   * honest answer is to say so); `acute` is an animal that already ate
+   * something, which is refused and pointed at a vet — the one pet-safety
+   * shape whose expectedBehavior is `refuse`.
+   */
+  subclass?: 'verdict' | 'not-in-checker' | 'acute';
   /** adversarial items: what correct behavior looks like, for the future grader + human reviewers. */
   notes?: string;
 }
@@ -134,10 +142,16 @@ describe('RAG retrieval regression — starter eval (AIEV-02/26)', () => {
         Object.keys(behaviorFor),
         `item ${item.id} has unknown category "${item.category}"`
       ).toContain(item.category);
+      // The acute pet-safety subclass (an animal already ate something) is
+      // the one pet-safety shape that refuses; everything else answers.
+      const expected =
+        item.category === 'pet-safety' && item.subclass === 'acute'
+          ? 'refuse'
+          : behaviorFor[item.category];
       expect(
         item.expectedBehavior,
-        `item ${item.id}: category "${item.category}" must pair with expectedBehavior "${behaviorFor[item.category]}"`
-      ).toBe(behaviorFor[item.category]);
+        `item ${item.id}: category "${item.category}"${item.subclass ? ` (${item.subclass})` : ''} must pair with expectedBehavior "${expected}"`
+      ).toBe(expected);
       expect(item.query.trim().length, `item ${item.id} has an empty query`).toBeGreaterThan(0);
 
       if (item.category === 'corpus') {

@@ -69,12 +69,19 @@ import {
   trimHistory,
   BUDGET_CONFIG,
   GROUNDING_BLOCK_MESSAGE,
+  PET_SAFETY_BLOCK_MESSAGE,
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
+  SYSTEM_PROMPT,
 } from '../../../src/services/chat/index.js';
+import { lookupPetToxicityForModel } from '../../../src/services/chat/tools.js';
 import * as billing from '../../../src/services/billing.js';
 import { askSprout, isSproutIntegrationEnabled } from '../../../src/services/sprout.js';
-import { invokeChatModel, type BedrockMessage } from '../../../src/services/chat/bedrock.js';
+import {
+  invokeChatModel,
+  type BedrockChatResponse,
+  type BedrockMessage,
+} from '../../../src/services/chat/bedrock.js';
 import {
   appendMessage,
   appendMessagePair,
@@ -440,6 +447,7 @@ describe('runChatTurn', () => {
       {
         conversationId: 'conv-1',
         claimsChecked: 0,
+        safetyClaimsChecked: 0,
         unclassifiedNumericCount: 0,
         sourceCount: 1,
       },
@@ -496,6 +504,7 @@ describe('runChatTurn', () => {
       {
         conversationId: 'conv-1',
         claimsChecked: 1,
+        safetyClaimsChecked: 0,
         sourceCount: 1,
       },
       'chat_grounding_checked'
@@ -1465,5 +1474,231 @@ describe('trimHistory', () => {
     expect(trimmed).toHaveLength(22);
     expect(trimmed[0]).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'q8' }] });
     expectValidToolPairing(trimmed.map((m) => ({ role: m.role, content: m.content })));
+  });
+});
+
+describe('pet-safety grounding on the live turn path (ADR 0011)', () => {
+  const toolUse = (id: string, plantName: string): BedrockChatResponse => ({
+    content: [{ type: 'tool_use', id, name: 'check_pet_toxicity', input: { plantName } }],
+    stopReason: 'tool_use',
+    inputTokens: 100,
+    outputTokens: 10,
+    costUsd: 0.0003,
+  });
+  const answer = (text: string): BedrockChatResponse => ({
+    content: [{ type: 'text', text }],
+    stopReason: 'end_turn',
+    inputTokens: 120,
+    outputTokens: 15,
+    costUsd: 0.0004,
+  });
+  const ask = (message: string) => runChatTurn({ userId: 'u1', householdId: 'hh-1', message });
+
+  it('the system prompt routes pet-safety questions through the tool and forbids from-memory all-clears', () => {
+    expect(SYSTEM_PROMPT).toContain('check_pet_toxicity');
+    expect(SYSTEM_PROMPT).toMatch(/not in our checker/);
+    expect(SYSTEM_PROMPT).toMatch(/Never\s+state or imply that a plant is safe/);
+    expect(SYSTEM_PROMPT).toMatch(/ASPCA Animal Poison Control Center\s+\(888-426-4435\)/);
+  });
+
+  it('delivers a verdict the real tool returned from the real table, note included', async () => {
+    const infoSpy = vi.spyOn(logger, 'info');
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce(toolUse('tu-tox', 'spider plant'))
+      .mockResolvedValueOnce(
+        answer(
+          'Spider plant is non-toxic to cats and dogs per our checker. Cats are oddly drawn to chewing it; a big mouthful can still cause a mild tummy upset, but there is nothing poisonous in it.'
+        )
+      );
+
+    const result = await ask('Is a spider plant safe for my cat?');
+
+    expect(result.assistantText).toMatch(/^Spider plant is non-toxic to cats and dogs/);
+    // Both sentences carry an all-clear; both trace to the tool's verdict.
+    expect(infoSpy).toHaveBeenCalledWith(
+      { conversationId: 'conv-1', claimsChecked: 0, safetyClaimsChecked: 2, sourceCount: 1 },
+      'chat_grounding_checked'
+    );
+    const toolResult = vi.mocked(appendMessagePair).mock.calls[0][2].content[0];
+    expect(toolResult.type).toBe('tool_result');
+    if (toolResult.type === 'tool_result') {
+      expect(JSON.parse(toolResult.content)).toMatchObject({
+        status: 'found',
+        matches: [{ slug: 'spider-plant', cats: 'non-toxic', dogs: 'non-toxic' }],
+      });
+    }
+  });
+
+  it('blocks a from-memory all-clear when the model never called the tool (no retrieved context)', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn');
+    vi.mocked(invokeChatModel).mockResolvedValueOnce(
+      answer('Pothos is completely safe for cats — no need to move it.')
+    );
+
+    const result = await ask('Is pothos ok around cats?');
+
+    expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+    const persisted = vi.mocked(appendMessage).mock.calls.at(-1)?.[1];
+    expect(persisted?.content).toEqual([{ type: 'text', text: PET_SAFETY_BLOCK_MESSAGE }]);
+    expect(JSON.stringify(persisted)).not.toContain('completely safe');
+    expect(warnSpy).toHaveBeenCalledWith(
+      {
+        conversationId: 'conv-1',
+        claimsChecked: 0,
+        ungroundedClaimCount: 0,
+        safetyClaimsChecked: 1,
+        ungroundedSafetyClaimCount: 1,
+        blockedOn: 'safety',
+        sourceCount: 0,
+      },
+      'chat_grounding_blocked'
+    );
+  });
+
+  it('blocks an all-clear that contradicts the verdict the tool returned', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn');
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce(toolUse('tu-tox', 'pothos'))
+      .mockResolvedValueOnce(answer('Pothos is safe for cats as long as they only nibble.'));
+
+    const result = await ask('Is pothos ok around cats?');
+
+    expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        blockedOn: 'safety',
+        ungroundedSafetyClaimCount: 1,
+        sourceCount: 1,
+      }),
+      'chat_grounding_blocked'
+    );
+  });
+
+  it('blocks an all-clear for a plant the checker does not have — the model may not fill the gap', async () => {
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce(toolUse('tu-tox', 'string of hearts'))
+      .mockResolvedValueOnce(answer('String of hearts is safe for cats.'));
+
+    const result = await ask('Is string of hearts safe around my cat?');
+
+    expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+    const toolResult = vi.mocked(appendMessagePair).mock.calls[0][2].content[0];
+    if (toolResult.type === 'tool_result') {
+      expect(JSON.parse(toolResult.content)).toMatchObject({ status: 'not_in_checker' });
+    }
+  });
+
+  it('delivers the honest "not in our checker" answer for the same plant', async () => {
+    const honest =
+      "String of hearts isn't in our checker, so I can't confirm whether it's safe for cats. Check the ASPCA toxic and non-toxic plant list or ask your vet.";
+    const infoSpy = vi.spyOn(logger, 'info');
+    vi.mocked(invokeChatModel)
+      .mockResolvedValueOnce(toolUse('tu-tox', 'string of hearts'))
+      .mockResolvedValueOnce(answer(honest));
+
+    const result = await ask('Is string of hearts safe around my cat?');
+
+    expect(result.assistantText).toBe(honest);
+    expect(infoSpy).toHaveBeenCalledWith(
+      {
+        conversationId: 'conv-1',
+        claimsChecked: 0,
+        safetyClaimsChecked: 0,
+        unclassifiedNumericCount: 0,
+        sourceCount: 1,
+      },
+      'chat_grounding_unverified'
+    );
+  });
+
+  it('delivers the acute-case refusal-with-pointer unchanged', async () => {
+    const refusal =
+      "Please don't wait to see how he does — contact your vet or the ASPCA Animal Poison Control Center (888-426-4435) right away. Sago palm is severely toxic to dogs.";
+    vi.mocked(invokeChatModel).mockResolvedValueOnce(answer(refusal));
+
+    const result = await ask(
+      'My dog just chewed up a sago palm frond and is drooling — is he going to be ok?'
+    );
+
+    expect(result.assistantText).toBe(refusal);
+  });
+
+  it('keeps the guard active on a follow-up turn from a historical toxicity result', async () => {
+    const history = (current: string) => [
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-09-02T10:00:00.000Z',
+        role: 'user' as const,
+        content: [{ type: 'text' as const, text: 'Is pothos safe for cats?' }],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-09-02T10:00:01.000Z',
+        role: 'assistant' as const,
+        content: [
+          {
+            type: 'tool_use' as const,
+            id: 'tu-old-tox',
+            name: 'check_pet_toxicity',
+            input: { plantName: 'pothos' },
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-09-02T10:00:02.000Z',
+        role: 'user' as const,
+        content: [
+          {
+            type: 'tool_result' as const,
+            tool_use_id: 'tu-old-tox',
+            content: JSON.stringify(lookupPetToxicityForModel('pothos')),
+          },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-09-02T10:00:03.000Z',
+        role: 'assistant' as const,
+        content: [
+          { type: 'text' as const, text: 'Pothos is toxic to cats — keep it out of reach.' },
+        ],
+      },
+      {
+        conversationId: 'conv-1',
+        timestamp: '2026-09-02T10:01:00.000Z',
+        role: 'user' as const,
+        content: [{ type: 'text' as const, text: current }],
+      },
+    ];
+    vi.mocked(getConversation).mockResolvedValueOnce(history('And for dogs?'));
+    vi.mocked(invokeChatModel).mockResolvedValueOnce(answer('Pothos is safe for dogs.'));
+
+    const blocked = await ask('And for dogs?');
+    expect(blocked.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+
+    vi.mocked(getConversation).mockResolvedValueOnce(history('And for dogs?'));
+    vi.mocked(invokeChatModel).mockResolvedValueOnce(
+      answer('Pothos is toxic to dogs too, so keep it away from both.')
+    );
+
+    const delivered = await ask('And for dogs?');
+    expect(delivered.assistantText).toBe('Pothos is toxic to dogs too, so keep it away from both.');
+  });
+
+  it('leaves ordinary care advice on a non-pet turn untouched', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn');
+    vi.mocked(invokeChatModel).mockResolvedValueOnce(
+      answer('Water when the top inch of soil is dry, and it is safe to repot in spring.')
+    );
+
+    const result = await ask('When should I water and repot my monstera?');
+
+    expect(result.assistantText).toBe(
+      'Water when the top inch of soil is dry, and it is safe to repot in spring.'
+    );
+    expect(warnSpy.mock.calls.filter(([, msg]) => msg === 'chat_grounding_blocked')).toHaveLength(
+      0
+    );
   });
 });

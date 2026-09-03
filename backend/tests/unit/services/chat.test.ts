@@ -9,7 +9,9 @@ import {
   TOOL_REGISTRY,
   findTool,
   sanitizeToolResultForModel,
+  type PetToxicityToolResult,
 } from '../../../src/services/chat/tools.js';
+import { lookupToxicity } from '../../../src/models/petToxicity.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as taskService from '../../../src/services/taskService.js';
 import * as climateService from '../../../src/services/climate.js';
@@ -423,5 +425,89 @@ describe('chat budget gate', () => {
         { maxInputTokensPerMonth: 10_000, maxOutputTokensPerMonth: 2_000 }
       )
     ).toBe(true);
+  });
+});
+
+describe('check_pet_toxicity (read-only lookup over the curated ASPCA-grounded table)', () => {
+  const tool = () => findTool('check_pet_toxicity')!;
+  const ctx = { userId: 'u1', householdId: 'hh-1', toolCallNumber: 1 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the matcher result unchanged for a plant in the table', async () => {
+    const out = (await tool().execute(
+      { plantName: 'Pothos' } as never,
+      ctx
+    )) as PetToxicityToolResult;
+
+    expect(out.status).toBe('found');
+    if (out.status !== 'found') return;
+    // The SAME matcher the public route uses, neither reimplemented nor loosened.
+    expect(out.matches).toEqual(lookupToxicity('Pothos'));
+    expect(out.matches[0]).toMatchObject({ slug: 'pothos', cats: 'toxic', dogs: 'toxic' });
+    expect(out.matches[0].note.length).toBeGreaterThan(0);
+    expect(out.source).toMatch(/ASPCA/);
+    expect(out.emergency).toMatch(/888-426-4435/);
+  });
+
+  it('reports a plant the checker does not have as not_in_checker, with no verdict anywhere', async () => {
+    const out = (await tool().execute(
+      { plantName: 'string of hearts' } as never,
+      ctx
+    )) as PetToxicityToolResult;
+
+    expect(out.status).toBe('not_in_checker');
+    if (out.status !== 'not_in_checker') return;
+    expect(out.matches).toEqual([]);
+    expect(out.guidance).toMatch(/not in our checker/i);
+    expect(out.guidance).toMatch(/do not guess/i);
+    // Nothing in the payload can be read as a cats/dogs verdict.
+    expect(JSON.stringify(out)).not.toMatch(/"cats"|"dogs"/);
+  });
+
+  it.each([
+    ['', 'empty'],
+    ['x', 'one character'],
+    [42, 'not a string'],
+  ])('rejects %j (%s) as invalid rather than guessing', async (plantName) => {
+    const out = (await tool().execute({ plantName } as never, ctx)) as PetToxicityToolResult;
+
+    expect(out.status).toBe('invalid');
+  });
+
+  it('caps the query at 80 characters, mirroring the public route', async () => {
+    const out = (await tool().execute(
+      { plantName: `pothos${' x'.repeat(60)}` } as never,
+      ctx
+    )) as PetToxicityToolResult;
+
+    expect(out.status).toBe('found');
+    if (out.status !== 'found') return;
+    expect(out.query).toHaveLength(80);
+  });
+
+  it('reads no household data — a forged householdId in the input has nothing to widen', async () => {
+    await tool().execute({ plantName: 'pothos', householdId: 'hh-ATTACKER' } as never, ctx);
+
+    expect(plantService.getPlants).not.toHaveBeenCalled();
+    expect(plantService.getPlant).not.toHaveBeenCalled();
+    expect(householdService.getHousehold).not.toHaveBeenCalled();
+    expect(householdService.getHouseholdMembers).not.toHaveBeenCalled();
+    expect(taskService.getUpcomingTasks).not.toHaveBeenCalled();
+  });
+
+  it('crosses the model-boundary sanitizer intact — it carries no PII-bearing keys', async () => {
+    const out = await tool().execute({ plantName: 'peace lily' } as never, ctx);
+
+    expect(sanitizeToolResultForModel(out)).toEqual(out);
+  });
+
+  it('is the only tool that surfaces the toxicity table, and its schema requires plantName', () => {
+    const exposing = TOOL_REGISTRY.filter((t) => /toxic/i.test(`${t.name} ${t.description}`));
+
+    expect(exposing.map((t) => t.name)).toEqual(['check_pet_toxicity']);
+    expect(tool().input_schema.required).toEqual(['plantName']);
   });
 });
