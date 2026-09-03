@@ -11,6 +11,8 @@ import * as leafHealth from '../../services/leafHealth.js';
 import * as leafHealthBudget from '../../services/leafHealthBudget.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
+import * as billing from '../../services/billing.js';
+import { getPlan } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -52,10 +54,31 @@ export const checkPlantHealth = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
+    // The cap is tier-aware the same way identify's is (household plan ->
+    // allowanceForPlan), but the plan is only read once per-tier caps are
+    // actually configured: with the flat default every tier shares one number
+    // and this is the pre-tiering path, read for read. A cap we could not
+    // resolve is not one we spend against — same 503 as a failed reservation.
+    let cap: number;
+    try {
+      cap = await leafHealthBudget.resolveMonthlyCap(
+        async () => getPlan((await billing.getHouseholdSubscription(user.householdId!)).planId).id
+      );
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, householdId: user.householdId },
+        'leaf_health.cap_resolution_failed'
+      );
+      throw createHttpError(
+        503,
+        'Leaf-health checks are temporarily unavailable. Please try again.',
+        { expose: true }
+      );
+    }
+
     // Atomically reserve BEFORE the model call. A read-then-check gate lets
     // concurrent requests all invoke Bedrock before any one increments the
     // counter, so the conditional DynamoDB update is the real spend ceiling.
-    const cap = leafHealthBudget.monthlyCap();
     const metered = cap > 0;
     if (metered) {
       try {

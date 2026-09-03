@@ -6,12 +6,16 @@ vi.mock('../../../src/services/leafHealthBudget.js');
 vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/householdService.js');
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(),
+}));
 
 import * as leafHealth from '../../../src/services/leafHealth.js';
 import * as leafHealthBudget from '../../../src/services/leafHealthBudget.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as activity from '../../../src/services/activity.js';
 import * as householdService from '../../../src/services/householdService.js';
+import * as billing from '../../../src/services/billing.js';
 
 const ASSESSMENT: leafHealth.LeafHealthAssessment = {
   overall: 'monitor',
@@ -70,8 +74,9 @@ describe('plants health-check handler', () => {
 
     vi.mocked(plantService.getPlant).mockResolvedValue(PLANT);
     vi.mocked(leafHealth.assessLeafHealth).mockResolvedValue(ASSESSMENT);
-    // Spend cap (M1): atomically reserve one invocation by default.
-    vi.mocked(leafHealthBudget.monthlyCap).mockReturnValue(200);
+    // Spend cap (M1): resolve the household's cap (the flat 200 by default)
+    // and atomically reserve one invocation.
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockResolvedValue(200);
     vi.mocked(leafHealthBudget.reserveUsage).mockResolvedValue(1);
     vi.mocked(leafHealthBudget.releaseUsage).mockResolvedValue(undefined);
     vi.mocked(leafHealthBudget.incrementUsage).mockResolvedValue(1);
@@ -106,6 +111,9 @@ describe('plants health-check handler', () => {
     // A real (non-demo) assessment was reserved before Bedrock ran.
     expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 200);
     expect(leafHealthBudget.incrementUsage).not.toHaveBeenCalled();
+    // The plan lookup lives inside the closure handed to resolveMonthlyCap,
+    // so on the flat-cap path (the default) the household row is never read.
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
   });
 
   it('accepts a schema-in-spec image close to the 350,000-char cap (regression: bodySizeGuard used to reject these with a 413 before the schema ever ran)', async () => {
@@ -165,8 +173,34 @@ describe('plants health-check handler', () => {
     expect(leafHealth.assessLeafHealth).not.toHaveBeenCalled();
   });
 
+  it('resolves a tier-aware cap through the household plan (the lookup identify uses) and reserves against it', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'greenhouse',
+    } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockImplementation(async (lookupPlanId) =>
+      (await lookupPlanId()) === 'greenhouse' ? 400 : 200
+    );
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+    expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 400);
+  });
+
+  it('503s before Bedrock when the cap cannot be resolved (a cap we cannot determine is not one to spend against)', async () => {
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockRejectedValue(new Error('ddb down'));
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatch(/temporarily unavailable/i);
+    expect(leafHealthBudget.reserveUsage).not.toHaveBeenCalled();
+    expect(leafHealth.assessLeafHealth).not.toHaveBeenCalled();
+  });
+
   it('still tracks real checks when the configured cap is unlimited', async () => {
-    vi.mocked(leafHealthBudget.monthlyCap).mockReturnValue(0);
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockResolvedValue(0);
     const checkPlantHealth = await subject();
     const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
 

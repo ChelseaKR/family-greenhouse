@@ -18,6 +18,22 @@ alert_email                 = ""
 enable_monitoring_alarms    = false
 enable_monitoring_dashboard = false
 
+# --- AI inference cost caps (per household per UTC month) ---
+# Identify metering is tracking-only here (and in the code default): usage is
+# counted and returned, never blocked. Only production sets "1". Made explicit
+# so the staging/production difference is visible in a diff, not implied.
+identify_metering_enabled = ""
+
+# Leaf-health and chat caps: blank = code default (200 checks and 250k/50k
+# tokens per household per month, every tier) — the behaviour this environment
+# has always had. Production's tfvars explains each lever before you set one.
+leaf_health_monthly_cap            = ""
+leaf_health_monthly_cap_seedling   = ""
+leaf_health_monthly_cap_garden     = ""
+leaf_health_monthly_cap_greenhouse = ""
+chat_budget_input_tokens           = ""
+chat_budget_output_tokens          = ""
+
 # --- Stripe billing (TEST MODE ONLY) ---
 # Staging exists to exercise the full checkout -> webhook -> entitlement loop
 # against Stripe test mode, where card 4242 4242 4242 4242 succeeds and no real

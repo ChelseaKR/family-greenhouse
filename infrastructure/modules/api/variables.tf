@@ -206,6 +206,34 @@ variable "identify_metering_enabled" {
   default     = ""
 }
 
+# --- Leaf-health monthly cap (Bedrock vision; services/leafHealthBudget.ts) ---
+# Empty = code default (a flat 200 per household per month, every tier). The
+# per-tier values inherit the flat one when empty; setting any of them makes
+# the handler resolve the household's plan first. '0' = unlimited.
+variable "leaf_health_monthly_cap" {
+  description = "Flat monthly leaf-health check cap per household for every tier without a per-tier override. Empty = code default (200). '0' = unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "leaf_health_monthly_cap_seedling" {
+  description = "Monthly leaf-health check cap for Seedling households. Empty = inherit leaf_health_monthly_cap. '0' = unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "leaf_health_monthly_cap_garden" {
+  description = "Monthly leaf-health check cap for Garden households. Empty = inherit leaf_health_monthly_cap. '0' = unlimited."
+  type        = string
+  default     = ""
+}
+
+variable "leaf_health_monthly_cap_greenhouse" {
+  description = "Monthly leaf-health check cap for Greenhouse households. Empty = inherit leaf_health_monthly_cap. '0' = unlimited."
+  type        = string
+  default     = ""
+}
+
 variable "perenual_api_key_parameter_name" {
   description = "SSM SecureString parameter name (e.g. '/family-greenhouse/perenual-api-key') holding the Perenual API key. The Lambda fetches the value at cold start; the secret material never lands in Terraform state. Empty disables Perenual integration."
   type        = string

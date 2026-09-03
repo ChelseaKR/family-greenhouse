@@ -381,6 +381,12 @@ locals {
     IDENTIFY_METERING_ENABLED = var.identify_metering_enabled
     # Leaf health uses the same Bedrock model selector as chat.
     BEDROCK_CHAT_MODEL_ID = var.bedrock_chat_model_id
+    # Per-household monthly leaf-health caps (services/leafHealthBudget.ts).
+    # Empty = code default (flat 200); an empty per-tier value inherits the flat one.
+    LEAF_HEALTH_MONTHLY_CAP            = var.leaf_health_monthly_cap
+    LEAF_HEALTH_MONTHLY_CAP_SEEDLING   = var.leaf_health_monthly_cap_seedling
+    LEAF_HEALTH_MONTHLY_CAP_GARDEN     = var.leaf_health_monthly_cap_garden
+    LEAF_HEALTH_MONTHLY_CAP_GREENHOUSE = var.leaf_health_monthly_cap_greenhouse
   }
 
   weather_environment = {

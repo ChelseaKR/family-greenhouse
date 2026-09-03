@@ -191,6 +191,16 @@ module "api" {
   posthog_key                     = var.posthog_key
   posthog_host                    = var.posthog_host
 
+  # AI inference cost caps. All blank = the code defaults every tier has
+  # always had (200 leaf-health checks; 250k/50k chat tokens). See the
+  # "AI inference cost caps" block in variables.tf for what each lever does.
+  leaf_health_monthly_cap            = var.leaf_health_monthly_cap
+  leaf_health_monthly_cap_seedling   = var.leaf_health_monthly_cap_seedling
+  leaf_health_monthly_cap_garden     = var.leaf_health_monthly_cap_garden
+  leaf_health_monthly_cap_greenhouse = var.leaf_health_monthly_cap_greenhouse
+  chat_budget_input_tokens           = var.chat_budget_input_tokens
+  chat_budget_output_tokens          = var.chat_budget_output_tokens
+
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
   # is only a warning) and every Lambda sees "" regardless of what's set.
