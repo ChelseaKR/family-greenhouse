@@ -33,7 +33,7 @@ const KNOWN_ERROR_NAMES = new Set([
   'URIError',
 ]);
 
-function telemetryAllowed(): boolean {
+export function telemetryAllowed(): boolean {
   return typeof navigator === 'undefined' || navigator.doNotTrack !== '1';
 }
 
