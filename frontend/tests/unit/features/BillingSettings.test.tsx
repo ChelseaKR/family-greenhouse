@@ -494,6 +494,61 @@ describe('purchase controls once payment activity is available', () => {
     });
   });
 
+  it('tells a trialing household when its first charge lands', async () => {
+    // A trial that does not say when it ends is a surprise charge with extra
+    // steps: status stays trialing, nothing on the page changes, and the
+    // household has no way to know it has not been billed yet or when it will
+    // be.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'trialing',
+        currentPeriodEnd: '2026-09-17T02:45:20.000Z',
+      },
+      { paid: true }
+    );
+
+    // The status marker on the plan line, and the date sentence below it.
+    expect(screen.getByText(/plan \(free trial\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Your free trial ends on/)).toBeInTheDocument();
+    expect(screen.getByText(/You will not be charged before then/)).toBeInTheDocument();
+  });
+
+  it('does not promise a trial end date to a household that already cancelled', async () => {
+    // Two dates would contradict each other; the cancellation notice is the
+    // more useful message.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'trialing',
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: '2026-09-17T02:45:20.000Z',
+      },
+      { paid: true }
+    );
+
+    expect(screen.queryByText(/Your free trial ends on/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Cancelled/)).toBeInTheDocument();
+  });
+
+  it('treats an unknown status on a live subscription as live, not as no subscription', async () => {
+    // checkout.session.completed records the subscription id without a status,
+    // so there is a window where the row cannot describe a subscription the
+    // household really holds. Offering a purchase button there earns a 409 at
+    // best and a second concurrent subscription at worst.
+    await renderBilling(
+      { planId: 'garden', stripeCustomerId: 'cus_1', stripeSubscriptionId: 'sub_1' },
+      { paid: true }
+    );
+
+    expect(screen.queryByRole('button', { name: 'Switch to Greenhouse' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Manage subscription.*to switch to Greenhouse/)).toBeInTheDocument();
+  });
+
   it('tells a cancelled household when its plan actually ends', async () => {
     // Stripe keeps a cancelled subscription serving until the period ends, so
     // status stays trialing/active and nothing else on the page changes.

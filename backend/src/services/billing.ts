@@ -264,11 +264,17 @@ export async function createCheckoutSession(args: {
   // the first, indefinitely, until someone notices the extra charge. The
   // lifetime path is exempt: a lifetime purchase's webhook handler already
   // cancels any prior recurring subscription (see applyStripeEvent).
+  // A known-dead status is the only thing that permits a new subscription
+  // checkout. An UNKNOWN status does not: checkout.session.completed records
+  // the subscription id without a status, so between that event and
+  // customer.subscription.created the household holds a live subscription the
+  // row cannot yet describe. Reading that gap as "no subscription" would let a
+  // second one start alongside the first and bill twice, which is exactly what
+  // this guard exists to prevent — so it fails closed.
   if (
     interval !== 'lifetime' &&
     sub.stripeSubscriptionId &&
-    sub.status &&
-    LIVE_SUBSCRIPTION_STATUSES.has(sub.status)
+    (!sub.status || LIVE_SUBSCRIPTION_STATUSES.has(sub.status))
   ) {
     throw new Error(
       'ALREADY_SUBSCRIBED: This household already has an active subscription. Use the billing portal to change plans.'
@@ -470,6 +476,20 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
       }
       // mode==='subscription' (or undefined → treat as subscription for
       // back-compat with the existing recurring checkout flow).
+      //
+      // `status` is deliberately NOT written here. This event does not carry
+      // the subscription's status — the session references the subscription by
+      // id — so the previous hardcoded 'active' was a guess, and a wrong one
+      // for every checkout that starts a trial (all of them: subscriptions are
+      // created with trial_period_days). customer.subscription.created and
+      // .updated do carry the real status, so they own the field. Whichever of
+      // the two events arrived last used to win, which is why a trialing
+      // household could end up recorded as active and never see that it was on
+      // a trial or when its first charge would land.
+      const expandedStatus =
+        typeof session.subscription === 'object' && session.subscription
+          ? (session.subscription as unknown as { status?: string }).status
+          : undefined;
       return {
         householdId,
         fields: {
@@ -479,7 +499,8 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
             typeof session.subscription === 'string'
               ? session.subscription
               : session.subscription?.id,
-          status: 'active',
+          // Only when Stripe actually expanded the subscription for us.
+          ...(expandedStatus ? { status: expandedStatus } : {}),
         },
       };
     }
@@ -867,14 +888,23 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     // seedling + status active). The Stripe webhook is the source of truth for
     // revenue.
     //
-    // We restrict the emit to the ONE-TIME activation events — checkout
-    // completion and subscription creation — and deliberately exclude
-    // `customer.subscription.updated`. `updated` fires on every renewal, plan
-    // change, and metadata edit while a subscription stays `active`; emitting on
-    // it would re-fire `subscription_activated` repeatedly and inflate the
-    // conversion count. (Edge: a checkout that starts in a trial fires
-    // `subscription.created` with status `trialing`, so this won't double-count
-    // with `checkout.session.completed`, which we stamp `active`.)
+    // We restrict the emit to the CHECKOUT completion events, which are the
+    // actual conversion moment and fire exactly once per purchase.
+    //
+    // `customer.subscription.updated` is excluded because it fires on every
+    // renewal, plan change, and metadata edit, and would inflate the count.
+    // `customer.subscription.created` is excluded because it accompanies the
+    // checkout event for every subscription this app creates, so counting both
+    // would double-count one conversion. A subscription created outside
+    // checkout — by hand in the Stripe dashboard, say — therefore records no
+    // conversion, which is correct: nobody converted.
+    //
+    // This used to de-duplicate on `status === 'active'` instead, which worked
+    // only because checkout.session.completed stamped that status itself while
+    // subscription.created carried the real `trialing`. That stamp was a guess
+    // about state the event does not carry, and it made every trialing
+    // household look active — so the de-duplication now keys on the event,
+    // which is the thing that is actually one-per-purchase.
     //
     // Gated on `isNew`: an ordinary Stripe webhook REDELIVERY can re-apply its
     // idempotent fields, but the ledger prevents the conversion emit from being
@@ -886,16 +916,9 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     // Stripe retry an already-applied delivery).
     const isActivationEvent =
       event.type === 'checkout.session.completed' ||
-      event.type === 'checkout.session.async_payment_succeeded' ||
-      event.type === 'customer.subscription.created';
+      event.type === 'checkout.session.async_payment_succeeded';
     const activatedPlan = delta.fields.planId;
-    if (
-      isNew &&
-      isActivationEvent &&
-      activatedPlan &&
-      activatedPlan !== 'seedling' &&
-      delta.fields.status === 'active'
-    ) {
+    if (isNew && isActivationEvent && activatedPlan && activatedPlan !== 'seedling') {
       void capture(delta.householdId, 'subscription_activated', {
         plan: activatedPlan,
         interval: intervalFromEvent(event),

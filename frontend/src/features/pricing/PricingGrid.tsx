@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 import { buttonStyles } from '@/components/buttonStyles';
@@ -23,17 +24,30 @@ import { PaidPlanGrid } from './PaidPlanGrid';
  * visitors to registration and the real purchase path lives in
  * Settings -> Billing.
  */
-export function PricingGrid() {
+export function PricingGrid({ publishedFooter }: PricingGridProps = {}) {
   // The catalog query lives in the child, not here, so that the held surface
   // mounts no data-fetching hook at all: while the hold is on this page is
   // pure static copy and needs no query client in the tree.
   if (COMMERCIAL_HOLD_ACTIVE) {
     return <CommercialHoldNotice className="mx-auto mt-10 max-w-2xl" />;
   }
-  return <PublishedPlanCatalog />;
+  return <PublishedPlanCatalog publishedFooter={publishedFooter} />;
 }
 
-function PublishedPlanCatalog() {
+interface PricingGridProps {
+  /**
+   * Rendered directly beneath the grid, but ONLY when real amounts are on
+   * screen. Callers use it for copy that describes the terms of a purchase
+   * (trial, card collection, where checkout happens). That copy contradicts
+   * the fail-closed notice, so it must never survive the fallback — this is
+   * the same defect the landing page's plans band had, and the slot exists so
+   * a caller cannot reintroduce it.
+   */
+  publishedFooter?: React.ReactNode;
+}
+
+function PublishedPlanCatalog({ publishedFooter }: PricingGridProps) {
+  const { t } = useTranslation();
   const plansQuery = useQuery({
     queryKey: ['plans'],
     queryFn: billingService.listPlans,
@@ -54,19 +68,24 @@ function PublishedPlanCatalog() {
   }
 
   return (
-    <PaidPlanGrid
-      plans={plansQuery.data.plans}
-      renderCta={(plan) => (
-        <Link
-          to="/register"
-          className={buttonStyles({
-            variant: plan.id === 'seedling' ? 'secondary' : 'primary',
-            className: 'w-full',
-          })}
-        >
-          {plan.id === 'seedling' ? 'Start free' : `Choose ${plan.name}`}
-        </Link>
-      )}
-    />
+    <>
+      <PaidPlanGrid
+        plans={plansQuery.data.plans}
+        renderCta={(plan) => (
+          <Link
+            to="/register"
+            className={buttonStyles({
+              variant: plan.id === 'seedling' ? 'secondary' : 'primary',
+              className: 'w-full',
+            })}
+          >
+            {plan.id === 'seedling'
+              ? t('pricing.startFree')
+              : t('pricing.choosePlan', { plan: plan.name })}
+          </Link>
+        )}
+      />
+      {publishedFooter}
+    </>
   );
 }

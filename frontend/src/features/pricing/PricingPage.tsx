@@ -8,6 +8,26 @@ import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 
+/**
+ * The "why would I pay for a plant app" band. Three claims, each one true of
+ * the shipped product and checkable against code:
+ *
+ *  - per-household billing: one subscription per household id, and every tier
+ *    carries a member cap (backend/src/models/plans.ts, services/billing.ts);
+ *  - raised caps: the free tier's plant cap is what a paid plan lifts, and
+ *    per-plant schedules/photos/history are shipped features;
+ *  - nothing locked away: cancelling returns the household to the free tier,
+ *    over-cap records stay readable and editable, and household export is not
+ *    plan-gated (GET /me/export requires auth only).
+ *
+ * No numbers here: caps come from the API and belong to the grid above.
+ */
+const WHY_PAID_POINTS = [
+  { title: 'pricing.whyHouseholdTitle', body: 'pricing.whyHouseholdBody' },
+  { title: 'pricing.whyRoomTitle', body: 'pricing.whyRoomBody' },
+  { title: 'pricing.whyLeaveTitle', body: 'pricing.whyLeaveBody' },
+] as const;
+
 /** Standalone public status page retained at /pricing for stable links. */
 export function PricingPage() {
   const { t } = useTranslation();
@@ -22,7 +42,7 @@ export function PricingPage() {
       ? PUBLIC_REGISTRATION_AVAILABLE
         ? 'Create a free Family Greenhouse account for up to 10 plants. Paid plans, purchases, and plan changes remain paused.'
         : 'Paid plans, purchases, plan changes, and new account registration are paused.'
-      : 'Start free with up to 10 plants, or choose a paid plan for a larger collection. Every paid plan begins with a 14-day trial.',
+      : 'Family Greenhouse is priced per household, not per person. Start free with up to 10 plants and 6 household members, or choose a paid plan for a larger collection. Paid plans begin with a 14-day trial.',
     canonical: siteUrl('/pricing'),
   });
 
@@ -54,14 +74,14 @@ export function PricingPage() {
             ? PUBLIC_REGISTRATION_AVAILABLE
               ? 'Start with a free account'
               : 'Paid plans are paused'
-            : 'Plans for every collection'
+            : 'Priced per household, not per person'
         }
         lede={
           COMMERCIAL_HOLD_ACTIVE
             ? PUBLIC_REGISTRATION_AVAILABLE
               ? 'Free accounts include up to 10 plants and 6 household members. Paid plans, purchases, and plan changes remain paused.'
               : 'New account registration, paid plans, purchases, and plan changes are currently paused.'
-            : 'Free accounts include up to 10 plants and 6 household members. Paid plans lift those caps and begin with a 14-day trial you can cancel any time.'
+            : 'Everyone you live with shares one plant list, one schedule, and one bill. Free accounts include up to 10 plants and 6 household members. Paid plans raise both limits and begin with a 14-day trial you can cancel any time.'
         }
       />
 
@@ -73,7 +93,46 @@ export function PricingPage() {
         </div>
       )}
 
-      <PricingGrid />
+      {/* Trial terms and the purchase path answer the two questions a buyer
+          has while looking at the CTA, so they sit with the grid rather than
+          only in the FAQ far below. They go through `publishedFooter` so they
+          appear only when real amounts do: describing checkout above a
+          "payments are temporarily unavailable" notice would contradict it. */}
+      <PricingGrid
+        publishedFooter={
+          <>
+            <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-6 text-gray-700">
+              {t('pricing.trialNote')}
+            </p>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-6 text-gray-600">
+              {t('pricing.howToBuyNote')}
+            </p>
+          </>
+        }
+      />
+
+      {/* Positioning, not a purchase claim: it explains what paid tiers are
+          for, which stays true whether or not checkout is open right now. */}
+      {!COMMERCIAL_HOLD_ACTIVE && (
+        <>
+          <section className="mt-16 mx-auto max-w-4xl">
+            <h2 className="font-serif text-2xl tracking-tight text-ink text-center">
+              {t('pricing.whyHeading')}
+            </h2>
+            <ul role="list" className="mt-8 grid gap-6 md:grid-cols-3">
+              {WHY_PAID_POINTS.map((point) => (
+                <li
+                  key={point.title}
+                  className="rounded-2xl border border-primary-100 bg-white p-6"
+                >
+                  <h3 className="font-medium text-gray-900">{t(point.title)}</h3>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">{t(point.body)}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
+      )}
 
       <section className="mt-16 max-w-2xl mx-auto">
         <h2 className="font-serif text-2xl tracking-tight text-ink">
@@ -90,7 +149,10 @@ export function PricingPage() {
           )}
           {(COMMERCIAL_HOLD_ACTIVE
             ? (['paidOffer', 'reactivation'] as const)
-            : (['trial', 'change', 'where'] as const)
+            : // `household` and `card` lead: "does everyone need to pay?" and
+              // "will you take my card?" are the two questions a hesitant
+              // buyer has before the ones about changing plans later.
+              (['household', 'trial', 'card', 'change', 'where'] as const)
           ).map((topic) => (
             <div key={topic}>
               <dt className="font-medium text-gray-900">{t(`pricingStatus.${topic}Question`)}</dt>

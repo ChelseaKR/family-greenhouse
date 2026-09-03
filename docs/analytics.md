@@ -25,33 +25,33 @@ We do **not** install `posthog-js`. The optional rail posts directly to PostHog'
 
 The full set is the `EventName` union in `analytics.ts`. Each is a deliberate funnel step or product interaction; we do not capture page views or DOM clicks.
 
-| Event                      | Trigger                                       | Notes                                                                                                                                                 |
-| -------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signup_completed`         | Email confirmation succeeded                  | First-party source is the trusted auth handler because confirmation does not return a JWT; no email is included.                                      |
-| `household_created`        | `POST /households` returned 201               | `ordinal: 'first' \| 'subsequent'` distinguishes onboarding vs. multi-household creation.                                                             |
-| `household_joined`         | `POST /households/join/:invite` returned 200  | Pairs with `invite_accepted`.                                                                                                                         |
-| `invite_sent`              | Admin generated an invite link                | Health metric: how many households actually try to add a co-member.                                                                                   |
-| `invite_accepted`          | A user joined via an invite link              | The conversion from `invite_sent`. Pair them in PostHog.                                                                                              |
-| `plant_added`              | Plant successfully created                    | `ordinal: 'first' \| 'subsequent'` is the activation signal.                                                                                          |
-| `plant_lifecycle_changed`  | Plant archived, restored, died, or given away | `context` carries the resulting status so retention and recovery behavior can be compared without recording plant details.                            |
-| `plants_imported`          | Bulk plant import completed                   | `context` is a bounded row count, never plant content.                                                                                                |
-| `plants_moved`             | Quick or bulk placement change completed      | `context` is a bounded plant count, never a space or plant name.                                                                                      |
-| `task_created`             | Task POST returned 200                        | `taskType` for breakdowns.                                                                                                                            |
-| `task_completed`           | Task complete POST returned 200               | The retention-defining event.                                                                                                                         |
-| `task_snoozed`             | Snooze POST returned 200                      | High snooze rate is a signal that schedules are too aggressive.                                                                                       |
-| `photo_uploaded`           | Image-confirm POST returned 200               | Engagement deepener.                                                                                                                                  |
-| `subscription_upgraded`    | Stripe checkout started                       | Client-side **intent**, currently dormant while the commercial hold removes checkout controls. Its confirmed counterpart is `subscription_activated`. |
-| `subscription_canceled`    | User opened the Stripe portal                 | Intent leading indicator, currently dormant while the commercial hold removes billing-management controls.                                            |
-| `data_exported`            | CSV download started                          | Engaged-power-user signal.                                                                                                                            |
-| `plant_identified`         | AI identification suggestion accepted         | Validates the Plant.id integration's value.                                                                                                           |
-| `leaf_health_checked`      | Leaf-health assessment submitted              | Measures use of the image assessment flow without recording the image or result text.                                                                 |
-| `plant_shared`             | Cutting-share link created                    | Intent from the household sharing a cutting.                                                                                                          |
-| `plant_share_accepted`     | Shared cutting copied into a household        | Confirmed collaboration loop completion.                                                                                                              |
-| `cutting_graft_started`    | Shared-cutting recipient starts acceptance    | Intent step immediately before the authenticated copy mutation.                                                                                       |
-| `household_switched`       | Switcher activated a different household      | Multi-household engagement.                                                                                                                           |
-| `shared_care_pulse_action` | Shared-care setup action or dismissal         | `context` is a fixed milestone key or `dismiss`.                                                                                                      |
-| `climate_location_set`     | Household location saved                      | Validates the OpenWeatherMap integration's reach.                                                                                                     |
-| `experiment_viewed`        | Landing experiment variant rendered           | Carries only the fixed experiment id and A/B variant.                                                                                                 |
+| Event                      | Trigger                                       | Notes                                                                                                                                                                                                                              |
+| -------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signup_completed`         | Email confirmation succeeded                  | First-party source is the trusted auth handler because confirmation does not return a JWT; no email is included.                                                                                                                   |
+| `household_created`        | `POST /households` returned 201               | `ordinal: 'first' \| 'subsequent'` distinguishes onboarding vs. multi-household creation.                                                                                                                                          |
+| `household_joined`         | `POST /households/join/:invite` returned 200  | Pairs with `invite_accepted`.                                                                                                                                                                                                      |
+| `invite_sent`              | Admin generated an invite link                | Health metric: how many households actually try to add a co-member.                                                                                                                                                                |
+| `invite_accepted`          | A user joined via an invite link              | The conversion from `invite_sent`. Pair them in PostHog.                                                                                                                                                                           |
+| `plant_added`              | Plant successfully created                    | `ordinal: 'first' \| 'subsequent'` is the activation signal.                                                                                                                                                                       |
+| `plant_lifecycle_changed`  | Plant archived, restored, died, or given away | `context` carries the resulting status so retention and recovery behavior can be compared without recording plant details.                                                                                                         |
+| `plants_imported`          | Bulk plant import completed                   | `context` is a bounded row count, never plant content.                                                                                                                                                                             |
+| `plants_moved`             | Quick or bulk placement change completed      | `context` is a bounded plant count, never a space or plant name.                                                                                                                                                                   |
+| `task_created`             | Task POST returned 200                        | `taskType` for breakdowns.                                                                                                                                                                                                         |
+| `task_completed`           | Task complete POST returned 200               | The retention-defining event.                                                                                                                                                                                                      |
+| `task_snoozed`             | Snooze POST returned 200                      | High snooze rate is a signal that schedules are too aggressive.                                                                                                                                                                    |
+| `photo_uploaded`           | Image-confirm POST returned 200               | Engagement deepener.                                                                                                                                                                                                               |
+| `subscription_upgraded`    | Stripe checkout session created               | Client-side **intent**, fired from `billingService.createCheckout` after the session exists. Its confirmed counterpart is `subscription_activated`.                                                                                |
+| `subscription_canceled`    | _Not wired — no call site_                    | **Declared but never fired.** The name also overstates the documented trigger (opening the billing portal is not a cancellation), so it is deliberately left unwired; real churn needs a server-confirmed event. See "Known gaps". |
+| `data_exported`            | CSV download started                          | Engaged-power-user signal.                                                                                                                                                                                                         |
+| `plant_identified`         | AI identification suggestion accepted         | Validates the Plant.id integration's value.                                                                                                                                                                                        |
+| `leaf_health_checked`      | Leaf-health assessment submitted              | Measures use of the image assessment flow without recording the image or result text.                                                                                                                                              |
+| `plant_shared`             | Cutting-share link created                    | Intent from the household sharing a cutting.                                                                                                                                                                                       |
+| `plant_share_accepted`     | Shared cutting copied into a household        | Confirmed collaboration loop completion.                                                                                                                                                                                           |
+| `cutting_graft_started`    | Shared-cutting recipient starts acceptance    | Intent step immediately before the authenticated copy mutation.                                                                                                                                                                    |
+| `household_switched`       | Switcher activated a different household      | Multi-household engagement.                                                                                                                                                                                                        |
+| `shared_care_pulse_action` | Shared-care setup action or dismissal         | `context` is a fixed milestone key or `dismiss`.                                                                                                                                                                                   |
+| `climate_location_set`     | Household location saved                      | Validates the OpenWeatherMap integration's reach.                                                                                                                                                                                  |
+| `experiment_viewed`        | Landing experiment variant rendered           | Carries only the fixed experiment id and A/B variant.                                                                                                                                                                              |
 
 ## Server-confirmed events
 
@@ -71,7 +71,8 @@ gated on `POSTHOG_KEY`, a server/project key rather than the `VITE_` browser key
 Where the server event differs from the browser ones:
 
 - **Distinct id** is `household:<householdId>` (the webhook has no user session), carried with the same `$groups: { household }` key — so it lines up with the per-household funnels above.
-- **Fires once.** Only the one-time activation events (`checkout.session.completed`, `customer.subscription.created`) emit it. `customer.subscription.updated` — which also fires on every renewal, plan change, and metadata edit — is deliberately excluded, so renewals don't inflate the conversion count. (A checkout that opens in a trial arrives as `subscription.created` with status `trialing` and is skipped until it flips to `active`.)
+- **Fires once,** at checkout completion. `customer.subscription.updated` — which also fires on every renewal, plan change, and metadata edit — is deliberately excluded, so renewals don't inflate the count.
+- **It counts trial starts, not revenue.** Every subscription checkout is created with `trial_period_days: 14`, so the moment this event fires the household has started a _free trial_; no money has moved. The trial→paid transition arrives later as `customer.subscription.updated`, which is excluded, and no other event replaces it. Read `subscription_activated` as "a 14-day trial began". The one exception is `interval: 'lifetime'`, a one-time `mode: 'payment'` purchase with no trial — those are real revenue at the moment they fire.
 - **Best-effort.** The first-party log is synchronous and local. PostHog fan-out never throws and the webhook `void`s its promise, so a vendor outage can never 5xx the webhook (which would make Stripe retry an already-applied delivery).
 
 ## Privacy & data
@@ -110,7 +111,76 @@ events, so its per-user activation funnel begins after sign-in:
 2. **Collaboration funnel**: `household_created` → `invite_sent` → `invite_accepted`, set to aggregate by the `household` group (see "Household group analytics") so the admin's `invite_sent` and the invitee's `invite_accepted` pair across users. Below 50% of households reaching `invite_sent` means the collaborative pitch isn't landing.
 3. **Climate adoption**: `household_created` → `climate_location_set`. If <10%, the dashboard nudge needs work.
 4. **Upgrade intent**: `subscription_upgraded` from each tier. Pair with cohorts (>10 plants, >2 members).
-5. **True conversion**: `subscription_upgraded` → `subscription_activated` (intent → confirmed), aggregated by the `household` group. The drop-off is checkout abandonment; the confirmed step is the only revenue-true number.
+5. **Trial conversion**: `subscription_upgraded` → `subscription_activated` (intent → trial started), aggregated by the `household` group. The drop-off is checkout abandonment. Note that the second step is a trial start, not revenue — see "Known gaps" for why paid conversion is not yet measurable.
+
+## What this instrumentation cannot answer
+
+Every rail in `analytics.ts` is identity-gated: the first-party
+`/telemetry/product` endpoint requires a JWT, and the optional PostHog rail
+requires a `distinct_id`. An anonymous visitor therefore produces **no events
+at all**. That is the privacy posture working as designed — no beaconing from
+marketing pages — but it means the acquisition half of the funnel is dark.
+
+Observable today (authenticated, or trusted server-side):
+
+| Funnel step                                  | Observable? | Where                                                                                                                                  |
+| -------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Landing page view                            | No          | no event exists                                                                                                                        |
+| Care guide / blog view                       | No          | no event exists                                                                                                                        |
+| Pricing page view                            | No          | no event exists                                                                                                                        |
+| Signup started (register form)               | No          | no event exists                                                                                                                        |
+| Signup completed                             | Yes         | auth handler, `POST /auth/confirm`                                                                                                     |
+| Household created / first plant / first task | Yes         | browser shim, service layer                                                                                                            |
+| Checkout reached (intent)                    | Yes         | `billingService.createCheckout`                                                                                                        |
+| Trial started                                | Yes         | Stripe webhook → `subscription_activated`                                                                                              |
+| **Trial converted to paid**                  | **No**      | excluded `customer.subscription.updated`; no replacement                                                                               |
+| **Churn / cancellation**                     | **Partly**  | `customer.subscription.deleted` updates the row and writes a generic `subscription_updated` log line, but emits no typed product event |
+
+So these questions currently have no answer:
+
+- _"Did anyone who read a care guide sign up?"_ — **No.** Care guides emit
+  nothing, and nothing links an anonymous read to a later account.
+- _"Which entry page precedes a paid conversion?"_ — **No.** No entry page is
+  recorded, and no attribution is carried through signup.
+- _"What fraction of pricing-page visitors start a trial?"_ — **No.** The
+  denominator does not exist.
+- _"How many trials became paying customers?"_ — **No.** See the trial note
+  above; nothing fires at the paid transition.
+- _"How many paying households cancelled this month?"_ — **Only by grepping**
+  the `subscription_updated` log line, not from a typed product event.
+
+`experiment_viewed` deserves a specific warning: the landing hero A/B test
+calls `track()` from an anonymous page, so it reaches no rail and the
+experiment currently yields **zero data**. The variant survives as a
+super-property and is attached to later authenticated events only when PostHog
+is configured — which it is not (see "Known gaps"). Do not read the A/B test as
+having produced a result.
+
+## Known gaps
+
+1. **No paid-conversion event.** The highest-value gap now that plans are
+   live. Fixing it means handling the trialing→active transition (or the first
+   `invoice.payment_succeeded` with `billing_reason: 'subscription_cycle'`) and
+   emitting a distinct server event. It touches the Stripe webhook, so it is a
+   deliberate change, not a drive-by one.
+2. **No typed churn event.** `customer.subscription.deleted` is already handled
+   in `applyStripeEvent`; emitting a `subscription_deactivated` server event
+   there would mirror `subscription_activated` symmetrically and give real
+   churn (a deleted subscription), rather than the portal-open proxy that
+   `subscription_canceled` was specified as.
+3. **No vendor is configured.** Neither `PRODUCTION_POSTHOG_KEY` nor
+   `PRODUCTION_GTM_ID` is set, so PostHog and GTM are both inert in production
+   and CloudWatch Logs Insights is the only place any of this can be read. The
+   funnels listed above are queries someone has to write by hand.
+4. **Top-of-funnel measurement requires a privacy decision.** Making landing,
+   pricing, and care-guide reach measurable means recording something for
+   visitors who have not signed in. The privacy page currently states we do not
+   capture page views; any change here must update that page in the same
+   commit.
+5. **GTM is undisclosed.** `analytics.ts` will inject
+   `googletagmanager.com/gtm.js` if `VITE_GTM_ID` is ever set, but the privacy
+   page's third-party list does not mention Google. Setting that variable
+   without amending the privacy page would make the page inaccurate.
 
 ## Optional hosted funnel UI
 

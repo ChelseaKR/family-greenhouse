@@ -463,10 +463,19 @@ jobs:
             # artifacts that can never exist — observed in the v0.2.0 run).
             # The newest PUBLISHED version number is what deploys archive.
             # $LATEST is a literal Lambda qualifier in the JMESPath expression.
+            #
+            # `| sort -n | tail -1` is load-bearing, not defensive. The AWS CLI
+            # paginates list-versions-by-function at 50 and applies --query to
+            # EACH PAGE, concatenating the results — so once a function passes
+            # 50 versions this returns one maximum per page ("49\n50") and the
+            # get-function below fails with a qualifier ValidationException.
+            # That broke the v0.23.4 deploy the first time a function crossed
+            # the page boundary. Taking the max of the per-page maxima is
+            # correct for any number of pages.
             # shellcheck disable=SC2016
             ver=$(aws lambda list-versions-by-function --function-name "$FUNCTION_NAME" \
               --query 'max_by(Versions[?Version!=`$LATEST`], &to_number(Version)).Version' \
-              --output text)
+              --output text | sort -n | tail -1)
             if [ -z "$ver" ] || [ "$ver" = "None" ]; then
               echo "::error::${FUNCTION_NAME}: no published version is available for rollback"
               exit 1

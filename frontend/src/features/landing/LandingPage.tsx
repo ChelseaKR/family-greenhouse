@@ -38,7 +38,8 @@ import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment'
 import { track, registerSuperProperties } from '@/services/analytics';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL, siteUrl } from '@/config/site';
-import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
+import { planBandFor } from './planBand';
 import clsx from 'clsx';
 
 // Hero copy for the two framings under test. Variant A (control) is the
@@ -531,6 +532,8 @@ export function LandingPage() {
   // A/B test of the hero framing (control vs solo-first). Bucketing is
   // stable per browser; see lib/experiment.ts.
   const variant = useHeroVariant();
+  // Both commercial gates decide the plans-band copy, not registration alone.
+  const planBand = planBandFor(COMMERCIAL_HOLD_ACTIVE, PUBLIC_REGISTRATION_AVAILABLE);
 
   useMetaTags({
     title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
@@ -920,28 +923,22 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Free registration stays open while paid pricing and purchase content
-          remain behind the repository-level commercial hold. */}
+      {/* Plans band. Copy is chosen by BOTH commercial gates — see
+          planBandFor — so this heading can never announce a pause over a
+          catalog that is actually selling. `PricingGrid` remains the
+          authority on whether any amount is shown at all. */}
       <div id="pricing" className="py-20 sm:py-28 bg-paper">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <SectionHeading
             eyebrow="Plans"
-            title={
-              PUBLIC_REGISTRATION_AVAILABLE
-                ? 'Start free; paid plans are paused'
-                : 'New accounts and paid plans are paused'
-            }
-            description={
-              PUBLIC_REGISTRATION_AVAILABLE
-                ? 'Free accounts include up to 10 plants and 6 household members, with no credit card. Paid plans, purchases, and plan changes remain unavailable.'
-                : 'Existing account holders can still sign in. New accounts, paid plans, purchases, and plan changes remain unavailable.'
-            }
+            title={planBand.title}
+            description={planBand.description}
           />
           <PricingGrid />
           <p className="mt-12 text-center text-sm text-gray-700">
-            Read the full{' '}
+            {planBand.footerNote}{' '}
             <Link to="/pricing" className="font-medium text-primary-700 hover:underline">
-              plan-status notice
+              {planBand.footerLink}
             </Link>
             .
           </p>

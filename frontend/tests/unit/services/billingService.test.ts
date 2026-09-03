@@ -7,6 +7,7 @@ vi.mock('@/services/api', () => ({
 vi.mock('@/services/analytics', () => ({ track: vi.fn(), setTelemetryAuthToken: vi.fn() }));
 
 import { api } from '@/services/api';
+import { track } from '@/services/analytics';
 import { billingService } from '@/services/billingService';
 
 describe('billingService.listPlans', () => {
@@ -70,5 +71,43 @@ describe('billingService.listPlans', () => {
     expect(catalog.plans[0]).not.toHaveProperty('monthlyPrice');
     expect(catalog.plans[0]).not.toHaveProperty('annualPrice');
     expect(catalog.plans[0]).not.toHaveProperty('lifetimePrice');
+  });
+});
+
+describe('billingService.createCheckout upgrade-intent event', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('records upgrade intent with closed-enum properties once the session exists', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { url: 'https://checkout.stripe.test/s' } });
+
+    await billingService.createCheckout({
+      planId: 'greenhouse',
+      interval: 'year',
+      checkoutAttemptId: 'attempt-1',
+    });
+
+    expect(track).toHaveBeenCalledWith('subscription_upgraded', {
+      upgradeTo: 'greenhouse',
+      interval: 'year',
+    });
+  });
+
+  it('does not record intent when checkout never opened', async () => {
+    // The server re-checks the commercial gate and answers 503 when payment
+    // activity is off. A blocked attempt is not a checkout the user reached,
+    // so counting it would inflate the intent step of the funnel.
+    vi.mocked(api.post).mockRejectedValueOnce(new Error('Request failed with status code 503'));
+
+    await expect(
+      billingService.createCheckout({
+        planId: 'garden',
+        interval: 'month',
+        checkoutAttemptId: 'attempt-2',
+      })
+    ).rejects.toThrow();
+
+    expect(track).not.toHaveBeenCalled();
   });
 });

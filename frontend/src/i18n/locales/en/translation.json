@@ -271,7 +271,11 @@
     "whereAnswer": "Plan changes happen inside your account, under Settings → Billing, and are made by a household admin. Purchases are not offered in the mobile apps.",
     "dataQuestion": "What happens to existing data?",
     "dataAnswerHeld": "Existing plants, household records, tasks, and care history remain available under the current plan limits. The hold does not delete user data.",
-    "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants and members stay readable and editable — only adding more is blocked until you are back under the limit."
+    "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants and members stay readable and editable — only adding more is blocked until you are back under the limit.",
+    "householdQuestion": "Does everyone in my household need their own plan?",
+    "householdAnswer": "No. One plan covers the whole household. A household admin holds the subscription, and every member shares the same plants, tasks, and care history under it — up to the member limit shown on each plan.",
+    "cardQuestion": "Do I need a credit card?",
+    "cardAnswer": "Not for a free account — the Seedling tier needs no card at all. Starting a paid plan goes through our payment provider's checkout, which collects a card before the trial begins; nothing is charged until the 14-day trial ends."
   },
   "petSafeSignup": {
     "title": "Keeping a pet-safe home is easier when everyone’s on the same page",
@@ -589,7 +593,8 @@
       "ownedForLife": "You own this plan permanently.",
       "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier.",
       "cancelPending": "Cancelled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
-      "cancelPendingNoDate": "Cancelled — your {{plan}} plan ends when the current period does, then your household returns to Seedling."
+      "cancelPendingNoDate": "Cancelled — your {{plan}} plan ends when the current period does, then your household returns to Seedling.",
+      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and cancelling any time before it costs nothing."
     }
   },
   "notifications": {
@@ -716,6 +721,15 @@
     "featureEverythingGarden": "Everything in Garden",
     "featureApiAccess": "API access for automation",
     "featureBulkImport": "Bulk import and export",
-    "featurePrioritySupport": "Priority support"
+    "featurePrioritySupport": "Priority support",
+    "trialNote": "Monthly and yearly plans begin with a 14-day trial. Checkout collects a card up front, you are not charged until the 14 days are up, and cancelling before then costs nothing. A lifetime plan is a single payment and has no trial.",
+    "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
+    "whyHeading": "Why a paid plan",
+    "whyHouseholdTitle": "One bill for the house",
+    "whyHouseholdBody": "A plan covers the whole household on a single subscription. The people you share your plants with are members of your plan, not extra seats to buy.",
+    "whyRoomTitle": "Room for the collection you have",
+    "whyRoomBody": "A paid plan is what you move to when the free plant limit stops being enough. Every plant keeps its own schedule, photos, and care history no matter how many you add.",
+    "whyLeaveTitle": "Nothing locked away if you leave",
+    "whyLeaveBody": "Cancelling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time."
   }
 }

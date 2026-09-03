@@ -101,6 +101,42 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   same reason. Re-measured and re-dated alongside the file counts the ruleset
   guard adds.
 
+## [0.23.4] - 2026-09-03
+
+### Fixed
+
+- A household on a free trial is now told so, and told when its first charge
+  lands. `checkout.session.completed` stamped `status: 'active'` on every
+  subscription, which is state that event does not carry — it references the
+  subscription by id — and is wrong for every checkout that starts a trial,
+  which is all of them. Whichever of the two webhook events arrived last won,
+  so a trialing household could be recorded as active and never see the trial
+  marker or its end date. `customer.subscription.created`/`.updated` now own
+  the field, because they are the events that actually carry it.
+- The conversion analytics no longer depend on that stamp. Emitting
+  `subscription_activated` was gated on `status === 'active'`, which worked
+  only because checkout stamped it — so removing the stamp would have silenced
+  the event for every trial subscription. De-duplication now keys on the
+  checkout event itself, which is the thing that is genuinely one per
+  purchase; `customer.subscription.created` is excluded because it always
+  accompanies a checkout.
+- Both double-billing guards now fail closed on an unknown status. Between
+  `checkout.session.completed` (which records the subscription id) and
+  `customer.subscription.created` (which records its status) a household holds
+  a live subscription its row cannot yet describe. Reading that gap as "no
+  subscription" would let a second one start alongside the first.
+- The client's live-subscription status set matches the server's. It was
+  missing `unpaid` and `paused`, so a household in either state was offered a
+  purchase button the server refuses with a 409.
+- Production deploys work again past 50 Lambda versions. The rollback snapshot
+  read the newest published version with `aws lambda list-versions-by-function
+--query`, and the AWS CLI paginates that call at 50 while applying `--query`
+  to each page — so once a function crossed the boundary it returned one
+  maximum per page (`49\n50`) and `get-function` rejected it as an invalid
+  qualifier. It is a pre-existing latent defect that fired the first time a
+  function accumulated 51 versions; the snapshot runs before any code ships,
+  so the failed deploy changed nothing in production.
+
 ## [0.23.3] - 2026-09-02
 
 ### Added

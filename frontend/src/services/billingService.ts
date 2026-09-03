@@ -1,4 +1,5 @@
 import { api } from './api';
+import { track } from './analytics';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
@@ -172,6 +173,16 @@ export const billingService = {
     checkoutAttemptId: string;
   }): Promise<{ url: string }> {
     const response = await api.post<{ url: string }>('/billing/checkout', input);
+    // Upgrade INTENT, recorded once the session exists and we are about to
+    // hand the user to Stripe. Deliberately after the await: a 503 from the
+    // commercial gate, or any other failure, is not an upgrade attempt that
+    // reached checkout. Its server-confirmed counterpart is
+    // `subscription_activated` (backend/src/utils/serverAnalytics.ts); the
+    // drop-off between the two is checkout abandonment.
+    //
+    // Both properties are closed enums already accepted by the server-side
+    // schema (backend/src/models/telemetry.ts), so no free text is sent.
+    track('subscription_upgraded', { upgradeTo: input.planId, interval: input.interval });
     return response.data;
   },
 

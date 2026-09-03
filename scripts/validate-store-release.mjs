@@ -207,8 +207,23 @@ if (/NSPrivacyAccessedAPITypes<\/key>\s*<array\s*\/>/.test(privacyManifest)) {
 
 const metadata = json('store-assets/metadata/en-US.json');
 assertEqual(metadata.shared.appName, appName, 'Shared store app name');
-assertEqual(metadata.googlePlay.title, appName, 'Google Play title');
-assertEqual(metadata.appStore.name, appName, 'App Store name');
+
+// The store listing name and the native display name are DIFFERENT fields with
+// different jobs, so they are checked for a shared prefix rather than equality.
+// `appName` is the home-screen label, where short wins (iOS truncates it at
+// roughly 12 characters). The store title is the single most heavily indexed
+// field in both stores' search, and "Family Greenhouse" alone contains no term
+// anyone searches for — the descriptor after the brand is what makes the app
+// findable at all. Requiring the brand as a prefix keeps the two in step (a
+// rename still has to be reflected in the listing) without forcing the listing
+// to throw away the ~13 indexed characters the brand does not use.
+function assertBrandPrefix(value, label) {
+  if (!value.startsWith(appName)) {
+    fail(`${label}: expected it to start with the Capacitor appName "${appName}", got "${value}"`);
+  }
+}
+assertBrandPrefix(metadata.googlePlay.title, 'Google Play title');
+assertBrandPrefix(metadata.appStore.name, 'App Store name');
 assertLength(metadata.googlePlay.title, 30, 'Google Play title');
 assertLength(metadata.googlePlay.shortDescription, 80, 'Google Play short description');
 assertLength(metadata.googlePlay.fullDescription, 4000, 'Google Play full description');

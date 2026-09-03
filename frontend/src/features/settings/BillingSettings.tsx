@@ -39,7 +39,7 @@ const planRank = (id: PlanId) => PLAN_ORDER.indexOf(id);
  *  LIVE_SUBSCRIPTION_STATUSES in backend/src/services/billing.ts. A household
  *  in one of these must change plans through the portal: the API rejects a
  *  second purchase with 409 precisely to avoid double-billing. */
-const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
+const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 
 /** Map the API's failure modes onto something a household can act on. The
  *  server is the authority on all three; none of them are recoverable by
@@ -151,10 +151,14 @@ export function BillingSettings() {
   const limits = evaluatePlanLimits(usage);
   // A live recurring subscription must be changed in the portal, never by a
   // second purchase. Mirrors the server-side guard that returns 409.
+  // Mirrors the server guard, including its fail-closed treatment of an
+  // unknown status: checkout.session.completed records the subscription id
+  // without a status, so there is a window where the household holds a live
+  // subscription the row cannot yet describe. Offering a purchase button there
+  // would earn a 409 at best and a second concurrent subscription at worst.
   const hasLiveSubscription =
     !!subQuery.data?.stripeSubscriptionId &&
-    !!subQuery.data?.status &&
-    LIVE_SUBSCRIPTION_STATUSES.has(subQuery.data.status);
+    (!subQuery.data.status || LIVE_SUBSCRIPTION_STATUSES.has(subQuery.data.status));
 
   return (
     <div className="space-y-6">
@@ -208,6 +212,19 @@ export function BillingSettings() {
           plan
           {subQuery.data?.status === 'trialing' && ' (free trial)'}.
         </p>
+        {/* A trial that does not say when it ends is a surprise charge with
+            extra steps. Only shown when the household has NOT already
+            cancelled — the cancellation notice below is the more useful
+            message in that case, and two dates would contradict each other. */}
+        {subQuery.data?.status === 'trialing' &&
+          !subQuery.data?.cancelAtPeriodEnd &&
+          subQuery.data?.currentPeriodEnd && (
+            <p className="mt-1 text-sm text-gray-600">
+              {t('settings.billing.trialEnds', {
+                date: formatDate(subQuery.data.currentPeriodEnd),
+              })}
+            </p>
+          )}
         {/* Stripe keeps a cancelled subscription serving until the period
             ends, so `status` stays active/trialing and nothing else on this
             page changes. Without this line a household that cancelled sees no
