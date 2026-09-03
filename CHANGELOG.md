@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.23.5] - 2026-09-03
+
 ### Added
 
 - The care assistant can now answer "is this plant safe for my cat/dog?" from
