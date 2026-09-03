@@ -46,7 +46,7 @@
     "build": "npm run build --workspaces --if-present",
     "eval": "npm run eval --workspace backend",
     "i18n:check": "npm run i18n:check --workspace frontend",
-    "reads:check": "npm run reads:check --workspace frontend",
+    "reads:check": "npm run reads:check --workspaces --if-present",
     "mobile:validate": "node scripts/validate-store-release.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "api:check": "node scripts/check-api-spec.mjs",

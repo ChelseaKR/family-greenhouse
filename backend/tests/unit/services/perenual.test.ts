@@ -37,7 +37,7 @@ describe('perenual client', () => {
     delete process.env.PERENUAL_API_KEY_PARAMETER_NAME;
     const perenual = await import('../../../src/services/perenual.js');
     perenual.__resetApiKeyForTests();
-    expect(await perenual.isConfigured()).toBe(false);
+    expect(await perenual.configurationStatus()).toBe('unset');
     expect(await perenual.searchSpecies('monstera')).toBeNull();
     expect(await perenual.getSpecies(1)).toBeNull();
     expect(await perenual.lookupSpecies(1)).toEqual({
@@ -127,22 +127,35 @@ describe('perenual client', () => {
     });
   });
 
-  it('retries parameter resolution after a transient Parameter Store failure', async () => {
+  it('reports a transient Parameter Store failure as unavailable — not unset — and retries it', async () => {
     process.env = { ...ORIGINAL, PERENUAL_API_KEY_PARAMETER_NAME: '/app/perenual-key' };
     delete process.env.PERENUAL_API_KEY;
     const perenual = await import('../../../src/services/perenual.js');
     perenual.__resetApiKeyForTests();
 
     // First call: Parameter Store throttles. The integration must degrade
-    // for THIS call only — not cache 'unset' for the container lifetime.
+    // for THIS call only — not cache 'unset' for the container lifetime —
+    // and it must say "could not read the key", not "no key". The two used
+    // to share `false`, and pestAlerts skips an unconfigured integration
+    // for the day while retrying an unavailable one (ADR 0010).
     ssmSend.mockRejectedValueOnce(new Error('ThrottlingException'));
-    expect(await perenual.isConfigured()).toBe(false);
+    expect(await perenual.configurationStatus()).toBe('unavailable');
+
+    // A lookup during the blip is a retryable upstream failure, never the
+    // cacheable "unconfigured" answer, and never reaches the network.
+    ssmSend.mockRejectedValueOnce(new Error('ThrottlingException'));
+    expect(await perenual.lookupSpecies(1)).toEqual({
+      status: 'unavailable',
+      reason: 'upstream_error',
+      result: null,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
 
     // Next call (same warm container, NO test reset): fetch succeeds and
     // the integration comes back.
     ssmSend.mockResolvedValueOnce({ Parameter: { Value: 'real-key' } });
-    expect(await perenual.isConfigured()).toBe(true);
-    expect(ssmSend).toHaveBeenCalledTimes(2);
+    expect(await perenual.configurationStatus()).toBe('configured');
+    expect(ssmSend).toHaveBeenCalledTimes(3);
   });
 
   it('falls back to the env literal when the parameter fetch fails transiently', async () => {
@@ -155,7 +168,7 @@ describe('perenual client', () => {
     perenual.__resetApiKeyForTests();
 
     ssmSend.mockRejectedValueOnce(new Error('network'));
-    expect(await perenual.isConfigured()).toBe(true);
+    expect(await perenual.configurationStatus()).toBe('configured');
   });
 
   it('caches the unset sentinel only for a genuinely empty parameter', async () => {
@@ -166,8 +179,8 @@ describe('perenual client', () => {
 
     // Deliberately blank parameter: cache 'unset' and don't re-fetch.
     ssmSend.mockResolvedValue({ Parameter: { Value: '   ' } });
-    expect(await perenual.isConfigured()).toBe(false);
-    expect(await perenual.isConfigured()).toBe(false);
+    expect(await perenual.configurationStatus()).toBe('unset');
+    expect(await perenual.configurationStatus()).toBe('unset');
     expect(ssmSend).toHaveBeenCalledTimes(1);
   });
 

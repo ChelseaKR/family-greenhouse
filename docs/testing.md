@@ -9,15 +9,15 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
      script counts must have a row here naming the path it lives at. File counts
      are deliberately not written down; see the note below the table) -->
 
-| Layer                         | Tool               | Where                                                                   | Test cases |
-| ----------------------------- | ------------------ | ----------------------------------------------------------------------- | ---------- |
-| Backend unit                  | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}` | 1,501      |
-| Backend integration           | vitest + supertest | `backend/tests/integration/`                                            | 199        |
-| Backend RAG + pet-safety eval | vitest             | `backend/tests/eval/`                                                   | 73         |
-| Frontend unit + component     | vitest + RTL + MSW | `frontend/tests/unit/`                                                  | 781        |
-| Frontend colocated unit       | vitest             | `frontend/src/**/*.test.ts`                                             | 78         |
-| Frontend integration          | vitest + RTL + MSW | `frontend/tests/integration/`                                           | 1          |
-| Frontend e2e                  | Playwright         | `frontend/tests/e2e/`                                                   | see below  |
+| Layer                         | Tool               | Where                                                                           | Test cases |
+| ----------------------------- | ------------------ | ------------------------------------------------------------------------------- | ---------- |
+| Backend unit                  | vitest             | `backend/tests/unit/{config,handlers,middleware,models,scripts,services,utils}` | 1,501      |
+| Backend integration           | vitest + supertest | `backend/tests/integration/`                                                    | 199        |
+| Backend RAG + pet-safety eval | vitest             | `backend/tests/eval/`                                                           | 73         |
+| Frontend unit + component     | vitest + RTL + MSW | `frontend/tests/unit/`                                                          | 781        |
+| Frontend colocated unit       | vitest             | `frontend/src/**/*.test.ts`                                                     | 78         |
+| Frontend integration          | vitest + RTL + MSW | `frontend/tests/integration/`                                                   | 1          |
+| Frontend e2e                  | Playwright         | `frontend/tests/e2e/`                                                           | see below  |
 
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
