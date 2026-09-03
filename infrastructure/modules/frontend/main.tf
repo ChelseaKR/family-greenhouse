@@ -195,6 +195,26 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+# Clean-URL router for the prerendered marketing pages.
+#
+# The frontend origin is a PRIVATE S3 bucket reached over the REST API (Origin
+# Access Control), not an S3 website endpoint, so it has no directory-index
+# behaviour: a request for /pricing asks for an object keyed "pricing", gets a
+# 403, and falls through to the SPA error response below. `default_root_object`
+# only covers the bare "/". Without this function every prerendered file would
+# be built, uploaded, and never served — the empty JS shell would keep going out
+# to crawlers and link unfurlers.
+#
+# The function body lives in functions/spa-router.js with its reasoning, and is
+# unit-tested by frontend/scripts/spa-router.test.mjs.
+resource "aws_cloudfront_function" "spa_router" {
+  name    = "${var.project_name}-spa-router-${var.environment}"
+  runtime = "cloudfront-js-2.0"
+  comment = "Map clean marketing URLs to prerendered index.html objects"
+  publish = true
+  code    = file("${path.module}/functions/spa-router.js")
+}
+
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
@@ -226,6 +246,14 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3.id
 
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    # Resolve /pricing -> /pricing/index.html so the prerendered marketing
+    # pages are actually served. Only on the default behavior: the /plants/*
+    # behavior targets the images bucket and must not be rewritten.
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_router.arn
+    }
   }
 
   # Cache behavior for plant photos. S3 keys in the images bucket are
@@ -246,17 +274,27 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3.id
   }
 
-  # SPA fallback
+  # SPA fallback for every path that has NO prerendered file: the dashboard and
+  # the rest of the authenticated app, plus any unknown URL. S3 returns 403 for
+  # a missing key on a private bucket and 404 where the key is listable, so both
+  # map to the same document.
+  #
+  # This MUST be app-shell.html, not index.html. Now that the marketing routes
+  # are prerendered, index.html is the rendered HOMEPAGE — serving it here would
+  # flash the landing page at every signed-in user loading /dashboard directly,
+  # and hand React markup that doesn't match the route it's about to render.
+  # app-shell.html is the pristine empty shell that frontend/scripts/prerender.mjs
+  # writes for exactly this purpose; the app boots from it the way it always has.
   custom_error_response {
     error_code         = 404
     response_code      = 200
-    response_page_path = "/index.html"
+    response_page_path = "/app-shell.html"
   }
 
   custom_error_response {
     error_code         = 403
     response_code      = 200
-    response_page_path = "/index.html"
+    response_page_path = "/app-shell.html"
   }
 
   restrictions {

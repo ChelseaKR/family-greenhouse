@@ -41,19 +41,25 @@ describe('experiment bucketing', () => {
     expect(draw).toBeLessThan(1);
   });
 
-  it('useHeroVariant returns the persisted assignment', () => {
+  it('useHeroVariant returns the control while the experiment is paused', () => {
+    // Paused for prerendering: the server snapshot can only render the
+    // control, so a client swap to B would shift the hero after the
+    // prerendered HTML had painted. The hook overrides even a persisted B.
+    // getVariant above still buckets correctly, so resuming is a one-line
+    // change once the hero has a fixed min-height.
     localStorage.setItem(KEY, '0.8');
+    expect(getVariant(HERO_EXPERIMENT)).toBe('B');
     let seen: string | undefined;
     function Probe() {
       seen = useHeroVariant();
       return null;
     }
     render(<Probe />);
-    expect(seen).toBe('B');
+    expect(seen).toBe('A');
   });
 });
 
-describe('LandingPage renders both hero variants', () => {
+describe('LandingPage hero while the experiment is paused', () => {
   beforeEach(() => {
     localStorage.clear();
   });
@@ -81,11 +87,16 @@ describe('LandingPage renders both hero variants', () => {
     expect(screen.queryByText(/ask the care assistant/i)).not.toBeInTheDocument();
   });
 
-  it('renders the solo-first (B) hero', () => {
+  it('does not render the solo-first (B) hero while the experiment is paused', () => {
+    // A persisted B draw must not reach the hero: that swap is the layout
+    // shift Lighthouse caught against prerendered HTML. The B copy still
+    // lives in heroCopy for when the experiment resumes; what is asserted
+    // here is that nothing routes to it today.
     localStorage.setItem(KEY, '0.8');
     renderLanding();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Keep');
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('plant alive');
+    const heading = screen.getByRole('heading', { level: 1 }).textContent ?? '';
+    expect(heading).toContain('I thought');
+    expect(heading).not.toContain('plant alive');
     expect(screen.getAllByRole('link', { name: /sign up free/i }).length).toBeGreaterThan(0);
   });
 });

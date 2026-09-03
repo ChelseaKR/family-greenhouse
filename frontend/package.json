@@ -8,7 +8,9 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/build-sitemap.mjs",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
+    "prerender": "node scripts/prerender.mjs",
+    "seo:check": "node scripts/check-prerender-coverage.mjs",
     "sitemap": "node scripts/build-sitemap.mjs",
     "sitemap:check": "node scripts/build-sitemap.mjs --check",
     "brand:render": "./scripts/render-brand-assets.sh",
@@ -18,6 +20,7 @@
     "lint:fix": "eslint src --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:edge": "node --test scripts/spa-router.test.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "i18n:check": "node scripts/check-i18n-catalogs.mjs && node scripts/check-hardcoded-strings.mjs",

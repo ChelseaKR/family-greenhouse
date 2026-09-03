@@ -13,15 +13,15 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 | Backend unit              | vitest             | `backend/tests/unit/{config,handlers,middleware,models,services,utils}`   | 91    | 1,501           |
 | Backend integration       | vitest + supertest | `backend/tests/integration/`                                              | 8     | 199        |
 | Backend RAG + pet-safety eval | vitest         | `backend/tests/eval/`                                                     | 2     | 73         |
-| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 102   | 758        |
-| Frontend colocated unit   | vitest             | `frontend/src/**/*.test.ts`                                               | 14    | 72         |
+| Frontend unit + component | vitest + RTL + MSW | `frontend/tests/unit/`                                                    | 103   | 781        |
+| Frontend colocated unit   | vitest             | `frontend/src/**/*.test.ts`                                               | 14    | 78         |
 | Frontend integration      | vitest + RTL + MSW | `frontend/tests/integration/`                                             | 1     | 1          |
 | Frontend e2e              | Playwright         | `frontend/tests/e2e/`                                                     | 24    | see below  |
 
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,604 vitest cases** across 218 files — 1,773 backend, 831 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,633 vitest cases** across 219 files — 1,773 backend, 860 frontend. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
 
 Of the 24 Playwright specs, 22 run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 

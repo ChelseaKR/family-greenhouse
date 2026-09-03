@@ -89,9 +89,27 @@ export function getVariant(experiment: string): Variant {
  * the value is read consistently and never tears between renders.
  */
 export function useHeroVariant(): Variant {
+  // PAUSED while the public routes are prerendered.
+  //
+  // The server snapshot has no localStorage, so it can only render the
+  // control. The client snapshot then drew at random, and a 'B' draw
+  // rewrote the hero *after* the prerendered HTML had painted — different
+  // copy, different height, a measurable layout shift on roughly half of
+  // landing-page visits. Before prerendering this cost nothing: the page
+  // painted blank first, so there was no earlier state to shift from.
+  // Lighthouse's CLS assertion caught it, and it failed by coin flip
+  // rather than consistently, which is exactly the shape a retry hides.
+  //
+  // Pausing rather than deleting: the harness, the analytics event and the
+  // variant copy all stay. `experiment_viewed` now honestly reports the
+  // control, which is what every visitor actually sees.
+  //
+  // To resume: give the hero a fixed min-height so swapping copy moves
+  // nothing below it, then restore `() => getVariant(HERO_EXPERIMENT)` as
+  // the client snapshot. Re-running it as-is would reintroduce the shift.
   return useSyncExternalStore(
     () => () => {},
-    () => getVariant(HERO_EXPERIMENT),
+    () => 'A',
     () => 'A'
   );
 }

@@ -1,6 +1,6 @@
 import '@/lib/zodConfig';
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
@@ -10,6 +10,7 @@ import { initPwaRegistration } from './services/pwaRegistration';
 import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
+import { useAuthStore } from './store/authStore';
 // Self-hosted brand fonts. Bitter Variable is the display face used in the
 // wordmark and major headlines; Instrument Sans is the body face. Both are loaded
 // at app boot from /node_modules so the page renders in-brand on first
@@ -46,7 +47,9 @@ const queryClient = new QueryClient({
   },
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')!;
+
+const app = (
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -55,3 +58,35 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+/**
+ * Hydrate the prerendered markup when — and only when — it is markup for the
+ * URL actually being loaded and for the auth state we are about to render in.
+ *
+ * scripts/prerender.mjs stamps each page with `data-prerendered="<path>"`. Two
+ * cases must NOT hydrate, because React would find markup that doesn't match
+ * what it renders, log a hydration error, and throw the whole tree away:
+ *
+ *  1. Path mismatch. CloudFront serves app-shell.html (empty #root) for
+ *     non-prerendered paths, so this normally can't happen — but if the edge
+ *     config ever lags a deploy, an unrelated prerendered page could arrive
+ *     here. Client-render it instead of melting down.
+ *  2. `/` while signed in. The prerender runs logged out, so index.html holds
+ *     the landing page; App redirects an authenticated visitor to /dashboard
+ *     instead of rendering it.
+ *
+ * Anything else — the empty shell, a first-time visitor — falls through to the
+ * plain client render this app has always done.
+ */
+const prerenderedPath = rootElement.dataset.prerendered;
+const currentPath = window.location.pathname.replace(/(.)\/$/, '$1');
+const authRedirectsAway = currentPath === '/' && useAuthStore.getState().isAuthenticated;
+
+if (prerenderedPath !== undefined && prerenderedPath === currentPath && !authRedirectsAway) {
+  hydrateRoot(rootElement, app);
+} else {
+  // Drop any server markup we've decided not to hydrate so React starts from a
+  // clean container rather than rendering over it.
+  rootElement.replaceChildren();
+  createRoot(rootElement).render(app);
+}

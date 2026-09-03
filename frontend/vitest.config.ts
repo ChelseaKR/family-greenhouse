@@ -33,6 +33,13 @@ export default defineConfig({
         'tests/setup.ts',
         'tests/e2e/**',
         'src/main.tsx',
+        // Build-time SSR entry, same category as main.tsx: a bootstrap module
+        // that only runs inside `vite build --ssr` + scripts/prerender.mjs.
+        // Its output IS gated — scripts/check-prerender-coverage.mjs asserts
+        // every rendered page's markup and metadata on every build — and its
+        // one piece of real logic (the head serializer) lives in
+        // src/config/seo.ts, which is unit-tested.
+        'src/entry-server.tsx',
         'src/sentry.ts',
         '**/*.config.*',
         '**/sw.ts',

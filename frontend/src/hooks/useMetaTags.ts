@@ -1,36 +1,20 @@
-import { useEffect } from 'react';
+import { useContext, useEffect } from 'react';
+import { MetaSinkContext } from './metaSink';
+import type { MetaTags } from '@/config/seo';
 
 /**
  * Mutate <head> meta tags imperatively for the lifetime of a route. Cleans
  * up on unmount so leaving an article doesn't leak that article's
  * description onto the next page.
  *
- * Why imperative DOM rather than a Helmet-style abstraction: the SPA
- * doesn't pre-render, so the OG/Twitter scrapers see the index HTML
- * regardless. These tags are for the in-tab experience (browser title,
- * shared link previews from a logged-in user, etc.). For real social
- * preview of blog posts, we need server-rendered or build-time meta —
- * tracked separately.
+ * Why imperative DOM rather than a Helmet-style abstraction: this runs for the
+ * in-tab experience (browser title, a link shared by a logged-in user). The
+ * tags a crawler or a social unfurler sees are produced at BUILD time instead —
+ * `scripts/prerender.mjs` renders each public route and writes the same tags as
+ * literal HTML, from the same `MetaTags` payload, via `config/seo.ts`. The two
+ * paths share that module so they can't disagree.
  */
-export interface MetaTags {
-  title?: string;
-  description?: string;
-  /** Path under /og-cards/ for a per-post OG image, if shipped. */
-  ogImage?: string;
-  /** Open Graph object type. Marketing pages default to `website`; posts and
-   * care guides should use `article`. */
-  ogType?: 'website' | 'article';
-  /** Absolute canonical URL for this route. Sets <link rel="canonical"> + og:url
-   *  so Google (which renders the SPA) attributes the page to the right URL
-   *  instead of guessing — important for the indexable marketing routes. */
-  canonical?: string;
-  /** Search-engine indexing policy. Use `noindex, nofollow` for app-only,
-   * tokenized, or error pages that can otherwise look like valid SPA URLs. */
-  robots?: 'index, follow' | 'noindex, follow' | 'noindex, nofollow';
-  /** Optional JSON-LD payload (Article, FAQ, etc.). The shape isn't
-   *  validated here — caller is responsible for emitting valid schema.org. */
-  jsonLd?: Record<string, unknown>;
-}
+export type { MetaTags } from '@/config/seo';
 
 function setMeta(name: string, content: string, attr: 'name' | 'property' = 'name'): () => void {
   const selector = `meta[${attr}="${name}"]`;
@@ -55,7 +39,11 @@ function setCanonical(href: string): () => void {
     const previous = existing.getAttribute('href');
     existing.setAttribute('href', href);
     return () => {
-      if (previous === null) existing.removeAttribute('href');
+      // An href-less <link rel="canonical"> is worse than no tag at all: it
+      // is the "empty canonical" a crawler reads as "this page canonicalizes
+      // to nothing". Restoring an absent href by dropping the whole element
+      // leaves the safe state (no canonical → Google uses the request URL).
+      if (previous === null) existing.remove();
       else existing.setAttribute('href', previous);
     };
   }
@@ -67,6 +55,13 @@ function setCanonical(href: string): () => void {
 }
 
 export function useMetaTags(meta: MetaTags): void {
+  // Prerender capture. Effects don't run during server rendering, so the
+  // build-time prerender reads the route's head data out of this sink during
+  // render instead. `MetaSinkContext` has no provider in the browser, so
+  // `sink` is always null there and this line does nothing at runtime.
+  const sink = useContext(MetaSinkContext);
+  if (sink) sink.current = meta;
+
   // Callers construct `jsonLd` fresh each render, so a referential dep would
   // rebuild every head tag on every render (title/JSON-LD flicker). Depend on
   // a stable serialization instead.
