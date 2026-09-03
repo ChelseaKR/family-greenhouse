@@ -40,6 +40,79 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   corpus — the table stays the only source). The red-team corpus gains a
   `verdict-integrity` invariant so injected text cannot flip, invent, or
   soften a verdict.
+- Eight blog posts, weighted toward the wedge the product owns — several
+  people, one set of plants: splitting plant care with a partner, watering
+  while on vacation, what to leave for a plant sitter, care instructions for
+  non-plant people, and merging collections when moving in together, plus
+  three high-intent diagnostic posts (signs of overwatering, why leaves turn
+  yellow, and how much light a room gets). They deliberately make no new
+  toxicity or pet-safety claims — that ground belongs to the care guides and
+  `/pet-safe`, where a wrong claim can get an animal hurt — and the two that
+  touch pet safety link to the checker rather than restating a verdict. Where
+  a mechanism is genuinely ambiguous the post says so and tells the reader to
+  change one variable and wait. The prose lands entirely in the lazy `posts`
+  chunk that only `/blog/:slug` pulls, so every critical-path budget is
+  untouched; only the all-JS-combined budget moved, 386 → 402 kB against
+  389.69 kB measured.
+- The Household page now shows how care is actually split. A care-load panel
+  gives every member their completed care over the last 30 days and the number
+  of tasks they are holding right now, with a pooled row for the plant sitter
+  and a row for anyone who has left with assignments still on them. When one
+  person is carrying most of it the card says so and points at the up-for-grabs
+  pool — never at the people who did less. It reads only the household activity
+  feed and the task list, both already member-scoped, so no visibility boundary
+  moves; it saves each person keeping a private tally, which is where nagging
+  starts. If the activity feed hits its page limit before covering 30 days the
+  card says "since <date>" rather than printing a share over a period it never
+  saw.
+- Sitter links can be scheduled to start on a chosen day. The create form
+  gained the start date the API has always accepted and nothing ever sent, so a
+  link made a week before a trip no longer goes live immediately and burns a
+  week of its own window — length is now counted from the day cover begins. The
+  sitter's own page also tells them when their access ends: `GET /sitter/:token`
+  has always returned `expiresAt` and the page discarded it, so a neighbour had
+  no idea how long they were on the hook or that access stops on its own.
+- Nine plants the site publishes a full care guide for now have a row in the
+  pet-toxicity table. `/care/<plant>` shipped fourteen new guides while
+  `/pet-safe` still answered "we don't have that one in our checker yet" for
+  bird-of-paradise, anthurium, chinese-evergreen, english-ivy, money-tree,
+  christmas-cactus, parlor-palm, hoya, and nerve-plant. Every verdict — the
+  first four toxic, the last five non-toxic — was read off that plant's own
+  ASPCA entry page, not inferred from the slug and not taken from the care
+  guide's prose.
+- Paid conversion and churn are countable for the first time.
+  `subscription_paid` fires when Stripe moves a subscription to `active` from a
+  non-active status, which it only does once an invoice has actually been paid,
+  and carries `from` so a trial conversion (`trialing`) stays separable from a
+  recovered payment (`past_due`) — real revenue, but not a new conversion.
+  `subscription_deactivated` fires on `customer.subscription.deleted` and
+  reports the tier the household lost, read before the delta rewrites `planId`,
+  with a bucketed `churnReason` so voluntary churn is countable apart from
+  dunning failure. Both emits are gated on the existing `STRIPE_EVENT#<id>`
+  dedupe ledger, which is written after the apply, so a crash in between loses
+  an event rather than counting revenue twice: these numbers undercount, never
+  double-count, and `docs/analytics.md` now states that rather than leaving it
+  to be discovered.
+- `npm run verify` now runs `figures:check`, `api:check`, `sitemap:check`, and
+  `brand:check`. Four committed artifacts were standing in for a computation
+  with nothing re-running the computation and comparing.
+  `scripts/check-doc-figures.mjs` re-derives its figures from the artifacts
+  that own them, importing `findHandlerRoutes` from `check-api-spec.mjs` rather
+  than reimplementing the scan, and fails in both directions — a wrong figure
+  fails, and so does a document that stops stating the figure, because a check
+  satisfied by deleting the sentence is a check that quietly stops checking.
+  `build-sitemap.mjs --check` builds the XML in memory and byte-compares,
+  writing nothing: `prebuild` regenerated the sitemap before every vite build,
+  so CI's Build, Lighthouse, and bundle-size jobs each overwrote the committed
+  file on a clean checkout and threw the result away, while search engines read
+  the committed bytes. `check-brand-assets.mjs` — which SHA256-binds four
+  SVG/PNG pairs and dimension-checks 44 rasters — had no call site anywhere
+  outside its own definition. And `check-api-spec.mjs` ran only in `ci.yml`, so
+  a contributor's green `npm run verify` said nothing about API-spec drift.
+- `docs/PR-TRIAGE.md` records the state of the open pull-request queue as of
+  `5655398`, with each finding checked against the repo or the running API
+  rather than against the pull requests' own descriptions. It is a dated
+  snapshot, not a live view.
 
 - A settled read with no data is now a decision the repo has written down, not
   one re-derived per bug. [ADR 0010](docs/adr/0010-settled-read-states.md)
@@ -86,6 +159,47 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   resolve to the right tier, the billing portal keeps managing them, and
   entitlement, which reads `planId` alone, is untouched. No Stripe object was
   archived.
+- The free tier's leaf-health allowance drops from 200 checks a month to 20 at
+  the next `terraform apply`. Two of the three AI cost caps were tier-blind: a
+  $0 Seedling household got the same 200 leaf-health checks as a $9.99
+  Greenhouse household, an inference exposure of up to $1.79 per free household
+  per month against no revenue. Production now sets
+  `leaf_health_monthly_cap_seedling = "20"`, which takes that tier's ceiling
+  from $1.18 to $0.12; Garden and Greenhouse are left blank and inherit the
+  flat 200, so no paying household's allowance changes, and identification was
+  already 3/30/100 by tier. Nothing is revoked retroactively — the cap binds on
+  the next reservation, so a household already past 20 in the current period is
+  blocked until the month rolls over.
+- Every AI cap is settable per environment, with the code defaults unchanged.
+  `leaf_health_monthly_cap` and its `_seedling`, `_garden`, and `_greenhouse`
+  overrides are declared at the root and wired through to the plants Lambda: a
+  blank value means the code default and `"0"` means unlimited for that tier.
+  The handler makes no plan lookup at all until a per-tier value exists, so the
+  all-blank path is the pre-tiering path read for read, and a failed plan lookup
+  fails closed with the reservation's 503.
+  `chat_budget_{input,output}_tokens` existed only inside the module, so a
+  tfvars value for either was silently dropped; both are now declared at the
+  root and passed through, and validation refuses `"0"`, which the chat code
+  reads as a zero budget rather than as unlimited. Chat is not tier-aware.
+  Staging lists every cap explicitly as `""`, including
+  `identify_metering_enabled`, so the production-only enforcement is visible
+  rather than implied.
+- The pricing page and the landing plans band lead with the household wedge:
+  priced per household, not per person. Competitors in this category bill per
+  user and this app does not, and the headline, lede, and meta description said
+  nothing about it. The page adds a "why a paid plan" band whose three claims
+  are each checkable against code — per-household billing (one subscription per
+  household id, and every tier has a member cap), raised caps, and nothing
+  locked away on cancellation (over-cap records stay readable and editable, and
+  `GET /me/export` is not plan-gated) — plus two FAQ entries for the questions
+  asked before the ones about changing plans later: whether everyone in a
+  household needs their own plan, and whether a credit card is required. Trial
+  terms and the purchase path now sit with the grid instead of only in the FAQ
+  far below, through a slot that renders only when real amounts do. Plan caps
+  are the actual free-versus-paid difference, so they are set apart from the
+  tier description rather than sharing its styling, which takes that text from
+  7.6:1 to 12.9:1 contrast. No amount is hardcoded: prices stay API-sourced and
+  both commercial gates still fail closed.
 
 ### Fixed
 
@@ -126,6 +240,69 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   export should be restricted is a product decision this change does not make.
   API access, the adjacent Greenhouse bullet, is enforced
   (`backend/src/handlers/apiKeys/handler.ts`) and stays.
+- The landing page no longer announces a pause directly above live prices. Its
+  plans band branched on the registration kill switch alone, so with the
+  commercial hold lifted it kept rendering "Start free; paid plans are paused"
+  and "purchases and plan changes remain unavailable" above a `PricingGrid`
+  publishing real, purchasable amounts — telling every visitor to the
+  highest-traffic surface that they could not buy. The copy now keys off both
+  gates, so a pause can never be announced over a selling catalog, and a guard
+  test pins it: the band may claim paid plans are paused only while the hold is
+  active, and may never publish an amount.
+- The sitter-link list no longer shows an expired link as active. `status` is
+  only the revocation flag, so a link whose window had closed stayed under
+  "Active links" — with a live Revoke button — for the better part of a week,
+  because the DynamoDB TTL keeps a three-day buffer past `expiresAt` and the
+  sweeper lags behind that. Each link's state is now derived from its window —
+  active, scheduled, expired, or revoked — and an ended window moves to a
+  "recently ended" note that says access has stopped.
+- "fern" no longer leads the pet-safety checker with a green "Boston fern is
+  pet-safe" card above the genuinely toxic asparagus fern. Boston fern's bare
+  `fern` alias put the non-toxic row in the exact-match tier, outranking every
+  later tier; that alias is removed, the mirror of the note already on
+  asparagus fern, and "fern" still reaches Boston fern through the substring
+  tier. The nine new rows are deliberately narrow for the same reason:
+  money-tree carries no `money plant` alias, because in ordinary use "money
+  plant" more often means pothos or jade, both toxic and both already in the
+  table; parlor-palm carries no bare `palm`, because sago palm is in this table
+  and causes often-fatal liver failure; christmas-cactus carries no bare
+  `christmas`, because poinsettia is toxic; and bird-of-paradise carries none
+  of Caesalpinia gilliesii's common names, a different and harsher shrub sold
+  under the same name. Ties inside a matching tier now break toxic-first, since
+  the page renders every match but the first card is the one a worried reader
+  acts on; this re-orders within a tier only and never widens a result set.
+- `subscription_activated` is no longer read as revenue. Every subscription
+  checkout carries `trial_period_days: 14`, so the event counts trial starts,
+  not payments — which is why "has anyone ever paid us?" had no answer anywhere
+  in the system. It keeps its real meaning (a trial began, or a lifetime
+  purchase completed, the one case where it is money), and `docs/analytics.md`
+  stops listing `customer.subscription.created` among its triggers, which the
+  code has never emitted on, and stops answering "No"/"Partly" to the trial
+  conversion and churn rows. The unwired `subscription_canceled` stays unwired:
+  its documented trigger is "opened the billing portal", which is not a
+  cancellation. `docs/billing.md` also stops saying the checkout events set
+  status to active, which #380 removed.
+- `experiment_viewed` reached no rail at all, so the landing hero A/B test had
+  produced zero rows. It is fired by an anonymous visitor and every rail is
+  identity-gated; pre-identity events are now held in memory and replayed at
+  sign-in. Nothing is sent while the visitor is anonymous, so the privacy
+  posture is unchanged and the anonymous-visitor characterization tests still
+  assert zero network traffic. This buys the numerator, not the denominator,
+  and the docs say so.
+- Two committed figures were stale and are now corrected and gated.
+  `docs/quality-audit.md` stated the handler-route count as 66, in two places,
+  while describing that count as CI-enforced — the enforcement was real and
+  green, it simply never reported its number back to the document quoting it,
+  so the audit sat 39 routes stale (the handlers expose 105) while truthfully
+  describing a passing gate. `README.md`'s standards-conformance row claimed
+  root and workspace versions were "aligned at 0.23.0" when they had moved on;
+  `validate-store-release.mjs` enforces that three-way alignment but never
+  reads the README and is in neither `verify` nor CI. Both figures are now
+  re-derived on every `npm run verify`.
+- The pricing grid's CTA labels and cadence suffixes are translated. They went
+  through hardcoded English while the catalog already carried the keys in both
+  locales, because they sit inside JSX expressions, which the hardcoded-string
+  scanner does not inspect.
 - The dashboard climate card no longer renders a failed read as a calm night
   (#351). `if (!data) return null` put a failed climate read in the same
   silence as "no household active" and "no location saved with the integration
