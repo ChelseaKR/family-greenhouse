@@ -58,6 +58,7 @@ const HouseholdPage = lazyNamed(
 const SettingsPage = lazyNamed(() => import('@/features/settings/SettingsPage'), 'SettingsPage');
 const AccountPage = lazyNamed(() => import('@/features/settings/AccountPage'), 'AccountPage');
 const HelpPage = lazyNamed(() => import('@/features/help/HelpPage'), 'HelpPage');
+const HelpTopicPage = lazyNamed(() => import('@/features/help/HelpTopicPage'), 'HelpTopicPage');
 const AnalyticsPage = lazyNamed(
   () => import('@/features/analytics/AnalyticsPage'),
   'AnalyticsPage'
@@ -186,6 +187,12 @@ function App() {
               <Route path="/support" element={<SupportPage />} />
               <Route path="/legal/terms" element={<TermsPage />} />
               <Route path="/status" element={<StatusPage />} />
+              {/* Help is PUBLIC on purpose. Behind ProtectedRoute it was
+                  unreachable to the two people most likely to need it — someone
+                  deciding whether to sign up, and someone locked out of their
+                  account — and no search engine could index a single answer. */}
+              <Route path="/help" element={<HelpPage />} />
+              <Route path="/help/:topicId" element={<HelpTopicPage />} />
               <Route path="/pricing" element={<PricingPage />} />
 
               {/* Protected routes */}
@@ -212,7 +219,6 @@ function App() {
                   <Route path="/household" element={<HouseholdPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/settings/billing" element={<SettingsPage />} />
-                  <Route path="/help" element={<HelpPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
                 </Route>
               </Route>

@@ -79,7 +79,9 @@ describe('free registration with paid activity on hold', () => {
   it('states the authoritative free tier limits on acquisition and help surfaces', () => {
     const repositoryRoot = resolve(process.cwd(), '..');
     for (const relativePath of [
-      'frontend/src/features/help/HelpPage.tsx',
+      // The help answers live in helpContent.tsx; HelpPage.tsx is now only the
+      // browse/filter shell around them.
+      'frontend/src/features/help/helpContent.tsx',
       'frontend/src/features/landing/LandingPage.tsx',
       'frontend/src/features/pricing/PricingPage.tsx',
       'frontend/src/i18n/locales/en/translation.json',
