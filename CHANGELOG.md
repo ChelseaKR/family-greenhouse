@@ -128,6 +128,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - The client's live-subscription status set matches the server's. It was
   missing `unpaid` and `paused`, so a household in either state was offered a
   purchase button the server refuses with a 409.
+- Production deploys work again past 50 Lambda versions. The rollback snapshot
+  read the newest published version with `aws lambda list-versions-by-function
+--query`, and the AWS CLI paginates that call at 50 while applying `--query`
+  to each page — so once a function crossed the boundary it returned one
+  maximum per page (`49\n50`) and `get-function` rejected it as an invalid
+  qualifier. It is a pre-existing latent defect that fired the first time a
+  function accumulated 51 versions; the snapshot runs before any code ships,
+  so the failed deploy changed nothing in production.
 
 ## [0.23.3] - 2026-09-02
 
