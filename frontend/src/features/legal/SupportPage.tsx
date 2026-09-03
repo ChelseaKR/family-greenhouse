@@ -10,7 +10,7 @@ export function SupportPage() {
   });
 
   return (
-    <LegalShell title="Support" effectiveDate="July 12, 2026">
+    <LegalShell title="Support" effectiveDate="September 2, 2026">
       <p className="lead">
         Need help with Family Greenhouse? Email{' '}
         <a href="mailto:support@familygreenhouse.net">support@familygreenhouse.net</a>. Include the
@@ -25,8 +25,8 @@ export function SupportPage() {
       </p>
       <h2>Plant-care help</h2>
       <p>
-        Signed-in users can open Help inside the app for guidance on plants, tasks, reminders,
-        households, and troubleshooting.
+        The public <Link to="/help">help pages</Link> cover plants, tasks, reminders, households,
+        billing, and troubleshooting. You do not need an account or to be signed in to read them.
       </p>
       <h2>Service status</h2>
       <p>

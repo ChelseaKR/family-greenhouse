@@ -12,7 +12,7 @@ export function AccountDeletionPage() {
   });
 
   return (
-    <LegalShell title="Delete your account" effectiveDate="July 12, 2026">
+    <LegalShell title="Delete your account" effectiveDate="September 2, 2026">
       <p className="lead">
         You can permanently delete your Family Greenhouse account in the app, even if you have not
         created or joined a household.
@@ -25,6 +25,10 @@ export function AccountDeletionPage() {
         </li>
         <li>Confirm the permanent deletion.</li>
       </ol>
+      <p>
+        If you are the only admin of a household that still has other members, deletion is refused
+        until you promote another member to admin, so the household is not left without one.
+      </p>
       <p>
         <Link to={isAuthenticated ? '/account' : '/login'}>
           {isAuthenticated ? 'Open Account & data' : 'Sign in to delete your account'}

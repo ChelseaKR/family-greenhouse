@@ -19,7 +19,7 @@ export function PrivacyPage() {
   });
 
   return (
-    <LegalShell title="Privacy" effectiveDate="July 12, 2026">
+    <LegalShell title="Privacy" effectiveDate="September 2, 2026">
       <p className="lead">
         This page explains what data Family Greenhouse collects, why, and what you can do about it.
         We&rsquo;ve deliberately written it as plain text rather than a template — if anything is
@@ -31,8 +31,10 @@ export function PrivacyPage() {
       <p>To run the app, we collect:</p>
       <ul>
         <li>
-          <strong>Account info</strong> — email, password (hashed), and display name. Stored in AWS
-          Cognito.
+          <strong>Account info</strong> — email, password (hashed), and display name. Your password
+          is only ever held by AWS Cognito. Your email and display name are stored in Cognito and
+          also copied onto your membership record in our database, so the app can show who is in a
+          household and reach you about it.
         </li>
         <li>
           <strong>Plant + task data</strong> — every plant, task, and completion you record, along
@@ -44,7 +46,9 @@ export function PrivacyPage() {
           we got back from the geocoder; we do not request precise device geolocation.
         </li>
         <li>
-          <strong>Optional phone number</strong> — only if you opt in to SMS reminders.
+          <strong>Optional phone number</strong> — only if you opt in to SMS reminders, and only
+          after you verify it. Turning SMS reminders back off stops the messages but keeps the
+          number on file; clear the field in notification settings to remove it.
         </li>
         <li>
           <strong>Notification credentials</strong> — a browser push subscription or native-device
@@ -71,8 +75,10 @@ export function PrivacyPage() {
         </li>
         <li>
           Sanitized browser error summaries and LCP, CLS, and INP performance measurements with an
-          anonymous session UUID, normalized route, and release id. We do not send stack traces,
-          query strings, account ids, email, phone, tokens, or plant and household names.
+          anonymous session UUID, normalized route, and release id. These go to our own API, not to
+          a vendor. On this rail we do not send stack traces, query strings, account ids, email,
+          phone, tokens, or plant and household names — the error name and message are both
+          restricted to a fixed list of values, so free text cannot ride along.
         </li>
       </ul>
       <p>
@@ -94,11 +100,12 @@ export function PrivacyPage() {
           not sent back to the model as training data by Family Greenhouse.
         </li>
         <li>
-          <strong>Stripe</strong> — the retained integration may process supported,
-          already-originated billing events, including subscription cancellations. New Checkout and
-          customer-portal sessions are disabled during the commercial hold. We never see a card
-          number; if Stripe returns a historical customer id, it is stored only for the associated
-          billing record.
+          <strong>Stripe</strong> (only if your household buys or manages a paid plan) — runs
+          checkout, the billing portal, plan changes, and cancellations. Stripe receives your email
+          address and your household&rsquo;s opaque id so it can create and match the customer
+          record. We never see or store a card number. On your household&rsquo;s billing record we
+          store the Stripe customer and subscription ids, the plan, its status, and the current
+          period end.
         </li>
         <li>
           <strong>Plant.id</strong> (optional, only if you use plant identification) — receives the
@@ -114,7 +121,29 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>PostHog</strong> (optional, when analytics is enabled) — receives the events
-          listed above with your pseudonymous distinct id.
+          listed above with your pseudonymous account and household ids.
+        </li>
+        <li>
+          <strong>Push delivery services</strong> (only if you turn on push notifications) — a
+          browser or device push notification is handed to whichever service your browser or phone
+          nominates, such as Google, Apple, Mozilla, or Microsoft. They deliver the message to your
+          device.
+        </li>
+        <li>
+          <strong>Sentry</strong> (optional error monitoring, and switched off on this service
+          today) — the app and the API can each be configured with a Sentry key. When one is set,
+          crash reports go to Sentry, and unlike the measurements described above those reports do
+          include stack traces and browsing breadcrumbs. No Sentry key is configured on the hosted
+          service, so no crash data is sent to Sentry today.
+        </li>
+        <li>
+          <strong>Google Tag Manager</strong> (optional, and switched off on this service today) —
+          the app can be configured with a Tag Manager container id. When one is set, signing in
+          loads Google Tag Manager from <code>googletagmanager.com</code> and the same lifecycle
+          events, your pseudonymous account id, and your household id are pushed to it; Tag Manager
+          then forwards them to whatever destinations that container is configured for, and can
+          collect further data of its own once loaded. No container id is configured on the hosted
+          service, so nothing is sent to Google today.
         </li>
       </ul>
       <p>
@@ -146,17 +175,20 @@ export function PrivacyPage() {
       <h2>Your rights</h2>
       <ul>
         <li>
-          <strong>Export.</strong> Download all your plants and tasks as CSV from{' '}
-          <em>Settings → Account → Download my data</em>.
+          <strong>Export.</strong> From <em>Settings → Account → Download my data</em> you can take
+          a CSV of the plants and tasks in your current household, or a full JSON export covering
+          every household you belong to plus your account details and notification settings. Photos
+          and the completion history are not part of either file today.
         </li>
         <li>
           <strong>Delete.</strong> The <em>Delete account</em> button in Settings wipes your login
           and notification credentials and removes you from every household you&rsquo;re a member
-          of. It is also available from the setup screen before you create or join a household.
-          Shared care facts such as a past completion may remain useful to other members, but your
-          name and account id on those records are replaced with &ldquo;Former member.&rdquo; See
-          our <a href="/account-deletion">account-deletion instructions</a> for the web request
-          path.
+          of. It is also available from the setup screen before you create or join a household. If
+          you are the only admin of a household that still has other members, deletion is refused
+          until you promote someone else, so the household is not left without an admin. Shared care
+          facts such as a past completion may remain useful to other members, but your name and
+          account id on those records are replaced with &ldquo;Former member.&rdquo; See our{' '}
+          <a href="/account-deletion">account-deletion instructions</a> for the web request path.
         </li>
         <li>
           <strong>Access / correction.</strong> Email{' '}
