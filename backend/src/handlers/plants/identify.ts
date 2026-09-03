@@ -10,6 +10,11 @@ import * as plantIdentification from '../../services/plantIdentification.js';
 import * as identifyBudget from '../../services/identifyBudget.js';
 import * as billing from '../../services/billing.js';
 import { getPlan } from '../../models/plans.js';
+import {
+  PLANT_ID_CREDITS_PER_IDENTIFICATION,
+  PLANT_ID_USD_PER_CREDIT,
+} from '../../config/upstreamCosts.js';
+import { logger } from '../../utils/logger.js';
 import { successResponse } from '../../utils/response.js';
 
 // We accept a data URL or a bare base64 string. The Plant.id SDK accepts both.
@@ -97,6 +102,23 @@ export const identify = createHandler(
     let finalUsed = used;
     if (result.configured && !meteringEnabled) {
       finalUsed = await identifyBudget.incrementUsage(bucketId);
+    }
+
+    // Cost accounting, not gating. A configured call consumed one Plant.id
+    // credit; log what it cost in the same shape as `bedrock_invoke` logs
+    // `costUsd`, so a month of identification spend can be summed from
+    // CloudWatch the same way (evals/UNIT-ECONOMICS.md, "Verifying this for
+    // free"). The not-configured fallback consumed nothing and logs nothing.
+    if (result.configured) {
+      logger.info(
+        {
+          bucketId,
+          planId: plan.id,
+          credits: PLANT_ID_CREDITS_PER_IDENTIFICATION,
+          costUsd: PLANT_ID_USD_PER_CREDIT * PLANT_ID_CREDITS_PER_IDENTIFICATION,
+        },
+        'plant_id_identify'
+      );
     }
 
     return successResponse({
