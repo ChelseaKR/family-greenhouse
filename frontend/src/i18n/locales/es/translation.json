@@ -635,7 +635,13 @@
       "startsLabel": "Empieza (opcional)",
       "startsHelp": "Déjalo vacío para empezar ahora. Indica el día en que empieza tu viaje y el enlace no funcionará hasta entonces.",
       "lengthLabel": "Dura (días)",
-      "lengthHelp": "Hasta 60 días, contados desde el día de inicio.",
+            "lengthHelpPlan": "Hasta {{days}} días según tu plan, contados desde el día de inicio.",
+      "lengthHelpChecking": "Comprobando cuánto permite tu plan…",
+      "lengthHelpUnknown": "No pudimos confirmar la duración máxima de tu plan en este momento. El límite de tu plan se aplicará igualmente al crear el enlace.",
+      "seedlingHint": "¿Un viaje más largo? Garden permite enlaces de cuidador de hasta 90 días, varios a la vez y una guía de traspaso imprimible.",
+      "seePlans": "Ver planes",
+      "activeCap_one": "Tu plan mantiene {{count}} enlace de cuidador activo a la vez. Desactiva el actual para crear otro.",
+      "activeCap_other": "Tu plan permite {{count}} enlaces de cuidador activos a la vez. Desactiva uno para crear otro.",
       "labelLabel": "Etiqueta (opcional)",
       "labelHelp": "Un nombre amable que verá tu cuidador. Sin datos personales.",
       "currentHeading": "Enlaces que has compartido",
@@ -1017,7 +1023,7 @@
       },
       "sitter": {
         "heading": "Enlaces de cuidador",
-        "body": "Un miembro del hogar puede crear un enlace temporal de cuidador sin necesidad de crear una cuenta para esa persona. Quien tenga ese enlace puede ver las tareas de cuidado pendientes, los nombres de las plantas, el espacio actual de cada planta y su breve nota de ubicación, y puede marcar esas tareas como completadas durante el periodo de cobertura que hayas seleccionado. Los enlaces de cuidador no exponen la ubicación guardada de tu hogar, las notas privadas de plantas o tareas, ni la identidad y los datos de contacto de los miembros del hogar. El enlace es una credencial al portador, así que envíaselo solo a alguien de confianza. Caduca como máximo a los 60 días y cualquier miembro del hogar puede revocarlo antes. No pedimos ni almacenamos la identidad del cuidador."
+        "body": "Un miembro del hogar puede crear un enlace temporal de cuidador sin necesidad de crear una cuenta para esa persona. Quien tenga ese enlace puede ver las tareas de cuidado pendientes, los nombres de las plantas, el espacio actual de cada planta y su breve nota de ubicación, y puede marcar esas tareas como completadas durante el periodo de cobertura que hayas seleccionado. Los enlaces de cuidador no exponen la ubicación guardada de tu hogar, las notas privadas de plantas o tareas, ni la identidad y los datos de contacto de los miembros del hogar. El enlace es una credencial al portador, así que envíaselo solo a alguien de confianza. Caduca como máximo a los 90 días y cualquier miembro del hogar puede revocarlo antes. No pedimos ni almacenamos la identidad del cuidador."
       },
       "rights": {
         "heading": "Tus derechos",

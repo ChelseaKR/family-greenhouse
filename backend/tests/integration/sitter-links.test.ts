@@ -83,13 +83,56 @@ describe('sitter link creation (authed)', () => {
     expect(list.body[0].id).toBe(res.body.id);
   });
 
-  it('rejects an over-long window (> 60 days)', async () => {
+  it('rejects a window past the 90-day ceiling (400, before any plan check)', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'garden';
     const res = await request(app)
       .post(`/households/${seedHouseholdId}/sitter-links`)
       .set('Authorization', `Bearer ${token}`)
       .send({ expiresAt: inFuture(120) });
     expect(res.status).toBe(400);
+  });
+
+  it('Seedling: refuses (402) an 8-day window and a second live link; Garden allows 30 days', async () => {
+    const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'seedling';
+
+    const tooLong = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(8) });
+    expect(tooLong.status).toBe(402);
+    expect(tooLong.body.message).toMatch(/up to 7 days/);
+
+    const first = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(7) });
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(3) });
+    expect(second.status).toBe(402);
+    expect(second.body.message).toMatch(/1 live sitter link at a time/);
+
+    // Revoking the live one frees the slot.
+    await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${first.body.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    const again = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(3) });
+    expect(again.status).toBe(201);
+
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const month = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(30) });
+    expect(month.status).toBe(201);
   });
 
   it('rejects creation for a household the caller is not in (403)', async () => {
@@ -326,6 +369,8 @@ describe('sitter links are open to every member; revocation is creator-or-admin'
   });
 
   it('a member can revoke their own link but not another member’s; an admin can revoke any', async () => {
+    // Two live links at once needs a paid plan (the Seedling cap is 1).
+    db.households.get(seedHouseholdId)!.planId = 'garden';
     const admin = await loginAsSeed();
     const member = await loginAsSeedMember();
 

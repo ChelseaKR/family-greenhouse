@@ -26,6 +26,11 @@ import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import { getPlan } from '../../models/plans.js';
+import {
+  checkSitterLinkPlanGate,
+  countLiveSitterLinks,
+  sitterWindowDays,
+} from '../../services/sitterPlanGate.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { rateLimit } from '../../middleware/rateLimit.js';
@@ -600,10 +605,24 @@ export const createSitterLink = createHandler(
       );
     }
 
+    // Plan gate (ADR 0015): window length and live-link count are the
+    // free/paid line. Seedling keeps one live link of up to seven days;
+    // Garden/Greenhouse get 90-day windows and several links. Enforced here,
+    // where the plan is known — the schema's 90-day cap is only the ceiling.
+    const startsAt = validatedBody.startsAt ?? new Date().toISOString();
+    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    const gate = checkSitterLinkPlanGate(plan, {
+      windowDays: sitterWindowDays(startsAt, validatedBody.expiresAt),
+      liveLinks: countLiveSitterLinks(await sitterService.listSitterLinks(householdId)),
+    });
+    if (!gate.ok) {
+      throw createHttpError(402, gate.message);
+    }
+
     const link = await sitterService.createSitterLink({
       householdId,
       createdBy: user.userId,
-      startsAt: validatedBody.startsAt ?? new Date().toISOString(),
+      startsAt,
       expiresAt: validatedBody.expiresAt,
       label: validatedBody.label ?? null,
     });

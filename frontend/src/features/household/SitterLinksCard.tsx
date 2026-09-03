@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardDocumentIcon, KeyIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { householdService, type CreatedSitterLink } from '@/services/householdService';
+import { billingService } from '@/services/billingService';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -12,6 +14,7 @@ import { formatDate } from '@/i18n/format';
 import { useAuthStore } from '@/store/authStore';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { groupSitterLinks, sitterLinkState } from './sitterLinkState';
+import { SITTER_LINK_MAX_DAYS_CEILING, sitterLinkLimitsFor } from './sitterPlanLimits';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,8 +52,10 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
   const [created, setCreated] = useState<CreatedSitterLink | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  // Default the window to two weeks out — a typical trip length.
+  // Default the window to two weeks out — a typical trip length. Until the
+  // member edits it, the default bends to the plan's cap (see `shownDays`).
   const [days, setDays] = useState('14');
+  const [daysTouched, setDaysTouched] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [label, setLabel] = useState('');
 
@@ -59,9 +64,33 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
     queryFn: () => householdService.listSitterLinks(householdId),
   });
 
+  // The plan sets the longest window and how many links may be live (ADR
+  // 0015). Read it so the wall the traveller hits reads as an upgrade prompt
+  // while they type, not as a refusal after submitting. An unsettled or
+  // failed read is shown as unknown — never assumed to be the free tier, and
+  // never presented as unlimited. The backend enforces the cap regardless.
+  const subscriptionQuery = useQuery({
+    queryKey: ['subscription', householdId],
+    queryFn: billingService.getCurrentSubscription,
+    staleTime: 60_000,
+  });
+  const limits = subscriptionQuery.isSuccess
+    ? sitterLinkLimitsFor(subscriptionQuery.data.planId)
+    : null;
+  const maxDays = limits?.maxDays ?? SITTER_LINK_MAX_DAYS_CEILING;
+  const shownDays =
+    !daysTouched && limits && (parseInt(days, 10) || 0) > limits.maxDays
+      ? String(limits.maxDays)
+      : days;
+  const lengthHelp = limits
+    ? t('household.sitterLinks.lengthHelpPlan', { days: limits.maxDays })
+    : subscriptionQuery.isError
+      ? t('household.sitterLinks.lengthHelpUnknown')
+      : t('household.sitterLinks.lengthHelpChecking');
+
   const createMutation = useMutation({
     mutationFn: () => {
-      const n = Math.max(1, Math.min(60, parseInt(days, 10) || 14));
+      const n = Math.max(1, Math.min(SITTER_LINK_MAX_DAYS_CEILING, parseInt(shownDays, 10) || 14));
       // The length is counted from the day the sitter takes over, not from
       // "now" — otherwise scheduling a link a week ahead of the trip silently
       // spends a week of its own window before anyone needs it.
@@ -109,6 +138,10 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
   // and the sweeper lags), and listing those as active told the household a
   // neighbour still had access when they did not.
   const { current: currentLinks, ended: endedLinks } = groupSitterLinks(linksQuery.data ?? []);
+  // Live = active or scheduled, the same count the backend gates on. Only a
+  // SETTLED links read can say the cap is reached; a failed read cannot.
+  const atActiveCap =
+    limits !== null && linksQuery.isSuccess && currentLinks.length >= limits.maxActive;
 
   return (
     <Card>
@@ -184,10 +217,13 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
               label={t('household.sitterLinks.lengthLabel')}
               type="number"
               min={1}
-              max={60}
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
-              helperText={t('household.sitterLinks.lengthHelp')}
+              max={maxDays}
+              value={shownDays}
+              onChange={(e) => {
+                setDaysTouched(true);
+                setDays(e.target.value);
+              }}
+              helperText={lengthHelp}
             />
             <Input
               className="sm:col-span-2"
@@ -199,13 +235,30 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
               helperText={t('household.sitterLinks.labelHelp')}
             />
           </div>
+          {atActiveCap && limits && (
+            <Alert variant="info">
+              {t('household.sitterLinks.activeCap', { count: limits.maxActive })}
+            </Alert>
+          )}
           <Button
             type="submit"
             isLoading={createMutation.isPending}
+            disabled={atActiveCap}
             leftIcon={<KeyIcon className="h-4 w-4" aria-hidden="true" />}
           >
             Create sitter link
           </Button>
+          {limits?.planId === 'seedling' && (
+            <p className="text-xs text-gray-600">
+              {t('household.sitterLinks.seedlingHint')}{' '}
+              <Link
+                to="/settings/billing"
+                className="text-primary-700 underline hover:text-primary-800"
+              >
+                {t('household.sitterLinks.seePlans')}
+              </Link>
+            </p>
+          )}
         </form>
       )}
 

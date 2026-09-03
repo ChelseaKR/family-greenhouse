@@ -46,6 +46,11 @@ import {
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
+import {
+  checkSitterLinkPlanGate,
+  countLiveSitterLinks,
+  sitterWindowDays,
+} from './services/sitterPlanGate.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
@@ -1430,6 +1435,19 @@ app.post(
     }
     const body = (req as any).validatedBody;
     const now = new Date();
+    // Plan gate — mirrors the handler: window length + live-link count.
+    const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'] ?? PLANS.seedling;
+    const startsAt: string = body.startsAt ?? now.toISOString();
+    const gate = checkSitterLinkPlanGate(plan, {
+      windowDays: sitterWindowDays(startsAt, body.expiresAt),
+      liveLinks: countLiveSitterLinks(
+        [...db.sitterLinks.values()].filter((l) => l.householdId === req.params.id),
+        now
+      ),
+    });
+    if (!gate.ok) {
+      return res.status(402).json({ message: gate.message });
+    }
     const token = randomBytes(32).toString('hex'); // 256-bit, like the service
     const link: SitterLink = {
       id: uuidv4(),
@@ -1437,7 +1455,7 @@ app.post(
       householdId: req.params.id,
       createdBy: user.userId,
       createdAt: now.toISOString(),
-      startsAt: body.startsAt ?? now.toISOString(),
+      startsAt,
       expiresAt: body.expiresAt,
       status: 'active',
       label: body.label ?? null,

@@ -20,6 +20,12 @@ describe('plan catalog', () => {
     expect(PLANS.greenhouse).toMatchObject({ monthlyPrice: 9.99, maxPlants: 5000, maxMembers: 50 });
   });
 
+  it('pins the sitter-link caps per tier (ADR 0015: free keeps one 7-day link; paid gets 90 days, several)', () => {
+    expect(PLANS.seedling.limits).toEqual({ sitterLinkMaxDays: 7, sitterLinksActive: 1 });
+    expect(PLANS.garden.limits).toEqual({ sitterLinkMaxDays: 90, sitterLinksActive: 10 });
+    expect(PLANS.greenhouse.limits).toEqual({ sitterLinkMaxDays: 90, sitterLinksActive: 25 });
+  });
+
   it('only paid tiers carry a Stripe price env var; free tier has none', () => {
     expect(PLANS.seedling.stripePriceEnv).toBeUndefined();
     expect(PLANS.garden.stripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN');

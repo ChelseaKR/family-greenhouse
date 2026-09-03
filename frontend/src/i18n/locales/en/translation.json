@@ -621,7 +621,13 @@
       "startsLabel": "Starts (optional)",
       "startsHelp": "Leave empty to start now. Set the day your trip starts and the link stays shut until then.",
       "lengthLabel": "Lasts for (days)",
-      "lengthHelp": "Up to 60 days, counted from the start day.",
+            "lengthHelpPlan": "Up to {{days}} days on your plan, counted from the start day.",
+      "lengthHelpChecking": "Checking how long your plan allows…",
+      "lengthHelpUnknown": "We couldn’t confirm your plan’s longest window just now. Your plan’s limit still applies when you create the link.",
+      "seedlingHint": "Longer trip? Garden allows sitter links up to 90 days, several at once, and a printable handoff brief.",
+      "seePlans": "See plans",
+      "activeCap_one": "Your plan keeps {{count}} live sitter link at a time. Revoke the current one to create another.",
+      "activeCap_other": "Your plan allows {{count}} live sitter links at a time. Revoke one to create another.",
       "labelLabel": "Label (optional)",
       "labelHelp": "A friendly name your sitter sees. No personal details.",
       "currentHeading": "Links you’ve shared",
@@ -1002,7 +1008,7 @@
       },
       "sitter": {
         "heading": "Sitter links",
-        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 60 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
+        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 90 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
       },
       "rights": {
         "heading": "Your rights",

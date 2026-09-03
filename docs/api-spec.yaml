@@ -889,6 +889,12 @@ paths:
                   expiresAt: { type: string, format: date-time }
                   status: { type: string, enum: [active, revoked] }
                   label: { type: string, nullable: true }
+        '402':
+          description: Over the plan's sitter-link cap — window longer than the plan allows, or too many live links. The message names the cap and what the next tier lifts it to.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403': { $ref: '#/components/responses/Forbidden' }
     get:
       summary: List the household's plant-sitter links (any household member). Never returns tokens.

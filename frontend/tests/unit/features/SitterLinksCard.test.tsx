@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { SitterLinksCard } from '@/features/household/SitterLinksCard';
 import { useAuthStore } from '@/store/authStore';
@@ -41,12 +42,18 @@ beforeEach(() => {
 function renderCard(
   links: unknown[] | 'fail',
   role: 'admin' | 'member' = 'admin',
-  members: Array<{ userId: string; name: string }> = []
+  members: Array<{ userId: string; name: string }> = [],
+  plan: 'seedling' | 'garden' | 'greenhouse' | 'fail' = 'garden'
 ) {
   signInAs(role);
   server.use(
     http.get(`${API}/households/hh-1/sitter-links`, () =>
       links === 'fail' ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(links)
+    ),
+    http.get(`${API}/billing/me`, () =>
+      plan === 'fail'
+        ? new HttpResponse(null, { status: 500 })
+        : HttpResponse.json({ planId: plan })
     )
   );
   const queryClient = new QueryClient({
@@ -54,7 +61,9 @@ function renderCard(
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SitterLinksCard householdId="hh-1" members={members} />
+      <MemoryRouter>
+        <SitterLinksCard householdId="hh-1" members={members} />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -242,12 +251,15 @@ describe('SitterLinksCard creation window', () => {
         );
       })
     );
+    server.use(http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'garden' })));
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     render(
       <QueryClientProvider client={queryClient}>
-        <SitterLinksCard householdId="hh-1" />
+        <MemoryRouter>
+          <SitterLinksCard householdId="hh-1" />
+        </MemoryRouter>
       </QueryClientProvider>
     );
 
@@ -265,5 +277,71 @@ describe('SitterLinksCard creation window', () => {
     // Local midnight on the chosen day, not "now" and not UTC midnight.
     expect(new Date(startsAt).getFullYear()).toBe(2099);
     expect(new Date(startsAt).getHours()).toBe(0);
+  });
+});
+
+/**
+ * The plan sets the longest window and how many links may be live (ADR
+ * 0015). The card says which cap applies while the member types, bends the
+ * default to it, and — on the free tier — turns the wall into an upgrade
+ * prompt. An unsettled or failed plan read is stated as unknown: never the
+ * free tier by assumption, never unlimited.
+ */
+describe('SitterLinksCard plan caps', () => {
+  it('Seedling: caps the length input at 7, bends the default to it, and offers Garden', async () => {
+    renderCard([], 'admin', [], 'seedling');
+
+    const length = (await screen.findByLabelText('Lasts for (days)')) as HTMLInputElement;
+    await waitFor(() => expect(length).toHaveAttribute('max', '7'));
+    expect(length.value).toBe('7');
+    expect(screen.getByText(/Up to 7 days on your plan/)).toBeInTheDocument();
+    expect(screen.getByText(/Garden allows sitter links up to 90 days/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+  });
+
+  it('Garden: allows 90 days, keeps the 14-day default, and shows no upgrade prompt', async () => {
+    renderCard([], 'admin', [], 'garden');
+
+    const length = (await screen.findByLabelText('Lasts for (days)')) as HTMLInputElement;
+    await waitFor(() => expect(length).toHaveAttribute('max', '90'));
+    expect(length.value).toBe('14');
+    expect(screen.getByText(/Up to 90 days on your plan/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+  });
+
+  it('says the cap is unknown when the plan read fails — not 7, not 90', async () => {
+    renderCard([], 'admin', [], 'fail');
+
+    expect(
+      await screen.findByText(/couldn.t confirm your plan.s longest window/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Up to 7 days/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Up to 90 days/)).not.toBeInTheDocument();
+  });
+
+  it('Seedling with one live link: explains the one-at-a-time cap and disables Create', async () => {
+    renderCard(
+      [
+        {
+          id: 'l1',
+          label: 'Live',
+          status: 'active',
+          createdBy: 'user-1',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+      ],
+      'admin',
+      [],
+      'seedling'
+    );
+
+    expect(
+      await screen.findByText(/keeps 1 live sitter link at a time\. Revoke the current one/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create sitter link/i })).toBeDisabled();
   });
 });

@@ -18,6 +18,14 @@ export type PlanId = 'seedling' | 'garden' | 'greenhouse';
  */
 export type BillingInterval = 'month' | 'year' | 'lifetime';
 
+/** Per-tier caps on features that are gated by number rather than on/off. */
+export interface PlanLimits {
+  /** Longest sitter-link coverage window, in days (ADR 0015). */
+  sitterLinkMaxDays: number;
+  /** How many sitter links may be live (active or scheduled) at once. */
+  sitterLinksActive: number;
+}
+
 export interface Plan {
   id: PlanId;
   name: string;
@@ -25,6 +33,7 @@ export interface Plan {
   monthlyPrice: number; // dollars
   maxPlants: number;
   maxMembers: number;
+  limits: PlanLimits;
   /** Env var name where the Stripe MONTHLY price ID lives. Read at runtime so
    *  staging/prod keys stay separate. Free tier has none. */
   stripePriceEnv?: string;
@@ -73,6 +82,8 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyPrice: 0,
     maxPlants: 10,
     maxMembers: 6,
+    // One live sitter link, a week long: the task list for a weekend away.
+    limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1 },
   },
   garden: {
     id: 'garden',
@@ -87,6 +98,8 @@ export const PLANS: Record<PlanId, Plan> = {
     lifetimePrice: 149,
     maxPlants: 500,
     maxMembers: 6,
+    // The Away Kit: windows to 90 days, several sitters at once.
+    limits: { sitterLinkMaxDays: 90, sitterLinksActive: 10 },
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
     lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
@@ -103,6 +116,7 @@ export const PLANS: Record<PlanId, Plan> = {
     annualPrice: 79.99,
     maxPlants: 5000,
     maxMembers: 50,
+    limits: { sitterLinkMaxDays: 90, sitterLinksActive: 25 },
     stripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE_ANNUAL',
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
@@ -117,6 +131,11 @@ export function getPlan(id: string | undefined | null): Plan {
   // the caller instead of falling back to the free tier.
   if (id && Object.hasOwn(PLANS, id)) return PLANS[id as PlanId];
   return PLANS.seedling;
+}
+
+/** Numeric caps for a tier; unknown ids fall back to the free tier's. */
+export function planLimits(id: string | undefined | null): PlanLimits {
+  return getPlan(id).limits;
 }
 
 /**

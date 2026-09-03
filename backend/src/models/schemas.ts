@@ -244,10 +244,13 @@ export const setVacationSchema = z
 
 // Sitter link (no-account, time-boxed plant-sitting access). The creator sets
 // an explicit [startsAt, expiresAt] coverage window; the link is rejected
-// outside it on every public call. Window is capped so a stray click can't
-// mint a year-long public link. `label` is an optional, non-PII friendly name
-// shown to the sitter (e.g. "The Smiths' plants") — never a member name/email.
-const MAX_SITTER_DAYS = 60;
+// outside it on every public call. The window is capped here at the ABSOLUTE
+// ceiling (the longest any plan allows — see models/plans.ts `limits`) so a
+// stray click can't mint a year-long public link; the per-plan cap is
+// enforced in the handler, where the household's plan is known. `label` is an
+// optional, non-PII friendly name shown to the sitter (e.g. "The Smiths'
+// plants") — never a member name/email.
+const MAX_SITTER_DAYS = 90;
 export const createSitterLinkSchema = z
   .object({
     startsAt: z.string().datetime().optional(),

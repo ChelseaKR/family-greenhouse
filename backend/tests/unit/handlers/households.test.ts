@@ -901,6 +901,96 @@ describe('sitter links — member access and revocation model', () => {
     expect(JSON.stringify(call)).not.toContain('a'.repeat(64));
   });
 
+  it('refuses (402) an over-cap window on Seedling and names what Garden lifts it to', async () => {
+    await warm('member');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+    } as never);
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 8 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    expect(JSON.parse(res.body).message).toMatch(/up to 7 days.*Garden allows up to 90 days/);
+    expect(sitterService.createSitterLink).not.toHaveBeenCalled();
+  });
+
+  it('refuses (402) a second live link on Seedling; ended and revoked rows do not count', async () => {
+    await warm('admin');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' } as never);
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const attempt = () =>
+      createSitterLink(
+        buildEvent(adminClaims, {
+          httpMethod: 'POST',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ expiresAt: new Date(Date.now() + 3 * DAY_MS).toISOString() }),
+        }),
+        fakeContext,
+        () => {}
+      ) as Promise<APIGatewayProxyResult>;
+
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([link() as never]);
+    const blocked = await attempt();
+    expect(blocked.statusCode).toBe(402);
+    expect(JSON.parse(blocked.body).message).toMatch(/1 live sitter link at a time/);
+
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([
+      link({ id: 'old', expiresAt: new Date(Date.now() - DAY_MS).toISOString() }) as never,
+      link({ id: 'off', status: 'revoked' }) as never,
+    ]);
+    const allowed = await attempt();
+    expect(allowed.statusCode).toBe(201);
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' } as never);
+  });
+
+  it('allows a 30-day window with several live links on Garden', async () => {
+    await warm('member');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([
+      link({ id: 'l1' }) as never,
+      link({ id: 'l2' }) as never,
+    ]);
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('rejects (400) a window past the 90-day ceiling before the plan is even consulted', async () => {
+    await warm('member');
+    const billing = await import('../../../src/services/billing.js');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 120 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+  });
+
   it('lets a plain member list the household links', async () => {
     await warm('member');
     const sitterService = await import('../../../src/services/sitterService.js');
