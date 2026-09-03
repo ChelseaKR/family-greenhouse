@@ -67,6 +67,13 @@ The artwork validates, but validating is not the same as selling:
   tablet. Play surfaces a large-screen quality warning and down-ranks tablet
   and Chromebook surfacing without 7"/10" frames.
 - **Four frames each.** Apple allows 10, Play allows 8.
+- **English-only listing for a bilingual app.** `frontend/src/i18n/locales/es`
+  is a complete catalog at key parity with English, enforced by the i18n
+  gates, but this directory only has `en-US.json`. Both stores localize
+  listings independently of the binary, so a Spanish listing is reach the app
+  has already paid for and is not collecting. It needs a native-Spanish
+  reviewer rather than a machine translation — a listing is the one surface
+  where awkward Spanish is the whole first impression.
 
 ## Not blocked on anything in this directory
 
