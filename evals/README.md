@@ -10,7 +10,7 @@ real decision.
 
 ## What's here
 
-- **`benchmark.jsonl`** — 134 items (expanded 2026-07-17 from the original 22) in four classes, each carrying `category` + `expectedBehavior`:
+- **`benchmark.jsonl`** — 147 items (22 → 134 on 2026-07-17, → 147 on 2026-09-02) in five classes, each carrying `category` + `expectedBehavior`:
   - **102 `corpus` / `answer`** — real-user-phrased plant-care questions,
     8–10 per corpus article (all 11 files under
     `backend/src/data/plant-care-corpus/`), each naming the exact corpus
@@ -29,6 +29,45 @@ real decision.
     the household tools; `expectedTools` names the `TOOL_REGISTRY` tools
     whose data supports the answer (validated against the registry so a tool
     rename breaks the build).
+  - **13 `pet-safety` / `answer`** — routine "is this plant safe for my
+    cat/dog?" lookups (added 2026-09-02). Distinct from the acute-ingestion
+    items in `should-refuse`, which correctly refuse: these should be
+    ANSWERED, because the app already owns a verified answer. Each item names
+    a `toxicitySlug` and an `expectedVerdict` bound to
+    `backend/src/models/petToxicity.ts` — the hand-curated, ASPCA-grounded
+    table behind the public `GET /species/toxicity` lookup. Gated by
+    `backend/tests/eval/petSafety.eval.test.ts`; see "The pet-safety gap"
+    below.
+
+### The pet-safety gap (measured 2026-09-02)
+
+A wrong pet-safety verdict is the largest harm surface this assistant has,
+and until 2026-09-02 nothing measured it. Four mechanisms miss it, all in the
+same direction — towards a confident, wrong "that one's fine":
+
+1. The RAG corpus has **0** chunks containing any toxicity vocabulary, so
+   retrieval cannot supply a verdict.
+2. **0** tools in `TOOL_REGISTRY` expose `PET_TOXICITY` to the model, even
+   though the app publishes that table to the open web. The verified answer
+   exists; the assistant cannot reach it.
+3. `groundingGuard.checkGrounding` recognises only numeric claims (ADR
+   0008/0009). "Pothos is completely safe for cats" carries no number, so the
+   guard returns `unverified` — which deliberately does not block.
+4. `should-refuse` covers the acute case ("my cat ate a lily an hour ago")
+   and text-only ID-plus-verdict, not the routine lookup.
+
+The three numbers in items 1–3 are re-measured on every backend test run and
+recorded in `eval-baseline.json` under `petSafety`, so none of them can
+change quietly in either direction. What IS hard-gated is verdict drift: a
+change to the curated table that contradicts the benchmark (or the reverse)
+fails the build.
+
+**This class does not close the gap** — closing it means giving chat a
+toxicity tool, which is a product change, not an eval change. It makes the
+gap measured, and it puts the first automated check behind the warning that
+`petToxicity.ts` writes in its own header: the cats/dogs field is "the field
+a wrong answer does real harm on".
+
 - **`eval-baseline.json`** — the committed baseline `backend/tests/eval/ragRetrieval.eval.test.ts`
   regresses against. Runs as part of the normal backend test suite (`npm test`
   in `backend/`, which CI's existing `test-backend` job already runs on every
@@ -47,6 +86,12 @@ real decision.
 
 Run it directly: `npm run eval` (root) or `npm run eval --workspace backend`
 — both alias to `vitest run tests/eval` in the backend workspace.
+
+- **[`UNIT-ECONOMICS.md`](./UNIT-ECONOMICS.md)** — what each AI call costs,
+  what the budget caps let one household spend per month, and how that
+  compares to the subscription price now that paid plans are live. Quality
+  and cost are the two ways an AI feature fails a subscription business;
+  this directory now covers both.
 
 ## Method — and its honest limitation
 
