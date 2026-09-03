@@ -19,12 +19,14 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 
 import * as perenual from '../../../src/services/perenual.js';
 import { dynamodb } from '../../../src/utils/dynamodb.js';
+import { logger } from '../../../src/utils/logger.js';
 import {
   searchSpeciesCached,
   getSpeciesCached,
   lookupSpeciesCached,
   getCareGuideCached,
   listPestsForSpeciesCached,
+  __testing,
 } from '../../../src/services/enrichment.js';
 
 interface Cmd {
@@ -72,7 +74,7 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
     vi.clearAllMocks();
     process.env = { ...ORIGINAL };
     delete process.env.PERENUAL_DAILY_BUDGET;
-    vi.mocked(perenual.isConfigured).mockResolvedValue(true);
+    vi.mocked(perenual.configurationStatus).mockResolvedValue('configured');
   });
 
   afterEach(() => {
@@ -80,7 +82,7 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
   });
 
   it('returns null from every method when Perenual is unconfigured (no DDB traffic)', async () => {
-    vi.mocked(perenual.isConfigured).mockResolvedValue(false);
+    vi.mocked(perenual.configurationStatus).mockResolvedValue('unset');
     expect(await searchSpeciesCached('monstera')).toBeNull();
     expect(await getSpeciesCached(7)).toBeNull();
     expect(await lookupSpeciesCached(7)).toEqual({
@@ -94,6 +96,27 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
       reason: 'unconfigured',
     });
     expect(dynamodb.send).not.toHaveBeenCalled();
+  });
+
+  it('reports an unreadable key store as retryable, never as unconfigured (no DDB traffic)', async () => {
+    vi.mocked(perenual.configurationStatus).mockResolvedValue('unavailable');
+    expect(await searchSpeciesCached('monstera')).toBeNull();
+    expect(await getCareGuideCached(7)).toBeNull();
+    // The discriminated results say "upstream", not "unconfigured": pestAlerts
+    // treats the latter as permanent and skips the household for the day, so
+    // an SSM blip used to cost a household its pest check (ADR 0010).
+    expect(await lookupSpeciesCached(7)).toEqual({
+      status: 'unavailable',
+      reason: 'upstream_error',
+      result: null,
+    });
+    expect(await listPestsForSpeciesCached('Monstera deliciosa')).toEqual({
+      ok: false,
+      reason: 'upstream_error',
+    });
+    expect(dynamodb.send).not.toHaveBeenCalled();
+    expect(perenual.lookupSpecies).not.toHaveBeenCalled();
+    expect(perenual.listPestsForSpecies).not.toHaveBeenCalled();
   });
 
   it('returns [] for a blank search query without touching cache or API', async () => {
@@ -197,6 +220,35 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
       const out = await searchSpeciesCached('monstera');
       expect(out).toEqual(summary);
       expect(perenual.searchSpecies).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a failed counter read as unverified, not as a fresh zero (ADR 0010)', async () => {
+      stubDynamo({ updateRejects: true });
+      const state = await __testing.checkAndIncrementBudget();
+      // Not `{ used: 0, limit, blocked: false }` — that is byte-for-byte what
+      // a real first call of the day returns, and no caller could tell a
+      // metered call from an unmetered one.
+      expect(state).toEqual({ available: false, limit: 80 });
+      expect(state).not.toHaveProperty('blocked');
+      expect(state).not.toHaveProperty('used');
+    });
+
+    it('logs the fail-open decision, as a decision, every time it is taken', async () => {
+      const warn = vi.spyOn(logger, 'warn');
+      try {
+        stubDynamo({ cacheItem: null, updateRejects: true });
+        vi.mocked(perenual.searchSpecies).mockResolvedValue(summary as never);
+
+        expect(await searchSpeciesCached('monstera')).toEqual(summary);
+        expect(warn).toHaveBeenCalledWith(
+          expect.objectContaining({ decision: 'fail_open', limit: 80 }),
+          'perenual.budget_unverified'
+        );
+        // Never as the exhausted case: that is the opposite decision.
+        expect(warn).not.toHaveBeenCalledWith(expect.anything(), 'perenual.budget_exhausted');
+      } finally {
+        warn.mockRestore();
+      }
     });
   });
 

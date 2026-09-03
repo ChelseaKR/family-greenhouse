@@ -3,7 +3,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 
 vi.mock('../../../src/services/enrichment.js');
 vi.mock('../../../src/services/perenual.js', () => ({
-  isConfigured: vi.fn(async () => true),
+  configurationStatus: vi.fn(async () => 'configured'),
 }));
 // authMiddleware (on the authenticated routes) validates the claim household
 // against the membership table.
@@ -289,7 +289,7 @@ describe('species handler', () => {
   describe('search', () => {
     it('reports source "disabled" only when Perenual is unconfigured', async () => {
       const perenual = await import('../../../src/services/perenual.js');
-      vi.mocked(perenual.isConfigured).mockResolvedValueOnce(false);
+      vi.mocked(perenual.configurationStatus).mockResolvedValueOnce('unset');
       const enrichment = await import('../../../src/services/enrichment.js');
       // Matches enrichment.searchSpeciesCached's own behavior when
       // unconfigured (it short-circuits to null before ever touching the
@@ -304,6 +304,39 @@ describe('species handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
       expect(JSON.parse(res.body).source).toBe('disabled');
+    });
+
+    it('reports source "unavailable" — never "disabled" — when the key store could not be read', async () => {
+      const perenual = await import('../../../src/services/perenual.js');
+      vi.mocked(perenual.configurationStatus).mockResolvedValueOnce('unavailable');
+      const enrichment = await import('../../../src/services/enrichment.js');
+      vi.mocked(enrichment.searchSpeciesCached).mockResolvedValueOnce(null);
+      const { search } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await search(
+        buildEvent({ path: '/species/search', queryStringParameters: { q: 'monstera' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      // An SSM blip is an outage of this request, not an operator switching
+      // the catalog off. `isConfigured()` used to answer `false` for both,
+      // and the status page said "disabled" (ADR 0010).
+      expect(JSON.parse(res.body).source).toBe('unavailable');
+    });
+
+    it('labels the short-query early return with the same three states', async () => {
+      const perenual = await import('../../../src/services/perenual.js');
+      vi.mocked(perenual.configurationStatus).mockResolvedValueOnce('unavailable');
+      const { search } = await import('../../../src/handlers/species/handler.js');
+
+      const res = (await search(
+        buildEvent({ path: '/species/search', queryStringParameters: { q: 'm' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      const body = JSON.parse(res.body);
+      expect(body.source).toBe('unavailable');
+      expect(body.results).toEqual([]);
     });
 
     it('reports source "unavailable" (not "disabled") when configured but the request got no data', async () => {

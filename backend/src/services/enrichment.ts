@@ -56,11 +56,18 @@ function ttlSeconds(seconds: number): number {
   return Math.floor(Date.now() / 1000) + seconds;
 }
 
-interface BudgetState {
-  used: number;
-  limit: number;
-  blocked: boolean;
-}
+/**
+ * `available: false` is the counter's own "we do not know" — the atomic ADD
+ * could not be read back. It used to come back as `{ used: 0, blocked: false }`,
+ * byte-for-byte what a fresh day under budget looks like, so no caller could
+ * tell an unmetered call from a metered one. The fail-open decision is still
+ * made — once, in `upstreamCallPermitted` — but it is now made on purpose and
+ * logged as the decision it is (compare climate.ts, whose weather counter
+ * makes the opposite call and fails closed). ADR 0010.
+ */
+type BudgetState =
+  | { available: true; used: number; limit: number; blocked: boolean }
+  | { available: false; limit: number };
 
 async function checkAndIncrementBudget(): Promise<BudgetState> {
   const limit = dailyBudget();
@@ -80,13 +87,35 @@ async function checkAndIncrementBudget(): Promise<BudgetState> {
       })
     );
     const used = (result.Attributes?.used as number) ?? 1;
-    return { used, limit, blocked: used > limit };
+    return { available: true, used, limit, blocked: used > limit };
   } catch (err) {
-    // If the budget check itself fails we don't want to brick the call —
-    // log and proceed. The cache will still absorb most traffic.
     logger.warn({ err: (err as Error).message }, 'perenual.budget_check_failed');
-    return { used: 0, limit, blocked: false };
+    return { available: false, limit };
   }
+}
+
+/**
+ * Whether a metered Perenual call may go ahead. Spends one unit of today's
+ * budget as a side effect (the check IS the increment).
+ *
+ * When the counter cannot be read this fails OPEN: the cache absorbs most
+ * traffic, the daily budget is a soft quota rather than a hard spend cap, and
+ * a DynamoDB blip should degrade metering before it degrades species lookups
+ * (which carry pet toxicity). That choice is logged on every occurrence as
+ * `perenual.budget_unverified`, so an outage quietly spending unmetered calls
+ * is visible instead of looking like a quiet day.
+ */
+async function upstreamCallPermitted(): Promise<boolean> {
+  const budget = await checkAndIncrementBudget();
+  if (!budget.available) {
+    logger.warn({ limit: budget.limit, decision: 'fail_open' }, 'perenual.budget_unverified');
+    return true;
+  }
+  if (budget.blocked) {
+    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
+    return false;
+  }
+  return true;
 }
 
 interface CacheRow<T> {
@@ -148,7 +177,10 @@ async function writeCache<T>(pk: string, sk: string, payload: T, ttlSec: number)
 }
 
 export async function searchSpeciesCached(query: string): Promise<PerenualSpeciesSummary[] | null> {
-  if (!(await perenual.isConfigured())) return null;
+  // Nullable projection: `null` already means "could not answer" here, so an
+  // unset key and an unreadable key store both map to it (perenual.ts logs
+  // which). Callers that must tell them apart use lookupSpeciesCached.
+  if ((await perenual.configurationStatus()) !== 'configured') return null;
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return [];
 
@@ -156,11 +188,7 @@ export async function searchSpeciesCached(query: string): Promise<PerenualSpecie
   const cached = await readCache<PerenualSpeciesSummary[]>('PERENUAL#CACHE', sk);
   if (cached) return cached;
 
-  const budget = await checkAndIncrementBudget();
-  if (budget.blocked) {
-    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
-    return null;
-  }
+  if (!(await upstreamCallPermitted())) return null;
 
   const fresh = await perenual.searchSpecies(trimmed);
   if (fresh) await writeCache('PERENUAL#CACHE', sk, fresh, SEARCH_TTL_SECONDS);
@@ -183,8 +211,14 @@ export type SpeciesLookupResult =
  *   states and are never written to the result cache.
  */
 export async function lookupSpeciesCached(id: number): Promise<SpeciesLookupResult> {
-  if (!(await perenual.isConfigured())) {
+  const configuration = await perenual.configurationStatus();
+  if (configuration === 'unset') {
     return { status: 'unavailable', reason: 'unconfigured', result: null };
+  }
+  if (configuration === 'unavailable') {
+    // The key store could not be read this time. Retryable — so it must not
+    // present as `unconfigured`, which callers treat as permanent.
+    return { status: 'unavailable', reason: 'upstream_error', result: null };
   }
 
   const sk = `SPECIES#${id}`;
@@ -195,9 +229,7 @@ export async function lookupSpeciesCached(id: number): Promise<SpeciesLookupResu
       : { status: 'found', result: cached.value };
   }
 
-  const budget = await checkAndIncrementBudget();
-  if (budget.blocked) {
-    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
+  if (!(await upstreamCallPermitted())) {
     return { status: 'unavailable', reason: 'budget_exhausted', result: null };
   }
 
@@ -222,17 +254,14 @@ export async function getSpeciesCached(id: number): Promise<PerenualSpeciesDetai
 }
 
 export async function getCareGuideCached(speciesId: number): Promise<PerenualCareGuide | null> {
-  if (!(await perenual.isConfigured())) return null;
+  // Nullable projection, same reasoning as searchSpeciesCached.
+  if ((await perenual.configurationStatus()) !== 'configured') return null;
 
   const sk = `GUIDE#${speciesId}`;
   const cached = await readCache<PerenualCareGuide>('PERENUAL#CACHE', sk);
   if (cached) return cached;
 
-  const budget = await checkAndIncrementBudget();
-  if (budget.blocked) {
-    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
-    return null;
-  }
+  if (!(await upstreamCallPermitted())) return null;
 
   const fresh = await perenual.getCareGuide(speciesId);
   if (fresh)
@@ -253,17 +282,19 @@ export type PestLookupResult =
   | { ok: false; reason: 'unconfigured' | 'budget_exhausted' | 'upstream_error' };
 
 export async function listPestsForSpeciesCached(scientificName: string): Promise<PestLookupResult> {
-  if (!(await perenual.isConfigured())) return { ok: false, reason: 'unconfigured' };
+  const configuration = await perenual.configurationStatus();
+  if (configuration === 'unset') return { ok: false, reason: 'unconfigured' };
+  // An unreadable key store is retryable. pestAlerts skips `unconfigured`
+  // for the day (it is permanent) but flags any other reason for a retry, so
+  // this distinction is what keeps an SSM blip from silently costing a
+  // household its pest check.
+  if (configuration === 'unavailable') return { ok: false, reason: 'upstream_error' };
   const trimmed = scientificName.trim().toLowerCase();
   const sk = `PESTS#${trimmed}`;
   const cached = await readCache<PerenualPestSummary[]>('PERENUAL#CACHE', sk);
   if (cached) return { ok: true, pests: cached };
 
-  const budget = await checkAndIncrementBudget();
-  if (budget.blocked) {
-    logger.warn({ used: budget.used, limit: budget.limit }, 'perenual.budget_exhausted');
-    return { ok: false, reason: 'budget_exhausted' };
-  }
+  if (!(await upstreamCallPermitted())) return { ok: false, reason: 'budget_exhausted' };
 
   const fresh = await perenual.listPestsForSpecies(trimmed);
   if (fresh === null) return { ok: false, reason: 'upstream_error' };

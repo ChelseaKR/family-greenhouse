@@ -15,6 +15,10 @@
  *   2. `PERENUAL_API_KEY` env → literal value. Dev/local fallback.
  *   3. Neither set → nullable methods short-circuit to null. The integration
  *      is feature-gated by the presence of a key, not by an explicit flag.
+ *
+ * A Parameter Store read that FAILS is a fourth situation, not a variant of
+ * (3): `configurationStatus()` reports it as `unavailable`, and the request
+ * that hit it degrades as an upstream error, never as "not configured".
  */
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import AWSXRay from 'aws-xray-sdk-core';
@@ -85,8 +89,20 @@ const ssmClient = AWSXRay.captureAWSv3Client(
   new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' })
 );
 
-async function resolveApiKey(): Promise<string | undefined> {
-  if (resolvedAt !== undefined) return resolvedKey;
+/**
+ * How the API key resolved. `unset` is a settled answer (nobody configured
+ * the integration); `unavailable` is not (Parameter Store could not be read
+ * just now, and the next call retries). The two used to collapse into one
+ * `undefined`, so a throttled SSM call reported itself as "not configured" —
+ * which pestAlerts treats as permanent and does not retry that day. ADR 0010.
+ */
+type ApiKeyResolution =
+  { status: 'resolved'; key: string } | { status: 'unset' } | { status: 'unavailable' };
+
+async function resolveApiKey(): Promise<ApiKeyResolution> {
+  if (resolvedAt !== undefined) {
+    return resolvedKey ? { status: 'resolved', key: resolvedKey } : { status: 'unset' };
+  }
   const parameterName = optionalEnv('PERENUAL_API_KEY_PARAMETER_NAME');
   if (parameterName) {
     try {
@@ -97,7 +113,7 @@ async function resolveApiKey(): Promise<string | undefined> {
       if (value) {
         resolvedKey = value;
         resolvedAt = 'parameter';
-        return resolvedKey;
+        return { status: 'resolved', key: value };
       }
       // Genuinely empty parameter: fall through to the literal/unset path
       // below — caching 'unset' is correct for a deliberately blank value.
@@ -115,23 +131,35 @@ async function resolveApiKey(): Promise<string | undefined> {
       if (fallback) {
         resolvedKey = fallback;
         resolvedAt = 'env';
-        return resolvedKey;
+        return { status: 'resolved', key: fallback };
       }
-      return undefined;
+      // Not `unset`: we could not find out. Reported as its own state so the
+      // caller degrades this request as retryable instead of "switched off".
+      return { status: 'unavailable' };
     }
   }
   const literal = optionalEnv('PERENUAL_API_KEY');
   if (literal) {
     resolvedKey = literal;
     resolvedAt = 'env';
-    return resolvedKey;
+    return { status: 'resolved', key: literal };
   }
   resolvedAt = 'unset';
-  return undefined;
+  return { status: 'unset' };
 }
 
-export async function isConfigured(): Promise<boolean> {
-  return (await resolveApiKey()) !== undefined;
+export type PerenualConfigurationStatus = 'configured' | 'unset' | 'unavailable';
+
+/**
+ * Three answers, not two. `configured` and `unset` are settled; `unavailable`
+ * means the key lives in Parameter Store and this call could not read it.
+ * There is deliberately no boolean form: `isConfigured()` had to pick a side
+ * for the third state, picked `false`, and a throttled SSM read then looked
+ * exactly like an operator who never set the key.
+ */
+export async function configurationStatus(): Promise<PerenualConfigurationStatus> {
+  const resolution = await resolveApiKey();
+  return resolution.status === 'resolved' ? 'configured' : resolution.status;
 }
 
 /** Test hook — lets unit tests force a re-resolution between cases. */
@@ -151,10 +179,13 @@ async function fetchJsonResult<T>(
   path: string,
   query: Record<string, string> = {}
 ): Promise<FetchJsonResult<T>> {
-  const key = await resolveApiKey();
-  if (!key) return { ok: false, reason: 'unconfigured' };
+  const resolution = await resolveApiKey();
+  if (resolution.status === 'unset') return { ok: false, reason: 'unconfigured' };
+  // The key store could not be read: a failure of THIS request, retryable,
+  // and no evidence either way about configuration.
+  if (resolution.status === 'unavailable') return { ok: false, reason: 'upstream_error' };
 
-  const params = new URLSearchParams({ key, ...query });
+  const params = new URLSearchParams({ key: resolution.key, ...query });
   const url = `${BASE_URL}${path}?${params.toString()}`;
 
   const ctrl = new AbortController();

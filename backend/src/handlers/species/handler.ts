@@ -14,7 +14,7 @@ import { authMiddleware } from '../../middleware/auth.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import * as enrichment from '../../services/enrichment.js';
-import { isConfigured } from '../../services/perenual.js';
+import { configurationStatus } from '../../services/perenual.js';
 import { deriveCareSuggestion } from '../../services/careRecommendations.js';
 import { lookupToxicity } from '../../models/petToxicity.js';
 import createHttpError from 'http-errors';
@@ -40,16 +40,28 @@ export const search = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const q = (event.queryStringParameters?.q ?? '').trim().slice(0, MAX_QUERY_LENGTH);
     if (!q || q.length < 2) {
+      const configuration = await configurationStatus();
       return successResponse({
-        source: (await isConfigured()) ? 'perenual' : 'disabled',
+        source:
+          configuration === 'configured'
+            ? 'perenual'
+            : configuration === 'unset'
+              ? 'disabled'
+              : 'unavailable',
         results: [],
       });
     }
     const hits = await enrichment.searchSpeciesCached(q);
-    // `source: 'disabled'` should mean exactly that — not "budget exhausted"
-    // or "Perenual errored," which look identical to a real outage if this
-    // says "disabled." isConfigured() only reports the no-API-key case.
-    const source = hits !== null ? 'perenual' : (await isConfigured()) ? 'unavailable' : 'disabled';
+    // `source: 'disabled'` should mean exactly that — not "budget exhausted",
+    // "Perenual errored", or "the key store could not be read", all of which
+    // look identical to a real outage if this says "disabled". Only a
+    // settled `unset` earns the word.
+    const source =
+      hits !== null
+        ? 'perenual'
+        : (await configurationStatus()) === 'unset'
+          ? 'disabled'
+          : 'unavailable';
     return cacheableResponse(
       { source, results: hits ?? [] },
       { maxAgeSeconds: 300, visibility: 'public' }
