@@ -253,21 +253,33 @@ export interface SitterTask {
 }
 
 /**
+ * The end of the sitter's lookahead: the link's own `expiresAt`, never a
+ * fixed number of days. A task is "in the window" when it is due on or before
+ * that instant — which also covers everything already overdue. Guarded so a
+ * window that has somehow closed still shows today's and overdue work rather
+ * than an empty list that reads as "nothing to do".
+ */
+export function sitterWindowCutoff(windowEndsAt: string, now: Date): string {
+  const nowIso = now.toISOString();
+  return windowEndsAt > nowIso ? windowEndsAt : nowIso;
+}
+
+/**
  * Due/overdue tasks for the plant-sitter view, projected to the PII-free
- * SitterTask shape. "Due" means due within the next `dueWithinDays` days OR
- * already overdue — the sitter should see everything that needs doing during
- * their window, not just strictly-overdue items. Tasks for died/gave_away
- * plants are filtered out (getTasks already does this). The returned objects
- * expose ONLY the fields documented by SitterTask.
+ * SitterTask shape. "Due" means due at any point up to `windowEndsAt` — the
+ * link's `expiresAt` — OR already overdue: the sitter should see everything
+ * that needs doing during THEIR window, however long the household set it.
+ * (This used to be hardcoded to seven days ahead regardless of the link, so
+ * a three-week trip showed the sitter only its first week.) Tasks for
+ * died/gave_away plants are filtered out (getTasks already does this). The
+ * returned objects expose ONLY the fields documented by SitterTask.
  */
 export async function getSitterTasks(
   householdId: string,
-  now: Date = new Date(),
-  dueWithinDays = 7
+  windowEndsAt: string,
+  now: Date = new Date()
 ): Promise<SitterTask[]> {
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() + dueWithinDays);
-  const cutoffIso = cutoff.toISOString();
+  const cutoffIso = sitterWindowCutoff(windowEndsAt, now);
   const nowIso = now.toISOString();
 
   // getTasks already lifecycle-filters (active plants only) and returns the

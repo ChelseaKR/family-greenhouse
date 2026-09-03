@@ -582,7 +582,8 @@ export const listVacations = createHandler(
 // Validate the token, then return the household's due/overdue tasks in the
 // minimal sitter shape. 404 for an invalid/expired/revoked token (generic —
 // no oracle). The optional `label` is a friendly, non-PII household nickname
-// the creator chose; absent → a generic greeting on the frontend.
+// the creator chose; absent → a generic greeting on the frontend. The
+// lookahead is the link's own window (`expiresAt`), not a fixed seven days.
 export const getSitterView = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const token = event.pathParameters?.token ?? '';
@@ -592,7 +593,7 @@ export const getSitterView = createHandler(
       // malformed) so a caller can't distinguish them and enumerate tokens.
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
-    const tasks = await taskService.getSitterTasks(link.householdId);
+    const tasks = await taskService.getSitterTasks(link.householdId, link.expiresAt);
     return successResponse({
       label: link.label,
       expiresAt: link.expiresAt,

@@ -93,6 +93,9 @@ describe('GET /sitter/{token} (public)', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.label).toBe('Our plants');
+    // The lookahead is the LINK'S window — the handler hands the service the
+    // link's own expiresAt, never a fixed number of days.
+    expect(getSitterTasks).toHaveBeenCalledWith('hh-1', '2999-01-01T00:00:00.000Z');
     expect(body.tasks[0]).toEqual({
       taskId: 't1',
       plantName: 'Monstera',

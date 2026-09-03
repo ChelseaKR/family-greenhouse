@@ -103,12 +103,13 @@ describe('sitter link creation (authed)', () => {
 });
 
 describe('public sitter view (no auth)', () => {
-  async function createLink(): Promise<string> {
+  async function createLink(overrides: Record<string, unknown> = {}): Promise<string> {
     const token = await loginAsSeed();
     const res = await request(app)
       .post(`/households/${seedHouseholdId}/sitter-links`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ expiresAt: inFuture(7), label: 'Our plants' });
+      .send({ expiresAt: inFuture(7), label: 'Our plants', ...overrides });
+    expect(res.status).toBe(201);
     return res.body.token as string;
   }
 
@@ -149,6 +150,26 @@ describe('public sitter view (no auth)', () => {
     expect(blob).not.toContain('Private propagation plan');
     expect(blob).not.toContain('Use the private measuring cup');
     expect(blob).not.toMatch(/assignedTo|completedBy|createdBy|"notes"|email/);
+  });
+
+  it('shows the sitter every task due inside the link window, not only seven days ahead', async () => {
+    // A three-week trip: the sitter must see week-three work too. (The
+    // lookahead used to be hardcoded to 7 days regardless of the window.)
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    db.tasks.get(seedTaskId)!.nextDue = inFuture(18);
+    const sitterToken = await createLink({ expiresAt: inFuture(21) });
+    const res = await request(app).get(`/sitter/${sitterToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tasks.map((t: { taskId: string }) => t.taskId)).toContain(seedTaskId);
+    expect(res.body.tasks[0].overdue).toBe(false);
+  });
+
+  it('keeps a short link short: work due after the window is not shown', async () => {
+    db.tasks.get(seedTaskId)!.nextDue = inFuture(6);
+    const sitterToken = await createLink({ expiresAt: inFuture(3) });
+    const res = await request(app).get(`/sitter/${sitterToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tasks.map((t: { taskId: string }) => t.taskId)).not.toContain(seedTaskId);
   });
 
   it('404s on an unknown / malformed token (no enumeration oracle)', async () => {

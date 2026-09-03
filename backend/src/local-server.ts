@@ -2653,13 +2653,12 @@ app.get('/plants/shared/:code', (req, res) => {
 // data are not.
 
 /** Minimal due/overdue tasks for a household. Mirrors taskService.getSitterTasks:
- *  due within 7 days OR overdue, active plants only, with sitter-safe location. */
-function sitterTasksFor(householdId: string) {
+ *  due on or before the link's own `expiresAt` OR overdue (never a fixed
+ *  seven days), active plants only, with sitter-safe location. */
+function sitterTasksFor(householdId: string, windowEndsAt: string) {
   const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() + 7);
-  const cutoffIso = cutoff.toISOString();
   const nowIso = now.toISOString();
+  const cutoffIso = windowEndsAt > nowIso ? windowEndsAt : nowIso;
   return [...db.tasks.values()]
     .filter((t) => t.householdId === householdId)
     .filter((t) => (db.plants.get(t.plantId)?.status ?? 'active') === 'active')
@@ -2689,7 +2688,7 @@ app.get('/sitter/:token', (req, res) => {
   res.json({
     label: link.label,
     expiresAt: link.expiresAt,
-    tasks: sitterTasksFor(link.householdId),
+    tasks: sitterTasksFor(link.householdId, link.expiresAt),
   });
 });
 
