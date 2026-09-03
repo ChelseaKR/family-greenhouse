@@ -16,6 +16,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- Sentry now honours Do Not Track, and a crash report is now only what the
+  privacy page says it is. The first-party telemetry rail has always checked
+  `navigator.doNotTrack`; `frontend/src/sentry.ts` did not, so the moment a
+  `VITE_SENTRY_DSN` was set the "DNT suppresses analytics" sentence would have
+  become false without any code change. Sentry initialisation is now gated on
+  the rail's own `telemetryAllowed()` predicate so the two cannot drift. The
+  same change closes what a report would have carried beyond the stack trace:
+  the SDK attaches `location.href` and the referrer to every event and puts
+  full URLs in fetch and navigation breadcrumbs, and `/sit/<bearer token>` and
+  `/join/<invite code>` are real routes here. URLs are now reduced to the
+  rail's normalized route, error messages pass through the rail's sanitizer,
+  console breadcrumbs are dropped, every `dataCollection` category that could
+  carry a person or their content (user info, cookies, headers, bodies, query
+  strings, local variables) is off by declaration on both the app and the API,
+  and both session-replay rates are pinned to 0 so adding the replay
+  integration later cannot quietly start recording. Nothing is collected
+  today — no DSN is configured — and nothing new is collected by this change.
+
 ## [0.23.5] - 2026-09-03
 
 ### Added
