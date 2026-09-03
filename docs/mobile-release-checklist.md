@@ -6,6 +6,14 @@
 - [x] Native HTTP handles API and presigned image uploads without weakening web CORS.
 - [x] Account deletion, AI response reporting, native purchase guards, camera disclosures, and privacy copy are implemented.
 - [x] Store icons, Play feature graphic, metadata, and review-safe screenshots validate.
+- [ ] Screenshots are re-captured from a seeded store-demo household. The
+      current frames come from the mock backend's default `test@example.com`
+      fixture: the dashboard greets "Test", the household has one member, and
+      one plant and one task carry all four frames, so the shared-household
+      pitch never appears. See `store-assets/README.md`.
+- [ ] Listing still says reminders are email-only. Native push is not
+      implemented and production SMS is off, so this stays true until
+      `docs/mobile.md`'s push work ships.
 - [x] Android API 36 release bundle compiles with JDK 21.
 - [ ] Apple Developer and Google Play accounts have accepted current agreements.
 - [ ] Reviewer account is seeded and its credentials are stored only in the store consoles.
