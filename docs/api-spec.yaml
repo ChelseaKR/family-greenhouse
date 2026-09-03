@@ -532,6 +532,10 @@ paths:
       responses:
         '204': { description: Account deleted }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '502':
+          description: >-
+            The Stripe subscription of a household the caller is the only
+            member of could not be cancelled. Nothing was deleted; retry.
   /me/export:
     get:
       summary: GDPR data-portability export (profile, prefs, memberships, plants, tasks)

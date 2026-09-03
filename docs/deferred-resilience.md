@@ -9,7 +9,7 @@ The quality audit (`docs/quality-audit.md`) flagged a handful of items that are 
 **What's missing.** Several flows mutate multiple rows that aren't covered by a single `TransactWrite`:
 
 - `PATCH /auth/me` updates Cognito + every `HouseholdMember.name`
-- `DELETE /me` removes plants → tasks → invites → membership → Cognito user
+- `DELETE /me` cancels an abandoned household's Stripe subscription → removes plants → tasks → invites → membership → Cognito user
 - `joinHousehold` writes a membership row + records an activity event
 
 If any one step after the first fails, the rows drift. Today the user can retry and the system converges; activity events are written fire-and-forget so they can drop without breaking core flows.

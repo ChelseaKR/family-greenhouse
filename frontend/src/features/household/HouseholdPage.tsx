@@ -21,6 +21,7 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
 import { SitterLinksCard } from './SitterLinksCard';
+import { CareLoadCard } from './CareLoadCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -125,6 +126,17 @@ export function HouseholdPage() {
         title={household.name}
         description="Manage your household members and settings."
       />
+
+      {/* How the care is actually split. Shown to every member, not just
+          admins — the roster is shared, and so is the work. Skipped for a
+          household of one, where a split is not a thing that exists yet. */}
+      {householdId && household.members.length > 1 && (
+        <CareLoadCard
+          householdId={householdId}
+          members={household.members}
+          currentUserId={user?.id ?? null}
+        />
+      )}
 
       {/* Invite section */}
       {isAdmin && (

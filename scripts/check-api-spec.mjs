@@ -15,7 +15,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HANDLERS_DIR = join(ROOT, 'backend', 'src', 'handlers');
@@ -74,28 +74,39 @@ function findSpecRoutes() {
   return routes;
 }
 
-const handlerRoutes = findHandlerRoutes();
-const specRoutes = findSpecRoutes();
+// Exported so scripts/check-doc-figures.mjs can re-derive the handler-route
+// count from the same scan the drift detector uses, instead of a second
+// implementation that can disagree with this one.
+export { findHandlerRoutes };
 
-const missingFromSpec = [...handlerRoutes].filter((r) => !specRoutes.has(r)).sort();
-const orphanedInSpec = [...specRoutes].filter((r) => !handlerRoutes.has(r)).sort();
+function main() {
+  const handlerRoutes = findHandlerRoutes();
+  const specRoutes = findSpecRoutes();
 
-if (missingFromSpec.length === 0 && orphanedInSpec.length === 0) {
-  console.log(`API spec OK — ${handlerRoutes.size} handler routes documented.`);
-  process.exit(0);
+  const missingFromSpec = [...handlerRoutes].filter((r) => !specRoutes.has(r)).sort();
+  const orphanedInSpec = [...specRoutes].filter((r) => !handlerRoutes.has(r)).sort();
+
+  if (missingFromSpec.length === 0 && orphanedInSpec.length === 0) {
+    console.log(`API spec OK — ${handlerRoutes.size} handler routes documented.`);
+    process.exit(0);
+  }
+
+  if (missingFromSpec.length > 0) {
+    console.error(
+      `\n❌ ${missingFromSpec.length} handler route(s) missing from docs/api-spec.yaml:`
+    );
+    for (const r of missingFromSpec) console.error(`   ${r}`);
+  }
+
+  if (orphanedInSpec.length > 0) {
+    console.error(
+      `\n⚠️  ${orphanedInSpec.length} spec route(s) with no handler — stale entries to remove:`
+    );
+    for (const r of orphanedInSpec) console.error(`   ${r}`);
+  }
+
+  console.error('\nUpdate docs/api-spec.yaml to match, or fix the route comment in the handler.');
+  process.exit(1);
 }
 
-if (missingFromSpec.length > 0) {
-  console.error(`\n❌ ${missingFromSpec.length} handler route(s) missing from docs/api-spec.yaml:`);
-  for (const r of missingFromSpec) console.error(`   ${r}`);
-}
-
-if (orphanedInSpec.length > 0) {
-  console.error(
-    `\n⚠️  ${orphanedInSpec.length} spec route(s) with no handler — stale entries to remove:`
-  );
-  for (const r of orphanedInSpec) console.error(`   ${r}`);
-}
-
-console.error('\nUpdate docs/api-spec.yaml to match, or fix the route comment in the handler.');
-process.exit(1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

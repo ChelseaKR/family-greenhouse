@@ -85,7 +85,11 @@ export function readCareGuides() {
 /**
  * Every public route, in sitemap order, as
  * `{ path, priority, changefreq, lastmod }`. `lastmod` falls back to today for
- * a manifest entry with no date rather than being omitted.
+ * a manifest entry with no date rather than being omitted — and such an entry
+ * also carries `undated` (the reason), because a `<lastmod>` that changes at
+ * midnight makes the committed sitemap unreproducible: `build-sitemap.mjs
+ * --check` refuses to verify those routes by name rather than silently skip
+ * them.
  */
 export function publicRoutes() {
   const today = new Date().toISOString().slice(0, 10);
@@ -95,6 +99,7 @@ export function publicRoutes() {
     priority: 0.7,
     changefreq: 'monthly',
     lastmod: date ?? today,
+    ...(date ? {} : { undated: 'no `date:` in posts/index.ts' }),
   }));
 
   const careEntries = [...readCareGuides().entries()].map(([slug, reviewed]) => ({
@@ -102,6 +107,7 @@ export function publicRoutes() {
     priority: 0.7,
     changefreq: 'monthly',
     lastmod: reviewed ?? today,
+    ...(reviewed ? {} : { undated: 'no `reviewed:` in careGuides.ts' }),
   }));
 
   return [...STATIC_ROUTES, ...blogEntries, ...careEntries];

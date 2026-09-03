@@ -10,7 +10,21 @@
  * This emitter exists to fire CONFIRMED revenue events from the trusted
  * backend. The frontend `subscription_upgraded` event fires at checkout START
  * (intent, not confirmation); the Stripe webhook is the source of truth for
- * revenue, so it emits the confirmed counterpart `subscription_activated`.
+ * revenue, so it emits the confirmed counterparts.
+ *
+ * The three server events form the subscription lifecycle, and only the
+ * middle one is money:
+ *
+ *   subscription_activated  → a 14-day TRIAL began (or a lifetime purchase
+ *                             completed — the one case where it is revenue).
+ *   subscription_paid       → the subscription became `active`, which Stripe
+ *                             only does once an invoice has actually been
+ *                             paid. This is the paid conversion.
+ *   subscription_deactivated→ the subscription was deleted at Stripe. Churn.
+ *
+ * Do not read `subscription_activated` as revenue for recurring plans: every
+ * subscription checkout carries `trial_period_days: 14`, so no money has moved
+ * when it fires. See docs/analytics.md.
  *
  * Privacy / safety:
  *  - distinct_id is a stable household-scoped id (`household:<householdId>`)
@@ -31,14 +45,39 @@ import { logger } from './logger.js';
 const HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
 
 /** Server-side product events emitted from trusted backend paths. */
-export type ServerEventName = 'subscription_activated'; // Stripe webhook confirmed a paid plan is active.
+export type ServerEventName =
+  // Checkout completed. For a recurring plan this is a TRIAL START — no money
+  // has moved. For `interval: 'lifetime'` it is a completed one-time payment.
+  | 'subscription_activated'
+  // The subscription reached Stripe status `active` from a non-active status.
+  // Stripe only makes that transition after an invoice is actually paid, so
+  // this is the money-moved signal. `from: 'trialing'` is a trial conversion.
+  | 'subscription_paid'
+  // `customer.subscription.deleted` — the subscription is gone at Stripe.
+  | 'subscription_deactivated';
 
 export interface ServerEventProps {
-  /** Plan the household activated. */
+  /** Plan the household activated, paid for, or churned out of. */
   plan?: 'garden' | 'greenhouse';
   /** Billing cadence stamped on the Stripe metadata at checkout. `lifetime`
    *  is the one-time Garden purchase. */
   interval?: 'month' | 'year' | 'lifetime';
+  /**
+   * `subscription_paid` only — the Stripe status the subscription held
+   * immediately before it became `active`. `trialing` is a trial converting to
+   * paid (the number the business cares about); `past_due`/`unpaid`/
+   * `incomplete` is a recovered payment, which is real revenue but NOT a new
+   * conversion. Count them separately. Bucketed to a closed enum so an
+   * unfamiliar Stripe status can never become free text in the log stream.
+   */
+  from?: 'trialing' | 'past_due' | 'unpaid' | 'incomplete' | 'paused' | 'other';
+  /**
+   * `subscription_deactivated` only — Stripe's `cancellation_details.reason`,
+   * bucketed. Distinguishes voluntary churn (`requested`) from involuntary
+   * churn (`payment_failed`), which have completely different remedies.
+   * Absent when Stripe did not record a reason.
+   */
+  churnReason?: 'requested' | 'payment_failed' | 'payment_disputed' | 'other';
 }
 
 /**
