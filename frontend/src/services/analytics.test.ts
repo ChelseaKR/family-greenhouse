@@ -157,3 +157,75 @@ describe('household group analytics', () => {
     expect(captured?.$groups).toBeUndefined();
   });
 });
+
+/**
+ * Characterization tests for the anonymous (pre-signin) visitor.
+ *
+ * These pin a real property of the current design rather than a bug: every
+ * rail in the shim is identity-gated, so a visitor who has not signed in
+ * produces NO network traffic at all. That is the privacy posture working as
+ * intended — no anonymous beaconing from marketing pages — and it is also the
+ * reason the top of the acquisition funnel is not measurable today. See
+ * docs/analytics.md, "What this instrumentation cannot answer".
+ *
+ * If a future change makes anonymous visitors emit events, these tests should
+ * fail loudly: that is a privacy-posture decision and a privacy-page change,
+ * not a silent instrumentation tweak.
+ */
+describe('anonymous visitors', () => {
+  it('sends nothing on any rail before identify()', async () => {
+    const { mod, fetchMock } = await loadShim();
+    // No identify(), no setTelemetryAuthToken() — an anonymous landing visitor.
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('drops the first-party event when identified but not yet token-bearing', async () => {
+    // identify() alone is not enough: /telemetry/product is authenticated, so
+    // the first-party rail stays closed until a JWT is set.
+    const { mod, fetchMock } = await loadShim();
+    mod.identify(USER_A);
+    mod.track('signup_completed');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toHaveLength(0);
+  });
+
+  it('honors Do-Not-Track for an identified, token-bearing user', async () => {
+    Object.defineProperty(globalThis.navigator, 'doNotTrack', {
+      value: '1',
+      configurable: true,
+    });
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    mod.track('subscription_upgraded', { upgradeTo: 'garden', interval: 'month' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toHaveLength(0);
+    expect(captures(fetchMock)).toHaveLength(0);
+  });
+});
+
+describe('upgrade-intent event', () => {
+  it('carries only closed-enum properties on the first-party rail', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    mod.setActiveHousehold(HOUSEHOLD_A);
+    mod.track('subscription_upgraded', { upgradeTo: 'greenhouse', interval: 'year' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toContainEqual({
+      event: 'subscription_upgraded',
+      properties: { upgradeTo: 'greenhouse', interval: 'year' },
+      superProperties: {},
+    });
+  });
+});
