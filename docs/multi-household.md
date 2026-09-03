@@ -30,6 +30,8 @@ The local Express server mirrors this by reading the role straight from its in-m
 
 Resource handlers refuse cross-household access by checking `user.householdId === <addressed household>`. Combined with the X-Header override, that means a user can only see plants/tasks/activity in the household pinned for the request. There is no global "all my plants" view by design — it would be confusing and would mix unrelated households' data on the same screen.
 
+The one cross-household read is `GET /me/today`, and it is a work queue, not that view ([ADR 0017](adr/0017-cross-home-today-is-a-work-queue-not-a-global-view.md)). For every membership it runs the same due/overdue task query the dashboard runs, with that household's role from its membership row, and returns the result **grouped by household with the household name on every row** — never merged. A household whose read fails is returned as an explicit `status: 'unavailable'` entry rather than dropped. The read is not pinned to a household (`X-Household-Id` is irrelevant to it); acting on a row goes back through the ordinary single-household task routes with an explicit `X-Household-Id` for that row's home, so the refusal above is untouched. It is a Greenhouse feature (`crossHomeToday` in `models/plans.ts`), gated per user across every household they belong to.
+
 ## Adding a household
 
 The switcher exposes a "+ Add a household" affordance that links to `/onboarding?mode=add`. The same `HouseholdOnboarding` component handles both first-time setup and additional households; the `mode` param flips two behaviors:

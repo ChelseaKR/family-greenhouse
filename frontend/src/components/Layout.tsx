@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Dialog, Transition } from '@headlessui/react';
 import {
   Bars3Icon,
@@ -12,6 +13,7 @@ import {
   QuestionMarkCircleIcon,
   ChartBarIcon,
   SparklesIcon,
+  HomeModernIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { BrandMark } from './BrandMark';
@@ -28,6 +30,16 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Plants', href: '/plants', icon: PlantIcon },
   { name: 'Tasks', href: '/tasks', icon: ClipboardDocumentListIcon },
+  // Cross-home Today (ADR 0017). Shown to every tier: the page itself
+  // renders the Greenhouse explanation for the others, never a 404. The
+  // label goes through the catalog (`labelKey`) rather than joining this
+  // file's hardcoded-string baseline.
+  {
+    name: 'Today, across your homes',
+    labelKey: 'nav.today',
+    href: '/today',
+    icon: HomeModernIcon,
+  },
   { name: 'Chat', href: '/chat', icon: SparklesIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Household', href: '/household', icon: UserGroupIcon },
@@ -217,6 +229,7 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarContentProps) {
+  const { t } = useTranslation();
   return (
     <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 px-6 pb-4">
       {/* Pane lines + a climbing vine turn the rail into the edge of the
@@ -252,7 +265,7 @@ function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarCo
                       }
                     >
                       <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                      {item.name}
+                      {item.labelKey ? t(item.labelKey) : item.name}
                     </NavLink>
                   </li>
                 ))}

@@ -64,6 +64,10 @@ const SharedPlantPage = lazyNamed(
   'SharedPlantPage'
 );
 const TasksPage = lazyNamed(() => import('@/features/tasks/TasksPage'), 'TasksPage');
+const CrossHomeTodayPage = lazyNamed(
+  () => import('@/features/today/CrossHomeTodayPage'),
+  'CrossHomeTodayPage'
+);
 const HouseholdPage = lazyNamed(
   () => import('@/features/household/HouseholdPage'),
   'HouseholdPage'
@@ -249,6 +253,7 @@ function App() {
                   <Route path="/plants/:plantId" element={<PlantDetailPage />} />
                   <Route path="/tasks" element={<TasksPage />} />
                   <Route path="/tags" element={<PlantTagsPage />} />
+                  <Route path="/today" element={<CrossHomeTodayPage />} />
                   <Route path="/chat" element={<ChatPage />} />
                   <Route path="/household" element={<HouseholdPage />} />
                   <Route path="/away-recap" element={<AwayRecapPage />} />

@@ -109,6 +109,13 @@ export interface Plan {
    * deliberately small — this is the plan catalog, not a permission system.
    */
   features: PlanFeatures;
+  /**
+   * Cross-home Today (`GET /me/today`, ADR 0017): the caller's due + overdue
+   * work across every household they belong to, grouped by home. Multi-home
+   * is the Greenhouse story; membership in ANY household on a plan with this
+   * flag unlocks the view. Read it through `planIncludesCrossHomeToday`.
+   */
+  crossHomeToday?: boolean;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -122,6 +129,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // One live sitter link, a week long: the task list for a weekend away.
     // No Plant Tags: the printable QR labels start at Garden.
     limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1, tags: 0 },
+    crossHomeToday: false,
     features: { kiosk: false, householdToolkit: false, plantTags: false },
   },
   garden: {
@@ -139,6 +147,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxMembers: 6,
     // The Away Kit: windows to 90 days, several sitters at once.
     limits: { sitterLinkMaxDays: 90, sitterLinksActive: 10, tags: 50 },
+    crossHomeToday: false,
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
     lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
@@ -157,6 +166,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxPlants: 5000,
     maxMembers: 50,
     limits: { sitterLinkMaxDays: 90, sitterLinksActive: 25, tags: Number.POSITIVE_INFINITY },
+    crossHomeToday: true,
     stripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE_ANNUAL',
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
@@ -215,6 +225,11 @@ export function planHasFeature(
   feature: keyof PlanFeatures
 ): boolean {
   return getPlan(id).features[feature];
+}
+
+/** True when membership in a household on this plan unlocks cross-home Today (ADR 0017). */
+export function planIncludesCrossHomeToday(plan: Plan): boolean {
+  return plan.crossHomeToday === true;
 }
 
 /** True iff `id` names a real plan in the catalog. */
