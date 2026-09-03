@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { MemorialFrame } from './brand/MemorialFrame';
 
 const FOOTER_LINKS = [
+  { label: 'Help', to: '/help' },
   { label: 'Care guides', to: '/care' },
   { label: 'Blog', to: '/blog' },
   { label: 'Plans', to: '/pricing' },

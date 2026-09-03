@@ -33,13 +33,67 @@ const CATEGORY_STYLES: Record<Category, string> = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-09-02',
+    category: 'Feature',
+    title: 'Paid plans are open',
+    body: (
+      <>
+        Garden and Greenhouse can now be bought on the web, monthly or annually, with a one-off
+        lifetime option on Garden. A household admin buys and manages the plan in Settings, and new
+        subscriptions start with a 14-day free trial. The free Seedling plan is unchanged and stays
+        free. <Link to="/pricing">See the plans</Link>, or read{' '}
+        <Link to="/help/billing">how billing and cancelling work</Link>.
+      </>
+    ),
+  },
+  {
+    date: '2026-09-02',
+    category: 'Fix',
+    title: 'A cancelled plan now says it is cancelled',
+    body: (
+      <>
+        Cancelling leaves you on the paid plan until the period you already paid for runs out, so
+        nothing on screen used to change and cancelling looked like it had failed. Billing now shows
+        the date your plan ends. A separate fix protects lifetime purchases: a tier you bought
+        outright can no longer be sold to you twice, or lost when a later subscription is cancelled.
+      </>
+    ),
+  },
+  {
+    date: '2026-09-02',
+    category: 'Improvement',
+    title: 'Help is public, and much bigger',
+    body: (
+      <>
+        The <Link to="/help">help pages</Link> used to be locked behind sign-in, which is precisely
+        the wrong place for &ldquo;how do I cancel&rdquo; and &ldquo;I cannot log in&rdquo;. They
+        are now public, split into topics you can link straight to, and rewritten against what the
+        product actually does — including the parts that are unfinished.
+      </>
+    ),
+  },
+  {
+    date: '2026-08-18',
+    category: 'Fix',
+    title: 'Streaks stopped overstating themselves',
+    body: (
+      <>
+        A plant&rsquo;s care streak is counted from its last 10 logged completions, shared across
+        all of that plant&rsquo;s tasks — so a plant watered forty times in a row could never show
+        more than ten. It read as a measurement. An unbroken run that fills the window now reads
+        &ldquo;10+&rdquo;, because the rest of the history is genuinely out of view.
+      </>
+    ),
+  },
+  {
     date: '2026-07-19',
     category: 'Feature',
     title: 'Free accounts are open again',
     body: (
       <>
         New households can sign up for the free Seedling plan again: up to 10 plants and 6 members,
-        with no credit card. Paid plans, purchases, upgrades, and plan changes remain paused.
+        with no credit card. (Paid plans were still paused at this point; they reopened on
+        2026-09-02.)
       </>
     ),
   },

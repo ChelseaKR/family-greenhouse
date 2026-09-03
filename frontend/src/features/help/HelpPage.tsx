@@ -1,570 +1,224 @@
-import { useMemo, useState } from 'react';
-import { Card, CardHeader } from '@/components/Card';
-import { PageHeader } from '@/components/PageHeader';
-import { ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import clsx from 'clsx';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useId, useMemo, useState } from 'react';
+import { Link } from 'react-router';
+import { PublicShell, PageIntro } from '@/components/PublicShell';
+import { useMetaTags } from '@/hooks/useMetaTags';
+import { siteUrl } from '@/config/site';
 import { isNativeApp } from '@/lib/platform';
+import { useAuthStore } from '@/store/authStore';
+import { BackToApp } from './BackToApp';
+import { SUPPORT_EMAIL, POPULAR, visibleSections } from './helpContent';
 
 /**
- * In-app help/FAQ. Hand-curated rather than CMS-driven because the article
- * count is small and changes slowly. Filter is text-based; categories are
- * for browsing when the user doesn't have a specific question yet.
+ * Public help index at `/help`.
+ *
+ * Public on purpose. Help used to live behind `ProtectedRoute`, which meant
+ * the answers to "how do I cancel", "what does a sitter see", and "why didn't
+ * my reminder arrive" were unreachable to the two audiences most likely to
+ * ask them: someone deciding whether to sign up, and someone locked out of
+ * their account. It also meant no search engine could index a single one of
+ * them.
+ *
+ * This page is the browse-and-filter surface: every question on one page,
+ * collapsed. The per-topic pages under `/help/:topicId` are the reading
+ * surface, and they are where the FAQ structured data lives so one question
+ * has one canonical home.
+ *
+ * Disclosure uses native <details>/<summary> rather than a button plus a
+ * conditional render. Three reasons, all of them load-bearing here: the
+ * keyboard and screen-reader semantics are correct without any JS, the answer
+ * text stays in the DOM when collapsed (so browser find-in-page and crawlers
+ * can both see it), and more than one answer can be open at a time — the old
+ * accordion allowed exactly one, which is hostile when you are comparing two
+ * plans or following a two-part answer.
  */
-
-interface HelpArticle {
-  q: string;
-  a: React.ReactNode;
-  /** Plain-text body kept alongside the React node so the search filter
-   *  can match content, not just titles. */
-  searchText: string;
-}
-
-interface HelpSection {
-  id: string;
-  title: string;
-  description: string;
-  articles: HelpArticle[];
-}
-
-function md(strings: TemplateStringsArray): string {
-  // Tag for clean co-location of the searchable plain-text version of an
-  // article body. Templates here intentionally don't interpolate.
-  return strings.join('');
-}
-
-const SECTIONS: HelpSection[] = [
-  {
-    id: 'getting-started',
-    title: 'Getting started',
-    description: 'The first 5 minutes.',
-    articles: [
-      {
-        q: 'How do I add my first plant?',
-        a: (
-          <>
-            From the dashboard, click <strong>Plants</strong> in the sidebar and then the green{' '}
-            <strong>Add plant</strong> button. You can upload a photo, pick a species (typing in the
-            field shows suggestions from our 240-entry catalog plus, when configured, the Perenual
-            species database), and add a location like &ldquo;kitchen window.&rdquo; Don&rsquo;t
-            have a name in mind? Click <em>✨ Generate a fun name</em>.
-          </>
-        ),
-        searchText: md`
-From the dashboard, click Plants in the sidebar and then Add plant. Upload photo pick species suggestions Perenual catalog location kitchen window generate fun name
-        `,
-      },
-      {
-        q: "Why didn't my new plant appear with care suggestions?",
-        a: (
-          <>
-            Care suggestions only appear when the species you picked matches an entry our species
-            database recognizes. Free-text species (e.g.{' '}
-            <em>&ldquo;the funky one Aunt Ruth gave me&rdquo;</em>) save fine but don&rsquo;t
-            trigger the suggested watering schedule or care guide. Pick a suggestion from the
-            dropdown to wire those features in.
-          </>
-        ),
-        searchText: md`
-Care suggestions species recognized Perenual database free-text watering schedule care guide pick suggestion dropdown
-        `,
-      },
-      {
-        q: 'I picked a species but no watering task was created.',
-        a: (
-          <>
-            We only auto-create a watering task when Perenual returns a recommended cadence
-            (frequent / average / minimum). Some species entries don&rsquo;t have one. You can
-            always add a task manually from the plant&rsquo;s detail page — click{' '}
-            <strong>Add task</strong> under Care.
-          </>
-        ),
-        searchText: md`
-watering task Perenual cadence frequent average minimum manually add task plant detail Care
-        `,
-      },
-    ],
-  },
-  {
-    id: 'sharing',
-    title: 'Sharing & households',
-    description: 'Letting your housemates help.',
-    articles: [
-      {
-        q: 'How do I share my plants with my partner or roommates?',
-        a: (
-          <>
-            Go to <strong>Household</strong> in the sidebar, then{' '}
-            <strong>Generate invite link</strong>. Send the link to anyone you want to add.
-            They&rsquo;ll create their own login and join your household automatically. The Seedling
-            plan supports up to 6 members, Garden 6, Greenhouse 50.
-          </>
-        ),
-        searchText: md`
-share plants partner roommates Household sidebar Generate invite link create login Seedling Garden Greenhouse plan members
-        `,
-      },
-      {
-        q: 'Can I belong to more than one household?',
-        a: (
-          <>
-            Yes. Once you have one household, the sidebar shows a switcher with an{' '}
-            <strong>Add a household</strong> option. Each household has its own plants, tasks,
-            members, and (optionally) location for climate tips. You can be admin in one and a
-            member in another. Switching households doesn&rsquo;t move your default — your first
-            household stays attached to your login for any client that doesn&rsquo;t use the
-            switcher.
-          </>
-        ),
-        searchText: md`
-multiple households switcher add household admin member default first household login
-        `,
-      },
-      {
-        q: 'How do I promote someone to admin or remove them?',
-        a: (
-          <>
-            On the <strong>Household</strong> page, each member has a role badge. Admins see promote
-            / demote / remove buttons next to other members&rsquo; names. You can&rsquo;t demote
-            yourself if you&rsquo;re the last admin — promote someone else first.
-          </>
-        ),
-        searchText: md`
-promote admin demote remove member household page role badge last admin
-        `,
-      },
-    ],
-  },
-  {
-    id: 'tasks',
-    title: 'Tasks & reminders',
-    description: 'Watering, fertilizing, pruning — and snoozing.',
-    articles: [
-      {
-        q: "What's the difference between completing and snoozing a task?",
-        a: (
-          <>
-            <strong>Done</strong> records that you watered / fertilized / etc. and pushes the
-            next-due date forward by the task&rsquo;s frequency. <strong>Snooze</strong> bumps the
-            next-due date by 1 / 3 / 7 days (or skip the cycle entirely) <em>without</em> recording
-            a completion — useful when you&rsquo;ll get to it tomorrow but don&rsquo;t want to lose
-            your streak.
-          </>
-        ),
-        searchText: md`
-Done complete task fertilize next-due frequency snooze 1 3 7 days skip cycle completion streak
-        `,
-      },
-      {
-        q: 'How do streaks work?',
-        a: (
-          <>
-            A streak counts consecutive on-time completions of the same task. On-time means within
-            1.5× the task&rsquo;s frequency — so a weekly task allows about 10 days of slack before
-            the streak breaks. Each plant&rsquo;s detail page shows its longest historical streak in
-            the care report.
-          </>
-        ),
-        searchText: md`
-streaks consecutive on-time completions 1.5x frequency slack break weekly longest historical care report
-        `,
-      },
-      {
-        q: "Why didn't my reminder go through?",
-        a: (
-          <>
-            Check <strong>Settings → Notifications</strong>. Each channel (browser, email, SMS) is
-            opt-in. Email is on by default; browser requires <em>Allow notifications</em> in your
-            OS. SMS needs a phone number in E.164 format (e.g. <code>+15551234567</code>) and an
-            operator-enabled delivery configuration; there is no paid upgrade path during the
-            commercial hold. Quiet hours pause email + SMS during the window you set; browser push
-            respects your OS Do Not Disturb settings.
-          </>
-        ),
-        searchText: md`
-reminder notification email SMS browser opt-in E.164 phone quiet hours Do Not Disturb DND OS
-        `,
-      },
-      {
-        q: 'Can I apply the same care template to many plants at once?',
-        a: (
-          <>
-            Yes. From the <strong>Plants</strong> page, click <strong>Apply template</strong>. Pick
-            a template (water, fertilize, etc. with sensible defaults), then check the plants you
-            want it applied to. Up to 50 at once.
-          </>
-        ),
-        searchText: md`
-care template multiple plants bulk apply Plants page button water fertilize 50 limit
-        `,
-      },
-    ],
-  },
-  {
-    id: 'climate-and-care',
-    title: 'Climate & care guidance',
-    description: 'Smarter advice based on your plants and your weather.',
-    articles: [
-      {
-        q: 'What is the climate card on my dashboard?',
-        a: (
-          <>
-            When your household has a saved location, the dashboard shows local weather plus derived
-            care tips: low-humidity warnings for tropicals, freeze alerts for plants in outdoor
-            spaces, and hot-day soil-moisture nudges. Rainy-day skips only appear for plants in
-            outdoor spaces marked <strong>Rain exposed</strong>; covered patios and porches stay on
-            their normal watering schedule. Set or change the location on the{' '}
-            <strong>Household</strong> page (admin only).
-          </>
-        ),
-        searchText: md`
-climate card dashboard household location weather tips humidity tropicals freeze outdoor rain hot soil moisture admin
-        `,
-      },
-      {
-        q: 'How do I get a long-form care guide for my plant?',
-        a: (
-          <>
-            Open the plant&rsquo;s detail page. If we recognize the species via Perenual,
-            you&rsquo;ll see a <strong>Care guide</strong> card with watering, sunlight, pruning
-            sections plus toxicity warnings and hardiness zones. Plants saved with free-text species
-            names (we don&rsquo;t recognize them) won&rsquo;t show this card.
-          </>
-        ),
-        searchText: md`
-care guide plant detail Perenual species watering sunlight pruning toxicity hardiness zones free-text
-        `,
-      },
-      {
-        q: 'How do placement checks work?',
-        a: (
-          <>
-            You can optionally mark each household space with its typical light level and whether
-            pets can reach plants there. On a plant&rsquo;s detail page, Family Greenhouse compares
-            those details with care data for recognized species and may suggest a brighter or
-            pet-safer spot. These are cautious checks, not measurements or diagnoses; observe the
-            plant and use your judgment before moving it. Unknown space or species details never
-            produce a warning.
-          </>
-        ),
-        searchText: md`
-placement check space light low medium bright pet access toxic warning move species optional
-        `,
-      },
-      {
-        q: 'What are pest alerts?',
-        a: (
-          <>
-            An opt-in feature. When enabled, you get a notification (max one per plant per quarter)
-            when one of your plants is entering a typical pest season — spider mites, aphids, etc.
-            Only fires for plants we recognize and only when you&rsquo;ve turned it on under{' '}
-            <strong>Settings → Notifications</strong>.
-          </>
-        ),
-        searchText: md`
-pest alerts opt-in notification quarter spider mites aphids season recognized species notifications
-        `,
-      },
-    ],
-  },
-  {
-    id: 'analytics',
-    title: 'Analytics & insights',
-    description: 'How your household is doing on care.',
-    articles: [
-      {
-        q: 'What do the KPI tiles on the Analytics page mean?',
-        a: (
-          <>
-            <strong>Plants</strong> and <strong>Active tasks</strong> are current totals.{' '}
-            <strong>Done last 7 days</strong> sums completions from the daily series.{' '}
-            <strong>Overdue now</strong> turns amber when there&rsquo;s anything past its due date —
-            click into <em>Plants at risk</em> below to see the worst offenders.
-          </>
-        ),
-        searchText: md`
-KPI tiles analytics plants active tasks done last 7 days overdue amber plants at risk worst offenders
-        `,
-      },
-      {
-        q: 'Why is the by-task-type breakdown empty?',
-        a: (
-          <>
-            That card shows year-to-date completions by task type. If your household joined this
-            year and hasn&rsquo;t completed many tasks yet, the card hides itself. It&rsquo;ll start
-            showing up after a handful of completions land.
-          </>
-        ),
-        searchText: md`
-by task type breakdown year to date completions empty hides few tasks new household
-        `,
-      },
-    ],
-  },
-  {
-    id: 'account',
-    title: 'Account & data',
-    description: 'Profile, photos, exports, and the goodbye flow.',
-    articles: [
-      {
-        q: 'How do I edit my display name?',
-        a: (
-          <>
-            <strong>Settings → Account</strong>. The name change propagates to every household
-            you&rsquo;re a member of. If you later delete your account, retained shared care history
-            is labeled &ldquo;Former member&rdquo; instead of keeping your name.
-          </>
-        ),
-        searchText: md`
-edit name display profile settings account propagate household activity completion history
-        `,
-      },
-      {
-        q: 'My plant photo upload failed — what now?',
-        a: (
-          <>
-            Photos must be JPEG, PNG, or WebP and under 5 MB. If the upload was interrupted (closed
-            tab, dropped network) the plant won&rsquo;t show a broken image — we only commit the
-            photo after the upload finishes. Just try again from the plant detail page.
-          </>
-        ),
-        searchText: md`
-plant photo upload failed JPEG PNG WebP 5 MB interrupted commit retry plant detail
-        `,
-      },
-      {
-        q: 'How do I export my data?',
-        a: (
-          <>
-            <strong>Settings → Account → Download my data</strong>. Two CSVs land in your downloads
-            — one for plants, one for tasks. RFC 4180 compatible; opens cleanly in any spreadsheet.
-          </>
-        ),
-        searchText: md`
-export data CSV download plants tasks RFC 4180 spreadsheet account settings
-        `,
-      },
-      {
-        q: 'How do I delete my account?',
-        a: (
-          <>
-            <strong>Settings → Account → Delete my account</strong>. We wipe your login and remove
-            you from every household you belong to. If you&rsquo;re the only admin in any of those
-            households (with other members), promote someone else first or the request is refused.
-            Shared completion records remain for the household, but your name and account id are
-            replaced with &ldquo;Former member.&rdquo;
-          </>
-        ),
-        searchText: md`
-delete account settings remove household admin promote member historical completion records
-        `,
-      },
-    ],
-  },
-  {
-    id: 'preferences',
-    title: 'Preferences & accessibility',
-    description: 'Theme, density, language, keyboard.',
-    articles: [
-      {
-        q: 'How do I change the theme or density?',
-        a: (
-          <>
-            <strong>Settings → Preferences</strong>. Theme is light / dark / system; density is cozy
-            or compact (about 25% less vertical padding). Settings save per device — your phone and
-            laptop can differ.
-          </>
-        ),
-        searchText: md`
-theme dark light system density cozy compact preferences settings device per-device
-        `,
-      },
-      {
-        q: 'Is there a keyboard shortcut for search?',
-        a: (
-          <>
-            <kbd>⌘K</kbd> on Mac, <kbd>Ctrl+K</kbd> elsewhere. Searches across your plants and
-            tasks; press a result with Enter to jump straight to it.
-          </>
-        ),
-        searchText: md`
-keyboard shortcut search Cmd K Ctrl K plants tasks Enter
-        `,
-      },
-      {
-        q: 'Where are the Spanish (or other language) translations?',
-        a: (
-          <>
-            We have the i18n infrastructure but only ship English today. Non-English translation
-            files exist as scaffolding — we hide the language picker until they&rsquo;re translated
-            by a real human. When that lands, the picker reappears automatically.
-          </>
-        ),
-        searchText: md`
-Spanish language translation i18n English picker hidden gated
-        `,
-      },
-    ],
-  },
-  {
-    id: 'billing',
-    title: 'Plan status',
-    description: 'Free-account limits and the paid-activity hold.',
-    articles: [
-      {
-        q: 'Can I buy or change a plan?',
-        a: (
-          <>
-            No. Paid-plan offers, purchases, upgrades, and billing-portal access are paused. If you
-            believe an earlier test or billing event affected you, contact support so it can be
-            investigated and resolved directly.
-          </>
-        ),
-        searchText: md`
-commercial hold paid plan purchase upgrade billing portal unavailable contact support
-        `,
-      },
-      {
-        q: 'Can I create a new account?',
-        a: (
-          <>
-            Yes. Free accounts are open for households with up to 10 plants and 6 members, and no
-            credit card is required. Paid plans, purchases, upgrades, and plan changes remain
-            paused.
-          </>
-        ),
-        searchText: md`
-new account registration free signup ten plants no credit card paid plans paused
-        `,
-      },
-      {
-        q: 'What happens when I downgrade past my plant or member limit?',
-        a: (
-          <>
-            Existing plants and members stay — we never auto-delete data. You won&rsquo;t be able to
-            add new ones until you&rsquo;re back under the cap. Active tasks keep running.
-          </>
-        ),
-        searchText: md`
-downgrade plan plant limit member cap auto-delete data add new upgrade tasks running
-        `,
-      },
-    ],
-  },
-];
-
-function flatten(sections: HelpSection[]): Array<{ section: HelpSection; article: HelpArticle }> {
-  return sections.flatMap((section) => section.articles.map((article) => ({ section, article })));
-}
-
 export function HelpPage() {
-  useDocumentTitle('Help');
   const native = isNativeApp();
-  const [open, setOpen] = useState<string | null>(null);
+  // A signed-in reader gets a plain header and a way back into the app; the
+  // public header's "Try the app" CTA is aimed at someone who has not signed
+  // up, and reads as a dead end to someone who already has.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [query, setQuery] = useState('');
+  const searchId = useId();
+
+  useMetaTags({
+    title: 'Help & FAQ — Family Greenhouse',
+    description:
+      'Answers about plants, tasks, reminders, households, plant sitters, plans and billing, and your data in Family Greenhouse.',
+    canonical: siteUrl('/help'),
+    robots: 'index, follow',
+  });
+
+  const sections = useMemo(() => visibleSections(native), [native]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    // Native store builds do not sell plans or send users to an external
-    // payment flow. The read-only Plan screen remains available in Settings,
-    // while web-only billing instructions stay out of native help/search.
-    const availableSections = native
-      ? SECTIONS.filter((section) => section.id !== 'billing')
-      : SECTIONS;
-    if (!q) return availableSections;
-    return availableSections
-      .map((section) => {
-        const articles = section.articles.filter(
-          (a) => a.q.toLowerCase().includes(q) || a.searchText.toLowerCase().includes(q)
-        );
-        return { ...section, articles };
-      })
-      .filter((s) => s.articles.length > 0);
-  }, [native, query]);
+    if (!q) return sections;
+    return sections
+      .map((section) => ({
+        ...section,
+        articles: section.articles.filter(
+          (a) => a.q.toLowerCase().includes(q) || a.text.toLowerCase().includes(q)
+        ),
+      }))
+      .filter((section) => section.articles.length > 0);
+  }, [query, sections]);
 
-  const visibleArticles = flatten(filtered);
+  const matchCount = filtered.reduce((n, section) => n + section.articles.length, 0);
+  const searching = query.trim().length > 0;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Guides & answers"
-        title="Help"
-        description={
+    <PublicShell plainHeader={isAuthenticated}>
+      <BackToApp show={isAuthenticated} />
+      <PageIntro
+        eyebrow="Help & FAQ"
+        title="How can we help?"
+        lede={
           <>
-            Quick answers to the questions we hear most. Still stuck? Email us at{' '}
-            <a
-              className="text-primary-700 underline hover:text-primary-800"
-              href="mailto:support@familygreenhouse.net"
-            >
-              support@familygreenhouse.net
-            </a>
-            .
+            Answers to the questions we actually get asked, grouped by topic. Everything here
+            describes the product as it ships today — where something is unfinished or only works on
+            some devices, it says so.
           </>
         }
       />
 
-      <div className="relative">
-        <MagnifyingGlassIcon
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-          aria-hidden="true"
-        />
+      <div role="search" className="mt-10">
+        <label htmlFor={searchId} className="block text-sm font-medium text-ink">
+          Search the help pages
+        </label>
         <input
+          id={searchId}
           type="search"
-          aria-label="Search help articles"
-          placeholder="Search help…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="input pl-10"
+          placeholder="cancel, reminder, sitter, export…"
+          className="mt-2 w-full rounded-lg border border-dew bg-paper px-4 py-3 text-base text-ink placeholder:text-gray-500 focus:border-primary-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
         />
+        {/* Announce the filtered count, not just the visual change: a
+            keyboard/screen-reader user typing here otherwise gets no feedback
+            that the page under them has shrunk to nothing. */}
+        <p aria-live="polite" className="mt-2 text-sm text-gray-600">
+          {searching
+            ? `${matchCount} ${matchCount === 1 ? 'answer' : 'answers'} match “${query.trim()}”.`
+            : ''}
+        </p>
       </div>
 
-      {visibleArticles.length === 0 ? (
-        <Card>
-          <p className="text-sm text-gray-700">
-            No articles match &ldquo;{query}&rdquo;. Try fewer words, or email us directly.
-          </p>
-        </Card>
-      ) : (
-        filtered.map((section) => (
-          <Card key={section.id} padding="none">
-            <CardHeader title={section.title} description={section.description} />
-            <ul className="divide-y divide-primary-100/60">
-              {section.articles.map((article) => {
-                const id = `${section.id}::${article.q}`;
-                const isOpen = open === id;
-                return (
-                  <li key={article.q}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left hover:bg-parchment/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
-                      aria-expanded={isOpen}
-                      aria-controls={`faq-${id}`}
-                      onClick={() => setOpen(isOpen ? null : id)}
-                    >
-                      <span className="text-sm font-medium text-gray-900">{article.q}</span>
-                      <ChevronDownIcon
-                        className={clsx(
-                          'h-5 w-5 shrink-0 text-gray-500 transition-transform',
-                          isOpen && 'rotate-180'
-                        )}
-                        aria-hidden="true"
-                      />
-                    </button>
-                    {isOpen && (
-                      <div
-                        id={`faq-${id}`}
-                        className="px-6 pb-4 text-sm text-gray-700 leading-relaxed"
-                      >
-                        {article.a}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        ))
+      {!searching && (
+        <nav aria-labelledby="help-popular" className="mt-10">
+          <h2 id="help-popular" className="font-serif text-2xl tracking-tight text-ink">
+            Start here
+          </h2>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {POPULAR.map((item) => (
+              <li key={`${item.section}-${item.article}`}>
+                <Link
+                  to={`/help/${item.section}#${item.article}`}
+                  className="block rounded-lg border border-dew bg-paper px-4 py-3 text-sm font-medium text-ink hover:border-primary-300 hover:bg-glass/40"
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
       )}
-    </div>
+
+      {matchCount === 0 ? (
+        <div className="mt-10 rounded-xl border border-dew bg-paper p-6">
+          <p className="text-base text-gray-700">
+            Nothing here matches “{query.trim()}”. Try a shorter phrase, browse the topics from the{' '}
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="text-primary-700 underline hover:text-primary-800"
+            >
+              full list
+            </button>
+            , or email{' '}
+            <a
+              className="text-primary-700 underline hover:text-primary-800"
+              href={`mailto:${SUPPORT_EMAIL}`}
+            >
+              {SUPPORT_EMAIL}
+            </a>
+            .
+          </p>
+        </div>
+      ) : (
+        <div className="mt-12 space-y-12">
+          {filtered.map((section) => (
+            <section key={section.id} aria-labelledby={`section-${section.id}`}>
+              <h2
+                id={`section-${section.id}`}
+                className="font-serif text-2xl tracking-tight text-ink border-b border-primary-100/80 pb-2"
+              >
+                <Link to={`/help/${section.id}`} className="hover:text-primary-800">
+                  {section.title}
+                </Link>
+              </h2>
+              <p className="mt-2 text-sm text-gray-600">{section.description}</p>
+              <ul className="mt-4 divide-y divide-primary-100/60 rounded-xl border border-primary-100/80 bg-paper">
+                {section.articles.map((article) => (
+                  <li key={article.id}>
+                    <details className="group" id={article.id}>
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 hover:bg-glass/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden">
+                        <h3 className="text-sm font-medium text-ink">{article.q}</h3>
+                        <svg
+                          className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M5 8l5 5 5-5" />
+                        </svg>
+                      </summary>
+                      <div className="prose-fg px-5 pb-5 text-sm">{article.a}</div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-sm">
+                <Link
+                  to={`/help/${section.id}`}
+                  className="text-primary-700 underline hover:text-primary-800"
+                >
+                  Read {section.title.toLowerCase()} as a full page
+                </Link>
+              </p>
+            </section>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-16 rounded-xl border border-primary-100/80 bg-glass/40 p-6">
+        <h2 className="font-serif text-xl tracking-tight text-ink">Still stuck?</h2>
+        <p className="mt-2 text-base text-gray-700">
+          Email{' '}
+          <a
+            className="text-primary-700 underline hover:text-primary-800"
+            href={`mailto:${SUPPORT_EMAIL}`}
+          >
+            {SUPPORT_EMAIL}
+          </a>
+          . Tell us what you were doing, what you expected, and what happened instead — and never
+          send a password or a sign-in code. If logging in or syncing looks broken for everyone,{' '}
+          <Link to="/status" className="text-primary-700 underline hover:text-primary-800">
+            check the status page
+          </Link>{' '}
+          first.
+        </p>
+      </div>
+
+      <p className="mt-8 text-sm text-gray-600">
+        {sections.length} topics ·{' '}
+        <Link to="/changelog" className="text-primary-700 underline hover:text-primary-800">
+          what changed recently
+        </Link>
+      </p>
+    </PublicShell>
   );
 }
