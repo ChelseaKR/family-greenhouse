@@ -242,6 +242,29 @@ export default defineConfig(({ isSsrBuild }) => ({
               if (/node_modules\/(@headlessui\/react|@heroicons\/react)\//.test(id)) {
                 return 'ui';
               }
+              // Pin the STARTUP translation catalogs to their own long-lived
+              // chunk. The bundler used to extract them on its own, but that
+              // is a heuristic: adding one lazy route was enough to flip it
+              // and fold ~164 kB of catalog into the entry chunk, quadrupling
+              // `Initial JS` without a line of new startup code. They are
+              // shared by every route and version independently of the code,
+              // so naming the chunk is both stabler and what the vendor/
+              // query/ui rules above already do for the same reason.
+              //
+              // `legal.json` is excluded on purpose (#428): those 101 keys per
+              // locale are ~37 kB of prose that only the four legal routes
+              // read, loaded on demand through src/i18n/legalCatalog.ts. This
+              // rule would otherwise capture them by path and fold them back
+              // into a modulepreloaded startup chunk — measured, the deferred
+              // chunk collapses to 154 B — silently undoing that split while
+              // every page still renders. tests/unit/i18n/legalCatalog.test.ts
+              // fails if this exclusion is dropped.
+              if (
+                /src\/i18n\/locales\//.test(id) &&
+                !/src\/i18n\/locales\/[^/]+\/legal\.json/.test(id)
+              ) {
+                return 'i18n';
+              }
               return undefined;
             },
       },

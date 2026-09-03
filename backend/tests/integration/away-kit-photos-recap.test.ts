@@ -65,6 +65,19 @@ function inPast(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/**
+ * Close a link's window around everything that has already happened: the
+ * window opened an hour ago and ends now, so activity recorded a moment ago
+ * sits inside [startsAt, expiresAt] and the link reads as ended. Setting
+ * only `expiresAt` into the past would invert the window (startsAt is the
+ * creation time) and the recap would legitimately find nothing.
+ */
+function endWindowNow(token: string): void {
+  const link = db.sitterLinks.get(token)!;
+  link.startsAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  link.expiresAt = new Date().toISOString();
+}
+
 function seedPlan(planId: 'seedling' | 'garden' | 'greenhouse') {
   db.households.get(seedHouseholdId)!.planId = planId;
 }
@@ -328,10 +341,19 @@ describe('return recap (members-only)', () => {
     expect(photo.status).toBe(201);
 
     // The member's OWN completion during the window is not the sitter's.
-    const own = await request(app)
+    // The sitter completed this same task moments ago, so #423's double-care
+    // detection answers 409 DUPLICATE_CARE first and logs nothing; confirming
+    // is exactly what a member does from that prompt. It is the CONFIRMED
+    // write the recap must still refuse to attribute to the sitter.
+    const duplicate = await request(app)
       .post(`/tasks/${seedTaskId}/complete`)
       .set('Authorization', `Bearer ${admin}`)
       .send({});
+    expect(duplicate.status).toBe(409);
+    const own = await request(app)
+      .post(`/tasks/${seedTaskId}/complete`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ confirmDuplicate: true });
     expect(own.status).toBe(200);
 
     // Nothing has ended yet → explicit 404, never an empty recap.
@@ -348,7 +370,7 @@ describe('return recap (members-only)', () => {
     expect(inProgress.status).toBe(200);
     expect(inProgress.body.link.ended).toBe(false);
 
-    db.sitterLinks.get(link.token)!.expiresAt = new Date(Date.now() - 1000).toISOString();
+    endWindowNow(link.token);
 
     const res = await request(app)
       .get(`/households/${seedHouseholdId}/away-recap`)
@@ -387,7 +409,7 @@ describe('return recap (members-only)', () => {
     seedPlan('garden');
     const link = await createLink(admin);
     await sitterCompletes(link.token);
-    db.sitterLinks.get(link.token)!.expiresAt = new Date(Date.now() - 1000).toISOString();
+    endWindowNow(link.token);
 
     const invite = await request(app)
       .post(`/households/${seedHouseholdId}/invites`)

@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { sitterService, SitterLinkInactiveError, type SitterTask } from '@/services/sitterService';
+import { SitterPhotoBack } from './SitterPhotoBack';
 import { formatDate } from '@/i18n/format';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 
@@ -225,6 +226,14 @@ export function SitPage() {
               </ul>
             )}
           </div>
+
+          {/* Photo-back: the sitter can send a picture home. Hidden entirely
+              when the household's plan doesn't include the Away Kit. */}
+          <SitterPhotoBack
+            token={token}
+            tasks={tasks}
+            onLinkInactive={() => setStatus('inactive')}
+          />
 
           <p className="mt-10 text-sm text-gray-600">
             Looking after plants regularly?{' '}

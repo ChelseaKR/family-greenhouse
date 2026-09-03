@@ -9,6 +9,8 @@
     "plants.lineage.childrenCount_many"
   ],
   "intentionallyEqual": [
+    "awayRecap.noteLine",
+    "awayRecap.taskLine",
     "common.no",
     "firstRun.plant.speciesPlaceholder",
     "publicShell.blog",
