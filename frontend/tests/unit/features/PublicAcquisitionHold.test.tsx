@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { PublicShell } from '@/components/PublicShell';
+import { planBandFor } from '@/features/landing/planBand';
 
 describe('free registration with paid activity on hold', () => {
   it('links the shared public shell to free registration', () => {
@@ -148,6 +149,52 @@ describe('free registration with paid activity on hold', () => {
     for (const copy of pricingCopy) {
       expect(copy).not.toMatch(/current free-account limits/i);
       expect(copy).not.toMatch(/l[íi]mites de la cuenta gratuita actual/i);
+    }
+  });
+});
+
+describe('landing plans band tracks BOTH commercial gates', () => {
+  /**
+   * Regression guard. The band used to branch on the registration kill switch
+   * alone, so when the commercial hold lifted it kept telling every visitor
+   * "paid plans are paused" directly above a PricingGrid that was rendering
+   * real, purchasable amounts. A pause announcement over a selling catalog
+   * costs a sale on the highest-traffic surface there is, and it is a lie in
+   * whichever direction the reader believes it.
+   */
+  // Deliberately narrow: it targets a pause claim about *paid* activity, not
+  // the word "paused" anywhere. Registration and paid plans are independent
+  // gates, and "new account registration is paused" is the correct thing to
+  // say in the hold-lifted / registration-closed state.
+  const PAID_PAUSE_LANGUAGE =
+    /(?:paid plans?|purchases?|plan changes)[^.]{0,60}(?:paused|unavailable)/i;
+
+  it('announces the pause only while the hold is actually active', () => {
+    for (const registrationOpen of [true, false]) {
+      const held = planBandFor(true, registrationOpen);
+      expect(
+        `${held.title} ${held.description}`,
+        `hold active / registration ${registrationOpen} must state the pause`
+      ).toMatch(PAID_PAUSE_LANGUAGE);
+    }
+  });
+
+  it('never claims paid plans are paused once the hold is lifted', () => {
+    for (const registrationOpen of [true, false]) {
+      const open = planBandFor(false, registrationOpen);
+      expect(
+        `${open.title} ${open.description} ${open.footerNote} ${open.footerLink}`,
+        `hold lifted / registration ${registrationOpen} must not announce a pause`
+      ).not.toMatch(PAID_PAUSE_LANGUAGE);
+    }
+  });
+
+  it('publishes no amount in band copy — prices belong to the API-backed grid', () => {
+    for (const holdActive of [true, false]) {
+      for (const registrationOpen of [true, false]) {
+        const band = planBandFor(holdActive, registrationOpen);
+        expect(Object.values(band).join(' ')).not.toMatch(/\$\s*\d/);
+      }
     }
   });
 });

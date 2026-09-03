@@ -148,16 +148,19 @@ export function PaidPlanGrid({ plans, currentPlanId, renderCta }: PaidPlanGridPr
                     </span>
                     <span className="ml-1 text-sm text-gray-600">
                       {active === 'lifetime'
-                        ? 'once'
+                        ? t('pricing.onceOff')
                         : active === 'year'
-                          ? 'per year'
-                          : 'per month'}
+                          ? t('pricing.perYear')
+                          : t('pricing.perMonth')}
                     </span>
                   </>
                 )}
               </p>
 
-              <p className="mt-3 text-sm text-gray-600">
+              {/* The caps are what actually separates the tiers, so they are
+                  set apart from the tier description rather than sharing its
+                  styling. Values stay API-sourced. */}
+              <p className="mt-4 rounded-lg bg-primary-50 px-3 py-2 text-sm font-medium text-primary-900">
                 {t('pricing.planCaps', {
                   plants: plan.maxPlants.toLocaleString(),
                   members: plan.maxMembers.toLocaleString(),
