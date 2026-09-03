@@ -38,17 +38,41 @@ function formatDateTime(d: Date): string {
   return `${formatDate(d)}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
 }
 
-/** RFC 5545 line folding: lines over 75 octets must be broken with CRLF + space. */
+/**
+ * RFC 5545 line folding: lines over 75 octets must be broken with CRLF +
+ * space. Folds on UTF-8 BYTE boundaries, never splitting a multi-byte code
+ * point — the same requirement `smsNotifier.truncateToBytes` documents.
+ * `String.length` counts UTF-16 code units, so a line that reads as "72
+ * characters" in JS can still be well over 75 UTF-8 bytes once it contains
+ * non-ASCII text (accented Spanish plant names/notes, CJK, emoji — all of
+ * which this app's free-text fields accept), and a plain `.slice(0, 75)`
+ * can bisect a surrogate pair. Both silently produced non-conformant VEVENT
+ * output for exactly the content this app's EN/ES i18n exists to support;
+ * iterating by code point and measuring each one's real UTF-8 byte length
+ * avoids both failure modes.
+ */
 function fold(line: string): string {
-  if (line.length <= 75) return line;
-  const out: string[] = [];
-  let remaining = line;
-  while (remaining.length > 75) {
-    out.push(remaining.slice(0, 75));
-    remaining = ' ' + remaining.slice(75);
+  if (Buffer.byteLength(line, 'utf8') <= 75) return line;
+  const segments: string[] = [];
+  let current = '';
+  let currentBytes = 0;
+  // The first physical line gets the full 75-octet budget; each
+  // continuation line spends one octet on its mandatory leading space, so
+  // its own content budget is 74.
+  let budget = 75;
+  for (const ch of line) {
+    const chBytes = Buffer.byteLength(ch, 'utf8');
+    if (currentBytes + chBytes > budget) {
+      segments.push(current);
+      current = '';
+      currentBytes = 0;
+      budget = 74;
+    }
+    current += ch;
+    currentBytes += chBytes;
   }
-  out.push(remaining);
-  return out.join('\r\n');
+  segments.push(current);
+  return segments.map((seg, i) => (i === 0 ? seg : ' ' + seg)).join('\r\n');
 }
 
 /** Escape backslashes, semicolons, commas, and newlines per RFC 5545 §3.3.11. */

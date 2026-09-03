@@ -86,4 +86,49 @@ describe('buildIcs', () => {
     // Folded continuation lines start with a single space.
     expect(/\r\n /.test(ics)).toBe(true);
   });
+
+  it('folds a line whose UTF-8 byte length exceeds 75 even when its UTF-16 code-unit length does not', () => {
+    // 72 UTF-16 code units but 164 UTF-8 bytes (CJK + accented text) — a
+    // line `String.length` alone reports as "under 75" while RFC 5545's
+    // actual octet limit is blown more than 2x over.
+    const plantName = '日本語植物名前がとても長いですかもしれません🌱café résumé naïve';
+    expect(plantName.length).toBeLessThanOrEqual(75);
+    expect(Buffer.byteLength(plantName, 'utf8')).toBeGreaterThan(75);
+
+    const ics = buildIcs([task({ plantName, type: 'custom', customType: '水やり' })], now);
+    const lines = ics.split('\r\n');
+    const summaryStart = lines.findIndex((l) => l.startsWith('SUMMARY:'));
+    expect(summaryStart).toBeGreaterThanOrEqual(0);
+
+    // Every physical line — the SUMMARY line itself and any continuation —
+    // must be <=75 UTF-8 octets, per RFC 5545.
+    let i = summaryStart;
+    let raw = lines[i];
+    while (lines[i + 1]?.startsWith(' ')) {
+      i += 1;
+      raw += '\r\n' + lines[i];
+    }
+    for (const physicalLine of raw.split('\r\n')) {
+      expect(Buffer.byteLength(physicalLine, 'utf8')).toBeLessThanOrEqual(75);
+    }
+    // Unfolding (strip CRLF + the single leading space) must reproduce the
+    // original text exactly — no character was corrupted at a fold point.
+    const unfolded = raw
+      .split('\r\n')
+      .map((l, idx) => (idx === 0 ? l : l.slice(1)))
+      .join('');
+    expect(unfolded).toBe(`SUMMARY:水やり — ${plantName}`);
+  });
+
+  it('never splits a surrogate pair (emoji) across a fold boundary', () => {
+    // An astral character (2 UTF-16 code units) landing exactly on a fold
+    // boundary must move whole to the next line, not be bisected into an
+    // unpaired surrogate.
+    const notes = 'x'.repeat(73) + '🌱' + 'y'.repeat(20);
+    const ics = buildIcs([task({ notes })], now);
+    // A lone surrogate serializes as the U+FFFD replacement character (or
+    // throws) — neither of which can appear here if the pair stayed intact.
+    expect(ics).not.toMatch(/�/);
+    expect(ics).toContain('🌱');
+  });
 });
