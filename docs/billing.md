@@ -134,11 +134,13 @@ applyStripeEvent(event): Promise                          // calls deltaForStrip
 
 Webhook events we handle:
 
-- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs, set status to active, set planId from the session metadata. The async event completes delayed one-time payment methods.
+- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs and planId from the session metadata. The async event completes delayed one-time payment methods. **Status is deliberately not written here** — the session references the subscription by id and does not carry its state, so the subscription events own the field (otherwise every trialing household was recorded as `active`). A lifetime (`mode: 'payment'`) session is the exception: it has no subscription, so it writes `active` and clears the subscription ids.
 - `customer.subscription.created` / `customer.subscription.updated` → record latest status + period-end + planId
 - `customer.subscription.deleted` → reset to seedling, status canceled
 
 Anything else is acknowledged and ignored.
+
+Three of these also emit a server-side product event (`backend/src/utils/serverAnalytics.ts`). The distinction that matters: every subscription checkout carries `trial_period_days: 14`, so checkout completion is a **trial start**, and the money-moved signal is the later `trialing → active` transition. See [`docs/analytics.md`](analytics.md) for the full contract — including why paid conversion keys off `customer.subscription.updated` rather than `invoice.payment_succeeded`, and how the dedupe ledger keeps an at-least-once redelivery from double-counting revenue.
 
 ## Webhook signature verification
 

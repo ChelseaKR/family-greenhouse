@@ -212,6 +212,114 @@ describe('anonymous visitors', () => {
   });
 });
 
+/**
+ * Deferred replay of events fired before any identity existed.
+ *
+ * `experiment_viewed` (landing hero A/B) and `cutting_graft_started` (public
+ * cutting card) both fire for signed-out visitors, so before this they reached
+ * no rail at all and the experiment produced literally zero rows. They are now
+ * held in memory and replayed at sign-in.
+ *
+ * The privacy posture is deliberately unchanged: the `anonymous visitors`
+ * suite above still asserts zero network traffic before `identify()`, and
+ * these tests exist to prove the queue does not quietly become anonymous
+ * beaconing.
+ */
+describe('pre-identity event replay', () => {
+  it('replays the landing experiment impression onto the first-party rail at sign-in', async () => {
+    const { mod, fetchMock } = await loadShim();
+    // Anonymous landing visit.
+    mod.registerSuperProperties({ landing_hero_framing: 'B' });
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // …the same browser signs in.
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toContainEqual({
+      event: 'experiment_viewed',
+      properties: { experiment: 'landing_hero_framing', variant: 'B' },
+      superProperties: { landing_hero_framing: 'B' },
+    });
+  });
+
+  it('replays in the order the visitor generated the events', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'A' });
+    mod.track('cutting_graft_started');
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock).map((e) => e.event)).toEqual([
+      'experiment_viewed',
+      'cutting_graft_started',
+    ]);
+  });
+
+  it('replays exactly once — a second identify() does not re-send the queue', async () => {
+    // `authStore.setUser` calls identify() on every set, and session restore
+    // calls it again. A queue that refilled or replayed twice would double the
+    // experiment's numerator.
+    const { mod, fetchMock } = await loadShim();
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    mod.identify(USER_A);
+    mod.setTelemetryAuthToken('jwt-token-refreshed');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock).filter((e) => e.event === 'experiment_viewed')).toHaveLength(
+      1
+    );
+  });
+
+  it('sends nothing when only half of the identity exists', async () => {
+    // `distinct_id` without a JWT opens the PostHog rail only. Flushing there
+    // would consume the queue before the first-party rail — the only rail
+    // configured in production — could ever receive it.
+    const { mod, fetchMock } = await loadShim();
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'A' });
+    mod.identify(USER_A);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toHaveLength(0);
+    expect(captures(fetchMock).some((e) => e.event === 'experiment_viewed')).toBe(false);
+  });
+
+  it('drops the queue on logout so one visitor’s impression is never attributed to the next', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
+    mod.reset();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toHaveLength(0);
+  });
+
+  it('bounds the queue so an anonymous visitor cannot grow it without limit', async () => {
+    const { mod, fetchMock } = await loadShim();
+    for (let i = 0; i < 20; i += 1) {
+      mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'A' });
+    }
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock).length).toBeLessThanOrEqual(5);
+  });
+});
+
 describe('upgrade-intent event', () => {
   it('carries only closed-enum properties on the first-party rail', async () => {
     const { mod, fetchMock } = await loadShim();

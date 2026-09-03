@@ -977,7 +977,11 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
     });
   });
 
-  it('does NOT emit on a cancellation/downgrade to seedling', async () => {
+  it('emits subscription_deactivated (not subscription_activated) on a cancellation', async () => {
+    // A cancellation must never look like an activation, and must no longer be
+    // silent: churn used to reach analytics as nothing at all, so "how many
+    // paying households cancelled?" could only be answered by grepping the
+    // generic `subscription_updated` log line.
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     // Guard read (subscription matches) + Update + ledger Put.
     vi.mocked(dynamodb.send)
@@ -989,10 +993,21 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
       created: 1_700_000_000,
       type: 'customer.subscription.deleted',
       data: {
-        object: { id: 'sub_live', metadata: { householdId: 'hh-1', planId: 'garden' } },
+        object: {
+          id: 'sub_live',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+          cancellation_details: { reason: 'cancellation_requested' },
+        },
       },
     } as unknown as Stripe.Event);
-    expect(captureMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_deactivated', {
+      // The tier the household LOST, read before the delta rewrote planId to
+      // 'seedling' — not the tier it fell to.
+      plan: 'garden',
+      interval: 'month',
+      churnReason: 'requested',
+    });
   });
 
   it('does NOT re-emit on customer.subscription.updated (renewal/plan-change) to avoid inflating conversions', async () => {
@@ -1127,6 +1142,303 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
         },
       } as unknown as Stripe.Event)
     ).resolves.toBeUndefined();
+    expect(captureMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Paid conversion — the number that was previously unobservable.
+ *
+ * Every subscription checkout carries `trial_period_days: 14`, so
+ * `subscription_activated` counts trial STARTS. Money moves later, when Stripe
+ * takes the first charge and moves the subscription from `trialing` to
+ * `active`. These tests pin that distinction down in both directions: the
+ * transition must fire, and everything that merely resembles it must not.
+ */
+describe('applyStripeEvent — paid-conversion analytics (subscription_paid)', () => {
+  const conditionErr = () =>
+    Object.assign(new Error('exists'), { name: 'ConditionalCheckFailedException' });
+
+  /** A `customer.subscription.updated` carrying a status change in its diff. */
+  const statusChange = (args: {
+    id: string;
+    from?: string;
+    to: string;
+    planId?: string;
+    interval?: string;
+  }) =>
+    ({
+      id: args.id,
+      created: 1_700_000_000,
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: args.to,
+          metadata: {
+            householdId: 'hh-1',
+            planId: args.planId ?? 'garden',
+            ...(args.interval ? { interval: args.interval } : {}),
+          },
+        },
+        // Stripe attaches the pre-change values of exactly the fields that
+        // changed. `status` present here is what makes this a transition.
+        ...(args.from ? { previous_attributes: { status: args.from } } : {}),
+      },
+    }) as unknown as Stripe.Event;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    captureMock.mockResolvedValue(undefined);
+  });
+
+  it('emits subscription_paid when a trial converts (trialing → active)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      statusChange({ id: 'evt_paid', from: 'trialing', to: 'active', interval: 'month' })
+    );
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_paid', {
+      plan: 'garden',
+      interval: 'month',
+      from: 'trialing',
+    });
+  });
+
+  it('emits subscription_paid with from=past_due when a failed first charge is later recovered', async () => {
+    // Real revenue, but NOT a new trial conversion — `from` is what keeps the
+    // two countable separately instead of collapsing into one wrong number.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      statusChange({ id: 'evt_recovered', from: 'past_due', to: 'active', interval: 'year' })
+    );
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_paid', {
+      plan: 'garden',
+      interval: 'year',
+      from: 'past_due',
+    });
+  });
+
+  it('does NOT emit when a trial ends in a FAILED charge (trialing → past_due)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(statusChange({ id: 'evt_failed', from: 'trialing', to: 'past_due' }));
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT emit on a RENEWAL — status is absent from previous_attributes', async () => {
+    // A monthly renewal re-bills but leaves the subscription `active`, so
+    // Stripe's diff contains no `status`. This is the case that would have
+    // inflated the count into meaninglessness.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(statusChange({ id: 'evt_renew', to: 'active' }));
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT emit on a plan change between two active states (active → active)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      statusChange({ id: 'evt_switch', from: 'active', to: 'active', planId: 'greenhouse' })
+    );
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT emit at TRIAL START — a trialing subscription is not revenue', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_trial_start',
+      created: 1_700_000_000,
+      type: 'customer.subscription.created',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'trialing',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT double-count a paid conversion on a webhook REDELIVERY', async () => {
+    // Stripe webhooks are at-least-once. The apply is idempotent and re-runs,
+    // but the dedupe ledger reports the event id as already recorded, so the
+    // revenue emit happens exactly once for the same delivery.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = statusChange({
+      id: 'evt_paid_dupe',
+      from: 'trialing',
+      to: 'active',
+      interval: 'month',
+    });
+
+    // First delivery: Update succeeds, ledger Put succeeds → counted.
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    await applyStripeEvent(event);
+    expect(captureMock).toHaveBeenCalledTimes(1);
+
+    // Redelivery of the SAME event id: Update re-applies, ledger Put is
+    // rejected by its attribute_not_exists condition → not counted again.
+    vi.mocked(dynamodb.send).mockReset();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}).mockRejectedValueOnce(conditionErr());
+    await applyStripeEvent(event);
+    expect(captureMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT emit when the write is rejected as OUT OF ORDER', async () => {
+    // A stale delivery that loses to `lastStripeEventCreated` never applied, so
+    // it must not report revenue either.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditionErr());
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(statusChange({ id: 'evt_stale', from: 'trialing', to: 'active' }));
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('buckets an unfamiliar previous status rather than leaking it as free text', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      statusChange({ id: 'evt_odd', from: 'some_future_stripe_status', to: 'active' })
+    );
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_paid', {
+      plan: 'garden',
+      interval: undefined,
+      from: 'other',
+    });
+  });
+});
+
+describe('applyStripeEvent — churn analytics (subscription_deactivated)', () => {
+  const conditionErr = () =>
+    Object.assign(new Error('exists'), { name: 'ConditionalCheckFailedException' });
+
+  const deletion = (id: string, reason?: string) =>
+    ({
+      id,
+      created: 1_700_000_000,
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_live',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+          ...(reason ? { cancellation_details: { reason } } : {}),
+        },
+      },
+    }) as unknown as Stripe.Event;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    captureMock.mockResolvedValue(undefined);
+  });
+
+  it('omits churnReason when Stripe recorded none, rather than inventing one', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'greenhouse', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(deletion('evt_churn_noreason'));
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_deactivated', {
+      plan: 'greenhouse',
+      interval: 'month',
+    });
+  });
+
+  it('distinguishes involuntary churn (payment_failed) from a requested cancellation', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'garden', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(deletion('evt_churn_dunning', 'payment_failed'));
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_deactivated', {
+      plan: 'garden',
+      interval: 'month',
+      churnReason: 'payment_failed',
+    });
+  });
+
+  it('does NOT emit for a household that was already on the free tier', async () => {
+    // A subscription ending for a household with no paid tier is not churn.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'seedling', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(deletion('evt_churn_free'));
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT emit for a deletion of a subscription the household no longer references', async () => {
+    // The mismatch guard returns before the analytics path, so a stale deletion
+    // for a replaced subscription never reports churn that did not happen.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { planId: 'garden', stripeSubscriptionId: 'sub_other' },
+    });
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(deletion('evt_churn_orphan'));
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the tier a lifetime household lost, not the tier it keeps', async () => {
+    // The recurring subscription really ended; the permanent grant underneath
+    // survives, and `delta.fields.planId` is restored to it. The churn event
+    // must still describe what stopped being billed.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Item: {
+          planId: 'greenhouse',
+          stripeSubscriptionId: 'sub_live',
+          lifetimePlanId: 'garden',
+        },
+      })
+      .mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(deletion('evt_churn_lifetime', 'cancellation_requested'));
+    expect(captureMock).toHaveBeenCalledWith('hh-1', 'subscription_deactivated', {
+      plan: 'greenhouse',
+      interval: 'month',
+      churnReason: 'requested',
+    });
+  });
+
+  it('does NOT double-count churn on a webhook REDELIVERY', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = deletion('evt_churn_dupe', 'cancellation_requested');
+
+    // First delivery: guard read + Update + ledger Put all succeed.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'garden', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValue({});
+    await applyStripeEvent(event);
+    expect(captureMock).toHaveBeenCalledTimes(1);
+
+    // Redelivery: the deletion delta does not clear stripeSubscriptionId, so
+    // the guard still matches and the apply re-runs — but the ledger rejects
+    // the already-recorded event id, so churn is counted exactly once.
+    vi.mocked(dynamodb.send).mockReset();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { planId: 'garden', stripeSubscriptionId: 'sub_live' } })
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(conditionErr());
+    await applyStripeEvent(event);
     expect(captureMock).toHaveBeenCalledTimes(1);
   });
 });
