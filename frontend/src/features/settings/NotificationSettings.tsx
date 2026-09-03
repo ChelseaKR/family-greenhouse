@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader } from '@/components/Card';
@@ -44,6 +44,42 @@ async function registerPushSubscription(): Promise<PushSubscription | null> {
 const E164 = /^\+[1-9]\d{6,14}$/;
 type PreferencesUpdate = Parameters<typeof notificationService.updatePreferences>[0];
 
+interface SaveVariables {
+  overrides: Partial<PreferencesUpdate>;
+  /** A background write the user did not ask for: no "saved" banner on success. */
+  quiet?: boolean;
+}
+
+/**
+ * IANA zone this browser reports, or null when it cannot be resolved (no Intl,
+ * a runtime that throws, or one that answers with a placeholder). Null means
+ * "leave the stored value alone" — never a guessed zone.
+ */
+function resolveBrowserTimeZone(): string | null {
+  try {
+    if (typeof Intl === 'undefined' || typeof Intl.DateTimeFormat !== 'function') return null;
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof zone !== 'string' || zone.trim() === '' || zone === 'Etc/Unknown') return null;
+    return zone;
+  } catch {
+    return null;
+  }
+}
+
+/** Zones equivalent to the server's UTC default; persisting one changes nothing. */
+const UTC_ALIASES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
+
+/**
+ * The API has no "timezone never chosen" state: GET /notifications/prefs
+ * answers 'UTC' both for a row that was never written and for one saved as
+ * UTC, and PUT stores 'UTC' whenever a client omits the field. UTC is thus the
+ * server's own "not provided" sentinel — the only signal this client has that
+ * a zone still needs choosing.
+ */
+function isServerDefaultTimeZone(zone: string): boolean {
+  return zone === '' || zone === 'UTC';
+}
+
 function buildPreferencesUpdate(
   current: NotificationPreferences,
   overrides: Partial<PreferencesUpdate>
@@ -76,11 +112,14 @@ export function NotificationSettings() {
   const [codeSent, setCodeSent] = useState(false);
   const [dndStartDraft, setDndStartDraft] = useState('');
   const [dndEndDraft, setDndEndDraft] = useState('');
-  // Default to the user's actual timezone if the server doesn't have one
-  // recorded yet — far better UX than UTC for first-time DND setup.
-  const [tzDraft, setTzDraft] = useState(
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-  );
+  // Resolved once per mount; null when this browser cannot name its zone.
+  const [browserTimeZone] = useState(resolveBrowserTimeZone);
+  const [tzDraft, setTzDraft] = useState(browserTimeZone ?? 'UTC');
+  // The background timezone write below runs at most once per mount.
+  const timezoneDefaulted = useRef(false);
+  // Last server record mirrored into the drafts, so a write that leaves a
+  // field unchanged does not wipe an edit the user has in progress.
+  const lastSynced = useRef<NotificationPreferences | null>(null);
 
   const prefsQuery = useQuery({
     // Preferences are stored per household membership — scope by household.
@@ -130,18 +169,9 @@ export function NotificationSettings() {
     return queryClient.getQueryData<NotificationPreferences>(prefsKey) ?? prefsQuery.data;
   }
 
-  useEffect(() => {
-    if (prefsQuery.data) {
-      setPhoneDraft(prefsQuery.data.phone);
-      setDndStartDraft(prefsQuery.data.dndStart);
-      setDndEndDraft(prefsQuery.data.dndEnd);
-      if (prefsQuery.data.timezone) setTzDraft(prefsQuery.data.timezone);
-    }
-  }, [prefsQuery.data]);
-
   const saveMutation = useMutation({
     scope: preferencesMutationScope,
-    mutationFn: (overrides: Partial<PreferencesUpdate>) => {
+    mutationFn: ({ overrides }: SaveVariables) => {
       const current = currentPreferences();
       if (!current) throw new Error(t('notifications.preferencesUnavailable'));
       return notificationService.updatePreferences(buildPreferencesUpdate(current, overrides));
@@ -150,9 +180,11 @@ export function NotificationSettings() {
       setInfo(null);
       setError(null);
     },
-    onSuccess: (updated) => {
+    onSuccess: (updated, { quiet }) => {
       queryClient.setQueryData(prefsKey, updated);
-      setInfo(t('notifications.preferencesSaved'));
+      // A background write the user never asked for earns no "saved" banner;
+      // a failure still surfaces through onError so nothing is hidden.
+      if (!quiet) setInfo(t('notifications.preferencesSaved'));
       setError(null);
     },
     onError: (err) => setError(getErrorMessage(err)),
@@ -169,8 +201,48 @@ export function NotificationSettings() {
    */
   function save(overrides: Partial<PreferencesUpdate>): void {
     if (!currentPreferences()) return;
-    saveMutation.mutate(overrides);
+    saveMutation.mutate({ overrides });
   }
+  // TanStack memoises `mutate` per observer, so the effect below can depend
+  // on it without re-running every render.
+  const { mutate: persistPreferences } = saveMutation;
+
+  // Mirror the persisted record into the drafts — only the fields the server
+  // actually changed, so a write that returns the same phone or quiet hours
+  // never wipes an edit in progress.
+  //
+  // The timezone gets one extra step. Quiet hours are evaluated server-side in
+  // `timezone`, and the server defaults it to UTC, so a user who entered
+  // "22:00–07:00" without ever touching the Timezone field was silenced on UTC
+  // hours, not their own. On the first load that still carries the default,
+  // persist this browser's zone through the same write path Save uses —
+  // quietly, and at most once per mount, so choosing UTC on purpose in this
+  // session is respected rather than overridden on the next refetch.
+  useEffect(() => {
+    const data = prefsQuery.data;
+    if (!data) return;
+    const prev = lastSynced.current;
+    lastSynced.current = data;
+    if (!prev || prev.phone !== data.phone) setPhoneDraft(data.phone);
+    if (!prev || prev.dndStart !== data.dndStart) setDndStartDraft(data.dndStart);
+    if (!prev || prev.dndEnd !== data.dndEnd) setDndEndDraft(data.dndEnd);
+
+    if (
+      !timezoneDefaulted.current &&
+      isServerDefaultTimeZone(data.timezone) &&
+      browserTimeZone !== null &&
+      !UTC_ALIASES.has(browserTimeZone)
+    ) {
+      timezoneDefaulted.current = true;
+      setTzDraft(browserTimeZone);
+      persistPreferences({ overrides: { timezone: browserTimeZone }, quiet: true });
+      return;
+    }
+    // Otherwise show what is actually stored. When the browser cannot resolve
+    // a zone this leaves the server default visible as "UTC" — the truth —
+    // rather than a guess.
+    if (!prev || prev.timezone !== data.timezone) setTzDraft(data.timezone || 'UTC');
+  }, [prefsQuery.data, browserTimeZone, persistPreferences]);
 
   const sendCodeMutation = useMutation({
     mutationFn: () => notificationService.startPhoneVerification(phoneDraft),

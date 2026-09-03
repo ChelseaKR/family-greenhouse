@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+import { act, cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationSettings } from '@/features/settings/NotificationSettings';
@@ -54,6 +54,12 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
   };
 }
 
+/** Unmount + reset mocks between repeated renders inside one case. */
+function cleanupRender() {
+  cleanup();
+  vi.clearAllMocks();
+}
+
 async function renderSettings(initial: NotificationPreferences) {
   const { notificationService } = await import('@/services/notificationService');
   vi.mocked(notificationService.getPreferences).mockResolvedValue(initial);
@@ -70,12 +76,28 @@ async function renderSettings(initial: NotificationPreferences) {
   return { notificationService };
 }
 
+/**
+ * Pin the zone this "browser" reports so the suite is deterministic on any
+ * machine. 'UTC' matches the server default, so the pre-existing cases see no
+ * background timezone write; the quiet-hours cases below override it.
+ */
+let resolvedOptionsSpy: MockInstance<() => Intl.ResolvedDateTimeFormatOptions>;
+function stubBrowserTimeZone(timeZone: string | undefined) {
+  resolvedOptionsSpy.mockReturnValue({ timeZone } as unknown as Intl.ResolvedDateTimeFormatOptions);
+}
+
 describe('NotificationSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     notificationApi.supported = true;
     notificationApi.enabledLocally = false;
     notificationApi.permission = 'default';
+    resolvedOptionsSpy = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions');
+    stubBrowserTimeZone('UTC');
+  });
+
+  afterEach(() => {
+    resolvedOptionsSpy.mockRestore();
   });
 
   it('shows the weekly digest toggle (checked by default) and saves an opt-out', async () => {
@@ -199,6 +221,182 @@ describe('NotificationSettings', () => {
       dndEnd: '07:00',
       timezone: 'America/New_York',
       pestAlerts: true,
+    });
+  });
+
+  describe('quiet-hours timezone default', () => {
+    // GET /notifications/prefs answers timezone 'UTC' for a user who has never
+    // chosen one, and the reminder run evaluates quiet hours in that zone. So
+    // "22:00–07:00" saved by a user who never touched the Timezone field was
+    // silently a UTC window. The stored value must be right before Save.
+
+    it('persists the browser timezone on first load while the server still holds the UTC default', async () => {
+      stubBrowserTimeZone('America/Chicago');
+      const { notificationService } = await import('@/services/notificationService');
+      vi.mocked(notificationService.updatePreferences).mockResolvedValue(
+        prefs({ timezone: 'America/Chicago' })
+      );
+
+      await renderSettings(prefs());
+
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+      // Same write path as Save, built from the persisted record: the zone is
+      // the only thing that changes and no quiet-hours values are invented.
+      expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toEqual({
+        browser: false,
+        email: true,
+        sms: false,
+        phone: '',
+        dndStart: '',
+        dndEnd: '',
+        timezone: 'America/Chicago',
+        pestAlerts: false,
+        weeklyDigest: true,
+      });
+      await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('America/Chicago'));
+      // A write the user did not ask for shows no "saved" banner.
+      expect(screen.queryByText('Preferences saved.')).not.toBeInTheDocument();
+    });
+
+    it('evaluates quiet hours saved without touching the Timezone field in the browser zone', async () => {
+      stubBrowserTimeZone('America/Chicago');
+      const user = userEvent.setup();
+      const { notificationService } = await import('@/services/notificationService');
+      vi.mocked(notificationService.updatePreferences).mockImplementation(async (payload) =>
+        prefs(payload)
+      );
+
+      await renderSettings(prefs());
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save quiet hours' })).toBeEnabled()
+      );
+
+      fireEvent.change(screen.getByLabelText('Start'), { target: { value: '22:00' } });
+      fireEvent.change(screen.getByLabelText('End'), { target: { value: '07:00' } });
+      await user.click(screen.getByRole('button', { name: 'Save quiet hours' }));
+
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(notificationService.updatePreferences).mock.calls[1][0]).toMatchObject({
+        dndStart: '22:00',
+        dndEnd: '07:00',
+        timezone: 'America/Chicago',
+      });
+      expect(await screen.findByText('Preferences saved.')).toBeInTheDocument();
+    });
+
+    it('leaves an explicitly saved timezone alone even when the browser disagrees', async () => {
+      stubBrowserTimeZone('America/Chicago');
+      const { notificationService } = await renderSettings(prefs({ timezone: 'Europe/Berlin' }));
+
+      expect(screen.getByLabelText('Timezone')).toHaveValue('Europe/Berlin');
+      expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when the browser zone is UTC or an alias of it', async () => {
+      for (const zone of ['UTC', 'Etc/UTC']) {
+        stubBrowserTimeZone(zone);
+        const { notificationService } = await renderSettings(prefs());
+
+        expect(screen.getByLabelText('Timezone')).toHaveValue('UTC');
+        expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+        cleanupRender();
+      }
+    });
+
+    it('falls back to the stored zone, without a write, when the browser cannot resolve one', async () => {
+      // Runtime that throws.
+      resolvedOptionsSpy.mockImplementation(() => {
+        throw new RangeError('time zone unavailable');
+      });
+      let rendered = await renderSettings(prefs());
+      expect(screen.getByLabelText('Timezone')).toHaveValue('UTC');
+      expect(rendered.notificationService.updatePreferences).not.toHaveBeenCalled();
+      cleanupRender();
+
+      // Runtime that answers with no zone at all.
+      stubBrowserTimeZone(undefined);
+      rendered = await renderSettings(prefs());
+      expect(screen.getByLabelText('Timezone')).toHaveValue('UTC');
+      expect(rendered.notificationService.updatePreferences).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a rejected default write and keeps the browser zone in the field', async () => {
+      // The server validates IANA names against its own ICU data, which can
+      // lag the browser's. Hiding that rejection would let a later Save fall
+      // back to UTC silently; showing it and keeping the draft means Save
+      // re-sends the same zone and gets the same, visible answer.
+      stubBrowserTimeZone('America/Chicago');
+      const { notificationService } = await import('@/services/notificationService');
+      vi.mocked(notificationService.updatePreferences).mockRejectedValue(
+        new Error('Unknown timezone: America/Chicago')
+      );
+
+      await renderSettings(prefs());
+
+      expect(await screen.findByText('Unknown timezone: America/Chicago')).toBeInTheDocument();
+      expect(screen.getByLabelText('Timezone')).toHaveValue('America/Chicago');
+    });
+
+    it('defaults at most once per mount and respects a deliberate choice of UTC', async () => {
+      stubBrowserTimeZone('America/Chicago');
+      const user = userEvent.setup();
+      const { notificationService } = await import('@/services/notificationService');
+      vi.mocked(notificationService.updatePreferences).mockImplementation(async (payload) =>
+        prefs(payload)
+      );
+
+      await renderSettings(prefs());
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save quiet hours' })).toBeEnabled()
+      );
+
+      // The user genuinely wants UTC: the server now answers 'UTC' again, and
+      // the page must not treat that as "unset" and write the browser zone back.
+      await user.clear(screen.getByLabelText('Timezone'));
+      await user.type(screen.getByLabelText('Timezone'), 'UTC');
+      await user.click(screen.getByRole('button', { name: 'Save quiet hours' }));
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(notificationService.updatePreferences).mock.calls[1][0]).toMatchObject({
+        timezone: 'UTC',
+      });
+
+      // Let any stray follow-up write surface before asserting there is none.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(notificationService.updatePreferences).toHaveBeenCalledTimes(2);
+      expect(screen.getByLabelText('Timezone')).toHaveValue('UTC');
+    });
+
+    it('does not wipe a quiet-hours edit in progress when the background write returns', async () => {
+      stubBrowserTimeZone('America/Chicago');
+      const { notificationService } = await import('@/services/notificationService');
+      let finishDefaultWrite!: (value: NotificationPreferences) => void;
+      vi.mocked(notificationService.updatePreferences).mockImplementationOnce(
+        () =>
+          new Promise<NotificationPreferences>((resolve) => {
+            finishDefaultWrite = resolve;
+          })
+      );
+
+      await renderSettings(prefs());
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+
+      // The user starts on quiet hours while the timezone write is in flight.
+      fireEvent.change(screen.getByLabelText('Start'), { target: { value: '23:15' } });
+      expect(screen.getByLabelText('Start')).toHaveValue('23:15');
+
+      await act(async () => {
+        finishDefaultWrite(prefs({ timezone: 'America/Chicago' }));
+        await Promise.resolve();
+      });
+
+      // The response changed only the zone; the unchanged dndStart must not
+      // clobber what the user is typing.
+      expect(screen.getByLabelText('Start')).toHaveValue('23:15');
+      await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('America/Chicago'));
     });
   });
 

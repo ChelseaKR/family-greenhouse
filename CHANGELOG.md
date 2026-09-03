@@ -76,6 +76,33 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   is dead the deletion is refused with a 502 and nothing has been touched, and
   a retry is safe because an already-cancelled or missing subscription counts
   as done.
+- Quiet hours are now evaluated in the browser's timezone for a user who never
+  touched the Timezone field (#398). `GET /notifications/prefs` answers
+  `timezone: 'UTC'` for an account that has never chosen one, and the reminder
+  run evaluates the do-not-disturb window in that zone, so "22:00–07:00" saved
+  by a user who filled in only the two times was a UTC window — the field's
+  own helper text, "24-hour, your local time", was not true. The settings page
+  only ever defaulted its _draft_ to the browser zone, and the server's `'UTC'`
+  overwrote even that on load. On the first load that still carries the server
+  default, the browser's `Intl` zone is now written through the same mutation
+  Save uses — built from the persisted record, so no half-edited quiet hours
+  are committed — quietly (no "saved" banner) and at most once per mount, so a
+  deliberate choice of UTC in the same session is kept. A browser that cannot
+  name its zone writes nothing and the field shows the stored `UTC`; a
+  rejected write is shown, not hidden. The draft-sync effect now overwrites
+  only the fields the server actually changed, so the background write cannot
+  wipe a Start time being typed.
+- The pricing grid no longer sells "Bulk import and export" as a Greenhouse
+  feature (#398). `POST /plants/import` is open to every tier and bounded only by the
+  plan's plant cap (which the caps line already states), and `GET /me/export`
+  requires only a login — the "Nothing locked away" band on the same page
+  already promises export to everyone. Because the bullets are cumulative
+  ("Everything in Garden"), listing it under Greenhouse claimed the lower tiers
+  lack it. The bullet moves to Seedling as "Import and export (CSV and JSON)"
+  (es: "Importación y exportación (CSV y JSON)"). Nothing is gated — whether
+  export should be restricted is a product decision this change does not make.
+  API access, the adjacent Greenhouse bullet, is enforced
+  (`backend/src/handlers/apiKeys/handler.ts`) and stays.
 - The dashboard climate card no longer renders a failed read as a calm night
   (#351). `if (!data) return null` put a failed climate read in the same
   silence as "no household active" and "no location saved with the integration

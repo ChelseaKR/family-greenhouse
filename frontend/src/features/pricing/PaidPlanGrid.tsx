@@ -15,12 +15,20 @@ const INTERVALS: { id: BillingInterval; labelKey: string; hintKey?: string }[] =
 ];
 
 /** Feature bullets per tier. Caps come from the API; these are the qualitative
- *  differences that have no numeric field to read. */
+ *  differences that have no numeric field to read.
+ *
+ *  The lists are cumulative ("Everything in …"), so a bullet on a paid tier
+ *  claims the tiers below lack it. Anything every tier can do belongs on
+ *  Seedling: import (POST /plants/import) and export (GET /me/export) are open
+ *  to every plan — import is bounded only by the plant cap the caps line
+ *  already states — while API keys really are Greenhouse-only
+ *  (backend/src/handlers/apiKeys/handler.ts). */
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   seedling: [
     'pricing.featureReminders',
     'pricing.featureIdentification',
     'pricing.featureSharedHousehold',
+    'pricing.featureImportExport',
   ],
   garden: [
     'pricing.featureEverythingSeedling',
@@ -30,7 +38,6 @@ const PLAN_FEATURES: Record<PlanId, string[]> = {
   greenhouse: [
     'pricing.featureEverythingGarden',
     'pricing.featureApiAccess',
-    'pricing.featureBulkImport',
     'pricing.featurePrioritySupport',
   ],
 };

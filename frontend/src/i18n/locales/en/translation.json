@@ -763,7 +763,7 @@
     "featurePriorityIdentification": "Priority plant identification",
     "featureEverythingGarden": "Everything in Garden",
     "featureApiAccess": "API access for automation",
-    "featureBulkImport": "Bulk import and export",
+    "featureImportExport": "Import and export (CSV and JSON)",
     "featurePrioritySupport": "Priority support",
     "trialNote": "Paid plans begin with a 14-day trial. Checkout collects a card up front, you are not charged until the 14 days are up, and cancelling before then costs nothing.",
     "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
