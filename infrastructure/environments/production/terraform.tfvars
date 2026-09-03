@@ -81,4 +81,7 @@ stripe_automatic_tax_enabled = ""
 #
 # This is also the fastest kill switch: returning it to "0" and applying stops
 # all new payment activity without a code change or a frontend deploy.
-payments_enabled = "0"
+#
+# Opened 2026-09-02, after the v0.23.2 deploy wired the live price ids and
+# proved the Stripe webhook secret reached the Lambda.
+payments_enabled = "1"
