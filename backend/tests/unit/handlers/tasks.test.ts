@@ -253,7 +253,10 @@ describe('tasks handler', () => {
       'hh-1',
       'user-1',
       'Pothos',
-      { defaultAssigneeId: '22222222-2222-4222-8222-222222222222' }
+      {
+        defaultAssigneeId: '22222222-2222-4222-8222-222222222222',
+        defaultAssignmentSource: 'space_default',
+      }
     );
   });
 

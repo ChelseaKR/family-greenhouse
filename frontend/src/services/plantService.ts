@@ -6,6 +6,13 @@ export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 /** List filter mirroring the backend: active (default), past, or all. */
 export type PlantFilter = 'active' | 'past' | 'all';
 
+/** Care rotation for a space (ADR 0018); mirrors the backend SpaceRotation. */
+export interface SpaceRotation {
+  memberIds: string[];
+  cadence: 'weekly' | 'monthly';
+  anchor: string;
+}
+
 export interface PlantSpace {
   id: string;
   householdId: string;
@@ -19,6 +26,14 @@ export interface PlantSpace {
   petAccess?: boolean | null;
   /** Household member who usually handles new tasks for plants here. */
   defaultCaregiverId?: string | null;
+  /** Care rotation; takes precedence over defaultCaregiverId. */
+  rotation?: SpaceRotation | null;
+  /**
+   * Derived server-side, present ONLY on spaces that have a rotation.
+   * `turnUserId: null` means everyone in the rotation is away — a real
+   * answer, and rendered as one rather than as "no rotation".
+   */
+  rotationTurn?: { turnUserId: string | null; turnName: string | null };
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -151,9 +166,10 @@ export interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  /** Space-inherited and Move-Day-split assignments can be taken over by
-   *  another member; null means explicit or unassigned. */
-  assignmentSource?: 'space_default' | 'move_day' | null;
+  /** Inherited assignments — space default, Move Day split, or rotation turn
+   *  — can be taken over by another member; null means explicit or
+   *  unassigned. */
+  assignmentSource?: 'space_default' | 'move_day' | 'rotation' | null;
   notes: string | null;
   /** Auto-handoff marker: `escalatedForDue === nextDue` means this occurrence
    *  was put up for grabs by the app and nobody has claimed it since. */

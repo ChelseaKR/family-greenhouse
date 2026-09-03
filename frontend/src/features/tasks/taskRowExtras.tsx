@@ -75,7 +75,13 @@ export function ClaimControls({ task, onClaim, onUnclaim, isPending }: ClaimCont
       </Button>
     );
   }
-  if (task.assignmentSource === 'space_default' || task.assignmentSource === 'move_day') {
+  // Inherited every way — a space default, a Move Day split, or this cycle's
+  // rotation turn.
+  if (
+    task.assignmentSource === 'space_default' ||
+    task.assignmentSource === 'move_day' ||
+    task.assignmentSource === 'rotation'
+  ) {
     return (
       <Button
         variant="secondary"

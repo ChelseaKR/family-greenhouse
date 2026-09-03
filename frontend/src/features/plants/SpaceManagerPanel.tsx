@@ -10,6 +10,8 @@ import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import type { PlantSpace } from '@/services/plantService';
+import type { RotationInput } from '@/services/spaceService';
+import { SpaceRotationControl } from './SpaceRotationControl';
 
 type LightLevel = NonNullable<PlantSpace['lightLevel']>;
 type PetAccessChoice = '' | 'yes' | 'no';
@@ -66,7 +68,7 @@ export function SpaceManagerPanel() {
       id: string;
       input: Partial<
         Pick<PlantSpace, 'rainExposure' | 'lightLevel' | 'petAccess' | 'defaultCaregiverId'>
-      >;
+      > & { rotation?: RotationInput | null };
     }) => spaceService.updateSpace(id, input),
     onSuccess: refresh,
   });
@@ -256,6 +258,14 @@ export function SpaceManagerPanel() {
                     </option>
                   ))}
                 </select>
+                <SpaceRotationControl
+                  space={space}
+                  members={members}
+                  isPending={updateMutation.isPending}
+                  onSave={(rotation) =>
+                    updateMutation.mutate({ id: space.id, input: { rotation } })
+                  }
+                />
                 <Button
                   type="button"
                   variant="danger"

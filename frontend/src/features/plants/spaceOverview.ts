@@ -22,6 +22,12 @@ export interface SpaceOverviewGroup {
   todayCount: number;
   nextDue: string | null;
   caregiverName: string | null;
+  /**
+   * Rotation state for the card. `null` when the space has no rotation at all;
+   * otherwise `turnName` is whose turn it is, or null when everyone in the
+   * rotation is away (a real answer the card states in words).
+   */
+  rotation: { turnName: string | null } | null;
   seasonalMoves: SeasonalMoveSummary[];
 }
 
@@ -89,6 +95,16 @@ export function buildSpaceOverviewGroups(
         nextDue: groupTasks[0]?.nextDue ?? null,
         caregiverName: space?.defaultCaregiverId
           ? (memberById.get(space.defaultCaregiverId) ?? null)
+          : null,
+        rotation: space?.rotation
+          ? {
+              // Prefer the server's derived turn; fall back to its id only.
+              turnName:
+                space.rotationTurn?.turnName ??
+                (space.rotationTurn?.turnUserId
+                  ? (memberById.get(space.rotationTurn.turnUserId) ?? null)
+                  : null),
+            }
           : null,
         seasonalMoves,
       };

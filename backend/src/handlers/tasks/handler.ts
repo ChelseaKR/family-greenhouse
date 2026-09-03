@@ -37,6 +37,7 @@ import { nextDueAfterMatch } from '../../services/doubleCareRules.js';
 import { getPlan, hasHouseholdToolkit, Plan } from '../../models/plans.js';
 import * as householdEmails from '../../services/householdEmails.js';
 import { recordActivity } from '../../services/activity.js';
+import { resolveInheritedAssignee } from '../../services/assignmentResolver.js';
 import {
   successResponse,
   createdResponse,
@@ -133,14 +134,35 @@ async function resolveCompleterName(
   return email.split('@')[0];
 }
 
-/** Resolve the optional usual caregiver from a plant's current space. The
- * task service re-validates membership and ignores a stale departed member. */
-async function defaultCaregiverForPlant(
+/**
+ * Resolve what a new task INHERITS from its plant's current space — the
+ * rotation turn for its due date if the space has one, otherwise the usual
+ * caregiver (ADR 0018). Ranking lives in the shared resolver, not here.
+ *
+ * Members + vacation windows are read only when the space actually has a
+ * rotation, so spaces without one cost exactly what they did before.
+ */
+async function inheritedAssignmentForPlant(
   householdId: string,
-  plant: { spaceId?: string | null }
-): Promise<string | undefined> {
-  if (!plant.spaceId) return undefined;
-  return (await spaceService.getSpace(householdId, plant.spaceId))?.defaultCaregiverId ?? undefined;
+  plant: { spaceId?: string | null },
+  dueDate: Date
+): Promise<{ defaultAssigneeId?: string; defaultAssignmentSource?: 'space_default' | 'rotation' }> {
+  if (!plant.spaceId) return {};
+  const space = await spaceService.getSpace(householdId, plant.spaceId);
+  if (!space) return {};
+  if (!space.rotation) {
+    return space.defaultCaregiverId
+      ? { defaultAssigneeId: space.defaultCaregiverId, defaultAssignmentSource: 'space_default' }
+      : {};
+  }
+  const [members, vacations] = await Promise.all([
+    householdService.getHouseholdMembers(householdId),
+    taskService.listVacationWindows(householdId),
+  ]);
+  const inherited = resolveInheritedAssignee(space, { members, vacations }, dueDate);
+  return inherited.userId && inherited.source
+    ? { defaultAssigneeId: inherited.userId, defaultAssignmentSource: inherited.source }
+    : {};
 }
 
 // GET /tasks
@@ -205,16 +227,20 @@ export const createTask = createHandler(
 
     let task;
     try {
-      const defaultAssigneeId =
+      const inherited =
         validatedBody.assignedTo === undefined
-          ? await defaultCaregiverForPlant(user.householdId!, plant)
-          : undefined;
+          ? await inheritedAssignmentForPlant(
+              user.householdId!,
+              plant,
+              new Date(validatedBody.nextDue ?? Date.now())
+            )
+          : {};
       task = await taskService.createTask(
         validatedBody,
         user.householdId!,
         user.userId,
         plant.name,
-        { defaultAssigneeId }
+        inherited
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'AssigneeNotMemberError') {
@@ -527,7 +553,7 @@ export const applyTemplateBulk = createHandler(
         continue;
       }
       const taskIds: string[] = [];
-      const defaultAssigneeId = await defaultCaregiverForPlant(user.householdId!, plant);
+      const inherited = await inheritedAssignmentForPlant(user.householdId!, plant, new Date());
       for (const taskDef of tpl.tasks) {
         const t = await taskService.createTask(
           {
@@ -540,7 +566,7 @@ export const applyTemplateBulk = createHandler(
           user.householdId!,
           user.userId,
           plant.name,
-          { defaultAssigneeId }
+          inherited
         );
         taskIds.push(t.id);
       }
@@ -578,7 +604,7 @@ export const applyTemplate = createHandler(
     if (!plant) throw createHttpError(404, 'Plant not found');
 
     const created = [];
-    const defaultAssigneeId = await defaultCaregiverForPlant(user.householdId!, plant);
+    const inherited = await inheritedAssignmentForPlant(user.householdId!, plant, new Date());
     for (const taskDef of tpl.tasks) {
       const task = await taskService.createTask(
         {
@@ -591,7 +617,7 @@ export const applyTemplate = createHandler(
         user.householdId!,
         user.userId,
         plant.name,
-        { defaultAssigneeId }
+        inherited
       );
       created.push(task);
     }

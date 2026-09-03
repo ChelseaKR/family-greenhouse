@@ -23,12 +23,14 @@ import {
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { logger } from '../utils/logger.js';
 import { Task, TaskCompletion, DynamoDBItem } from '../models/types.js';
 import { CreateTaskInput, UpdateTaskInput, TaskFilters } from '../models/schemas.js';
-import { getMemberByUserId } from './householdService.js';
+import { getMemberByUserId, getHouseholdMembers } from './householdService.js';
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
 import { recordActivity } from './activity.js';
+import { isExplicitAssignment, resolveInheritedAssignee } from './assignmentResolver.js';
 
 const MAX_QUERY_LIMIT = 200;
 const MAX_DUE_WITHIN_DAYS = 365;
@@ -89,8 +91,9 @@ export async function createTask(
   plantName: string,
   options: {
     defaultAssigneeId?: string;
-    /** What the default assignee is: the space's usual caregiver (default)
-     *  or Seasonal Move Day's round-robin pick. Either stays claimable. */
+    /** Which inherited source produced `defaultAssigneeId` (ADR 0018): the
+     *  space's usual caregiver, Seasonal Move Day's round-robin pick, or the
+     *  space's rotation turn. Every one of them stays claimable. */
     defaultAssignmentSource?: Exclude<Task['assignmentSource'], null>;
   } = {}
 ): Promise<Task> {
@@ -624,7 +627,84 @@ export async function completeTask(
     return null;
   }
 
-  return itemToTask(result.Attributes);
+  return reassignInheritedOccurrence(itemToTask(result.Attributes));
+}
+
+/**
+ * Re-resolve an INHERITED assignment for the occurrence just generated
+ * (ADR 0018). This is where care rotation actually advances: completing a task
+ * moves `nextDue`, and the next occurrence is resolved for its own due date,
+ * so a weekly rotation hands over on the week the work is due rather than the
+ * week it happened to be finished.
+ *
+ * Explicit assignments — a manual assignment or a claim — return untouched on
+ * the first line. That is the whole protection the brief asks for: rotation
+ * can never stomp a name a person chose.
+ *
+ * Best-effort: the task has already advanced and its completion is recorded,
+ * so a failure here leaves the previous assignee in place for one more cycle
+ * rather than failing a completion the user just made.
+ */
+async function reassignInheritedOccurrence(task: Task): Promise<Task> {
+  if (isExplicitAssignment(task)) return task;
+  try {
+    const plant = await plantService.getPlant(task.householdId, task.plantId);
+    if (!plant?.spaceId) return task;
+    const space = await spaceService.getSpace(task.householdId, plant.spaceId);
+    if (!space || (!space.rotation && !space.defaultCaregiverId)) return task;
+
+    const [members, vacations] = await Promise.all([
+      getHouseholdMembers(task.householdId),
+      listVacationWindows(task.householdId),
+    ]);
+    const inherited = resolveInheritedAssignee(
+      space,
+      { members, vacations },
+      new Date(task.nextDue)
+    );
+    if (inherited.userId === task.assignedTo && inherited.source === task.assignmentSource) {
+      return task;
+    }
+
+    const assigned = inherited.userId !== null;
+    const updated = await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${task.householdId}`, SK: `TASK#${task.id}` },
+        UpdateExpression: assigned
+          ? 'SET #assignedTo = :assignedTo, #assignedToName = :assignedToName, #assignmentSource = :source, GSI2PK = :gsi2pk, GSI2SK = #nextDue'
+          : 'SET #assignedTo = :null, #assignedToName = :null, #assignmentSource = :null REMOVE GSI2PK, GSI2SK',
+        ExpressionAttributeNames: {
+          '#assignedTo': 'assignedTo',
+          '#assignedToName': 'assignedToName',
+          '#assignmentSource': 'assignmentSource',
+          ...(assigned ? { '#nextDue': 'nextDue' } : {}),
+        },
+        ExpressionAttributeValues: assigned
+          ? {
+              ':assignedTo': inherited.userId,
+              ':assignedToName': inherited.name,
+              ':source': inherited.source,
+              ':gsi2pk': `HOUSEHOLD#${task.householdId}#ASSIGNEE#${inherited.userId}`,
+              // Only re-resolve while the occurrence we resolved for is still
+              // current: a concurrent complete/snooze must not be overwritten.
+              ':expectedNextDue': task.nextDue,
+            }
+          : { ':null': null, ':expectedNextDue': task.nextDue },
+        ConditionExpression: 'attribute_exists(PK) AND nextDue = :expectedNextDue',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
+    return updated.Attributes ? itemToTask(updated.Attributes) : task;
+  } catch (err) {
+    if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') {
+      logger.warn(
+        { err: (err as Error).message, householdId: task.householdId, taskId: task.id },
+        'tasks.rotation_reassign_failed'
+      );
+    }
+    return task;
+  }
 }
 
 export interface SnoozeTaskOutcome {
@@ -963,9 +1043,14 @@ export async function claimTask(
           ':null': null,
           ':spaceDefault': 'space_default',
           ':moveDay': 'move_day',
+          ':rotation': 'rotation',
         },
+        // Inherited assignments — a space default, a Move Day split OR a
+        // rotation turn — can be taken over; explicit ones stay protected.
+        // Claiming converts the task to explicit, which is what stops rotation
+        // reclaiming it next cycle.
         ConditionExpression:
-          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay)',
+          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay OR #assignmentSource = :rotation)',
         ReturnValues: 'ALL_NEW',
       })
     );

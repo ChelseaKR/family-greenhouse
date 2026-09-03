@@ -28,7 +28,7 @@
  * Everything here is pure. Callers load the context once per household
  * (members + vacation windows) and resolve any number of tasks against it.
  */
-import type { Task } from '../models/types.js';
+import type { PlantSpace, SpaceRotation, Task } from '../models/types.js';
 
 /** The two member fields resolution needs; `HouseholdMember` satisfies it. */
 export interface MemberRef {
@@ -52,7 +52,8 @@ export interface AssignmentContext {
   vacations: readonly VacationRef[];
 }
 
-export type AssignmentSource = 'explicit' | 'escalated' | 'space_default' | 'unassigned';
+export type AssignmentSource =
+  'explicit' | 'escalated' | 'rotation' | 'space_default' | 'unassigned';
 
 export interface ResolvedAssignment {
   /** Who holds the task on the row (null = nobody). */
@@ -116,7 +117,7 @@ export function resolveAssignment(
 
   let source: AssignmentSource;
   if (holder && task.assignmentSource === null) source = 'explicit';
-  else if (holder) source = 'space_default';
+  else if (holder) source = task.assignmentSource === 'rotation' ? 'rotation' : 'space_default';
   else if (isEscalatedOccurrence(task)) source = 'escalated';
   else source = 'unassigned';
 
@@ -142,4 +143,122 @@ export function resolveAssignment(
     effectiveName: cover.name,
     coveringFor: holder.name,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Care rotation (ADR 0018, precedence slot 3)
+// ---------------------------------------------------------------------------
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Which period of the rotation `at` falls in, counted from the anchor.
+ *
+ * Time-indexed, not a stored counter: a household that skips a cycle, or a
+ * task completed late, cannot leave the rotation one step behind reality, and
+ * the same answer can be derived for a FUTURE occurrence — which is what
+ * "assign next week's turn when next week's task is generated" needs.
+ *
+ * Monthly counts calendar months (not 30-day blocks) so "Priya has March"
+ * means the month, and both ends stay stable across month lengths and DST.
+ * Periods before the anchor are negative; the caller's modulo handles that.
+ */
+export function rotationPeriodIndex(rotation: SpaceRotation, at: Date): number {
+  const anchor = new Date(rotation.anchor);
+  if (Number.isNaN(anchor.getTime()) || Number.isNaN(at.getTime())) return 0;
+  if (rotation.cadence === 'monthly') {
+    return (
+      (at.getUTCFullYear() - anchor.getUTCFullYear()) * 12 +
+      (at.getUTCMonth() - anchor.getUTCMonth())
+    );
+  }
+  return Math.floor((at.getTime() - anchor.getTime()) / WEEK_MS);
+}
+
+/**
+ * Whose turn it is at `at`, skipping anyone `isEligible` rejects (a member who
+ * has left, or is away) by walking forward through the order.
+ *
+ * Returns null when NOBODY is eligible. That is a real answer — the whole
+ * household is away — and the caller must leave the task unassigned (up for
+ * grabs) rather than pick someone who cannot act on it. It is never a stand-in
+ * for a failed read: callers that could not load members do not call this.
+ */
+export function rotationTurnAt(
+  rotation: SpaceRotation,
+  at: Date,
+  isEligible: (userId: string) => boolean
+): string | null {
+  const order = rotation.memberIds;
+  if (order.length === 0) return null;
+  const period = rotationPeriodIndex(rotation, at);
+  const start = ((period % order.length) + order.length) % order.length;
+  for (let hop = 0; hop < order.length; hop++) {
+    const candidate = order[(start + hop) % order.length];
+    if (isEligible(candidate)) return candidate;
+  }
+  return null;
+}
+
+export interface InheritedAssignment {
+  userId: string | null;
+  name: string | null;
+  /** 'rotation' or 'space_default' when someone was inherited; null when nobody
+   *  was. A narrow slice of `Task['assignmentSource']`: this resolver never
+   *  produces the sources other features write (Seasonal Move Day's
+   *  `move_day`), so callers can pass it straight into their own narrower
+   *  parameters. */
+  source: Extract<Task['assignmentSource'], 'rotation' | 'space_default'> | null;
+}
+
+const NOBODY: InheritedAssignment = { userId: null, name: null, source: null };
+
+/**
+ * The assignee a NEW occurrence inherits from its space, resolved for the
+ * occurrence's own due date. This is the single place rotation and the space
+ * default are ranked against each other, and it is deliberately separate from
+ * `resolveAssignment`: this one answers "who should this become?" at write
+ * time, that one answers "who is it now?" at read time.
+ *
+ * Explicit assignments never reach here — callers check
+ * `isExplicitAssignment` first, which is how a manual assignment or a claim
+ * survives every future cycle.
+ */
+export function resolveInheritedAssignee(
+  space: Pick<PlantSpace, 'defaultCaregiverId' | 'rotation'> | null,
+  ctx: AssignmentContext,
+  dueDate: Date
+): InheritedAssignment {
+  if (!space) return NOBODY;
+  const isMember = (userId: string) => ctx.members.some((m) => m.userId === userId);
+  const eligible = (userId: string) =>
+    isMember(userId) && !isAwayAt(ctx.vacations, userId, dueDate);
+
+  if (space.rotation && space.rotation.memberIds.length > 0) {
+    const turn = rotationTurnAt(space.rotation, dueDate, eligible);
+    if (turn) {
+      return {
+        userId: turn,
+        name: memberNamed(ctx.members, turn)?.name ?? null,
+        source: 'rotation',
+      };
+    }
+    // A configured rotation with nobody available leaves the task up for
+    // grabs. It does NOT fall through to the space default: the household
+    // said "these people take turns", and the default caregiver may well be
+    // the person who is away.
+    return NOBODY;
+  }
+
+  const fallback = space.defaultCaregiverId;
+  // A departed default caregiver is ignored, exactly as createTask already
+  // does — a stale default must never stop care tasks being assignable.
+  if (fallback && isMember(fallback)) {
+    return {
+      userId: fallback,
+      name: memberNamed(ctx.members, fallback)?.name ?? null,
+      source: 'space_default',
+    };
+  }
+  return NOBODY;
 }

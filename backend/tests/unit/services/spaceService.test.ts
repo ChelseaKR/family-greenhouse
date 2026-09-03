@@ -188,3 +188,144 @@ describe('spaceService', () => {
     ).rejects.toMatchObject({ name: 'DuplicateSpaceNameError' });
   });
 });
+
+describe('spaceService — care rotation (ADR 0018)', () => {
+  const rotation = { memberIds: ['sam', 'priya'], cadence: 'weekly' as const };
+
+  it('rejects a rotation containing someone who is not a household member', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const household = await import('../../../src/services/householdService.js');
+    const { createSpace } = await import('../../../src/services/spaceService.js');
+    vi.mocked(household.getMemberByUserId).mockImplementation(async (_hh, userId) =>
+      userId === 'sam' ? ({ userId: 'sam', name: 'Sam' } as never) : null
+    );
+    await expect(
+      createSpace({ name: 'Balcony', environment: 'outside', rotation } as never, 'hh', 'sam')
+    ).rejects.toMatchObject({ name: 'RotationMemberNotMemberError' });
+    // The real safety property: nothing was persisted.
+    const kinds = vi.mocked(dynamodb.send).mock.calls.map((c) => (c[0] as { kind: string }).kind);
+    expect(kinds).not.toContain('Put');
+  });
+
+  it('stamps an anchor when one is not supplied, so the cycle has an origin', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const household = await import('../../../src/services/householdService.js');
+    const { createSpace } = await import('../../../src/services/spaceService.js');
+    vi.mocked(household.getMemberByUserId).mockResolvedValue({ userId: 'x', name: 'X' } as never);
+    vi.mocked(dynamodb.send).mockResolvedValue({ Items: [] } as never);
+    const space = await createSpace(
+      { name: 'Balcony', environment: 'outside', rotation } as never,
+      'hh',
+      'sam'
+    );
+    expect(space.rotation?.memberIds).toEqual(['sam', 'priya']);
+    expect(Number.isNaN(Date.parse(space.rotation!.anchor))).toBe(false);
+  });
+
+  it('reads a malformed or single-member stored rotation as NO rotation', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getSpaces } = await import('../../../src/services/spaceService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [
+        {
+          id: 'a',
+          householdId: 'hh',
+          name: 'A',
+          environment: 'inside',
+          rotation: { memberIds: ['solo'], cadence: 'weekly', anchor: '2026-06-01T00:00:00.000Z' },
+        },
+        {
+          id: 'b',
+          householdId: 'hh',
+          name: 'B',
+          environment: 'inside',
+          rotation: {
+            memberIds: ['x', 'y'],
+            cadence: 'fortnightly',
+            anchor: '2026-06-01T00:00:00.000Z',
+          },
+        },
+        {
+          id: 'c',
+          householdId: 'hh',
+          name: 'C',
+          environment: 'inside',
+          rotation: { memberIds: ['x', 'y'], cadence: 'weekly', anchor: 'nonsense' },
+        },
+        {
+          id: 'd',
+          householdId: 'hh',
+          name: 'D',
+          environment: 'inside',
+          rotation: {
+            memberIds: ['x', 'y'],
+            cadence: 'weekly',
+            anchor: '2026-06-01T00:00:00.000Z',
+          },
+        },
+      ],
+    } as never);
+    const spaces = await getSpaces('hh');
+    expect(spaces.map((s) => s.rotation)).toEqual([
+      null,
+      null,
+      null,
+      { memberIds: ['x', 'y'], cadence: 'weekly', anchor: '2026-06-01T00:00:00.000Z' },
+    ]);
+  });
+
+  it('derives whose turn it is only for spaces that HAVE a rotation', async () => {
+    const { rotationTurns } = await import('../../../src/services/spaceService.js');
+    const anchor = '2026-06-01T00:00:00.000Z';
+    const spaces = [
+      { id: 'plain', rotation: null, defaultCaregiverId: 'lee' },
+      {
+        id: 'rota',
+        rotation: { memberIds: ['sam', 'priya'], cadence: 'weekly' as const, anchor },
+        defaultCaregiverId: null,
+      },
+    ] as never;
+    const ctx = {
+      members: [
+        { userId: 'sam', name: 'Sam' },
+        { userId: 'priya', name: 'Priya' },
+        { userId: 'lee', name: 'Lee' },
+      ],
+      vacations: [],
+    };
+    const turns = rotationTurns(spaces, ctx, new Date('2026-06-08T00:00:00.000Z'));
+    expect(turns.has('plain')).toBe(false);
+    expect(turns.get('rota')).toEqual({ turnUserId: 'priya', turnName: 'Priya' });
+  });
+
+  it('reports a rotating space with everyone away as a turn of nobody, not as no rotation', async () => {
+    const { rotationTurns } = await import('../../../src/services/spaceService.js');
+    const anchor = '2026-06-01T00:00:00.000Z';
+    const spaces = [
+      {
+        id: 'rota',
+        rotation: { memberIds: ['sam', 'priya'], cadence: 'weekly' as const, anchor },
+        defaultCaregiverId: null,
+      },
+    ] as never;
+    const away = (userId: string) => ({
+      userId,
+      coveredBy: 'lee',
+      coveredByName: 'Lee',
+      startDate: '2026-06-01T00:00:00.000Z',
+      endDate: '2026-06-30T00:00:00.000Z',
+    });
+    const turns = rotationTurns(
+      spaces,
+      {
+        members: [
+          { userId: 'sam', name: 'Sam' },
+          { userId: 'priya', name: 'Priya' },
+        ],
+        vacations: [away('sam'), away('priya')],
+      },
+      new Date('2026-06-08T00:00:00.000Z')
+    );
+    expect(turns.get('rota')).toEqual({ turnUserId: null, turnName: null });
+  });
+});
