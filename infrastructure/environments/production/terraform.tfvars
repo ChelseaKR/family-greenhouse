@@ -51,7 +51,7 @@ identify_metering_enabled = "1"
 # (the same read identify already makes). A household already past a newly
 # lowered cap is blocked until the month rolls over, so lower caps on the 1st.
 leaf_health_monthly_cap            = ""
-leaf_health_monthly_cap_seedling   = ""
+leaf_health_monthly_cap_seedling   = "20"
 leaf_health_monthly_cap_garden     = ""
 leaf_health_monthly_cap_greenhouse = ""
 chat_budget_input_tokens           = ""
