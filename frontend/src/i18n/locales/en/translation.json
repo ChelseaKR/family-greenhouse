@@ -621,7 +621,7 @@
       "startsLabel": "Starts (optional)",
       "startsHelp": "Leave empty to start now. Set the day your trip starts and the link stays shut until then.",
       "lengthLabel": "Lasts for (days)",
-            "lengthHelpPlan": "Up to {{days}} days on your plan, counted from the start day.",
+      "lengthHelpPlan": "Up to {{days}} days on your plan, counted from the start day.",
       "lengthHelpChecking": "Checking how long your plan allows…",
       "lengthHelpUnknown": "We couldn’t confirm your plan’s longest window just now. Your plan’s limit still applies when you create the link.",
       "seedlingHint": "Longer trip? Garden allows sitter links up to 90 days, several at once, and a printable handoff brief.",
@@ -645,7 +645,45 @@
     }
   },
   "sitter": {
-    "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own."
+    "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",
+    "openBrief": "Open the full plant-care brief (printable)"
+  },
+  "sitterBrief": {
+    "metaTitle": "Plant-care brief — Family Greenhouse",
+    "metaDescription": "Everything you need to look after these plants, written by the people who live with them.",
+    "title": "The plant-care brief",
+    "titleLabelled": "{{label}}: the plant-care brief",
+    "window": "Covering {{start}} to {{end}}.",
+    "intro": "Everything below was written by the household — nothing here is generated advice. If a plant has no note, it says so, and your judgement is as good as ours.",
+    "print": "Print",
+    "loading": "Loading the plant-care brief…",
+    "backToList": "Back to what needs doing today",
+    "noPlants": "There are no plants on this brief yet.",
+    "noPlace": "No placement note — ask where this one lives.",
+    "houseRule": "House rule",
+    "householdNote": "The household’s note",
+    "noCareNote": "No note for this plant. Water when the top of the soil is dry if you’re unsure, and let them know what you did.",
+    "whileYoureHere": "While you’re here",
+    "nothingDue": "Nothing due during your window.",
+    "due": "due {{date}}",
+    "overdueSince": "overdue since {{date}}",
+    "petToxic": "Keep away from pets — cats: {{cats}}, dogs: {{dogs}}.",
+    "petSafe": "Listed as non-toxic to cats and dogs.",
+    "petSource": "From our verified pet-safety list, matched to {{matched}} ({{scientific}}), grounded in the ASPCA database.",
+    "verdict": {
+      "toxic": "toxic",
+      "non-toxic": "non-toxic"
+    },
+    "task": {
+      "water": "Water",
+      "fertilize": "Feed",
+      "prune": "Prune",
+      "repot": "Repot"
+    },
+    "unavailableTitle": "This care brief isn’t available",
+    "unavailableBody": "The link may have expired, been turned off, or this household’s plan may not include the brief. The day-to-day task list may still work — try the link they sent you.",
+    "errorTitle": "Something went wrong",
+    "errorBody": "We couldn’t load the care brief just now. Please refresh and try again in a moment."
   },
   "settings": {
     "title": "Settings",

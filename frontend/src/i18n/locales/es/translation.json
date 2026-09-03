@@ -635,12 +635,13 @@
       "startsLabel": "Empieza (opcional)",
       "startsHelp": "Déjalo vacío para empezar ahora. Indica el día en que empieza tu viaje y el enlace no funcionará hasta entonces.",
       "lengthLabel": "Dura (días)",
-            "lengthHelpPlan": "Hasta {{days}} días según tu plan, contados desde el día de inicio.",
+      "lengthHelpPlan": "Hasta {{days}} días según tu plan, contados desde el día de inicio.",
       "lengthHelpChecking": "Comprobando cuánto permite tu plan…",
       "lengthHelpUnknown": "No pudimos confirmar la duración máxima de tu plan en este momento. El límite de tu plan se aplicará igualmente al crear el enlace.",
       "seedlingHint": "¿Un viaje más largo? Garden permite enlaces de cuidador de hasta 90 días, varios a la vez y una guía de traspaso imprimible.",
       "seePlans": "Ver planes",
       "activeCap_one": "Tu plan mantiene {{count}} enlace de cuidador activo a la vez. Desactiva el actual para crear otro.",
+      "activeCap_many": "Tu plan permite {{count}} enlaces de cuidador activos a la vez. Desactiva uno para crear otro.",
       "activeCap_other": "Tu plan permite {{count}} enlaces de cuidador activos a la vez. Desactiva uno para crear otro.",
       "labelLabel": "Etiqueta (opcional)",
       "labelHelp": "Un nombre amable que verá tu cuidador. Sin datos personales.",
@@ -659,7 +660,45 @@
     }
   },
   "sitter": {
-    "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola."
+    "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",
+    "openBrief": "Abre la guía de cuidados completa (imprimible)"
+  },
+  "sitterBrief": {
+    "metaTitle": "Guía de cuidados — Family Greenhouse",
+    "metaDescription": "Todo lo que necesitas para cuidar estas plantas, escrito por quienes conviven con ellas.",
+    "title": "La guía de cuidados",
+    "titleLabelled": "{{label}}: la guía de cuidados",
+    "window": "Cubres del {{start}} al {{end}}.",
+    "intro": "Todo lo que aparece aquí lo escribió el hogar; nada son consejos generados. Si una planta no tiene nota, lo decimos, y tu criterio vale tanto como el nuestro.",
+    "print": "Imprimir",
+    "loading": "Cargando la guía de cuidados…",
+    "backToList": "Volver a lo que toca hoy",
+    "noPlants": "Todavía no hay plantas en esta guía.",
+    "noPlace": "Sin nota de ubicación: pregunta dónde vive esta planta.",
+    "houseRule": "Norma de la casa",
+    "householdNote": "La nota del hogar",
+    "noCareNote": "Sin nota para esta planta. Si dudas, riega cuando la capa superior de tierra esté seca y cuéntales qué hiciste.",
+    "whileYoureHere": "Mientras estés aquí",
+    "nothingDue": "No hay nada pendiente durante tu periodo.",
+    "due": "para el {{date}}",
+    "overdueSince": "pendiente desde el {{date}}",
+    "petToxic": "Manténla lejos de las mascotas: gatos: {{cats}}, perros: {{dogs}}.",
+    "petSafe": "Figura como no tóxica para gatos y perros.",
+    "petSource": "De nuestra lista verificada de seguridad para mascotas, coincidencia con {{matched}} ({{scientific}}), basada en la base de datos de la ASPCA.",
+    "verdict": {
+      "toxic": "tóxica",
+      "non-toxic": "no tóxica"
+    },
+    "task": {
+      "water": "Riega",
+      "fertilize": "Abona",
+      "prune": "Poda",
+      "repot": "Trasplanta"
+    },
+    "unavailableTitle": "Esta guía de cuidados no está disponible",
+    "unavailableBody": "Puede que el enlace haya caducado, se haya desactivado o que el plan de este hogar no incluya la guía. Puede que la lista diaria de tareas siga funcionando: prueba el enlace que te enviaron.",
+    "errorTitle": "Algo salió mal",
+    "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento."
   },
   "settings": {
     "title": "Ajustes",

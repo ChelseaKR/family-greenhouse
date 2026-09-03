@@ -353,6 +353,9 @@ paths:
                 properties:
                   label: { type: string, nullable: true }
                   expiresAt: { type: string, format: date-time }
+                  briefAvailable:
+                    type: boolean
+                    description: "Whether this household's plan includes the handoff brief. False means the brief endpoint answers its generic 404 for this link."
                   tasks:
                     type: array
                     items:
@@ -395,17 +398,15 @@ paths:
                         spaceName: { type: string, nullable: true }
                         placementNote: { type: string, nullable: true }
                         careNote:
-                          {
-                            type: string,
-                            nullable: true,
-                            description: The household's own care words; null when they wrote none — never generated.,
-                          }
+                          type: string
+                          nullable: true
+                          description: "The household's own care words; null when they wrote none. Never generated."
                         careNoteSource: { type: string, nullable: true, enum: [rule, notes] }
                         photoUrl: { type: string, nullable: true }
                         petSafety:
                           type: object
                           nullable: true
-                          description: Entry from the curated, ASPCA-grounded table. Null means no verdict, never "safe".
+                          description: 'Entry from the curated, ASPCA-grounded table. Null means no verdict, never safe.'
                           properties:
                             slug: { type: string }
                             commonName: { type: string }

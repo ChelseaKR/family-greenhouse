@@ -215,6 +215,18 @@ describe('public sitter view (no auth)', () => {
     expect(res.body.tasks.map((t: { taskId: string }) => t.taskId)).not.toContain(seedTaskId);
   });
 
+  it('tells the page whether the plan includes the brief, without naming the tier', async () => {
+    db.households.get(seedHouseholdId)!.planId = 'seedling';
+    const free = await request(app).get(`/sitter/${await createLink()}`);
+    expect(free.status).toBe(200);
+    expect(free.body.briefAvailable).toBe(false);
+    expect(JSON.stringify(free.body)).not.toContain('seedling');
+
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const paid = await request(app).get(`/sitter/${await createLink()}`);
+    expect(paid.body.briefAvailable).toBe(true);
+  });
+
   it('404s on an unknown / malformed token (no enumeration oracle)', async () => {
     const bad = await request(app).get('/sitter/not-a-real-token');
     expect(bad.status).toBe(404);

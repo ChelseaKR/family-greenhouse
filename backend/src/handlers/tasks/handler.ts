@@ -597,11 +597,19 @@ export const getSitterView = createHandler(
       // malformed) so a caller can't distinguish them and enumerate tokens.
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
-    const tasks = await taskService.getSitterTasks(link.householdId, link.expiresAt);
+    const [tasks, subscription] = await Promise.all([
+      taskService.getSitterTasks(link.householdId, link.expiresAt),
+      billing.getHouseholdSubscription(link.householdId),
+    ]);
     return successResponse({
       label: link.label,
       expiresAt: link.expiresAt,
       tasks,
+      // Whether THIS household's plan includes the handoff brief, so the page
+      // offers it only when the link can actually open it. It says nothing
+      // about the household beyond that, and only to a holder of a valid
+      // token — the brief endpoint itself stays a generic 404 either way.
+      briefAvailable: sitterBriefIncluded(getPlan(subscription.planId)),
     });
   }
   // No authMiddleware — anonymous sitter. 60/min per IP absorbs the

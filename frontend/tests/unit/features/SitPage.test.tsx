@@ -50,6 +50,30 @@ const view: SitterView = {
   tasks: [waterTask],
 };
 
+describe('SitPage handoff-brief link', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('offers the brief only when the household’s plan includes it', async () => {
+    getView.mockResolvedValue({ ...view, briefAvailable: true });
+    renderPage();
+    expect(await screen.findByRole('link', { name: /full plant-care brief/i })).toBeInTheDocument();
+  });
+
+  it('does not offer a brief the link cannot open', async () => {
+    getView.mockResolvedValue({ ...view, briefAvailable: false });
+    renderPage();
+    await screen.findByText(/Water the Monstera/i);
+    expect(screen.queryByRole('link', { name: /full plant-care brief/i })).not.toBeInTheDocument();
+  });
+
+  it('treats an older backend that omits the flag as "no brief", not as available', async () => {
+    getView.mockResolvedValue(view);
+    renderPage();
+    await screen.findByText(/Water the Monstera/i);
+    expect(screen.queryByRole('link', { name: /full plant-care brief/i })).not.toBeInTheDocument();
+  });
+});
+
 describe('SitPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();

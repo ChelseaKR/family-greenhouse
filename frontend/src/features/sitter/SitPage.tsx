@@ -66,6 +66,10 @@ export function SitPage() {
   // — or that their access stops on its own.
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [tasks, setTasks] = useState<SitterTask[]>([]);
+  // Whether this household's plan includes the printable handoff brief. Only
+  // a settled `true` offers the link — an older backend that omits the field,
+  // or a plan without it, must not send the sitter to a page that 404s.
+  const [briefAvailable, setBriefAvailable] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'inactive' | 'error'>('loading');
   // taskIds currently being completed (optimistic in-flight), and ones done.
   const [pending, setPending] = useState<Set<string>>(new Set());
@@ -80,6 +84,7 @@ export function SitPage() {
         setLabel(view.label);
         setExpiresAt(view.expiresAt);
         setTasks(view.tasks);
+        setBriefAvailable(view.briefAvailable === true);
         setStatus('ready');
       })
       .catch((err: unknown) => {
@@ -160,6 +165,16 @@ export function SitPage() {
           {expiresAt && (
             <p className="mt-2 text-sm text-gray-600">
               {t('sitter.coveringUntil', { date: formatDate(expiresAt) })}
+            </p>
+          )}
+          {briefAvailable && (
+            <p className="mt-2 text-sm">
+              <Link
+                to={`/sit/${token}/brief`}
+                className="text-primary-700 underline hover:text-primary-800"
+              >
+                {t('sitter.openBrief')}
+              </Link>
             </p>
           )}
 

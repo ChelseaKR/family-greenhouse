@@ -2723,10 +2723,12 @@ app.get('/sitter/:token', (req, res) => {
   if (!link) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
+  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
   res.json({
     label: link.label,
     expiresAt: link.expiresAt,
     tasks: sitterTasksFor(link.householdId, link.expiresAt),
+    briefAvailable: sitterBriefIncluded(plan),
   });
 });
 
