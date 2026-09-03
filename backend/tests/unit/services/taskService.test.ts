@@ -786,7 +786,7 @@ describe('taskService', () => {
       const update = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as SentCommand;
       // Exists AND either unassigned or inherited, atomically.
       expect(update.input.ConditionExpression).toBe(
-        'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault)'
+        'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay)'
       );
       expect(update.input.UpdateExpression).toContain('#assignmentSource = :null');
       expect(update.input.ExpressionAttributeValues[':gsi2pk']).toBe(

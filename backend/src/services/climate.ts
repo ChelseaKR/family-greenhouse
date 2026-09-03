@@ -247,6 +247,42 @@ export interface ClimateTip {
   message: string;
 }
 
+/** Overnight low (°C) below which the tips say "bring tender plants
+ *  indoors". Seasonal Move Day (services/moveDay.ts) reads the same number,
+ *  so it can never fire on a night the climate card would not have warned
+ *  about. */
+export const FROST_LOW_C = 5;
+/** Daytime temperature (°C) above which the heat tip fires; Move Day reads
+ *  it as "summer has arrived". */
+export const HEAT_HIGH_C = 32;
+
+export type SeasonalSignal = 'winter' | 'summer';
+
+/**
+ * The season a snapshot says is arriving, or null when neither line is
+ * crossed. Frost wins over heat when both are: a 33°C day with a 4°C night
+ * is a night to bring plants in, not a day to put them out.
+ */
+export function seasonalSignal(snapshot: WeatherSnapshot): SeasonalSignal | null {
+  const todayLow = snapshot.forecast[0]?.minC ?? snapshot.tempC;
+  if (todayLow < FROST_LOW_C) return 'winter';
+  if (snapshot.tempC > HEAT_HIGH_C) return 'summer';
+  return null;
+}
+
+/**
+ * Read-only view of the weather cache: the snapshot `getWeatherCached` last
+ * stored for these coordinates, or null when none is live (never written,
+ * expired, or the read itself failed). Never calls the provider and never
+ * touches the daily budget — a caller that must not spend a weather call
+ * (Seasonal Move Day) uses this and stays silent on a miss rather than
+ * fetching.
+ */
+export async function peekWeatherCached(lat: number, lon: number): Promise<WeatherSnapshot | null> {
+  const sk = `WEATHER#${quantize(lat)},${quantize(lon)}`;
+  return readCache<WeatherSnapshot>('WEATHER#CACHE', sk);
+}
+
 export function deriveClimateTips(snapshot: WeatherSnapshot): ClimateTip[] {
   const tips: ClimateTip[] = [];
 
@@ -265,7 +301,7 @@ export function deriveClimateTips(snapshot: WeatherSnapshot): ClimateTip[] {
   }
 
   const todayLow = snapshot.forecast[0]?.minC ?? snapshot.tempC;
-  if (todayLow < 5) {
+  if (todayLow < FROST_LOW_C) {
     tips.push({
       level: 'warning',
       appliesTo: ['outdoor', 'tropical'],
@@ -282,7 +318,7 @@ export function deriveClimateTips(snapshot: WeatherSnapshot): ClimateTip[] {
     });
   }
 
-  if (snapshot.tempC > 32) {
+  if (snapshot.tempC > HEAT_HIGH_C) {
     tips.push({
       level: 'warning',
       appliesTo: [],

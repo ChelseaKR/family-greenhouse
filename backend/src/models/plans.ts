@@ -66,6 +66,11 @@ export interface Plan {
   maxPlants: number;
   maxMembers: number;
   limits: PlanLimits;
+  /** Seasonal Move Day (ideation brief §4.9): when the household's cached
+   *  climate snapshot crosses the frost/heat line, plants whose current space
+   *  differs from their summer/winter space become claimable tasks split
+   *  across members. $0 marginal cost — it reads the cached snapshot only. */
+  moveDay: boolean;
   /** Env var name where the Stripe MONTHLY price ID lives. Read at runtime so
    *  staging/prod keys stay separate. Free tier has none. */
   stripePriceEnv?: string;
@@ -130,6 +135,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // No Plant Tags: the printable QR labels start at Garden.
     limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1, tags: 0 },
     crossHomeToday: false,
+    moveDay: false,
     features: { kiosk: false, householdToolkit: false, plantTags: false },
   },
   garden: {
@@ -148,6 +154,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // The Away Kit: windows to 90 days, several sitters at once.
     limits: { sitterLinkMaxDays: 90, sitterLinksActive: 10, tags: 50 },
     crossHomeToday: false,
+    moveDay: true,
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
     lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
@@ -167,6 +174,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxMembers: 50,
     limits: { sitterLinkMaxDays: 90, sitterLinksActive: 25, tags: Number.POSITIVE_INFINITY },
     crossHomeToday: true,
+    moveDay: true,
     stripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE_ANNUAL',
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
@@ -230,6 +238,11 @@ export function planHasFeature(
 /** True when membership in a household on this plan unlocks cross-home Today (ADR 0017). */
 export function planIncludesCrossHomeToday(plan: Plan): boolean {
   return plan.crossHomeToday === true;
+}
+
+/** True when the tier includes Seasonal Move Day (brief §4.9). */
+export function planHasMoveDay(plan: Plan): boolean {
+  return plan.moveDay;
 }
 
 /** True iff `id` names a real plan in the catalog. */

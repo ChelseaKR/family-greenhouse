@@ -1061,6 +1061,28 @@
     "unavailableTitle": "Clima local no disponible.",
     "unavailableBody": "No pudimos consultar el clima de tu zona en este momento, así que los avisos de helada, calor o lluvia de esta noche están sin comprobar, no descartados."
   },
+  "moveDay": {
+    "titleWinter": "Día de mudanza: hora de meter estas plantas",
+    "titleSummer": "Día de mudanza: estas plantas ya pueden volver afuera",
+    "signalWinter": "Esta noche la mínima será de {{low}}°C, por debajo del umbral de helada de {{line}}°C.",
+    "signalSummer": "Hoy hace {{temp}}°C, por encima del umbral de calor de {{line}}°C.",
+    "count_one": "{{count}} planta no está en su espacio de {{season}}. Las mudanzas se reparten entre el hogar; reclama o cede cualquiera desde la lista de tareas.",
+    "count_many": "{{count}} plantas no están en su espacio de {{season}}. Las mudanzas se reparten entre el hogar; reclama o cede cualquiera desde la lista de tareas.",
+    "count_other": "{{count}} plantas no están en su espacio de {{season}}. Las mudanzas se reparten entre el hogar; reclama o cede cualquiera desde la lista de tareas.",
+    "season": {
+      "winter": "invierno",
+      "summer": "verano"
+    },
+    "listAria": "Plantas por mover",
+    "noCurrentSpace": "Sin espacio asignado",
+    "tender_one": "{{count}} planta sensible a las heladas está afuera y aún no tiene espacio de invierno:",
+    "tender_many": "{{count}} plantas sensibles a las heladas están afuera y aún no tienen espacio de invierno:",
+    "tender_other": "{{count}} plantas sensibles a las heladas están afuera y aún no tienen espacio de invierno:",
+    "tenderZone": "resiste hasta la zona {{zone}}",
+    "tenderHint": "Solo se revisan las plantas con una ficha de especie guardada; el resto no está descartado, solo sin revisar.",
+    "listedOn": "Lista creada el {{date}}",
+    "openTasks": "Abrir la lista de tareas →"
+  },
   "pricing": {
     "intervalLabel": "Intervalo de facturación",
     "intervalMonthly": "Mensual",

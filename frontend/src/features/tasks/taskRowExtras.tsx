@@ -70,7 +70,7 @@ export function ClaimControls({ task, onClaim, onUnclaim, isPending }: ClaimCont
       </Button>
     );
   }
-  if (task.assignmentSource === 'space_default') {
+  if (task.assignmentSource === 'space_default' || task.assignmentSource === 'move_day') {
     return (
       <Button
         variant="secondary"

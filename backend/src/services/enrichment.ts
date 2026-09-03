@@ -247,6 +247,21 @@ export async function lookupSpeciesCached(id: number): Promise<SpeciesLookupResu
   return fresh;
 }
 
+/**
+ * Read-only view of the species cache: the detail a previous lookup stored,
+ * or null when none is live (never fetched, expired, a cached 404, or the
+ * read failed). Never calls Perenual and never touches the daily budget —
+ * Seasonal Move Day uses this so its hardiness hint costs nothing and is
+ * honest about only covering plants whose species were already looked up.
+ */
+export async function peekSpeciesCached(id: number): Promise<PerenualSpeciesDetail | null> {
+  const cached = await readCacheEntry<PerenualSpeciesDetail | null>(
+    'PERENUAL#CACHE',
+    `SPECIES#${id}`
+  );
+  return cached.hit ? cached.value : null;
+}
+
 /** Nullable projection retained for thumbnails, plant validation, and guides. */
 export async function getSpeciesCached(id: number): Promise<PerenualSpeciesDetail | null> {
   const lookup = await lookupSpeciesCached(id);

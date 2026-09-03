@@ -165,8 +165,10 @@ export interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  /** Inherited space assignments remain claimable; null means explicit/unassigned. */
-  assignmentSource: 'space_default' | null;
+  /** Inherited assignments remain claimable; null means explicit/unassigned.
+   *  `space_default` came from the space's usual caregiver, `move_day` from
+   *  Seasonal Move Day's round-robin split (services/moveDay.ts). */
+  assignmentSource: 'space_default' | 'move_day' | null;
   notes: string | null;
   createdBy: string;
   createdAt: string;
