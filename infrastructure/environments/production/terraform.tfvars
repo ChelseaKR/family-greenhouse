@@ -44,8 +44,11 @@ identify_metering_enabled = "1"
 #   leaf_health_monthly_cap            flat cap, every tier without an override
 #   leaf_health_monthly_cap_<tier>     per tier; blank inherits the flat cap;
 #                                      "0" = unlimited for that tier
-#   chat_budget_{input,output}_tokens  NOT tier-aware; "0" is NOT unlimited
-#                                      (it would 429 every turn — leave blank)
+#   chat_budget_{input,output}_tokens  flat token caps, every tier without an
+#                                      override; "0" is NOT unlimited (it
+#                                      would 429 every turn — leave blank)
+#   chat_budget_{input,output}_tokens_<tier>
+#                                      per tier; blank inherits the flat pair
 #
 # Setting any per-tier leaf-health value adds one household read per check
 # (the same read identify already makes). A household already past a newly
@@ -56,6 +59,20 @@ leaf_health_monthly_cap_garden     = ""
 leaf_health_monthly_cap_greenhouse = ""
 chat_budget_input_tokens           = ""
 chat_budget_output_tokens          = ""
+
+# Free-tier chat: 25% of the flat 250k / 50k. The care assistant is gated to
+# Garden and up in code (a Seedling turn is refused with a 402 before any
+# budget is reserved), so today this is a floor UNDER that gate, not a live
+# spend: it is what a Seedling household would get if the gate were ever
+# relaxed (a trial, say), instead of the full paid-tier budget. Garden and
+# Greenhouse stay blank (the flat pair). Lowering a cap a household is already
+# past blocks it until the month rolls over — change these on the 1st.
+chat_budget_input_tokens_seedling    = "62500"
+chat_budget_output_tokens_seedling   = "12500"
+chat_budget_input_tokens_garden      = ""
+chat_budget_output_tokens_garden     = ""
+chat_budget_input_tokens_greenhouse  = ""
+chat_budget_output_tokens_greenhouse = ""
 
 # Keep SMS fail-closed until AWS approves SMS Production Access in us-east-1
 # and the required origination identity/registration is active. Once both are

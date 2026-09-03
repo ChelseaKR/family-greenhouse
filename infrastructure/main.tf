@@ -200,6 +200,13 @@ module "api" {
   leaf_health_monthly_cap_greenhouse = var.leaf_health_monthly_cap_greenhouse
   chat_budget_input_tokens           = var.chat_budget_input_tokens
   chat_budget_output_tokens          = var.chat_budget_output_tokens
+  # Per-tier chat budgets; a blank one inherits the flat pair above.
+  chat_budget_input_tokens_seedling    = var.chat_budget_input_tokens_seedling
+  chat_budget_output_tokens_seedling   = var.chat_budget_output_tokens_seedling
+  chat_budget_input_tokens_garden      = var.chat_budget_input_tokens_garden
+  chat_budget_output_tokens_garden     = var.chat_budget_output_tokens_garden
+  chat_budget_input_tokens_greenhouse  = var.chat_budget_input_tokens_greenhouse
+  chat_budget_output_tokens_greenhouse = var.chat_budget_output_tokens_greenhouse
 
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
