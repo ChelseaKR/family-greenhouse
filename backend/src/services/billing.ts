@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js';
 import { PlanId, getPlan, isPlanId, planRank, PLANS } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
+import type { ServerEventProps } from '../utils/serverAnalytics.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
 
 let cachedClient: Stripe | null = null;
@@ -408,6 +409,66 @@ function intervalFromEvent(event: Stripe.Event): 'month' | 'year' | 'lifetime' |
 }
 
 /**
+ * The Stripe subscription status held immediately BEFORE this event, read from
+ * `data.previous_attributes` — the diff Stripe attaches to every `updated`
+ * event describing what the fields were before the change.
+ *
+ * Returns `undefined` when `status` is absent from the diff, which is the
+ * common case and the important one: it means this event did not change the
+ * status at all. Renewals, plan changes, metadata edits, `cancel_at_period_end`
+ * toggles and payment-method updates all arrive as `customer.subscription.updated`
+ * with the status untouched, and every one of them must be silent for revenue.
+ *
+ * Reading the previous status off the EVENT rather than off our stored row is
+ * deliberate. The row is last-write-wins across an at-least-once delivery
+ * stream, so a redelivered or racing event could observe a row that already
+ * says `active` and conclude a transition it did not witness — or miss one it
+ * did. `previous_attributes` is immutable and travels with the delivery, so the
+ * same event always decides the same way however many times it arrives.
+ */
+function previousStatusFromEvent(event: Stripe.Event): string | undefined {
+  const previous = (event.data as unknown as { previous_attributes?: { status?: string } | null })
+    .previous_attributes;
+  return previous?.status;
+}
+
+/**
+ * Bucket a Stripe subscription status into the closed enum the analytics rail
+ * accepts. Unknown/new Stripe statuses collapse to `other` rather than leaking
+ * an unbounded string into the log stream.
+ */
+function bucketPreviousStatus(status: string): NonNullable<ServerEventProps['from']> {
+  switch (status) {
+    case 'trialing':
+    case 'past_due':
+    case 'unpaid':
+    case 'incomplete':
+    case 'paused':
+      return status;
+    default:
+      return 'other';
+  }
+}
+
+/**
+ * Bucket Stripe's `cancellation_details.reason` for the churn event. Stripe
+ * leaves it null for subscriptions that simply ended, so `undefined` is a
+ * normal outcome and means "Stripe recorded no reason", not "no reason".
+ */
+function churnReasonFromEvent(event: Stripe.Event): ServerEventProps['churnReason'] {
+  const reason = (
+    event.data.object as unknown as {
+      cancellation_details?: { reason?: string | null } | null;
+    }
+  ).cancellation_details?.reason;
+  if (!reason) return undefined;
+  if (reason === 'cancellation_requested') return 'requested';
+  if (reason === 'payment_failed') return 'payment_failed';
+  if (reason === 'payment_disputed') return 'payment_disputed';
+  return 'other';
+}
+
+/**
  * Reverse-map a live Stripe price id back to our planId via the per-tier price
  * env vars. A plan change made in the Stripe billing portal swaps the
  * subscription's price but never re-stamps OUR metadata, so resolving plan
@@ -729,6 +790,18 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
 
+  /**
+   * The paid tier the household held when a `customer.subscription.deleted`
+   * arrived — captured before the delta overwrites `planId`.
+   *
+   * It cannot be read off `delta.fields.planId`: that is 'seedling' (the tier
+   * they fall TO), or, for a household with a lifetime purchase underneath,
+   * the tier they KEEP. Neither is the thing that churned. Left undefined for
+   * every other event type and for a household that was already on seedling —
+   * a subscription ending for a household with no paid tier is not churn.
+   */
+  let churnedFromPlan: PlanId | undefined;
+
   // Guard a lifetime household against a stale `subscription.deleted` wiping
   // its permanent grant. A lifetime purchase CLEARS the stored
   // stripeSubscriptionId (and cancels the old sub below); if a deletion then
@@ -740,6 +813,7 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   if (event.type === 'customer.subscription.deleted') {
     const deletedSubId = (event.data.object as unknown as { id?: string }).id;
     const current = await getHouseholdSubscription(delta.householdId);
+    churnedFromPlan = current.planId;
     // A household that bought a tier outright keeps it forever. Cancelling a
     // subscription taken out ON TOP of a lifetime purchase must fall back to
     // what was paid for permanently, never to seedling — otherwise a
@@ -882,11 +956,32 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       metadata: { stripeEventType: event.type, fields: delta.fields },
     });
 
-    // CONFIRMED conversion signal. The client fires `subscription_upgraded` at
+    // ---------------------------------------------------------------------
+    // Subscription lifecycle analytics. Three server events, one per real
+    // transition, all gated on `isNew` (the dedupe ledger) so an at-least-once
+    // Stripe redelivery can re-apply its idempotent fields without counting
+    // revenue twice:
+    //
+    //   subscription_activated   — checkout finished. For every recurring plan
+    //                              this is a TRIAL START, not revenue.
+    //   subscription_paid        — Stripe moved the subscription to `active`,
+    //                              which it only does once an invoice is paid.
+    //                              This is the money-moved signal.
+    //   subscription_deactivated — the subscription was deleted at Stripe.
+    // ---------------------------------------------------------------------
+
+    // CONFIRMED checkout signal. The client fires `subscription_upgraded` at
     // checkout START (intent); this is its server-confirmed counterpart, emitted
-    // once a household actually transitions to an ACTIVE paid plan (planId !=
-    // seedling + status active). The Stripe webhook is the source of truth for
-    // revenue.
+    // once a household actually completes checkout on a paid plan. The Stripe
+    // webhook is the source of truth.
+    //
+    // NOT a revenue number for recurring plans. `createCheckoutSession` sets
+    // `trial_period_days: 14` on every subscription it creates, so at the moment
+    // this fires the household has started a free trial and no money has moved.
+    // `interval: 'lifetime'` is the exception: a `mode: 'payment'` one-time
+    // purchase has no trial, and the delta is only built once Stripe reports
+    // `payment_status: 'paid'`, so those really are revenue here. Paid
+    // conversion for the recurring plans is `subscription_paid` below.
     //
     // We restrict the emit to the CHECKOUT completion events, which are the
     // actual conversion moment and fire exactly once per purchase.
@@ -923,6 +1018,100 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
         plan: activatedPlan,
         interval: intervalFromEvent(event),
       });
+    }
+
+    // PAID CONVERSION. The number the business actually wants: did a trial ever
+    // turn into money?
+    //
+    // Signal: `customer.subscription.updated` where `previous_attributes.status`
+    // shows the subscription was NOT `active` and now is. Chosen over the first
+    // `invoice.payment_succeeded` for four reasons, argued in full in the PR:
+    //
+    //  1. It is already delivered. `customer.subscription.updated` is on the
+    //     endpoint's event list (docs/external-services-setup.md);
+    //     `invoice.payment_succeeded` is not, so an invoice-based handler would
+    //     ship dark and produce nothing until someone edits the Stripe
+    //     dashboard — the same "instrumented but silent" failure this change
+    //     exists to remove.
+    //  2. Stripe only moves a subscription to `active` after an invoice has
+    //     been PAID. A trial whose first charge fails goes to `past_due` /
+    //     `unpaid` / `incomplete`, never `active`. So the transition is
+    //     money-gated without us inspecting an invoice at all. When that
+    //     household later fixes its card, `past_due → active` fires this event
+    //     with `from: 'past_due'` — real revenue, correctly distinguished from
+    //     a new conversion.
+    //  3. The subscription object carries our `householdId` metadata. An
+    //     Invoice does not (we stamp sessions and subscriptions, not invoices),
+    //     so an invoice handler would need an extra Stripe lookup to find the
+    //     household — a network call inside the webhook, and a new failure mode.
+    //  4. "First" paid invoice needs durable state to identify. Renewals also
+    //     emit `invoice.payment_succeeded`, so counting only the first means
+    //     storing a per-household marker. A status TRANSITION is self-describing
+    //     and needs no extra state at all.
+    //
+    // Known limits, stated rather than hidden:
+    //  - A first invoice discounted to $0 by a 100%-off coupon still moves the
+    //    subscription to `active`, so it would count here as a paid conversion
+    //    for zero cents. We issue no coupons today; if that changes, this is
+    //    the line to revisit.
+    //  - A subscription created ALREADY `active` (no trial — which no checkout
+    //    of ours produces) never makes this transition and so records nothing.
+    //    That matches the existing, deliberate stance that a subscription
+    //    minted outside checkout is not a conversion.
+    //
+    // Renewals, plan changes, metadata edits and `cancel_at_period_end` toggles
+    // all arrive as `customer.subscription.updated` with `status` absent from
+    // `previous_attributes` — the status did not change — so they are silent.
+    const previousStatus =
+      event.type === 'customer.subscription.updated' ? previousStatusFromEvent(event) : undefined;
+    const paidPlan = delta.fields.planId;
+    if (
+      isNew &&
+      previousStatus !== undefined &&
+      previousStatus !== 'active' &&
+      delta.fields.status === 'active' &&
+      paidPlan &&
+      paidPlan !== 'seedling'
+    ) {
+      void capture(delta.householdId, 'subscription_paid', {
+        plan: paidPlan,
+        interval: intervalFromEvent(event),
+        from: bucketPreviousStatus(previousStatus),
+      });
+    }
+
+    // CHURN. Mirrors `subscription_activated` at the other end of the
+    // lifecycle. `customer.subscription.deleted` is the only honest churn
+    // signal we have: the subscription is gone at Stripe.
+    //
+    // Deliberately NOT the frontend's `subscription_canceled`, whose documented
+    // trigger is "user opened the billing portal" — a name that overstates what
+    // it measures, since opening the portal is not cancelling. That event stays
+    // unwired.
+    //
+    // `churnedFromPlan` is the tier the household actually lost, read before
+    // the delta rewrote `planId` (see its declaration). A household already on
+    // seedling emits nothing — a subscription ending for a household with no
+    // paid tier is not churn. A lifetime household DOES emit: the recurring
+    // subscription really ended, even though the permanent grant underneath it
+    // survives and `delta.fields.planId` was restored to it.
+    //
+    // The mismatch and lifetime guards above `return` before this point, so a
+    // deletion for a subscription this household no longer references is never
+    // counted.
+    if (
+      isNew &&
+      event.type === 'customer.subscription.deleted' &&
+      churnedFromPlan &&
+      churnedFromPlan !== 'seedling'
+    ) {
+      const churnProps: ServerEventProps = {
+        plan: churnedFromPlan,
+        interval: intervalFromEvent(event),
+      };
+      const churnReason = churnReasonFromEvent(event);
+      if (churnReason) churnProps.churnReason = churnReason;
+      void capture(delta.householdId, 'subscription_deactivated', churnProps);
     }
   } catch (err) {
     if (lifetimeClaimOwner && !lifetimeClaimSettled) {
