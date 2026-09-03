@@ -23,7 +23,7 @@
     "features/household/HouseholdOnboarding.tsx": 11,
     "features/household/HouseholdPage.tsx": 9,
     "features/household/JoinHouseholdPage.tsx": 12,
-    "features/household/SitterLinksCard.tsx": 8,
+    "features/household/SitterLinksCard.tsx": 5,
     "features/landing/LandingPage.tsx": 43,
     "features/onboarding/WelcomeFlow.tsx": 6,
     "features/petsafe/PetSafePage.tsx": 10,
