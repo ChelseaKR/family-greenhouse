@@ -101,6 +101,11 @@ export interface Plant {
   winterSpaceId?: string | null;
   imageUrl: string | null;
   notes: string | null;
+  /** House rule: one short per-plant care convention, e.g. "bottom-water
+   *  only" (≤140 chars, trimmed server-side). Surfaced to whoever is about
+   *  to complete a task for this plant; `notes` stays the long-form field.
+   *  Optional for legacy rows; null/absent means no rule, so nothing renders. */
+  careRule?: string | null;
   /** Lifecycle status; absent on legacy rows → treated as 'active'. */
   status: PlantStatus;
   /** When status last changed (set on archive/outcome/restore). */

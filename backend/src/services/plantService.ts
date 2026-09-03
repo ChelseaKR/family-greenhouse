@@ -76,6 +76,7 @@ export async function createPlant(
     winterSpaceId: input.winterSpaceId ?? null,
     imageUrl: null,
     notes: input.notes || null,
+    careRule: input.careRule || null,
     status: 'active',
     statusChangedAt: null,
     tags,
@@ -188,6 +189,7 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
     winterSpaceId: (result.Item.winterSpaceId as string | null | undefined) ?? null,
     imageUrl: result.Item.imageUrl as string | null,
     notes: result.Item.notes as string | null,
+    careRule: (result.Item.careRule as string | null | undefined) ?? null,
     status: (result.Item.status as PlantStatus | undefined) ?? 'active',
     statusChangedAt: (result.Item.statusChangedAt as string | null | undefined) ?? null,
     tags: (result.Item.tags as string[] | undefined) ?? [],
@@ -262,6 +264,7 @@ export async function getPlants(
       winterSpaceId: (item.winterSpaceId as string | null | undefined) ?? null,
       imageUrl: item.imageUrl as string | null,
       notes: item.notes as string | null,
+      careRule: (item.careRule as string | null | undefined) ?? null,
       status: (item.status as PlantStatus | undefined) ?? 'active',
       statusChangedAt: (item.statusChangedAt as string | null | undefined) ?? null,
       tags: (item.tags as string[] | undefined) ?? [],
@@ -335,6 +338,14 @@ export async function updatePlant(
     updateExpressions.push('#notes = :notes');
     expressionAttributeNames['#notes'] = 'notes';
     expressionAttributeValues[':notes'] = input.notes;
+  }
+
+  if (input.careRule !== undefined) {
+    // Already trimmed by the schema; an emptied field clears the rule (null)
+    // so a blank never shows up as a rule at completion time.
+    updateExpressions.push('#careRule = :careRule');
+    expressionAttributeNames['#careRule'] = 'careRule';
+    expressionAttributeValues[':careRule'] = input.careRule || null;
   }
 
   if (input.tags !== undefined) {
@@ -428,6 +439,7 @@ export async function updatePlant(
       winterSpaceId: (result.Attributes.winterSpaceId as string | null | undefined) ?? null,
       imageUrl: result.Attributes.imageUrl as string | null,
       notes: result.Attributes.notes as string | null,
+      careRule: (result.Attributes.careRule as string | null | undefined) ?? null,
       status: (result.Attributes.status as PlantStatus | undefined) ?? 'active',
       statusChangedAt: (result.Attributes.statusChangedAt as string | null | undefined) ?? null,
       tags: (result.Attributes.tags as string[] | undefined) ?? [],
@@ -654,6 +666,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
         winterSpaceId: (item.winterSpaceId as string | null | undefined) ?? null,
         imageUrl: (item.imageUrl as string | null | undefined) ?? null,
         notes: (item.notes as string | null | undefined) ?? null,
+        careRule: (item.careRule as string | null | undefined) ?? null,
         status: (item.status as PlantStatus | undefined) ?? 'active',
         statusChangedAt: (item.statusChangedAt as string | null | undefined) ?? null,
         tags: (item.tags as string[] | undefined) ?? [],

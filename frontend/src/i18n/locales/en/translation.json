@@ -338,6 +338,13 @@
     "speciesLabel": "Species",
     "locationLabel": "Location",
     "notesLabel": "Notes",
+    "careRule": {
+      "label": "House rule",
+      "placeholder": "e.g., bottom-water only",
+      "hint": "One short line, shown to whoever is about to do a task for this plant.",
+      "counter": "{{used}} of {{max}} characters.",
+      "tooLong": "Keep the house rule to {{max}} characters"
+    },
     "photoLabel": "Photo (optional)",
     "photoRecovery": {
       "toast": "The plant was saved, but its photo could not be uploaded. Try again below.",
@@ -559,7 +566,11 @@
     "coveringFor": "Covering for {{name}}",
     "skipRain": "Rain expected — skip this cycle?",
     "skipFrost": "Frost expected — skip this cycle?",
-    "skippedToast": "Skipped to next cycle"
+    "skippedToast": "Skipped to next cycle",
+    "careRule": {
+      "title": "Before you mark {{plant}} done",
+      "confirm": "Mark done"
+    }
   },
   "household": {
     "climateChecking": "Checking climate availability…",

@@ -24,6 +24,9 @@ export interface PlantSpace {
   updatedAt: string;
 }
 
+/** House rule length cap; mirrors CARE_RULE_MAX_LENGTH in backend/src/models/schemas.ts. */
+export const CARE_RULE_MAX_LENGTH = 140;
+
 export interface Plant {
   id: string;
   householdId: string;
@@ -36,6 +39,9 @@ export interface Plant {
   winterSpaceId?: string | null;
   imageUrl: string | null;
   notes: string | null;
+  /** House rule: one short care convention (≤140 chars) shown at completion
+   *  time. Absent/null on rows without one — nothing is rendered then. */
+  careRule?: string | null;
   /** Lifecycle status; legacy rows may omit it → treat as 'active'. */
   status?: PlantStatus;
   statusChangedAt?: string | null;
@@ -57,6 +63,7 @@ export interface CreatePlantData {
   summerSpaceId?: string;
   winterSpaceId?: string;
   notes?: string;
+  careRule?: string;
   tags?: string[];
   perenualSpeciesId?: number;
   /** Set when adding a cutting via "Propagate" — links it to its parent. */
@@ -72,6 +79,8 @@ export interface UpdatePlantData {
   summerSpaceId?: string | null;
   winterSpaceId?: string | null;
   notes?: string;
+  /** null clears the rule; omit to leave it untouched. */
+  careRule?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
   status?: PlantStatus;

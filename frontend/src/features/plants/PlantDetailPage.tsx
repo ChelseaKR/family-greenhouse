@@ -17,6 +17,7 @@ import {
 import { plantService, Task, type PlantStatus } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
 import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
+import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -139,6 +140,12 @@ export function PlantDetailPage() {
   });
 
   const completeTaskMutation = useCompleteTaskMutation(householdId);
+  // House rule gate: the plant is this page's own read, so the rule shown
+  // before a completion is authoritative here (see useCareRuleGate).
+  const careRuleGate = useCareRuleGate<Task>(
+    () => careRuleFor(plant),
+    (task) => completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue })
+  );
 
   const snoozeTaskMutation = useMutation({
     mutationFn: ({
@@ -357,6 +364,16 @@ export function PlantDetailPage() {
               <dt className="text-sm font-medium text-gray-500">Added</dt>
               <dd className="text-sm text-gray-900">{formatDate(plant.createdAt)}</dd>
             </div>
+            {/* House rule first: it is the one line the next person must read.
+                Rendered only when set — no "add a rule" placeholder. */}
+            {careRuleFor(plant) && (
+              <div className="col-span-2">
+                <dt className="text-sm font-medium text-gray-500">{t('plants.careRule.label')}</dt>
+                <dd className="mt-1 font-serif text-lg leading-snug text-ink">
+                  {careRuleFor(plant)}
+                </dd>
+              </div>
+            )}
             {/* Notes lives inside the <dl> — a <dt>/<dd> pair outside a <dl>
                 fails axe's `dlitem` rule. */}
             {plant.notes && (
@@ -469,12 +486,7 @@ export function PlantDetailPage() {
                 key={task.id}
                 task={task}
                 completions={plant.recentCompletions}
-                onComplete={() =>
-                  completeTaskMutation.mutate({
-                    taskId: task.id,
-                    expectedNextDue: task.nextDue,
-                  })
-                }
+                onComplete={() => careRuleGate.request(task)}
                 onSnooze={(days) =>
                   snoozeTaskMutation.mutate({
                     taskId: task.id,
@@ -539,6 +551,8 @@ export function PlantDetailPage() {
         isOpen={showLeafHealth}
         onClose={() => setShowLeafHealth(false)}
       />
+
+      {careRuleGate.dialog}
 
       <EditPlantModal
         plant={plant}

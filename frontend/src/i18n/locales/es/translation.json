@@ -348,6 +348,13 @@
     "speciesLabel": "Especie",
     "locationLabel": "Ubicación",
     "notesLabel": "Notas",
+    "careRule": {
+      "label": "Regla de la casa",
+      "placeholder": "p. ej., regar solo por abajo",
+      "hint": "Una línea corta que verá quien vaya a hacer una tarea de esta planta.",
+      "counter": "{{used}} de {{max}} caracteres.",
+      "tooLong": "La regla de la casa no puede superar los {{max}} caracteres"
+    },
     "photoLabel": "Foto (opcional)",
     "photoRecovery": {
       "toast": "La planta se guardó, pero no se pudo subir la foto. Inténtalo de nuevo abajo.",
@@ -573,7 +580,11 @@
     "coveringFor": "Cubriendo a {{name}}",
     "skipRain": "Se espera lluvia — ¿saltar este ciclo?",
     "skipFrost": "Se espera helada — ¿saltar este ciclo?",
-    "skippedToast": "Saltado al próximo ciclo"
+    "skippedToast": "Saltado al próximo ciclo",
+    "careRule": {
+      "title": "Antes de marcar {{plant}} como hecha",
+      "confirm": "Marcar como hecha"
+    }
   },
   "household": {
     "climateChecking": "Comprobando la disponibilidad del clima…",

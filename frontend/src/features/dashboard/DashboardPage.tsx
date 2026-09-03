@@ -26,6 +26,7 @@ import {
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from '@/features/tasks/taskMutations';
+import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { YearInReviewCard } from './YearInReviewCard';
@@ -136,6 +137,12 @@ export function DashboardPage() {
   );
   const climateSignals = deriveClimateSignals(climate);
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
+  // House rule gate (see useCareRuleGate): shows the plant's care rule before
+  // a completion goes through; with no rule the click completes as before.
+  const careRuleGate = useCareRuleGate<TaskWithCoverage>(
+    (task) => careRuleFor(plantsById.get(task.plantId)),
+    (task) => void handleCompleteTask(task)
+  );
   const placementForTask = (task: TaskWithCoverage) => {
     const spaceId = plantsById.get(task.plantId)?.spaceId;
     return spaceId ? spacesById.get(spaceId) : undefined;
@@ -242,7 +249,7 @@ export function DashboardPage() {
                     ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById)
                     : t('spaces.unplaced')
                 }
-                onComplete={handleCompleteTask}
+                onComplete={careRuleGate.request}
                 isCompleting={
                   completeTaskMutation.isPending &&
                   completeTaskMutation.variables?.taskId === task.id
@@ -258,6 +265,7 @@ export function DashboardPage() {
           </ul>
         )}
       </Card>
+      {careRuleGate.dialog}
 
       <SprigDivider className="mx-auto h-6 w-40 text-primary-700/40" aria-hidden="true" />
 

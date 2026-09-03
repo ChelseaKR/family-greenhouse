@@ -1644,6 +1644,11 @@ components:
         notes:
           type: string
           nullable: true
+        careRule:
+          type: string
+          nullable: true
+          maxLength: 140
+          description: House rule — one short care convention shown at completion time; null when none is set.
         createdAt:
           type: string
           format: date-time
@@ -1696,6 +1701,10 @@ components:
         notes:
           type: string
           maxLength: 1000
+        careRule:
+          type: string
+          maxLength: 140
+          description: Trimmed server-side; whitespace-only is stored as null.
 
     UpdatePlantRequest:
       type: object
@@ -1731,6 +1740,11 @@ components:
           type: string
           maxLength: 1000
           nullable: true
+        careRule:
+          type: string
+          maxLength: 140
+          nullable: true
+          description: Trimmed server-side; null or whitespace-only clears the rule.
 
     MovePlantsRequest:
       type: object

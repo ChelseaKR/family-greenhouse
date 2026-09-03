@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm } from 'react-hook-form';
@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Plant, plantService } from '@/services/plantService';
+import { CARE_RULE_MAX_LENGTH, Plant, plantService } from '@/services/plantService';
 import { getErrorMessage } from '@/services/api';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
@@ -15,17 +15,25 @@ import { Alert } from '@/components/Alert';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SpacePicker } from './SpacePicker';
 
-const plantSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  species: z.string().max(100).optional(),
-  spaceId: z.string().optional(),
-  placementNote: z.string().max(120).optional(),
-  summerSpaceId: z.string().optional(),
-  winterSpaceId: z.string().optional(),
-  notes: z.string().max(1000).optional(),
-});
+// Built with `t` so the house-rule length message is localized; the other
+// messages are unchanged from the module-level schema this replaces.
+const buildPlantSchema = (t: ReturnType<typeof useTranslation>['t']) =>
+  z.object({
+    name: z.string().min(1, 'Name is required').max(100),
+    species: z.string().max(100).optional(),
+    spaceId: z.string().optional(),
+    placementNote: z.string().max(120).optional(),
+    summerSpaceId: z.string().optional(),
+    winterSpaceId: z.string().optional(),
+    notes: z.string().max(1000).optional(),
+    careRule: z
+      .string()
+      .trim()
+      .max(CARE_RULE_MAX_LENGTH, t('plants.careRule.tooLong', { max: CARE_RULE_MAX_LENGTH }))
+      .optional(),
+  });
 
-type PlantFormData = z.infer<typeof plantSchema>;
+type PlantFormData = z.infer<ReturnType<typeof buildPlantSchema>>;
 
 interface EditPlantModalProps {
   plant: Plant;
@@ -37,6 +45,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
+  const plantSchema = useMemo(() => buildPlantSchema(t), [t]);
 
   const {
     register,
@@ -55,6 +64,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
       summerSpaceId: plant.summerSpaceId || '',
       winterSpaceId: plant.winterSpaceId || '',
       notes: plant.notes || '',
+      careRule: plant.careRule || '',
     },
   });
 
@@ -65,6 +75,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
   const spaceIdValue = watch('spaceId') ?? '';
   const summerSpaceIdValue = watch('summerSpaceId') ?? '';
   const winterSpaceIdValue = watch('winterSpaceId') ?? '';
+  const careRuleValue = watch('careRule') ?? '';
 
   useEffect(() => {
     if (isOpen) {
@@ -76,6 +87,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         summerSpaceId: plant.summerSpaceId || '',
         winterSpaceId: plant.winterSpaceId || '',
         notes: plant.notes || '',
+        careRule: plant.careRule || '',
       });
       setPerenualSpeciesId(plant.perenualSpeciesId ?? null);
     }
@@ -91,6 +103,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         summerSpaceId: data.summerSpaceId || null,
         winterSpaceId: data.winterSpaceId || null,
         notes: data.notes || undefined,
+        // Explicit null clears the rule — an omitted key would leave it untouched.
+        careRule: data.careRule?.trim() || null,
         // Always explicit, including null — omitting it would leave the
         // backend's existing link untouched and reintroduce stale care/
         // toxicity data after the species text is edited away from it.
@@ -190,6 +204,18 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                     helperText={t('spaces.placementNoteSitterHint')}
                     error={errors.placementNote?.message}
                     {...register('placementNote')}
+                  />
+
+                  <Input
+                    label={t('plants.careRule.label')}
+                    placeholder={t('plants.careRule.placeholder')}
+                    helperText={`${t('plants.careRule.hint')} ${t('plants.careRule.counter', {
+                      used: careRuleValue.length,
+                      max: CARE_RULE_MAX_LENGTH,
+                    })}`}
+                    maxLength={CARE_RULE_MAX_LENGTH}
+                    error={errors.careRule?.message}
+                    {...register('careRule')}
                   />
 
                   <fieldset className="space-y-3 rounded-lg border border-primary-100/70 bg-parchment/40 p-4">
