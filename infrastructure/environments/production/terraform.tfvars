@@ -56,17 +56,19 @@ sms_notifications_enabled = ""
 # commercial-status.json; a check block in main.tf refuses an apply that opens
 # one gate without the other, or that enables payments with blank Stripe
 # configuration.
-stripe_price_id_garden            = ""
-stripe_price_id_garden_annual     = ""
-stripe_price_id_garden_lifetime   = ""
-stripe_price_id_greenhouse        = ""
-stripe_price_id_greenhouse_annual = ""
-
+stripe_price_id_garden            = "price_1Tkur4AhnUt8CMG0b07WYF1t"
+stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL"
+stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO"
+stripe_price_id_greenhouse        = "price_1UB7JuAhnUt8CMG05o9ktQLa"
+stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
 # Manual confirmation gate (see check block in main.tf): only set true once
 # every non-empty stripe_price_id_* above has been verified to exist in the
 # SAME Stripe mode (test/live) as the STRIPE_SECRET_KEY secret. Terraform
 # cannot check this automatically — price ids don't encode their mode.
-stripe_price_ids_are_live = false
+#
+# Attested by the repository owner on 2026-09-02: all five ids above were
+# created in Stripe LIVE mode.
+stripe_price_ids_are_live = true
 
 # Enable only after Stripe Tax registrations and product tax codes are live.
 stripe_automatic_tax_enabled = ""

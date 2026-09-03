@@ -176,16 +176,28 @@ describe('production IaC commercial-hold invariants', () => {
     }
   });
 
-  it('keeps every committed production Stripe price id blank and the live gate false', () => {
+  it('populates every production Stripe price id, or none at all', () => {
+    // Half-configured is the dangerous state: a blank MONTHLY id makes a tier
+    // unbuyable while the rest of the catalog still advertises it. All five
+    // are now live-mode ids, so all five must be present.
     const priceLines = productionVars
       .split('\n')
       .filter((line) => /^stripe_price_id_[a-z_]+\s*=/.test(line.trim()));
 
     expect(priceLines).toHaveLength(5);
     for (const line of priceLines) {
-      expect(line).toMatch(/^stripe_price_id_[a-z_]+\s*=\s*""\s*$/);
+      expect(line).toMatch(/^stripe_price_id_[a-z_]+\s*=\s*"price_[A-Za-z0-9]+"\s*$/);
     }
-    expect(productionVars).toMatch(/^stripe_price_ids_are_live\s*=\s*false\s*$/m);
+  });
+
+  it('pairs a populated production catalog with the live-mode attestation', () => {
+    // Terraform cannot tell a live price id from a test one — they are
+    // visually identical — so this flag is a human attestation, and the
+    // check block in main.tf refuses an sk_live_ key without it. Pinning it
+    // here means silently reverting the attestation while keeping live ids
+    // fails the suite rather than passing unnoticed.
+    expect(productionVars).toMatch(/^stripe_price_ids_are_live\s*=\s*true\s*$/m);
+    expect(productionVars).toMatch(/created in Stripe LIVE mode/);
   });
 
   it('enables Cognito public self-signup explicitly while keeping the IaC default closed', () => {
