@@ -34,6 +34,7 @@
   "_size-limit-note-0-17": "All-JS-combined raised 348 → 360 kB for the location-aware plant move workflow: the 349.39 kB measured aggregate includes the new 2.71 kB-gzip MovePlantsDialog lazy chunk, while Initial JS (11.88 kB), Vendor (61.32 kB), and CSS (14.59 kB) remain within their existing budgets. The 360 kB limit restores a tight ~3% regression cushion without relaxing any critical-path budget.",
   "_size-limit-note-0-21": "All-JS-combined raised 360 → 374 kB when free-account registration reopened: the 362.74 kB measured aggregate includes the restored lazy signup flow, confirmation recovery, and localized public acquisition copy. Initial JS (13.61 kB), Vendor (61.26 kB), and CSS (10.04 kB) remain within their existing budgets; only the aggregate moved. The 374 kB limit restores a tight ~3% regression cushion without relaxing a critical-path budget.",
   "_size-limit-note-0-23": "All-JS-combined raised 374 -> 386 kB for the paid-plan purchase surface: the 374.56 kB measured aggregate includes the new PaidPlanGrid, its interval toggle, the checkout and billing-portal controls, and ~60 new i18n keys across en + es. Every one of those lands in the lazy pricing/settings chunks, so the critical-path budgets are untouched and still hold wide margins - Initial JS 14.6 kB (limit 62), Vendor 59.85 kB (limit 64), CSS 12.54 kB (limit 15). Only the aggregate moved, and by 556 B. Sanctioned feature growth, not regression drift; 386 kB restores a tight ~3% cushion without relaxing any critical-path budget.",
+  "_size-limit-note-blog-expansion": "All-JS-combined raised 386 -> 402 kB for the blog content expansion (eight new posts: shared-household care, travel/plant-sitter handover, and the overwatering / yellow-leaves / room-light diagnostics). Every word lands in the lazy `posts` chunk that only /blog/:slug pulls, so no critical-path budget moved: Initial JS 14.6 kB (limit 62), Vendor 59.85 kB (limit 64), CSS 12.5 kB (limit 15) are all unchanged. Only the aggregate moved, to 389.69 kB measured. Sanctioned content growth, not regression drift; 402 kB restores the usual ~3% cushion without relaxing a critical-path budget.",
   "size-limit": [
     {
       "name": "Initial JS (brotli)",
@@ -50,7 +51,7 @@
     {
       "name": "All JS combined (brotli)",
       "path": "dist/assets/*.js",
-      "limit": "386 kB",
+      "limit": "402 kB",
       "brotli": true
     },
     {

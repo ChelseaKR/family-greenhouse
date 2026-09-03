@@ -5,6 +5,14 @@ import LowWaterPlants from './low-water-plants';
 import MovingWithPlants from './moving-with-plants';
 import PetSafeHardToKill from './pet-safe-hard-to-kill';
 import CommonToxicHouseplants from './common-toxic-houseplants';
+import SplitPlantCare from './split-plant-care';
+import WateringWhileOnVacation from './watering-while-on-vacation';
+import PlantSitterHandoff from './plant-sitter-handoff';
+import NonPlantPeople from './non-plant-people';
+import MergingCollections from './merging-collections';
+import SignsOfOverwatering from './signs-of-overwatering';
+import YellowLeaves from './yellow-leaves';
+import RoomLight from './room-light';
 
 /**
  * Blog post manifest. Adding a post means dropping a TSX file in this
@@ -84,6 +92,78 @@ export const POSTS: BlogPost[] = [
     date: '2026-06-16',
     readingMinutes: 6,
     Component: CommonToxicHouseplants,
+  },
+  {
+    slug: 'how-to-split-plant-care-with-your-partner',
+    title: 'How to split plant care with a partner or housemates',
+    description:
+      '“We’ll both just do it” is the one arrangement that reliably fails — two people who might water a plant water it less often than one person who knows it’s theirs. Four ways to actually divide it, and what each costs you.',
+    date: '2026-06-24',
+    readingMinutes: 6,
+    Component: SplitPlantCare,
+  },
+  {
+    slug: 'how-to-water-plants-while-on-vacation',
+    title: 'How to keep your plants alive while you’re away',
+    description:
+      'Five days is a non-problem; two weeks is a real one. What actually works at each trip length, which popular hacks quietly fail, and the handover mistake that kills plants after you get home.',
+    date: '2026-07-01',
+    readingMinutes: 6,
+    Component: WateringWhileOnVacation,
+  },
+  {
+    slug: 'what-to-leave-for-a-plant-sitter',
+    title: 'What to actually leave for a plant sitter',
+    description:
+      'Plant-sitting goes wrong because the instructions were written by someone who already knows the answer. Write actions, not conditions — plus the five things to leave, and the permission slip most people forget.',
+    date: '2026-07-08',
+    readingMinutes: 6,
+    Component: PlantSitterHandoff,
+  },
+  {
+    slug: 'plant-care-instructions-for-non-plant-people',
+    title: 'Setting up plant care so a non-plant-person can help',
+    description:
+      'You can’t delegate noticing to someone who isn’t interested — only doing. How to hand over plants in a way that survives contact with a housemate who does not care about plants.',
+    date: '2026-07-15',
+    readingMinutes: 6,
+    Component: NonPlantPeople,
+  },
+  {
+    slug: 'merging-plant-collections-when-you-move-in-together',
+    title: 'Moving in together: merging two plant collections',
+    description:
+      'Two collections, one flat, and a caretaker gap nobody notices until something dies. Quarantine, duplicates, the awkward truth about “our” plants, and reconciling two watering schedules without an argument.',
+    date: '2026-07-22',
+    readingMinutes: 6,
+    Component: MergingCollections,
+  },
+  {
+    slug: 'signs-of-overwatering-and-how-to-fix-it',
+    title: 'Signs of overwatering (and how to fix it)',
+    description:
+      'An overwatered plant looks exactly like a thirsty one, which is why people keep watering it. How to tell them apart in two minutes, what to do about root rot, and the shared-household version nobody warns you about.',
+    date: '2026-07-29',
+    readingMinutes: 6,
+    Component: SignsOfOverwatering,
+  },
+  {
+    slug: 'why-are-my-plant-leaves-turning-yellow',
+    title: 'Why are my plant’s leaves turning yellow?',
+    description:
+      'Yellow leaves are a symptom, not a diagnosis — almost everything that can go wrong produces them. Triage by pattern instead: which leaves, in what order, and what else is true.',
+    date: '2026-08-05',
+    readingMinutes: 6,
+    Component: YellowLeaves,
+  },
+  {
+    slug: 'how-much-light-does-my-room-get',
+    title: 'How much light does your room actually get?',
+    description:
+      '“Bright indirect light” describes about one square metre of most rented flats. The shadow test, why light falls off faster than it looks, and what to do about a genuinely dark home.',
+    date: '2026-08-12',
+    readingMinutes: 6,
+    Component: RoomLight,
   },
 ];
 
