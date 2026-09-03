@@ -867,10 +867,15 @@ locals {
     "DELETE /households/{id}/sitter-links/{linkId}" = { group = "households", auth = "jwt" }
 
     # --- me ---
-    "DELETE /me"           = { group = "me", auth = "jwt" }
-    "GET /me/export"       = { group = "me", auth = "jwt" }
-    "GET /me/households"   = { group = "me", auth = "jwt" }
-    "GET /me/calendar.ics" = { group = "me", auth = "jwt" }
+    "DELETE /me"                = { group = "me", auth = "jwt" }
+    "GET /me/export"            = { group = "me", auth = "jwt" }
+    "GET /me/households"        = { group = "me", auth = "jwt" }
+    "GET /me/calendar.ics"      = { group = "me", auth = "jwt" }
+    "GET /me/calendar-token"    = { group = "me", auth = "jwt" }
+    "POST /me/calendar-token"   = { group = "me", auth = "jwt" }
+    "DELETE /me/calendar-token" = { group = "me", auth = "jwt" }
+    # Capability URL for calendar apps: the token in the path is the credential.
+    "GET /calendar/{token}/family-greenhouse.ics" = { group = "me", auth = "none" }
 
     # --- notifications ---
     "GET /notifications/prefs"          = { group = "notifications", auth = "jwt" }
