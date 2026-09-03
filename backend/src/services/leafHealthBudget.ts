@@ -64,11 +64,23 @@ function budgetKey(householdId: string, now: Date): { PK: string; SK: string } {
 }
 
 /**
- * Leaf-health checks used this month for the household. Missing row → 0. DDB
- * failures fail OPEN (0 + a warn log): the spend cap must never take down the
- * feature itself.
+ * Leaf-health checks used this month for the household.
+ *
+ * A MISSING row is a real zero — nothing has been spent this month. A FAILED
+ * read is `null`: we do not know. These used to collapse to the same `0`,
+ * which is the same defect already fixed in the sibling
+ * `identifyBudget.getUsage` (see its docstring): a DynamoDB blip reported
+ * "this household has used 0 of its 200 checks" with exactly the confidence
+ * of a real reading. Nothing in `src/` consults this function today — the
+ * live gate is the fail-CLOSED `reserveUsage` below — so this is a latent
+ * trap rather than a live bug, and closing it is behaviour-preserving. But a
+ * future caller wiring `isOverCap` in as the spend gate would have inherited
+ * a guard that silently reports "under cap" whenever DynamoDB hiccups.
  */
-export async function getUsage(householdId: string, now: Date = new Date()): Promise<number> {
+export async function getUsage(
+  householdId: string,
+  now: Date = new Date()
+): Promise<number | null> {
   try {
     const result = await dynamodb.send(
       new GetCommand({ TableName: TABLE_NAME, Key: budgetKey(householdId, now) })
@@ -77,18 +89,28 @@ export async function getUsage(householdId: string, now: Date = new Date()): Pro
     return typeof used === 'number' && used > 0 ? used : 0;
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'leaf_health.budget_read_failed');
-    return 0;
+    return null;
   }
 }
 
 /**
  * True when the household has hit its monthly cap (and a cap is in effect).
- * Reads usage and compares; callers gate the Bedrock call on this.
+ *
+ * An UNKNOWN usage total (a failed read) is deliberately NOT treated as
+ * over-cap: per this module's contract the spend cap must never take down the
+ * feature itself, and the authoritative ceiling is `reserveUsage`'s
+ * conditional write, not this advisory read. That decision is now explicit and
+ * logged at the point it is made, instead of being laundered through a
+ * stand-in zero inside `getUsage`. Behaviour is identical to before.
  */
 export async function isOverCap(householdId: string, now: Date = new Date()): Promise<boolean> {
   const cap = monthlyCap();
   if (cap <= 0) return false; // unlimited
   const used = await getUsage(householdId, now);
+  if (used === null) {
+    logger.warn({ householdId }, 'leaf_health.over_cap_unknown_usage_treated_as_under_cap');
+    return false;
+  }
   return used >= cap;
 }
 

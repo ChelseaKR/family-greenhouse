@@ -1,15 +1,27 @@
 {
-  "generatedAt": "2026-07-17",
-  "questionCount": 134,
+  "generatedAt": "2026-09-02",
+  "questionCount": 147,
   "classCounts": {
     "corpus": 102,
     "should-refuse": 12,
     "out-of-corpus": 10,
-    "household-data": 10
+    "household-data": 10,
+    "pet-safety": 13
   },
   "perArticleFloor": 8,
   "recallAt3": 1.0,
   "ownChunkTop1Rate": 1.0,
-  "method": "Retrieval metrics cover the 102 corpus-class items only. Each corpus item's anchor-chunk embedding (its own precomputed Titan vector) is used as the query vector into searchCorpusWithEmbedding(topK=3). recallAt3 = fraction of corpus questions where the expected source article appears anywhere in the top 3 results (also ~1.0 by construction, for the same reason: if the anchor chunk ranks #1 then its article is in the top 3 unconditionally, so recallAt3 can never fall below ownChunkTop1Rate under this method); ownChunkTop1Rate = fraction where the anchor chunk itself ranks #1 (expected to be ~1.0 by construction, since cosine(x, x) = 1 is the maximum possible score — this is a sanity floor on the ranking algorithm and corpus integrity, not a measure of live query-embedding quality). The three adversarial classes (should-refuse / out-of-corpus / household-data) are schema-validated and count-gated but NOT behaviorally scored — grading refusal/abstention/tool-use correctness requires the live generation-layer eval job, which does not exist yet.",
-  "regressionPolicy": "backend/tests/eval/ragRetrieval.eval.test.ts fails the build if a measured value drops below the corresponding field here, if the benchmark shrinks below questionCount, if any class shrinks below its classCounts floor, or if any corpus article falls below perArticleFloor corpus questions. Regenerate this file (by hand, reviewed) whenever the benchmark grows or the corpus changes in a way that legitimately moves these numbers — never lower a threshold to make a red build green without recording why in the same PR."
+  "method": "Retrieval metrics cover the 102 corpus-class items only. Each corpus item's anchor-chunk embedding (its own precomputed Titan vector) is used as the query vector into searchCorpusWithEmbedding(topK=3). recallAt3 = fraction of corpus questions where the expected source article appears anywhere in the top 3 results (also ~1.0 by construction, for the same reason: if the anchor chunk ranks #1 then its article is in the top 3 unconditionally, so recallAt3 can never fall below ownChunkTop1Rate under this method); ownChunkTop1Rate = fraction where the anchor chunk itself ranks #1 (expected to be ~1.0 by construction, since cosine(x, x) = 1 is the maximum possible score — this is a sanity floor on the ranking algorithm and corpus integrity, not a measure of live query-embedding quality). The four non-corpus classes (should-refuse / out-of-corpus / household-data / pet-safety) are schema-validated and count-gated but NOT behaviorally scored — grading refusal/abstention/tool-use/verdict correctness requires the live generation-layer eval job, which does not exist yet.",
+  "petSafety": {
+    "items": 13,
+    "toxicVerdictItems": 8,
+    "nonToxicVerdictItems": 5,
+    "verdictSource": "backend/src/models/petToxicity.ts (PET_TOXICITY — hand-curated, grounded in the ASPCA toxic/non-toxic plant database)",
+    "corpusToxicityChunks": 0,
+    "chatToolsExposingToxicity": 0,
+    "groundingGuardVerdictOnUnsupportedSafetyClaim": "unverified",
+    "method": "Measured, not asserted. `corpusToxicityChunks` is the number of chunks in plant-care-corpus-embeddings.json whose text carries any toxicity vocabulary — 0, so the RAG path has no source that could ground a pet-safety verdict. `chatToolsExposingToxicity` is the number of TOOL_REGISTRY tools that surface PET_TOXICITY to the model — 0, so the verified table the app already publishes at GET /species/toxicity is invisible to the assistant. `groundingGuardVerdictOnUnsupportedSafetyClaim` is checkGrounding()'s actual verdict for a false, purely qualitative safety claim against unrelated retrieved spans — 'unverified', which by design does NOT block delivery (ADR 0009). Together these three recorded numbers are the finding: a wrong pet-safety verdict is ungrounded by the corpus, unexposed to a verified tool, and unblockable by the guard. The verdict fields on each item ARE hard-gated against PET_TOXICITY, so the curated table and the benchmark cannot drift apart in either direction.",
+    "closingTheGap": "Any of the three recorded zeros/verdicts changing is a real product change, not a test failure to paper over: it means a toxicity corpus article, a toxicity chat tool, or a qualitative-claim grounding check now exists. Update this block and model-card.md in the same PR that makes it true."
+  },
+  "regressionPolicy": "backend/tests/eval/ragRetrieval.eval.test.ts and backend/tests/eval/petSafety.eval.test.ts fail the build if a measured value drops below the corresponding field here, if the benchmark shrinks below questionCount, if any class shrinks below its classCounts floor, if any corpus article falls below perArticleFloor corpus questions, or if any pet-safety item's expected verdict stops matching PET_TOXICITY. Regenerate this file (by hand, reviewed) whenever the benchmark grows or the corpus changes in a way that legitimately moves these numbers — never lower a threshold to make a red build green without recording why in the same PR."
 }

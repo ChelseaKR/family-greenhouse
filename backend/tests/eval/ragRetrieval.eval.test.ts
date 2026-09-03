@@ -27,6 +27,11 @@
  *   - `household-data` / `answer` — questions answerable only via household
  *     tools; `expectedTools` names the registry tools whose data supports
  *     the answer.
+ *   - `pet-safety` / `answer` — routine "is this plant safe for my cat/dog?"
+ *     lookups. Unlike the acute-ingestion items in `should-refuse`, these
+ *     should be answered, and the app already owns a verified answer
+ *     (`models/petToxicity.ts`, ASPCA-grounded). The verdict-drift gate and
+ *     the recorded coverage gaps live in `petSafety.eval.test.ts`.
  *
  * IMPORTANT honesty boundary: the three adversarial classes are SCHEMA-
  * VALIDATED AND STRUCTURALLY GATED here (labels well-formed, tool names real,
@@ -53,7 +58,8 @@ interface CorpusChunk {
 }
 const CORPUS = corpusJson as unknown as { chunks: CorpusChunk[] };
 
-type BenchmarkCategory = 'corpus' | 'should-refuse' | 'out-of-corpus' | 'household-data';
+type BenchmarkCategory =
+  'corpus' | 'should-refuse' | 'out-of-corpus' | 'household-data' | 'pet-safety';
 type ExpectedBehavior = 'answer' | 'refuse' | 'abstain';
 
 interface BenchmarkItem {
@@ -67,6 +73,10 @@ interface BenchmarkItem {
   expectedFacts?: string[];
   /** household-data items only: registry tools whose data supports the answer. */
   expectedTools?: string[];
+  /** pet-safety items only: the PET_TOXICITY slug carrying the verified verdict. */
+  toxicitySlug?: string;
+  /** pet-safety items only: the verdict that entry must still hold. */
+  expectedVerdict?: { cats: string; dogs: string };
   /** adversarial items: what correct behavior looks like, for the future grader + human reviewers. */
   notes?: string;
 }
@@ -112,6 +122,11 @@ describe('RAG retrieval regression — starter eval (AIEV-02/26)', () => {
       'should-refuse': 'refuse',
       'out-of-corpus': 'abstain',
       'household-data': 'answer',
+      // pet-safety questions are ANSWERABLE — the app already owns a verified
+      // verdict for them (models/petToxicity.ts). Abstaining is not the goal;
+      // answering from the curated table instead of from recall is. The
+      // verdict-level gates live in petSafety.eval.test.ts.
+      'pet-safety': 'answer',
     };
 
     for (const item of benchmark) {

@@ -53,10 +53,28 @@ describe('leafHealthBudget service (M1 — monthly Bedrock spend cap)', () => {
     expect(await isOverCap('hh')).toBe(true);
   });
 
-  it('getUsage fails OPEN (0) on a DDB error — the cap never breaks the feature', async () => {
+  it('getUsage reports a MISSING row as a real 0', async () => {
+    const { getUsage } = await import('../../../src/services/leafHealthBudget.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    expect(await getUsage('hh')).toBe(0);
+  });
+
+  it('getUsage reports a FAILED read as null, not as a stand-in 0', async () => {
     const { getUsage } = await import('../../../src/services/leafHealthBudget.js');
     vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('ddb down'));
-    expect(await getUsage('hh')).toBe(0);
+    // "nothing spent this month" and "we could not read the total" are
+    // different facts; collapsing them to 0 is the defect already fixed in
+    // identifyBudget.getUsage.
+    expect(await getUsage('hh')).toBeNull();
+  });
+
+  it('isOverCap still fails OPEN on an unknown total — the cap never breaks the feature', async () => {
+    const { isOverCap } = await import('../../../src/services/leafHealthBudget.js');
+    process.env.LEAF_HEALTH_MONTHLY_CAP = '3';
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('ddb down'));
+    // Behaviour is unchanged; the decision is now made (and logged) at the
+    // call site instead of being hidden inside getUsage's return value.
+    expect(await isOverCap('hh')).toBe(false);
   });
 
   it('incrementUsage atomically ADDs one against the household month partition', async () => {

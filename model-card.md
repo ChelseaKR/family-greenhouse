@@ -23,10 +23,18 @@ model-index:
             embedding is computed anywhere in this eval.
         dataset:
           name: >-
-            family-greenhouse starter benchmark, 134 items; only the 102
-            corpus-class items are scored here. The 32 adversarial items
-            (should-refuse / out-of-corpus / household-data) are schema- and
-            count-gated but not behaviourally graded.
+            family-greenhouse starter benchmark, 147 items; only the 102
+            corpus-class items are scored here. The 45 adversarial items
+            (should-refuse / out-of-corpus / household-data / pet-safety)
+            are schema- and count-gated but not behaviourally graded. The
+            13 pet-safety items additionally have their expected cats/dogs
+            verdicts hard-gated against the curated ASPCA-grounded table in
+            backend/src/models/petToxicity.ts, so benchmark and table cannot
+            drift apart — but whether the live assistant returns that verdict
+            is still ungraded, and evals/eval-baseline.json records the three
+            measured reasons it could get one wrong unchecked (no toxicity
+            content in the RAG corpus, no chat tool exposing the table, and a
+            grounding guard that only recognises numeric claims).
           type: evals/benchmark.jsonl
         metrics:
           # eval-baseline.json calls this field recallAt3.
@@ -199,13 +207,28 @@ said this; until 2026-08-15 the caveat did not travel to this card, which
 published the two 1.0s in machine-readable `model-index` front-matter as
 though they were results.
 
-Scope of the run (verified 2026-08-15 against the committed benchmark and
-corpus): `evals/benchmark.jsonl` holds **134 items**, of which the **102
-corpus-class items** are the only ones scored; the other 32
-(`should-refuse` / `out-of-corpus` / `household-data`) are schema-validated
-and count-gated but not behaviourally graded, because grading them requires
-the live generation-layer job that does not exist yet. The corpus is 74
-chunks across 11 articles. The card said "22-question" until 2026-08-15: that
+Scope of the run (verified 2026-09-02 against the committed benchmark and
+corpus): `evals/benchmark.jsonl` holds **147 items**, of which the **102
+corpus-class items** are the only ones scored; the other 45
+(`should-refuse` / `out-of-corpus` / `household-data` / `pet-safety`) are
+schema-validated and count-gated but not behaviourally graded, because
+grading them requires the live generation-layer job that does not exist yet.
+The corpus is 74 chunks across 11 articles.
+
+The `pet-safety` class (13 items, added 2026-09-02) is the one place where
+this card can say something stronger than "labelled but ungraded". Its
+expected cats/dogs verdicts are hard-gated against
+`backend/src/models/petToxicity.ts` — the hand-curated, ASPCA-grounded table
+the app already publishes at `GET /species/toxicity` — so the benchmark and
+that table cannot drift apart in either direction without failing the build.
+What is still ungraded is whether the live assistant returns that verdict,
+and `evals/eval-baseline.json` now records three measured reasons a wrong
+verdict would pass unchallenged today: the RAG corpus contains **0** chunks
+with any toxicity vocabulary, **0** tools in `TOOL_REGISTRY` expose the
+curated table to the model, and `checkGrounding` returns `unverified`
+(explicitly non-blocking, per ADR 0009) for a purely qualitative safety
+claim, because it only recognises numeric claims. Those three numbers are
+re-measured on every backend test run. The card said "22-question" until 2026-08-15: that
 was the original benchmark size, and the claim went stale on 2026-07-17 when
 the benchmark was expanded, four days after this card's previous review date.
 
