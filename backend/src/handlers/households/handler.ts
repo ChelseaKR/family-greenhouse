@@ -25,12 +25,13 @@ import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
-import { getPlan } from '../../models/plans.js';
+import { getPlan, hasHouseholdToolkit } from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
   sitterWindowDays,
 } from '../../services/sitterPlanGate.js';
+import * as doubleCare from '../../services/doubleCare.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { rateLimit } from '../../middleware/rateLimit.js';
@@ -382,6 +383,26 @@ export const getActivity = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
+/**
+ * Double-care this month (household toolkit): confirmed duplicates counted
+ * from the completion log. Three explicit states — a count, `not_in_plan`,
+ * or `unavailable` when either the plan or the log could not be read — so
+ * the analytics page never renders a failed read as "0 duplicates".
+ */
+async function confirmedDoubleCareThisMonth(
+  householdId: string
+): Promise<doubleCare.DoubleCareMonthly> {
+  let plan;
+  try {
+    plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
+    return { status: 'unavailable' };
+  }
+  if (!hasHouseholdToolkit(plan)) return { status: 'not_in_plan' };
+  return doubleCare.countConfirmedDuplicatesThisMonth(householdId);
+}
+
 // GET /households/:id/analytics/daily?days=N
 export const getDailyAnalytics = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -393,8 +414,11 @@ export const getDailyAnalytics = createHandler(
     }
     const daysRaw = event.queryStringParameters?.days;
     const days = daysRaw ? Math.max(1, Math.min(180, parseInt(daysRaw, 10) || 30)) : 30;
-    const series = await taskService.getDailyCompletionCounts(householdId, days);
-    return successResponse({ days, series });
+    const [series, doubleCareMonthly] = await Promise.all([
+      taskService.getDailyCompletionCounts(householdId, days),
+      confirmedDoubleCareThisMonth(householdId),
+    ]);
+    return successResponse({ days, series, doubleCare: doubleCareMonthly });
   }
 )
   .use(authMiddleware())

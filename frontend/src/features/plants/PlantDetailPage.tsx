@@ -15,7 +15,8 @@ import {
   ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 import { plantService, Task, type PlantStatus } from '@/services/plantService';
-import { taskService } from '@/services/taskService';
+import { taskService, type ScheduleDrift } from '@/services/taskService';
+import { ScheduleDriftHint } from './ScheduleDriftHint';
 import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { Button } from '@/components/Button';
@@ -146,6 +147,26 @@ export function PlantDetailPage() {
     () => careRuleFor(plant),
     (task) => completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue })
   );
+
+  // Schedule drift (household toolkit): one read per plant, a reading per
+  // task. On tiers without the toolkit the server answers `available: false`
+  // and no hint renders; a reading with `drift: null` renders nothing too.
+  const { data: scheduleDrift } = useQuery({
+    queryKey: ['plants', householdId, plantId, 'schedule-drift'],
+    queryFn: () => taskService.getScheduleDrift(plantId!),
+    enabled: !!plantId,
+  });
+
+  const matchScheduleMutation = useMutation({
+    mutationFn: (taskId: string) => taskService.matchSchedule(taskId),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['household', householdId, 'activity'] });
+      toast.success(t('scheduleDrift.matchedToast', { count: updated.frequency }));
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
 
   const snoozeTaskMutation = useMutation({
     mutationFn: ({
@@ -501,6 +522,11 @@ export function PlantDetailPage() {
                 }
                 isSnoozing={snoozeTaskMutation.isPending}
                 isReadOnly={(plant.status ?? 'active') !== 'active'}
+                drift={scheduleDrift?.tasks.find((reading) => reading.taskId === task.id)}
+                onMatchSchedule={() => matchScheduleMutation.mutate(task.id)}
+                isMatchingSchedule={
+                  matchScheduleMutation.isPending && matchScheduleMutation.variables === task.id
+                }
               />
             ))}
           </ul>
@@ -603,6 +629,10 @@ interface TaskRowProps {
   isCompleting: boolean;
   isSnoozing: boolean;
   isReadOnly: boolean;
+  /** Schedule-drift reading for this task; undefined until loaded / not in plan. */
+  drift?: ScheduleDrift;
+  onMatchSchedule: () => void;
+  isMatchingSchedule: boolean;
 }
 
 const SNOOZE_OPTIONS = [
@@ -621,6 +651,9 @@ function TaskRow({
   isCompleting,
   isSnoozing,
   isReadOnly,
+  drift,
+  onMatchSchedule,
+  isMatchingSchedule,
 }: TaskRowProps) {
   const { t } = useTranslation();
   // `completions` is `plant.recentCompletions` — capped at
@@ -664,6 +697,13 @@ function TaskRow({
             )}
             {streakText && (
               <p className="text-xs text-primary-700 font-medium mt-0.5">🌱 {streakText}</p>
+            )}
+            {!isReadOnly && (
+              <ScheduleDriftHint
+                drift={drift}
+                onMatch={onMatchSchedule}
+                isMatching={isMatchingSchedule}
+              />
             )}
           </div>
         </div>

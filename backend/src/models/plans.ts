@@ -36,6 +36,13 @@ export interface PlanLimits {
 export interface PlanFeatures {
   /** Kiosk / wall-display link: a long-lived, read-mostly household token. */
   kiosk: boolean;
+  /**
+   * Coordination features gated by tier (brief §7: Garden's line is drawn on
+   * homes and hands, not collection size). `householdToolkit` covers
+   * double-care detection and schedule-drift suggestions — signals only a
+   * shared household can produce, served at $0 marginal cost.
+   */
+  householdToolkit: boolean;
 }
 
 export interface Plan {
@@ -101,7 +108,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxMembers: 6,
     // One live sitter link, a week long: the task list for a weekend away.
     limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1 },
-    features: { kiosk: false },
+    features: { kiosk: false, householdToolkit: false },
   },
   garden: {
     id: 'garden',
@@ -124,7 +131,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // Annual ($3.33/mo) and lifetime ($149 once) both earn less per month
     // than the tier's $3.48 AI-cost ceiling. Existing subscribers keep them.
     withdrawnIntervals: ['year', 'lifetime'],
-    features: { kiosk: false },
+    features: { kiosk: false, householdToolkit: true },
   },
   greenhouse: {
     id: 'greenhouse',
@@ -141,9 +148,14 @@ export const PLANS: Record<PlanId, Plan> = {
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
     // ceiling. Existing subscribers keep it.
     withdrawnIntervals: ['year'],
-    features: { kiosk: true },
+    features: { kiosk: true, householdToolkit: true },
   },
 };
+
+/** True when the tier includes the household toolkit (double-care, drift). */
+export function hasHouseholdToolkit(plan: Plan): boolean {
+  return plan.features.householdToolkit;
+}
 
 export function getPlan(id: string | undefined | null): Plan {
   // Object.hasOwn (not `in`): `in` also matches inherited prototype

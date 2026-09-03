@@ -9,6 +9,13 @@ vi.mock('../../../src/services/spaceService.js');
 vi.mock('../../../src/services/activity.js', () => ({
   recordActivity: vi.fn(),
 }));
+// Double-care detection reads the household plan before a completion; the
+// free tier skips the detector, which keeps these tests about the completion
+// itself. The toolkit path is covered in doubleCare.test.ts.
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(async () => ({ planId: 'seedling' })),
+}));
+vi.mock('../../../src/services/doubleCare.js');
 // authMiddleware validates the claim household against the membership row;
 // without this mock the handler tests would hit the real DDB client.
 vi.mock('../../../src/services/householdService.js', () => ({

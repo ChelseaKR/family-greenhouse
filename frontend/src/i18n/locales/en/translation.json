@@ -33,7 +33,9 @@
     "healthChecked": "{{actor}} ran a leaf-health check on {{plant}} — {{overall}}",
     "healthCheckedUnknown": "{{actor}} ran a leaf-health check on {{plant}}",
     "healthCheckedUnlabelled": "{{actor}} requested a leaf-health check for {{plant}} — this record doesn't say whether a real analysis ran or a demo result was shown",
-    "healthDemo": "{{actor}} viewed a demo leaf-health result for {{plant}} — no image analysis was performed"
+    "healthDemo": "{{actor}} viewed a demo leaf-health result for {{plant}} — no image analysis was performed",
+    "aTask": "a task",
+    "scheduleMatched": "{{actor}} matched the {{task}} schedule for {{plant}} to reality ({{from}} → {{to}} days)"
   },
   "spaces": {
     "all": "All spaces",
@@ -976,5 +978,39 @@
     "whyRoomBody": "A paid plan is what you move to when the free plant limit stops being enough. Every plant keeps its own schedule, photos, and care history no matter how many you add.",
     "whyLeaveTitle": "Nothing locked away if you leave",
     "whyLeaveBody": "Cancelling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time."
+  },
+  "doubleCare": {
+    "title": "Already done",
+    "message": "{{name}} logged {{task}} for {{plant}} {{when}}. Log it anyway?",
+    "justNow": "just now",
+    "minutesAgo_one": "{{count}} minute ago",
+    "minutesAgo_other": "{{count}} minutes ago",
+    "hoursAgo_one": "{{count}} hour ago",
+    "hoursAgo_other": "{{count}} hours ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "logAnyway": "Log it anyway",
+    "dontLog": "Don’t log it",
+    "loggedAnyway": "Logged anyway",
+    "notLogged": "Not logged",
+    "analytics": {
+      "title": "Double-care this month",
+      "description": "Times two members logged the same care inside the detection window and chose to keep both.",
+      "count_one": "{{count}} confirmed duplicate",
+      "count_other": "{{count}} confirmed duplicates",
+      "none": "No double-care confirmed yet this month.",
+      "month": "Counted for {{month}} (UTC calendar month).",
+      "unavailable": "We couldn’t check double-care just now.",
+      "locked": "Double-care detection is part of the Garden household toolkit.",
+      "seePlans": "See plans"
+    }
+  },
+  "scheduleDrift": {
+    "hint": "You do this about {{actual}}, but it’s scheduled {{scheduled}}.",
+    "everyDays_one": "every day",
+    "everyDays_other": "every {{count}} days",
+    "match": "Match schedule to reality",
+    "matchedToast_one": "Schedule updated: every day",
+    "matchedToast_other": "Schedule updated: every {{count}} days"
   }
 }

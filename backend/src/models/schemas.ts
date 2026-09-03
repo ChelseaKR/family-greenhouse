@@ -197,6 +197,10 @@ export const completeTaskSchema = z.object({
   // Occurrence token used by the app and integrations to make a retry after
   // a lost response a no-op instead of completing the next recurrence too.
   expectedNextDue: z.string().datetime().optional(),
+  // Double-care: when another member completed the same care inside the
+  // detection window the endpoint answers 409 DUPLICATE_CARE and logs
+  // nothing; the client re-submits with this flag to log it anyway.
+  confirmDuplicate: z.boolean().optional(),
 });
 
 // Why the task was snoozed — feeds the activity feed ("snoozed (rain

@@ -44,7 +44,7 @@ import {
   createSitterLinkSchema,
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
-import { PLANS, planSummary, planHasFeature } from './models/plans.js';
+import { PLANS, planSummary, planHasFeature, hasHouseholdToolkit } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
 // would take this whole dev server down before it could serve a request.
@@ -54,6 +54,11 @@ import {
   KIOSK_MAX_POLL_SECONDS,
   KIOSK_LOOKAHEAD_DAYS,
 } from './models/kiosk.js';
+import {
+  computeScheduleDrift,
+  nextDueAfterMatch,
+  pickRecentDuplicate,
+} from './services/doubleCareRules.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -350,6 +355,8 @@ interface Completion {
   completedByName: string;
   completedAt: string;
   notes: string | null;
+  /** Double-care: the other member's completion this one knowingly duplicates. */
+  duplicateOfCompletionId?: string | null;
 }
 
 interface MockUploadGrant {
@@ -698,6 +705,11 @@ function recordActivity(input: RecordActivityInput): void {
     occurredAt: new Date().toISOString(),
     payload: input.payload,
   });
+}
+
+/** Mirrors handlers/tasks resolvePlanBestEffort + hasHouseholdToolkit. */
+function householdHasToolkit(householdId: string): boolean {
+  return hasHouseholdToolkit(PLANS[db.households.get(householdId)?.planId ?? 'seedling']);
 }
 
 // Health check
@@ -3708,11 +3720,39 @@ app.post(
       return res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
     }
 
+    // Mirror handlers/tasks detectDoubleCare: on household-toolkit tiers,
+    // check this plant's completion log for another member's completion
+    // inside the care type's window BEFORE anything is written. A suspected
+    // duplicate is a 409 the client confirms past with confirmDuplicate.
+    const now = new Date();
+    let duplicateOfCompletionId: string | null = null;
+    if (householdHasToolkit(user.householdId)) {
+      const duplicate = pickRecentDuplicate(
+        [...db.completions.values()].filter(
+          (c) => c.householdId === task.householdId && c.plantId === task.plantId
+        ),
+        {
+          taskId: task.id,
+          taskType: task.customType || task.type,
+          actorId: user.userId,
+          now,
+        }
+      );
+      if (duplicate) {
+        if (!(req as any).validatedBody.confirmDuplicate) {
+          return res.status(409).json({
+            message: `${duplicate.completedByName} already logged ${duplicate.taskType} for ${task.plantName}. Send confirmDuplicate: true to log it anyway.`,
+            details: { code: 'DUPLICATE_CARE', plantName: task.plantName, duplicate },
+          });
+        }
+        duplicateOfCompletionId = duplicate.completionId;
+      }
+    }
+
     // Mirror taskService.completeTask: advance the schedule from NOW (the
     // production write is conditioned on the just-read nextDue, which makes
     // a concurrent double-complete a no-op; this single-threaded mock can't
     // race, so the sequential semantics below are identical).
-    const now = new Date();
     const nextDue = new Date(now);
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
@@ -3730,11 +3770,89 @@ app.post(
       completedByName: dbUser?.name ?? user.email.split('@')[0],
       completedAt: now.toISOString(),
       notes: (req as any).validatedBody.notes || null,
+      duplicateOfCompletionId,
     });
 
     res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
   }
 );
+
+// GET /plants/:plantId/schedule-drift — mirrors handlers/tasks getPlantScheduleDrift.
+app.get('/plants/:plantId/schedule-drift', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (!householdHasToolkit(user.householdId)) {
+    return res.json({ available: false, reason: 'not_in_plan', tasks: [] });
+  }
+  const plant = db.plants.get(req.params.plantId);
+  if (!plant || plant.householdId !== user.householdId) {
+    return res.status(404).json({ message: 'Plant not found' });
+  }
+  const tasks = [...db.tasks.values()].filter(
+    (t) => t.householdId === user.householdId && t.plantId === plant.id
+  );
+  const completions = [...db.completions.values()].filter(
+    (c) => c.householdId === user.householdId && c.plantId === plant.id
+  );
+  res.json({
+    available: true,
+    reason: null,
+    tasks: tasks.map((t) =>
+      computeScheduleDrift(
+        t.id,
+        t.frequency,
+        completions.filter((c) => c.taskId === t.id)
+      )
+    ),
+  });
+});
+
+// POST /tasks/:id/match-schedule — mirrors handlers/tasks matchTaskSchedule.
+app.post('/tasks/:id/match-schedule', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (!householdHasToolkit(user.householdId)) {
+    return res.status(402).json({
+      message:
+        'Schedule-drift suggestions are part of the Garden household toolkit. Upgrade to match a schedule to reality.',
+    });
+  }
+  const task = db.tasks.get(req.params.id);
+  if (!task || task.householdId !== user.householdId) {
+    return res.status(404).json({ message: 'Task not found' });
+  }
+  const reading = computeScheduleDrift(
+    task.id,
+    task.frequency,
+    [...db.completions.values()].filter(
+      (c) => c.householdId === user.householdId && c.taskId === task.id
+    )
+  );
+  if (!reading.drift || !reading.drift.exceedsThreshold) {
+    return res
+      .status(409)
+      .json({ message: 'This task’s schedule already matches how often it gets done.' });
+  }
+  const previousFrequency = task.frequency;
+  task.frequency = reading.drift.suggestedFrequency;
+  const nextDue = nextDueAfterMatch(task.lastCompleted, task.frequency, new Date());
+  if (nextDue) task.nextDue = nextDue;
+  recordActivity({
+    type: 'task.schedule_matched',
+    householdId: user.householdId,
+    actorId: user.userId,
+    actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+    payload: {
+      taskId: task.id,
+      plantId: task.plantId,
+      plantName: task.plantName,
+      taskType: task.customType || task.type,
+      previousFrequency,
+      newFrequency: task.frequency,
+      medianIntervalDays: reading.drift.medianIntervalDays,
+      completionsConsidered: reading.completionsConsidered,
+    },
+  });
+  res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
+});
 
 app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
@@ -3762,9 +3880,25 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     const key = c.completedAt.slice(0, 10);
     if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + 1);
   }
+  // Mirror handlers/households confirmedDoubleCareThisMonth: a count on
+  // toolkit tiers, an explicit not_in_plan otherwise (never a silent 0).
+  const month = now.toISOString().slice(0, 7);
+  const doubleCare = householdHasToolkit(req.params.id)
+    ? {
+        status: 'ok',
+        month,
+        confirmedDuplicates: [...db.completions.values()].filter(
+          (c) =>
+            c.householdId === req.params.id &&
+            c.completedAt >= `${month}-01T00:00:00.000Z` &&
+            typeof c.duplicateOfCompletionId === 'string'
+        ).length,
+      }
+    : { status: 'not_in_plan' };
   res.json({
     days,
     series: [...buckets.entries()].map(([date, count]) => ({ date, count })),
+    doubleCare,
   });
 });
 

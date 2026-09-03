@@ -44,6 +44,18 @@ export interface TaskAssignmentActivityPayload {
   taskType: string;
 }
 
+/** One-tap "match the schedule to reality" from a schedule-drift suggestion. */
+export interface TaskScheduleMatchedActivityPayload {
+  taskId: string;
+  plantId: string;
+  plantName: string;
+  taskType: string;
+  previousFrequency: number;
+  newFrequency: number;
+  medianIntervalDays: number;
+  completionsConsidered: number;
+}
+
 export interface PlantIdentityActivityPayload {
   plantId: string;
   plantName: string;
@@ -95,6 +107,7 @@ export interface ActivityPayloadByType {
   'member.left': { role?: 'admin' | 'member' };
   'sitter_link.created': SitterLinkActivityPayload;
   'sitter_link.revoked': SitterLinkActivityPayload;
+  'task.schedule_matched': TaskScheduleMatchedActivityPayload;
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -120,6 +133,7 @@ export const ACTIVITY_TYPES = [
   'member.left',
   'sitter_link.created',
   'sitter_link.revoked',
+  'task.schedule_matched',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

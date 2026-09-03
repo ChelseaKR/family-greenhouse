@@ -25,6 +25,33 @@ export interface CompleteTaskData {
   notes?: string;
   /** Echo the occurrence's nextDue to make transport retries idempotent. */
   expectedNextDue?: string;
+  /** Double-care: log even though another member completed it inside the window. */
+  confirmDuplicate?: boolean;
+}
+
+/** Mirrored from backend `doubleCareRules.ScheduleDrift`. */
+export interface ScheduleDriftReading {
+  medianIntervalDays: number;
+  /** Signed fraction: +0.57 = done 57% less often than scheduled. */
+  driftPct: number;
+  suggestedFrequency: number;
+  exceedsThreshold: boolean;
+}
+
+export interface ScheduleDrift {
+  taskId: string;
+  scheduledIntervalDays: number;
+  completionsConsidered: number;
+  requiredCompletions: number;
+  /** null below `requiredCompletions` or when the history read failed — see `reason`. */
+  drift: ScheduleDriftReading | null;
+  reason: 'insufficient_completions' | 'history_unavailable' | null;
+}
+
+export interface ScheduleDriftResponse {
+  available: boolean;
+  reason: 'not_in_plan' | 'plan_unavailable' | null;
+  tasks: ScheduleDrift[];
 }
 
 export interface TaskFilters {
@@ -151,6 +178,18 @@ export const taskService = {
     if (opts?.expectedNextDue) body.expectedNextDue = opts.expectedNextDue;
     const response = await api.post<Task>(`/tasks/${id}/snooze`, body);
     track('task_snoozed');
+    return response.data;
+  },
+
+  /** Schedule drift for every task of a plant (household toolkit). */
+  async getScheduleDrift(plantId: string): Promise<ScheduleDriftResponse> {
+    const response = await api.get<ScheduleDriftResponse>(`/plants/${plantId}/schedule-drift`);
+    return response.data;
+  },
+
+  /** One tap: set the task's frequency to how often it actually gets done. */
+  async matchSchedule(taskId: string): Promise<Task> {
+    const response = await api.post<Task>(`/tasks/${taskId}/match-schedule`, {});
     return response.data;
   },
 

@@ -161,6 +161,13 @@ export interface TaskCompletion {
   completedByName: string;
   completedAt: string;
   notes: string | null;
+  /**
+   * Set when the member saw the double-care notice and chose "log it anyway":
+   * the id of the other member's completion this one duplicates. Counted per
+   * month in analytics and excluded from schedule-drift math. Absent/null on
+   * every ordinary completion (and on rows that predate the feature).
+   */
+  duplicateOfCompletionId?: string | null;
 }
 
 // DynamoDB item types

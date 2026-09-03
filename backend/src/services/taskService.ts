@@ -514,7 +514,11 @@ export async function completeTask(
   userId: string,
   userName: string,
   notes?: string,
-  expectedNextDue?: string
+  expectedNextDue?: string,
+  opts?: {
+    /** Double-care: the other member's completion this one knowingly duplicates. */
+    duplicateOfCompletionId?: string;
+  }
 ): Promise<Task | null> {
   const task = await getTask(householdId, taskId);
   if (!task) {
@@ -591,6 +595,7 @@ export async function completeTask(
     completedByName: userName,
     completedAt: now.toISOString(),
     notes: notes || null,
+    duplicateOfCompletionId: opts?.duplicateOfCompletionId ?? null,
   };
 
   const completionItem: DynamoDBItem = {
@@ -718,6 +723,7 @@ export async function getTaskCompletions(
     completedByName: item.completedByName as string,
     completedAt: item.completedAt as string,
     notes: item.notes as string | null,
+    duplicateOfCompletionId: (item.duplicateOfCompletionId as string | null) ?? null,
   }));
 }
 
@@ -760,6 +766,7 @@ export async function getHouseholdActivity(
         completedByName: item.completedByName as string,
         completedAt: item.completedAt as string,
         notes: item.notes as string | null,
+        duplicateOfCompletionId: (item.duplicateOfCompletionId as string | null) ?? null,
       });
       if (completions.length >= want) return completions;
     }

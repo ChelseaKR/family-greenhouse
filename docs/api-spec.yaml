@@ -317,6 +317,15 @@ paths:
   /tasks/{id}/complete:
     post:
       summary: Mark task as complete
+      description: >-
+        Advances the schedule and writes one completion row. On Garden and
+        Greenhouse (household toolkit), if another member completed the same
+        task — or the same plant + care type — inside the care type's
+        detection window (24h for watering, longer for slower care; set
+        server-side), the endpoint answers 409 with
+        `details.code = DUPLICATE_CARE` and logs NOTHING. Re-submit with
+        `confirmDuplicate: true` to log it anyway; that row is tagged with
+        the completion it duplicates and counted in the monthly analytics.
       tags: [Tasks]
       parameters:
         - $ref: '#/components/parameters/TaskId'
@@ -328,6 +337,13 @@ paths:
               properties:
                 notes:
                   type: string
+                expectedNextDue:
+                  type: string
+                  format: date-time
+                  description: Occurrence token; a stale value makes the call a no-op.
+                confirmDuplicate:
+                  type: boolean
+                  description: Log the completion even though it duplicates another member's.
       responses:
         '200':
           description: Task completed
@@ -335,6 +351,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
+        '409':
+          description: >-
+            Suspected double-care; nothing was logged. `details.duplicate`
+            carries who completed it, when, the task id / care type, whether it
+            was the very same task, and the window in hours.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  details:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [DUPLICATE_CARE] }
+                      plantName: { type: string }
+                      duplicate:
+                        type: object
+                        properties:
+                          completionId: { type: string }
+                          completedAt: { type: string, format: date-time }
+                          completedBy: { type: string }
+                          completedByName: { type: string }
+                          taskId: { type: string }
+                          taskType: { type: string }
+                          sameTask: { type: boolean }
+                          windowHours: { type: integer }
+
+  /tasks/{id}/match-schedule:
+    post:
+      summary: >-
+        One-tap "match the schedule to reality" from a schedule-drift
+        suggestion (household toolkit). The server recomputes the drift, sets
+        the frequency to the median real interval, re-derives the next due
+        date from the last completion, and audits a `task.schedule_matched`
+        activity event.
+      tags: [Tasks]
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '402': { description: Tier lacks the household toolkit }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          { description: No drift to match (schedule already matches, or fewer than 4 completions) }
+        '503': { description: Plan or completion history could not be read; nothing changed }
 
   /sitter/{token}:
     get:
@@ -775,6 +842,50 @@ paths:
       parameters: [{ $ref: '#/components/parameters/PlantIdAlt' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /plants/{plantId}/schedule-drift:
+    get:
+      summary: >-
+        Schedule drift for every task of a plant (household toolkit): the
+        median real interval between completions against the scheduled one.
+        `drift` is null — with a `reason` — below 4 completions or when the
+        history read failed; it is never a fabricated 0% drift.
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/PlantIdAlt' }]
+      responses:
+        '200':
+          description: Per-task drift, or an explicit unavailable/not-in-plan envelope
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  reason:
+                    type: string
+                    nullable: true
+                    enum: [not_in_plan, plan_unavailable, null]
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        scheduledIntervalDays: { type: integer }
+                        completionsConsidered: { type: integer }
+                        requiredCompletions: { type: integer }
+                        drift:
+                          type: object
+                          nullable: true
+                          properties:
+                            medianIntervalDays: { type: number }
+                            driftPct: { type: number }
+                            suggestedFrequency: { type: integer }
+                            exceedsThreshold: { type: boolean }
+                        reason:
+                          type: string
+                          nullable: true
+                          enum: [insufficient_completions, history_unavailable, null]
+        '404': { $ref: '#/components/responses/NotFound' }
   /plants/apply-template-bulk:
     post:
       summary: Apply a task template to up to 50 plants at once
@@ -889,7 +1000,11 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
   /households/{id}/analytics/daily:
     get:
-      summary: Daily completion analytics for the last N days
+      summary: >-
+        Daily completion analytics for the last N days, plus `doubleCare` —
+        confirmed double-care completions this UTC calendar month on
+        household-toolkit tiers (`status: ok` with a count), `not_in_plan`
+        otherwise, or `unavailable` when the plan or the log could not be read.
       tags: [Households]
       parameters:
         - { $ref: '#/components/parameters/HouseholdId' }

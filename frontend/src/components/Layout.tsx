@@ -21,6 +21,7 @@ import { SidebarPattern } from './brand/SidebarPattern';
 import { MemorialFrame } from './brand/MemorialFrame';
 import { billingService } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { DoubleCarePrompt } from '@/features/tasks/DoubleCarePrompt';
 import clsx from 'clsx';
 
 const navigation = [
@@ -183,6 +184,9 @@ export function Layout() {
             <Outlet />
           </div>
         </main>
+        {/* Double-care "already done — log it anyway?" prompt, fed by every
+            task-completion mutation through the double-care store. */}
+        <DoubleCarePrompt />
 
         {/* Memorial closing line, flanked by mirrored botanical sprigs. The
             text itself is unchanged from the original; only the decoration

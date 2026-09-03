@@ -545,6 +545,17 @@ function ActivityRow({ event }: ActivityRowProps) {
       }
       break;
     }
+    case 'task.schedule_matched': {
+      const p = event.payload;
+      body = t('activity.scheduleMatched', {
+        actor: actorName,
+        task: p.taskType ?? t('activity.aTask'),
+        plant: p.plantName ?? t('activity.aPlant'),
+        from: p.previousFrequency,
+        to: p.newFrequency,
+      });
+      break;
+    }
     case 'plant.archived':
     case 'plant.restored':
     case 'plant.died':
