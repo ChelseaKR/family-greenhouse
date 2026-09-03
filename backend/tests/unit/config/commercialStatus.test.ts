@@ -113,12 +113,28 @@ describe('production IaC commercial-hold invariants', () => {
     );
   });
 
-  it('opens payment activity in staging only, and keeps production closed', () => {
-    // Staging is deliberately open so the paid flow can be exercised against
-    // Stripe TEST mode. Production is the assertion that actually matters:
-    // it must stay shut until its own separately reviewed change.
-    expect(stagingVars).toMatch(/^payments_enabled\s*=\s*"1"\s*$/m);
-    expect(productionVars).toMatch(/^payments_enabled\s*=\s*"0"\s*$/m);
+  it('constrains payment activity to the two values the backend accepts', () => {
+    // Production is now open, so this can no longer assert "closed". What it
+    // still pins is that neither environment can drift to a value the backend
+    // silently treats as disabled — '01', 'true', ' 1' all fail closed at
+    // runtime, and Terraform's own validation rejects them at plan time.
+    for (const vars of [productionVars, stagingVars]) {
+      expect(vars).toMatch(/^payments_enabled\s*=\s*"[01]"\s*$/m);
+    }
+  });
+
+  it('never opens a runtime gate that the repository status still holds shut', () => {
+    // The pairing that must never exist: an environment enabling payments
+    // while commercial-status.json still reports the hold active. Terraform
+    // blocks that combination too (see the guard below); this fails the suite
+    // before it ever reaches a plan.
+    const status = JSON.parse(readFileSync(new URL('commercial-status.json', root), 'utf8')) as {
+      commercialHoldActive: boolean;
+    };
+    const anyGateOpen = [productionVars, stagingVars].some((v) =>
+      /^payments_enabled\s*=\s*"1"\s*$/m.test(v)
+    );
+    if (anyGateOpen) expect(status.commercialHoldActive).toBe(false);
   });
 
   it('never pairs an open staging gate with live-mode price confirmation', () => {
