@@ -265,14 +265,18 @@ variable "leaf_health_monthly_cap_greenhouse" {
   }
 }
 
-# Chat (services/chat/). These have been declared in modules/api/variables.tf
-# since the chat budget shipped, but never at this level and never passed
-# through main.tf — so a tfvars value was silently dropped (an undeclared
-# variable is only a warning) and the code default always ran. Declared here
-# so the cap is settable per environment; blank keeps today's default. Not
-# tier-aware. NOTE: unlike the leaf-health caps, "0" here is NOT unlimited —
-# the code reads it as a zero budget and 429s every turn — so the validation
-# refuses it; leave blank instead.
+# Chat (services/chat/budget.ts). The flat pair has been declared in
+# modules/api/variables.tf since the chat budget shipped, but never at this
+# level and never passed through main.tf — so a tfvars value was silently
+# dropped (an undeclared variable is only a warning) and the code default
+# always ran. Declared here so the cap is settable per environment; blank
+# keeps today's default. The per-tier pairs work like leaf-health's: a blank
+# per-tier value inherits the flat one for that counter, and setting ANY
+# per-tier value makes the guard tier-aware. The turn already reads the
+# household's plan for its Garden-and-up gate, so tiering adds no read to a
+# turn; GET /chat/budget gains one. NOTE: unlike the leaf-health caps, "0"
+# here is NOT unlimited — the code reads it as a zero budget and 429s every
+# turn — so the validation refuses it on all eight; to lift a cap, raise it.
 variable "chat_budget_input_tokens" {
   description = "Per-household monthly chat input-token cap. Blank = code default (250000). Must be a positive integer when set; '0' is not 'unlimited'."
   type        = string
@@ -292,6 +296,72 @@ variable "chat_budget_output_tokens" {
   validation {
     condition     = var.chat_budget_output_tokens == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_output_tokens))
     error_message = "chat_budget_output_tokens must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_input_tokens_seedling" {
+  description = "Monthly chat input-token cap for Seedling (free) households. Blank = inherit chat_budget_input_tokens. Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_input_tokens_seedling == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_input_tokens_seedling))
+    error_message = "chat_budget_input_tokens_seedling must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_output_tokens_seedling" {
+  description = "Monthly chat output-token cap for Seedling (free) households. Blank = inherit chat_budget_output_tokens. Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_output_tokens_seedling == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_output_tokens_seedling))
+    error_message = "chat_budget_output_tokens_seedling must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_input_tokens_garden" {
+  description = "Monthly chat input-token cap for Garden households. Blank = inherit chat_budget_input_tokens. Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_input_tokens_garden == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_input_tokens_garden))
+    error_message = "chat_budget_input_tokens_garden must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_output_tokens_garden" {
+  description = "Monthly chat output-token cap for Garden households. Blank = inherit chat_budget_output_tokens. Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_output_tokens_garden == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_output_tokens_garden))
+    error_message = "chat_budget_output_tokens_garden must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_input_tokens_greenhouse" {
+  description = "Monthly chat input-token cap for Greenhouse households. Blank = inherit chat_budget_input_tokens. Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_input_tokens_greenhouse == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_input_tokens_greenhouse))
+    error_message = "chat_budget_input_tokens_greenhouse must be blank or a positive integer ('0' would block every chat turn)."
+  }
+}
+
+variable "chat_budget_output_tokens_greenhouse" {
+  description = "Monthly chat output-token cap for Greenhouse households. Blank = inherit chat_budget_output_tokens. Must be a positive integer when set; '0' is not 'unlimited'."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.chat_budget_output_tokens_greenhouse == "" || can(regex("^[1-9][0-9]*$", var.chat_budget_output_tokens_greenhouse))
+    error_message = "chat_budget_output_tokens_greenhouse must be blank or a positive integer ('0' would block every chat turn)."
   }
 }
 

@@ -19,8 +19,13 @@ import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../midd
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit } from '../../middleware/rateLimit.js';
 import { successResponse } from '../../utils/response.js';
-import { getConversationHistory, runChatTurn, BUDGET_CONFIG } from '../../services/chat/index.js';
+import { getConversationHistory, runChatTurn } from '../../services/chat/index.js';
 import { getBudget } from '../../services/chat/persistence.js';
+import { resolveBudgetConfig } from '../../services/chat/budget.js';
+import type { BudgetConfig } from '../../services/chat/types.js';
+import * as billing from '../../services/billing.js';
+import { getPlan } from '../../models/plans.js';
+import { logger } from '../../utils/logger.js';
 import { saveChatReport } from '../../services/chatReports.js';
 import { audit } from '../../utils/auditLog.js';
 
@@ -137,13 +142,34 @@ export const getChatBudget = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     if (!user.householdId) throw createHttpError(403, 'User must belong to a household');
-    const state = await getBudget(user.householdId);
+    const householdId = user.householdId;
+    // The cap this household's tier is enforced against (services/chat/
+    // budget.ts). The plan is only looked up once a per-tier value is
+    // configured; until then this is the flat BUDGET_CONFIG and the read
+    // count is unchanged. A cap we could not determine is not one to report
+    // as if we had — fail closed, the same 503 shape as the leaf-health
+    // handler's cap resolution.
+    let config: BudgetConfig;
+    try {
+      config = await resolveBudgetConfig(
+        async () => getPlan((await billing.getHouseholdSubscription(householdId)).planId).id
+      );
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, householdId },
+        'chat_budget.cap_resolution_failed'
+      );
+      throw createHttpError(503, 'The chat budget is temporarily unavailable. Please try again.', {
+        expose: true,
+      });
+    }
+    const state = await getBudget(householdId);
     return successResponse({
       yearMonth: state.yearMonth,
       inputTokensUsed: state.inputTokens,
       outputTokensUsed: state.outputTokens,
-      inputTokensCap: BUDGET_CONFIG.maxInputTokensPerMonth,
-      outputTokensCap: BUDGET_CONFIG.maxOutputTokensPerMonth,
+      inputTokensCap: config.maxInputTokensPerMonth,
+      outputTokensCap: config.maxOutputTokensPerMonth,
       costUsd: Math.round(state.costUsd * 10000) / 10000,
     });
   }
