@@ -52,6 +52,26 @@ describe('useMetaTags canonical', () => {
     unmount();
   });
 
+  it('removes an href-less canonical rather than leaving an empty one behind', () => {
+    // A <link rel="canonical"> with no href tells a crawler the page
+    // canonicalizes to nothing — strictly worse than having no tag, which lets
+    // Google fall back to the request URL. Restoring "no href" therefore drops
+    // the element.
+    const bare = document.createElement('link');
+    bare.setAttribute('rel', 'canonical');
+    document.head.appendChild(bare);
+
+    const { unmount } = renderHook(() =>
+      useMetaTags({ canonical: 'https://familygreenhouse.net/pricing' })
+    );
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+      'https://familygreenhouse.net/pricing'
+    );
+
+    unmount();
+    expect(document.querySelector('link[rel="canonical"]')).toBeNull();
+  });
+
   it('overrides a pre-existing homepage canonical and restores its href on unmount', () => {
     // If a canonical link already exists (e.g. one route navigating to another
     // before cleanup), the hook overrides its href and restores it on unmount

@@ -76,26 +76,33 @@ export function isRTL(lang: string): boolean {
   return RTL_LANGS.has(lang.split('-')[0]);
 }
 
-i18n
-  .use(LanguageDetector)
-  .use(initReactI18next)
-  .init({
-    resources: {
-      en: { translation: en },
-      es: { translation: es },
-    },
-    fallbackLng: 'en',
-    supportedLngs: SUPPORTED_LANGS as unknown as string[],
-    interpolation: {
-      escapeValue: false, // React already escapes
-    },
-    returnNull: false,
-    detection: {
-      order: ['localStorage', 'navigator'],
-      lookupLocalStorage: 'i18nextLng',
-      caches: ['localStorage'],
-    },
-  });
+// The browser language detector reads localStorage and `navigator`, neither of
+// which exists in the Node process that runs the build-time prerender
+// (scripts/prerender.mjs). Skip it there and pin the render to English — the
+// prerendered pages are the canonical English marketing routes, and the client
+// re-detects normally on boot, before hydration.
+const IS_BROWSER = typeof window !== 'undefined';
+
+if (IS_BROWSER) i18n.use(LanguageDetector);
+
+i18n.use(initReactI18next).init({
+  resources: {
+    en: { translation: en },
+    es: { translation: es },
+  },
+  ...(IS_BROWSER ? {} : { lng: 'en' }),
+  fallbackLng: 'en',
+  supportedLngs: SUPPORTED_LANGS as unknown as string[],
+  interpolation: {
+    escapeValue: false, // React already escapes
+  },
+  returnNull: false,
+  detection: {
+    order: ['localStorage', 'navigator'],
+    lookupLocalStorage: 'i18nextLng',
+    caches: ['localStorage'],
+  },
+});
 
 // If a stale localStorage entry pinned the user to a non-shippable locale
 // (e.g. they tested Spanish before the gate landed), pull them back to en.

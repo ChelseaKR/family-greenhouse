@@ -9,6 +9,9 @@ docs/research/
 frontend/vite.config.js
 frontend/vite.config.d.ts
 dist/
+# SSR bundle for the marketing prerender (frontend/scripts/prerender.mjs).
+# Build artifact of `vite build --ssr`; regenerate it, never commit it.
+dist-ssr/
 build/
 .next/
 out/

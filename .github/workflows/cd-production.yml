@@ -376,15 +376,27 @@ jobs:
 
       - name: Sync to S3
         run: |
+          # Hashed, immutable assets. Every HTML document is excluded here and
+          # uploaded below with a no-cache header: the prerendered marketing
+          # pages (dist/<route>/index.html) are rebuilt on every deploy, so a
+          # 1-year immutable cache would pin stale copy at the edge and in
+          # browsers until the URL changed — which it never does.
           aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
             --delete \
             --cache-control "max-age=31536000,public" \
-            --exclude "index.html" \
+            --exclude "*.html" \
             --exclude "sw.js" \
             --exclude "push-handler.js" \
             --exclude "*.json"
 
-          aws s3 cp dist/index.html s3://${{ needs.terraform.outputs.frontend_bucket }}/index.html \
+          # All HTML: the prerendered routes, the homepage, and app-shell.html
+          # (CloudFront's error response + the service worker's offline
+          # navigation fallback). --delete is scoped by the same filters, so a
+          # route removed from the sitemap stops being served.
+          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+            --delete \
+            --exclude "*" \
+            --include "*.html" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
           aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"

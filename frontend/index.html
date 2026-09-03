@@ -7,24 +7,30 @@
     <meta name="theme-color" content="#173404" />
     <meta name="color-scheme" content="light" />
 
+    <!--
+      head:start / head:end delimit every tag that VARIES BY ROUTE. The
+      build-time prerender (scripts/prerender.mjs) replaces this whole block on
+      each page it emits, generating the tags from src/config/seo.ts — that is
+      how /pricing, /care/monstera and each blog post ship their own title,
+      description, canonical and Open Graph card to a crawler that never runs
+      JavaScript.
+
+      The literal copy below is the DEV-SERVER fallback (and the source that
+      `npm run dev` serves); it mirrors DEFAULT_META in src/config/seo.ts.
+      Nothing between these markers reaches production untouched — the SPA
+      shell gets the generated defaults too.
+
+      Canonical: there is deliberately no canonical or og:url here. The shell
+      answers for every non-prerendered path, so a hardcoded homepage canonical
+      would tell Google that /dashboard, /login and every unknown URL are all
+      "/". Prerendered routes emit their own; see src/config/seo.ts.
+    -->
+    <!--head:start-->
     <title>Family Greenhouse — Grow together</title>
     <meta
       name="description"
       content="A collaborative plant care app for households. Free accounts include up to 10 plants, shared tasks, reminders, and care history."
     />
-
-    <!-- NOTE: no static <link rel="canonical"> or og:url here. This single
-         index.html serves every SPA route, so a hardcoded homepage canonical
-         would wrongly canonicalize /pricing, /care, /blog, … to "/" and drop
-         them from the index. Canonical + og:url are set PER ROUTE via
-         useMetaTags; routes that don't set one fall back to URL-as-canonical
-         (the safe default). -->
-
-    <!-- Open Graph + Twitter Card. The brand renderer ships purpose-built PNGs
-         (1200×630 OG, 1200×600 Twitter) in /brand/. Image URLs are ABSOLUTE —
-         social scrapers (Facebook/LinkedIn/Slack) reject a relative og:image.
-         These are HOMEPAGE defaults; per-route pages override title/description
-         via useMetaTags. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Family Greenhouse" />
     <meta
@@ -56,6 +62,8 @@
       name="twitter:image:alt"
       content="Family Greenhouse — every plant, every person, one care log"
     />
+    <meta name="robots" content="index, follow" />
+    <!--head:end-->
 
     <!-- Icons. v2 brand kit covers favicon (.ico + 32px PNG), apple-touch
          (180×180), and the PWA manifest icons (192/512). All ship from
@@ -67,8 +75,10 @@
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Performance: preconnect to the API origin so the first XHR is faster.
-         Override at build time by replacing this with the real API origin. -->
-    <link rel="preconnect" href="http://localhost:4000" crossorigin />
+         __API_ORIGIN__ is substituted at build time from VITE_API_URL by the
+         apiOrigin() plugin in vite.config.ts, so a production bundle preconnects
+         to the production API instead of shipping a dead localhost hint. -->
+    <link rel="preconnect" href="__API_ORIGIN__" crossorigin />
 
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="format-detection" content="telephone=no" />
@@ -88,7 +98,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://localhost:4000 https:; connect-src 'self' http://localhost:4000 https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
+      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https:; connect-src 'self' __API_ORIGIN__ https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
     />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   </head>

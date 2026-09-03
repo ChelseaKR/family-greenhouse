@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CheckCircleIcon,
@@ -32,6 +33,31 @@ const variantConfig: Record<
   },
 };
 
+const noopSubscribe = () => () => {};
+
+/**
+ * False during server rendering AND during the client's hydration render, true
+ * from the first commit onward.
+ *
+ * `useSyncExternalStore`'s third argument is the server snapshot, and React
+ * uses it for the hydration render too — which is exactly the guarantee needed
+ * here. The previous `typeof document === 'undefined'` check did NOT give that:
+ * it made the server render nothing while the client's very first render
+ * produced a portal, so React saw the tree change shape underneath it, reported
+ * a hydration mismatch, and threw away the entire prerendered page. Every
+ * marketing route would have shipped real HTML to crawlers and then re-rendered
+ * from scratch in every real browser.
+ *
+ * Same idiom as `useHeroVariant` in lib/experiment.ts.
+ */
+function useIsHydrated(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  );
+}
+
 /**
  * Transient notification stack. Mount once near the app root. The container is
  * a persistent polite live region so screen readers announce toasts as they're
@@ -41,8 +67,12 @@ const variantConfig: Record<
 export function Toaster() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
+  const hydrated = useIsHydrated();
 
-  if (typeof document === 'undefined') return null;
+  // Nothing to portal into during the prerender, and nothing may be portalled
+  // during hydration either — see useIsHydrated. Toasts are only ever raised by
+  // user action, so there is nothing to show this early regardless.
+  if (!hydrated || typeof document === 'undefined') return null;
 
   return createPortal(
     <div
