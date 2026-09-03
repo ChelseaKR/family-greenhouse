@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { priceFor } from '@/features/pricing/planPricing';
 import type { Plan } from '@/services/billingService';
@@ -24,6 +24,17 @@ const garden: Plan = {
   monthlyPrice: 4.99,
   annualPrice: 39.99,
   lifetimePrice: 149,
+};
+
+const greenhouse: Plan = {
+  id: 'greenhouse',
+  name: 'Greenhouse',
+  description: 'Serious plant parents',
+  maxPlants: 5000,
+  maxMembers: 50,
+  monthlyPrice: 9.99,
+  annualPrice: 79.99,
+  lifetimePrice: null,
 };
 
 describe('priceFor', () => {
@@ -72,6 +83,22 @@ describe('PaidPlanGrid', () => {
   it('marks the household’s current tier', () => {
     render(<PaidPlanGrid plans={[seedling, garden]} currentPlanId="garden" />);
     expect(screen.getByText('Current plan')).toBeInTheDocument();
+  });
+
+  it('lists import and export under the free tier, not as a paid differentiator', () => {
+    // POST /plants/import and GET /me/export are open to every tier (import is
+    // bounded only by the plan's plant cap, which the caps line already shows).
+    // The bullets are cumulative, so naming them under Greenhouse claimed the
+    // lower tiers lack them — contradicting the "Nothing locked away" band,
+    // which promises export to everyone.
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+    expect(card('Seedling').getByText('Import and export (CSV and JSON)')).toBeInTheDocument();
+    expect(card('Garden').queryByText(/import|export/i)).not.toBeInTheDocument();
+    expect(card('Greenhouse').queryByText(/import|export/i)).not.toBeInTheDocument();
+    // The one paid-only bullet that is actually enforced stays.
+    expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
   });
 
   it('renders no call to action when the caller supplies none', () => {
