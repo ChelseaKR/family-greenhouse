@@ -129,6 +129,8 @@ interface Plant {
   winterSpaceId: string | null;
   imageUrl: string | null;
   notes: string | null;
+  /** House rule (≤140 chars); null/absent = no rule. Mirrors models/types.ts. */
+  careRule?: string | null;
   status: 'active' | 'died' | 'gave_away' | 'archived';
   statusChangedAt: string | null;
   tags: string[];
@@ -1795,6 +1797,7 @@ app.post(
       summerSpaceId,
       winterSpaceId,
       notes,
+      careRule,
       tags,
       perenualSpeciesId,
       parentPlantId,
@@ -1849,6 +1852,7 @@ app.post(
       winterSpaceId: winterSpaceId ?? null,
       imageUrl: null,
       notes: notes || null,
+      careRule: careRule || null,
       status: 'active',
       statusChangedAt: null,
       tags: (tags ?? [])
@@ -1968,6 +1972,7 @@ app.post(
         winterSpaceId: null,
         imageUrl: null,
         notes: input.notes || null,
+        careRule: input.careRule || null,
         status: 'active',
         statusChangedAt: null,
         tags: (input.tags ?? [])
@@ -2092,6 +2097,8 @@ app.put(
       plant[field] = body[field];
     }
     if (body.notes !== undefined) plant.notes = body.notes;
+    // Mirrors plantService.updatePlant: an emptied rule clears to null.
+    if (body.careRule !== undefined) plant.careRule = body.careRule || null;
     if (body.tags !== undefined) {
       plant.tags = body.tags
         .map((t: string) => t.trim())

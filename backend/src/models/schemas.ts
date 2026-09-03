@@ -94,6 +94,9 @@ export const updateSpaceSchema = createSpaceSchema
   );
 
 // Plant schemas
+/** House rule length cap — one line, not a paragraph (see Plant.careRule). */
+export const CARE_RULE_MAX_LENGTH = 140;
+
 const tagsSchema = z.array(z.string().min(1).max(40)).max(10).optional();
 
 export const createPlantSchema = z.object({
@@ -106,6 +109,9 @@ export const createPlantSchema = z.object({
   summerSpaceId: z.string().uuid().optional(),
   winterSpaceId: z.string().uuid().optional(),
   notes: z.string().max(1000).optional(),
+  // House rule: trimmed here so the cap measures the real text; a
+  // whitespace-only value becomes "no rule" (null) in the service.
+  careRule: z.string().trim().max(CARE_RULE_MAX_LENGTH).optional(),
   perenualSpeciesId: z.number().int().positive().optional(),
   // Propagation: the same-household plant this cutting was taken from.
   // Existence (same household, not self) is validated in the handler.
@@ -123,6 +129,7 @@ export const updatePlantSchema = z.object({
   summerSpaceId: z.string().uuid().optional().nullable(),
   winterSpaceId: z.string().uuid().optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
+  careRule: z.string().trim().max(CARE_RULE_MAX_LENGTH).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),
   // Lifecycle transition. Setting 'died'/'gave_away' records an outcome;

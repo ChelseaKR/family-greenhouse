@@ -295,8 +295,9 @@ describe('plantService', () => {
       // perenualSpeciesId + server-trusted canonical species (defaulting to
       // null), the lifecycle status
       // (legacy rows with no status hydrate to 'active'), and the
-      // propagation parent link (defaulting to null) so the response
-      // shape stays stable for clients that always expect the fields.
+      // propagation parent link and the house rule (both defaulting to
+      // null) so the response shape stays stable for clients that always
+      // expect the fields.
       expect(result).toEqual({
         ...mockPlant,
         tags: [],
@@ -309,6 +310,7 @@ describe('plantService', () => {
         placementNote: null,
         summerSpaceId: null,
         winterSpaceId: null,
+        careRule: null,
       });
     });
 

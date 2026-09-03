@@ -85,6 +85,7 @@ export const importPlants = createHandler(
         species: row.species,
         location: row.location,
         notes: row.notes,
+        careRule: row.careRule,
         tags: row.tags,
         perenualSpeciesId: row.perenualSpeciesId,
       };

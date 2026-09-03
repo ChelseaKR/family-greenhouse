@@ -14,6 +14,7 @@ import {
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from './taskMutations';
+import { careRuleFor, useCareRuleGate } from './useCareRuleGate';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -179,6 +180,12 @@ export function TasksPage() {
   const error = tasksError || (requestedSpaceFilter ? (plantsError ?? spacesError) : null);
 
   const completeTaskMutation = useCompleteTaskMutation(householdId);
+  // House rule gate: a plant with a care rule shows it before the completion
+  // goes through; with no rule the click completes exactly as before.
+  const careRuleGate = useCareRuleGate<TaskWithCoverage>(
+    (task) => careRuleFor(plantsById.get(task.plantId)),
+    (task) => completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue })
+  );
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -400,12 +407,7 @@ export function TasksPage() {
               key={group.id}
               title={`${t(`spaces.${group.environment}`)} · ${group.name}`}
               tasks={group.tasks}
-              onComplete={(task) =>
-                completeTaskMutation.mutate({
-                  taskId: task.id,
-                  expectedNextDue: task.nextDue,
-                })
-              }
+              onComplete={careRuleGate.request}
               completingTaskId={
                 completeTaskMutation.isPending
                   ? (completeTaskMutation.variables?.taskId ?? null)
@@ -421,12 +423,7 @@ export function TasksPage() {
             <TaskSection
               title="Overdue"
               tasks={overdueTasks}
-              onComplete={(task) =>
-                completeTaskMutation.mutate({
-                  taskId: task.id,
-                  expectedNextDue: task.nextDue,
-                })
-              }
+              onComplete={careRuleGate.request}
               completingTaskId={
                 completeTaskMutation.isPending
                   ? (completeTaskMutation.variables?.taskId ?? null)
@@ -441,12 +438,7 @@ export function TasksPage() {
             <TaskSection
               title="Today"
               tasks={todayTasks}
-              onComplete={(task) =>
-                completeTaskMutation.mutate({
-                  taskId: task.id,
-                  expectedNextDue: task.nextDue,
-                })
-              }
+              onComplete={careRuleGate.request}
               completingTaskId={
                 completeTaskMutation.isPending
                   ? (completeTaskMutation.variables?.taskId ?? null)
@@ -460,12 +452,7 @@ export function TasksPage() {
             <TaskSection
               title="Upcoming"
               tasks={upcomingTasks}
-              onComplete={(task) =>
-                completeTaskMutation.mutate({
-                  taskId: task.id,
-                  expectedNextDue: task.nextDue,
-                })
-              }
+              onComplete={careRuleGate.request}
               completingTaskId={
                 completeTaskMutation.isPending
                   ? (completeTaskMutation.variables?.taskId ?? null)
@@ -476,6 +463,7 @@ export function TasksPage() {
           )}
         </div>
       )}
+      {careRuleGate.dialog}
     </div>
   );
 }
