@@ -13,6 +13,7 @@ import * as accountCleanup from '../../services/accountCleanup.js';
 import { buildIcs } from '../../services/icsExport.js';
 import { noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
+import { logger } from '../../utils/logger.js';
 
 /**
  * Refuse the deletion if the user is the last admin in a household with
@@ -51,14 +52,23 @@ async function wipeSoloHouseholdPlants(householdId: string, members: unknown[]):
 // EVERY household the user is a member of (not just the active claim one):
 //   1. If the user is the lone admin of any multi-member household, refuse
 //      (consistent with the long-standing single-household guard).
-//   2. For households where they're the only member, wipe plants (cascading
+//   2. Cancel the Stripe subscription of every household they are the ONLY
+//      member of. Subscriptions are per household, so leaving a household
+//      that keeps other members never touches billing — but an abandoned
+//      household is erased below together with the only login that could
+//      reach the billing portal, so its subscription must die first. This
+//      runs before ANY destructive step and fails closed: if Stripe cannot
+//      confirm the subscription is dead, the deletion is refused (502) with
+//      nothing touched, and a retry is safe (see
+//      accountCleanup.cancelAbandonedHouseholdSubscription).
+//   3. For households where they're the only member, wipe plants (cascading
 //      task/photo cleanup) and revoke the household's API keys — the
 //      household is being abandoned.
-//   3. Anonymize their identity in retained shared history and clear active
+//   4. Anonymize their identity in retained shared history and clear active
 //      task assignments, then remove their member row from each household.
-//   4. Delete the complete user-scoped partition: notification prefs, phone
+//   5. Delete the complete user-scoped partition: notification prefs, phone
 //      challenges, browser/native credentials, and every delivery marker.
-//   5. Delete their Cognito user.
+//   6. Delete their Cognito user.
 // Shared completion/activity facts remain useful to the household, but the
 // deleted user's display name and stable id do not.
 export const deleteMe = createHandler(
@@ -77,6 +87,41 @@ export const deleteMe = createHandler(
       const members = await householdService.getHouseholdMembers(m.householdId);
       membersByHousehold.set(m.householdId, members);
       refuseIfOnlyAdmin(user.userId, m.role, members);
+    }
+
+    // Billing pass: cancel the subscription of every household about to be
+    // abandoned, BEFORE the destructive pass. A failure here refuses the
+    // whole deletion with nothing deleted — the alternative is a user who can
+    // no longer log in but is still being charged, with no self-serve way out.
+    for (const m of memberships) {
+      const members = membersByHousehold.get(m.householdId) ?? [];
+      if (members.length !== 1) continue;
+      let cancellation: accountCleanup.SubscriptionCancellationOutcome;
+      try {
+        cancellation = await accountCleanup.cancelAbandonedHouseholdSubscription(m.householdId);
+      } catch (err) {
+        logger.error(
+          { err, householdId: m.householdId },
+          'account_deletion_refused_subscription_cancel_failed'
+        );
+        throw createHttpError(
+          502,
+          "We couldn't cancel your household's subscription, so your account was not deleted. Please try again in a few minutes.",
+          { expose: true }
+        );
+      }
+      if (cancellation.outcome !== 'no_subscription') {
+        audit('billing.subscription_changed', {
+          actorId: user.userId,
+          actorEmail: user.email,
+          householdId: m.householdId,
+          metadata: {
+            trigger: 'account_deletion',
+            outcome: cancellation.outcome,
+            subscriptionId: cancellation.subscriptionId,
+          },
+        });
+      }
     }
 
     // Destructive pass.

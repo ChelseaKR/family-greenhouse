@@ -1,5 +1,8 @@
+import type Stripe from 'stripe';
 import { DeleteCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { logger } from '../utils/logger.js';
+import * as billing from './billing.js';
 
 const DELETED_USER_ID = 'deleted-user';
 const DELETED_USER_NAME = 'Former member';
@@ -50,6 +53,115 @@ async function deleteItems(items: Record<string, unknown>[]): Promise<void> {
       })
     );
   });
+}
+
+export type SubscriptionCancellationOutcome =
+  /** Nothing on file to cancel: free tier, or a lifetime (one-time) purchase. */
+  | { outcome: 'no_subscription' }
+  /** Stripe accepted the cancellation on this call. */
+  | { outcome: 'canceled'; subscriptionId: string }
+  /** Stripe already had it in a terminal state (an earlier attempt, the
+   *  portal, or the dashboard); nothing more can be billed. */
+  | { outcome: 'already_canceled'; subscriptionId: string }
+  /** Stripe has no such subscription at all, so there is nothing to bill. */
+  | { outcome: 'missing_in_stripe'; subscriptionId: string };
+
+// Stripe statuses from which a subscription can never bill again.
+const TERMINAL_SUBSCRIPTION_STATUSES = new Set(['canceled', 'incomplete_expired']);
+
+function stripeErrorCode(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * After a failed cancel call, ask Stripe whether the subscription is in fact
+ * already dead. Returns the matching outcome, or null when Stripe either says
+ * it is still live or cannot be reached — in which case the caller must treat
+ * the original failure as real.
+ */
+async function confirmSubscriptionIsDead(
+  stripe: Stripe,
+  subscriptionId: string
+): Promise<'already_canceled' | 'missing_in_stripe' | null> {
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    return TERMINAL_SUBSCRIPTION_STATUSES.has(subscription.status) ? 'already_canceled' : null;
+  } catch (err) {
+    return stripeErrorCode(err) === 'resource_missing' ? 'missing_in_stripe' : null;
+  }
+}
+
+/**
+ * Cancel the Stripe subscription of a household its sole member is about to
+ * abandon through account deletion.
+ *
+ * Subscriptions belong to HOUSEHOLDS, not users (see models/plans.ts and the
+ * HOUSEHOLD#{id}/METADATA row billing.ts reads and writes). A member leaving
+ * a household that keeps other members must therefore never touch billing —
+ * the household, its admin, and its plan all carry on. But when the ONLY
+ * member deletes their account, deleteAbandonedHouseholdData erases the very
+ * row that records the subscription, and cognitoUsers.deleteUser removes the
+ * only identity that could have reached the billing portal to stop it. Left
+ * alone, Stripe keeps charging a card for a household that no longer exists
+ * and a person who can no longer log in. That is the gap this closes.
+ *
+ * Cancellation is immediate (not at period end): nobody remains to use the
+ * rest of the paid period, and an "active until period end" subscription on
+ * an erased household would just be a slower version of the same leak. No
+ * proration or refund is requested — matching the lifetime-grant path in
+ * billing.applyStripeEvent and Stripe's own default.
+ *
+ * Callers must run this BEFORE any destructive step and must treat a thrown
+ * error as "refuse the deletion" (fail closed): losing a Stripe call must
+ * never silently leave a deleted user paying.
+ *
+ * Retry-safe. Stripe — not the stored `subscriptionStatus` — is the source
+ * of truth for whether anything is still billable: billing.ts documents a
+ * window in which a freshly checked-out subscription id can sit next to a
+ * stale `canceled` status, so a stored-status shortcut could skip cancelling
+ * a live subscription. Instead every call with an id on file goes to Stripe
+ * under a stable idempotency key (a replay within Stripe's window returns
+ * the original result), and when the cancel call fails the subscription is
+ * retrieved to check whether it is already in a terminal state or gone
+ * entirely. Both count as success; anything else is rethrown.
+ *
+ * Deliberately NOT gated on the commercial hold (assertPaymentActivityAllowed):
+ * that hold blocks the billing portal, which would otherwise leave account
+ * deletion as a user's only way to stop being charged.
+ */
+export async function cancelAbandonedHouseholdSubscription(
+  householdId: string
+): Promise<SubscriptionCancellationOutcome> {
+  const subscription = await billing.getHouseholdSubscription(householdId);
+  const subscriptionId = subscription.stripeSubscriptionId;
+  if (!subscriptionId) return { outcome: 'no_subscription' };
+
+  const stripe = await billing.getStripe();
+  try {
+    await stripe.subscriptions.cancel(
+      subscriptionId,
+      {},
+      { idempotencyKey: `account-deletion-cancel:${householdId}:${subscriptionId}` }
+    );
+    logger.info({ householdId, subscriptionId }, 'account_deletion_canceled_subscription');
+    return { outcome: 'canceled', subscriptionId };
+  } catch (err) {
+    const dead = await confirmSubscriptionIsDead(stripe, subscriptionId);
+    if (dead) {
+      logger.info(
+        { householdId, subscriptionId, outcome: dead },
+        'account_deletion_subscription_already_dead'
+      );
+      return { outcome: dead, subscriptionId };
+    }
+    logger.error(
+      { err, householdId, subscriptionId },
+      'account_deletion_cancel_subscription_failed'
+    );
+    throw err;
+  }
 }
 
 /**

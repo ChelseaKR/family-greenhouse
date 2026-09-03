@@ -47,6 +47,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- Deleting an account now cancels the Stripe subscription of every household
+  the user was the only member of. `DELETE /me` erased the household row that
+  recorded the subscription and the only login that could reach the billing
+  portal, so a deleted user kept being charged with no self-serve way to stop
+  it. Subscriptions are per household, so leaving a household that keeps other
+  members still never touches billing. The cancellation runs before any
+  destructive step and fails closed: if Stripe cannot confirm the subscription
+  is dead the deletion is refused with a 502 and nothing has been touched, and
+  a retry is safe because an already-cancelled or missing subscription counts
+  as done.
 - The dashboard climate card no longer renders a failed read as a calm night
   (#351). `if (!data) return null` put a failed climate read in the same
   silence as "no household active" and "no location saved with the integration

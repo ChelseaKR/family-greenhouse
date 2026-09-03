@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type Stripe from 'stripe';
+import type { HouseholdSubscription } from '../../../src/services/billing.js';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   QueryCommand: vi.fn(function (input) {
@@ -14,6 +16,14 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
+}));
+// The cancellation path only needs billing's two exported seams: the stored
+// household subscription and the lazily built Stripe client. Faking the client
+// here (the same `subscriptions.cancel` shape billing.test.ts fakes) keeps the
+// Stripe SDK and its key out of the picture entirely.
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(),
+  getStripe: vi.fn(),
 }));
 
 describe('account cleanup', () => {
@@ -260,5 +270,140 @@ describe('account cleanup', () => {
         .filter((command) => command.kind === 'Query')
         .every((command) => command.input.ProjectionExpression === 'PK, SK')
     ).toBe(true);
+  });
+});
+
+describe('cancelAbandonedHouseholdSubscription', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function stripeError(message: string, code?: string): Error {
+    return Object.assign(new Error(message), code ? { code, statusCode: 404 } : {});
+  }
+
+  async function arrange(subscription: HouseholdSubscription) {
+    const billing = await import('../../../src/services/billing.js');
+    const stripe = { subscriptions: { cancel: vi.fn(), retrieve: vi.fn() } };
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue(subscription);
+    vi.mocked(billing.getStripe).mockResolvedValue(stripe as unknown as Stripe);
+    const { cancelAbandonedHouseholdSubscription } =
+      await import('../../../src/services/accountCleanup.js');
+    return { billing, stripe, cancel: cancelAbandonedHouseholdSubscription };
+  }
+
+  it('does nothing when there is no subscription on file (free tier or lifetime purchase)', async () => {
+    // A lifetime purchase clears stripeSubscriptionId by design: it is a
+    // one-time charge, so there is nothing recurring to stop.
+    const { billing, stripe, cancel } = await arrange({
+      planId: 'garden',
+      lifetimePlanId: 'garden',
+    });
+
+    await expect(cancel('hh')).resolves.toEqual({ outcome: 'no_subscription' });
+    expect(billing.getStripe).not.toHaveBeenCalled();
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+
+  it('cancels a live subscription immediately under a stable idempotency key', async () => {
+    const { stripe, cancel } = await arrange({
+      planId: 'garden',
+      stripeSubscriptionId: 'sub_1',
+      status: 'active',
+    });
+    stripe.subscriptions.cancel.mockResolvedValue({ id: 'sub_1', status: 'canceled' });
+
+    await expect(cancel('hh')).resolves.toEqual({ outcome: 'canceled', subscriptionId: 'sub_1' });
+    // The key is derived from the household + subscription, not the request,
+    // so a retried deletion replays Stripe's original result instead of
+    // issuing a second cancellation.
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledWith(
+      'sub_1',
+      {},
+      { idempotencyKey: 'account-deletion-cancel:hh:sub_1' }
+    );
+    expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+  });
+
+  it('goes to Stripe even when the stored status already says canceled', async () => {
+    // billing.ts documents a window in which a freshly checked-out
+    // subscription id sits next to a stale `canceled` status until the
+    // subscription.created webhook lands. Trusting the stored status there
+    // would skip cancelling a live subscription — Stripe is the authority.
+    const { stripe, cancel } = await arrange({
+      planId: 'garden',
+      stripeSubscriptionId: 'sub_new',
+      status: 'canceled',
+    });
+    stripe.subscriptions.cancel.mockResolvedValue({});
+
+    await expect(cancel('hh')).resolves.toEqual({
+      outcome: 'canceled',
+      subscriptionId: 'sub_new',
+    });
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an already-cancelled subscription as success (retry after a partial failure)', async () => {
+    const { stripe, cancel } = await arrange({
+      planId: 'garden',
+      stripeSubscriptionId: 'sub_1',
+      status: 'active',
+    });
+    stripe.subscriptions.cancel.mockRejectedValue(
+      stripeError('No such subscription: sub_1', 'resource_missing')
+    );
+    stripe.subscriptions.retrieve.mockResolvedValue({ id: 'sub_1', status: 'canceled' });
+
+    await expect(cancel('hh')).resolves.toEqual({
+      outcome: 'already_canceled',
+      subscriptionId: 'sub_1',
+    });
+    expect(stripe.subscriptions.retrieve).toHaveBeenCalledWith('sub_1');
+  });
+
+  it('treats a subscription Stripe no longer has as nothing left to bill', async () => {
+    const { stripe, cancel } = await arrange({
+      planId: 'garden',
+      stripeSubscriptionId: 'sub_gone',
+      status: 'active',
+    });
+    stripe.subscriptions.cancel.mockRejectedValue(
+      stripeError('No such subscription: sub_gone', 'resource_missing')
+    );
+    stripe.subscriptions.retrieve.mockRejectedValue(
+      stripeError('No such subscription: sub_gone', 'resource_missing')
+    );
+
+    await expect(cancel('hh')).resolves.toEqual({
+      outcome: 'missing_in_stripe',
+      subscriptionId: 'sub_gone',
+    });
+  });
+
+  it('rethrows the original failure when Stripe still reports the subscription live', async () => {
+    // Fail closed: the caller refuses the deletion rather than leaving a
+    // user who can no longer log in on a subscription that still bills.
+    const { stripe, cancel } = await arrange({
+      planId: 'garden',
+      stripeSubscriptionId: 'sub_1',
+      status: 'active',
+    });
+    const failure = stripeError('Stripe is down');
+    stripe.subscriptions.cancel.mockRejectedValue(failure);
+    stripe.subscriptions.retrieve.mockResolvedValue({ id: 'sub_1', status: 'active' });
+
+    await expect(cancel('hh')).rejects.toBe(failure);
+  });
+
+  it('rethrows the original failure when the outcome cannot be confirmed either way', async () => {
+    const { stripe, cancel } = await arrange({
+      planId: 'garden',
+      stripeSubscriptionId: 'sub_1',
+      status: 'active',
+    });
+    const failure = stripeError('Stripe is down');
+    stripe.subscriptions.cancel.mockRejectedValue(failure);
+    stripe.subscriptions.retrieve.mockRejectedValue(stripeError('socket hang up'));
+
+    await expect(cancel('hh')).rejects.toBe(failure);
   });
 });
