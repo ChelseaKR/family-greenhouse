@@ -12,15 +12,24 @@
  * chains the same command. A contributor reading that section would have
  * concluded a coverage drop couldn't block their merge, and been wrong.
  *
- * Hand-maintained numbers rot. So the numbers that CAN be derived cheaply are
- * derived here and diffed against the doc:
+ * Hand-maintained numbers rot. So what CAN be derived cheaply is derived here
+ * and diffed against the doc:
  *
- *   1. Test FILE counts per layer, from the filesystem.
+ *   1. The test layers themselves — every layer this script counts has a row
+ *      in the doc's table naming the path it actually lives at.
  *   2. Coverage thresholds, from the two vitest configs.
  *   3. The enforcement claims themselves — that thresholds exist in both
  *      configs, that the two CI test jobs run `test:coverage`, that pre-push
  *      runs `npm run verify`, and that the retired "not enforced" phrasings
  *      have not come back.
+ *
+ * Test FILE counts are derived, not documented. They used to be written into
+ * the table and checked here, which kept them honest but made every PR that
+ * added a test file rewrite the same two lines — on 2026-09-03 nine open PRs
+ * were unmergeable on `docs/testing.md` alone, and the correct post-merge
+ * number was on none of them. `--print` shows the live per-layer counts; the
+ * check refuses a `Files` column or an "across N files" total so the conflict
+ * surface cannot come back.
  *
  * Test CASE counts are deliberately NOT checked: collecting them means running
  * both suites, which is far too slow for a lint-stage gate. The doc labels them
@@ -29,7 +38,7 @@
  * Runs in CI's Lint job and in `npm run verify` — the same both-places pattern
  * as check-no-bare-markers.mjs (see CICD-27, make-verify parity).
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,56 +67,71 @@ const VITEST = /\.test\.tsx?$/;
 const PLAYWRIGHT = /\.spec\.ts$/;
 
 // ---------------------------------------------------------------------------
-// 1. Test file counts per layer
+// 1. Test layers: each one the script counts has a row, at its real path
 // ---------------------------------------------------------------------------
 
-const layers = [
-  ['backend/tests/unit/', countFiles('backend/tests/unit', VITEST)],
-  ['backend/tests/integration/', countFiles('backend/tests/integration', VITEST)],
-  ['backend/tests/eval/', countFiles('backend/tests/eval', VITEST)],
-  ['frontend/tests/unit/', countFiles('frontend/tests/unit', VITEST)],
-  ['frontend/src/**/*.test.ts', countFiles('frontend/src', VITEST)],
-  ['frontend/tests/integration/', countFiles('frontend/tests/integration', VITEST)],
-  ['frontend/tests/e2e/', countFiles('frontend/tests/e2e', PLAYWRIGHT)],
+// [doc row's `Where` text, directory walked, file pattern]. The `Where` text is
+// what the doc row must contain; the directory is what actually gets counted.
+const LAYERS = [
+  ['backend/tests/unit/', 'backend/tests/unit', VITEST],
+  ['backend/tests/integration/', 'backend/tests/integration', VITEST],
+  ['backend/tests/eval/', 'backend/tests/eval', VITEST],
+  ['frontend/tests/unit/', 'frontend/tests/unit', VITEST],
+  ['frontend/src/**/*.test.ts', 'frontend/src', VITEST],
+  ['frontend/tests/integration/', 'frontend/tests/integration', VITEST],
+  ['frontend/tests/e2e/', 'frontend/tests/e2e', PLAYWRIGHT],
 ];
 
-/**
- * Pull the `Files` cell out of the counts table row whose `Where` cell
- * contains the given path. Rows look like:
- *   | Backend unit | vitest | `backend/tests/unit/{...}` | 90 | 1,270 |
- */
-function docFileCount(where) {
-  const table = doc.match(/<!-- BEGIN:TEST-COUNTS[\s\S]*?<!-- END:TEST-COUNTS -->/);
-  if (!table) return null;
-  for (const line of table[0].split('\n')) {
-    if (!line.trim().startsWith('|') || !line.includes(where)) continue;
-    const cells = line.split('|').map((c) => c.trim());
-    // ['', Layer, Tool, Where, Files, Test cases, '']
-    const files = Number(cells[4]);
-    return Number.isNaN(files) ? null : files;
-  }
-  return null;
-}
-
-for (const [where, actual] of layers) {
-  const stated = docFileCount(where);
-  if (stated === null) {
+// A layer whose directory is gone is the "integration layer was really eight
+// files" drift in reverse: the doc would keep a row for tests that no longer
+// live there. Fail with the fix spelled out rather than an ENOENT stack.
+const layers = [];
+for (const [where, dir, re] of LAYERS) {
+  if (!existsSync(join(ROOT, dir))) {
     errors.push(
-      `${DOC_PATH}: counts table has no row for \`${where}\` (or its Files cell is not a number).`
+      `${dir}/ no longer exists, but this script and ${DOC_PATH} both list it as a test layer. Move or drop the entry in both.`
     );
-  } else if (stated !== actual) {
-    errors.push(
-      `${DOC_PATH}: counts table says ${stated} file(s) for \`${where}\`, but the repo has ${actual}. Update the table.`
-    );
+    continue;
   }
+  layers.push([where, countFiles(dir, re)]);
 }
 
 const totalVitestFiles = layers
   .filter(([where]) => where !== 'frontend/tests/e2e/')
   .reduce((n, [, c]) => n + c, 0);
-if (!doc.includes(`${totalVitestFiles} files`)) {
+
+if (process.argv.includes('--print')) {
+  const width = Math.max(...layers.map(([where]) => where.length));
+  for (const [where, n] of layers) console.log(`${where.padEnd(width)}  ${n}`);
+  console.log(`${'vitest total (non-e2e)'.padEnd(width)}  ${totalVitestFiles}`);
+  process.exit(errors.length > 0 ? 1 : 0);
+}
+
+const table = doc.match(/<!-- BEGIN:TEST-COUNTS[\s\S]*?<!-- END:TEST-COUNTS -->/);
+if (!table) {
+  errors.push(`${DOC_PATH}: the TEST-COUNTS marked block is missing.`);
+} else {
+  const rows = table[0].split('\n').filter((l) => l.trim().startsWith('|'));
+  for (const [where] of layers) {
+    if (!rows.some((l) => l.includes(where))) {
+      errors.push(`${DOC_PATH}: counts table has no row for \`${where}\`.`);
+    }
+  }
+  // The retired column. A `Files` cell is a hand-maintained number that every
+  // test-adding PR must rewrite; see the header comment for what that cost.
+  const header = rows[0] ?? '';
+  if (/\|\s*Files\s*\|/.test(header)) {
+    errors.push(
+      `${DOC_PATH}: counts table has a \`Files\` column again. File counts are derived (\`--print\`), not documented — drop the column.`
+    );
+  }
+}
+
+// The retired total. Same reasoning as the column.
+const total = doc.match(/across \d[\d,]* files/);
+if (total) {
   errors.push(
-    `${DOC_PATH}: should state "${totalVitestFiles} files" as the vitest file total (sum of every non-e2e row).`
+    `${DOC_PATH}: says "${total[0]}" — a hand-maintained file total. File counts are derived (\`--print\`), not documented — drop the figure.`
   );
 }
 
@@ -244,5 +268,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `docs/testing.md matches the repo (${totalVitestFiles} vitest files, coverage floors in sync).`
+  `docs/testing.md matches the repo (${layers.length} test layers, ${totalVitestFiles} vitest files on disk, coverage floors in sync).`
 );
