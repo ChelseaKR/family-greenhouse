@@ -180,6 +180,51 @@
       }
     }
   },
+  "firstRun": {
+    "documentTitle": "Welcome",
+    "greeting": "Welcome, {{name}}",
+    "greetingFallback": "Welcome to Family Greenhouse",
+    "progress": "Step {{current}} of {{total}}",
+    "skip": "Skip for now",
+    "loading": "Setting up your first minute…",
+    "footer": "Nothing here is required — you can pick any of it up later from Help in the sidebar.",
+    "plant": {
+      "title": "Add your first plant",
+      "description": "One plant is enough to get started. Give it a name and we'll take it from there.",
+      "nameLabel": "Plant name",
+      "namePlaceholder": "Kitchen monstera",
+      "nameHelp": "Whatever your household already calls it.",
+      "nameRequired": "Give your plant a name.",
+      "nameTooLong": "That name is too long.",
+      "speciesLabel": "Species (optional)",
+      "speciesPlaceholder": "Monstera deliciosa",
+      "speciesHelp": "If we recognise the species, we can set up its care schedule for you.",
+      "speciesTooLong": "That species name is too long.",
+      "scheduleNoSpecies": "Add a species and we'll look for a care schedule to go with it.",
+      "scheduleChecking": "Checking for a care schedule…",
+      "scheduleCheckFailed": "We couldn't check for a care schedule just now. Your plant will still be saved — you can add its tasks from its own page.",
+      "scheduleUnknown": "We don't have a care schedule for that species, and we won't guess at one. You can add a recurring task from the plant's page whenever you like.",
+      "scheduleMatch": "Set up the {{name}} schedule.",
+      "submit": "Add plant",
+      "fullForm": "Add photos, spaces and more details instead",
+      "created": "{{name}} is in your greenhouse.",
+      "createdWithSchedule": "{{name}} is in, with its care schedule set up.",
+      "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page."
+    },
+    "invite": {
+      "title": "Share the care",
+      "description": "This is the part a single-user plant tracker can't do. Everyone in your household sees the same plants and the same schedule — whoever is around does the watering and marks it done, so nobody has to nag and nobody has to ask whether it got done.",
+      "free": "Sharing a household is part of the free plan — you don't need to pay to do this.",
+      "create": "Create an invite link",
+      "linkLabel": "Invite link",
+      "copy": "Copy link",
+      "copied": "Invite link copied.",
+      "copyFailed": "We couldn't copy it for you — the link is selected, so copy it now.",
+      "expires": "The link works until {{date}}.",
+      "solo": "It's just me for now",
+      "finish": "Go to my dashboard"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "plants": "Plants",

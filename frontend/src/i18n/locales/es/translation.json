@@ -190,6 +190,51 @@
       }
     }
   },
+  "firstRun": {
+    "documentTitle": "Bienvenida",
+    "greeting": "Te damos la bienvenida, {{name}}",
+    "greetingFallback": "Te damos la bienvenida a Family Greenhouse",
+    "progress": "Paso {{current}} de {{total}}",
+    "skip": "Omitir por ahora",
+    "loading": "Preparando tu primer minuto…",
+    "footer": "Nada de esto es obligatorio: puedes retomarlo más tarde desde Ayuda, en la barra lateral.",
+    "plant": {
+      "title": "Añade tu primera planta",
+      "description": "Con una planta basta para empezar. Ponle un nombre y nosotros seguimos desde ahí.",
+      "nameLabel": "Nombre de la planta",
+      "namePlaceholder": "Monstera de la cocina",
+      "nameHelp": "El nombre con el que ya la llamáis en casa.",
+      "nameRequired": "Ponle un nombre a tu planta.",
+      "nameTooLong": "Ese nombre es demasiado largo.",
+      "speciesLabel": "Especie (opcional)",
+      "speciesPlaceholder": "Monstera deliciosa",
+      "speciesHelp": "Si reconocemos la especie, podemos preparar su calendario de cuidados.",
+      "speciesTooLong": "Ese nombre de especie es demasiado largo.",
+      "scheduleNoSpecies": "Añade una especie y buscaremos un calendario de cuidados que le corresponda.",
+      "scheduleChecking": "Buscando un calendario de cuidados…",
+      "scheduleCheckFailed": "Ahora mismo no hemos podido comprobar si hay un calendario de cuidados. Tu planta se guardará igualmente: puedes añadir sus tareas desde su propia página.",
+      "scheduleUnknown": "No tenemos un calendario de cuidados para esa especie y no vamos a inventarlo. Puedes añadir una tarea periódica desde la página de la planta cuando quieras.",
+      "scheduleMatch": "Preparar el calendario de {{name}}.",
+      "submit": "Añadir planta",
+      "fullForm": "Mejor añadir fotos, espacios y más detalles",
+      "created": "{{name}} ya está en tu invernadero.",
+      "createdWithSchedule": "{{name}} ya está, con su calendario de cuidados preparado.",
+      "scheduleFailed": "Se guardó {{name}}, pero no se pudo añadir su calendario de cuidados. Puedes añadir tareas desde su propia página."
+    },
+    "invite": {
+      "title": "Comparte el cuidado",
+      "description": "Esto es lo que un registro de plantas para una sola persona no puede hacer. Todo el hogar ve las mismas plantas y el mismo calendario: quien esté en casa riega y lo marca como hecho, así nadie tiene que insistir ni preguntar si ya se hizo.",
+      "free": "Compartir el hogar forma parte del plan gratuito: no hace falta pagar para hacerlo.",
+      "create": "Crear un enlace de invitación",
+      "linkLabel": "Enlace de invitación",
+      "copy": "Copiar enlace",
+      "copied": "Enlace de invitación copiado.",
+      "copyFailed": "No hemos podido copiarlo por ti: el enlace está seleccionado, cópialo ahora.",
+      "expires": "El enlace funciona hasta el {{date}}.",
+      "solo": "De momento soy la única persona",
+      "finish": "Ir a mi panel"
+    }
+  },
   "nav": {
     "dashboard": "Panel",
     "plants": "Plantas",

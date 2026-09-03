@@ -8,5 +8,10 @@
     "importPlants.submit_many",
     "plants.lineage.childrenCount_many"
   ],
-  "intentionallyEqual": ["common.no", "publicShell.blog", "spaces.seasonalMoveSummary"]
+  "intentionallyEqual": [
+    "common.no",
+    "firstRun.plant.speciesPlaceholder",
+    "publicShell.blog",
+    "spaces.seasonalMoveSummary"
+  ]
 }
