@@ -91,9 +91,10 @@ The Lambdas read everything from environment variables that Terraform sets at de
 
 ### Plant identification (optional)
 
-| Variable           | Effect                                |
-| ------------------ | ------------------------------------- |
-| `PLANT_ID_API_KEY` | Real Plant.id calls. Demo without it. |
+| Variable                  | Effect                                                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PLANT_ID_API_KEY`        | Real Plant.id calls. Demo without it.                                                                                                                                                          |
+| `PLANT_ID_USD_PER_CREDIT` | USD accounted per credit on the `plant_id_identify` log line — cost accounting only, never gating. Default `0.0585` (€0.05 × 1.17). Not yet a Terraform variable, so the default is what runs. |
 
 ### AI inference cost caps
 
@@ -291,4 +292,25 @@ For ~100 households, ~10k plants, ~50k reminders/month:
 - SES: ~$0.10/1000 emails
 - SNS SMS: ~$0.0075/SMS in US (this is the expensive one — most cost will come here if SMS reminders take off)
 
-Sentry, Stripe, and Plant.id costs are vendor-dependent.
+Sentry and Stripe costs are vendor-dependent. Plant.id's is not: it is prepaid,
+pay-as-you-go, one credit per identification call, priced in EUR only
+(<https://www.kindwise.com/pricing>, read 2026-09-02):
+
+| Tier | Credits   | € / credit | Minimum purchase |
+| ---- | --------- | ---------- | ---------------- |
+| A    | 1,000     | €0.05      | €50              |
+| B    | 10,000    | €0.03      | €300             |
+| C    | 50,000    | €0.02      | €1,000           |
+| D    | 200,000   | €0.015     | €3,000           |
+| E    | 800,000   | €0.012     | €9,600           |
+| F    | 1,500,000 | €0.01      | €15,000          |
+
+100 free credits on registration. "Purchased credits are valid for 3 months
+(this does not apply to purchases under 30 000 credits)" — so a Tier A or B
+purchase does not expire. At our volume we are Tier A: **€0.05 ≈ $0.0585 per
+identification** at the 1.17 USD/EUR assumed in
+`backend/src/config/upstreamCosts.ts`. That is the number the plan allowances
+(3 / 30 / 100 identifications a month) are priced against, and it is why the
+annual and lifetime plans were withdrawn from sale — see
+[ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md) and
+[`evals/UNIT-ECONOMICS.md`](../evals/UNIT-ECONOMICS.md).

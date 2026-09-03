@@ -100,6 +100,41 @@ describe('plants identify handler', () => {
     expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
   });
 
+  it('logs the accounted cost of a configured identification (cost accounting, never gating) and nothing for the free fallback', async () => {
+    const { logger } = await import('../../../src/utils/logger.js');
+    const { PLANT_ID_USD_PER_CREDIT } = await import('../../../src/config/upstreamCosts.js');
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    const info = vi.spyOn(logger, 'info');
+    const costLogs = () =>
+      (info.mock.calls as unknown[][]).filter((call) => call[1] === 'plant_id_identify');
+
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+      configured: true,
+      suggestions: [],
+    });
+    const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(costLogs()).toHaveLength(1);
+    // One credit at the recorded Tier A price (€0.05 × 1.17 USD/EUR). The
+    // response itself carries no cost field — this is telemetry only.
+    expect(costLogs()[0][0]).toMatchObject({
+      bucketId: 'user:user-1',
+      planId: 'seedling',
+      credits: 1,
+      costUsd: PLANT_ID_USD_PER_CREDIT,
+    });
+    expect(PLANT_ID_USD_PER_CREDIT).toBe(0.0585);
+    expect(JSON.parse(res.body)).not.toHaveProperty('costUsd');
+
+    info.mockClear();
+    vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValue(false);
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({ configured: false });
+    await identify(buildEvent(), ctx, () => {});
+    expect(costLogs()).toHaveLength(0);
+    info.mockRestore();
+  });
+
   it('does NOT meter a not-configured fallback (no Plant.id credit was spent)', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
