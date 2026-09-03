@@ -1848,6 +1848,35 @@ paths:
       tags: [Billing]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /billing/top-up/checkout:
+    post:
+      summary: Start a one-time Stripe checkout for an identification top-up pack (admin only)
+      description: >-
+        Sells the pack described by `identifyTopUp` on GET /billing/plans (20 identifications, valid 12
+        months, never auto-renewed; ADR 0019). Credits are granted by the Stripe webhook, idempotently on
+        the Checkout Session id, and drawn on only after the plan's monthly allowance is spent. Fails
+        CLOSED: when no Stripe price is configured for this environment the answer is a 400 whose
+        `details.code` is `TOP_UP_NOT_CONFIGURED` — never a fallback price, never a free credit.
+      tags: [Billing]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checkoutAttemptId:
+                  type: string
+                  format: uuid
+                  description: Generated once per click; forwarded as Stripe's idempotency key.
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400':
+          {
+            description: Top-up pack not for sale in this environment (`details.code` = TOP_UP_NOT_CONFIGURED),
+          }
+        '403': { description: Admin-only }
+        '503': { description: Payments paused }
   /billing/portal:
     post:
       summary: Open the Stripe customer portal for plan management
@@ -2003,8 +2032,19 @@ paths:
                   type: string
                   description: Base64-encoded JPEG/PNG or a data URL. Cap at 256 KB after encoding.
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: >-
+            Suggestions plus `usage` ({ used, allowance, meteringEnabled }). On the enforced path the
+            object also carries `source` (`allowance` | `credit`) and, after a credit spend, `credits`
+            (IdentifyCreditBalance). Both are omitted when credits were not consulted.
+        '402':
+          description: >-
+            Monthly allowance exhausted and no top-up credit left. `details` carries
+            `code: IDENTIFY_BUDGET_EXHAUSTED`, `topUpAvailable` (true only when the caller has a household,
+            payments are on, and a top-up price is configured), `credits` (IdentifyCreditBalance with a
+            real 0, or null when credits were not consulted), and `topUp` ({ credits, priceUsd } or null).
         '502': { description: Plant.id upstream failed }
+        '503': { description: Metering unavailable; nothing was charged and nothing was reserved }
 
   # --- Notifications: manual reminder kick (also runs hourly via EventBridge) ---
   /notifications/run-reminders:
@@ -2334,6 +2374,29 @@ components:
             Compatibility field for numeric-only clients; omitted whenever either counter is unknown.
         usageDetail:
           $ref: '#/components/schemas/BillingUsageDetail'
+        lifetimePlanId: { type: string, enum: [garden, greenhouse] }
+        cancelAtPeriodEnd: { type: boolean }
+        identifyCredits:
+          description: >-
+            Identification top-up credits (ADR 0019). `null` means the balance could not be read and is
+            unknown — never zero. A genuine zero is `{ remaining: 0, expiresAt: null }`.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/IdentifyCreditBalance'
+
+    IdentifyCreditBalance:
+      type: object
+      additionalProperties: false
+      required: [remaining, expiresAt]
+      properties:
+        remaining:
+          type: integer
+          minimum: 0
+          description: Credits left across every unexpired pack.
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the soonest-expiring pack with credits runs out; null when none remain.
 
     FrontendTelemetryEvent:
       oneOf:

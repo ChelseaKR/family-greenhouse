@@ -1351,5 +1351,28 @@
       "completeFailedBody": "No se guardó nada. Toca otra vez en un momento.",
       "footer": "Esta planta se cuida con"
     }
+  },
+  "identifyTopUp": {
+    "title": "¿Necesitas más identificaciones?",
+    "body": "Compra un paquete único de identificaciones de plantas adicionales. Los créditos se usan solo cuando se agota la cuota mensual de tu plan, y nada se renueva automáticamente.",
+    "exhaustedTitle": "Se han agotado las identificaciones de este mes",
+    "exhaustedBody": "La cuota mensual de identificaciones de tu plan está agotada y tu hogar no tiene créditos restantes. Compra un paquete para seguir identificando o mejora tu plan para tener una cuota mensual mayor.",
+    "exhaustedNoPack": "Se han agotado las identificaciones de plantas de este mes. Tu cuota se restablece el mes que viene, y un plan superior incluye más cada mes.",
+    "offer": "{{credits}} identificaciones por {{price}}",
+    "terms": "Compra única. Los créditos son válidos durante {{days}} días desde la compra y se usan solo después de la cuota mensual de tu plan. Nada se renueva automáticamente.",
+    "termsNoDays": "Compra única. Los créditos se usan solo después de la cuota mensual de tu plan. Nada se renueva automáticamente.",
+    "buy": "Comprar {{credits}} por {{price}}",
+    "adminOnly": "Solo una persona administradora del hogar puede comprar paquetes de identificaciones.",
+    "notForSale": "Los paquetes de identificaciones no están disponibles en este momento.",
+    "balance": "{{n}} créditos de identificación restantes",
+    "balanceExpires": "{{n}} créditos de identificación restantes, válidos hasta el {{date}}",
+    "balanceNone": "No quedan créditos de identificación",
+    "balanceUnavailable": "No hemos podido leer tu saldo de créditos de identificación en este momento.",
+    "purchaseReturned": "Gracias: tus créditos de identificación aparecerán aquí en cuanto se confirme el pago. Puede tardar un momento.",
+    "errorTitle": "No se pudo iniciar la compra",
+    "errorNotConfigured": "Los paquetes de identificaciones no están disponibles en este momento. No se ha realizado ningún cargo.",
+    "errorPaymentsPaused": "Los pagos están en pausa. No se ha realizado ningún cargo.",
+    "errorNotAdmin": "Solo una persona administradora del hogar puede comprar paquetes de identificaciones.",
+    "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos."
   }
 }

@@ -104,6 +104,12 @@ stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL"
 stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO"
 stripe_price_id_greenhouse        = "price_1UB7JuAhnUt8CMG05o9ktQLa"
 stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
+# Identification top-up pack (ADR 0019): a ONE-TIME price for "20
+# identifications, $1.99", created in Stripe LIVE mode. Blank = not for sale;
+# POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED and no credit
+# is ever granted. Owner step: create the product + one-time price in Stripe
+# LIVE mode, paste its id here, re-attest stripe_price_ids_are_live, apply.
+stripe_price_id_identify_top_up = ""
 # Manual confirmation gate (see check block in main.tf): only set true once
 # every non-empty stripe_price_id_* above has been verified to exist in the
 # SAME Stripe mode (test/live) as the STRIPE_SECRET_KEY secret. Terraform

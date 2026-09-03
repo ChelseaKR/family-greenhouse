@@ -235,6 +235,7 @@ module "api" {
   stripe_price_id_garden_lifetime   = var.stripe_price_id_garden_lifetime
   stripe_price_id_greenhouse        = var.stripe_price_id_greenhouse
   stripe_price_id_greenhouse_annual = var.stripe_price_id_greenhouse_annual
+  stripe_price_id_identify_top_up   = var.stripe_price_id_identify_top_up
   stripe_automatic_tax_enabled      = var.stripe_automatic_tax_enabled
   payments_enabled                  = var.payments_enabled
 }

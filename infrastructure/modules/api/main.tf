@@ -388,6 +388,7 @@ locals {
     STRIPE_PRICE_ID_GARDEN_LIFETIME   = var.stripe_price_id_garden_lifetime
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
+    STRIPE_PRICE_ID_IDENTIFY_TOP_UP   = var.stripe_price_id_identify_top_up
     STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                  = var.payments_enabled
     POSTHOG_KEY                       = var.posthog_key
@@ -1012,11 +1013,12 @@ locals {
     "POST /notifications/email/unsubscribe" = { group = "notifications", auth = "none" }
 
     # --- billing (plans + webhook public; webhook is Stripe-signed) ---
-    "GET /billing/plans"     = { group = "billing", auth = "none" }
-    "GET /billing/me"        = { group = "billing", auth = "jwt" }
-    "POST /billing/checkout" = { group = "billing", auth = "jwt" }
-    "POST /billing/portal"   = { group = "billing", auth = "jwt" }
-    "POST /billing/webhook"  = { group = "billing", auth = "none" }
+    "GET /billing/plans"            = { group = "billing", auth = "none" }
+    "GET /billing/me"               = { group = "billing", auth = "jwt" }
+    "POST /billing/checkout"        = { group = "billing", auth = "jwt" }
+    "POST /billing/top-up/checkout" = { group = "billing", auth = "jwt" }
+    "POST /billing/portal"          = { group = "billing", auth = "jwt" }
+    "POST /billing/webhook"         = { group = "billing", auth = "none" }
 
     # --- species ---
     "GET /species/search" = { group = "species", auth = "jwt" }

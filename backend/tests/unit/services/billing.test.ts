@@ -956,6 +956,142 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
   });
 });
 
+describe('applyStripeEvent — identification top-up grant (ADR 0019)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const conditionErr = () =>
+    Object.assign(new Error('exists'), { name: 'ConditionalCheckFailedException' });
+
+  function topUpEvent(over: { id?: string; payment_status?: string; type?: string } = {}) {
+    return {
+      id: over.id ?? 'evt_topup_1',
+      created: 1_756_857_600,
+      type: over.type ?? 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_topup_1',
+          mode: 'payment',
+          payment_status: over.payment_status ?? 'paid',
+          customer: 'cus_1',
+          metadata: { householdId: 'hh-1', purchase: 'identify_top_up', credits: '20' },
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  type Sent = { kind: string; input: Record<string, any> };
+  const sentCalls = async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    return vi.mocked(dynamodb.send).mock.calls.map((c) => c[0] as unknown as Sent);
+  };
+
+  it('grants the pack row keyed by the session, then records the ledger — and never touches the household row', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(topUpEvent());
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['Put', 'Put']);
+    // The grant: idempotent by its own key.
+    expect(calls[0].input.ConditionExpression).toBe('attribute_not_exists(PK)');
+    expect(calls[0].input.Item).toMatchObject({
+      PK: 'HOUSEHOLD#hh-1',
+      SK: 'IDCREDIT#cs_topup_1',
+      granted: 20,
+      remaining: 20,
+      purchasedAt: new Date(1_756_857_600 * 1000).toISOString(),
+    });
+    // Then the shared dedupe ledger, in the same apply-then-record order as
+    // every other event.
+    expect(calls[1].input.Item.PK).toBe('STRIPE_EVENT#evt_topup_1');
+    // No subscription write of any kind: a pack is credits, not entitlement.
+    expect(calls.some((c) => c.kind === 'Update')).toBe(false);
+    // Not a subscription activation: no lifecycle analytics.
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('a second delivery of the same event grants NOTHING, whatever the ledger says', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    // The pack row already exists (conditional put refused); the ledger row
+    // does NOT (the first delivery crashed between grant and ledger write).
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditionErr()).mockResolvedValueOnce({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(applyStripeEvent(topUpEvent())).resolves.toBeUndefined();
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['Put', 'Put']);
+    expect(calls[0].input.Item.SK).toBe('IDCREDIT#cs_topup_1');
+    // No throw: Stripe gets its 2xx and stops retrying.
+  });
+
+  it('a redelivery where BOTH the pack and the ledger already exist is a silent no-op', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockRejectedValueOnce(conditionErr())
+      .mockRejectedValueOnce(conditionErr());
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(applyStripeEvent(topUpEvent())).resolves.toBeUndefined();
+  });
+
+  it('a failed grant write propagates so Stripe retries, and leaves no ledger row behind', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('DDB throttled'));
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(applyStripeEvent(topUpEvent())).rejects.toThrow('DDB throttled');
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+
+  it('an UNPAID top-up checkout grants nothing and is not mistaken for a malformed lifetime purchase', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent, deltaForStripeEvent } =
+      await import('../../../src/services/billing.js');
+    const unpaid = topUpEvent({ payment_status: 'unpaid' });
+    expect(deltaForStripeEvent(unpaid)).toBeNull();
+    await applyStripeEvent(unpaid);
+    expect(dynamodb.send).not.toHaveBeenCalled();
+  });
+
+  it('grants on the later async_payment_succeeded for a deferred payment method', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      topUpEvent({ type: 'checkout.session.async_payment_succeeded', id: 'evt_async' })
+    );
+    const calls = await sentCalls();
+    expect(calls[0].input.Item.SK).toBe('IDCREDIT#cs_topup_1');
+    expect(calls[1].input.Item.PK).toBe('STRIPE_EVENT#evt_async');
+  });
+
+  it('a lifetime (mode=payment) checkout still takes the subscription path — the marker, not the mode, decides', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({ Item: undefined });
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_life',
+      created: 1_756_857_600,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_life',
+          mode: 'payment',
+          payment_status: 'paid',
+          customer: 'cus_1',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    const calls = await sentCalls();
+    expect(calls.some((c) => c.kind === 'Update' && c.input.Key?.PK === 'HOUSEHOLD#hh-1')).toBe(
+      true
+    );
+    expect(
+      calls.some((c) => c.kind === 'Put' && String(c.input.Item?.SK).startsWith('IDCREDIT#'))
+    ).toBe(false);
+  });
+});
+
 describe('applyStripeEvent — confirmed-conversion analytics', () => {
   beforeEach(() => {
     vi.clearAllMocks();

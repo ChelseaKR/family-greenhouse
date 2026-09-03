@@ -7,6 +7,7 @@ import { BillingSettings } from '@/features/settings/BillingSettings';
 import {
   evaluatePlanLimits,
   resolvePlanUsage,
+  type IdentifyTopUpOffer,
   type Plan,
   type PlanUsage,
   type PlanUsageDetail,
@@ -25,6 +26,7 @@ vi.mock('@/services/billingService', async () => {
       getCurrentSubscription: vi.fn(),
       createCheckout: vi.fn(),
       createPortalSession: vi.fn(),
+      createTopUpCheckout: vi.fn(),
     },
   };
 });
@@ -82,13 +84,18 @@ const PRICED_PLANS: Plan[] = [
 
 async function renderBilling(
   sub: SubscriptionState,
-  { paid = false, route = '/settings/billing' } = {}
+  {
+    paid = false,
+    route = '/settings/billing',
+    identifyTopUp,
+  }: { paid?: boolean; route?: string; identifyTopUp?: IdentifyTopUpOffer } = {}
 ) {
   const { billingService } = await import('@/services/billingService');
   vi.mocked(billingService.listPlans).mockResolvedValue({
     paymentsAvailable: paid,
     commercialHold: { active: !paid, effectiveDate: '2026-07-14' },
     plans: paid ? PRICED_PLANS : PLANS,
+    ...(identifyTopUp ? { identifyTopUp } : {}),
   });
   vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
   useAuthStore.setState({
@@ -609,5 +616,105 @@ describe('purchase controls once payment activity is available', () => {
     await renderBilling({ planId: 'garden' }, { paid: true });
     expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
     expect(screen.getByText('This is your current plan.')).toBeInTheDocument();
+  });
+});
+
+describe('BillingSettings — identification top-up pack (ADR 0019)', () => {
+  const OFFER: IdentifyTopUpOffer = {
+    available: true,
+    credits: 20,
+    validityDays: 365,
+    priceUsd: 1.99,
+  };
+
+  beforeEach(() => {
+    isAdmin.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders the pack with the household balance when the catalog offers it', async () => {
+    await renderBilling(
+      {
+        planId: 'garden',
+        identifyCredits: { remaining: 12, expiresAt: '2027-09-03T12:00:00.000Z' },
+      },
+      { paid: true, identifyTopUp: OFFER }
+    );
+    expect(screen.getByTestId('identify-top-up-card')).toBeInTheDocument();
+    expect(screen.getByText('20 identifications for $1.99')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+    expect(screen.getByTestId('identify-credit-balance')).toHaveTextContent(
+      /12 identification credits left/
+    );
+  });
+
+  it('renders nothing for the pack when the catalog does not offer it and the household holds no credits', async () => {
+    await renderBilling(
+      { planId: 'garden', identifyCredits: { remaining: 0, expiresAt: null } },
+      {
+        paid: true,
+        identifyTopUp: { available: false, credits: 20, validityDays: 365, priceUsd: 1.99 },
+      }
+    );
+    expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing for the pack against an older backend that publishes no offer', async () => {
+    await renderBilling({ planId: 'garden' }, { paid: true });
+    expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+  });
+
+  it('keeps a held balance visible even when the pack is no longer for sale', async () => {
+    await renderBilling(
+      { planId: 'garden', identifyCredits: { remaining: 4, expiresAt: null } },
+      {
+        paid: true,
+        identifyTopUp: { available: false, credits: 20, validityDays: 365, priceUsd: 1.99 },
+      }
+    );
+    expect(screen.getByTestId('identify-top-up-card')).toBeInTheDocument();
+    expect(screen.getByText('4 identification credits left')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
+  });
+
+  it('reports an unreadable balance as unavailable, never as 0', async () => {
+    await renderBilling(
+      { planId: 'garden', identifyCredits: null },
+      { paid: true, identifyTopUp: OFFER }
+    );
+    const balance = screen.getByTestId('identify-credit-balance');
+    expect(balance).toHaveTextContent(/couldn't read your identification credit balance/i);
+    expect(balance).not.toHaveTextContent(/No identification credits left/);
+  });
+
+  it('withholds the purchase while payments are paused even if a stale catalog says available', async () => {
+    await renderBilling({ planId: 'garden' }, { paid: false, identifyTopUp: OFFER });
+    expect(screen.queryByRole('button', { name: /Buy 20/ })).not.toBeInTheDocument();
+  });
+
+  it('shows members the admin-only reason instead of a button', async () => {
+    isAdmin.mockReturnValue(false);
+    await renderBilling({ planId: 'garden' }, { paid: true, identifyTopUp: OFFER });
+    expect(screen.queryByRole('button', { name: /Buy 20/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Only a household admin can buy identification packs.')
+    ).toBeInTheDocument();
+  });
+
+  it('acknowledges a return from a top-up checkout while the webhook catches up', async () => {
+    await renderBilling(
+      { planId: 'garden', identifyCredits: { remaining: 0, expiresAt: null } },
+      {
+        paid: true,
+        identifyTopUp: OFFER,
+        route: '/settings/billing?status=success&purchase=identify-top-up',
+      }
+    );
+    expect(
+      screen.getByText(/credits will show here as soon as the payment is confirmed/i)
+    ).toBeInTheDocument();
   });
 });

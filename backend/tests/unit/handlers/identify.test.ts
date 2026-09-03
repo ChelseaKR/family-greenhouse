@@ -48,6 +48,12 @@ describe('plants identify handler', () => {
     vi.mocked(identifyBudget.getUsage).mockResolvedValue(0);
     vi.mocked(identifyBudget.incrementUsage).mockResolvedValue(1);
     vi.mocked(identifyBudget.reserveUsage).mockResolvedValue(1);
+    vi.mocked(identifyBudget.reserveIdentification).mockResolvedValue({
+      used: 1,
+      source: 'allowance',
+    });
+    delete process.env.PAYMENTS_ENABLED;
+    delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValue(true);
     vi.mocked(identifyBudget.allowanceForPlan).mockImplementation(
@@ -189,17 +195,130 @@ describe('plants identify handler', () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
-    vi.mocked(identifyBudget.reserveUsage).mockRejectedValueOnce(
-      new identifyBudget.IdentifyBudgetExceededError()
-    );
+    const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+    // Householdless caller: credits were not consulted (null), not zero.
+    Object.assign(exceeded, { credits: null });
+    vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
 
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
     const body = JSON.parse(res.body);
     expect(body.message).toMatch(/Seedling plan is limited to 3 plant identifications/);
     expect(body.message).toMatch(/Upgrade/);
+    // A householdless caller has nowhere to hold a pack, so none is offered.
+    expect(body.details).toEqual({
+      code: 'IDENTIFY_BUDGET_EXHAUSTED',
+      topUpAvailable: false,
+      credits: null,
+      topUp: null,
+    });
     // The paid upstream must never be hit for a blocked call.
     expect(plantIdentification.identifyPlant).not.toHaveBeenCalled();
+  });
+
+  function householdEvent() {
+    return buildEvent({
+      requestContext: {
+        authorizer: {
+          claims: { sub: 'user-1', email: 'a@b.com', 'custom:household_id': 'hh-1' },
+        },
+        identity: { sourceIp: '127.0.0.1' },
+      } as APIGatewayProxyEvent['requestContext'],
+    });
+  }
+
+  async function warmHousehold() {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    setCachedMembership('user-1', 'hh-1', 'member');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+    vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
+  }
+
+  it('offers the top-up pack in the 402 when the household can actually buy one (ADR 0019)', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    await warmHousehold();
+    process.env.PAYMENTS_ENABLED = '1';
+    process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+    Object.assign(exceeded, { credits: { remaining: 0, expiresAt: null } });
+    vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
+
+    const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    const body = JSON.parse(res.body);
+    expect(body.message).toMatch(
+      /Garden plan's 30 plant identifications for this month are used up/
+    );
+    expect(body.message).toMatch(/top-up pack of 20 identifications/);
+    expect(body.details).toEqual({
+      code: 'IDENTIFY_BUDGET_EXHAUSTED',
+      topUpAvailable: true,
+      credits: { remaining: 0, expiresAt: null },
+      topUp: { credits: 20, priceUsd: 1.99 },
+    });
+    expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 30, 'hh-1');
+    expect(plantIdentification.identifyPlant).not.toHaveBeenCalled();
+  });
+
+  it('does NOT offer the pack when no top-up price is configured — the old message, no offer', async () => {
+    await warmHousehold();
+    process.env.PAYMENTS_ENABLED = '1';
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+    Object.assign(exceeded, { credits: { remaining: 0, expiresAt: null } });
+    vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
+
+    const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    const body = JSON.parse(res.body);
+    expect(body.message).toMatch(/Garden plan is limited to 30 plant identifications per month/);
+    expect(body.details).toEqual({
+      code: 'IDENTIFY_BUDGET_EXHAUSTED',
+      topUpAvailable: false,
+      credits: { remaining: 0, expiresAt: null },
+      topUp: null,
+    });
+  });
+
+  it('does NOT offer the pack while payments are paused, even with a price configured', async () => {
+    await warmHousehold();
+    process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+    Object.assign(exceeded, { credits: { remaining: 0, expiresAt: null } });
+    vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
+
+    const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    expect(JSON.parse(res.body).details).toMatchObject({ topUpAvailable: false, topUp: null });
+  });
+
+  it('publishes which pool paid and the balance left after a credit spend', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    await warmHousehold();
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    vi.mocked(identifyBudget.reserveIdentification).mockResolvedValueOnce({
+      used: 30,
+      source: 'credit',
+      credits: { remaining: 19, expiresAt: '2027-09-03T12:00:00.000Z' },
+    });
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+      configured: true,
+      suggestions: [],
+    });
+
+    const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).usage).toEqual({
+      used: 30,
+      allowance: 30,
+      meteringEnabled: true,
+      source: 'credit',
+      credits: { remaining: 19, expiresAt: '2027-09-03T12:00:00.000Z' },
+    });
   });
 
   it('with metering DISABLED (the beta default) an over-allowance household still identifies', async () => {
@@ -225,7 +344,9 @@ describe('plants identify handler', () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
-    vi.mocked(identifyBudget.reserveUsage).mockRejectedValueOnce(new Error('DynamoDB unavailable'));
+    vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(
+      new Error('DynamoDB unavailable')
+    );
 
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
 
@@ -244,7 +365,10 @@ describe('plants identify handler', () => {
 
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
-    vi.mocked(identifyBudget.reserveUsage).mockResolvedValue(6);
+    vi.mocked(identifyBudget.reserveIdentification).mockResolvedValue({
+      used: 6,
+      source: 'allowance',
+    });
     vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
       configured: true,
       suggestions: [],
@@ -260,9 +384,17 @@ describe('plants identify handler', () => {
     });
     const res = (await identify(event, ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).usage).toEqual({ used: 6, allowance: 30, meteringEnabled: true });
-    // Household callers meter on the household bucket, not the user.
-    expect(identifyBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 30);
+    // On the allowance path nothing is claimed about credits: no `credits`
+    // key at all, rather than a 0 that was never read.
+    expect(JSON.parse(res.body).usage).toEqual({
+      used: 6,
+      allowance: 30,
+      meteringEnabled: true,
+      source: 'allowance',
+    });
+    // Household callers meter on the household bucket, not the user, and
+    // the household id is what lets a top-up credit be found.
+    expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 30, 'hh-1');
     expect(identifyBudget.getUsage).not.toHaveBeenCalled();
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });

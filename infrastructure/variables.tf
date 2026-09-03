@@ -487,6 +487,12 @@ variable "stripe_price_id_greenhouse_annual" {
   default     = ""
 }
 
+variable "stripe_price_id_identify_top_up" {
+  description = "Stripe ONE-TIME price ID for the identification top-up pack (20 identifications, $1.99; ADR 0019). Optional: blank means the pack is not for sale and POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED. Never a fallback price."
+  type        = string
+  default     = ""
+}
+
 variable "stripe_automatic_tax_enabled" {
   description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured."
   type        = string

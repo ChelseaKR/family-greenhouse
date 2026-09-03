@@ -53,6 +53,11 @@ stripe_price_id_garden_annual     = "price_1UB39YAhnUt8CMG0n38Jx1Ol"
 stripe_price_id_garden_lifetime   = "price_1UB39YAhnUt8CMG0z0D2bIqs"
 stripe_price_id_greenhouse        = "price_1UB3AhAhnUt8CMG0oeGJZKqH"
 stripe_price_id_greenhouse_annual = "price_1UB3A7AhnUt8CMG0kyrXPGtH"
+# Identification top-up pack (ADR 0019): a ONE-TIME test-mode price for
+# "20 identifications, $1.99". Blank = not for sale; checkout answers 400
+# TOP_UP_NOT_CONFIGURED and nothing is granted. Owner step: create the price in
+# Stripe TEST mode, paste its id here, apply.
+stripe_price_id_identify_top_up = ""
 # Stays false in staging: these ids are test-mode by design, and the check
 # block in main.tf only requires the attestation for an sk_live_ key.
 stripe_price_ids_are_live = false

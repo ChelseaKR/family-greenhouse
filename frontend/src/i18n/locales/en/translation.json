@@ -1317,5 +1317,28 @@
       "completeFailedBody": "Nothing was logged. Please tap again in a moment.",
       "footer": "This plant is looked after with"
     }
+  },
+  "identifyTopUp": {
+    "title": "Need more identifications?",
+    "body": "Buy a one-time pack of extra plant identifications. Credits are used only after your plan's monthly allowance runs out, and nothing renews automatically.",
+    "exhaustedTitle": "This month's identifications are used up",
+    "exhaustedBody": "Your plan's monthly identification allowance is spent and your household has no credits left. Buy a pack to keep identifying, or upgrade your plan for a higher monthly allowance.",
+    "exhaustedNoPack": "This month's plant identifications are used up. Your allowance resets next month, and a higher plan includes more each month.",
+    "offer": "{{credits}} identifications for {{price}}",
+    "terms": "One-time purchase. Credits are valid for {{days}} days from purchase and are used only after your plan's monthly allowance. Nothing renews automatically.",
+    "termsNoDays": "One-time purchase. Credits are used only after your plan's monthly allowance. Nothing renews automatically.",
+    "buy": "Buy {{credits}} for {{price}}",
+    "adminOnly": "Only a household admin can buy identification packs.",
+    "notForSale": "Identification packs aren't available right now.",
+    "balance": "{{n}} identification credits left",
+    "balanceExpires": "{{n}} identification credits left, valid until {{date}}",
+    "balanceNone": "No identification credits left",
+    "balanceUnavailable": "We couldn't read your identification credit balance right now.",
+    "purchaseReturned": "Thanks — your identification credits will show here as soon as the payment is confirmed. This can take a moment.",
+    "errorTitle": "Purchase could not be started",
+    "errorNotConfigured": "Identification packs aren't available right now. No charge was made.",
+    "errorPaymentsPaused": "Payments are currently paused. No charge was made.",
+    "errorNotAdmin": "Only a household admin can buy identification packs.",
+    "errorProviderUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly."
   }
 }

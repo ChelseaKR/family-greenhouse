@@ -7,7 +7,12 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/outline';
-import { plantService, IdentificationSuggestion } from '@/services/plantService';
+import {
+  plantService,
+  identifyBudgetExhaustedFromError,
+  type IdentificationSuggestion,
+  type IdentifyBudgetExhausted,
+} from '@/services/plantService';
 import { suggestTaskTemplate, taskService } from '@/services/taskService';
 import { speciesService } from '@/services/speciesService';
 import { track } from '@/services/analytics';
@@ -22,6 +27,7 @@ import { SuggestedCareCard } from './SuggestedCareCard';
 import { PetToxicityNote } from './PetToxicityNote';
 import { PlantNameNursery } from './PlantNameNursery';
 import { SpacePicker } from './SpacePicker';
+import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { downscaleImage } from '@/utils/image';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -92,6 +98,10 @@ export function AddPlantPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [suggestions, setSuggestions] = useState<IdentificationSuggestion[] | null>(null);
   const [identifyNotice, setIdentifyNotice] = useState<string | null>(null);
+  // The 402 "allowance and credits spent" refusal, kept apart from `error`
+  // so the page can offer the top-up pack (ADR 0019) at the moment of need
+  // instead of a dead-end message.
+  const [identifyExhausted, setIdentifyExhausted] = useState<IdentifyBudgetExhausted | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [autoAddCareTasks, setAutoAddCareTasks] = useState(true);
 
@@ -148,6 +158,7 @@ export function AddPlantPage() {
     setIsIdentifying(true);
     setError(null);
     setIdentifyNotice(null);
+    setIdentifyExhausted(null);
     // A new identify REPLACES the previous result in every outcome. Leaving
     // the old list mounted meant an empty or failed re-identify rendered
     // "No suggestions came back" above a still-clickable "Monstera deliciosa
@@ -177,6 +188,15 @@ export function AddPlantPage() {
         setSuggestions(result.suggestions);
       }
     } catch (err) {
+      const exhausted = identifyBudgetExhaustedFromError(err);
+      if (exhausted) {
+        setIdentifyExhausted(exhausted);
+        // No pack can be bought here (no household, payments paused, or no
+        // price configured): say what happened and where the allowance
+        // comes from, in the reader's language.
+        if (!exhausted.topUpAvailable) setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
+        return;
+      }
       setError(getErrorMessage(err));
     } finally {
       setIsIdentifying(false);
@@ -379,6 +399,17 @@ export function AddPlantPage() {
           <Alert variant="info" className="mb-6">
             {identifyNotice}
           </Alert>
+        )}
+        {identifyExhausted?.topUpAvailable && identifyExhausted.topUp && (
+          <div className="mb-6">
+            <IdentifyTopUpCard
+              variant="exhausted"
+              available
+              credits={identifyExhausted.topUp.credits}
+              priceUsd={identifyExhausted.topUp.priceUsd}
+              balance={identifyExhausted.credits}
+            />
+          </div>
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>

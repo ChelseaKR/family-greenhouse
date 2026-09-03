@@ -26,6 +26,7 @@ export type AuditEvent =
   | 'household.settings_changed'
   | 'billing.subscription_changed'
   | 'billing.upgrade_requested'
+  | 'billing.identify_top_up_granted'
   // Outbound-mail deliverability (services/emailSuppression.ts). Suppressing
   // an address stops every product email to it, and clearing one puts it back
   // on the send list — both are consequential enough to leave a trail.
