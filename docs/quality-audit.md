@@ -5,7 +5,7 @@
 > **Correction, 2026-08-29.** This document stated the handler-route count as 66, in two
 > places, while describing that count as CI-enforced. The enforcement was real and green;
 > it simply never reported its number back to the document quoting it, so the audit sat 39
-> routes stale (the handlers now expose 105) while truthfully describing a passing gate.
+> routes stale (the handlers now expose 110) while truthfully describing a passing gate.
 > A number typed into prose is a committed artifact standing in for a computation, and
 > nothing re-ran the computation. Both figures are corrected and are now re-derived on
 > every `npm run verify` by `scripts/check-doc-figures.mjs`, which fails in both
@@ -41,7 +41,7 @@ Every finding cites the file/file-region that backs it.
 
 ### Standards compliance
 
-**Strong.** REST conventions consistent. OpenAPI spec at `docs/api-spec.yaml` now documents every one of the 109 handler routes, and `scripts/check-api-spec.mjs` fails CI on any drift (a handler route without a spec entry, or a stale spec entry without a handler). Adding `GET /me/export` in this pass exercised the loop: handler comment → spec entry → green check.
+**Strong.** REST conventions consistent. OpenAPI spec at `docs/api-spec.yaml` now documents every one of the 110 handler routes, and `scripts/check-api-spec.mjs` fails CI on any drift (a handler route without a spec entry, or a stale spec entry without a handler). Adding `GET /me/export` in this pass exercised the loop: handler comment → spec entry → green check.
 
 ---
 
@@ -248,7 +248,7 @@ Every finding cites the file/file-region that backs it.
 
 ## Documentation
 
-**Strong.** `docs/` covers architecture, deployment, accessibility, billing, security, testing, notifications, roadmap, production checklist, and now Perenual + profile editing. Inline doc comments are dense and explain rationale. `api-spec.yaml` is complete (all 109 handler routes) and CI-enforced against drift via `scripts/check-api-spec.mjs`.
+**Strong.** `docs/` covers architecture, deployment, accessibility, billing, security, testing, notifications, roadmap, production checklist, and now Perenual + profile editing. Inline doc comments are dense and explain rationale. `api-spec.yaml` is complete (all 110 handler routes) and CI-enforced against drift via `scripts/check-api-spec.mjs`.
 
 ---
 
