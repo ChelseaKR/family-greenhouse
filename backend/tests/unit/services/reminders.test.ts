@@ -44,6 +44,12 @@ vi.mock('../../../src/services/notificationPrefs.js', async () => {
     getPreferences: vi.fn(),
   };
 });
+// Auto-handoff (ADR 0018) rides on the reminder scan; its own behaviour is
+// covered in escalation.test.ts. Here it is a stub so these tests stay about
+// reminders, plus one case pinning the hand-off contract below.
+vi.mock('../../../src/services/escalation.js', () => ({
+  runEscalations: vi.fn(async () => ({ escalated: 0, notified: 0 })),
+}));
 vi.mock('../../../src/services/pestAlerts.js', () => ({
   evaluatePestAlerts: vi.fn(),
   wasAlerted: vi.fn(async () => false),
@@ -836,6 +842,32 @@ describe('reminders service', () => {
       expect(sent).toBe(1);
       expect(vi.mocked(notifier.sendToUser).mock.calls[0][0].userId).toBe('u2');
     });
+  });
+
+  it('hands the active-plant-filtered due list to auto-handoff and survives its failure', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const escalation = await import('../../../src/services/escalation.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']); // p-dead is not active
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { id: 'live', nextDue: past, plantId: 'p1', assignedTo: 'u1' },
+      { id: 'dead', nextDue: past, plantId: 'p-dead', assignedTo: 'u1' },
+    ] as never);
+    vi.mocked(escalation.runEscalations).mockRejectedValueOnce(new Error('ddb hiccup'));
+
+    // The reminder still goes out, and the hook saw only the live-plant task.
+    expect(await remindHousehold('hh', NOW)).toBe(1);
+    expect(notifier.sendToUser).toHaveBeenCalledOnce();
+    expect(escalation.runEscalations).toHaveBeenCalledOnce();
+    const [hh, due, when] = vi.mocked(escalation.runEscalations).mock.calls[0];
+    expect(hh).toBe('hh');
+    expect((due as Array<{ id: string }>).map((t) => t.id)).toEqual(['live']);
+    expect(when).toBe(NOW);
   });
 
   it('remindAllHouseholds scans every household and survives one failing', async () => {

@@ -17,6 +17,8 @@ import {
   UpdateMemberRoleInput,
   createSitterLinkSchema,
   CreateSitterLinkInput,
+  setEscalationRuleSchema,
+  SetEscalationRuleInput,
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
 import * as welcomeEmail from '../../services/welcomeEmail.js';
@@ -28,6 +30,7 @@ import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
+import * as escalation from '../../services/escalation.js';
 import { getPlan, hasHouseholdToolkit } from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
@@ -911,6 +914,59 @@ export const revokeSitterLink = createHandler(
 // Kiosk (wall display) link management. Separate file, same group: it mints a
 // household-scoped credential exactly like the sitter links above.
 import { issueKioskLink, getKioskLink, revokeKioskLink } from './kioskLink.js';
+// PUT /households/{id}/escalation
+//
+// Auto-handoff rule (brief §4.4, ADR 0018): `{ escalateAfterDays: 5..60 | null }`.
+// Admin-only (it turns on a new class of email for the whole household) and
+// gated to plans with the household toolkit — 402, the same upgrade signal
+// the plant cap uses. The 5-day floor is enforced by the schema here AND by
+// the service, so no path can persist a lower value.
+export const setEscalationRule = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<SetEscalationRuleInput>;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    if (!hasHouseholdToolkit(plan)) {
+      throw createHttpError(
+        402,
+        `Auto-handoff is part of the household toolkit, which the ${plan.name} plan does not include. Upgrade to turn it on.`
+      );
+    }
+    let escalateAfterDays: number | null;
+    try {
+      escalateAfterDays = await escalation.setEscalationRule(
+        householdId,
+        validatedBody.escalateAfterDays
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === 'EscalationRuleRangeError') {
+        throw createHttpError(400, err.message);
+      }
+      if (err instanceof Error && err.name === 'HouseholdNotFoundError') {
+        throw createHttpError(404, 'Household not found');
+      }
+      throw err;
+    }
+    audit('household.settings_changed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { setting: 'escalateAfterDays', value: escalateAfterDays },
+    });
+    return successResponse({ escalateAfterDays });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(setEscalationRuleSchema));
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
@@ -934,4 +990,5 @@ export const handler = createRouter({
   // Member → admin upgrade ask; documented in ./upgradeRequests.ts.
   'POST /households/{id}/upgrade-requests': createUpgradeRequest,
   'GET /households/{id}/away-recap': getAwayRecap,
+  'PUT /households/{id}/escalation': setEscalationRule,
 });

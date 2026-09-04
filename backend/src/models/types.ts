@@ -22,6 +22,13 @@ export interface Household {
    *  via the household settings page; off by default — we don't ask for
    *  geo without an explicit reason. */
   location?: HouseholdLocation | null;
+  /**
+   * Auto-handoff rule (ADR 0018): a task this many days overdue goes up for
+   * grabs and the rest of the household is told once. null/absent = OFF.
+   * The server enforces a floor of 5 days (escalation.ts) so a client can
+   * never turn the feature into hourly nagging.
+   */
+  escalateAfterDays?: number | null;
   createdAt: string;
   createdBy: string;
 }
@@ -84,6 +91,20 @@ export interface HouseholdInvite {
  */
 export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 
+/**
+ * Care rotation for a space (ADR 0018): "the balcony alternates between Sam
+ * and Priya, weekly". Time-indexed from `anchor` rather than a stored turn
+ * counter, so "whose turn" is a function of the clock — the server can derive
+ * it for any date without a write, and a missed cycle cannot desynchronise it.
+ */
+export interface SpaceRotation {
+  /** Members in turn order. At least two — a rotation of one is a default caregiver. */
+  memberIds: string[];
+  cadence: 'weekly' | 'monthly';
+  /** Instant period 0 starts at. Set when the rotation is created. */
+  anchor: string;
+}
+
 /** A household-scoped place where plants currently live. Keeping the
  * inside/outside classification on the space (rather than the plant) means a
  * seasonal move changes one relationship instead of rewriting plant traits. */
@@ -101,6 +122,8 @@ export interface PlantSpace {
   petAccess: boolean | null;
   /** Current household member assigned to new tasks for plants here. */
   defaultCaregiverId: string | null;
+  /** Care rotation; takes precedence over defaultCaregiverId. Null = none. */
+  rotation: SpaceRotation | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -167,9 +190,20 @@ export interface Task {
   assignedToName: string | null;
   /** Inherited assignments remain claimable; null means explicit/unassigned.
    *  `space_default` came from the space's usual caregiver, `move_day` from
-   *  Seasonal Move Day's round-robin split (services/moveDay.ts). */
-  assignmentSource: 'space_default' | 'move_day' | null;
+   *  Seasonal Move Day's round-robin split (services/moveDay.ts), `rotation`
+   *  from the space's care-rotation turn (ADR 0018). */
+  assignmentSource: 'space_default' | 'move_day' | 'rotation' | null;
   notes: string | null;
+  /**
+   * Auto-handoff marker (ADR 0018). Set once per occurrence: `escalatedForDue`
+   * pins the `nextDue` the escalation fired for, so the hourly scan can never
+   * escalate the same lapse twice and a completion (which advances nextDue)
+   * naturally re-arms it. Absent on rows that were never escalated.
+   */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  /** Who held the task when it was escalated (null when it was unassigned). */
+  escalatedFrom?: string | null;
   createdBy: string;
   createdAt: string;
 }

@@ -104,7 +104,8 @@ export function SpaceBrowseView({
                   (group.space.lightLevel ||
                     group.space.environment === 'outside' ||
                     group.space.petAccess != null ||
-                    group.caregiverName)
+                    group.caregiverName ||
+                    group.rotation)
                 );
                 return (
                   <Card
@@ -236,6 +237,15 @@ export function SpaceBrowseView({
                           {group.caregiverName && (
                             <span className="rounded-full border border-primary-100 bg-paper px-2.5 py-1 text-xs text-gray-700">
                               {t('spaces.usualCaregiver', { name: group.caregiverName })}
+                            </span>
+                          )}
+                          {/* A rotating space always says whose turn it is —
+                              or, honestly, that everyone in it is away. */}
+                          {group.rotation && (
+                            <span className="rounded-full border border-primary-100 bg-paper px-2.5 py-1 text-xs text-gray-700">
+                              {group.rotation.turnName
+                                ? t('spaces.rotation.turnIs', { name: group.rotation.turnName })
+                                : t('spaces.rotation.everyoneAway')}
                             </span>
                           )}
                         </div>

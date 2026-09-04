@@ -70,6 +70,32 @@ describe('HouseholdPage', () => {
       // list — both already member-visible, neither previously fetched here.
       http.get(`${API}/households/hh-1/activity`, () => HttpResponse.json([])),
       http.get(`${API}/tasks`, () => HttpResponse.json([])),
+      // The admin-only auto-handoff card reads the plan catalog + subscription.
+      http.get(`${API}/billing/plans`, () =>
+        HttpResponse.json({
+          paymentsAvailable: false,
+          commercialHold: { active: false, effectiveDate: '' },
+          plans: [
+            {
+              id: 'seedling',
+              name: 'Seedling',
+              description: '',
+              maxPlants: 10,
+              maxMembers: 6,
+              householdToolkit: false,
+            },
+            {
+              id: 'garden',
+              name: 'Garden',
+              description: '',
+              maxPlants: 500,
+              maxMembers: 6,
+              householdToolkit: true,
+            },
+          ],
+        })
+      ),
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'seedling' })),
       http.get(`${API}/me/households`, () =>
         HttpResponse.json([
           { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'member', joinedAt: '' },

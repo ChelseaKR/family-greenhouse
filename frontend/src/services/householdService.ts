@@ -6,6 +6,8 @@ export interface Household {
   name: string;
   /** Optional saved location for climate-aware care tips. */
   location?: { city: string; lat: number; lon: number } | null;
+  /** Auto-handoff rule: days overdue before a task goes up for grabs; null/absent = off. */
+  escalateAfterDays?: number | null;
   createdAt: string;
   createdBy: string;
 }
@@ -212,6 +214,21 @@ export const householdService = {
     );
     return response.data;
   },
+
+  /**
+   * Auto-handoff rule (admin-only, household-toolkit plans). `null` turns it
+   * off; the server enforces the 5-day floor.
+   */
+  async setEscalationRule(
+    householdId: string,
+    escalateAfterDays: number | null
+  ): Promise<{ escalateAfterDays: number | null }> {
+    const response = await api.put<{ escalateAfterDays: number | null }>(
+      `/households/${householdId}/escalation`,
+      { escalateAfterDays }
+    );
+    return response.data;
+  },
 };
 
 /**
@@ -326,6 +343,13 @@ export interface ActivityPayloadByType {
    *  string here because historical rows may name features this build no
    *  longer knows. */
   'upgrade.requested': { feature: string; plan: 'garden' | 'greenhouse' };
+  /** Auto-handoff put an overdue task up for grabs. System-authored: no actor. */
+  'task.escalated': TaskAssignmentActivityPayload & {
+    previousAssigneeId: string | null;
+    previousAssigneeName: string | null;
+    daysOverdue: number;
+    notified: number;
+  };
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -353,6 +377,7 @@ export const ACTIVITY_TYPES = [
   'sitter_link.revoked',
   'task.schedule_matched',
   'upgrade.requested',
+  'task.escalated',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

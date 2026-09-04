@@ -62,6 +62,7 @@ import * as climate from './climate.js';
 import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
 import * as emailSuppression from './emailSuppression.js';
+import * as escalation from './escalation.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -664,6 +665,16 @@ export async function remindHousehold(
       );
       if (memberDelivered) sent += 1;
     }
+  }
+
+  // Auto-handoff (ADR 0018) rides on the same due-window query: `due` is the
+  // already-fetched, active-plant-filtered list, so when nothing is ≥5 days
+  // overdue this costs no reads at all. Best-effort, after the reminder loop
+  // so an escalation can never suppress or duplicate today's reminders.
+  try {
+    await escalation.runEscalations(householdId, due, now);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, householdId }, 'reminders.escalation_failed');
   }
 
   // Seasonal pest alerts ride along with the reminder run (the prefs toggle

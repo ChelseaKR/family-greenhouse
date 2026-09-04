@@ -64,6 +64,20 @@ export const spaceEnvironmentEnum = z.enum(['inside', 'outside']);
 export const rainExposureEnum = z.enum(['exposed', 'sheltered']);
 export const lightLevelEnum = z.enum(['low', 'medium', 'bright']);
 
+// Care rotation (ADR 0018). At least two members: a rotation of one is just
+// `defaultCaregiverId` with extra steps, and allowing it would make "whose
+// turn" a fixed answer the UI would still label a rotation.
+export const spaceRotationSchema = z
+  .object({
+    memberIds: z.array(z.string().uuid()).min(2).max(20),
+    cadence: z.enum(['weekly', 'monthly']),
+    anchor: z.string().datetime().optional(),
+  })
+  .refine((input) => new Set(input.memberIds).size === input.memberIds.length, {
+    message: 'Rotation members must be unique',
+    path: ['memberIds'],
+  });
+
 export const createSpaceSchema = z.object({
   name: z.string().trim().min(1).max(80),
   environment: spaceEnvironmentEnum,
@@ -71,6 +85,7 @@ export const createSpaceSchema = z.object({
   lightLevel: lightLevelEnum.optional(),
   petAccess: z.boolean().optional(),
   defaultCaregiverId: z.string().uuid().optional(),
+  rotation: spaceRotationSchema.optional(),
 });
 
 export const updateSpaceSchema = createSpaceSchema
@@ -79,6 +94,7 @@ export const updateSpaceSchema = createSpaceSchema
     lightLevel: lightLevelEnum.nullable().optional(),
     petAccess: z.boolean().nullable().optional(),
     defaultCaregiverId: z.string().uuid().nullable().optional(),
+    rotation: spaceRotationSchema.nullable().optional(),
   })
   .refine(
     (input) =>
@@ -87,7 +103,8 @@ export const updateSpaceSchema = createSpaceSchema
       input.rainExposure !== undefined ||
       input.lightLevel !== undefined ||
       input.petAccess !== undefined ||
-      input.defaultCaregiverId !== undefined,
+      input.defaultCaregiverId !== undefined ||
+      input.rotation !== undefined,
     {
       message: 'At least one space field is required',
     }
@@ -279,6 +296,20 @@ export const createSitterLinkSchema = z
     }
   });
 
+// Auto-handoff rule (ADR 0018). The 5-day floor is the brief's own guardrail
+// against notification volume; it is enforced HERE (server-side) and again in
+// escalation.setEscalationRule so no client path can lower it. null = off.
+export const MIN_ESCALATE_AFTER_DAYS = 5;
+export const MAX_ESCALATE_AFTER_DAYS = 60;
+export const setEscalationRuleSchema = z.object({
+  escalateAfterDays: z
+    .number()
+    .int()
+    .min(MIN_ESCALATE_AFTER_DAYS)
+    .max(MAX_ESCALATE_AFTER_DAYS)
+    .nullable(),
+});
+
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1).max(80),
 });
@@ -343,6 +374,7 @@ export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type CreatePlantInput = z.infer<typeof createPlantSchema>;
 export type UpdatePlantInput = z.infer<typeof updatePlantSchema>;
 export type MovePlantsInput = z.infer<typeof movePlantsSchema>;
+export type SpaceRotationInput = z.infer<typeof spaceRotationSchema>;
 export type CreateSpaceInput = z.infer<typeof createSpaceSchema>;
 export type UpdateSpaceInput = z.infer<typeof updateSpaceSchema>;
 
@@ -359,5 +391,6 @@ export type CompleteTaskInput = z.infer<typeof completeTaskSchema>;
 export type SnoozeTaskInput = z.infer<typeof snoozeTaskSchema>;
 export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
 export type SetVacationInput = z.infer<typeof setVacationSchema>;
+export type SetEscalationRuleInput = z.infer<typeof setEscalationRuleSchema>;
 export type CreateSitterLinkInput = z.infer<typeof createSitterLinkSchema>;
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;

@@ -147,7 +147,7 @@ describe('claimTask', () => {
 
     const update = (vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as Sent).input;
     expect(update.ConditionExpression).toBe(
-      'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay)'
+      'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay OR #assignmentSource = :rotation)'
     );
     expect(update.ExpressionAttributeValues).toMatchObject({
       ':spaceDefault': 'space_default',

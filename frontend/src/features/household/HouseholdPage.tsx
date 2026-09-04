@@ -28,6 +28,7 @@ import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
 import { SitterLinksCard } from './SitterLinksCard';
 import { CareLoadCard } from './CareLoadCard';
+import { AutoHandoffCard } from './AutoHandoffCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -296,6 +297,11 @@ export function HouseholdPage() {
           {t('awayRecap.householdCardLink')}
         </Link>
       </Card>
+      {/* Auto-handoff (ADR 0018) — admin-only because it turns on a new class
+          of email for everyone. Plan gating is read from the catalog inside. */}
+      {isAdmin && householdId && (
+        <AutoHandoffCard householdId={householdId} household={household} />
+      )}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

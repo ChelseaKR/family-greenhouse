@@ -110,6 +110,9 @@ describe('householdService', () => {
       id: 'hh',
       name: 'Home',
       location: null,
+      // Same stable-shape rule for the auto-handoff rule (ADR 0018): absent
+      // reads as null (off), never as an enabled threshold.
+      escalateAfterDays: null,
       createdAt: '2026',
       createdBy: 'user-1',
     });

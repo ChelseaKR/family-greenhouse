@@ -272,6 +272,46 @@ describe('dashboard activity rows', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders an auto-handoff escalation without an actor and without blame', async () => {
+    renderDashboardActivity([
+      event('task.escalated', {
+        taskId: 'task-1',
+        plantId: 'plant-monstera',
+        plantName: 'Monstera',
+        taskType: 'water',
+        previousAssigneeId: 'user-2',
+        previousAssigneeName: 'Sam',
+        daysOverdue: 6,
+        notified: 2,
+      }),
+    ]);
+
+    const text = await screen.findByText(
+      'Nobody got to water for Monstera in 6 days — it’s up for grabs'
+    );
+    // System-authored: the row never renders the actor name, and the person
+    // the task was taken from is not named in the feed either.
+    const row = text.closest('li') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(within(row).queryByText(/Chelsea/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/Sam/)).not.toBeInTheDocument();
+  });
+
+  it('renders an escalation row whose days-overdue field is missing without inventing a number', async () => {
+    renderDashboardActivity([
+      runtimeEvent('task.escalated', {
+        taskId: 'task-1',
+        plantId: 'plant-fern',
+        plantName: 'Fern',
+        taskType: 'fertilize',
+      }),
+    ]);
+
+    expect(
+      await screen.findByText('Nobody got to fertilize for Fern — it’s up for grabs')
+    ).toBeInTheDocument();
+  });
+
   it('keeps rendering when a newer backend sends an activity type this build does not know', async () => {
     renderDashboardActivity([runtimeEvent('plant.future_event', {})]);
 

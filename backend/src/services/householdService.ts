@@ -29,6 +29,7 @@ import {
 } from '../models/types.js';
 import { CreateHouseholdInput } from '../models/schemas.js';
 import * as emailSuppression from './emailSuppression.js';
+import { normalizeEscalateAfterDays } from './escalationRule.js';
 
 /**
  * Raised when a write would exceed the household's plan cap. Handlers map
@@ -249,6 +250,9 @@ export async function getHousehold(householdId: string): Promise<Household | nul
     id: result.Item.id as string,
     name: result.Item.name as string,
     location: (result.Item.location as Household['location']) ?? null,
+    // Read-side normalisation lives in escalation.ts so a legacy/corrupt
+    // value can never surface as an enabled rule.
+    escalateAfterDays: normalizeEscalateAfterDays(result.Item.escalateAfterDays),
     createdAt: result.Item.createdAt as string,
     createdBy: result.Item.createdBy as string,
   };

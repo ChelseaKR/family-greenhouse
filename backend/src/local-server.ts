@@ -43,7 +43,10 @@ import {
   applyTemplateSchema,
   applyTemplateBulkSchema,
   createSitterLinkSchema,
+  setEscalationRuleSchema,
 } from './models/schemas.js';
+import type { SpaceRotation } from './models/types.js';
+import { resolveInheritedAssignee, isExplicitAssignment } from './services/assignmentResolver.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import {
   PLANS,
@@ -184,6 +187,8 @@ interface Household {
   name: string;
   /** Optional saved location for climate-aware care tips. */
   location?: { city: string; lat: number; lon: number } | null;
+  /** Auto-handoff rule (ADR 0018); null/absent = off. */
+  escalateAfterDays?: number | null;
   createdAt: string;
   createdBy: string;
   planId?: 'seedling' | 'garden' | 'greenhouse';
@@ -234,6 +239,8 @@ interface PlantSpace {
   lightLevel: 'low' | 'medium' | 'bright' | null;
   petAccess: boolean | null;
   defaultCaregiverId: string | null;
+  /** Care rotation (ADR 0018); mirrors models/types.ts SpaceRotation. */
+  rotation: SpaceRotation | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -268,8 +275,12 @@ interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  assignmentSource: 'space_default' | 'move_day' | null;
+  assignmentSource: 'space_default' | 'move_day' | 'rotation' | null;
   notes: string | null;
+  /** Auto-handoff marker; mirrors models/types.ts. */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  escalatedFrom?: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -565,6 +576,7 @@ export function resetDb(): void {
     lightLevel: null,
     petAccess: null,
     defaultCaregiverId: null,
+    rotation: null,
     createdAt: now,
     createdBy: seedUserId,
     updatedAt: now,
@@ -1685,6 +1697,38 @@ app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res
   res.json({ status: 'ready', list });
 });
 
+// PUT /households/:id/escalation — mirrors handlers/households setEscalationRule:
+// admin-only, plan-gated (402 without the household toolkit), 5-day floor via
+// the shared schema. Stored on the household so GET /households/:id returns it.
+app.put(
+  '/households/:id/escalation',
+  authMiddleware,
+  requireHousehold,
+  validateBody(setEscalationRuleSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (user.householdRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin role required' });
+    }
+    const household = db.households.get(req.params.id);
+    if (!household) return res.status(404).json({ message: 'Household not found' });
+    const plan = PLANS[household.planId ?? 'seedling'];
+    if (!plan.householdToolkit) {
+      return res.status(402).json({
+        message: `Auto-handoff is part of the household toolkit, which the ${plan.name} plan does not include. Upgrade to turn it on.`,
+      });
+    }
+    const { escalateAfterDays } = (req as any).validatedBody as {
+      escalateAfterDays: number | null;
+    };
+    household.escalateAfterDays = escalateAfterDays;
+    res.json({ escalateAfterDays });
+  }
+);
+
 app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
   const user = (req as any).user;
   if (user.householdId !== req.params.id) {
@@ -2404,17 +2448,60 @@ app.delete(
 
 // ============ PLANT ROUTES ============
 
+/** Members + not-yet-ended vacation windows: the shared resolver's context. */
+function assignmentContextOf(householdId: string) {
+  return {
+    members: membersOf(householdId).map((m) => ({ userId: m.userId, name: m.name })),
+    vacations: [...db.vacations.values()].filter((w) => w.householdId === householdId),
+  };
+}
+
+function rotationMembersValid(householdId: string, memberIds: string[]): boolean {
+  const ids = new Set(membersOf(householdId).map((m) => m.userId));
+  return memberIds.every((id) => ids.has(id));
+}
+
+/**
+ * Mirrors taskService.reassignInheritedOccurrence: a task whose assignment is
+ * INHERITED re-inherits from its space when a new occurrence is generated —
+ * which is where care rotation actually advances. Explicit assignments and
+ * claims are never stomped. Called from every surface that completes a task
+ * (app, sitter link, public API), because each one generates an occurrence.
+ */
+function advanceInheritedAssignment(task: Task): void {
+  if (isExplicitAssignment(task)) return;
+  const plant = db.plants.get(task.plantId);
+  const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+  if (!space) return;
+  const inherited = resolveInheritedAssignee(
+    space,
+    assignmentContextOf(task.householdId),
+    new Date(task.nextDue)
+  );
+  task.assignedTo = inherited.userId;
+  task.assignedToName = inherited.name;
+  task.assignmentSource = inherited.source;
+}
+
+/** Mirrors handlers/plants listSpaces: derived rotationTurn on rotating spaces. */
 app.get('/spaces', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
+  const ctx = assignmentContextOf(user.householdId);
   res.json(
     [...db.spaces.values()]
       .filter((space) => space.householdId === user.householdId)
-      .map((space) => ({
-        ...space,
-        lightLevel: space.lightLevel ?? null,
-        petAccess: space.petAccess ?? null,
-        defaultCaregiverId: space.defaultCaregiverId ?? null,
-      }))
+      .map((space) => {
+        const base = {
+          ...space,
+          lightLevel: space.lightLevel ?? null,
+          petAccess: space.petAccess ?? null,
+          defaultCaregiverId: space.defaultCaregiverId ?? null,
+          rotation: space.rotation ?? null,
+        };
+        if (!base.rotation) return base;
+        const turn = resolveInheritedAssignee(base, ctx, new Date());
+        return { ...base, rotationTurn: { turnUserId: turn.userId, turnName: turn.name } };
+      })
       .sort((a, b) => a.name.localeCompare(b.name))
   );
 });
@@ -2444,6 +2531,11 @@ app.post(
         .status(400)
         .json({ message: 'defaultCaregiverId must be a current household member' });
     }
+    if (input.rotation && !rotationMembersValid(user.householdId, input.rotation.memberIds)) {
+      return res
+        .status(400)
+        .json({ message: 'rotation.memberIds must all be current household members' });
+    }
     const now = new Date().toISOString();
     const space: PlantSpace = {
       id: uuidv4(),
@@ -2455,6 +2547,7 @@ app.post(
       lightLevel: input.lightLevel ?? null,
       petAccess: input.petAccess ?? null,
       defaultCaregiverId: input.defaultCaregiverId ?? null,
+      rotation: input.rotation ? { ...input.rotation, anchor: input.rotation.anchor ?? now } : null,
       createdAt: now,
       createdBy: user.userId,
       updatedAt: now,
@@ -2510,6 +2603,27 @@ app.put(
     if (input.petAccess !== undefined) space.petAccess = input.petAccess;
     if (input.defaultCaregiverId !== undefined) {
       space.defaultCaregiverId = input.defaultCaregiverId;
+    }
+    if (input.rotation !== undefined) {
+      if (input.rotation === null) {
+        space.rotation = null;
+      } else {
+        if (!rotationMembersValid(user.householdId, input.rotation.memberIds)) {
+          return res
+            .status(400)
+            .json({ message: 'rotation.memberIds must all be current household members' });
+        }
+        // Keep the anchor when the cadence is unchanged, mirroring spaceService.
+        space.rotation = {
+          memberIds: input.rotation.memberIds,
+          cadence: input.rotation.cadence,
+          anchor:
+            input.rotation.anchor ??
+            (space.rotation && space.rotation.cadence === input.rotation.cadence
+              ? space.rotation.anchor
+              : new Date().toISOString()),
+        };
+      }
     }
     space.updatedAt = new Date().toISOString();
     res.json(space);
@@ -3495,6 +3609,7 @@ app.post(
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
+    advanceInheritedAssignment(task);
 
     const completionId = uuidv4();
     db.completions.set(completionId, {
@@ -3812,12 +3927,15 @@ function buildTask(
   // now + frequency.
   const nextDue = input.nextDue || now.toISOString();
   const plant = db.plants.get(input.plantId);
-  const defaultAssigneeId = plant?.spaceId
-    ? (db.spaces.get(plant.spaceId)?.defaultCaregiverId ?? undefined)
-    : undefined;
-  let assignedTo = input.assignedTo ?? defaultAssigneeId ?? null;
+  const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+  // Mirrors handlers/tasks inheritedAssignmentForPlant: the shared resolver
+  // ranks rotation above the space default, for the occurrence's own due date.
+  const inherited = space
+    ? resolveInheritedAssignee(space, assignmentContextOf(householdId), new Date(nextDue))
+    : { userId: null, name: null, source: null as Task['assignmentSource'] };
+  let assignedTo = input.assignedTo ?? inherited.userId ?? null;
   let assignmentSource: Task['assignmentSource'] =
-    input.assignedTo === undefined && defaultAssigneeId ? 'space_default' : null;
+    input.assignedTo === undefined && inherited.userId ? inherited.source : null;
   let assignedToName: string | null = null;
   if (assignedTo) {
     const assignee = db.users.get(assignedTo);
@@ -3953,7 +4071,8 @@ app.post('/tasks/:id/claim', authMiddleware, requireHousehold, (req, res) => {
   if (!task || task.householdId !== user.householdId) {
     return res.status(404).json({ message: 'Task not found' });
   }
-  if (task.assignedTo && task.assignmentSource !== 'space_default') {
+  // Inherited assignments (space default OR rotation turn) can be taken over.
+  if (task.assignedTo && task.assignmentSource === null) {
     return res.status(409).json({ message: 'Already claimed' });
   }
   const dbUser = db.users.get(user.userId);
@@ -4233,6 +4352,7 @@ app.post(
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
+    advanceInheritedAssignment(task);
 
     const dbUser = db.users.get(user.userId);
     const completionId = uuidv4();
@@ -5589,6 +5709,7 @@ app.post(
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
+    advanceInheritedAssignment(task);
 
     const completionId = uuidv4();
     db.completions.set(completionId, {

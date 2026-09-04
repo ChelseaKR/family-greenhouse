@@ -127,10 +127,28 @@ async function canonicalSpeciesForUpdate(
 const MAX_LINEAGE_DEPTH = 50;
 
 // GET /spaces
+//
+// Spaces carry a derived `rotationTurn` when they have a care rotation, so the
+// UI never re-implements the period maths (ADR 0018). `turnUserId: null` on a
+// rotating space is a real answer — everyone in the rotation is away — and the
+// client renders it as such.
 export const listSpaces = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
-    return successResponse(await spaceService.getSpaces(user.householdId!));
+    const householdId = user.householdId!;
+    const spaces = await spaceService.getSpaces(householdId);
+    if (!spaces.some((space) => space.rotation)) return successResponse(spaces);
+    const [members, vacations] = await Promise.all([
+      householdService.getHouseholdMembers(householdId),
+      taskService.listVacationWindows(householdId),
+    ]);
+    const turns = spaceService.rotationTurns(spaces, { members, vacations });
+    return successResponse(
+      spaces.map((space) => {
+        const turn = turns.get(space.id);
+        return turn ? { ...space, rotationTurn: turn } : space;
+      })
+    );
   }
 )
   .use(authMiddleware())
@@ -148,7 +166,11 @@ export const createSpace = createHandler(
       if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
         throw createHttpError(409, error.message);
       }
-      if (error instanceof Error && error.name === 'DefaultCaregiverNotMemberError') {
+      if (
+        error instanceof Error &&
+        (error.name === 'DefaultCaregiverNotMemberError' ||
+          error.name === 'RotationMemberNotMemberError')
+      ) {
         throw createHttpError(400, error.message);
       }
       throw error;
@@ -175,7 +197,11 @@ export const updateSpace = createHandler(
       if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
         throw createHttpError(409, error.message);
       }
-      if (error instanceof Error && error.name === 'DefaultCaregiverNotMemberError') {
+      if (
+        error instanceof Error &&
+        (error.name === 'DefaultCaregiverNotMemberError' ||
+          error.name === 'RotationMemberNotMemberError')
+      ) {
         throw createHttpError(400, error.message);
       }
       throw error;

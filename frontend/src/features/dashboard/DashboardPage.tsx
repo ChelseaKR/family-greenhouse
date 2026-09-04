@@ -8,6 +8,7 @@ import {
   ExclamationTriangleIcon,
   InformationCircleIcon,
   QuestionMarkCircleIcon,
+  HandRaisedIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -635,6 +636,24 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
+    case 'task.escalated': {
+      // System-authored: the row must not lead with an actor name (it is
+      // empty). The copy names the lapse, not a person — nobody is blamed.
+      const p = event.payload;
+      icon = <HandRaisedIcon className="h-4 w-4 text-amber-700" aria-hidden="true" />;
+      iconTone = 'bg-amber-50 ring-amber-200';
+      const days =
+        typeof p.daysOverdue === 'number' && Number.isInteger(p.daysOverdue) && p.daysOverdue > 0
+          ? p.daysOverdue
+          : null;
+      const task = p.taskType ?? t('activity.aTask');
+      const plant = p.plantName ?? t('activity.aPlant');
+      body =
+        days === null
+          ? t('activity.escalatedUnknownDays', { task, plant })
+          : t('activity.escalated', { task, plant, count: days });
+      break;
+    }
     default: {
       const _exhaustive: never = event;
       void _exhaustive;
@@ -717,7 +736,9 @@ function TaskItem({
           <TaskLocation label={locationLabel} />
           {(!task.assignedTo || task.coveringFor || skipReason) && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              {!task.assignedTo && <UpForGrabsBadge />}
+              {!task.assignedTo && (
+                <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
+              )}
               {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
               {skipReason && (
                 <ClimateSkipChip
