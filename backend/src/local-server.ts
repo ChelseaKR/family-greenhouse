@@ -98,6 +98,8 @@ import {
 import type { MoveDayList } from './services/moveDayPlan.js';
 import { identifyTopUpSummary } from './models/identifyTopUp.js';
 import { analyticsWindow } from './services/analyticsWindow.js';
+// Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
+import { computeCoverage } from './services/coverageMath.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -5250,6 +5252,39 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     doubleCare,
     historyLimitDays,
   });
+});
+
+// Mirrors handlers/households getCoverage: Garden-and-up, same pure
+// computeCoverage over the in-memory tables. Not a leaderboard — see
+// services/coverageMath.ts.
+app.get('/households/:id/analytics/coverage', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  const householdId = req.params.id;
+  if (user.householdId !== householdId) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const plan = PLANS[db.households.get(householdId)?.planId ?? 'seedling'];
+  if (!hasHouseholdToolkit(plan)) {
+    return res.status(402).json({
+      message: 'Coverage is part of the household toolkit, included with the Garden plan and up.',
+    });
+  }
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const report = computeCoverage({
+    members: membersOf(householdId).map((m) => ({ userId: m.userId, name: m.name })),
+    plants: [...db.plants.values()]
+      .filter((p) => p.householdId === householdId && (p.status ?? 'active') === 'active')
+      .map((p) => ({ id: p.id, name: p.name })),
+    completions: [...db.completions.values()]
+      .filter((c) => c.householdId === householdId)
+      .map((c) => ({ plantId: c.plantId, completedBy: c.completedBy })),
+    windows: [...db.vacations.values()].filter(
+      (w) => w.householdId === householdId && w.endDate >= nowIso
+    ),
+    now,
+  });
+  res.json(report);
 });
 
 app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req, res) => {

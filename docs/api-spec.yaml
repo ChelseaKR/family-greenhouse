@@ -1350,6 +1350,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DailyAnalytics'
+  /households/{id}/analytics/coverage:
+    get:
+      summary: Coverage (bus-factor) report — which plants rest on one caregiver and what a vacation window leaves uncovered. Garden plan and up. Not a leaderboard; carries no per-member totals or ranking.
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '200':
+          description: Coverage report
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - members
+                  - memberCount
+                  - plantCount
+                  - plants
+                  - soleCaregiverPlants
+                  - uncaredPlantCount
+                  - awayRisks
+                  - generatedAt
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: '#/components/schemas/CoverageMember' }
+                  memberCount: { type: integer }
+                  plantCount: { type: integer }
+                  plants:
+                    description: Every active plant with the set of current members who have ever logged care on it, by plant name.
+                    type: array
+                    items: { $ref: '#/components/schemas/CoveragePlant' }
+                  soleCaregiverPlants:
+                    description: The subset of `plants` whose only-ever caregiver is a single current member, by plant name.
+                    type: array
+                    items: { $ref: '#/components/schemas/CoveragePlant' }
+                  uncaredPlantCount:
+                    description: Active plants no current member has ever logged care on.
+                    type: integer
+                  awayRisks:
+                    description: One entry per pending vacation window, soonest first.
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId: { type: string }
+                        name: { type: string }
+                        startDate: { type: string, format: date-time }
+                        endDate: { type: string, format: date-time }
+                        coveredBy: { type: string }
+                        coveredByName: { type: string, nullable: true }
+                        active: { type: boolean }
+                        uncoveredPlants:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              plantId: { type: string }
+                              plantName: { type: string }
+                        uncoveredPlantCount: { type: integer }
+                  generatedAt: { type: string, format: date-time }
+        '402':
+          { description: Household plan does not include the household toolkit (Garden and up) }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /households/{id}/year-in-review:
     get:
       summary: Year-in-review aggregation for a given calendar year
@@ -2647,6 +2710,26 @@ components:
         active: { type: boolean }
         createdAt: { type: string, format: date-time, nullable: true }
         lastUsedAt: { type: string, format: date-time, nullable: true }
+    CoverageMember:
+      type: object
+      required: [userId, name]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+    CoveragePlant:
+      type: object
+      required: [plantId, plantName, caregivers, caregiverCount, soleCaregiver]
+      properties:
+        plantId: { type: string }
+        plantName: { type: string }
+        caregivers:
+          description: Current members who have ever logged care on this plant — a set, never a tally.
+          type: array
+          items: { $ref: '#/components/schemas/CoverageMember' }
+        caregiverCount: { type: integer }
+        soleCaregiver:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/CoverageMember' }]
     BillingUsage:
       type: object
       additionalProperties: false

@@ -229,6 +229,12 @@ export const householdService = {
     );
     return response.data;
   },
+
+  /** Coverage (bus-factor) report. 402 on plans without the household toolkit. */
+  async getCoverage(householdId: string): Promise<CoverageReport> {
+    const response = await api.get<CoverageReport>(`/households/${householdId}/analytics/coverage`);
+    return response.data;
+  },
 };
 
 /**
@@ -457,4 +463,49 @@ export interface YearInReview {
   historyLimitDays?: number | null;
   windowStart?: string;
   windowEnd?: string;
+}
+
+// --- Coverage (the bus-factor view) -----------------------------------------
+//
+// Mirrors backend/src/services/coverageMath.ts. Deliberately shaped so a
+// per-member completion total cannot be expressed: caregivers are a SET of
+// names, and every count on this report is a count of plants at risk.
+
+export interface CoverageMember {
+  userId: string;
+  name: string;
+}
+
+export interface CoveragePlant {
+  plantId: string;
+  plantName: string;
+  /** Current members who have ever logged care on this plant, by name. */
+  caregivers: CoverageMember[];
+  caregiverCount: number;
+  /** The one person who knows this plant, when exactly one current member does. */
+  soleCaregiver: CoverageMember | null;
+}
+
+export interface AwayRisk {
+  userId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  coveredBy: string;
+  coveredByName: string | null;
+  active: boolean;
+  /** Plants nobody else who is still here has ever cared for, by name. */
+  uncoveredPlants: Array<{ plantId: string; plantName: string }>;
+  uncoveredPlantCount: number;
+}
+
+export interface CoverageReport {
+  members: CoverageMember[];
+  memberCount: number;
+  plantCount: number;
+  plants: CoveragePlant[];
+  soleCaregiverPlants: CoveragePlant[];
+  uncaredPlantCount: number;
+  awayRisks: AwayRisk[];
+  generatedAt: string;
 }

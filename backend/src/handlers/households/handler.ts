@@ -32,6 +32,7 @@ import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as escalation from '../../services/escalation.js';
+import * as coverage from '../../services/coverage.js';
 import { getPlan, hasHouseholdToolkit, limitOf, type Plan } from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
@@ -635,6 +636,36 @@ export const getDailyAnalytics = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
+// GET /households/:id/analytics/coverage
+//
+// The bus-factor view: which plants rest on one person, and what an upcoming
+// vacation window leaves uncovered. Garden-and-up (the household toolkit).
+// Deliberately NOT a leaderboard — the report carries no per-member totals
+// and no ranking; see services/coverageMath.ts for the rule and the reasoning.
+export const getCoverage = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) throw createHttpError(400, 'Household ID is required');
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    if (!hasHouseholdToolkit(plan)) {
+      throw createHttpError(
+        402,
+        'Coverage is part of the household toolkit, included with the Garden plan and up.'
+      );
+    }
+    // A failed read throws here and surfaces as a 5xx — never as a report
+    // claiming zero plants at risk.
+    const report = await coverage.getCoverageReport(householdId);
+    return successResponse(report);
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
 // GET /households/:id/year-in-review?year=YYYY
 export const getYearInReview = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -1064,6 +1095,7 @@ export const handler = createRouter({
   'POST /households/join/{inviteCode}': joinHousehold,
   'GET /households/{id}/activity': getActivity,
   'GET /households/{id}/analytics/daily': getDailyAnalytics,
+  'GET /households/{id}/analytics/coverage': getCoverage,
   'GET /households/{id}/year-in-review': getYearInReview,
   'PUT /households/{householdId}/members/{userId}/role': updateMemberRole,
   'DELETE /households/{householdId}/members/{userId}': removeMember,
