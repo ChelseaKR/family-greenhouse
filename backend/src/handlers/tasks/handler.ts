@@ -9,8 +9,6 @@ import { userRateLimit, rateLimit } from '../../middleware/rateLimit.js';
 import * as sitterService from '../../services/sitterService.js';
 import { buildSitterBrief } from '../../services/sitterBrief.js';
 import { sitterBriefIncluded } from '../../services/sitterPlanGate.js';
-import * as billing from '../../services/billing.js';
-import { getPlan } from '../../models/plans.js';
 import {
   createTaskSchema,
   updateTaskSchema,
@@ -32,6 +30,10 @@ import * as taskService from '../../services/taskService.js';
 import * as plantService from '../../services/plantService.js';
 import * as spaceService from '../../services/spaceService.js';
 import * as householdService from '../../services/householdService.js';
+import * as billing from '../../services/billing.js';
+import * as doubleCare from '../../services/doubleCare.js';
+import { nextDueAfterMatch } from '../../services/doubleCareRules.js';
+import { getPlan, hasHouseholdToolkit, Plan } from '../../models/plans.js';
 import { recordActivity } from '../../services/activity.js';
 import {
   successResponse,
@@ -40,6 +42,71 @@ import {
   cacheableResponse,
 } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
+
+/**
+ * The household's plan, or null when the billing read failed. Callers decide
+ * what "unknown plan" means for them: the completion path skips the paid
+ * detector (care logging is never blocked by its own gate), the drift
+ * endpoints say so explicitly.
+ */
+async function resolvePlanBestEffort(householdId: string): Promise<Plan | null> {
+  try {
+    return getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
+    return null;
+  }
+}
+
+/**
+ * Double-care detection (household toolkit, brief §4.7). Runs BEFORE the
+ * completion write: a suspected duplicate is answered with 409 DUPLICATE_CARE
+ * and nothing is logged, so it is never dropped silently and never logged
+ * silently. The client renders "already done <when> by <name> — log it
+ * anyway?" and re-submits with `confirmDuplicate: true`; that completion is
+ * tagged with the id it duplicates.
+ *
+ * Returns the id to tag the completion with, or undefined for an ordinary
+ * completion (no toolkit, no duplicate, or a stale retry the service will
+ * no-op anyway). A detector that cannot read the log comes back `unavailable`
+ * and the completion proceeds untagged — the log line is the signal.
+ */
+async function detectDoubleCare(
+  householdId: string,
+  taskId: string,
+  actorId: string,
+  body: CompleteTaskInput
+): Promise<string | undefined> {
+  const plan = await resolvePlanBestEffort(householdId);
+  if (!plan || !hasHouseholdToolkit(plan)) return undefined;
+
+  const task = await taskService.getTask(householdId, taskId);
+  if (!task) throw createHttpError(404, 'Task not found');
+  // A retry carrying a stale occurrence token is a no-op in the service;
+  // don't second-guess it with a notice about a completion it won't write.
+  if (body.expectedNextDue !== undefined && task.nextDue !== body.expectedNextDue) {
+    return undefined;
+  }
+
+  const check = await doubleCare.findRecentDuplicate({
+    householdId,
+    plantId: task.plantId,
+    taskId,
+    taskType: task.customType || task.type,
+    actorId,
+  });
+  if (check.status !== 'duplicate') return undefined;
+
+  if (!body.confirmDuplicate) {
+    const { duplicate } = check;
+    throw createHttpError(
+      409,
+      `${duplicate.completedByName} already logged ${duplicate.taskType} for ${task.plantName}. Send confirmDuplicate: true to log it anyway.`,
+      { details: { code: 'DUPLICATE_CARE', plantName: task.plantName, duplicate } }
+    );
+  }
+  return check.duplicate.completionId;
+}
 
 /**
  * Resolve a member's display name from the denormalized household member row
@@ -251,14 +318,33 @@ export const completeTask = createHandler(
 
     const userName = await resolveCompleterName(user.householdId!, user.userId, user.email);
 
-    const task = await taskService.completeTask(
+    const duplicateOfCompletionId = await detectDoubleCare(
       user.householdId!,
       taskId,
       user.userId,
-      userName,
-      validatedBody.notes,
-      validatedBody.expectedNextDue
+      validatedBody
     );
+
+    // The options argument is only passed when there is something to tag, so
+    // an ordinary completion keeps the six-argument call integrations rely on.
+    const task = duplicateOfCompletionId
+      ? await taskService.completeTask(
+          user.householdId!,
+          taskId,
+          user.userId,
+          userName,
+          validatedBody.notes,
+          validatedBody.expectedNextDue,
+          { duplicateOfCompletionId }
+        )
+      : await taskService.completeTask(
+          user.householdId!,
+          taskId,
+          user.userId,
+          userName,
+          validatedBody.notes,
+          validatedBody.expectedNextDue
+        );
 
     if (!task) {
       throw createHttpError(404, 'Task not found');
@@ -271,6 +357,121 @@ export const completeTask = createHandler(
   .use(userRateLimit())
   .use(requireHousehold())
   .use(validateBody(completeTaskSchema));
+
+// GET /plants/:plantId/schedule-drift
+//
+// Schedule drift for every task of a plant (household toolkit, brief §4.7
+// "Extension"): the median real interval between completions against the
+// scheduled one. One read of the plant's completion partition. `available`
+// is false — with a reason — when the tier lacks the toolkit or the plan
+// could not be read; per-task `drift: null` carries its own reason.
+export const getPlantScheduleDrift = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const plantId = event.pathParameters?.plantId;
+    if (!plantId) {
+      throw createHttpError(400, 'Plant ID is required');
+    }
+    const householdId = user.householdId!;
+
+    const plan = await resolvePlanBestEffort(householdId);
+    if (!plan) {
+      return successResponse({ available: false, reason: 'plan_unavailable', tasks: [] });
+    }
+    if (!hasHouseholdToolkit(plan)) {
+      return successResponse({ available: false, reason: 'not_in_plan', tasks: [] });
+    }
+
+    const plant = await plantService.getPlant(householdId, plantId);
+    if (!plant) {
+      throw createHttpError(404, 'Plant not found');
+    }
+    const tasks = await taskService.getTasksForPlant(householdId, plantId);
+    const drift = await doubleCare.getScheduleDriftForPlant(householdId, plantId, tasks);
+    return successResponse({ available: true, reason: null, tasks: drift });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
+// POST /tasks/:id/match-schedule
+//
+// One tap on a drift suggestion. The server recomputes the drift from the
+// log (never trusts a number from the client), sets the task's frequency to
+// the suggested interval, re-derives the next due date from the last
+// completion, and audits the change as a `task.schedule_matched` activity
+// event with before/after.
+export const matchTaskSchedule = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const taskId = event.pathParameters?.id;
+    if (!taskId) {
+      throw createHttpError(400, 'Task ID is required');
+    }
+    const householdId = user.householdId!;
+
+    const plan = await resolvePlanBestEffort(householdId);
+    if (!plan) {
+      throw createHttpError(503, 'Could not confirm the household plan just now. Try again.', {
+        expose: true,
+      });
+    }
+    if (!hasHouseholdToolkit(plan)) {
+      throw createHttpError(
+        402,
+        'Schedule-drift suggestions are part of the Garden household toolkit. Upgrade to match a schedule to reality.'
+      );
+    }
+
+    const task = await taskService.getTask(householdId, taskId);
+    if (!task) {
+      throw createHttpError(404, 'Task not found');
+    }
+
+    const reading = await doubleCare.getScheduleDriftForTask(householdId, task);
+    if (reading.reason === 'history_unavailable') {
+      throw createHttpError(503, 'Could not read this task’s completion history just now.', {
+        expose: true,
+      });
+    }
+    if (!reading.drift || !reading.drift.exceedsThreshold) {
+      throw createHttpError(409, 'This task’s schedule already matches how often it gets done.');
+    }
+
+    const newFrequency = reading.drift.suggestedFrequency;
+    const nextDue = nextDueAfterMatch(task.lastCompleted, newFrequency, new Date());
+    const updated = await taskService.updateTask(householdId, taskId, {
+      frequency: newFrequency,
+      ...(nextDue ? { nextDue } : {}),
+    });
+    if (!updated) {
+      throw createHttpError(404, 'Task not found');
+    }
+
+    const actorName = await resolveCompleterName(householdId, user.userId, user.email);
+    await recordActivity({
+      type: 'task.schedule_matched',
+      householdId,
+      actorId: user.userId,
+      actorName,
+      payload: {
+        taskId,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        previousFrequency: task.frequency,
+        newFrequency,
+        medianIntervalDays: reading.drift.medianIntervalDays,
+        completionsConsidered: reading.completionsConsidered,
+      },
+    });
+
+    return successResponse(updated);
+  }
+)
+  .use(authMiddleware())
+  .use(userRateLimit())
+  .use(requireHousehold());
 
 // GET /tasks/templates  (public)
 // Curated catalog; changes only on deploy. Cache aggressively at the edge
@@ -764,6 +965,8 @@ export const handler = createRouter({
   'PUT /tasks/{id}': updateTask,
   'DELETE /tasks/{id}': deleteTask,
   'POST /tasks/{id}/complete': completeTask,
+  'GET /plants/{plantId}/schedule-drift': getPlantScheduleDrift,
+  'POST /tasks/{id}/match-schedule': matchTaskSchedule,
   'GET /tasks/templates': listTemplates,
   'POST /plants/apply-template-bulk': applyTemplateBulk,
   'POST /plants/{plantId}/apply-template': applyTemplate,

@@ -15,6 +15,15 @@ import { PlantWithTasks, Task } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
+import { useDoubleCareStore } from '@/store/doubleCareStore';
+import { readDuplicateCare } from './doubleCare';
+
+export interface CompleteTaskVariables {
+  taskId: string;
+  expectedNextDue: string;
+  /** Double-care: the member saw the notice and chose to log it anyway. */
+  confirmDuplicate?: boolean;
+}
 
 type TasksPatch = (tasks: TaskWithCoverage[]) => TaskWithCoverage[];
 
@@ -103,12 +112,16 @@ function findTaskInSnapshots(snapshots: CachedQuerySnapshot, taskId: string): Ta
 }
 
 export function useCompleteTaskMutation(householdId: string | null) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, expectedNextDue }: { taskId: string; expectedNextDue: string }) =>
-      taskService.completeTask(taskId, { expectedNextDue }),
-    onMutate: async ({ taskId }: { taskId: string; expectedNextDue: string }) => {
+    mutationFn: ({ taskId, expectedNextDue, confirmDuplicate }: CompleteTaskVariables) =>
+      taskService.completeTask(
+        taskId,
+        confirmDuplicate ? { expectedNextDue, confirmDuplicate } : { expectedNextDue }
+      ),
+    onMutate: async ({ taskId }: CompleteTaskVariables) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['tasks', householdId] }),
         queryClient.cancelQueries({ queryKey: ['plants', householdId] }),
@@ -134,7 +147,7 @@ export function useCompleteTaskMutation(householdId: string | null) {
 
       return { previousTasks, previousPlants };
     },
-    onSuccess: (updatedTask) => {
+    onSuccess: (updatedTask, variables) => {
       // The mutation response is strongly authoritative. Do not immediately
       // replace it with an eventually consistent list/GSI read, which can
       // briefly return the old nextDue and make the completion look inert.
@@ -146,11 +159,24 @@ export function useCompleteTaskMutation(householdId: string | null) {
       queryClient.setQueriesData({ queryKey: ['plants', householdId] }, (value: unknown) =>
         replaceCompletedTaskInCache(value, updatedTask)
       );
-      toast.success('Task completed');
+      toast.success(variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : 'Task completed');
     },
-    onError: (err, _variables, context) => {
+    onError: (err, variables, context) => {
       context?.previousTasks.forEach(([key, value]) => queryClient.setQueryData(key, value));
       context?.previousPlants.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      // Double-care: the server held the completion back (nothing was logged)
+      // and said who did it first. The rollback above already undid the
+      // optimistic advance; hand the decision to the prompt instead of an
+      // error toast. Confirming re-submits with `confirmDuplicate: true`.
+      const duplicate = readDuplicateCare(err);
+      if (duplicate && !variables.confirmDuplicate) {
+        useDoubleCareStore.getState().prompt({
+          taskId: variables.taskId,
+          expectedNextDue: variables.expectedNextDue,
+          details: duplicate,
+        });
+        return;
+      }
       toast.error(getErrorMessage(err));
     },
     onSettled: () => {

@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { calendarDaysBetween } from '@/utils/date';
+import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
 
 /**
@@ -150,6 +151,9 @@ export function AnalyticsPage() {
           tone={overdueCount !== null && overdueCount > 0 ? 'warning' : undefined}
         />
       </div>
+
+      {/* Double-care this month (household toolkit) */}
+      <DoubleCareCard loading={dailyLoading} daily={daily} />
 
       {/* 30-day trend */}
       <Card padding="none">

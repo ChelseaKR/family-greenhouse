@@ -35,7 +35,9 @@
     "healthChecked": "{{actor}} revisó la salud de las hojas de {{plant}} — {{overall}}",
     "healthCheckedUnknown": "{{actor}} revisó la salud de las hojas de {{plant}}",
     "healthCheckedUnlabelled": "{{actor}} solicitó una revisión de salud foliar para {{plant}} — este registro no indica si se realizó un análisis real o se mostró un resultado de demostración",
-    "healthDemo": "{{actor}} vio un resultado de demostración de salud foliar para {{plant}} — no se realizó ningún análisis de imagen"
+    "healthDemo": "{{actor}} vio un resultado de demostración de salud foliar para {{plant}} — no se realizó ningún análisis de imagen",
+    "aTask": "una tarea",
+    "scheduleMatched": "{{actor}} ajustó el horario de {{task}} de {{plant}} a la realidad ({{from}} → {{to}} días)"
   },
   "spaces": {
     "all": "Todos los espacios",
@@ -995,5 +997,45 @@
     "whyRoomBody": "Un plan de pago es al que pasas cuando el límite de plantas del plan gratuito se queda corto. Cada planta conserva su propio calendario, sus fotos y su historial de cuidados, por muchas que añadas.",
     "whyLeaveTitle": "Nada queda bloqueado si te vas",
     "whyLeaveBody": "Al cancelar, tu hogar vuelve al plan gratuito al final del periodo pagado. Los registros que superen el límite gratuito se pueden seguir viendo y editando; solo se bloquea añadir más. Y puedes exportar tus datos cuando quieras."
+  },
+  "doubleCare": {
+    "title": "Ya está hecho",
+    "message": "{{name}} registró {{task}} para {{plant}} {{when}}. ¿Registrarlo de todos modos?",
+    "justNow": "hace un momento",
+    "minutesAgo_one": "hace {{count}} minuto",
+    "minutesAgo_many": "hace {{count}} minutos",
+    "minutesAgo_other": "hace {{count}} minutos",
+    "hoursAgo_one": "hace {{count}} hora",
+    "hoursAgo_many": "hace {{count}} horas",
+    "hoursAgo_other": "hace {{count}} horas",
+    "daysAgo_one": "hace {{count}} día",
+    "daysAgo_many": "hace {{count}} días",
+    "daysAgo_other": "hace {{count}} días",
+    "logAnyway": "Registrar de todos modos",
+    "dontLog": "No registrar",
+    "loggedAnyway": "Registrado de todos modos",
+    "notLogged": "No se registró",
+    "analytics": {
+      "title": "Cuidado duplicado este mes",
+      "description": "Veces que dos miembros registraron el mismo cuidado dentro del período de detección y decidieron conservar ambos.",
+      "count_one": "{{count}} duplicado confirmado",
+      "count_many": "{{count}} duplicados confirmados",
+      "count_other": "{{count}} duplicados confirmados",
+      "none": "Aún no se ha confirmado ningún cuidado duplicado este mes.",
+      "month": "Contado para {{month}} (mes calendario UTC).",
+      "unavailable": "No pudimos comprobar el cuidado duplicado en este momento.",
+      "locked": "La detección de cuidado duplicado forma parte del kit del hogar del plan Garden.",
+      "seePlans": "Ver planes"
+    }
+  },
+  "scheduleDrift": {
+    "hint": "Lo haces aproximadamente {{actual}}, pero está programado {{scheduled}}.",
+    "everyDays_one": "cada día",
+    "everyDays_many": "cada {{count}} días",
+    "everyDays_other": "cada {{count}} días",
+    "match": "Ajustar el horario a la realidad",
+    "matchedToast_one": "Horario actualizado: cada día",
+    "matchedToast_many": "Horario actualizado: cada {{count}} días",
+    "matchedToast_other": "Horario actualizado: cada {{count}} días"
   }
 }

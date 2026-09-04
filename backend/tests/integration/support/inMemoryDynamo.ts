@@ -156,7 +156,13 @@ export function createInMemoryDynamo(): InMemoryDynamo {
     names: Record<string, string> | undefined,
     values: Record<string, unknown> | undefined
   ): (item: Item) => boolean {
-    const parts = splitTopLevel(expr.trim(), 'AND');
+    // `BETWEEN :a AND :b` carries an AND of its own. Splitting the expression
+    // on top-level ANDs first would tear it into `SK BETWEEN :a` and `:b` and
+    // throw UnsupportedExpressionError — which silently made every two-sided
+    // range query (getDailyCompletionCounts, the double-care window read)
+    // unrunnable here. Fold the clause into a comma form BEFORE splitting.
+    const folded = expr.trim().replace(/\bBETWEEN\s+(:[\w]+)\s+AND\s+(:[\w]+)/gi, 'BETWEEN($1,$2)');
+    const parts = splitTopLevel(folded, 'AND');
     const predicates: Array<(item: Item) => boolean> = [];
     for (const partRaw of parts) {
       const part = partRaw.trim();
@@ -191,7 +197,7 @@ export function createInMemoryDynamo(): InMemoryDynamo {
         });
         continue;
       }
-      m = part.match(/^([#\w]+)\s+BETWEEN\s+(:[\w]+)\s+AND\s+(:[\w]+)$/);
+      m = part.match(/^([#\w]+)\s+BETWEEN\((:[\w]+),(:[\w]+)\)$/);
       if (m) {
         const attr = resolveName(m[1], names);
         const lo = values?.[m[2]] as string;

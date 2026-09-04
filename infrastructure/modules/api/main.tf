@@ -831,13 +831,16 @@ locals {
     "POST /plants/shared/{code}/accept" = { group = "plants", auth = "jwt" }
 
     # --- tasks (templates list is public) ---
-    "GET /tasks"                            = { group = "tasks", auth = "jwt" }
-    "GET /tasks/upcoming"                   = { group = "tasks", auth = "jwt" }
-    "POST /tasks"                           = { group = "tasks", auth = "jwt" }
-    "GET /tasks/{id}"                       = { group = "tasks", auth = "jwt" }
-    "PUT /tasks/{id}"                       = { group = "tasks", auth = "jwt" }
-    "DELETE /tasks/{id}"                    = { group = "tasks", auth = "jwt" }
-    "POST /tasks/{id}/complete"             = { group = "tasks", auth = "jwt" }
+    "GET /tasks"                = { group = "tasks", auth = "jwt" }
+    "GET /tasks/upcoming"       = { group = "tasks", auth = "jwt" }
+    "POST /tasks"               = { group = "tasks", auth = "jwt" }
+    "GET /tasks/{id}"           = { group = "tasks", auth = "jwt" }
+    "PUT /tasks/{id}"           = { group = "tasks", auth = "jwt" }
+    "DELETE /tasks/{id}"        = { group = "tasks", auth = "jwt" }
+    "POST /tasks/{id}/complete" = { group = "tasks", auth = "jwt" }
+    # Household toolkit (Garden+): schedule-drift read + one-tap match.
+    "GET /plants/{plantId}/schedule-drift"  = { group = "tasks", auth = "jwt" }
+    "POST /tasks/{id}/match-schedule"       = { group = "tasks", auth = "jwt" }
     "GET /tasks/templates"                  = { group = "tasks", auth = "none" }
     "POST /plants/apply-template-bulk"      = { group = "tasks", auth = "jwt" }
     "POST /plants/{plantId}/apply-template" = { group = "tasks", auth = "jwt" }
