@@ -40,7 +40,7 @@
     "features/plants/PlantImageUpload.tsx": 2,
     "features/plants/PlantsPage.tsx": 6,
     "features/plants/SuggestedCareCard.tsx": 3,
-    "features/settings/AccountSettings.tsx": 13,
+    "features/settings/AccountSettings.tsx": 11,
     "features/settings/ApiKeysSettings.tsx": 11,
     "features/settings/BillingSettings.tsx": 2,
     "features/settings/NotificationSettings.tsx": 15,

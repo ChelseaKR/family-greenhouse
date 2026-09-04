@@ -41,7 +41,7 @@ Every finding cites the file/file-region that backs it.
 
 ### Standards compliance
 
-**Strong.** REST conventions consistent. OpenAPI spec at `docs/api-spec.yaml` now documents every one of the 105 handler routes, and `scripts/check-api-spec.mjs` fails CI on any drift (a handler route without a spec entry, or a stale spec entry without a handler). Adding `GET /me/export` in this pass exercised the loop: handler comment → spec entry → green check.
+**Strong.** REST conventions consistent. OpenAPI spec at `docs/api-spec.yaml` now documents every one of the 109 handler routes, and `scripts/check-api-spec.mjs` fails CI on any drift (a handler route without a spec entry, or a stale spec entry without a handler). Adding `GET /me/export` in this pass exercised the loop: handler comment → spec entry → green check.
 
 ---
 
@@ -248,7 +248,7 @@ Every finding cites the file/file-region that backs it.
 
 ## Documentation
 
-**Strong.** `docs/` covers architecture, deployment, accessibility, billing, security, testing, notifications, roadmap, production checklist, and now Perenual + profile editing. Inline doc comments are dense and explain rationale. `api-spec.yaml` is complete (all 105 handler routes) and CI-enforced against drift via `scripts/check-api-spec.mjs`.
+**Strong.** `docs/` covers architecture, deployment, accessibility, billing, security, testing, notifications, roadmap, production checklist, and now Perenual + profile editing. Inline doc comments are dense and explain rationale. `api-spec.yaml` is complete (all 109 handler routes) and CI-enforced against drift via `scripts/check-api-spec.mjs`.
 
 ---
 

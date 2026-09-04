@@ -35,6 +35,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and both session-replay rates are pinned to 0 so adding the replay
   integration later cannot quietly start recording. Nothing is collected
   today — no DSN is configured — and nothing new is collected by this change.
+- The calendar feed works from a calendar app now. Settings handed out
+  `${API}/me/calendar.ics`, a route behind the API Gateway Cognito JWT
+  authorizer; Apple Calendar, Google Calendar, and Outlook fetch subscription
+  URLs with no session, so every subscriber was refused with 401 before the
+  Lambda ran. The feed is now a per-user, per-household capability URL
+  (`/calendar/{token}/family-greenhouse.ics`): a 256-bit token minted from
+  Settings, stored as a scrypt hash (the same construction as API keys),
+  shown once, revocable, and regenerable. **The tradeoff is real and stated in
+  the UI:** anyone holding the link can read that household's task titles,
+  cadence, and due dates. To bound that, the feed no longer emits task notes
+  or the assignee's name, membership is re-checked on every fetch, the public
+  route is IP-rate-limited, the token is not an API key (it opens nothing
+  under `/api/v1`), and the request log never records the path secret (this
+  also covers sitter links). `GET /me/calendar.ics` remains as an
+  authenticated one-shot download.
 
 ## [0.23.5] - 2026-09-03
 

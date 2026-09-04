@@ -291,6 +291,16 @@ interface ApiKey {
   plaintext: string;
 }
 
+/** Mirrors `calendarTokens.CalendarTokenRecord`. Dev-only: the Map is keyed
+ *  by the plaintext token so the public feed route can match it; production
+ *  stores only a scrypt hash (services/calendarTokens.ts). */
+interface CalendarToken {
+  userId: string;
+  householdId: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 /** Mirrors `apiKeys.API_SCOPES` in the backend service. */
 const API_SCOPES = ['read:plants', 'read:tasks', 'read:activity', 'write:tasks'];
 /** Mirrors `apiKeys.READ_API_SCOPES` — implicit scope defaults expand to
@@ -343,6 +353,7 @@ export const db = {
   reminderSent: new Set<string>(), // `${userId}|${householdId}|${localDate}|${channel}` markers
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
   sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
+  calendarTokens: new Map<string, CalendarToken>(), // keyed by token (the secret)
   // Tiny local object store used by the real browser upload flow. A presign
   // creates a capability token, PUT stores the bytes, confirm verifies the
   // object exists, and /mock-images serves the confirmed URL from this API.
@@ -377,6 +388,7 @@ export function resetDb(): void {
   db.reminderSent.clear();
   db.pendingConfirmations.clear();
   db.sitterLinks.clear();
+  db.calendarTokens.clear();
   db.mockUploadGrants.clear();
   db.mockImages.clear();
 
@@ -954,6 +966,11 @@ app.delete('/me', authMiddleware, (req, res) => {
     if (device.userId === dbUser.id) db.deviceTokens.delete(key);
   }
   db.notificationPrefs.delete(dbUser.id);
+  // Calendar-feed tokens live in the user's partition in production and go
+  // with the generic USER# sweep; mirror that here.
+  for (const [token, grant] of db.calendarTokens.entries()) {
+    if (grant.userId === dbUser.id) db.calendarTokens.delete(token);
+  }
   db.phoneVerifications.delete(dbUser.id);
   for (const key of [...db.recapSent]) {
     if (key.startsWith(`${dbUser.id}|`)) db.recapSent.delete(key);
@@ -1021,28 +1038,109 @@ app.get('/me/export', authMiddleware, (req, res) => {
     .send(JSON.stringify(payload, null, 2));
 });
 
-// GET /me/calendar.ics
-// Subscribe-able iCalendar feed. Tasks for the caller's active
-// household, with RRULE-driven recurrence so the calendar app
-// extrapolates locally.
-app.get('/me/calendar.ics', authMiddleware, async (req, res) => {
-  const user = (req as any).user;
-  // 403 (not 400) — matches handlers/me/handler.ts + requireHousehold.
-  if (!user.householdId) return res.status(403).json({ message: 'No household selected' });
-  // Same lifecycle filter as production taskService.getTasks: tasks of
-  // died / gave_away plants don't surface in the feed.
-  const tasks = [...db.tasks.values()].filter(
+/** Same lifecycle filter as production taskService.getTasks: tasks of
+ *  died / gave_away plants don't surface in either ICS route. */
+function icsTasksFor(householdId: string) {
+  return [...db.tasks.values()].filter(
     (t) =>
-      t.householdId === user.householdId &&
-      (db.plants.get(t.plantId)?.status ?? 'active') === 'active'
+      t.householdId === householdId && (db.plants.get(t.plantId)?.status ?? 'active') === 'active'
   );
+}
+
+async function sendIcs(res: express.Response, householdId: string) {
   const { buildIcs } = await import('./services/icsExport.js');
-  const ics = buildIcs(tasks);
   res
     .status(200)
     .type('text/calendar; charset=utf-8')
     .set('Content-Disposition', 'attachment; filename="family-greenhouse.ics"')
-    .send(ics);
+    .set('Cache-Control', 'private, max-age=300')
+    .send(buildIcs(icsTasksFor(householdId)));
+}
+
+// GET /me/calendar.ics
+// AUTHENTICATED one-shot iCalendar download (mirrors handlers/me/handler.ts).
+// Not a subscription URL: calendar apps carry no session and get 401 here.
+app.get('/me/calendar.ics', authMiddleware, async (req, res) => {
+  const user = (req as any).user;
+  // 403 (not 400) — matches handlers/me/handler.ts + requireHousehold.
+  if (!user.householdId) return res.status(403).json({ message: 'No household selected' });
+  await sendIcs(res, user.householdId);
+});
+
+// --- Calendar-feed link (mirrors handlers/me/handler.ts) -------------------
+// Per-user, per-household capability URL for calendar-app subscriptions.
+// Dev clone keeps the plaintext in memory; production hashes it.
+
+function calendarTokenStatus(grant: CalendarToken | null) {
+  return {
+    active: grant !== null,
+    createdAt: grant?.createdAt ?? null,
+    lastUsedAt: grant?.lastUsedAt ?? null,
+  };
+}
+
+function findCalendarToken(userId: string, householdId: string): [string, CalendarToken] | null {
+  for (const entry of db.calendarTokens.entries()) {
+    if (entry[1].userId === userId && entry[1].householdId === householdId) return entry;
+  }
+  return null;
+}
+
+// GET /me/calendar-token
+app.get('/me/calendar-token', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  const found = findCalendarToken(user.userId, user.householdId);
+  res.json(calendarTokenStatus(found ? found[1] : null));
+});
+
+// POST /me/calendar-token
+app.post('/me/calendar-token', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  // Regenerate semantics: the previous token for this (user, household) dies.
+  const existing = findCalendarToken(user.userId, user.householdId);
+  if (existing) db.calendarTokens.delete(existing[0]);
+  const token = randomBytes(32).toString('hex'); // 256-bit, like the service
+  const grant: CalendarToken = {
+    userId: user.userId,
+    householdId: user.householdId,
+    createdAt: new Date().toISOString(),
+    lastUsedAt: null,
+  };
+  db.calendarTokens.set(token, grant);
+  // Deliberately NOT echoed to the console (unlike dev API keys): the token
+  // is a bearer credential for the feed and the response already carries it.
+  res.status(201).json({
+    ...calendarTokenStatus(grant),
+    token,
+    path: `/calendar/${token}/family-greenhouse.ics`,
+  });
+});
+
+// DELETE /me/calendar-token
+app.delete('/me/calendar-token', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  const existing = findCalendarToken(user.userId, user.householdId);
+  if (!existing) return res.status(404).json({ message: 'No calendar link to revoke' });
+  db.calendarTokens.delete(existing[0]);
+  res.status(204).end();
+});
+
+// GET /calendar/:token/family-greenhouse.ics
+// PUBLIC (no auth): the token is the only credential. Generic 404 on every
+// miss (unknown / revoked / regenerated / membership gone), like sitter links.
+app.get('/calendar/:token/family-greenhouse.ics', async (req, res) => {
+  const token = req.params.token;
+  const grant = /^[0-9a-f]{64}$/.test(token) ? db.calendarTokens.get(token) : undefined;
+  const isMember =
+    grant &&
+    db.users
+      .get(grant.userId)
+      ?.memberships.some((m: Membership) => m.householdId === grant.householdId);
+  if (!grant || !isMember) {
+    return res.status(404).json({ message: 'This calendar link is invalid or has been revoked.' });
+  }
+  grant.lastUsedAt = new Date().toISOString();
+  await sendIcs(res, grant.householdId);
 });
 
 // Get current user - used to verify session

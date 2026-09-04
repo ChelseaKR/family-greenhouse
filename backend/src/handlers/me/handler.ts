@@ -2,7 +2,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
 import { createHandler } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
-import { authMiddleware, AuthenticatedEvent } from '../../middleware/auth.js';
+import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
+import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as householdService from '../../services/householdService.js';
 import * as plantService from '../../services/plantService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
@@ -10,8 +11,9 @@ import * as taskService from '../../services/taskService.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
 import * as apiKeys from '../../services/apiKeys.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
+import * as calendarTokens from '../../services/calendarTokens.js';
 import { buildIcs } from '../../services/icsExport.js';
-import { noContentResponse, successResponse } from '../../utils/response.js';
+import { createdResponse, noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { logger } from '../../utils/logger.js';
 
@@ -247,10 +249,29 @@ export const listMyHouseholds = createHandler(
   }
 ).use(authMiddleware());
 
+/** Shared response shape for both ICS routes (authed download + public feed). */
+function icsResponse(ics: string): APIGatewayProxyResult {
+  return {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="family-greenhouse.ics"',
+      // Calendar clients refetch on their own schedule; a 5-minute
+      // browser hint keeps fast re-loads from the same client cheap
+      // without delaying real updates noticeably.
+      'Cache-Control': 'private, max-age=300',
+    },
+    body: ics,
+  };
+}
+
 // GET /me/calendar.ics
-// Subscribe-able iCalendar feed for the caller's active household tasks.
-// Calendar apps re-fetch periodically; the embedded RRULE drives
-// recurrence locally, so we only emit one VEVENT per task.
+// AUTHENTICATED one-shot download of the caller's active-household tasks as
+// iCalendar. This route sits behind the API Gateway JWT authorizer, so it
+// works from the app (bearer token attached) but NOT as a calendar-app
+// subscription URL: Apple/Google/Outlook fetch subscriptions with no session
+// and were getting 401 from the gateway. The subscribe-able feed is
+// GET /calendar/{token}/family-greenhouse.ics below.
 export const calendarIcs = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -260,21 +281,134 @@ export const calendarIcs = createHandler(
       throw createHttpError(403, 'No household selected');
     }
     const tasks = await taskService.getTasks(user.householdId);
-    const ics = buildIcs(tasks);
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'text/calendar; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="family-greenhouse.ics"',
-        // Calendar clients refetch on their own schedule; a 5-minute
-        // browser hint keeps fast re-loads from the same client cheap
-        // without delaying real updates noticeably.
-        'Cache-Control': 'private, max-age=300',
-      },
-      body: ics,
-    };
+    return icsResponse(buildIcs(tasks));
   }
 ).use(authMiddleware());
+
+// ---------------------------------------------------------------------------
+// Calendar-feed link: a per-user, per-household capability URL
+// ---------------------------------------------------------------------------
+//
+// The tradeoff, stated plainly: the feed URL carries its own credential (a
+// 256-bit token in the path) because calendar apps cannot carry a Cognito
+// session, so anyone holding the URL can read the feed. What bounds that:
+//   - the token is scoped to ONE user's view of ONE household, read-only, and
+//     the feed emits only task titles, cadence, and due dates (never notes,
+//     assignees, or member data — see services/icsExport.ts);
+//   - it is stored hashed, returned once, revocable, and regenerable from
+//     Settings (services/calendarTokens.ts);
+//   - membership is re-validated on every fetch, so a removed member's URL
+//     dies with their membership;
+//   - the public route is IP-rate-limited, and the log line never carries the
+//     path secret (middleware/logging.ts).
+// It is NOT an API key and grants nothing under /api/v1 or any authed route.
+
+/** Non-secret status projection — never includes the token. */
+function calendarTokenStatus(record: calendarTokens.CalendarTokenRecord | null) {
+  return {
+    active: record !== null,
+    createdAt: record?.createdAt ?? null,
+    lastUsedAt: record?.lastUsedAt ?? null,
+  };
+}
+
+// One generic message for every miss (unknown / revoked / regenerated /
+// membership gone): the public endpoint must not be a token-existence oracle,
+// and a 401 would make Apple Calendar prompt for a password that doesn't
+// exist — 404 makes a dead subscription simply fail.
+const CALENDAR_LINK_INVALID = 'This calendar link is invalid or has been revoked.';
+
+// GET /me/calendar-token
+// Whether the caller has a feed link for the ACTIVE household (X-Household-Id
+// aware, like every household-scoped route). Never returns the token — it
+// isn't stored in a readable form. Regenerate is the recovery path.
+export const getCalendarToken = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const record = await calendarTokens.getCalendarToken(user.userId, user.householdId!);
+    return successResponse(calendarTokenStatus(record));
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
+// POST /me/calendar-token
+// Mint the caller's feed link for the active household, replacing any
+// existing one (this is also "regenerate"). The token leaves the building
+// exactly once, here, alongside the path the frontend composes into the
+// full URL. Any member may hold a feed of what they can already see — no
+// admin gate, unlike API keys, which grant programmatic access to the
+// whole household. Per-user rate-limited: nothing legitimate regenerates a
+// calendar link ten times a minute.
+export const createCalendarToken = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const result = await calendarTokens.createCalendarToken(user.userId, user.householdId!);
+    // Audit carries identity only — never the token.
+    audit('calendar_token.created', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId: user.householdId ?? undefined,
+    });
+    return createdResponse({
+      ...calendarTokenStatus(result.record),
+      token: result.token,
+      path: calendarTokens.calendarFeedPath(result.token),
+    });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(userRateLimit({ perWindowMs: 60_000, max: 10 }));
+
+// DELETE /me/calendar-token
+// Revoke the caller's feed link for the active household. 404 when there is
+// none — a 204 for a link that never existed would make "did I actually
+// revoke it?" unanswerable (same convention as API keys).
+export const revokeCalendarToken = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const revoked = await calendarTokens.revokeCalendarToken(user.userId, user.householdId!);
+    if (!revoked) {
+      throw createHttpError(404, 'No calendar link to revoke');
+    }
+    audit('calendar_token.revoked', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId: user.householdId ?? undefined,
+    });
+    return noContentResponse();
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
+// GET /calendar/{token}/family-greenhouse.ics
+// PUBLIC (auth=none) subscribe-able iCalendar feed. Reachable WITHOUT a
+// Cognito JWT — the token in the path is the only credential, and it is
+// validated on every fetch. No authMiddleware; 60/min per IP absorbs a
+// calendar client's refresh storms while keeping brute force pointless
+// against a 256-bit token.
+export const calendarFeed = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const token = event.pathParameters?.token ?? '';
+    const grant = await calendarTokens.resolveCalendarToken(token);
+    if (!grant) {
+      throw createHttpError(404, CALENDAR_LINK_INVALID);
+    }
+    // The membership row is authoritative (same rule as authMiddleware): a
+    // user who left, or was removed from, the household loses the feed even
+    // though their token row still exists.
+    const member = await householdService.getMemberByUserId(grant.householdId, grant.userId);
+    if (!member) {
+      throw createHttpError(404, CALENDAR_LINK_INVALID);
+    }
+    // Scoped by the grant, never by anything the request carries: a token
+    // for household A cannot be pointed at household B.
+    const tasks = await taskService.getTasks(grant.householdId);
+    return icsResponse(buildIcs(tasks));
+  }
+).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
@@ -282,4 +416,8 @@ export const handler = createRouter({
   'GET /me/export': exportMe,
   'GET /me/households': listMyHouseholds,
   'GET /me/calendar.ics': calendarIcs,
+  'GET /me/calendar-token': getCalendarToken,
+  'POST /me/calendar-token': createCalendarToken,
+  'DELETE /me/calendar-token': revokeCalendarToken,
+  'GET /calendar/{token}/family-greenhouse.ics': calendarFeed,
 });

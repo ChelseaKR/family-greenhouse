@@ -17,6 +17,7 @@ vi.mock('../../../src/services/pushSubscriptions.js');
 vi.mock('../../../src/services/deviceTokens.js');
 vi.mock('../../../src/services/accountCleanup.js');
 vi.mock('../../../src/services/apiKeys.js');
+vi.mock('../../../src/services/calendarTokens.js');
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
@@ -717,6 +718,331 @@ describe('me handler', () => {
       // 403 per convention: well-formed request, identity lacks a household.
       expect(res.statusCode).toBe(403);
       expect(res.body).toMatch(/no household/i);
+    });
+
+    it('is the ORIGINAL bug: rejects a calendar-app fetch (no session) with 401', async () => {
+      // Settings used to hand out this URL bare. Calendar apps carry no
+      // Cognito session, so every subscription fetch landed here (and, in
+      // production, on the API Gateway JWT authorizer before that).
+      const { calendarIcs } = await import('../../../src/handlers/me/handler.js');
+      const res = (await calendarIcs(
+        buildEvent({ requestContext: { identity: { sourceIp: '127.0.0.1' } } as never }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Calendar-feed link (capability URL) — management routes + public feed
+  // -------------------------------------------------------------------------
+
+  const TOKEN = 'f'.repeat(64);
+  const GRANT = {
+    userId: 'user-1',
+    householdId: 'hh-1',
+    createdAt: '2026-09-01T00:00:00.000Z',
+    lastUsedAt: null,
+  };
+
+  /** A genuinely anonymous event — no authorizer claims, as API Gateway
+   *  delivers for an auth=none route. */
+  function anonFeedEvent(token: string, ip = '10.0.0.1'): APIGatewayProxyEvent {
+    return buildEvent({
+      path: `/calendar/${token}/family-greenhouse.ics`,
+      pathParameters: { token },
+      requestContext: { identity: { sourceIp: ip } } as never,
+    });
+  }
+
+  describe('getCalendarToken', () => {
+    it('returns the non-secret status for the active household', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { getCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.getCalendarToken).mockResolvedValueOnce({
+        ...GRANT,
+        lastUsedAt: '2026-09-02T00:00:00.000Z',
+      });
+
+      const res = (await getCalendarToken(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({
+        active: true,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        lastUsedAt: '2026-09-02T00:00:00.000Z',
+      });
+      expect(calendarTokens.getCalendarToken).toHaveBeenCalledWith('user-1', 'hh-1');
+      // Status never carries a token (it isn't stored in a readable form).
+      expect(res.body).not.toMatch(/token/);
+    });
+
+    it('reports active:false when the caller has no link', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { getCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.getCalendarToken).mockResolvedValueOnce(null);
+      const res = (await getCalendarToken(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toEqual({ active: false, createdAt: null, lastUsedAt: null });
+    });
+
+    it('401s without claims and 403s without a household (management is authed)', async () => {
+      const { getCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      const anon = (await getCalendarToken(
+        buildEvent({ requestContext: { identity: { sourceIp: '127.0.0.1' } } as never }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(anon.statusCode).toBe(401);
+
+      const noHousehold = (await getCalendarToken(
+        buildEvent({
+          requestContext: {
+            authorizer: { claims: { sub: 'user-1', email: 'test@example.com' } },
+          } as APIGatewayProxyEvent['requestContext'],
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(noHousehold.statusCode).toBe(403);
+    });
+  });
+
+  describe('createCalendarToken', () => {
+    beforeEach(async () => {
+      const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+      __resetRateLimitForTests();
+    });
+
+    it('mints a token for (caller, active household) and returns it with the feed path — once', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { createCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.createCalendarToken).mockResolvedValueOnce({
+        record: GRANT,
+        token: TOKEN,
+      });
+      vi.mocked(calendarTokens.calendarFeedPath).mockReturnValueOnce(
+        `/calendar/${TOKEN}/family-greenhouse.ics`
+      );
+
+      const res = (await createCalendarToken(
+        buildEvent({ httpMethod: 'POST' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+      expect(JSON.parse(res.body)).toEqual({
+        active: true,
+        createdAt: GRANT.createdAt,
+        lastUsedAt: null,
+        token: TOKEN,
+        path: `/calendar/${TOKEN}/family-greenhouse.ics`,
+      });
+      expect(calendarTokens.createCalendarToken).toHaveBeenCalledWith('user-1', 'hh-1');
+    });
+
+    it('honours the X-Household-Id switch: the token binds to the ACTIVE household', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+      const { createCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      setCachedMembership('user-1', 'hh-2', 'member');
+      vi.mocked(calendarTokens.createCalendarToken).mockResolvedValueOnce({
+        record: { ...GRANT, householdId: 'hh-2' },
+        token: TOKEN,
+      });
+      vi.mocked(calendarTokens.calendarFeedPath).mockReturnValueOnce('/calendar/x');
+
+      const res = (await createCalendarToken(
+        buildEvent({ httpMethod: 'POST', headers: { 'x-household-id': 'hh-2' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+      expect(calendarTokens.createCalendarToken).toHaveBeenCalledWith('user-1', 'hh-2');
+    });
+
+    it('401s without claims — a calendar app can never mint its own link', async () => {
+      const { createCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      const res = (await createCalendarToken(
+        buildEvent({
+          httpMethod: 'POST',
+          requestContext: { identity: { sourceIp: '127.0.0.1' } } as never,
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe('revokeCalendarToken', () => {
+    it('returns 204 after revoking', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { revokeCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.revokeCalendarToken).mockResolvedValueOnce(true);
+      const res = (await revokeCalendarToken(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(204);
+      expect(calendarTokens.revokeCalendarToken).toHaveBeenCalledWith('user-1', 'hh-1');
+    });
+
+    it('returns 404 when there was no link to revoke', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { revokeCalendarToken } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.revokeCalendarToken).mockResolvedValueOnce(false);
+      const res = (await revokeCalendarToken(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe('calendarFeed (public, auth=none)', () => {
+    beforeEach(async () => {
+      const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+      __resetRateLimitForTests();
+    });
+
+    it('serves the feed for a valid token with NO Cognito session', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const icsExport = await import('../../../src/services/icsExport.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+
+      vi.mocked(calendarTokens.resolveCalendarToken).mockResolvedValueOnce(GRANT);
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+        householdId: 'hh-1',
+        userId: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(taskService.getTasks).mockResolvedValueOnce([]);
+      vi.mocked(icsExport.buildIcs).mockReturnValueOnce(
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n'
+      );
+
+      const res = (await calendarFeed(
+        anonFeedEvent(TOKEN),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers?.['Content-Type']).toMatch(/text\/calendar/);
+      expect(res.headers?.['Content-Disposition']).toMatch(/family-greenhouse\.ics/);
+      expect(res.body).toContain('BEGIN:VCALENDAR');
+      expect(calendarTokens.resolveCalendarToken).toHaveBeenCalledWith(TOKEN);
+      // Scoped by the grant — the household the token was minted for.
+      expect(householdService.getMemberByUserId).toHaveBeenCalledWith('hh-1', 'user-1');
+      expect(taskService.getTasks).toHaveBeenCalledWith('hh-1');
+    });
+
+    it('ignores any household the request tries to smuggle in — the grant decides', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+
+      vi.mocked(calendarTokens.resolveCalendarToken).mockResolvedValueOnce(GRANT);
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+        householdId: 'hh-1',
+        userId: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(taskService.getTasks).mockResolvedValueOnce([]);
+
+      const event = anonFeedEvent(TOKEN);
+      event.headers = { 'x-household-id': 'hh-victim' };
+      event.queryStringParameters = { householdId: 'hh-victim' };
+      await calendarFeed(event, ctx, () => {});
+
+      expect(taskService.getTasks).toHaveBeenCalledWith('hh-1');
+      expect(taskService.getTasks).not.toHaveBeenCalledWith('hh-victim');
+    });
+
+    it('404s (one generic message) for an unknown, revoked, or regenerated token', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.resolveCalendarToken).mockResolvedValueOnce(null);
+
+      const res = (await calendarFeed(
+        anonFeedEvent('0'.repeat(64)),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body)).toEqual({
+        message: 'This calendar link is invalid or has been revoked.',
+      });
+      expect(taskService.getTasks).not.toHaveBeenCalled();
+    });
+
+    it('404s with the SAME message when the token holder is no longer a household member', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.resolveCalendarToken).mockResolvedValueOnce(GRANT);
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+
+      const res = (await calendarFeed(
+        anonFeedEvent(TOKEN),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body)).toEqual({
+        message: 'This calendar link is invalid or has been revoked.',
+      });
+      expect(taskService.getTasks).not.toHaveBeenCalled();
+    });
+
+    it('404s a missing token segment without a lookup', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+      // resolveCalendarToken is automocked → returns undefined for '' — the
+      // handler must treat that as a miss, not as a grant.
+      const res = (await calendarFeed(
+        buildEvent({
+          pathParameters: null,
+          requestContext: { identity: { sourceIp: '10.0.0.9' } } as never,
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(404);
+      expect(calendarTokens.resolveCalendarToken).toHaveBeenCalledWith('');
+    });
+
+    it('is IP rate-limited (60/min) so a token can never be brute-forced through the feed', async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.resolveCalendarToken).mockResolvedValue(null);
+      let last: APIGatewayProxyResult | undefined;
+      for (let i = 0; i < 61; i += 1) {
+        last = (await calendarFeed(
+          anonFeedEvent('1'.repeat(64), '10.9.9.9'),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+      }
+      expect(last?.statusCode).toBe(429);
     });
   });
 });

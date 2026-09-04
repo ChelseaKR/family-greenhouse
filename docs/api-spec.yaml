@@ -561,8 +561,59 @@ paths:
                 items: { type: object }
   /me/calendar.ics:
     get:
-      summary: iCalendar feed of plant care tasks for the active household
+      summary: Authenticated one-shot iCalendar download of the active household's tasks. JWT-guarded, so it is NOT a subscription URL — calendar apps carry no session. Subscribe via /calendar/{token}/family-greenhouse.ics instead.
       tags: [Me]
+      responses:
+        '200':
+          description: iCalendar (RFC 5545) document
+          content:
+            text/calendar:
+              schema:
+                type: string
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /me/calendar-token:
+    get:
+      summary: Whether the caller has a calendar-feed link for the active household (X-Household-Id aware). Never returns the token — it is stored hashed and shown only at mint.
+      tags: [Me]
+      responses:
+        '200':
+          description: Link status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarTokenStatus'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Mint the caller's calendar-feed link for the active household, replacing any existing one (this is also "regenerate" — the previous URL stops working). Returns the token and feed path exactly once. Any member may mint one; it exposes only what they already see.
+      tags: [Me]
+      responses:
+        '201':
+          description: The new link — the only time the token is returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CalendarTokenStatus'
+                  - type: object
+                    properties:
+                      token: { type: string, description: '64 lowercase hex chars (256-bit)' }
+                      path: { type: string, example: '/calendar/{token}/family-greenhouse.ics' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { description: Rate limited (10/min per user) }
+    delete:
+      summary: Revoke the caller's calendar-feed link for the active household. 404 when there is none.
+      tags: [Me]
+      responses:
+        '204': { description: Revoked }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /calendar/{token}/family-greenhouse.ics:
+    get:
+      summary: Public subscribe-able iCalendar feed. No auth — the 256-bit token in the path is the only credential (a capability URL; whoever holds it can read the feed). Scoped to one user's view of one household, read-only, membership re-checked on every fetch. Emits task titles, cadence, and due dates only — never notes, assignees, or member data. IP-rate-limited.
+      tags: [Me]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
       responses:
         '200':
           description: iCalendar (RFC 5545) feed
@@ -570,7 +621,9 @@ paths:
             text/calendar:
               schema:
                 type: string
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '404':
+          description: Invalid, revoked, or regenerated link, or the holder is no longer a household member (one generic message)
+        '429': { description: Rate limited (60/min per IP) }
 
   # --- Plants: photos, history, image upload, templates ---
   /plants/{id}/photos:
@@ -1360,6 +1413,12 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    CalendarTokenStatus:
+      type: object
+      properties:
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time, nullable: true }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
     BillingUsage:
       type: object
       additionalProperties: false
