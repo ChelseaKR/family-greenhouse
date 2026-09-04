@@ -62,6 +62,52 @@ describe('email deliverability deployment wiring', () => {
     expect(emailOutputs).toMatch(/output "event_topic_arn"/);
   });
 
+  // Both of the next two failed the v0.24.0 production release. Neither is
+  // reachable by `terraform validate` — it never resolves a cross-module value
+  // and never talks to AWS — so they are asserted as text here, which is the
+  // only gate that runs before a plan against real state.
+  it('counts the conditional SES event resources on a plan-time-known flag', () => {
+    // A `count` that reads another module's resource attribute is not a
+    // deferred decision, it is a hard plan error the moment that resource does
+    // not already exist: "The count value depends on resource attributes that
+    // cannot be determined until apply". No `count` in the api module may read
+    // the topic ARN, ever.
+    for (const count of apiModule.match(/^\s*count\s*=.*$/gm) ?? []) {
+      expect(count).not.toContain('ses_event_topic_arn');
+    }
+    expect(apiModule).toMatch(
+      /resource "aws_sns_topic_subscription" "email_events" \{\n\s*count = var\.ses_events_enabled \? 1 : 0/
+    );
+    expect(apiModule).toMatch(
+      /resource "aws_lambda_permission" "email_events_sns" \{\n\s*count = var\.ses_events_enabled \? 1 : 0/
+    );
+    // ...and the flag itself must come from a plain input variable, or it is
+    // the same unknown wearing a different name.
+    expect(terraformRoot).toMatch(/ses_events_enabled\s*=\s*var\.domain_name != ""/);
+  });
+
+  it('encrypts the event topic with a key whose policy SES can actually be granted on', () => {
+    // alias/aws/sns is AWS-managed: AWS owns its key policy and it cannot be
+    // edited, so SES can never be added to it and SES rejects the event
+    // destination with "Access denied to KMS key for SNS topic ... Verify the
+    // KMS key policy grants Amazon SES the kms:GenerateDataKey and kms:Decrypt
+    // permissions." A customer-managed key is the only shape that works.
+    expect(emailEvents).not.toMatch(/kms_master_key_id\s*=\s*"alias\/aws\/sns"/);
+    expect(emailEvents).toMatch(/resource "aws_kms_key" "email_events"/);
+    expect(emailEvents).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.email_events\.arn/);
+    expect(emailEvents).toMatch(
+      /policy\s*=\s*data\.aws_iam_policy_document\.email_events_kms\.json/
+    );
+    for (const action of ['"kms:GenerateDataKey*"', '"kms:Decrypt"']) {
+      expect(emailEvents).toContain(action);
+    }
+    // Scoped, not blanket: only this account's SES may use the key.
+    expect(emailEvents).toContain('aws:SourceAccount');
+    // And the account must keep kms:* on it, or Terraform locks itself out of
+    // the key it just created — KMS does not fall back to IAM.
+    expect(emailEvents).toContain('"kms:*"');
+  });
+
   it('reaches the send path with the configuration set and a real Reply-To', () => {
     expect(apiModule).toMatch(/SES_CONFIGURATION_SET\s*=\s*var\.ses_configuration_set/);
     expect(apiModule).toMatch(/SES_REPLY_TO\s*=\s*var\.ses_reply_to_email/);
