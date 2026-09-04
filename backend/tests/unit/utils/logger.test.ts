@@ -124,6 +124,65 @@ describe('required fields (OBS-10)', () => {
   });
 });
 
+/**
+ * Redaction backstop (#452). These assert the SHIPPED config, through the real
+ * pino serialization path, for the same reason the OBS-09/10 tests do: a copy
+ * of the path list in a test proves nothing about what reaches CloudWatch.
+ */
+describe('PII redaction', () => {
+  it('censors a recipient address at the top level — the dry-run shape', () => {
+    const { log, lines } = captureLogger();
+    log.info({ msg: 'email_dry_run', to: 'someone@example.com', subject: 'hi' }, 'email_dry_run');
+    const record = JSON.parse(lines[0]);
+    expect(record.to).toBe('[redacted]');
+    // Everything else survives — redaction must not cost the diagnostic.
+    expect(record.subject).toBe('hi');
+  });
+
+  it('censors nested email, token and authorization fields', () => {
+    const { log, lines } = captureLogger();
+    log.info(
+      {
+        payload: { email: 'a@b.com', token: 'fg_secret', apiKey: 'k' },
+        headers: { authorization: 'Bearer nope' },
+        deep: { nested: { email: 'c@d.com' } },
+      },
+      'record'
+    );
+    const record = JSON.parse(lines[0]);
+    expect(record.payload.email).toBe('[redacted]');
+    expect(record.payload.token).toBe('[redacted]');
+    expect(record.payload.apiKey).toBe('[redacted]');
+    expect(record.headers.authorization).toBe('[redacted]');
+    expect(record.deep.nested.email).toBe('[redacted]');
+  });
+
+  it('censors a base64 image payload rather than shipping it to CloudWatch', () => {
+    const { log, lines } = captureLogger();
+    log.warn({ imageBase64: 'A'.repeat(1000) }, 'identify_failed');
+    const line = lines[0];
+    expect(JSON.parse(line).imageBase64).toBe('[redacted]');
+    expect(line).not.toContain('AAAA');
+  });
+
+  it('does NOT censor actorEmail — the audit trail keeps its actor, deliberately', () => {
+    const { log, lines } = captureLogger();
+    log.info({ audit: true, event: 'planttag.issued', actorEmail: 'a@b.com' }, 'planttag.issued');
+    // If this ever flips, docs/compliance.md and docs/observability.md have to
+    // change with it: they record the audit log as an in-scope PII store whose
+    // mitigation is the 30-day retention.
+    expect(JSON.parse(lines[0]).actorEmail).toBe('a@b.com');
+  });
+
+  it('leaves records with nothing sensitive byte-identical', () => {
+    const { log, lines } = captureLogger();
+    log.info({ householdId: 'hh-1', count: 3 }, 'move_day.fired');
+    const record = JSON.parse(lines[0]);
+    expect(record.householdId).toBe('hh-1');
+    expect(record.count).toBe(3);
+  });
+});
+
 describe('currentTraceId (OBS-12)', () => {
   it('returns undefined outside Lambda (env var unset)', () => {
     vi.stubEnv('_X_AMZN_TRACE_ID', '');

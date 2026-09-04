@@ -67,6 +67,17 @@ export interface EmailAcceptance {
 }
 
 /**
+ * The domain half of an address, for logging. Returns 'unknown' rather than
+ * the input when there is no `@` — an unparseable value is likelier to be a
+ * malformed address than a bare domain, and echoing it back would defeat the
+ * point of not logging the address.
+ */
+function recipientDomain(address: string): string {
+  const at = address.lastIndexOf('@');
+  return at > 0 && at < address.length - 1 ? address.slice(at + 1).toLowerCase() : 'unknown';
+}
+
+/**
  * Hand one email to SES.
  *
  * Three things happen before the send:
@@ -105,8 +116,21 @@ export interface EmailAcceptance {
 export async function sendEmailAccepted(msg: EmailMessage): Promise<EmailAcceptance> {
   const from = process.env.SES_FROM_EMAIL;
   if (!from) {
+    // The recipient's DOMAIN, never the address. This branch fires on the
+    // entire notification path in any environment where SES_FROM_EMAIL is
+    // unset — staging by default, and production the moment a Terraform change
+    // drops the variable — so it is the single highest-volume way an address
+    // could reach CloudWatch. The domain is what a dry run is actually
+    // diagnosed on ("is it sending to the right place at all?"); the local
+    // part adds nothing. The `email_suppressed` branch below already showed
+    // the discipline, on the same function (#452).
     logger.info(
-      { msg: 'email_dry_run', to: msg.to, subject: msg.subject, html: Boolean(msg.html) },
+      {
+        msg: 'email_dry_run',
+        toDomain: recipientDomain(msg.to),
+        subject: msg.subject,
+        html: Boolean(msg.html),
+      },
       'email_dry_run'
     );
     return { accepted: false, reason: 'dry_run' };
