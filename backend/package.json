@@ -27,7 +27,7 @@
     "@aws-sdk/client-sns": "^3.1100.0",
     "@aws-sdk/client-ssm": "^3.1079.0",
     "@aws-sdk/lib-dynamodb": "^3.1115.0",
-    "@aws-sdk/s3-request-presigner": "^3.1097.0",
+    "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@middy/core": "^7.8.0",
     "@middy/http-cors": "^7.6.7",
     "@middy/http-error-handler": "^7.6.7",
