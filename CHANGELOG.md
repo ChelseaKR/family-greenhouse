@@ -16,10 +16,284 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-04
+
+### Added
+
+- **One list of what is due today and what is overdue, across every household
+  you belong to** — grouped by home with the household name on every row,
+  never merged into one flat list. A household whose read fails comes back as
+  an explicit unavailable entry rather than an empty task list, because a
+  missing group reads as "nothing due there". Greenhouse-gated per user across
+  every membership, so switching to a free home does not lock the page; it
+  answers 402 when no household grants it and 503 when entitlement could not
+  be read, because "we couldn't check" is not "you don't have it". Acting on a
+  row still goes through the ordinary single-household routes — nothing gains
+  the ability to write across households.
+  [ADR 0017](docs/adr/0017-cross-home-today-is-a-work-queue-not-a-global-view.md).
+- **Email stopped being a notification and became something worth opening.**
+  Every message the app sent was plain text, in English, with no link to the
+  thing it was about and no way to unsubscribe — and the unsubscribe was not
+  merely missing but unreachable, because SES v1's `SendEmailCommand` has no
+  field to put a header in. Mail is now multipart HTML with a real plain-text
+  twin rendered from the same block list, in English or Spanish, with every
+  plant, task and setting a message names linked directly to its own page, and
+  RFC 8058 one-click unsubscribe on everything that is not transactional.
+  Language comes from a new **Email language** setting whose unset value means
+  "never chosen" rather than "English", and which Settings back-fills from the
+  language you are already reading the app in — so it is right before anyone
+  presses Save. The January year-in-review gets its own switch instead of
+  riding the master email toggle, which is why turning off the weekly digest
+  never used to stop it.
+  [ADR 0021](docs/adr/0021-email-rendering-and-usefulness.md).
+- **The daily reminder now says what needs doing, not how much.** It was two
+  integers and a link to a filtered list, while the full task list sat in
+  scope on the line above. It now names every due task by plant and care type
+  with how overdue it is, links each row to that plant, and puts unclaimed
+  work in its own "up for grabs — nobody has claimed these" section instead of
+  folding it into an anonymous number mailed identically to everybody. If you
+  are covering for someone who is away, the email tells you who and until
+  when. When the household's forecast is readable it adds a line about rain or
+  frost; when it is not, it adds nothing rather than implying clear skies. SMS
+  and push keep the short counts sentence; only email gets the list.
+- **The weekly digest now says who last did each job.** It listed plant names
+  and days overdue, mailed identically to every member, linking nowhere, while
+  the backend already knew everything it did not say. It now leads with
+  unclaimed work — the work nobody has taken — names who last did each job and
+  when (and says "you" when that is the reader), shows the household's
+  seven-versus-seven-day trend, carries the plant's latest photo, warns when a
+  plant the verified table lists as toxic sits in a pet-accessible space, and
+  adds a weather note read from the cached forecast only, at no upstream cost.
+  A genuinely quiet week now sends nothing instead of a cheerful empty digest,
+  and a week where the at-risk query _failed_ still sends and says out loud
+  that it could not check.
+- **Invitations can be emailed.** The app has minted 128-bit, seven-day invite
+  codes since May 2026 and had no way to send one, so every invitation was a
+  copy-and-paste and the funnel from "invite created" to "invite accepted" had
+  no email step in it at all. An admin can now type an address on the
+  Household page and press send — admin-only, ten per household per day and
+  one per address per day, with no free-text field. Four more household emails
+  follow the same thread: every existing member hears that someone joined,
+  with an extra line for whoever minted the invite; a weekly note names
+  unclaimed work due in the next few days, in the window the daily reminder
+  does not cover, so a hand can be asked for _before_ anything is late;
+  whoever is named as cover for an away member gets the list and the dates;
+  and the person whose task somebody else did gets a quiet "someone covered
+  for you" — no counts, no ranking, and no mention of anyone who did less.
+  Each of the four has its own switch.
+- **Billing emails exist.** Paid plans have been live since 0.23.3 and the
+  product sent nothing about money: you could be charged, have your card
+  decline, lose your subscription and delete your account without hearing from
+  the app once. Six emails close that — a receipt, a renewal notice before a
+  trial converts to a charge, a payment-failure notice linking Stripe's own
+  hosted invoice page, a card-expiring warning, a cancellation confirmation,
+  and an account-deletion confirmation that states in the same breath and at
+  the same weight what was deleted and what was _kept_ (shared care history
+  under a pseudonym, Stripe's record of payments already made, backups inside
+  their retention window). All six are transactional: they ignore the
+  notification preferences and the do-not-disturb window, carry no
+  unsubscribe, and say in the footer why there is none. They go to the
+  household's admins, taken from our own member roster rather than from the
+  address Stripe holds, so a billing email never reaches anyone the household
+  has not put on its own member list, and they dedupe on the existing Stripe
+  event ledger so a redelivered webhook cannot send a second receipt.
+  [ADR 0023](docs/adr/0023-billing-lifecycle-emails.md).
+- **A dead address stops being mailed.** There was no bounce feedback anywhere
+  in the stack, so nothing ever learned that a mailbox had gone away: a
+  hard-bouncing address was re-mailed every week forever, spending the sending
+  reputation that every message from the domain shares — password resets
+  included. SES bounce, complaint and delivery events now reach a new handler.
+  A hard bounce or a spam complaint suppresses the address permanently; a soft
+  bounce counts against a budget of five in thirty days, and a successful
+  delivery clears the counter. Suppression is visible rather than mysterious:
+  your notification settings say email is paused and why, with a **Resume
+  email to this address** button you press yourself, and your housemates see a
+  neutral "Email not arriving" marker beside your name — no address, and no
+  hint whether it was a bounce or a complaint. Outbound mail also
+  authenticates twice now: a custom `mail.` MAIL FROM subdomain makes SPF
+  align under DMARC alongside DKIM, so one broken mechanism is no longer a
+  total loss. Forgot-password and admin-invite mail is written in the app's
+  own voice instead of AWS's stock copy — the one message a locked-out user
+  has to trust — and replies to app email now reach the monitored `support@`
+  mailbox. A suppression has no automatic expiry by design, so someone who
+  fixes their mailbox stays suppressed until they press Resume.
+  [ADR 0022](docs/adr/0022-email-deliverability-and-bounce-handling.md).
+- **The Away Kit.** A sitter link set for three weeks showed its sitter one
+  week, silently: both task views looked a fixed seven days ahead regardless
+  of the window the household had agreed. The lookahead is now the link's own
+  end date. Any member can mint a link now, not only an admin — the traveller
+  is rarely the admin — balanced by revocation an admin can exercise over any
+  link and a member over their own, with the activity feed naming who opened a
+  door, with what label, and for how long, never the token. Sitters get a
+  printable handoff brief at their own link: the household plant by plant with
+  its space and placement, the household's _own_ care words, the verified
+  pet-safety entry, the latest photo, and the tasks due inside the window,
+  with print styles that drop the site chrome and keep one plant to a page so
+  it can be left on a counter. Creating a link first counts what the brief
+  will be missing — "6 plants have no watering note — your sitter will be
+  guessing" — and links straight to each plant, while somebody still cares
+  enough to write one. Sitters can send photos home through the same link
+  (sixty per link, 300 kB each, image type read from the file's own bytes,
+  refused once the window ends), and members get an **away recap** replaying
+  what the sitter did inside it. The window fix and member link-creation ship
+  free at every tier, because a task view that contradicts the window the
+  household set is a defect and not a feature; the brief, photo-back and recap
+  are one Garden entitlement, and a household without it gets the same generic
+  404 a bad token gets, so a sitter is never told the household's tier.
+  Seedling keeps one live link of up to seven days — a weekend away, complete
+  and free; Garden lifts that to ninety days and ten live links, Greenhouse to
+  twenty-five. [ADR 0015](docs/adr/0015-the-away-kit.md).
+- **Plant Tags: a printed QR label anyone in the house can use.** The person
+  who was never going to install the app can now scan the label on a pot and
+  see when that plant was last watered and by whom, read the household's own
+  care notes, and press one button to say they have just done it — no account,
+  no app, typing only a display name, recorded into the shared history with
+  its own attribution. Print the sheet from the app; QR codes are encoded in
+  your own browser, so no token is ever sent to an image service. A tag is
+  scoped to exactly one plant and two actions, can be revoked and re-issued
+  one at a time, and the household can turn on an optional scan PIN with a
+  per-tag lockout that does not invalidate anything already printed. Members
+  also get "last watered by" on the plant's own page, which the care history
+  always knew and nothing showed. Garden allows fifty active tags, Greenhouse
+  unlimited. [ADR 0016](docs/adr/0016-plant-tags-account-free-care-actions.md).
+- **A kiosk wall display.** A spare tablet in the kitchen or a screen in an
+  office breakroom becomes a read-mostly view of what needs doing today, with
+  tap-to-complete and no login. The link deliberately does not expire — a wall
+  display that dies on a timer is a broken wall display — so revocation is the
+  control instead, and issuing a new link revokes the old one in the same
+  click, which is the answer to "someone photographed the screen". It can read
+  today's tasks and complete one, and nothing else. Because this is the one
+  feature whose cost scales with wall-clock time rather than use, each refresh
+  interval is priced on the control that sets it. Greenhouse; revoking is
+  deliberately not gated, so a household that downgrades can always turn its
+  screen off.
+- **Double-care detection and schedule drift**, two signals only a shared
+  household can produce, both computed from the completion log the app already
+  writes. If a housemate already logged that care inside the care type's own
+  window — a day for watering, longer for slower care — marking it done stops
+  and says who did it and when, and asks whether to log it anyway. Nothing is
+  written until you answer: never silently dropped, never silently
+  double-logged, and a confirmed duplicate is tagged against the completion it
+  duplicates and counted on the analytics page. Separately, when a task's real
+  median interval has drifted more than 30% from its schedule across at least
+  four completions, the plant page offers to match the schedule to what
+  actually happens, in one tap. Below four completions it says why it cannot
+  tell rather than reporting a drift of zero. Garden and above.
+- **A house rule on each plant**, up to 140 characters, editable by any
+  member, shown as a confirmation the moment somebody marks that plant's task
+  done — "bottom-water only, and let it drain" reaches the person about to
+  water it instead of living in one person's head. It travels into the sitter
+  brief too. No rule, nothing shown. Free at every tier.
+- **Members can see the paid features they are locked out of, and ask for
+  them.** Billing is admin-only, so a member who hit a paid feature previously
+  saw nothing at all. Locked features now render visible and explained, name
+  the plan that includes them and its price, and offer a one-tap ask that
+  names the household's admins and reaches every one of them by push, email
+  and an activity-feed row naming the specific feature — once per member per
+  feature per week, with the UI saying when you can ask again. Each paid plan card
+  also divides its price by the household's active member count, in whole
+  cents so no cent is lost, showing the uneven split honestly when it does not
+  divide, with a share action. It is hidden for households of one and whenever
+  the member count cannot be read. Checkout and the billing portal stay
+  admin-only.
+- **The first run is reachable, and it does something.** Nothing in the app
+  ever navigated to `/welcome`: both ways into a household finished at the
+  dashboard, so a brand-new user's first authenticated screen was an empty one
+  and the three-screen tour was dead code you could only reach by typing the
+  URL. The first run now happens, and instead of three screens of prose it
+  adds your first plant — with a curated care schedule when the species
+  matches one, and no invented schedule when it does not — and mints a real
+  invite link, because sharing care with somebody is the whole point and a new
+  user never used to meet it in their first minute. Both steps are genuinely
+  skippable, and an established household signing in on a new device is not
+  sent through it again.
+- **Help is public and true.** "How do I cancel", "what can a plant sitter
+  see" and "why didn't my reminder arrive" sat behind the login, out of reach
+  of the two people most likely to need them — somebody deciding whether to
+  sign up, and somebody locked out of their account — and unindexable by
+  search. The support page even told readers to sign in to read it. Help and
+  its nine topics are now public and searchable, each question with a stable
+  anchor a support reply can link to. The answers were rewritten from the code
+  rather than edited, because several were simply false: they described a
+  theme picker for a dark mode that was never shipped, and the whole billing
+  section said paid plans were paused, which stopped being true on 2026-09-01.
+  Two answers exist because the honest version prevents a support ticket —
+  deleting your account does _not_ cancel your subscription, so cancel first;
+  and quiet hours run in a timezone that defaults to UTC until you press Save,
+  which is why they look broken. The limitations are stated rather than
+  glossed.
+- **The legal pages are ready to serve in Spanish.** Privacy, Terms, Support
+  and the account-deletion page were hardcoded English in an app that is
+  otherwise fully bilingual — English Terms on exactly the pages where
+  language access carries legal weight. All 101 strings per page now live in
+  both catalogs, with sentences kept whole for translators and contact
+  addresses interpolated from constants so no locale can name a wrong inbox.
+  The Spanish is a careful draft rather than reviewed legal text and says so:
+  every non-English render carries a draft notice and a line stating that the
+  English version governs, until a native speaker and counsel sign off. It
+  ships behind the same non-English-locale flag as the rest of the Spanish UI,
+  which is unset in production, so this is groundwork a production reader does
+  not see yet.
+- **Fourteen more species care guides**, taking the public care library from
+  ten to twenty-four, each with its toxicity verdict read off that plant's own
+  ASPCA entry. Four plants people ask about — croton, string of pearls, pilea
+  peperomioides and air plant — were deliberately left out because the ASPCA
+  database has no entry for them, and guessing a pet-safety line is the one
+  failure these pages cannot have.
+- **The public pages are served as real HTML.** Every public URL returned a
+  byte-identical JavaScript shell whose entire readable content was the shared
+  title and "Family Greenhouse needs JavaScript to run", while the sitemap
+  advertised twenty-five URLs no search engine could read. The marketing,
+  care, blog, help, pricing and legal routes are now prerendered at build time
+  with per-route title, description, canonical and Open Graph tags, so a
+  search result or a link pasted into a chat shows the actual page.
+  Authenticated routes still boot from a pristine app shell.
+  [ADR 0013](docs/adr/0013-build-time-prerendering-of-public-routes.md).
+- **The monthly chat allowance is configurable per tier** rather than one flat
+  number for every plan, in the same shape as the other AI caps. No paying
+  household's allowance changes: chat is a Garden-and-up feature, and the free
+  tier's new production value sits under a gate that already refuses the turn,
+  so it is a floor rather than a live spend.
+
+### Changed
+
+- The legal prose no longer loads on startup. Moving 101 keys per locale into
+  a catalog the four legal routes fetch on demand takes about 10 kB brotli off
+  every single visit, in both languages, including builds where Spanish is
+  switched off. No copy moved and no key changed; the legal pages still render
+  in full with no flash of raw keys, including when prerendered.
+- React and React DOM move to 19.2.8 together, along with the root overrides
+  that would otherwise have pinned the pair back.
+- Two release gates stopped being hand-maintained numbers. The handler-route
+  count and the test-file count were written into `docs/quality-audit.md` and
+  `docs/testing.md` and checked there, so every pull request that added a route
+  or a test rewrote the same lines and re-conflicted with every other one — on
+  2026-09-03 that alone made nine open pull requests unmergeable. Both are now
+  derived on demand, and a re-introduced hard-coded count is refused so the
+  conflict surface cannot come back. The combined-JavaScript budget was
+  likewise sized once for this whole wave of features rather than fifteen
+  times; it is deliberately loose and is to be re-tightened against a real
+  measurement now that the wave has landed.
+
 ### Fixed
 
-- Sentry now honours Do Not Track, and a crash report is now only what the
-  privacy page says it is. The first-party telemetry rail has always checked
+- **The calendar feed works from a calendar app now.** Settings handed out
+  `${API}/me/calendar.ics`, a route behind the API Gateway Cognito JWT
+  authorizer; Apple Calendar, Google Calendar, and Outlook fetch subscription
+  URLs with no session, so every subscriber was refused with 401 before the
+  Lambda ran. The feed is now a per-user, per-household capability URL
+  (`/calendar/{token}/family-greenhouse.ics`): a 256-bit token minted from
+  Settings, stored as a scrypt hash (the same construction as API keys),
+  shown once, revocable, and regenerable. **The tradeoff is real and stated in
+  the UI:** anyone holding the link can read that household's task titles,
+  cadence, and due dates. To bound that, the feed no longer emits task notes
+  or the assignee's name, membership is re-checked on every fetch, the public
+  route is IP-rate-limited, the token is not an API key (it opens nothing
+  under `/api/v1`), and the request log never records the path secret (this
+  also covers sitter links). `GET /me/calendar.ics` remains as an
+  authenticated one-shot download.
+- **Sentry now honours Do Not Track, and a crash report is now only what the
+  privacy page says it is.** The first-party telemetry rail has always checked
   `navigator.doNotTrack`; `frontend/src/sentry.ts` did not, so the moment a
   `VITE_SENTRY_DSN` was set the "DNT suppresses analytics" sentence would have
   become false without any code change. Sentry initialisation is now gated on
@@ -35,21 +309,56 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and both session-replay rates are pinned to 0 so adding the replay
   integration later cannot quietly start recording. Nothing is collected
   today — no DSN is configured — and nothing new is collected by this change.
-- The calendar feed works from a calendar app now. Settings handed out
-  `${API}/me/calendar.ics`, a route behind the API Gateway Cognito JWT
-  authorizer; Apple Calendar, Google Calendar, and Outlook fetch subscription
-  URLs with no session, so every subscriber was refused with 401 before the
-  Lambda ran. The feed is now a per-user, per-household capability URL
-  (`/calendar/{token}/family-greenhouse.ics`): a 256-bit token minted from
-  Settings, stored as a scrypt hash (the same construction as API keys),
-  shown once, revocable, and regenerable. **The tradeoff is real and stated in
-  the UI:** anyone holding the link can read that household's task titles,
-  cadence, and due dates. To bound that, the feed no longer emits task notes
-  or the assignee's name, membership is re-checked on every fetch, the public
-  route is IP-rate-limited, the token is not an API key (it opens nothing
-  under `/api/v1`), and the request log never records the path secret (this
-  also covers sitter links). `GET /me/calendar.ics` remains as an
-  authenticated one-shot download.
+- **A failed read no longer arrives as a fact.** This repo's named defect
+  class ([ADR 0010](docs/adr/0010-settled-read-states.md)) was enforced by hand
+  on the backend, which is how one budget read got fixed while the
+  identically-shaped one in the next file kept answering `0` to a query that
+  had failed. `npm run reads:check` now scans the backend too, on the same
+  two-directional ratchet, and its first run found twelve occurrences. The
+  ones people would have felt, fixed here and across the email work:
+  - a household's pest check was skipped for the rest of the day whenever the
+    key store was briefly unreadable, because "we couldn't check" was reported
+    as "nobody configured this", which the checker treats as permanent;
+  - the upstream budget check failed _open_ with a response byte-for-byte
+    identical to a fresh day under budget, so an outage looked like a quiet
+    day;
+  - the annual recap announced "A former plant" — that a plant was gone —
+    when the lookup had failed, and printed a raw account id under "Who did
+    the work";
+  - reminders said "waiting NaN days", printed the literal word "custom" as a
+    task's name, printed "0 coming up soon" as though it were information,
+    named a member nobody could load "a housemate", and turned an unread
+    forecast into "no rain expected";
+  - the household roster stopped paging at the plan cap, so members past it
+    were silently not considered for a reminder at all;
+  - the API-keys list rendered a failed read as an empty list, which reads as
+    "you have no keys" to the one person who most needs to know that an old
+    key is still live.
+- **Everywhere else, an absence is rendered as an absence.** Across the
+  features this release adds, the answer to a read that did not settle is a
+  named unknown the copy renders as a sentence rather than a value: a scanned
+  plant tag says "couldn't load care history" instead of "never watered"; the
+  kiosk keeps its last good list behind a stale marker and, on a hard failure,
+  says out loud that it is not claiming everything is done; the sitter brief
+  shows no pet-safety verdict rather than an unearned all-clear; the
+  sitter-link form renders an unreadable plan as unknown, never as free and
+  never as unlimited; the away recap distinguishes "we couldn't load it" from
+  "nothing was recorded"; the chat endpoint returns an error rather than a cap
+  it could not resolve; the bill-split line hides itself rather than divide by
+  a member count it does not have; and no billing email states an amount or a
+  date it could not read.
+- **The legal pages, the help content and the billing documentation described
+  a product that takes no money**, days after it started taking money. Privacy
+  and Terms now describe what actually crosses the boundary — the email
+  address and household id sent to Stripe, Google Tag Manager and Sentry (both
+  newly disclosed, along with the fact that both are currently off), and the
+  push services that receive notification traffic — and drop the
+  commercial-hold language. Smaller corrections in the same pass: a phone
+  number outlives turning SMS off, account deletion is refused for the lone
+  admin of a household that still has members, and the export is a CSV plus a
+  fuller JSON that excludes photos and completions. No policy was rewritten
+  and no new commitment was made; every correction was checked against shipped
+  code.
 
 ## [0.23.5] - 2026-09-03
 
