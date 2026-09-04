@@ -228,6 +228,69 @@ describe('householdService', () => {
   });
 });
 
+describe('emailInvite', () => {
+  it('posts the address and the inviter language, and reports the real outcome', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    let body: unknown = null;
+    server.use(
+      http.post(`${API}/households/hh-1/invites/email`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(
+          {
+            code: 'ABC',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/ABC',
+            status: 'accepted',
+          },
+          { status: 201 }
+        );
+      })
+    );
+
+    const result = await householdService.emailInvite('hh-1', 'friend@example.com', 'es');
+
+    expect(body).toEqual({ email: 'friend@example.com', locale: 'es' });
+    expect(result.status).toBe('accepted');
+    // The link always comes back so the caller can fall back to copy-and-paste.
+    expect(result.url).toBe('http://localhost:3000/join/ABC');
+    expect(vi.mocked(track)).toHaveBeenCalledWith('invite_sent');
+  });
+
+  it('omits locale entirely when the caller does not supply one', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    let body: unknown = null;
+    server.use(
+      http.post(`${API}/households/hh-1/invites/email`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(
+          { code: 'A', expiresAt: '', url: 'u', status: 'accepted' },
+          { status: 201 }
+        );
+      })
+    );
+
+    await householdService.emailInvite('hh-1', 'friend@example.com');
+
+    expect(body).toEqual({ email: 'friend@example.com' });
+  });
+
+  it('passes a non-delivery status through instead of throwing', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    server.use(
+      http.post(`${API}/households/hh-1/invites/email`, () =>
+        HttpResponse.json(
+          { code: 'A', expiresAt: '', url: 'u', status: 'unavailable' },
+          { status: 201 }
+        )
+      )
+    );
+
+    await expect(householdService.emailInvite('hh-1', 'friend@example.com')).resolves.toMatchObject(
+      { status: 'unavailable' }
+    );
+  });
+});
+
 describe('listMyHouseholds', () => {
   it('reads the caller memberships, not a single household', async () => {
     useAuthStore.setState({ accessToken: 'access-1' });

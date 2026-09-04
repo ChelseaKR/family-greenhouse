@@ -883,6 +883,7 @@ locals {
     "POST /households"                                    = { group = "households", auth = "jwt" }
     "GET /households/{id}"                                = { group = "households", auth = "jwt" }
     "POST /households/{id}/invites"                       = { group = "households", auth = "jwt" }
+    "POST /households/{id}/invites/email"                 = { group = "households", auth = "jwt" }
     "GET /households/invites/{inviteCode}"                = { group = "households", auth = "none" }
     "POST /households/join/{inviteCode}"                  = { group = "households", auth = "jwt" }
     "GET /households/{id}/activity"                       = { group = "households", auth = "jwt" }

@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HouseholdPage } from '@/features/household/HouseholdPage';
@@ -95,6 +96,116 @@ describe('HouseholdPage', () => {
     expect(await screen.findByText('Who’s carrying the care')).toBeInTheDocument();
     const rows = await screen.findAllByRole('rowheader');
     expect(rows.map((row) => row.textContent)).toEqual(['Alice (you)', 'Bob']);
+  });
+
+  /** Admin caller — the invite card is admin-only, like the link generator. */
+  function becomeAdmin() {
+    useAuthStore.setState({
+      user: {
+        id: 'user-1',
+        email: 'alice@example.com',
+        name: 'Alice',
+        householdId: 'hh-1',
+        householdRole: 'admin',
+      },
+    } as never);
+    server.use(
+      http.get(`${API}/me/households`, () =>
+        HttpResponse.json([
+          { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'admin', joinedAt: '' },
+        ])
+      ),
+      http.get(`${API}/households/hh-1/climate`, () =>
+        HttpResponse.json({ configured: false, location: null, weather: null, tips: [] })
+      )
+    );
+  }
+
+  it('emails an invite and shows the link alongside the confirmation', async () => {
+    becomeAdmin();
+    let received: unknown = null;
+    server.use(
+      http.post(`${API}/households/hh-1/invites/email`, async ({ request }) => {
+        received = await request.json();
+        return HttpResponse.json(
+          {
+            code: 'ABC',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/ABC',
+            status: 'accepted',
+          },
+          { status: 201 }
+        );
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(
+      await screen.findByLabelText('Send an invitation by email'),
+      'friend@example.com'
+    );
+    await user.click(screen.getByRole('button', { name: /Send invite/i }));
+
+    expect(await screen.findByText(/Invitation sent/i)).toBeInTheDocument();
+    expect(received).toMatchObject({ email: 'friend@example.com' });
+    // The copyable link is still offered — the email is the fast path, not the
+    // only one.
+    await waitFor(() =>
+      expect(screen.getByLabelText('Invite link')).toHaveValue('http://localhost:3000/join/ABC')
+    );
+  });
+
+  it('never claims a send that did not happen, and still hands over the link', async () => {
+    becomeAdmin();
+    server.use(
+      http.post(`${API}/households/hh-1/invites/email`, () =>
+        HttpResponse.json(
+          {
+            code: 'ABC',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/ABC',
+            status: 'unavailable',
+          },
+          { status: 201 }
+        )
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(
+      await screen.findByLabelText('Send an invitation by email'),
+      'friend@example.com'
+    );
+    await user.click(screen.getByRole('button', { name: /Send invite/i }));
+
+    expect(await screen.findByText(/couldn't send that email/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Invitation sent/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Invite link')).toHaveValue('http://localhost:3000/join/ABC');
+  });
+
+  it('surfaces the daily-cap refusal rather than pretending it sent', async () => {
+    becomeAdmin();
+    server.use(
+      http.post(`${API}/households/hh-1/invites/email`, () =>
+        HttpResponse.json(
+          { message: 'This household has sent its 10 invite emails for today.' },
+          { status: 429 }
+        )
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(
+      await screen.findByLabelText('Send an invitation by email'),
+      'friend@example.com'
+    );
+    await user.click(screen.getByRole('button', { name: /Send invite/i }));
+
+    expect(await screen.findByText(/10 invite emails for today/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Invitation sent/i)).not.toBeInTheDocument();
   });
 
   it('does not offer a dead location form when the climate provider is unavailable', async () => {

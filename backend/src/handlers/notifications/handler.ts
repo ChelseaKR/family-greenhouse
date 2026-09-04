@@ -83,6 +83,13 @@ const prefsSchema = z
     /** Weekly "plants at risk" digest. Optional so older clients that don't
      *  send it keep the stored value (default-on when email is enabled). */
     weeklyDigest: z.boolean().optional(),
+    /** Household emails (services/householdEmails.ts), each individually
+     *  switchable. All optional for the same reason as weeklyDigest: a client
+     *  that predates them keeps the stored value instead of resetting it. */
+    memberJoined: z.boolean().optional(),
+    taskUpForGrabs: z.boolean().optional(),
+    coverageUpdates: z.boolean().optional(),
+    careCredit: z.boolean().optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
     message: 'Quiet hours require both a start and end time',
@@ -161,6 +168,10 @@ export const updatePrefs = createHandler(
       timezone: validatedBody.timezone,
       pestAlerts: validatedBody.pestAlerts,
       weeklyDigest: validatedBody.weeklyDigest,
+      memberJoined: validatedBody.memberJoined,
+      taskUpForGrabs: validatedBody.taskUpForGrabs,
+      coverageUpdates: validatedBody.coverageUpdates,
+      careCredit: validatedBody.careCredit,
     });
     return successResponse(withNotificationCapabilities(updated));
   }

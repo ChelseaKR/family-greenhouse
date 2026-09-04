@@ -2,6 +2,12 @@
 
 Three channels (browser, email, SMS), each individually opt-in per user, all flowing through one entry point so adding a fourth channel later is small.
 
+Two families of message ride those channels:
+
+- **Reminders and summaries** — "your plants need care". Per-member, plant-shaped, described below.
+- **[Household emails](#household-emails)** — "the people you share care with did
+  something". Email only, event-driven, and each individually switchable.
+
 ## How a reminder gets delivered
 
 ```
@@ -152,8 +158,15 @@ PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
 userId, browser, email, sms, phone, phoneVerified,
-dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, updatedAt
+dndStart, dndEnd, timezone, pestAlerts, weeklyDigest,
+memberJoined, taskUpForGrabs, coverageUpdates, careCredit, updatedAt
 ```
+
+The last four are the household-email switches. Like `weeklyDigest`, they are
+optional in the PUT body and default-on at read time _only when `email` is on_,
+so a row written before they existed is not silently opted into new mail it
+never accepted, and an older client that omits them keeps the stored value
+instead of resetting it.
 
 One row per user. Read on every reminder fan-out; written when the user saves the settings page.
 
@@ -190,6 +203,11 @@ overlapping manual/scheduled runs from duplicating a channel while allowing
 failed or DND-deferred siblings to retry. Older aggregate marker shapes remain
 authoritative until their TTL expires, so rolling deployment does not resend a
 reminder on deploy day.
+
+The same hourly Lambda then runs `runHouseholdEmails`, which offers up any
+long-overdue unassigned tasks and delivers each member's queued household
+emails. It is wrapped so a failure there cannot take down the reminder pass, and
+vice versa.
 
 ## Channel-by-channel details
 
@@ -282,9 +300,163 @@ before SMS can be enabled. Codes expire after ten minutes, are stored only as
 hashes, and lock after five incorrect attempts. Changing the number clears its
 verified state.
 
+## Household emails
+
+`services/householdEmails.ts` + `services/inviteEmail.ts`, with all copy in
+`services/emailCopy.ts`.
+
+Every other email in the product is addressed to one person about their plants.
+These are about the household as a group of people, which is the thing
+`docs/roadmap.md` measures (_"active members per household ≥1.5"_) and the thing
+`docs/strategy-review.md` calls the moat.
+
+| Email                       | Trigger                                         | Audience                | Deep links                                       | Pref                          | Cap                                  |
+| --------------------------- | ----------------------------------------------- | ----------------------- | ------------------------------------------------ | ----------------------------- | ------------------------------------ |
+| **Invite**                  | `POST /households/{id}/invites/email` (admin)   | one address, no account | the join link                                    | n/a — recipient is not a user | 10/household/day + 1/address/day     |
+| **Someone joined**          | a successful `POST /households/join/{code}`     | every existing member   | `/household`                                     | `memberJoined`                | once per join                        |
+| **Up for grabs**            | hourly scan: unclaimed, due in (24h, 7d]        | every member            | `/plants/{id}` per task, `/tasks?filter=overdue` | `taskUpForGrabs`              | 1/household/ISO week                 |
+| **You're covering**         | `PUT /tasks/vacation`                           | the named cover         | `/plants/{id}` per task, `/tasks`                | `coverageUpdates`             | once per window (keyed on its dates) |
+| **Someone covered for you** | a completion by someone other than the assignee | the assignee only       | `/plants/{id}` per task, `/dashboard`            | `careCredit`                  | 1/recipient-local day, rolled up     |
+
+### Why the invite email is the important one
+
+`householdService.createInvite` has minted a 128-bit code with a 7-day TTL since
+May 2026 and the product could never send one — invites were copy-and-paste
+only, so `invite_sent → invite_accepted` (the loop `docs/analytics.md` names as
+unmeasurable) had no email step at all.
+
+Because it mails an address the service has never seen, it is bounded on four
+sides: admin-only, a per-household daily cap enforced by a conditional counter
+(not a read-then-write), one email per address per household per day, and a
+per-user route limit. There is no free-text field an inviter can fill — prose we
+send on someone's behalf to a person who has not consented to hear from them is
+how an invite feature becomes an open relay. An invite that cannot name its
+sender **and** its household is not sent at all; the endpoint answers 503 and the
+UI falls back to the copyable link.
+
+The response always carries the link and a `status` (`accepted` /`unavailable` /
+`identity_unavailable` / `recipient_cooldown`). `accepted` means SES took the
+message — which is not delivery, since there is no bounce destination wired yet
+— and the field is named for what we actually know.
+
+### Why "up for grabs" only looks forward
+
+The daily reminder queries `nextDue <= now + 24h`, which includes everything
+already overdue, and [#427](https://github.com/ChelseaKR/family-greenhouse/pull/427)
+gives that email its own "Up for grabs" section for the unclaimed rows in it. A
+dedicated email about unclaimed _overdue_ tasks would therefore name the same
+task twice on the same morning, to every member.
+
+So the two are **disjoint by construction**, which is the split #427 proposed:
+the reminder owns everything at or inside its 24-hour window, and this email
+owns `(24h, 7d]` — the unclaimed work nobody is being told about at all.
+`REMINDER_DUE_WINDOW_MS` in `services/householdEmails.ts` is the only place the
+line is encoded, and there is no shared state between the two paths.
+
+It is also the better half to own. Asking for a hand _before_ anything is late
+is the anti-nag version of the ask; asking after is the nag.
+
+The cadence is one per recipient per ISO week, not per day, because this is the
+only household email whose trigger is a standing state rather than an event — a
+forward list of unclaimed work barely changes overnight, so a daily cadence
+would be the same email again. The lookahead equals the cadence on purpose, so
+nothing falls between the two surfaces: a task further out is caught by a later
+weekly pass while still unclaimed, and one that crosses inside 24 hours first is
+caught by the daily reminder that morning.
+
+**If #427 does not land**, unclaimed overdue tasks stay an anonymous integer in
+the reminder and no email names them. The fix is one constant
+(`REMINDER_DUE_WINDOW_MS` → `0`), not a redesign.
+
+### Why "someone covered for you" is not a leaderboard
+
+It fires only when a task **had** an assignee and somebody else completed it, and
+it goes only to that assignee. It carries no per-person counts, no ordering by
+volume, no mention of the recipient's own contribution, and no mention of anyone
+who did less. Chore apps do monetize contribution scoreboards (Tody's FairShare,
+Sweepy's family leaderboard), but a floor left uncleaned is an annoyance and a
+plant left unwatered dies, and ranking is the mechanism by which a chore app
+nags. Broadcasting "Sam watered the Monstera" to the whole household was the
+obvious alternative and is deliberately not built: to most recipients it is a
+stranger's chore, and to the rest it is the digest's bystander problem with a
+friendlier subject line.
+
+### The queue
+
+Three of the four fire on a one-shot event, and a one-shot send has nowhere to
+retry and no way to respect a quiet window. So each is written to a row first and
+delivered by `flushUser`, which the hourly reminder Lambda already calls per
+member:
+
+```
+PK: USER#{userId}
+SK: HHEMAIL#{dedupeKey}
+entityType: HouseholdEmailQueueItem
+kind, householdId, email, items (list of JSON payload fragments),
+overflow, status: pending|sent, createdAt, expiresAt, ttl
+```
+
+- **DND** — a row whose owner is inside their quiet window is left alone and
+  picked up by a later hourly pass.
+- **Retry** — an SES exception or a dry run (`sendEmail` returning `false`) leaves
+  the row `pending`.
+- **Dedupe** — the sort key _is_ the marker, and a delivered row is kept as `sent`
+  until TTL rather than deleted, so a repeated trigger cannot produce a second
+  email. Daily keys use the **recipient's** local date, not the server's; the
+  weekly `up_for_grabs` key is UTC-based, so a member who travels cannot collect
+  two copies of one week.
+- **Roll-up** — `care_credit` appends, so ten covered tasks in an afternoon
+  produce one email. Past the list cap the surplus becomes an `overflow` count
+  the email states truthfully.
+- **Staleness** — a row undelivered after 36 hours is dropped with a
+  `household_email.expired` log line rather than sent as stale news.
+
+Preferences are re-read at send time, not trusted from enqueue time, so a user
+who switches an email off never receives one already queued.
+
+### Honest failure
+
+`docs/adr/0010-settled-read-states.md` applies to the copy, not just the data:
+
+- A member row that could not be read yields `null`, and the copy says the name
+  is missing with a link to the surface that has it. It never becomes a person
+  called _"a housemate"_ (`reminders.ts`) or a plant called _"A former plant"_
+  (the recap in `digest.ts`).
+- A coverage email's task list is `null` when the read did not settle and `[]`
+  when it settled and there is genuinely nothing. Those are different sentences.
+- A household with unassigned overdue tasks but an empty active-plant read is
+  reported as `unknown`, never as "nothing to do" — the hole in
+  `computePlantsAtRisk`, where a non-throwing short read makes a broken week and
+  a healthy week identical.
+- `runHouseholdEmails` returns `unknown` and `failed` alongside `sent`, and the
+  reminder Lambda reports `householdEmails: null` when the whole pass throws, so
+  a broken hour can never be read as a calm one.
+
+### Localization
+
+These are the first emails in the product written in both languages. The i18n
+system is frontend-only, so `services/emailCopy.ts` carries its own EN/ES
+catalog: per-language plural forms rather than the `total === 1 ? 'plant' :
+'plants'` ternaries the digest bakes into logic, and `Intl` for every date and
+number, which `docs/i18n.md` requires and the older composers violate (the
+i18n gate only scans `frontend/`).
+
+The invite email takes its language from the request, because the invitee has no
+account and therefore no stored preference — the inviter's UI locale is the best
+signal available. The other four call `preferredEmailLocale(prefs)`, which reads
+a `locale` field on the preferences row if one is present and otherwise returns
+English. That field is being added on a parallel branch; when it lands these
+switch language with no change here.
+
+### Unsubscribe
+
+Every household email ends with a link to `/settings`. A real
+`List-Unsubscribe` header needs `emailNotifier.sendEmail` to move to the SES v2
+API, which is out of scope here.
+
 ## Sending arbitrary notifications
 
-Code outside the reminder loop can call `notifier.sendToUser(recipient, payload)` to deliver any notification. Today the only caller is `runReminders`. Future callers (member-added, task-assigned, plant-shared) should use the same entry point so prefs are honoured.
+Code outside the reminder loop can call `notifier.sendToUser(recipient, payload)` to deliver any notification. Today the only caller is `runReminders`. Household emails deliberately do not use it: they are email-only by nature and should not be rerouted to SMS or suppressed by a window aimed at real-time pings — they defer inside it instead.
 
 A payload whose `body` runs to more than a couple of lines should also set
 `shortBody`; SMS and browser push use it, email does not.
@@ -325,3 +497,7 @@ curl -X POST http://localhost:4000/notifications/run-reminders \
 - Integration tests against the local server cover prefs CRUD and simulated
   recipient routing; they do not claim provider receipt
 - The notifier's per-channel error paths are unit-tested by mocking SES/SNS/web-push to throw and asserting the other channels still execute
+- Household emails have unit tests per trigger, per preference gate, for both
+  rate limits on the invite path, and for every honest-failure path (unreadable
+  name, unreadable task list, empty active-plant read, dry run, provider
+  exception, stale row). Copy is asserted in both languages

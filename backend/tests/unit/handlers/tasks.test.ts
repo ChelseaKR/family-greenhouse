@@ -16,6 +16,12 @@ vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'seedling' })),
 }));
 vi.mock('../../../src/services/doubleCare.js');
+// The household emails hang off completion and vacation writes as best-effort
+// side calls; mocked so the handler tests never reach DDB or SES.
+vi.mock('../../../src/services/householdEmails.js', () => ({
+  notifyCoveredCompletion: vi.fn(async () => 'queued'),
+  notifyCoverageAssigned: vi.fn(async () => 'queued'),
+}));
 // authMiddleware validates the claim household against the membership row;
 // without this mock the handler tests would hit the real DDB client.
 vi.mock('../../../src/services/householdService.js', () => ({
@@ -294,6 +300,80 @@ describe('tasks handler', () => {
       'done',
       '2026-07-25T12:00:00.000Z'
     );
+  });
+
+  it('completeTask credits the assignee when somebody else does their task', async () => {
+    const taskService = await import('../../../src/services/taskService.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    const { completeTask } = await import('../../../src/handlers/tasks/handler.js');
+    const completed = {
+      id: 't1',
+      householdId: 'hh-1',
+      plantId: 'p1',
+      plantName: 'Pothos',
+      type: 'water' as const,
+      customType: null,
+      frequency: 7,
+      lastCompleted: '',
+      nextDue: '',
+      // Completion never rewrites assignedTo, so the returned row still names
+      // whoever the task belonged to.
+      assignedTo: 'user-2',
+      assignedToName: 'Alex',
+      notes: null,
+      createdBy: '',
+      createdAt: '',
+    };
+    vi.mocked(taskService.completeTask).mockResolvedValueOnce(completed);
+    const event = buildEvent({
+      httpMethod: 'POST',
+      pathParameters: { id: 't1' },
+      body: JSON.stringify({ notes: 'soil was dry' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const res = (await completeTask(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(householdEmails.notifyCoveredCompletion).toHaveBeenCalledWith({
+      householdId: 'hh-1',
+      task: completed,
+      completedBy: 'user-1',
+      notes: 'soil was dry',
+    });
+  });
+
+  it('completeTask still succeeds when the credit email cannot be queued', async () => {
+    const taskService = await import('../../../src/services/taskService.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    vi.mocked(householdEmails.notifyCoveredCompletion).mockRejectedValueOnce(new Error('ddb down'));
+    const { completeTask } = await import('../../../src/handlers/tasks/handler.js');
+    vi.mocked(taskService.completeTask).mockResolvedValueOnce({
+      id: 't1',
+      householdId: 'hh-1',
+      plantId: 'p1',
+      plantName: 'Pothos',
+      type: 'water',
+      customType: null,
+      frequency: 7,
+      lastCompleted: '',
+      nextDue: '',
+      assignedTo: 'user-2',
+      assignedToName: 'Alex',
+      notes: null,
+      createdBy: '',
+      createdAt: '',
+    });
+    const event = buildEvent({
+      httpMethod: 'POST',
+      pathParameters: { id: 't1' },
+      body: JSON.stringify({}),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const res = (await completeTask(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
   });
 
   it('completeTask returns 404 when task missing', async () => {
@@ -634,6 +714,63 @@ describe('tasks handler', () => {
         expect.objectContaining({ userId: 'user-1', coveredBy: COVER, coveredByName: 'Cover' }),
         'user-1'
       );
+    });
+
+    it('setVacation tells the cover, with the window it applies to', async () => {
+      await mockMembers();
+      const taskService = await import('../../../src/services/taskService.js');
+      const householdEmails = await import('../../../src/services/householdEmails.js');
+      const { setVacation } = await import('../../../src/handlers/tasks/handler.js');
+      vi.mocked(taskService.setVacationWindow).mockResolvedValueOnce({
+        householdId: 'hh-1',
+        userId: 'user-1',
+        coveredBy: COVER,
+        coveredByName: 'Cover',
+        ...validDates,
+        createdBy: 'user-1',
+        createdAt: '',
+      });
+
+      const res = (await setVacation(
+        vacationEvent({ coveredBy: COVER, ...validDates }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(householdEmails.notifyCoverageAssigned).toHaveBeenCalledWith({
+        householdId: 'hh-1',
+        awayUserId: 'user-1',
+        coveredBy: COVER,
+        ...validDates,
+      });
+    });
+
+    it('setVacation still succeeds when the coverage email cannot be queued', async () => {
+      await mockMembers();
+      const taskService = await import('../../../src/services/taskService.js');
+      const householdEmails = await import('../../../src/services/householdEmails.js');
+      vi.mocked(householdEmails.notifyCoverageAssigned).mockRejectedValueOnce(
+        new Error('ddb down')
+      );
+      const { setVacation } = await import('../../../src/handlers/tasks/handler.js');
+      vi.mocked(taskService.setVacationWindow).mockResolvedValueOnce({
+        householdId: 'hh-1',
+        userId: 'user-1',
+        coveredBy: COVER,
+        coveredByName: 'Cover',
+        ...validDates,
+        createdBy: 'user-1',
+        createdAt: '',
+      });
+
+      const res = (await setVacation(
+        vacationEvent({ coveredBy: COVER, ...validDates }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
     });
 
     it('rejects endDate before startDate (400)', async () => {

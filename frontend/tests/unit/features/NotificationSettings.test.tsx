@@ -48,6 +48,10 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
     timezone: 'UTC',
     pestAlerts: false,
     weeklyDigest: true,
+    memberJoined: true,
+    taskUpForGrabs: true,
+    coverageUpdates: true,
+    careCredit: true,
     phoneVerified: false,
     updatedAt: '',
     ...over,
@@ -252,6 +256,10 @@ describe('NotificationSettings', () => {
         timezone: 'America/Chicago',
         pestAlerts: false,
         weeklyDigest: true,
+        memberJoined: true,
+        taskUpForGrabs: true,
+        coverageUpdates: true,
+        careCredit: true,
       });
       await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('America/Chicago'));
       // A write the user did not ask for shows no "saved" banner.
@@ -735,6 +743,47 @@ describe('NotificationSettings', () => {
 
     expect(
       await screen.findByRole('checkbox', { name: 'Weekly plant digest' })
+    ).toBeInTheDocument();
+  });
+
+  it('offers a separate switch for each household email', async () => {
+    await renderSettings(prefs());
+    for (const label of [
+      'Someone joins the household',
+      'A task is up for grabs',
+      "You're covering for someone",
+      'Someone covered for you',
+    ]) {
+      const toggle = screen.getByRole('checkbox', { name: label });
+      expect(toggle).toBeChecked();
+      expect(toggle).toBeEnabled();
+    }
+  });
+
+  it('turns one household email off without touching the others', async () => {
+    const user = userEvent.setup();
+    const { notificationService } = await renderSettings(prefs());
+    vi.mocked(notificationService.updatePreferences).mockResolvedValue(
+      prefs({ taskUpForGrabs: false })
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'A task is up for grabs' }));
+
+    await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+    expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
+      taskUpForGrabs: false,
+      memberJoined: true,
+      coverageUpdates: true,
+      careCredit: true,
+      weeklyDigest: true,
+    });
+  });
+
+  it('disables every household email switch when the email channel is off', async () => {
+    await renderSettings(prefs({ email: false }));
+    expect(screen.getByRole('checkbox', { name: 'Someone covered for you' })).toBeDisabled();
+    expect(
+      screen.getByText('Turn on email notifications to receive household emails.')
     ).toBeInTheDocument();
   });
 

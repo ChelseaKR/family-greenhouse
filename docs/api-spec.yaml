@@ -991,6 +991,39 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/Ok' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /households/{id}/invites/email:
+    post:
+      summary: Mint an invite and email it to an address (admin only)
+      description: >-
+        Always returns the invite link alongside `status`, so the caller can
+        fall back to copy-and-paste in every failure case. `status` is one of
+        `accepted` (SES took the message — acceptance, not delivery),
+        `unavailable` (email delivery is not configured),
+        `identity_unavailable` (we could not name the inviter or the household,
+        so no invitation was sent) or `recipient_cooldown` (this address was
+        already invited to this household today). Bounded by a per-household
+        daily cap (429) and a per-address cooldown.
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                locale:
+                  type: string
+                  enum: [en, es]
+                  description: Language to write the invitation in.
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { description: Daily invite-email allowance for this household is used up }
+        '503': { description: The inviter or household name could not be read, so nothing was sent }
   /households/{id}/activity:
     get:
       summary: Recent household activity feed

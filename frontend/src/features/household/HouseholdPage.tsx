@@ -1,9 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ClipboardDocumentIcon, UserPlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  ClipboardDocumentIcon,
+  EnvelopeIcon,
+  UserPlusIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
-import { householdService } from '@/services/householdService';
+import { householdService, type InviteEmailStatus } from '@/services/householdService';
 import { climateService } from '@/services/climateService';
 import { Input } from '@/components/Input';
 import { EmptyMembers } from '@/components/illustrations/EmptyMembers';
@@ -25,7 +30,7 @@ import { CareLoadCard } from './CareLoadCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const user = useAuthStore((state) => state.user);
   // Operate on the ACTIVE household (multi-household users can switch);
   // user.householdId is only the Cognito-claim default.
@@ -34,6 +39,11 @@ export function HouseholdPage() {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [inviteEmailDraft, setInviteEmailDraft] = useState('');
+  // What the server actually did with the last emailed invite. Held so the UI
+  // can say "we could not send it, here is the link" rather than implying a
+  // delivery that did not happen.
+  const [inviteEmailStatus, setInviteEmailStatus] = useState<InviteEmailStatus | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
 
   const {
@@ -52,6 +62,21 @@ export function HouseholdPage() {
     onSuccess: (data) => {
       setInviteLink(data.url);
       setCopyError(false);
+    },
+  });
+
+  const emailInviteMutation = useMutation({
+    mutationFn: () =>
+      householdService.emailInvite(
+        householdId!,
+        inviteEmailDraft.trim(),
+        i18n.language.startsWith('es') ? 'es' : 'en'
+      ),
+    onSuccess: (data) => {
+      setInviteLink(data.url);
+      setInviteEmailStatus(data.status);
+      setCopyError(false);
+      if (data.status === 'accepted') setInviteEmailDraft('');
     },
   });
 
@@ -158,6 +183,56 @@ export function HouseholdPage() {
               </p>
             </div>
           )}
+
+          {/* Send it, rather than making the inviter find their own channel.
+              The link below still appears either way — the email is the fast
+              path, not the only one. */}
+          <form
+            className="mb-4 space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (inviteEmailDraft.trim()) emailInviteMutation.mutate();
+            }}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <Input
+                id="invite-email"
+                type="email"
+                autoComplete="off"
+                className="flex-1"
+                label={t('household.inviteByEmailLabel')}
+                placeholder={t('household.inviteByEmailPlaceholder')}
+                helperText={t('household.inviteByEmailHint')}
+                value={inviteEmailDraft}
+                onChange={(e) => {
+                  setInviteEmailDraft(e.target.value);
+                  setInviteEmailStatus(null);
+                }}
+              />
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={!inviteEmailDraft.trim()}
+                isLoading={emailInviteMutation.isPending}
+                leftIcon={<EnvelopeIcon className="h-4 w-4" aria-hidden="true" />}
+              >
+                {t('household.inviteByEmailSend')}
+              </Button>
+            </div>
+            {inviteEmailStatus === 'accepted' && (
+              <Alert variant="success">{t('household.inviteByEmailSent')}</Alert>
+            )}
+            {inviteEmailStatus === 'recipient_cooldown' && (
+              <Alert variant="info">{t('household.inviteByEmailCooldown')}</Alert>
+            )}
+            {(inviteEmailStatus === 'unavailable' ||
+              inviteEmailStatus === 'identity_unavailable') && (
+              <Alert variant="warning">{t('household.inviteByEmailUnavailable')}</Alert>
+            )}
+            {emailInviteMutation.isError && (
+              <Alert variant="error">{getErrorMessage(emailInviteMutation.error)}</Alert>
+            )}
+          </form>
 
           {inviteLink ? (
             <div className="space-y-3">

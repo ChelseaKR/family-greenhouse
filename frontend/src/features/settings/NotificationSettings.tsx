@@ -94,9 +94,33 @@ function buildPreferencesUpdate(
     timezone: current.timezone,
     pestAlerts: current.pestAlerts ?? false,
     weeklyDigest: current.weeklyDigest ?? true,
+    // Household emails. `?? true` matches the server's read-time defaulting for
+    // rows written before these toggles existed (on iff email is on), so a
+    // save from this form never silently flips one off.
+    memberJoined: current.memberJoined ?? true,
+    taskUpForGrabs: current.taskUpForGrabs ?? true,
+    coverageUpdates: current.coverageUpdates ?? true,
+    careCredit: current.careCredit ?? true,
     ...overrides,
   };
 }
+
+/** The household-email toggles, in the order they appear in the form. Kept as
+ *  data so the four rows are one map, not four near-identical JSX blocks. */
+const HOUSEHOLD_EMAIL_TOGGLES = [
+  { key: 'memberJoined', titleKey: 'memberJoinedTitle', descriptionKey: 'memberJoinedDescription' },
+  {
+    key: 'taskUpForGrabs',
+    titleKey: 'taskUpForGrabsTitle',
+    descriptionKey: 'taskUpForGrabsDescription',
+  },
+  {
+    key: 'coverageUpdates',
+    titleKey: 'coverageUpdatesTitle',
+    descriptionKey: 'coverageUpdatesDescription',
+  },
+  { key: 'careCredit', titleKey: 'careCreditTitle', descriptionKey: 'careCreditDescription' },
+] as const;
 
 export function NotificationSettings() {
   const { t } = useTranslation();
@@ -567,6 +591,42 @@ export function NotificationSettings() {
               onChange={(e) => save({ weeklyDigest: e.target.checked })}
             />
           </label>
+        </div>
+
+        {/* Household emails — one switch each. Before these, `weeklyDigest` was
+            the only per-email control in the product, so anyone who wanted
+            fewer emails had to turn the whole channel off. */}
+        <div className="border-b border-primary-100/70 pb-4">
+          <p className="text-sm font-medium text-gray-900">
+            {t('notifications.householdEmailsTitle')}
+          </p>
+          <p className="text-sm text-gray-600">
+            {prefs.email
+              ? t('notifications.householdEmailsDescription')
+              : t('notifications.householdEmailsRequiresEmail')}
+          </p>
+          <div className="mt-3 space-y-3">
+            {HOUSEHOLD_EMAIL_TOGGLES.map((toggle) => (
+              <div key={toggle.key} className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm text-gray-900">{t(`notifications.${toggle.titleKey}`)}</p>
+                  <p className="text-xs text-gray-600">
+                    {t(`notifications.${toggle.descriptionKey}`)}
+                  </p>
+                </div>
+                <label className="inline-flex items-center cursor-pointer">
+                  <span className="sr-only">{t(`notifications.${toggle.titleKey}`)}</span>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-primary-700"
+                    checked={(prefs[toggle.key] ?? true) && prefs.email}
+                    disabled={!prefs.email || saveMutation.isPending}
+                    onChange={(e) => save({ [toggle.key]: e.target.checked })}
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* SMS */}

@@ -23,6 +23,12 @@ export interface NotificationPreferences {
   pestAlerts: boolean;
   /** Weekly "plants at risk" digest email. Defaults on when email is enabled. */
   weeklyDigest: boolean;
+  /** Household emails — each individually switchable, all default on when
+   *  email is enabled. See docs/notifications.md. */
+  memberJoined: boolean;
+  taskUpForGrabs: boolean;
+  coverageUpdates: boolean;
+  careCredit: boolean;
   /** True once the current phone number was confirmed via SMS code. Read-only:
    *  only the confirm-verification endpoint can set it. */
   phoneVerified: boolean;
@@ -70,6 +76,10 @@ export const notificationService = {
       | 'timezone'
       | 'pestAlerts'
       | 'weeklyDigest'
+      | 'memberJoined'
+      | 'taskUpForGrabs'
+      | 'coverageUpdates'
+      | 'careCredit'
     >
   ): Promise<NotificationPreferences> {
     const response = await api.put<NotificationPreferences>('/notifications/prefs', prefs);
