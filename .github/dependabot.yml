@@ -8,6 +8,23 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Supply-chain cooldown (zizmor `dependabot-cooldown`): let a freshly
+    # published version sit for a few days before Dependabot proposes it, so a
+    # compromised or hijacked release has time to be yanked upstream before it
+    # ever reaches a PR here. Cooldown applies to VERSION updates only —
+    # Dependabot *security* updates ignore it, so a real advisory is still
+    # raised immediately.
+    #
+    # Nothing is below 7 days on purpose. zizmor only enforces the
+    # `default-days` floor, but a hijacked release is typically published as
+    # a PATCH — the channel that attracts least scrutiny and the most
+    # traffic — so holding patches to a shorter window than the default
+    # would leave the likeliest attack path the least protected.
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     open-pull-requests-limit: 5
     groups:
       # Batch low-risk dev tooling so we get one PR, not a dozen.
@@ -24,6 +41,12 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Supply-chain cooldown — see the first entry above.
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     open-pull-requests-limit: 5
     groups:
       aws-sdk:
@@ -43,6 +66,12 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Supply-chain cooldown — see the first entry above.
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     open-pull-requests-limit: 5
     groups:
       dev-dependencies:
@@ -62,6 +91,12 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Supply-chain cooldown — see the first entry above. `default-days` only:
+    # Dependabot rejects the `semver-*-days` keys for non-semver ecosystems
+    # (github-actions, terraform), and an invalid dependabot.yml stops
+    # Dependabot running for the whole repository, not just this entry.
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - ci
@@ -81,6 +116,10 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Supply-chain cooldown — see the first entry above. `default-days` only,
+    # for the same reason as the github-actions entry.
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - infra
