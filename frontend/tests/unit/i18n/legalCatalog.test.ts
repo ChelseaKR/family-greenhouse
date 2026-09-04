@@ -80,19 +80,46 @@ describe('deferred legal catalog', () => {
     // catalog lives in. Nothing fails: the dynamic import still resolves, the
     // pages still render, and the split is silently undone. Measured against
     // PR #419's `i18n` pin, the deferred chunk collapsed to 154 B and the whole
-    // catalog reappeared inside a modulepreloaded chunk. So any rule naming the
-    // locales directory has to say something about `legal` — an exclusion.
-    const config = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
-    // `\\?` because the rule is written as a regex literal, where the path
-    // separators are escaped: /src\/i18n\/locales\//.
-    if (/i18n\\?\/locales/.test(config)) {
-      expect(
-        config,
-        'vite.config.ts pins src/i18n/locales/ to a manual chunk but never mentions legal: ' +
-          'that rule also captures locales/<lng>/legal.json and puts the deferred prose back ' +
-          'on the startup path. Exclude the legal fragments from the rule.'
-      ).toMatch(/legal/);
-    }
+    // catalog reappeared inside a modulepreloaded chunk.
+    //
+    // This used to be a text search for the word `legal` in vite.config.ts,
+    // which any comment satisfied without the rule doing anything. Run the
+    // rules instead: lift every `/…/.test(id)` predicate out of the config
+    // source, keep whether it was negated, and ask what each locale file
+    // resolves to. That holds for a denylist (match the directory, exclude
+    // legal.json) and for an allowlist (match translation.json by name), and it
+    // fails on a rule that only claims to handle the split.
+    //
+    // Read the source rather than `await import('../../../vite.config')`:
+    // measured, a config patched to return a sentinel chunk name still came
+    // back from that import as the previous build's rule, so an import-based
+    // version of this test passes on a config it never actually read.
+    const source = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+    const PREDICATE = /(!)?\/((?:\\.|\[[^\]]*\]|[^/\\\n])+)\/\.test\(id\)/g;
+    const rules = [...source.matchAll(PREDICATE)]
+      .map(([, bang, body]) => ({ negated: bang === '!', test: new RegExp(body) }))
+      .filter((rule) => rule.test.source.includes('locales'));
+    if (rules.length === 0) return; // no locales rule at all: nothing to swallow.
+
+    const pinned = (file: string) => {
+      const id = `/repo/frontend/src/i18n/locales/en/${file}`;
+      return (
+        rules.some((rule) => !rule.negated && rule.test.test(id)) &&
+        !rules.some((rule) => rule.negated && rule.test.test(id))
+      );
+    };
+
+    expect(
+      pinned('legal.json'),
+      'a manualChunks rule in vite.config.ts captures locales/<lng>/legal.json. That prose is ' +
+        'loaded on demand by src/i18n/legalCatalog.ts; naming it in a chunk rule folds it back ' +
+        'onto the startup path. Match translation.json by name, or exclude the legal fragments.'
+    ).toBe(false);
+    expect(
+      pinned('translation.json'),
+      'vite.config.ts has a locales chunk rule that does not capture the startup catalog, so ' +
+        'the rule is not doing what it says. Pin locales/<lng>/translation.json or drop the rule.'
+    ).toBe(true);
   });
 
   it('is never imported eagerly: the chunk module has exactly one importer', () => {
