@@ -95,7 +95,12 @@ describe('deferred legal catalog', () => {
     // back from that import as the previous build's rule, so an import-based
     // version of this test passes on a config it never actually read.
     const source = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
-    const PREDICATE = /(!)?\/((?:\\.|\[[^\]]*\]|[^/\\\n])+)\/\.test\(id\)/g;
+    // The three alternatives are kept mutually exclusive on their FIRST
+    // character — `\` starts an escape, `[` starts a character class, and the
+    // final branch excludes both. Letting `[` and `]` fall into two branches
+    // is what CodeQL flags as js/redos: on `/` followed by many `[]` pairs the
+    // engine has an exponential number of ways to split the same text.
+    const PREDICATE = /(!)?\/((?:\\.|\[[^\]]*\]|[^/\\\n[])+)\/\.test\(id\)/g;
     const rules = [...source.matchAll(PREDICATE)]
       .map(([, bang, body]) => ({ negated: bang === '!', test: new RegExp(body) }))
       .filter((rule) => rule.test.source.includes('locales'));
