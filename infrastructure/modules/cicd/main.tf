@@ -132,6 +132,11 @@ resource "aws_iam_policy" "deploy" {
         #   cloudwatch/logs/events - dashboards, alarms, log groups, EventBridge rule
         #   sns/sqs       - alerts topic, Lambda DLQ
         #   ses           - domain identity, DKIM, identity policy (modules/email)
+        #   kms           - the customer-managed key modules/email creates for SES
+        #                   event delivery. `alias/aws/sns` is AWS-managed and its
+        #                   key policy cannot be edited, so SES needs a CMK — and
+        #                   creating one needs kms:CreateKey AND kms:TagResource,
+        #                   since a tagged CreateKey is authorized against both.
         #   route53       - DNS records, health checks
         #   acm           - CloudFront cert create/validate (write needed: TF manages it)
         #   xray          - tracing config reads
@@ -152,6 +157,7 @@ resource "aws_iam_policy" "deploy" {
           "sns:*",
           "sqs:*",
           "ses:*",
+          "kms:*",
           "route53:*",
           "acm:*",
           "xray:*",
