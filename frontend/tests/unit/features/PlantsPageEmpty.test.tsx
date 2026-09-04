@@ -54,7 +54,9 @@ describe('PlantsPage empty state (first-plant activation)', () => {
     server.use(http.get(`${API}/plants`, () => HttpResponse.json([])));
     renderPlants();
 
-    await user.click(await screen.findByRole('tab', { name: /past plants/i }));
+    // Toggle button, not a tab: the collection switch has no panel and no
+    // arrow-key model, so it no longer claims `role="tab"` (#445).
+    await user.click(await screen.findByRole('button', { name: /past plants/i }));
 
     expect(await screen.findByText('No past plants')).toBeInTheDocument();
     expect(screen.getByText(/care history intact/i)).toBeInTheDocument();
