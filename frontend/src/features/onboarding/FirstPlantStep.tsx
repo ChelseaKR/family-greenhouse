@@ -28,6 +28,28 @@ const makeFirstPlantSchema = (t: TFunction) =>
 
 type FirstPlantFormData = z.infer<ReturnType<typeof makeFirstPlantSchema>>;
 
+/**
+ * The starting points offered when the species matches no curated bundle.
+ *
+ * These are NOT claims about a species — we don't know the species, that is
+ * the whole situation. They are three watering rhythms the user picks between
+ * and can change from the plant's page, which is why the copy says "a
+ * starting point" and why the chosen value is visible in the form before it
+ * is ever submitted. Without this, a first run whose species we don't
+ * recognise (or that has no species at all) finished with a plant and zero
+ * tasks: no reminder would ever fire and the dashboard had nothing to show.
+ */
+const WATER_STARTING_POINTS = [
+  { days: 4, key: 'firstRun.plant.scheduleStartThirsty' },
+  { days: 7, key: 'firstRun.plant.scheduleStartAverage' },
+  { days: 21, key: 'firstRun.plant.scheduleStartDrought' },
+] as const;
+
+/** The middle option. A default the user is shown, not a fact we assert. */
+const DEFAULT_WATER_DAYS = 7;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 interface FirstPlantStepProps {
   headingId: string;
   headingRef: Ref<HTMLHeadingElement>;
@@ -73,6 +95,9 @@ export function FirstPlantStep({
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [applySchedule, setApplySchedule] = useState(true);
+  // Only consulted when no curated bundle matched. `null` is the user
+  // explicitly declining a reminder, which stays a real option.
+  const [waterEveryDays, setWaterEveryDays] = useState<number | null>(DEFAULT_WATER_DAYS);
   const schema = useMemo(() => makeFirstPlantSchema(t), [t]);
 
   const {
@@ -106,11 +131,16 @@ export function FirstPlantStep({
         ...(species ? { species } : {}),
       });
 
-      // Best-effort, and only ever from a curated bundle the user was shown
-      // by name. A plant whose species we don't recognise gets NO invented
-      // schedule — a made-up watering cadence is worse than none.
+      // Best-effort, and never invented. A recognised species gets the
+      // curated bundle the user was shown by name; an unrecognised one gets
+      // the watering rhythm the user picked, which is their statement rather
+      // than ours. What it must never do again is finish silently with no
+      // schedule at all — that left the household with a plant, no reminder
+      // and nothing on the dashboard, with the product's whole loop
+      // unstarted (#477).
       let scheduled = false;
       let scheduleFailed = false;
+      let startedEveryDays: number | null = null;
       if (applySchedule && matchedTemplate) {
         try {
           await taskService.applyTemplate(plant.id, matchedTemplate.id);
@@ -118,19 +148,41 @@ export function FirstPlantStep({
         } catch {
           scheduleFailed = true;
         }
+      } else if (!matchedTemplate && waterEveryDays !== null) {
+        try {
+          await taskService.createTask({
+            plantId: plant.id,
+            type: 'water',
+            frequency: waterEveryDays,
+            // One interval out, not "now". `createTask` defaults nextDue to
+            // the instant of creation, so a plant added this afternoon would
+            // otherwise be reported as due today and overdue by morning —
+            // the first email this household ever gets (#346).
+            nextDue: new Date(Date.now() + waterEveryDays * MS_PER_DAY).toISOString(),
+          });
+          scheduled = true;
+          startedEveryDays = waterEveryDays;
+        } catch {
+          scheduleFailed = true;
+        }
       }
-      return { plant, scheduled, scheduleFailed };
+      return { plant, scheduled, scheduleFailed, startedEveryDays };
     },
-    onSuccess: ({ plant, scheduled, scheduleFailed }) => {
+    onSuccess: ({ plant, scheduled, scheduleFailed, startedEveryDays }) => {
       // Mirrors AddPlantPage's event so the activation funnel counts a
       // first-run plant and a plant added the long way as the same thing.
       track('plant_added', { ordinal: 'first' });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(
-        scheduled
-          ? t('firstRun.plant.createdWithSchedule', { name: plant.name })
-          : t('firstRun.plant.created', { name: plant.name })
+        startedEveryDays !== null
+          ? t('firstRun.plant.createdWithStartingPoint', {
+              name: plant.name,
+              days: startedEveryDays,
+            })
+          : scheduled
+            ? t('firstRun.plant.createdWithSchedule', { name: plant.name })
+            : t('firstRun.plant.created', { name: plant.name })
       );
       if (scheduleFailed) toast.info(t('firstRun.plant.scheduleFailed', { name: plant.name }));
       onAdded();
@@ -198,6 +250,8 @@ export function FirstPlantStep({
           templateDescription={matchedTemplate?.description ?? null}
           applySchedule={applySchedule}
           onToggleSchedule={setApplySchedule}
+          waterEveryDays={waterEveryDays}
+          onPickWaterEvery={setWaterEveryDays}
         />
 
         <div className="flex flex-col gap-3 sm:flex-row-reverse sm:items-center sm:justify-start">
@@ -231,16 +285,25 @@ interface ScheduleNoticeProps {
   templateDescription: string | null;
   applySchedule: boolean;
   onToggleSchedule: (next: boolean) => void;
+  /** Chosen fallback cadence in days, or `null` for "no reminder". */
+  waterEveryDays: number | null;
+  onPickWaterEvery: (days: number | null) => void;
 }
 
 /**
  * What we will (and will not) schedule, stated honestly.
  *
- * The four outcomes are deliberately distinct. "We have no schedule for that
+ * The outcomes are deliberately distinct. "We have no schedule for that
  * species" is a real answer we can only give once the template catalog has
  * actually loaded; saying it while the read is in flight — or after it failed
  * — would publish an unread as a finding, which is the same defect class the
  * dashboard metrics were fixed for.
+ *
+ * What changed with #477: three of those outcomes used to be dead ends. Each
+ * one is honest about what we don't know AND then offers a starting point the
+ * user chooses, so the first run can no longer finish having scheduled
+ * nothing. The one case that still offers nothing is the in-flight read,
+ * because it is not an outcome yet.
  */
 function ScheduleNotice({
   hasSpecies,
@@ -250,11 +313,20 @@ function ScheduleNotice({
   templateDescription,
   applySchedule,
   onToggleSchedule,
+  waterEveryDays,
+  onPickWaterEvery,
 }: ScheduleNoticeProps) {
   const { t } = useTranslation();
 
   if (!hasSpecies) {
-    return <p className="text-sm text-gray-600">{t('firstRun.plant.scheduleNoSpecies')}</p>;
+    // No species is not a failed read — there is simply nothing to look up —
+    // so this is stated plainly and the fallback is offered immediately.
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-600">{t('firstRun.plant.scheduleNoSpecies')}</p>
+        <WaterStartingPoint value={waterEveryDays} onPick={onPickWaterEvery} />
+      </div>
+    );
   }
 
   if (isPending) {
@@ -267,17 +339,21 @@ function ScheduleNotice({
 
   if (isError) {
     return (
-      <p className="text-sm text-gray-600" aria-live="polite">
-        {t('firstRun.plant.scheduleCheckFailed')}
-      </p>
+      <div className="space-y-3" aria-live="polite">
+        <p className="text-sm text-gray-600">{t('firstRun.plant.scheduleCheckFailed')}</p>
+        {/* A failed catalog read says nothing about how thirsty the plant is,
+            so the user's own answer is still available and still true. */}
+        <WaterStartingPoint value={waterEveryDays} onPick={onPickWaterEvery} />
+      </div>
     );
   }
 
   if (!templateName) {
     return (
-      <p className="text-sm text-gray-600" aria-live="polite">
-        {t('firstRun.plant.scheduleUnknown')}
-      </p>
+      <div className="space-y-3" aria-live="polite">
+        <p className="text-sm text-gray-600">{t('firstRun.plant.scheduleUnknown')}</p>
+        <WaterStartingPoint value={waterEveryDays} onPick={onPickWaterEvery} />
+      </div>
     );
   }
 
@@ -298,5 +374,61 @@ function ScheduleNotice({
         </span>
       </label>
     </div>
+  );
+}
+
+interface WaterStartingPointProps {
+  value: number | null;
+  onPick: (days: number | null) => void;
+}
+
+/**
+ * The fallback: a watering rhythm the user states, offered whenever we have
+ * no curated bundle to apply.
+ *
+ * A radio group rather than buttons so the chosen value is announced as a
+ * selection and the whole set carries one label — the first run is covered by
+ * an axe suite and this is the only new interactive control in it.
+ *
+ * The middle option is pre-selected. That is a default the user reads before
+ * submitting and can change or decline here, not a claim about the species:
+ * the legend says so in words. The alternative — selecting nothing by
+ * default — is what shipped, and it means the median first run ends with no
+ * schedule at all.
+ */
+function WaterStartingPoint({ value, onPick }: WaterStartingPointProps) {
+  const { t } = useTranslation();
+
+  return (
+    <fieldset className="rounded-lg border border-dew/70 bg-paper/60 p-4">
+      <legend className="px-1 text-sm font-medium text-ink">
+        {t('firstRun.plant.scheduleStartLegend')}
+      </legend>
+      <p className="text-xs text-gray-600">{t('firstRun.plant.scheduleStartHint')}</p>
+      <div className="mt-3 space-y-2">
+        {WATER_STARTING_POINTS.map(({ days, key }) => (
+          <label key={days} className="flex min-h-touch items-center gap-3 text-sm text-gray-800">
+            <input
+              type="radio"
+              name="water-starting-point"
+              checked={value === days}
+              onChange={() => onPick(days)}
+              className="h-4 w-4 shrink-0 border-primary-300 text-primary-700 focus:ring-primary-500"
+            />
+            <span>{t(key, { days })}</span>
+          </label>
+        ))}
+        <label className="flex min-h-touch items-center gap-3 text-sm text-gray-800">
+          <input
+            type="radio"
+            name="water-starting-point"
+            checked={value === null}
+            onChange={() => onPick(null)}
+            className="h-4 w-4 shrink-0 border-primary-300 text-primary-700 focus:ring-primary-500"
+          />
+          <span>{t('firstRun.plant.scheduleStartNone')}</span>
+        </label>
+      </div>
+    </fieldset>
   );
 }

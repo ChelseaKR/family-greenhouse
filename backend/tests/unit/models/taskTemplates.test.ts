@@ -145,3 +145,90 @@ describe('suggestTemplate', () => {
     expect(suggestTemplate('')).toBeUndefined();
   });
 });
+
+describe('suggestTemplate: the houseplants people actually own', () => {
+  // #477: a first run that matches nothing ends with a plant and zero tasks,
+  // which is the whole product loop unstarted. The catalog used to cover six
+  // bundles' worth of textbook names and miss most of the top-selling
+  // houseplants in the world. This table is the guard: each entry is a name a
+  // real person types into the species box, mapped to the bundle whose
+  // watering cadence actually suits it.
+  //
+  // Adding a species here is cheap. Getting one WRONG is not — a Hoya on the
+  // fern bundle would be watered every four days — so each line is a claim
+  // about the plant, not just about the string.
+  const CASES: Array<[string, string]> = [
+    // Aroids and the other humidity-loving foliage plants (water @ 7d).
+    ['Monstera deliciosa', 'tropical-houseplant'],
+    ['Calathea orbifolia', 'tropical-houseplant'],
+    ['Maranta leuconeura', 'tropical-houseplant'],
+    ['Prayer plant', 'tropical-houseplant'],
+    ['Alocasia zebrina', 'tropical-houseplant'],
+    ['Syngonium podophyllum', 'tropical-houseplant'],
+    ['Dieffenbachia', 'tropical-houseplant'],
+    ['Spider plant', 'tropical-houseplant'],
+    ['Chlorophytum comosum', 'tropical-houseplant'],
+    ['Ficus lyrata', 'tropical-houseplant'],
+    ['Fiddle leaf fig', 'tropical-houseplant'],
+    ['Ficus elastica', 'tropical-houseplant'],
+    ['Rubber plant', 'tropical-houseplant'],
+    ['Schefflera arboricola', 'tropical-houseplant'],
+    ['Parlor palm', 'tropical-houseplant'],
+    ['Epipremnum aureum', 'tropical-houseplant'],
+    ['Spathiphyllum', 'tropical-houseplant'],
+    // Drought-tolerant (water @ 21d). A ZZ or a Hoya on the tropical bundle
+    // would be watered three times too often, which is how these die.
+    ['ZZ plant', 'succulent-or-cactus'],
+    ['Zamioculcas zamiifolia', 'succulent-or-cactus'],
+    ['Hoya carnosa', 'succulent-or-cactus'],
+    ['String of pearls', 'succulent-or-cactus'],
+    ['Senecio rowleyanus', 'succulent-or-cactus'],
+    ['Haworthia', 'succulent-or-cactus'],
+    ['Euphorbia trigona', 'succulent-or-cactus'],
+    ['Sedum morganianum', 'succulent-or-cactus'],
+    ['Ponytail palm', 'succulent-or-cactus'],
+    ['Crassula ovata', 'succulent-or-cactus'],
+    // Ferns by their botanical names, which contain no "fern" to match on.
+    ['Nephrolepis exaltata', 'fern'],
+    ['Platycerium bifurcatum', 'fern'],
+    // Orchids beyond the two genera already listed.
+    ['Dendrobium nobile', 'orchid'],
+    ['Oncidium', 'orchid'],
+    // Flowering.
+    ['Cyclamen persicum', 'flowering-houseplant'],
+    ['Pelargonium', 'flowering-houseplant'],
+    ['Streptocarpus', 'flowering-houseplant'],
+    // Kitchen herbs beyond the first six.
+    ['Sage', 'herb'],
+    ['Chives', 'herb'],
+    ['Dill', 'herb'],
+    ['Tarragon', 'herb'],
+  ];
+
+  it.each(CASES)('matches %s to %s', (species, templateId) => {
+    expect(suggestTemplate(species)?.id).toBe(templateId);
+  });
+
+  it('still refuses to guess at a species it does not know', () => {
+    // Coverage is not a licence to match everything. A garden tree is not a
+    // houseplant and must still fall through to the caller's fallback.
+    expect(suggestTemplate('Quercus robur')).toBeUndefined();
+    expect(suggestTemplate('Acer palmatum')).toBeUndefined();
+  });
+
+  it('keeps every keyword unique across the whole catalog', () => {
+    // Within-template duplicates are already guarded above. ACROSS templates
+    // a shared keyword is worse than a duplicate: it makes the winner depend
+    // on catalog order rather than on the plant.
+    const owners = new Map<string, string>();
+    const clashes: string[] = [];
+    for (const tpl of TEMPLATES) {
+      for (const kw of tpl.suitsKeywords) {
+        const prior = owners.get(kw);
+        if (prior) clashes.push(`"${kw}" in both ${prior} and ${tpl.id}`);
+        owners.set(kw, tpl.id);
+      }
+    }
+    expect(clashes).toEqual([]);
+  });
+});

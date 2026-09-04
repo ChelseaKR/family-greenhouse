@@ -31,6 +31,20 @@ function signIn(role: 'admin' | 'member' = 'admin') {
 /** A membership old enough that nobody would call this person new. */
 const LONG_STANDING = '2026-01-05T09:00:00.000Z';
 
+/** Task bodies POSTed to /tasks during a test, in order. */
+const createdTasks: Array<Record<string, unknown>> = [];
+/** Template ids applied via /plants/:id/apply-template, in order. */
+const appliedTemplates: string[] = [];
+
+/** A curated bundle the matcher can actually hit. */
+const TROPICAL_TEMPLATE = {
+  id: 'tropical-houseplant',
+  name: 'Tropical houseplant',
+  description: 'Humidity-loving leafy plants.',
+  suitsKeywords: ['monstera', 'pothos'],
+  tasks: [{ type: 'water', frequencyDays: 7 }],
+};
+
 /** Every read the first run makes, with the household empty and the caller an admin. */
 function newHouseholdHandlers({
   plants = [] as unknown[],
@@ -47,7 +61,19 @@ function newHouseholdHandlers({
     http.get(`${API}/me/households`, () =>
       HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role, joinedAt }])
     ),
-    http.get(`${API}/tasks/templates`, () => HttpResponse.json(templates))
+    http.get(`${API}/tasks/templates`, () => HttpResponse.json(templates)),
+    // The first run now always tries to leave with a schedule, so both of
+    // the write paths it can take are stubbed for every test.
+    http.post(`${API}/tasks`, async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      createdTasks.push(body);
+      return HttpResponse.json({ id: 't-new', ...body });
+    }),
+    http.post(`${API}/plants/:plantId/apply-template`, async ({ request }) => {
+      const body = (await request.json()) as { templateId: string };
+      appliedTemplates.push(body.templateId);
+      return HttpResponse.json({ created: [] });
+    })
   );
 }
 
@@ -89,6 +115,8 @@ async function goToInviteStep(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
   signIn();
   usePrefsStore.setState({ welcomeSeen: false });
+  createdTasks.length = 0;
+  appliedTemplates.length = 0;
 });
 
 afterEach(() => {
@@ -395,5 +423,111 @@ describe('WelcomeFlow care-schedule honesty', () => {
     await user.type(await screen.findByLabelText(/species/i), 'Totally unknown plant');
 
     expect(await screen.findByText(/won't guess at one/i)).toBeVisible();
+  });
+});
+
+describe('WelcomeFlow always leaves with a schedule (#477)', () => {
+  /** Fill the form and submit, returning once the invite step has appeared. */
+  async function addPlant(
+    user: ReturnType<typeof userEvent.setup>,
+    { name, species }: { name: string; species?: string }
+  ) {
+    server.use(
+      http.post(`${API}/plants`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+      })
+    );
+    renderFirstRun();
+    await user.type(await screen.findByLabelText(/plant name/i), name);
+    if (species) await user.type(screen.getByLabelText(/species/i), species);
+  }
+
+  it('offers a starting point when the species matches no curated bundle', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers({ templates: [TROPICAL_TEMPLATE] });
+    await addPlant(user, { name: 'Wax plant', species: 'Hoya carnosa' });
+
+    // Honest about what we don't know...
+    expect(await screen.findByText(/we don't have a care schedule/i)).toBeVisible();
+    // ...and no longer a dead end.
+    expect(screen.getByRole('group', { name: /start with a watering reminder/i })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    expect(createdTasks).toHaveLength(1);
+    expect(createdTasks[0]).toMatchObject({ plantId: 'p-new', type: 'water', frequency: 7 });
+    expect(appliedTemplates).toEqual([]);
+  });
+
+  it('starts the first reminder one interval out, not already overdue', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers({ templates: [TROPICAL_TEMPLATE] });
+    const before = Date.now();
+    await addPlant(user, { name: 'Wax plant', species: 'Hoya carnosa' });
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    // A plant added this afternoon must not be reported as due today, and
+    // must not be overdue in the household's first-ever reminder email.
+    const nextDue = Date.parse(String(createdTasks[0].nextDue));
+    expect(nextDue).toBeGreaterThan(before + 6 * 24 * 60 * 60 * 1000);
+  });
+
+  it('offers a starting point when no species was given at all', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers({ templates: [TROPICAL_TEMPLATE] });
+    await addPlant(user, { name: 'The big one by the window' });
+
+    expect(screen.getByRole('group', { name: /start with a watering reminder/i })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    expect(createdTasks).toHaveLength(1);
+    expect(createdTasks[0]).toMatchObject({ type: 'water', frequency: 7 });
+  });
+
+  it('honours a user who picks a different rhythm', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers({ templates: [TROPICAL_TEMPLATE] });
+    await addPlant(user, { name: 'Cactus', species: 'Astrophytum' });
+
+    await user.click(await screen.findByRole('radio', { name: /drought-tolerant/i }));
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    expect(createdTasks[0]).toMatchObject({ type: 'water', frequency: 21 });
+  });
+
+  it('honours a user who declines a reminder', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers({ templates: [TROPICAL_TEMPLATE] });
+    await addPlant(user, { name: 'Wax plant', species: 'Hoya carnosa' });
+
+    await user.click(await screen.findByRole('radio', { name: /no reminder for now/i }));
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    // Declining stays a real option — the fix is that silence is no longer
+    // the DEFAULT, not that the user lost the choice.
+    expect(createdTasks).toEqual([]);
+  });
+
+  it('still prefers the curated bundle when the species is recognised', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers({ templates: [TROPICAL_TEMPLATE] });
+    await addPlant(user, { name: 'Kitchen monstera', species: 'Monstera deliciosa' });
+
+    // The matched bundle is named, and the starting-point picker stays out of
+    // the way: a curated schedule beats a guessed rhythm.
+    expect(await screen.findByText(/tropical houseplant/i)).toBeVisible();
+    expect(screen.queryByRole('group', { name: /start with a watering reminder/i })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    expect(appliedTemplates).toEqual(['tropical-houseplant']);
+    expect(createdTasks).toEqual([]);
   });
 });
