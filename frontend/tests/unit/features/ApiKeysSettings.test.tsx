@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { ApiKeysSettings } from '@/features/settings/ApiKeysSettings';
 import { useAuthStore } from '@/store/authStore';
@@ -14,7 +15,9 @@ function renderSettings() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ApiKeysSettings />
+      <MemoryRouter>
+        <ApiKeysSettings />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -46,8 +49,57 @@ describe('ApiKeysSettings', () => {
     server.use(
       http.get(`${API}/me/households`, () =>
         HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role: 'admin', joinedAt: '' }])
-      )
+      ),
+      // Issuing keys is Greenhouse-only; the existing tests describe an
+      // entitled household, so the tier read answers Greenhouse here.
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'greenhouse' }))
     );
+  });
+
+  it('renders issuing LOCKED (not hidden) below Greenhouse, and keeps the existing keys listed', async () => {
+    server.use(
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'garden' })),
+      http.get(`${API}/billing/plans`, () =>
+        HttpResponse.json({
+          paymentsAvailable: true,
+          commercialHold: { active: false, effectiveDate: '2026-09-01' },
+          plans: [
+            { id: 'seedling', name: 'Seedling', description: '', maxPlants: 10, maxMembers: 6 },
+            { id: 'garden', name: 'Garden', description: '', maxPlants: 500, maxMembers: 6 },
+            {
+              id: 'greenhouse',
+              name: 'Greenhouse',
+              description: '',
+              maxPlants: 5000,
+              maxMembers: 50,
+              monthlyPrice: 9.99,
+            },
+          ],
+        })
+      ),
+      http.get(`${API}/households/hh-1`, () =>
+        HttpResponse.json({
+          id: 'hh-1',
+          name: 'Home',
+          createdAt: '',
+          createdBy: 'u1',
+          members: [{ userId: 'u1', name: 'Test', role: 'admin', joinedAt: '' }],
+        })
+      ),
+      http.get(`${API}/api-keys`, () => HttpResponse.json([KEY]))
+    );
+    renderSettings();
+
+    expect(await screen.findByTestId('locked-included')).toHaveTextContent(
+      /Included with Greenhouse/
+    );
+    // The admin viewer gets the change-plan link, not an ask button.
+    expect(screen.getByRole('link', { name: 'Change plan' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+    expect(screen.queryByRole('button', { name: 'Issue key' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Home Assistant')).toBeInTheDocument();
   });
 
   it('lists issued keys when the read succeeds', async () => {

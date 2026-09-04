@@ -293,6 +293,11 @@ export interface ActivityPayloadByType {
   'sitter_link.created': SitterLinkActivityPayload;
   'sitter_link.revoked': SitterLinkActivityPayload;
   'task.schedule_matched': TaskScheduleMatchedActivityPayload;
+  /** A member asked the admins to upgrade for a locked feature. `feature` is
+   *  an `UpgradeFeature` id (services/upgradeRequestService.ts); kept as a
+   *  string here because historical rows may name features this build no
+   *  longer knows. */
+  'upgrade.requested': { feature: string; plan: 'garden' | 'greenhouse' };
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -319,6 +324,7 @@ export const ACTIVITY_TYPES = [
   'sitter_link.created',
   'sitter_link.revoked',
   'task.schedule_matched',
+  'upgrade.requested',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

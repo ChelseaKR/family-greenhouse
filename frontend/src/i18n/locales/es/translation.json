@@ -37,7 +37,9 @@
     "healthCheckedUnlabelled": "{{actor}} solicitó una revisión de salud foliar para {{plant}} — este registro no indica si se realizó un análisis real o se mostró un resultado de demostración",
     "healthDemo": "{{actor}} vio un resultado de demostración de salud foliar para {{plant}} — no se realizó ningún análisis de imagen",
     "aTask": "una tarea",
-    "scheduleMatched": "{{actor}} ajustó el horario de {{task}} de {{plant}} a la realidad ({{from}} → {{to}} días)"
+    "scheduleMatched": "{{actor}} ajustó el horario de {{task}} de {{plant}} a la realidad ({{from}} → {{to}} días)",
+    "upgradeRequested": "{{actor}} pidió a las personas administradoras del hogar que mejoren el plan para tener {{feature}}",
+    "upgradeRequestedUnknown": "{{actor}} pidió a las personas administradoras del hogar que mejoren el plan"
   },
   "spaces": {
     "all": "Todos los espacios",
@@ -803,7 +805,8 @@
     },
     "apiKeys": {
       "writeScopeWarning": "Esta clave podrá completar y posponer tareas de tu hogar. Concede acceso de escritura solo a integraciones de confianza.",
-      "loadFailed": "No pudimos cargar tus claves de API, así que esta lista no refleja lo que existe. Cualquier clave emitida antes sigue activa hasta que la revoques."
+      "loadFailed": "No pudimos cargar tus claves de API, así que esta lista no refleja lo que existe. Cualquier clave emitida antes sigue activa hasta que la revoques.",
+      "lockedBody": "Las claves permiten que scripts y Home Assistant lean los datos de tu hogar; el acceso de escritura se concede de forma explícita. Las claves emitidas antes siguen funcionando; emitir nuevas forma parte del plan Greenhouse."
     },
     "calendarFeed": {
       "title": "Calendario",
@@ -866,7 +869,16 @@
       "errorLifetimeOwned": "Tu hogar ya posee este plan de forma permanente. No hay nada más que comprar en este nivel.",
       "cancelPending": "Cancelado: tu plan {{plan}} termina el {{date}} y luego tu hogar vuelve a Plántula.",
       "cancelPendingNoDate": "Cancelado: tu plan {{plan}} termina al final del periodo actual y luego tu hogar vuelve a Plántula.",
-      "trialEnds": "Tu prueba gratuita termina el {{date}}. No se te cobrará antes de esa fecha, y cancelar en cualquier momento antes no cuesta nada."
+      "trialEnds": "Tu prueba gratuita termina el {{date}}. No se te cobrará antes de esa fecha, y cancelar en cualquier momento antes no cuesta nada.",
+      "splitLine": "{{total}} ÷ {{n}} miembros = {{each}} cada uno",
+      "splitLineApprox": "{{total}} ÷ {{n}} miembros ≈ {{each}} cada uno",
+      "splitExact": "Exactamente: {{high}} × {{highAmount}} y {{low}} × {{lowAmount}}.",
+      "splitShare": "Compartir el reparto",
+      "splitShareAria": "Compartir el reparto del plan {{plan}} con tu hogar",
+      "splitCopied": "Copiado.",
+      "splitCopyFailed": "No se pudo copiar automáticamente. Selecciona la línea y cópiala a mano.",
+      "splitHouseholdFallback": "Nuestro hogar",
+      "splitShareText": "{{household}} en Family Greenhouse: el plan {{plan}} cuesta {{total}} {{cadence}} para todo el hogar — {{each}} cada uno entre {{n}} miembros. {{url}}"
     }
   },
   "notifications": {
@@ -941,9 +953,6 @@
     "availabilityCheckFailed": "No se pudo comprobar la disponibilidad del chat. Inténtalo de nuevo en unos instantes.",
     "seedlingUnavailableTitle": "El chat de cuidado no está disponible en Seedling",
     "seedlingUnavailableDescription": "Tus plantas, tareas, recordatorios, análisis y guías de cuidado siguen disponibles.",
-    "seedlingUnavailablePaused": "El chat está incluido para los hogares Garden y Greenhouse existentes. Los cambios de plan están pausados, así que no se puede activar ahora.",
-    "seedlingUnavailableUpgrade": "El chat de cuidado está incluido en los hogares Garden y Greenhouse.",
-    "viewPlanStatus": "Ver estado del plan",
     "report": {
       "success": "Respuesta denunciada. Gracias.",
       "open": "Denunciar respuesta",
@@ -1055,5 +1064,32 @@
     "matchedToast_one": "Horario actualizado: cada día",
     "matchedToast_many": "Horario actualizado: cada {{count}} días",
     "matchedToast_other": "Horario actualizado: cada {{count}} días"
+  },
+  "locked": {
+    "includedWith": "Incluido en {{plan}}",
+    "includedWithPrice": "Incluido en {{plan}} — {{price}} al mes para todo el hogar",
+    "adminChangePlan": "Cambiar de plan",
+    "adminHint": "Eres administrador/a, así que puedes cambiar el plan del hogar en Ajustes → Facturación.",
+    "ask": "Pedir a {{names}} que mejore el plan",
+    "askAdmin": "Pedir a la persona administradora del hogar que mejore el plan",
+    "onceAWeek": "Le envía un aviso en la aplicación y por correo con el nombre de esta función. Una petición por función y semana; no se cobra nada a menos que una persona administradora mejore el plan.",
+    "sent": "Enviado. {{names}} recibirá un aviso en la aplicación y por correo.",
+    "sentAdmin": "Enviado. La persona administradora del hogar recibirá un aviso en la aplicación y por correo.",
+    "sentNoEmail": "El aviso está en la aplicación, pero el correo no se pudo enviar; quizá convenga comentárselo también en persona.",
+    "alreadyAsked": "Ya lo pediste. Puedes volver a pedirlo el {{date}}.",
+    "alreadyAskedNoDate": "Ya lo pediste hace poco. Puedes volver a pedirlo dentro de una semana.",
+    "alreadyIncluded": "Tu hogar ya tiene esto; recarga la página para verlo.",
+    "paymentsPaused": "Los cambios de plan de pago están en pausa ahora mismo, así que una persona administradora todavía no podría hacer nada con la petición.",
+    "failed": "No pudimos enviarlo ahora mismo. No se ha cobrado nada; inténtalo de nuevo en un momento.",
+    "features": {
+      "chat": "Chat de cuidado de plantas",
+      "identifications": "Más identificaciones de plantas al mes",
+      "leaf_health": "Más revisiones de salud foliar al mes",
+      "plant_cap": "Espacio para más plantas",
+      "member_cap": "Espacio para más miembros del hogar",
+      "api_keys": "Claves de API",
+      "garden_plan": "El plan Garden",
+      "greenhouse_plan": "El plan Greenhouse"
+    }
   }
 }

@@ -114,7 +114,8 @@ export type EventName =
   | 'household_switched' // User changed active household via the switcher.
   | 'shared_care_pulse_action' // Dashboard setup action or 30-day dismissal; `context` names the step.
   | 'climate_location_set'
-  | 'experiment_viewed'; // A bucketed A/B variant was rendered to the visitor.
+  | 'experiment_viewed' // A bucketed A/B variant was rendered to the visitor.
+  | 'upgrade_requested'; // A member asked the admins to upgrade for a locked feature; `upgradeTo` names the tier.
 
 export interface EventProps {
   /** Plan identifier when the event is plan-relevant. */

@@ -35,7 +35,9 @@
     "healthCheckedUnlabelled": "{{actor}} requested a leaf-health check for {{plant}} — this record doesn't say whether a real analysis ran or a demo result was shown",
     "healthDemo": "{{actor}} viewed a demo leaf-health result for {{plant}} — no image analysis was performed",
     "aTask": "a task",
-    "scheduleMatched": "{{actor}} matched the {{task}} schedule for {{plant}} to reality ({{from}} → {{to}} days)"
+    "scheduleMatched": "{{actor}} matched the {{task}} schedule for {{plant}} to reality ({{from}} → {{to}} days)",
+    "upgradeRequested": "{{actor}} asked the household admins to upgrade for {{feature}}",
+    "upgradeRequestedUnknown": "{{actor}} asked the household admins to upgrade"
   },
   "spaces": {
     "all": "All spaces",
@@ -785,7 +787,8 @@
     },
     "apiKeys": {
       "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust.",
-      "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Any key issued earlier is still active until you revoke it."
+      "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Any key issued earlier is still active until you revoke it.",
+      "lockedBody": "Keys let scripts and Home Assistant read your household data, with write access as an explicit grant. Keys issued earlier keep working; issuing new ones is part of the Greenhouse plan."
     },
     "calendarFeed": {
       "title": "Calendar feed",
@@ -848,7 +851,16 @@
       "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier.",
       "cancelPending": "Cancelled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
       "cancelPendingNoDate": "Cancelled — your {{plan}} plan ends when the current period does, then your household returns to Seedling.",
-      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and cancelling any time before it costs nothing."
+      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and cancelling any time before it costs nothing.",
+      "splitLine": "{{total}} ÷ {{n}} members = {{each}} each",
+      "splitLineApprox": "{{total}} ÷ {{n}} members ≈ {{each}} each",
+      "splitExact": "Exactly: {{high}} × {{highAmount}} and {{low}} × {{lowAmount}}.",
+      "splitShare": "Share the split",
+      "splitShareAria": "Share the {{plan}} split with your household",
+      "splitCopied": "Copied.",
+      "splitCopyFailed": "Couldn’t copy automatically. Select the line and copy it manually.",
+      "splitHouseholdFallback": "Our household",
+      "splitShareText": "{{household}} on Family Greenhouse: the {{plan}} plan is {{total}} {{cadence}} for the whole household — {{each}} each across {{n}} members. {{url}}"
     }
   },
   "notifications": {
@@ -923,9 +935,6 @@
     "availabilityCheckFailed": "Chat availability could not be checked. Try this page again in a moment.",
     "seedlingUnavailableTitle": "Plant care chat isn’t available on Seedling",
     "seedlingUnavailableDescription": "Your plants, tasks, reminders, analytics, and care guides remain available.",
-    "seedlingUnavailablePaused": "Plant care chat is included with existing Garden and Greenhouse households. Paid plan changes are paused, so it cannot be enabled right now.",
-    "seedlingUnavailableUpgrade": "Plant care chat is included with Garden and Greenhouse households.",
-    "viewPlanStatus": "View plan status",
     "report": {
       "success": "Response reported. Thank you.",
       "open": "Report response",
@@ -1030,5 +1039,32 @@
     "match": "Match schedule to reality",
     "matchedToast_one": "Schedule updated: every day",
     "matchedToast_other": "Schedule updated: every {{count}} days"
+  },
+  "locked": {
+    "includedWith": "Included with {{plan}}",
+    "includedWithPrice": "Included with {{plan}} — {{price}} a month for the whole household",
+    "adminChangePlan": "Change plan",
+    "adminHint": "You’re an admin, so you can change the household’s plan in Settings → Billing.",
+    "ask": "Ask {{names}} to upgrade",
+    "askAdmin": "Ask your household admin to upgrade",
+    "onceAWeek": "Sends them a note in the app and by email naming this feature. One ask per feature per week; nothing is charged unless an admin upgrades.",
+    "sent": "Sent. {{names}} will get a note in the app and by email.",
+    "sentAdmin": "Sent. Your household admin will get a note in the app and by email.",
+    "sentNoEmail": "The note is in the app, but the email could not be sent — you may want to mention it in person too.",
+    "alreadyAsked": "You already asked about this. You can ask again on {{date}}.",
+    "alreadyAskedNoDate": "You already asked about this recently. You can ask again in a week.",
+    "alreadyIncluded": "Your household already has this — reload to see it.",
+    "paymentsPaused": "Paid plan changes are paused right now, so there is nothing an admin could do with a request yet.",
+    "failed": "We couldn’t send that just now. Nothing was charged — try again in a moment.",
+    "features": {
+      "chat": "Plant care chat",
+      "identifications": "More plant identifications each month",
+      "leaf_health": "More leaf-health checks each month",
+      "plant_cap": "Room for more plants",
+      "member_cap": "Room for more household members",
+      "api_keys": "API keys",
+      "garden_plan": "The Garden plan",
+      "greenhouse_plan": "The Greenhouse plan"
+    }
   }
 }

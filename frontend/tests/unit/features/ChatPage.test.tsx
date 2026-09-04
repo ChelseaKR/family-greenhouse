@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatPage } from '@/features/chat/ChatPage';
 import { billingService } from '@/services/billingService';
 import { chatService } from '@/services/chatService';
+import { useAuthStore } from '@/store/authStore';
 
 vi.mock('@/hooks/useActiveHouseholdId', () => ({
   useActiveHouseholdId: () => 'hh-1',
@@ -13,7 +14,17 @@ vi.mock('@/hooks/useActiveHouseholdId', () => ({
 vi.mock('@/services/billingService', () => ({
   billingService: {
     getCurrentSubscription: vi.fn(),
+    // The locked-feature card reads the catalog to say which plan includes
+    // chat and whether payments are open.
+    listPlans: vi.fn(),
   },
+}));
+
+vi.mock('@/services/householdService', () => ({
+  householdService: {
+    getHousehold: vi.fn(),
+  },
+  listMyHouseholds: vi.fn(),
 }));
 
 vi.mock('@/services/chatService', () => ({
@@ -40,7 +51,7 @@ function renderPage() {
 }
 
 describe('ChatPage plan availability', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     HTMLElement.prototype.scrollTo = vi.fn();
     vi.mocked(chatService.getBudget).mockResolvedValue({
@@ -49,6 +60,52 @@ describe('ChatPage plan availability', () => {
       inputTokensCap: 1000,
       outputTokensCap: 1000,
       costUsd: 0,
+    });
+    vi.mocked(billingService.listPlans).mockResolvedValue({
+      paymentsAvailable: true,
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
+      plans: [
+        { id: 'seedling', name: 'Seedling', description: '', maxPlants: 10, maxMembers: 6 },
+        {
+          id: 'garden',
+          name: 'Garden',
+          description: '',
+          maxPlants: 500,
+          maxMembers: 6,
+          monthlyPrice: 4.99,
+        },
+        {
+          id: 'greenhouse',
+          name: 'Greenhouse',
+          description: '',
+          maxPlants: 5000,
+          maxMembers: 50,
+          monthlyPrice: 9.99,
+        },
+      ],
+    });
+    const { householdService, listMyHouseholds } = await import('@/services/householdService');
+    vi.mocked(householdService.getHousehold).mockResolvedValue({
+      id: 'hh-1',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'u-admin',
+      members: [
+        { userId: 'u-admin', name: 'Maria', role: 'admin', joinedAt: '' },
+        { userId: 'u-1', name: 'Sam', role: 'member', joinedAt: '' },
+      ],
+    });
+    vi.mocked(listMyHouseholds).mockResolvedValue([
+      { householdId: 'hh-1', name: 'Home', role: 'member', joinedAt: '' },
+    ]);
+    useAuthStore.setState({
+      user: {
+        id: 'u-1',
+        email: 'sam@example.com',
+        name: 'Sam',
+        householdId: 'hh-1',
+        householdRole: 'member',
+      },
     });
   });
 
@@ -65,6 +122,16 @@ describe('ChatPage plan availability', () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('Chat message')).not.toBeInTheDocument();
     expect(chatService.getBudget).not.toHaveBeenCalled();
+  });
+
+  it('renders the Seedling gate LOCKED, not hidden: a member sees the plan and can ask the admin', async () => {
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
+      planId: 'seedling',
+    });
+    renderPage();
+
+    expect(await screen.findByTestId('locked-included')).toHaveTextContent(/Included with Garden/);
+    expect(await screen.findByRole('button', { name: 'Ask Maria to upgrade' })).toBeInTheDocument();
   });
 
   it('renders the composer for an existing Garden household', async () => {

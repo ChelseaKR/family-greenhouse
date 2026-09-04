@@ -1248,6 +1248,78 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /households/{id}/upgrade-requests:
+    post:
+      summary: >-
+        A member (not an admin) asks the household's admins to upgrade for a specific locked
+        feature. Every admin gets an email and a browser/native push naming the feature, and the
+        ask is recorded in the household activity feed. Rate-limited server-side to once per member
+        per feature per 7 days. Never touches billing — admins buy through /billing/checkout.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [feature]
+              properties:
+                feature:
+                  type: string
+                  enum:
+                    [
+                      chat,
+                      identifications,
+                      leaf_health,
+                      plant_cap,
+                      member_cap,
+                      api_keys,
+                      garden_plan,
+                      greenhouse_plan,
+                    ]
+      responses:
+        '201':
+          description: Request recorded and the admins notified (delivery flags are honest — false means nothing left the building on that channel)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feature: { type: string }
+                  targetPlanId: { type: string, enum: [garden, greenhouse] }
+                  requestedAt: { type: string, format: date-time }
+                  nextAllowedAt: { type: string, format: date-time }
+                  admins:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId: { type: string }
+                        name: { type: string }
+                  emailDelivered: { type: boolean }
+                  pushDelivered: { type: boolean }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Caller is an admin, the household already includes the feature, or there is no admin to ask
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: This member already asked for this feature inside the 7-day window; `details.nextAllowedAt` is set when the earlier marker could be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Payment activity is paused, so there is nothing an admin could do with the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # --- Notifications ---
   /notifications/prefs:
     get:

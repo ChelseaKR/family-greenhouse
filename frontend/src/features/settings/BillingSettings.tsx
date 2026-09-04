@@ -16,11 +16,14 @@ import {
 import { formatDate } from '@/i18n/format';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
+import { useActiveHouseholdName } from '@/hooks/useActiveHouseholdName';
 import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { AskToUpgrade } from '@/components/LockedFeature';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
+import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { isNativeApp } from '@/lib/platform';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
@@ -71,6 +74,8 @@ export function BillingSettings() {
 
   const householdId = useActiveHouseholdId();
   const isAdmin = useIsHouseholdAdmin();
+  // For the split-the-bill share line; null while unknown, never a blank.
+  const householdName = useActiveHouseholdName();
   const [purchaseErrorKeyState, setPurchaseErrorKey] = useState<string | null>(null);
   // Stripe redirects back to ?status=success after a completed checkout.
   const [searchParams] = useSearchParams();
@@ -142,6 +147,8 @@ export function BillingSettings() {
   // Fail closed if an old or malformed API response omits the status field.
   const paymentsAvailable = plansQuery.data?.paymentsAvailable === true;
   const currentPlanId = subQuery.data?.planId ?? 'seedling';
+  // `memberCount` inside is nullable on purpose: the split line below only
+  // renders from a real count, never from a placeholder.
   const usage = resolvePlanUsage(subQuery.data);
   // Three outcomes, three messages. `over` is genuinely over the plan caps —
   // only possible after a downgrade; reads, edits, and deletes all keep
@@ -280,25 +287,39 @@ export function BillingSettings() {
           <PaidPlanGrid
             plans={plans}
             currentPlanId={currentPlanId}
-            renderCta={(plan, interval, price) =>
-              renderPlanCta({
-                plan,
-                interval,
-                price,
-                currentPlanId,
-                lifetimePlanId: subQuery.data?.lifetimePlanId,
-                isAdmin,
-                hasLiveSubscription,
-                t,
-                isPending: checkoutMutation.isPending,
-                pendingPlanId: checkoutMutation.variables?.planId,
-                onSelect: () =>
-                  checkoutMutation.mutate({
-                    planId: plan.id as 'garden' | 'greenhouse',
-                    interval,
-                  }),
-              })
-            }
+            renderCta={(plan, interval, price) => (
+              <>
+                {/* "$X ÷ N members = $Y each" from the live price and the
+                    real member count (brief §4.12). Hides itself for a
+                    household of one or an unknown count. */}
+                {plan.id !== 'seedling' && price !== null && price > 0 && (
+                  <SplitTheBill
+                    amount={price}
+                    interval={interval}
+                    planName={plan.name}
+                    memberCount={usage?.memberCount ?? null}
+                    householdName={householdName}
+                  />
+                )}
+                {renderPlanCta({
+                  plan,
+                  interval,
+                  price,
+                  currentPlanId,
+                  lifetimePlanId: subQuery.data?.lifetimePlanId,
+                  isAdmin,
+                  hasLiveSubscription,
+                  t,
+                  isPending: checkoutMutation.isPending,
+                  pendingPlanId: checkoutMutation.variables?.planId,
+                  onSelect: () =>
+                    checkoutMutation.mutate({
+                      planId: plan.id as 'garden' | 'greenhouse',
+                      interval,
+                    }),
+                })}
+              </>
+            )}
           />
         </Card>
       )}
@@ -363,7 +384,14 @@ function renderPlanCta({
   // Not sold at this cadence — a blank price id is a deliberate partial launch.
   if (price === null) return null;
   if (!isAdmin) {
-    return <p className="text-sm text-gray-600">{t('settings.billing.adminOnlyPlan')}</p>;
+    // A member cannot buy, but can ask (brief §7d): one tap sends the admins
+    // a note naming this plan. Billing itself stays admin-only.
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-gray-600">{t('settings.billing.adminOnlyPlan')}</p>
+        <AskToUpgrade feature={plan.id === 'greenhouse' ? 'greenhouse_plan' : 'garden_plan'} />
+      </div>
+    );
   }
   // A lifetime purchase is exempt: its webhook cancels the prior subscription,
   // so it is the one paid path that may run alongside a live one.
