@@ -687,6 +687,64 @@ jobs:
           path: frontend/playwright-report
           if-no-files-found: ignore
 
+  sweep-test-fixtures:
+    name: Sweep leaked post-deploy test fixtures
+    runs-on: ubuntu-latest
+    # `always()` is the entire point. The smoke test's own teardown is careful
+    # and complete, and it still left 35 orphan households in production —
+    # because it cannot run when the job is skipped, the run is cancelled, or
+    # the runner dies. This job must therefore run when smoke-tests FAILED, was
+    # SKIPPED, or was CANCELLED, and clean up what a previous run left behind.
+    # It needs Terraform only for the table name, so that is the one result it
+    # requires.
+    needs: [validate, terraform, smoke-tests]
+    if: ${{ always() && needs.terraform.result == 'success' }}
+    # OIDC: assumes AWS_PRODUCTION_ROLE_ARN for the DynamoDB reads and deletes.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Setup Node.js
+        # Cache-free for the same reason the smoke-tests job is: this job holds
+        # `id-token: write`, and CICD-24 forbids pairing a broad OIDC grant with
+        # Actions cache read/write in one job.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Only rows carrying `isTestFixture: true` — an attribute no application
+      # code path writes — and only fixtures older than the age gate, so this
+      # can never race a smoke run that is still going. A household holding a
+      # member who is not a fixture user is skipped and reported, never
+      # deleted. Legacy (pre-marker) debris is NOT swept here: it cannot be
+      # identified by rule, so it stays an operator decision made by running
+      # scripts/sweep-test-fixtures.mjs with --include-legacy by hand.
+      - name: Sweep fixtures older than the age gate
+        env:
+          TABLE_NAME: ${{ needs.terraform.outputs.dynamodb_table_name }}
+        run: |
+          node scripts/sweep-test-fixtures.mjs \
+            --table "$TABLE_NAME" \
+            --region "$AWS_REGION" \
+            --min-age-hours 3 \
+            --apply
+
   cleanup-success-snapshot:
     name: Purge successful release rollback snapshot
     runs-on: ubuntu-latest

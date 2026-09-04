@@ -44,13 +44,17 @@ import {
 import {
   DynamoDBClient,
   QueryCommand,
+  PutItemCommand,
+  UpdateItemCommand,
   BatchWriteItemCommand,
   type AttributeValue,
   type WriteRequest,
 } from '@aws-sdk/client-dynamodb';
 import { S3Client, DeleteObjectsCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import {
+  buildHouseholdFixtureStamp,
   buildSmokeEmail,
+  buildTestFixtureClaim,
   householdIdFromCreateResponse,
   householdIdFromMembershipItem,
   isAmazonS3Hostname,
@@ -59,6 +63,7 @@ import {
   runAllCleanupSteps,
   s3ObjectTargetFromPresignedUrl,
   safeResponseDiagnostic,
+  testFixtureClaimPartition,
   type SafeResponseDiagnostic,
   type SmokeDynamoKey,
   type SmokeS3ObjectTarget,
@@ -144,6 +149,8 @@ interface ConfirmedFixture {
   sub: string;
   /** Authoritative id returned by POST /households; avoids relying on GSI propagation. */
   householdId?: string;
+  /** Set once the run's claim row is written; see claimTestFixture below. */
+  runId?: string;
 }
 
 async function deleteCognitoUser(username: string): Promise<void> {
@@ -292,6 +299,89 @@ async function deleteDynamoKeys(keys: SmokeDynamoKey[]): Promise<void> {
   }
 }
 
+/**
+ * Claim this run's fixtures BEFORE the browser flow creates any.
+ *
+ * Everything below this line can fail, be cancelled, or have its runner
+ * killed. The teardown at the bottom of this file is careful and complete, but
+ * it only runs when the process lives long enough to run it — and a run that
+ * dies is precisely how production came to hold 35 orphan "Smoke Test
+ * Household" rows. The claim row is the record that outlives the process: it
+ * says "a fixture run started here, and its Cognito sub is this", which is
+ * enough for `scripts/sweep-test-fixtures.mjs` to find and remove whatever the
+ * run created, including through GSI1 memberships the run never reported.
+ *
+ * Written before the household exists, so there is no window in which a
+ * fixture household is unreachable from a claim. A failure here throws, which
+ * fails the test before it has created anything to leak.
+ */
+async function claimTestFixture(fixture: ConfirmedFixture, runId: string): Promise<void> {
+  const claim = buildTestFixtureClaim({
+    runId,
+    createdAt: new Date().toISOString(),
+    cognitoSub: fixture.sub,
+    cognitoUsername: fixture.username,
+  });
+
+  await ddb.send(
+    new PutItemCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: { S: claim.PK },
+        SK: { S: claim.SK },
+        entityType: { S: claim.entityType },
+        isTestFixture: { BOOL: claim.isTestFixture },
+        testFixtureRunId: { S: claim.testFixtureRunId },
+        testFixtureCreatedAt: { S: claim.testFixtureCreatedAt },
+        testFixtureSource: { S: claim.testFixtureSource },
+        cognitoSub: { S: claim.cognitoSub },
+        cognitoUsername: { S: claim.cognitoUsername },
+      },
+      // A run id is a fresh UUID, so a collision means something is wrong with
+      // the id, not with the table. Fail rather than overwrite another run's
+      // claim and orphan whatever it was pointing at.
+      ConditionExpression: 'attribute_not_exists(PK)',
+    })
+  );
+  fixture.runId = runId;
+}
+
+/**
+ * Mark the household the UI just created as a fixture, structurally.
+ *
+ * This is what lets anything that counts households — a metric, a query, an
+ * operator with the CLI — tell a real home from test debris without matching
+ * on the name "Smoke Test Household", which any real household could
+ * legitimately be called.
+ *
+ * A failure here throws. The stamp shares its credentials and its table with
+ * the teardown that follows, so a failure to write it predicts a failure to
+ * clean up; and this runs seconds after household creation, long before the
+ * expensive part of the flow. The claim row above still makes the household
+ * findable either way, so failing here loses no cleanup guarantee.
+ */
+async function stampHouseholdAsTestFixture(fixture: ConfirmedFixture): Promise<void> {
+  if (!fixture.householdId) throw new Error('Cannot stamp a fixture household without its id');
+  if (!fixture.runId) throw new Error('Cannot stamp a fixture household without a claimed run');
+
+  const stamp = buildHouseholdFixtureStamp({
+    householdId: fixture.householdId,
+    runId: fixture.runId,
+    createdAt: new Date().toISOString(),
+  });
+
+  await ddb.send(
+    new UpdateItemCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: { S: stamp.Key.PK }, SK: { S: stamp.Key.SK } },
+      UpdateExpression: stamp.UpdateExpression,
+      ConditionExpression: stamp.ConditionExpression,
+      ExpressionAttributeNames: stamp.ExpressionAttributeNames,
+      ExpressionAttributeValues: stamp.ExpressionAttributeValues,
+    })
+  );
+}
+
 async function deleteUserAndHouseholds(fixture: ConfirmedFixture): Promise<void> {
   // First find every household the user is a member of via GSI1
   // (GSI1PK: USER#<sub>, GSI1SK: HOUSEHOLD#<id>) so we can tear down the rows
@@ -345,13 +435,20 @@ async function deleteUserAndHouseholds(fixture: ConfirmedFixture): Promise<void>
     {
       label: `DynamoDB owned rows for Cognito sub ${fixture.sub}`,
       run: async () => {
+        const store = { listKeys: listPartitionKeys, deleteKeys: deleteDynamoKeys };
         await purgeSmokeOwnedPartitions(
           [`USER#${fixture.sub}`, ...[...householdIds].map((id) => `HOUSEHOLD#${id}`)],
-          {
-            listKeys: listPartitionKeys,
-            deleteKeys: deleteDynamoKeys,
-          }
+          store
         );
+
+        // Only after every partition above verified empty. The claim row is
+        // the one thing that can still find this run's rows once the process
+        // is gone, so it must outlive a partial failure — the call above
+        // throws on one, which leaves the claim in place for
+        // scripts/sweep-test-fixtures.mjs to finish the job.
+        if (fixture.runId) {
+          await purgeSmokeOwnedPartitions([testFixtureClaimPartition(fixture.runId)], store);
+        }
       },
     },
     {
@@ -508,6 +605,8 @@ test.describe('post-deploy smoke', () => {
   test.beforeEach(async ({ page }) => {
     email = smokeEmail('authenticated');
     fixture = await createConfirmedUser(email);
+    // Before anything else this run creates. See claimTestFixture.
+    await claimTestFixture(fixture, randomUUID());
     authenticatedSessionEstablished = false;
     uploadedS3Target = undefined;
     apiErrors.length = 0;
@@ -578,6 +677,9 @@ test.describe('post-deploy smoke', () => {
     const householdResponse = await householdResponsePromise;
     assertResponseStatus(householdResponse, 201, 'Household creation');
     activeFixture.householdId = householdIdFromCreateResponse(await householdResponse.json());
+    // Structural, not "the name is Smoke Test Household". See
+    // stampHouseholdAsTestFixture and TEST_FIXTURE in the support module.
+    await stampHouseholdAsTestFixture(activeFixture);
 
     // Household creation does NOT land on the dashboard. #394 put the first-run
     // activation flow in between: a household with no plants yet always routes
