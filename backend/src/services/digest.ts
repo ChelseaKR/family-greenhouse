@@ -303,7 +303,33 @@ export async function digestHousehold(
     // releases the reservation, so the next run retries that recipient.
     let delivered: boolean;
     try {
-      delivered = await emailNotifier.sendEmail({ to: member.email, subject, text, html, headers });
+      // `sendEmailAccepted` rather than the boolean shim so the log names WHY
+      // a send did not happen. A suppressed or unknown-suppression address
+      // leaves the weekly marker UNCLAIMED — the same treatment the DND path
+      // gets a few lines above, and for the same reason: #433 added a
+      // self-service resume, so an address suppressed on Monday and resumed on
+      // Wednesday must still be able to receive that week's digest. Burning
+      // the marker would lose it silently, with nothing anywhere recording
+      // that a delivery was dropped.
+      const acceptance = await emailNotifier.sendEmailAccepted({
+        to: member.email,
+        subject,
+        text,
+        html,
+        headers,
+      });
+      delivered = acceptance.accepted;
+      if (!delivered) {
+        logger.info(
+          {
+            householdId,
+            userId: member.userId,
+            reason: acceptance.reason,
+            msg: 'digest.not_delivered',
+          },
+          'digest.not_delivered'
+        );
+      }
     } catch (err) {
       await releaseWeeklyDigestSlot(member.userId, householdId, now, reservationId).catch(
         (cleanupErr) => {
@@ -684,14 +710,28 @@ export async function recapHousehold(
       householdName
     );
     try {
-      // Count only real deliveries; a dry-run (unconfigured SES) returns false.
-      const delivered = await emailNotifier.sendEmail({
+      // Count only real deliveries; a dry-run, a suppressed address or an
+      // unreadable suppression store all return accepted=false and release
+      // the annual marker, so a resumed address is still recapped next pass.
+      const acceptance = await emailNotifier.sendEmailAccepted({
         to: member.email,
         subject,
         text,
         html,
         headers,
       });
+      const delivered = acceptance.accepted;
+      if (!delivered) {
+        logger.info(
+          {
+            householdId,
+            userId: member.userId,
+            reason: acceptance.reason,
+            msg: 'recap.not_delivered',
+          },
+          'recap.not_delivered'
+        );
+      }
       if (delivered) {
         sent += 1;
         await finalizeYearRecapSlot(member.userId, householdId, year, reservationId).catch(

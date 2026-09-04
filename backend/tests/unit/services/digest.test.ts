@@ -36,6 +36,9 @@ vi.mock('../../../src/services/notificationPrefs.js', () => ({
 vi.mock('../../../src/services/emailNotifier.js', () => ({
   // Resolves true = a real delivery (sendEmail returns false only on a dry-run).
   sendEmail: vi.fn().mockResolvedValue(true),
+  // #433's discriminated result. The digest calls this one so a skipped send
+  // can name its reason; `accepted` drives the marker exactly as before.
+  sendEmailAccepted: vi.fn().mockResolvedValue({ accepted: true, reason: 'sent' }),
 }));
 // Composition is exercised in digestReport.test.ts; here we care about who
 // gets mailed, in what language, once.
@@ -168,8 +171,8 @@ describe('weekly digest delivery', () => {
     await mockPrefs({ u1: {}, u2: { weeklyDigest: false } });
 
     expect(await digestHousehold('hh', NOW)).toBe(1);
-    expect(email.sendEmail).toHaveBeenCalledOnce();
-    expect(vi.mocked(email.sendEmail).mock.calls[0][0].to).toBe('a@x.com');
+    expect(email.sendEmailAccepted).toHaveBeenCalledOnce();
+    expect(vi.mocked(email.sendEmailAccepted).mock.calls[0][0].to).toBe('a@x.com');
   });
 
   it('skips members whose email channel is off even if weeklyDigest is on', async () => {
@@ -181,7 +184,7 @@ describe('weekly digest delivery', () => {
     await mockPrefs({ u1: { email: false } });
 
     expect(await digestHousehold('hh', NOW)).toBe(0);
-    expect(email.sendEmail).not.toHaveBeenCalled();
+    expect(email.sendEmailAccepted).not.toHaveBeenCalled();
   });
 
   it('sends both parts and the one-click unsubscribe headers', async () => {
@@ -193,7 +196,7 @@ describe('weekly digest delivery', () => {
     await mockPrefs({ u1: {} });
 
     await digestHousehold('hh', NOW);
-    const sent = vi.mocked(email.sendEmail).mock.calls[0][0];
+    const sent = vi.mocked(email.sendEmailAccepted).mock.calls[0][0];
     expect(sent.text).toBeTruthy();
     expect(sent.html).toBeTruthy();
     expect(sent.headers?.['List-Unsubscribe']).toBeTruthy();
@@ -244,7 +247,7 @@ describe('weekly digest delivery', () => {
     await mockPrefs({ u1: {}, u2: {} });
 
     expect(await digestHousehold('hh', NOW)).toBe(1);
-    expect(vi.mocked(email.sendEmail).mock.calls[0][0].to).toBe('a@x.com');
+    expect(vi.mocked(email.sendEmailAccepted).mock.calls[0][0].to).toBe('a@x.com');
   });
 
   it('defers a digest during quiet hours without burning its weekly marker', async () => {
@@ -258,7 +261,7 @@ describe('weekly digest delivery', () => {
 
     vi.mocked(prefs.isInDndWindow).mockReturnValueOnce(true);
     expect(await digestHousehold('hh', NOW)).toBe(0);
-    expect(email.sendEmail).not.toHaveBeenCalled();
+    expect(email.sendEmailAccepted).not.toHaveBeenCalled();
 
     vi.mocked(prefs.isInDndWindow).mockReturnValue(false);
     expect(await digestHousehold('hh', NOW)).toBe(1);
@@ -275,7 +278,7 @@ describe('weekly digest delivery', () => {
     expect(await digestHousehold('hh', NOW)).toBe(1);
     expect(await digestHousehold('hh', NOW)).toBe(0);
     expect(await digestHousehold('hh', new Date(NOW.getTime() + 7 * 86400000))).toBe(1);
-    expect(email.sendEmail).toHaveBeenCalledTimes(2);
+    expect(email.sendEmailAccepted).toHaveBeenCalledTimes(2);
   });
 
   it('sends distinct weekly summaries for a user who belongs to two households', async () => {
@@ -288,7 +291,7 @@ describe('weekly digest delivery', () => {
 
     expect(await digestHousehold('hh', NOW)).toBe(1);
     expect(await digestHousehold('hh-2', NOW)).toBe(1);
-    expect(email.sendEmail).toHaveBeenCalledTimes(2);
+    expect(email.sendEmailAccepted).toHaveBeenCalledTimes(2);
   });
 
   it('releases the reservation when SES throws, so the next run retries', async () => {
@@ -298,10 +301,64 @@ describe('weekly digest delivery', () => {
     await mockConditionalMarkerStore();
     vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
     await mockPrefs({ u1: {} });
-    vi.mocked(email.sendEmail).mockRejectedValueOnce(new Error('SES down'));
+    vi.mocked(email.sendEmailAccepted).mockRejectedValueOnce(new Error('SES down'));
 
     expect(await digestHousehold('hh', NOW)).toBe(0);
-    vi.mocked(email.sendEmail).mockResolvedValue(true);
+    vi.mocked(email.sendEmailAccepted).mockResolvedValue({
+      accepted: true,
+      reason: 'sent',
+    } as never);
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+  });
+});
+
+describe('suppression must not burn the weekly marker', () => {
+  // #433 added self-service resume, so an address suppressed on Monday and
+  // resumed on Wednesday has to be able to receive that week's digest. Burning
+  // the marker would drop it silently — a delivery lost with nothing recording
+  // why. This mirrors the DND path, which also skips without claiming.
+  it('leaves the slot unclaimed for a suppressed address, so a later pass delivers', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const email = await import('../../../src/services/emailNotifier.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    vi.mocked(email.sendEmailAccepted).mockResolvedValueOnce({
+      accepted: false,
+      reason: 'suppressed',
+    } as never);
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+
+    // Same ISO week, address since resumed: the digest still goes out.
+    vi.mocked(email.sendEmailAccepted).mockResolvedValue({
+      accepted: true,
+      reason: 'sent',
+    } as never);
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+  });
+
+  it('does the same when the suppression store could not be read', async () => {
+    // "We could not tell" is not "fine" and not "blocked" — it must not cost
+    // the recipient their week.
+    const household = await import('../../../src/services/householdService.js');
+    const email = await import('../../../src/services/emailNotifier.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    vi.mocked(email.sendEmailAccepted).mockResolvedValueOnce({
+      accepted: false,
+      reason: 'suppression_unknown',
+    } as never);
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+
+    vi.mocked(email.sendEmailAccepted).mockResolvedValue({
+      accepted: true,
+      reason: 'sent',
+    } as never);
     expect(await digestHousehold('hh', NOW)).toBe(1);
   });
 });
@@ -318,7 +375,7 @@ describe('weekly digest: nothing to say', () => {
     await mockPrefs({ u1: {} });
 
     expect(await digestHousehold('hh', NOW)).toBe(0);
-    expect(email.sendEmail).not.toHaveBeenCalled();
+    expect(email.sendEmailAccepted).not.toHaveBeenCalled();
     // No member or preference reads at all on the quiet path.
     expect(household.getHouseholdMembers).not.toHaveBeenCalled();
   });
@@ -340,7 +397,7 @@ describe('weekly digest: nothing to say', () => {
     await mockPrefs({ u1: {} });
 
     expect(await digestHousehold('hh', NOW)).toBe(1);
-    expect(email.sendEmail).toHaveBeenCalledOnce();
+    expect(email.sendEmailAccepted).toHaveBeenCalledOnce();
   });
 });
 
@@ -531,7 +588,7 @@ describe('year recap delivery', () => {
     await mockPrefs({ u1: {}, u2: { yearRecap: false } });
 
     expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
-    expect(vi.mocked(email.sendEmail).mock.calls[0][0].to).toBe('a@x.com');
+    expect(vi.mocked(email.sendEmailAccepted).mock.calls[0][0].to).toBe('a@x.com');
   });
 
   it('sends both parts with the recap unsubscribe category', async () => {
@@ -543,7 +600,7 @@ describe('year recap delivery', () => {
     await mockPrefs({ u1: {}, u2: { email: false } });
 
     await recapHousehold('hh', 2025, NOW);
-    const sent = vi.mocked(email.sendEmail).mock.calls[0][0];
+    const sent = vi.mocked(email.sendEmailAccepted).mock.calls[0][0];
     expect(sent.html).toContain('<!DOCTYPE html>');
     expect(sent.headers?.['List-Unsubscribe']).toBeTruthy();
     expect(vi.mocked(capability.mintUnsubscribeToken).mock.calls[0]).toEqual(['u1', 'year_recap']);
@@ -559,7 +616,7 @@ describe('year recap delivery', () => {
     await mockPrefs({ u1: {}, u2: { email: false } });
 
     expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
-    expect(vi.mocked(email.sendEmail).mock.calls[0][0].text).toContain(
+    expect(vi.mocked(email.sendEmailAccepted).mock.calls[0][0].text).toContain(
       'A plant we could not look up'
     );
   });
@@ -574,7 +631,7 @@ describe('year recap delivery', () => {
 
     expect(await recapHousehold('hh', 2025, NOW)).toBe(0);
     expect(household.getHouseholdMembers).not.toHaveBeenCalled();
-    expect(email.sendEmail).not.toHaveBeenCalled();
+    expect(email.sendEmailAccepted).not.toHaveBeenCalled();
   });
 
   it('honours the once-per-year marker and retries only a failed recipient', async () => {
@@ -583,13 +640,18 @@ describe('year recap delivery', () => {
     await mockConditionalMarkerStore();
     await setupRecap();
     await mockPrefs({ u1: {}, u2: {} });
-    vi.mocked(email.sendEmail).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    vi.mocked(email.sendEmailAccepted)
+      .mockResolvedValueOnce({ accepted: true, reason: 'sent' } as never)
+      .mockResolvedValueOnce({ accepted: false, reason: 'dry_run' } as never);
 
     expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
-    vi.mocked(email.sendEmail).mockResolvedValue(true);
+    vi.mocked(email.sendEmailAccepted).mockResolvedValue({
+      accepted: true,
+      reason: 'sent',
+    } as never);
     // u1 is already recapped; only u2 is retried.
     expect(await recapHousehold('hh', 2025, NOW)).toBe(1);
-    expect(vi.mocked(email.sendEmail).mock.calls.at(-1)?.[0].to).toBe('b@x.com');
+    expect(vi.mocked(email.sendEmailAccepted).mock.calls.at(-1)?.[0].to).toBe('b@x.com');
   });
 
   it('defers a recap during quiet hours without burning its annual marker', async () => {
@@ -602,7 +664,7 @@ describe('year recap delivery', () => {
 
     vi.mocked(prefs.isInDndWindow).mockReturnValueOnce(true);
     expect(await recapHousehold('hh', 2025, NOW)).toBe(0);
-    expect(email.sendEmail).not.toHaveBeenCalled();
+    expect(email.sendEmailAccepted).not.toHaveBeenCalled();
 
     vi.mocked(prefs.isInDndWindow).mockReturnValue(false);
     expect(await recapHousehold('hh', 2025, NOW)).toBe(1);

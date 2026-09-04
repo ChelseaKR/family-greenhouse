@@ -97,18 +97,6 @@ describe('emailNotifier', () => {
     expect(raw).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
   });
 
-  it('stamps Reply-To when SES_REPLY_TO_EMAIL is configured', async () => {
-    process.env = {
-      ...ORIGINAL,
-      SES_FROM_EMAIL: 'noreply@x.com',
-      SES_REPLY_TO_EMAIL: 'support@x.com',
-    };
-    sesSendMock.mockResolvedValueOnce({});
-    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
-    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
-    expect(rawOf()).toContain('Reply-To: support@x.com');
-  });
-
   it('attaches the configuration set so SES publishes bounce/complaint events', async () => {
     process.env = {
       ...ORIGINAL,
@@ -131,8 +119,9 @@ describe('emailNotifier', () => {
     sesSendMock.mockResolvedValueOnce({});
     const { sendEmail } = await import('../../../src/services/emailNotifier.js');
     await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
-    const cmd = sesSendMock.mock.calls[0][0] as { input: { ReplyToAddresses?: string[] } };
-    expect(cmd.input.ReplyToAddresses).toEqual(['support@x.com']);
+    // Under SendRawEmailCommand there is no ReplyToAddresses parameter; the
+    // raw message IS the headers, so Reply-To moves into the MIME block.
+    expect(rawOf()).toContain('Reply-To: support@x.com');
   });
 
   it('omits Reply-To and the configuration set when neither is configured', async () => {
@@ -143,9 +132,9 @@ describe('emailNotifier', () => {
     const { sendEmail } = await import('../../../src/services/emailNotifier.js');
     await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
     const cmd = sesSendMock.mock.calls[0][0] as {
-      input: { ReplyToAddresses?: string[]; ConfigurationSetName?: string };
+      input: { ConfigurationSetName?: string };
     };
-    expect(cmd.input.ReplyToAddresses).toBeUndefined();
+    expect(rawOf()).not.toContain('Reply-To:');
     expect(cmd.input.ConfigurationSetName).toBeUndefined();
   });
 
