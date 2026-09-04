@@ -8,7 +8,23 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on a pull request — pushing again to a PR makes the
+  # previous run's verdict irrelevant, and that is what this setting is for.
+  #
+  # Never cancel on `main`. A push to `main` is the only CI run that ever tests
+  # that exact squashed commit, and cancelling it leaves the commit on `main`
+  # with no completed result — the branch has a gap in its record rather than a
+  # green one. Because `cancel-in-progress` was unconditional and the group key
+  # is just the ref, every merge cancelled the previous merge's run: measured
+  # 2026-09-04 over the 33 most recent `main` pushes, 16 of them (48%) ended
+  # `cancelled`, so nearly half of `main`'s commits carried no finished verdict
+  # from the workflow that holds nine of the repository's required checks.
+  #
+  # PR runs still cancel, so the fast-iteration benefit is unchanged. The cost
+  # is that consecutive merges now run concurrently instead of superseding each
+  # other; Actions minutes are free on this public repository, and total
+  # job-minutes are unchanged — only whether the work is thrown away.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
