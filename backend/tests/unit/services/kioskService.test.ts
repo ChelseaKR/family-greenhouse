@@ -224,3 +224,43 @@ describe('kioskService.revokeKioskLinks', () => {
     await expect(svc.revokeKioskLinks(HH)).rejects.toThrow('dynamo down');
   });
 });
+
+// #449: a kiosk link never expires and shows the whole household's task list,
+// so a member who is removed keeps a live window into the house from anywhere
+// unless the link they issued is revoked with them.
+describe('kioskService.revokeKioskLinksCreatedBy', () => {
+  it('revokes only the departing member’s active links', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          activeRow({ createdBy: 'departing' }),
+          activeRow({ id: 'k2', token: 'b'.repeat(64), createdBy: 'staying' }),
+          activeRow({ id: 'k3', token: 'c'.repeat(64), createdBy: 'departing', status: 'revoked' }),
+        ],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeKioskLinksCreatedBy(HH, 'departing')).toBe(1);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`KIOSK#${TOKEN}`);
+  });
+
+  it('reports 0 when the departing member issued none', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [activeRow({ createdBy: 'someone-else' })],
+    } as never);
+    expect(await svc.revokeKioskLinksCreatedBy(HH, 'departing')).toBe(0);
+  });
+
+  it('THROWS on a failed read rather than reporting 0 revoked', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('dynamo down') as never);
+    await expect(svc.revokeKioskLinksCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
+  });
+});

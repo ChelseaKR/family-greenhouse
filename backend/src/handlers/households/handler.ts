@@ -810,6 +810,14 @@ export const removeMember = createHandler(
       }
       throw err;
     }
+    // Revoke the capability tokens this member minted. STRICTLY BEFORE
+    // anonymizeUserInHousehold: that sweep overwrites `createdBy` with the
+    // deleted-user id on exactly these rows, after which nothing can tell
+    // which credentials were theirs. Removal used to end the session and
+    // nothing else, so a plant tag (no expiry), a kiosk link (no expiry) or a
+    // sitter link they had issued kept working (#449).
+    const revoked = await accountCleanup.revokeCredentialsCreatedBy(householdId, userId);
+
     // Member rows are only one half of departure. Clear every active task
     // assignment, vacation/cover relationship, and space default that still
     // points at the departed user, while anonymizing retained history.
@@ -836,7 +844,13 @@ export const removeMember = createHandler(
       actorEmail: user.email,
       targetId: userId,
       householdId,
-      metadata: { removedEmail: member.email, removedRole: member.role },
+      metadata: {
+        removedEmail: member.email,
+        removedRole: member.role,
+        // What departure actually cost the household, so the revocation is
+        // reconstructable after the fact rather than only inferable.
+        revokedCredentials: revoked,
+      },
     });
 
     return noContentResponse();

@@ -184,6 +184,41 @@ export async function revokeKioskLinks(householdId: string): Promise<number> {
 }
 
 /**
+ * Revoke every currently-ACTIVE kiosk link a given member issued. Called when
+ * that member is removed from the household.
+ *
+ * A kiosk link never expires and shows the whole household's task list, so a
+ * departing member who kept the URL keeps a live window into the house from
+ * anywhere. The cost of revoking is that the household's wall display stops
+ * until an admin re-issues — a visible, one-call remedy, and the removal that
+ * triggers it is a deliberate admin action, so the trade goes this way.
+ *
+ * Same fail-loud contract as revokeKioskLinks: an unreadable list propagates
+ * rather than being reported as "there was nothing to revoke".
+ */
+export async function revokeKioskLinksCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<number> {
+  const links = (await listKioskLinks(householdId)).filter(
+    (link) => link.createdBy === userId && link.status === 'active'
+  );
+  for (const link of links) {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `KIOSK#${link.token}`, SK: 'METADATA' },
+        UpdateExpression: 'SET #status = :revoked',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':revoked': 'revoked' },
+        ConditionExpression: 'attribute_exists(PK)',
+      })
+    );
+  }
+  return links.length;
+}
+
+/**
  * Issue a kiosk link, revoking any existing one first.
  *
  * Re-issue is the household's remedy for a leaked token (§ THREAT MODEL), so

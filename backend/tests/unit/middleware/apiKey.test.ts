@@ -15,10 +15,17 @@ vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(),
 }));
 
+// The key's creator has to still be a member; only that one read is consumed.
+vi.mock('../../../src/services/householdService.js', () => ({
+  getMemberByUserId: vi.fn(),
+}));
+
 import { apiKeyMiddleware, requireApiScope } from '../../../src/middleware/apiKey.js';
 import type { ApiKeyEvent } from '../../../src/middleware/apiKey.js';
 import * as apiKeys from '../../../src/services/apiKeys.js';
 import * as billing from '../../../src/services/billing.js';
+import * as householdService from '../../../src/services/householdService.js';
+import { __resetMembershipCacheForTests } from '../../../src/utils/membershipCache.js';
 import type { AuthenticatedEvent } from '../../../src/middleware/auth.js';
 
 const ALL_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as const;
@@ -61,8 +68,17 @@ async function runBefore(event: APIGatewayProxyEvent): Promise<void> {
 describe('apiKeyMiddleware', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetMembershipCacheForTests();
     vi.mocked(apiKeys.lookupApiKey).mockResolvedValue(keyRecord);
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValue({
+      householdId: 'hh-1',
+      userId: 'user-1',
+      name: 'Ada',
+      email: 'ada@example.com',
+      role: 'admin',
+      joinedAt: '2026-01-01T00:00:00.000Z',
+    });
   });
 
   it('accepts the key via Authorization: Bearer and attaches an isApiKey principal', async () => {
@@ -141,6 +157,43 @@ describe('apiKeyMiddleware', () => {
       expect((event as Partial<AuthenticatedEvent>).user).toBeUndefined();
     }
   );
+
+  // #449: the plan is re-checked on every use; the CREATOR'S MEMBERSHIP was
+  // not. An admin who minted a key, moved out, and was removed kept full
+  // household read access and task write access through /api/v1/* forever.
+  it("throws 403 when the key's creator is no longer a member of the household", async () => {
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValue(null);
+    const event = buildEvent({ authorization: 'Bearer fg_secret123' });
+    await expect(runBefore(event)).rejects.toMatchObject({
+      statusCode: 403,
+      message:
+        'This API key was issued by someone who is no longer a member of the household. Ask an admin to issue a new one.',
+    });
+    expect(householdService.getMemberByUserId).toHaveBeenCalledWith('hh-1', 'user-1');
+    expect((event as Partial<AuthenticatedEvent>).user).toBeUndefined();
+  });
+
+  it('also refuses a key whose creator was anonymized by account deletion', async () => {
+    // anonymizeUserInHousehold rewrites createdBy to the deleted-user id, which
+    // is never a member row — so the same check covers a deleted account.
+    vi.mocked(apiKeys.lookupApiKey).mockResolvedValue({
+      ...keyRecord,
+      createdBy: 'deleted-user',
+    });
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValue(null);
+    const event = buildEvent({ authorization: 'Bearer fg_secret123' });
+    await expect(runBefore(event)).rejects.toMatchObject({ statusCode: 403 });
+    expect(householdService.getMemberByUserId).toHaveBeenCalledWith('hh-1', 'deleted-user');
+  });
+
+  it('reads the membership only once per warm container, then serves from cache', async () => {
+    const first = buildEvent({ authorization: 'Bearer fg_secret123' });
+    const second = buildEvent({ authorization: 'Bearer fg_secret123' });
+    await runBefore(first);
+    await runBefore(second);
+    expect(householdService.getMemberByUserId).toHaveBeenCalledTimes(1);
+    expect((second as Partial<AuthenticatedEvent>).user?.householdId).toBe('hh-1');
+  });
 
   it('passes through and attaches the principal when the household is still on greenhouse', async () => {
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });

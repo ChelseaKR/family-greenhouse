@@ -201,6 +201,41 @@ export async function findSitterLink(householdId: string, id: string): Promise<S
  * needs the non-secret id, never the token) and then conditionally update the
  * base row.
  */
+/**
+ * Revoke every currently-ACTIVE link a given member created. Called when that
+ * member is removed from the household: the link is a whole-household task
+ * view plus completion and photo upload, and its holder is whoever the
+ * departing member handed it to. Expiry bounds it (7d free / 90d paid) but
+ * does not end it today.
+ *
+ * A read failure PROPAGATES rather than being swallowed into 0 — "we could not
+ * look" must never be reported to the caller as "there was nothing to revoke"
+ * (ADR 0010), which matters more here than usual because the caller writes the
+ * number into an audit line.
+ */
+export async function revokeSitterLinksCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<number> {
+  const links = (await listSitterLinks(householdId)).filter(
+    (link) => link.createdBy === userId && link.status === 'active'
+  );
+  for (const link of links) {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `SITTER#${link.token}`, SK: 'METADATA' },
+        UpdateExpression: 'SET #status = :revoked',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':revoked': 'revoked' },
+        // Guard against a row swept by TTL between the list read and this write.
+        ConditionExpression: 'attribute_exists(PK)',
+      })
+    );
+  }
+  return links.length;
+}
+
 export async function revokeSitterLink(householdId: string, id: string): Promise<boolean> {
   const links = await listSitterLinks(householdId);
   const target = links.find((l) => l.id === id);

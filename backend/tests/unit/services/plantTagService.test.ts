@@ -312,3 +312,45 @@ describe('plantTagService.toSummary', () => {
     expect(JSON.stringify(summary)).not.toContain(TOKEN);
   });
 });
+
+// #449: a tag never expires, so revocation is the only control — and the
+// token is printed on a label the departing member may have kept, or listed
+// in bulk on the way out (#451).
+describe('plantTagService.revokeTagsCreatedBy', () => {
+  it('revokes only the departing member’s active tags, and counts them', async () => {
+    const { dynamodb, svc } = await load();
+    respond(dynamodb.send, {
+      Query: {
+        Items: [
+          tagRow({ createdBy: 'departing' }),
+          tagRow({ id: 'tag-2', token: 'b'.repeat(64), createdBy: 'staying' }),
+          tagRow({ id: 'tag-3', token: 'c'.repeat(64), createdBy: 'departing', status: 'revoked' }),
+          tagRow({ id: 'tag-4', token: 'd'.repeat(64), createdBy: 'departing' }),
+        ],
+      },
+    });
+
+    expect(await svc.revokeTagsCreatedBy(HH, 'departing')).toBe(2);
+    const updates = sentCommands(dynamodb.send).filter((c) => c.kind === 'Update');
+    expect(updates.map((c) => c.input.Key.PK)).toEqual([
+      `PLANTTAG#${TOKEN}`,
+      `PLANTTAG#${'d'.repeat(64)}`,
+    ]);
+    // Revoked rows get a TTL so they sweep themselves — same contract as
+    // every other revoke path.
+    expect(updates[0].input.ExpressionAttributeValues[':ttl']).toBeGreaterThan(0);
+  });
+
+  it('reports 0 when the departing member issued none', async () => {
+    const { dynamodb, svc } = await load();
+    respond(dynamodb.send, { Query: { Items: [tagRow({ createdBy: 'someone-else' })] } });
+    expect(await svc.revokeTagsCreatedBy(HH, 'departing')).toBe(0);
+    expect(sentCommands(dynamodb.send).filter((c) => c.kind === 'Update')).toHaveLength(0);
+  });
+
+  it('THROWS on a failed read rather than reporting 0 revoked', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('dynamo down') as never);
+    await expect(svc.revokeTagsCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
+  });
+});

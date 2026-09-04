@@ -46,6 +46,10 @@ export type AuditEvent =
   | 'sitter.photo_uploaded'
   | 'planttag.issued'
   | 'planttag.revoked'
+  // The management list hands back every active tag's RAW token in one call —
+  // the only bulk read of live secrets in the API. Audited so an export is
+  // visible after the fact; the metadata carries the count, never a token.
+  | 'planttag.listed'
   | 'planttag.pin_changed'
   | 'planttag.task_completed';
 

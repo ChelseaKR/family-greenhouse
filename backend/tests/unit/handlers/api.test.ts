@@ -29,6 +29,10 @@ import * as taskService from '../../../src/services/taskService.js';
 import { recordActivity } from '../../../src/services/activity.js';
 import { dynamodb } from '../../../src/utils/dynamodb.js';
 import { __resetRateLimitForTests } from '../../../src/middleware/rateLimit.js';
+import {
+  __resetMembershipCacheForTests,
+  setCachedMembership,
+} from '../../../src/utils/membershipCache.js';
 
 const ALL_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as const;
 
@@ -80,6 +84,12 @@ describe('public API v1 handler', () => {
     __resetRateLimitForTests();
     vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue({ ...keyRecord });
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
+    // apiKeyMiddleware re-checks that the key's creator is STILL a member
+    // (#449). These route tests are about the routes, so the membership is
+    // pre-warmed in the same cache the JWT path uses rather than re-mocked per
+    // test; the check itself is covered in tests/unit/middleware/apiKey.test.ts.
+    __resetMembershipCacheForTests();
+    setCachedMembership(keyRecord.createdBy, keyRecord.householdId, 'admin');
   });
 
   describe('GET /api/v1/me', () => {

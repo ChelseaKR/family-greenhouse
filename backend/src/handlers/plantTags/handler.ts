@@ -204,11 +204,24 @@ export const listPlantTags = createHandler(
     const plan = getPlan(sub.planId);
     const allowance = plantTagAllowance(plan);
     const plantsById = new Map(plants.map((plant) => [plant.id, plant]));
+    const printable = tags.filter((tag) => plantsById.has(tag.plantId));
+
+    // Issuing ONE tag is not a privilege escalation (see the block above);
+    // taking a copy of every token in the house in a single call is a
+    // different act with a different risk profile, and tags never expire. The
+    // route genuinely needs the tokens — you cannot render a QR code without
+    // them — so the controls are visibility and rate, not withholding: this is
+    // the only audited bulk read of secrets in the API, and the count says how
+    // many walked out of the door (#451).
+    audit('planttag.listed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { tags: printable.length },
+    });
 
     return successResponse({
-      tags: tags
-        .filter((tag) => plantsById.has(tag.plantId))
-        .map((tag) => tagResponse(tag, plantsById.get(tag.plantId)!, baseUrl)),
+      tags: printable.map((tag) => tagResponse(tag, plantsById.get(tag.plantId)!, baseUrl)),
       pinEnabled: settings.pinEnabled,
       allowance: { ...allowance, used: tags.length },
       planId: plan.id,
@@ -216,7 +229,12 @@ export const listPlantTags = createHandler(
   }
 )
   .use(authMiddleware())
-  .use(requireHousehold());
+  .use(requireHousehold())
+  // Same 30/min as issue and revoke. This route was the only one in the file
+  // with no limit at all, which made a full export of every tag token a single
+  // free call; the limit does not stop a determined export but it removes the
+  // one-shot sweep and makes a scripted one visible in the audit trail above.
+  .use(userRateLimit({ perWindowMs: 60_000, max: 30 }));
 
 // PUT /households/:id/plant-tags/pin
 //

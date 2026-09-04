@@ -315,6 +315,56 @@ describe('GET /households/{id}/plant-tags', () => {
     expect(body.planId).toBe('garden');
     expect(plantService.getPlants).toHaveBeenCalledWith('hh-1', 'all');
   });
+
+  // #451: this route hands back every active tag's RAW, never-expiring token
+  // in one call. Issuing one tag is not an escalation; taking a copy of every
+  // token in the house is a different act, and it was neither audited nor
+  // limited while all three of its siblings were both.
+  it('audits the bulk read with a tag count, and never a token', async () => {
+    const s = await svc();
+    const plantService = await import('../../../src/services/plantService.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    // Spy rather than module-mock: the middy stack builds its request logger
+    // from this module, so replacing the whole module breaks every route.
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([tag()] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
+    vi.mocked(s.getTagSettings).mockResolvedValueOnce({ pinEnabled: false });
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    await listPlantTags(authedEvent({ pathParameters: { id: 'hh-1' } }), ctx, () => {});
+
+    const audited = info.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .find((fields) => fields?.event === 'planttag.listed');
+    expect(audited).toMatchObject({
+      audit: true,
+      event: 'planttag.listed',
+      householdId: 'hh-1',
+      actorId: 'user-1',
+      metadata: { tags: 1 },
+    });
+    expect(JSON.stringify(audited)).not.toContain(TOKEN);
+    info.mockRestore();
+  });
+
+  it('rate limits the bulk export at 30/min per user, like issue and revoke', async () => {
+    const s = await svc();
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(s.listActiveTags).mockResolvedValue([] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([] as never);
+    vi.mocked(s.getTagSettings).mockResolvedValue({ pinEnabled: false } as never);
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    const call = () =>
+      listPlantTags(
+        authedEvent({ pathParameters: { id: 'hh-1' } }),
+        ctx,
+        () => {}
+      ) as Promise<APIGatewayProxyResult>;
+    for (let i = 0; i < 30; i += 1) expect((await call()).statusCode).toBe(200);
+    expect((await call()).statusCode).toBe(429);
+  });
 });
 
 describe('PUT /households/{id}/plant-tags/pin', () => {

@@ -999,6 +999,14 @@ describe('households handler', () => {
     const res = (await removeMember(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(204);
     expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-1', 'user-2');
+    // #449: the credentials they minted are revoked, and STRICTLY BEFORE the
+    // anonymisation sweep — that sweep rewrites `createdBy` to the deleted-user
+    // id on the very rows revocation has to identify, so the reverse order
+    // would leave them live and unattributable forever.
+    expect(accountCleanup.revokeCredentialsCreatedBy).toHaveBeenCalledWith('hh-1', 'user-2');
+    expect(
+      vi.mocked(accountCleanup.revokeCredentialsCreatedBy).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(accountCleanup.anonymizeUserInHousehold).mock.invocationCallOrder[0]);
     expect(cognitoUsers.clearHouseholdClaims).toHaveBeenCalledWith('user-2');
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
