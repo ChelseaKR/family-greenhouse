@@ -1032,8 +1032,9 @@ locals {
     "GET /species/{id}/care-suggestions" = { group = "species", auth = "jwt" }
 
     # --- climate (household-scoped paths, served by the climate Lambda) ---
-    "GET /households/{id}/climate"  = { group = "climate", auth = "jwt" }
-    "PUT /households/{id}/location" = { group = "climate", auth = "jwt" }
+    "GET /households/{id}/climate"   = { group = "climate", auth = "jwt" }
+    "PUT /households/{id}/location"  = { group = "climate", auth = "jwt" }
+    "POST /households/{id}/move-day" = { group = "climate", auth = "jwt" }
 
     # --- api keys (management; JWT) ---
     "GET /api-keys"         = { group = "apiKeys", auth = "jwt" }

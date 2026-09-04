@@ -32,6 +32,7 @@ import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
+import { MoveDayCard } from './MoveDayCard';
 import { SharedCarePulse } from './SharedCarePulse';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -321,6 +322,9 @@ export function DashboardPage() {
           </div>
         )}
       </Card>
+
+      {/* Seasonal Move Day — renders only when a list exists */}
+      <MoveDayCard />
 
       {/* Year-in-review summary */}
       <ClimateCard />

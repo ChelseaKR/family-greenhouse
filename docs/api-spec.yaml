@@ -1219,6 +1219,29 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { description: Geocoding provider or daily usage gate is temporarily unavailable }
+  /households/{id}/move-day:
+    post:
+      summary: Evaluate Seasonal Move Day (idempotent per season; may create claimable move tasks)
+      description: >-
+        Reads the household's already-cached climate snapshot — it never calls the weather
+        provider. When tonight's low crosses the frost line or today's high crosses the heat
+        line, every active plant whose current space differs from its winter/summer space is
+        listed, the moves are split round-robin across members who are not on vacation, and one
+        claimable `custom` task per plant is created (or re-armed if last year's still exists).
+        Fires at most once per season per household; later calls return the same list for 14
+        days and are `quiet` after that. `unavailable` means no saved location or no live cached
+        snapshot — the feature then does nothing and asserts nothing. Garden and Greenhouse
+        plans only; other plans receive `locked` without evaluation.
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '200':
+          description: Evaluation result. Every status other than `ready` renders as silence.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MoveDayResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /households/{householdId}/members/{userId}:
     delete:
       summary: Remove a member from a household (admin only)
@@ -2907,3 +2930,56 @@ components:
         revokedAt: { type: string, format: date-time, nullable: true }
         token: { type: string, description: 64 lowercase hex chars (256 bits) }
         url: { type: string, description: The scan URL the QR code encodes }
+    MoveDayResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [locked, not_applicable, unavailable, quiet, ready]
+          description: >-
+            `locked` — plan does not include Move Day. `not_applicable` — no outdoor space or
+            no plant with a seasonal home. `unavailable` — no saved location or no live cached
+            snapshot (nothing is inferred). `quiet` — snapshot read, no line crossed / season
+            already handled / nothing out of place. `ready` — a list exists (see `list`).
+        list:
+          type: object
+          description: Present only when `status` is `ready`.
+          required: [season, firedAt, signal, items, tenderWithoutWinterHome]
+          properties:
+            season: { type: string, enum: [winter, summer] }
+            firedAt: { type: string, format: date-time }
+            signal:
+              type: object
+              description: The measured numbers that fired the list and the lines they crossed.
+              properties:
+                tempC: { type: number }
+                lowC: { type: number }
+                frostLineC: { type: number }
+                heatLineC: { type: number }
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  plantId: { type: string, format: uuid }
+                  plantName: { type: string }
+                  fromSpaceId: { type: string, format: uuid, nullable: true }
+                  fromSpaceName: { type: string, nullable: true }
+                  toSpaceId: { type: string, format: uuid }
+                  toSpaceName: { type: string }
+                  assigneeId: { type: string, format: uuid, nullable: true }
+                  assigneeName: { type: string, nullable: true }
+                  taskId: { type: string, format: uuid, nullable: true }
+            tenderWithoutWinterHome:
+              type: array
+              description: >-
+                Winter only. Outdoor plants with no winter space whose already-cached species
+                record is frost-tender (USDA zone 10+). Presence-only — plants without a cached
+                species record are absent, not cleared.
+              items:
+                type: object
+                properties:
+                  plantId: { type: string, format: uuid }
+                  plantName: { type: string }
+                  hardinessZone: { type: string }

@@ -1038,6 +1038,26 @@
     "unavailableTitle": "Local climate unavailable.",
     "unavailableBody": "We couldn’t read your local weather just now, so any frost, heat, or rain warning for tonight is unchecked rather than clear."
   },
+  "moveDay": {
+    "titleWinter": "Move day: bring these plants in",
+    "titleSummer": "Move day: these plants can go back out",
+    "signalWinter": "Tonight’s low is {{low}}°C — under the {{line}}°C frost line.",
+    "signalSummer": "It’s {{temp}}°C today — over the {{line}}°C heat line.",
+    "count_one": "{{count}} plant isn’t in its {{season}} space. The moves are split across the household; claim or hand off any of them from the task list.",
+    "count_other": "{{count}} plants aren’t in their {{season}} space. The moves are split across the household; claim or hand off any of them from the task list.",
+    "season": {
+      "winter": "winter",
+      "summer": "summer"
+    },
+    "listAria": "Plants to move",
+    "noCurrentSpace": "No space set",
+    "tender_one": "{{count}} frost-tender plant outdoors has no winter space yet:",
+    "tender_other": "{{count}} frost-tender plants outdoors have no winter space yet:",
+    "tenderZone": "hardy to zone {{zone}}",
+    "tenderHint": "Only plants with a saved species record are checked — the rest aren’t cleared, just unchecked.",
+    "listedOn": "Listed {{date}}",
+    "openTasks": "Open the task list →"
+  },
   "pricing": {
     "intervalLabel": "Billing interval",
     "intervalMonthly": "Monthly",

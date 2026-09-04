@@ -151,8 +151,9 @@ export interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  /** Space-inherited assignments can be taken over by another member. */
-  assignmentSource?: 'space_default' | null;
+  /** Space-inherited and Move-Day-split assignments can be taken over by
+   *  another member; null means explicit or unassigned. */
+  assignmentSource?: 'space_default' | 'move_day' | null;
   notes: string | null;
   createdBy: string;
   createdAt: string;

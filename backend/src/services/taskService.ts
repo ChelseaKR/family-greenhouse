@@ -87,24 +87,32 @@ export async function createTask(
   householdId: string,
   userId: string,
   plantName: string,
-  options: { defaultAssigneeId?: string } = {}
+  options: {
+    defaultAssigneeId?: string;
+    /** What the default assignee is: the space's usual caregiver (default)
+     *  or Seasonal Move Day's round-robin pick. Either stays claimable. */
+    defaultAssignmentSource?: Exclude<Task['assignmentSource'], null>;
+  } = {}
 ): Promise<Task> {
   const id = uuid();
   const now = new Date();
   const nextDue = input.nextDue || now.toISOString();
 
   // Explicit task assignment always wins. If it is omitted, a space's usual
-  // caregiver may be supplied by the caller; stale defaults are ignored so a
-  // departed member can never prevent care tasks from being created.
+  // caregiver (or a Move Day pick) may be supplied by the caller; stale
+  // defaults are ignored so a departed member can never prevent care tasks
+  // from being created.
   let assignedTo = input.assignedTo ?? options.defaultAssigneeId ?? null;
   let assignmentSource: Task['assignmentSource'] =
-    input.assignedTo === undefined && options.defaultAssigneeId ? 'space_default' : null;
+    input.assignedTo === undefined && options.defaultAssigneeId
+      ? (options.defaultAssignmentSource ?? 'space_default')
+      : null;
   let assignedToName: string | null = null;
   if (assignedTo) {
     const member = await getMemberByUserId(householdId, assignedTo);
     // Reject a dangling assignee rather than writing a task nobody can see (M4).
     if (!member) {
-      if (assignmentSource === 'space_default') {
+      if (assignmentSource !== null) {
         assignedTo = null;
         assignmentSource = null;
       } else {
@@ -908,11 +916,12 @@ export async function getTasksForPlant(householdId: string, plantId: string): Pr
 // ---------------------------------------------------------------------------
 
 /**
- * Atomically claim an unassigned task, or take over a space-inherited task,
- * for `userId`. Explicit assignments remain protected.
+ * Atomically claim an unassigned task, or take over a space-inherited or
+ * Move-Day-assigned task, for `userId`. Explicit assignments remain protected.
  *
  * The ConditionExpression guards both halves of the race in one write: the
- * task must still exist AND be unassigned or carry `space_default`. Two
+ * task must still exist AND be unassigned or carry `space_default` /
+ * `move_day` (both are suggestions, not claims — see Task.assignmentSource). Two
  * members tapping Claim/Take over at once means exactly one wins; the loser's
  * conditional write fails and we re-read to distinguish "someone beat you to
  * it" ('already_claimed' → 409 in the handler) from "task was deleted under
@@ -953,9 +962,10 @@ export async function claimTask(
           ':gsi2pk': `HOUSEHOLD#${householdId}#ASSIGNEE#${userId}`,
           ':null': null,
           ':spaceDefault': 'space_default',
+          ':moveDay': 'move_day',
         },
         ConditionExpression:
-          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault)',
+          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay)',
         ReturnValues: 'ALL_NEW',
       })
     );

@@ -52,6 +52,7 @@ import {
   hasHouseholdToolkit,
   planIncludesAwayKit,
   planIncludesCrossHomeToday,
+  planHasMoveDay,
 } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
@@ -80,6 +81,13 @@ import {
   isDueBy,
   resolveCutoff,
 } from './models/crossHomeToday.js';
+import {
+  assignRoundRobin,
+  isMoveDayApplicable,
+  moveTaskLabel,
+  planMoves,
+} from './services/moveDayPlan.js';
+import type { MoveDayList } from './services/moveDayPlan.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -260,7 +268,7 @@ interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  assignmentSource: 'space_default' | null;
+  assignmentSource: 'space_default' | 'move_day' | null;
   notes: string | null;
   createdBy: string;
   createdAt: string;
@@ -1578,6 +1586,104 @@ app.put(
     res.json(household);
   }
 );
+
+// Seasonal Move Day — mirrors handlers/climate/moveDay.ts + services/moveDay.ts
+// over the in-memory store, sharing the pure rules in services/moveDayPlan.ts.
+// Local dev has no weather integration, so the cached snapshot is never
+// available and the production answer is `unavailable`. Pass
+// `?season=winter|summer` to simulate the frost/heat line being crossed; the
+// `signal` numbers are then the simulation's, not a measurement.
+const moveDayRecords = new Map<string, MoveDayList>(); // `${householdId}#${season}`
+const MOVE_DAY_CARD_MS = 14 * 24 * 60 * 60 * 1000;
+const MOVE_DAY_REFIRE_GAP_MS = 180 * 24 * 60 * 60 * 1000;
+
+app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (req.params.id !== user.householdId) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const household = db.households.get(req.params.id);
+  if (!household) return res.status(404).json({ message: 'Household not found' });
+  if (!planHasMoveDay(PLANS[household.planId ?? 'seedling'])) {
+    return res.json({ status: 'locked' });
+  }
+
+  const plants = [...db.plants.values()].filter(
+    (p) => p.householdId === household.id && p.status === 'active'
+  );
+  const spaces = [...db.spaces.values()].filter((s) => s.householdId === household.id);
+  if (!isMoveDayApplicable(plants, spaces)) return res.json({ status: 'not_applicable' });
+
+  const now = Date.now();
+  const recent = (['winter', 'summer'] as const)
+    .map((season) => moveDayRecords.get(`${household.id}#${season}`))
+    .filter((r): r is MoveDayList => !!r && now - Date.parse(r.firedAt) < MOVE_DAY_CARD_MS)
+    .sort((a, b) => b.firedAt.localeCompare(a.firedAt))[0];
+  if (recent) return res.json({ status: 'ready', list: recent });
+
+  const requested = req.query.season;
+  const season = requested === 'winter' || requested === 'summer' ? requested : null;
+  if (!season) return res.json({ status: 'unavailable' });
+
+  const key = `${household.id}#${season}`;
+  const same = moveDayRecords.get(key);
+  if (same && now - Date.parse(same.firedAt) < MOVE_DAY_REFIRE_GAP_MS) {
+    return res.json({ status: 'quiet' });
+  }
+  const items = planMoves(plants, spaces, season);
+  if (items.length === 0) return res.json({ status: 'quiet' });
+
+  const nowIso = new Date(now).toISOString();
+  const away = new Set(
+    [...db.vacations.values()]
+      .filter((w) => w.householdId === household.id && w.startDate <= nowIso && nowIso <= w.endDate)
+      .map((w) => w.userId)
+  );
+  const assignees = [...db.users.values()]
+    .flatMap((u) => {
+      const membership = u.memberships.find((m) => m.householdId === household.id);
+      return membership && !away.has(u.id)
+        ? [{ userId: u.id, name: u.name, joinedAt: membership.joinedAt }]
+        : [];
+    })
+    .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.userId.localeCompare(b.userId));
+  assignRoundRobin(items, assignees);
+
+  for (const item of items) {
+    const task = buildTask(
+      {
+        plantId: item.plantId,
+        type: 'custom',
+        customType: moveTaskLabel(item.toSpaceName),
+        frequency: 365,
+        nextDue: nowIso,
+      },
+      household.id,
+      user.userId,
+      item.plantName
+    );
+    task.assignedTo = item.assigneeId;
+    task.assignedToName = item.assigneeName;
+    task.assignmentSource = item.assigneeId ? 'move_day' : null;
+    item.taskId = task.id;
+  }
+
+  const list: MoveDayList = {
+    season,
+    firedAt: nowIso,
+    // Simulated — mirrors FROST_LOW_C / HEAT_HIGH_C in services/climate.ts.
+    signal: {
+      tempC: season === 'summer' ? 34 : 9,
+      lowC: season === 'winter' ? 3 : 18,
+      frostLineC: 5,
+      heatLineC: 32,
+    },
+    items,
+    tenderWithoutWinterHome: [],
+  };
+  moveDayRecords.set(key, list);
+  res.json({ status: 'ready', list });
+});
 
 app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
   const user = (req as any).user;
