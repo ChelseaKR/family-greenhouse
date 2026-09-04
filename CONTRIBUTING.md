@@ -31,7 +31,13 @@ Three tiers, all enforced:
 - **pre-push**: `npm run verify` (the full local gate below, including both workspaces' coverage floors).
 - **CI** (`.github/workflows/ci.yml`): lint, typecheck, frontend+backend tests, Semgrep SAST, gitleaks, `npm audit`, terraform validate, build, Lighthouse, bundle-size, Playwright e2e + a11y.
 
-Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — chains `format:check → lint → typecheck → test:coverage → i18n:check → reads:check → observability:check → npm audit (--omit=dev --audit-level=high) → bare-marker grep`, the same stages CI runs. `test:coverage` is `vitest run --coverage` in both workspaces, so the coverage floors that gate `Test Frontend` / `Test Backend` are enforced locally too, not only in CI. `.husky/pre-push` already calls it.
+Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — the same stages CI runs: `format:check`, `lint`, `typecheck`, `test:coverage`, `i18n:check`, `reads:check`, `observability:check`, `npm audit (--omit=dev --audit-level=high)`, the bare-marker / silenced-gate / docs-testing guards, and the figures, API-spec, sitemap and brand checks. `test:coverage` is `vitest run --coverage` in both workspaces, so the coverage floors that gate `Test Frontend` / `Test Backend` are enforced locally too, not only in CI. `.husky/pre-push` already calls it.
+
+Those steps run **concurrently**, not as a chain — `scripts/run-gate.mjs` schedules the list in [`scripts/gate-steps.mjs`](scripts/gate-steps.mjs) across the machine's cores, and the run fails if any single step does, naming it and reprinting its output. Nothing is skipped or sampled; it is the same set of checks, overlapped. Notes for when it misbehaves:
+
+- Each step's output is buffered and shown only if that step fails. `npm run verify -- --verbose` prints all of it.
+- On an already-busy machine, narrow the pool: `GATE_JOBS=2 git push`, or `npm run verify -- --jobs 2`. `--jobs 1` is close to the old serial behaviour.
+- Adding a workspace, or renaming a script a gate step runs, fails the gate with an explanation rather than silently dropping the check. Add the step to `scripts/gate-steps.mjs`.
 
 This repo is onboarded to the portfolio's `docs/standards/` (vendored, pinned `v1.0.1`) — see the README `## Standards conformance` table for per-standard state and [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md) for the detail. A change that touches AI/chat, adds a new external API, or changes what PII the app collects should update the relevant declaration in the same PR.
 

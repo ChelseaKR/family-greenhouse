@@ -41,6 +41,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { STEPS as GATE_STEPS } from './gate-steps.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DOC_PATH = 'docs/testing.md';
@@ -237,11 +238,26 @@ if (!read('.husky/pre-push').includes('npm run verify')) {
   errors.push(`.husky/pre-push no longer runs \`npm run verify\`, but ${DOC_PATH} says it does.`);
 }
 
-const verify = JSON.parse(read('package.json')).scripts.verify ?? '';
-if (!verify.includes('test:coverage')) {
+// `verify` used to be a literal `&&` chain and this was a substring match on
+// it. It now delegates to scripts/run-gate.mjs, so the same claim — pre-push
+// enforces BOTH workspaces' coverage floors — is checked against the gate's
+// own step list, per workspace. That is stricter than the substring ever was:
+// the old form was satisfied by a single `--workspaces` invocation whose
+// `--if-present` would have quietly skipped a workspace that lost the script.
+const rootPkg = JSON.parse(read('package.json'));
+const verify = rootPkg.scripts.verify ?? '';
+if (!verify.includes('run-gate.mjs')) {
   errors.push(
-    `package.json: \`verify\` no longer chains \`test:coverage\`, but ${DOC_PATH} says it does.`
+    `package.json: \`verify\` no longer runs scripts/run-gate.mjs, so the gate steps below cannot be checked. If the gate moved, update this script too.`
   );
+} else {
+  for (const ws of rootPkg.workspaces ?? []) {
+    if (!GATE_STEPS.some((s) => s.workspace === ws && s.script === 'test:coverage')) {
+      errors.push(
+        `scripts/gate-steps.mjs: no \`test:coverage\` step for the \`${ws}\` workspace, but ${DOC_PATH} says pre-push enforces every workspace's coverage floors.`
+      );
+    }
+  }
 }
 
 // The exact retired claims. These were live and false; keep them retired.

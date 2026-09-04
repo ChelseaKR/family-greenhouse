@@ -1,0 +1,287 @@
+/**
+ * The local gate's parallel runner (`scripts/run-gate.mjs`) is the thing that
+ * decides whether `git push` is allowed to proceed. If it ever loses a step,
+ * mistakes a signal death for a pass, or swallows a child's exit code, the
+ * whole gate becomes a green tick that means nothing — the "gate that cannot
+ * fail" defect this repo already has a checker for
+ * (scripts/check-no-silenced-gates.mjs).
+ *
+ * So these tests drive the real runner as a child process against a throwaway
+ * fixture repo: a temp directory with its own package.json, its own workspace,
+ * a copy of run-gate.mjs, and a plan whose steps are trivial node one-liners
+ * that pass, fail, or die however the test needs. Nothing here stubs the
+ * runner's internals; the assertions are on its exit code and its output.
+ *
+ * It lives under backend/ because the repo's root has no test runner of its
+ * own and backend's vitest is the nearest one — the same reason
+ * tests/integration/route-terraform-parity.test.ts reaches up into
+ * infrastructure/. The runner itself is loaded only as a child process, never
+ * imported, so it stays out of this workspace's coverage accounting.
+ */
+import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+const REAL_RUNNER = resolve(__dirname, '../../../../scripts/run-gate.mjs');
+
+interface Step {
+  id: string;
+  script: string;
+  workspace?: string;
+  weight: number;
+  why: string;
+}
+
+interface RunResult {
+  code: number;
+  out: string;
+}
+
+/**
+ * Builds a fixture repo and runs the real runner in it.
+ *
+ * `scripts` are the root package.json scripts the plan may name; `wsScripts`
+ * are the fixture workspace's. `workspacesInPlan` defaults to matching the
+ * fixture's declared workspaces — tests override it to prove the mismatch is
+ * caught.
+ */
+function runGate(opts: {
+  steps: Step[];
+  scripts?: Record<string, string>;
+  wsScripts?: Record<string, string>;
+  workspacesInPlan?: string[];
+  args?: string[];
+}): RunResult {
+  const root = mkdtempSync(join(tmpdir(), 'gate-runner-'));
+  mkdirSync(join(root, 'scripts'), { recursive: true });
+  mkdirSync(join(root, 'ws'), { recursive: true });
+  copyFileSync(REAL_RUNNER, join(root, 'scripts', 'run-gate.mjs'));
+
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({
+      name: 'gate-fixture',
+      private: true,
+      workspaces: ['ws'],
+      scripts: opts.scripts ?? {},
+    })
+  );
+  writeFileSync(
+    join(root, 'ws', 'package.json'),
+    JSON.stringify({ name: 'ws', version: '0.0.0', scripts: opts.wsScripts ?? {} })
+  );
+  writeFileSync(
+    join(root, 'scripts', 'gate-steps.mjs'),
+    `export const WORKSPACES = ${JSON.stringify(opts.workspacesInPlan ?? ['ws'])};\n` +
+      `export const STEPS = ${JSON.stringify(opts.steps)};\n`
+  );
+
+  const argv = [join(root, 'scripts', 'run-gate.mjs'), ...(opts.args ?? [])];
+  try {
+    const stdout = execFileSync(process.execPath, argv, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, NO_COLOR: '1' },
+    });
+    return { code: 0, out: stdout };
+  } catch (err) {
+    const e = err as { status: number | null; stdout?: string; stderr?: string };
+    return { code: e.status ?? -1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
+  }
+}
+
+const step = (id: string, script: string, extra: Partial<Step> = {}): Step => ({
+  id,
+  script,
+  weight: 0,
+  why: `the ${id} contract`,
+  ...extra,
+});
+
+/** A step in the fixture workspace, so every declared workspace is covered. */
+const wsStep = (id: string, script: string, extra: Partial<Step> = {}): Step =>
+  step(id, script, { workspace: 'ws', ...extra });
+
+const PASSES = 'node -e "console.log(\'all good\')"';
+const FAILS = 'node -e "console.error(\'the thing is wrong\'); process.exit(3)"';
+
+describe('run-gate: the happy path', () => {
+  it('passes, and reports every planned step', () => {
+    const { code, out } = runGate({
+      scripts: { a: PASSES, b: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), step('beta', 'b'), wsStep('gamma', 'w')],
+    });
+
+    expect(code).toBe(0);
+    expect(out).toContain('gate PASSED');
+    for (const id of ['alpha', 'beta', 'gamma']) {
+      expect(out).toMatch(new RegExp(`PASS\\s+[\\d.]+s\\s+${id}`));
+    }
+  });
+
+  it('keeps a passing step’s output out of the way unless asked for it', () => {
+    const quiet = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('gamma', 'w')],
+    });
+    expect(quiet.out).not.toContain('all good');
+
+    const loud = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('gamma', 'w')],
+      args: ['--verbose'],
+    });
+    expect(loud.out).toContain('all good');
+  });
+});
+
+describe('run-gate: a failing step fails the gate', () => {
+  it('exits non-zero, names the step, and reprints its output', () => {
+    const { code, out } = runGate({
+      scripts: { good: PASSES, bad: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [step('ok-step', 'good'), step('broken-step', 'bad'), wsStep('ws-step', 'w')],
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('gate FAILED');
+    // Names the step that failed, in the summary and in its own banner.
+    expect(out).toContain('FAILED: broken-step');
+    expect(out).toMatch(/1 of 3 steps failed in [\d.]+s: broken-step/);
+    // The failing step's own output survives the buffering.
+    expect(out).toContain('the thing is wrong');
+    // And it says how to run just that step again.
+    expect(out).toContain('reproduce: npm run bad');
+    // The other steps still ran — a failure must not cancel the rest.
+    expect(out).toMatch(/PASS\s+[\d.]+s\s+ok-step/);
+    expect(out).toMatch(/PASS\s+[\d.]+s\s+ws-step/);
+  });
+
+  it('reports every failure, not just the first', () => {
+    const { code, out } = runGate({
+      scripts: { bad: FAILS, alsoBad: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [step('first-bad', 'bad'), step('second-bad', 'alsoBad'), wsStep('ws-step', 'w')],
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('FAILED: first-bad');
+    expect(out).toContain('FAILED: second-bad');
+    expect(out).toMatch(/2 of 3 steps failed/);
+  });
+
+  it('fails on a step killed by a signal, which exits with a null code', () => {
+    const { code, out } = runGate({
+      scripts: { suicide: 'node -e "process.kill(process.pid, \'SIGKILL\')"' },
+      wsScripts: { w: PASSES },
+      steps: [step('killed-step', 'suicide'), wsStep('ws-step', 'w')],
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('FAILED: killed-step');
+  });
+
+  it('still fails a failing step when the pool is narrowed to one job', () => {
+    const { code, out } = runGate({
+      scripts: { good: PASSES, bad: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [
+        step('heavy-ok', 'good', { weight: 4 }),
+        step('heavy-bad', 'bad', { weight: 4 }),
+        wsStep('ws-step', 'w', { weight: 2 }),
+      ],
+      args: ['--jobs', '1'],
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('FAILED: heavy-bad');
+    // A step weighing more than the whole pool must still run, not deadlock.
+    expect(out).toMatch(/PASS\s+[\d.]+s\s+heavy-ok/);
+    expect(out).toMatch(/PASS\s+[\d.]+s\s+ws-step/);
+  });
+});
+
+describe('run-gate: it refuses a plan that would check less than it claims', () => {
+  const refuses = (opts: Parameters<typeof runGate>[0], expected: RegExp) => {
+    const { code, out } = runGate(opts);
+    expect(code).toBe(1);
+    expect(out).not.toContain('gate PASSED');
+    expect(out).toMatch(expected);
+  };
+
+  it('refuses an empty step list rather than passing everything', () => {
+    refuses({ steps: [] }, /non-empty array/);
+  });
+
+  it('refuses a step naming a script that does not exist', () => {
+    refuses(
+      {
+        scripts: { a: PASSES },
+        wsScripts: { w: PASSES },
+        steps: [step('typo', 'lnit'), wsStep('ws-step', 'w')],
+      },
+      /does not define/
+    );
+  });
+
+  it('refuses when the plan’s workspaces disagree with package.json', () => {
+    // The exact drift the explicit list has to guard: a second workspace is
+    // added to package.json and nothing in the gate covers it.
+    refuses(
+      {
+        scripts: { a: PASSES },
+        wsScripts: { w: PASSES },
+        steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+        workspacesInPlan: ['ws', 'mobile'],
+      },
+      /package\.json declares/
+    );
+  });
+
+  it('refuses a declared workspace that has no steps of its own', () => {
+    refuses(
+      { scripts: { a: PASSES }, steps: [step('alpha', 'a')] },
+      /workspace `ws` has no gate steps/
+    );
+  });
+
+  it('refuses duplicate step ids, which would hide one result behind another', () => {
+    refuses(
+      {
+        scripts: { a: PASSES, b: PASSES },
+        wsScripts: { w: PASSES },
+        steps: [step('same', 'a'), step('same', 'b'), wsStep('ws-step', 'w')],
+      },
+      /duplicate step id/
+    );
+  });
+
+  it('refuses a negative or non-numeric weight', () => {
+    refuses(
+      {
+        scripts: { a: PASSES },
+        wsScripts: { w: PASSES },
+        steps: [step('alpha', 'a', { weight: -1 }), wsStep('ws-step', 'w')],
+      },
+      /non-negative numeric `weight`/
+    );
+  });
+
+  it('refuses a --jobs value that is not a positive number', () => {
+    refuses(
+      {
+        scripts: { a: PASSES },
+        wsScripts: { w: PASSES },
+        steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+        args: ['--jobs', '0'],
+      },
+      /must be a positive number/
+    );
+  });
+});
