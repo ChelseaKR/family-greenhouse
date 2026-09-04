@@ -1264,6 +1264,8 @@
     "quietBody": "Your sitter didn’t check off any tasks or send any photos between those dates. That’s what the activity log says — it isn’t a loading problem.",
     "truncatedTitle": "This recap is partial",
     "truncatedBody": "There was more activity in this window than we can show at once, so the lists below are only the beginning of it.",
+    "planUnknownTitle": "We couldn’t check your plan",
+    "planUnknownBody": "So we can’t tell whether your household has the Away Kit, and we’d rather say that than show you a blank page. Please refresh and try again.",
     "lockedTitle": "The Away Kit is part of Garden",
     "lockedBody": "Sitter photo-back and the return recap are included with Garden and Greenhouse. Your sitter links keep working either way.",
     "noneTitle": "No sitter window has ended yet",

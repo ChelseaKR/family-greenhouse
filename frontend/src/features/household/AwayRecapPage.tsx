@@ -9,6 +9,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { awayRecapService, type AwayRecap } from '@/services/awayRecapService';
+import { billingService } from '@/services/billingService';
 import { formatDate } from '@/i18n/format';
 
 /**
@@ -167,7 +168,37 @@ export function AwayRecapPage() {
   useDocumentTitle(t('awayRecap.title'));
   const [params] = useSearchParams();
   const linkId = params.get('linkId') ?? undefined;
-  const { householdQuery } = useActiveHousehold();
+  const { householdId, householdQuery } = useActiveHousehold();
+
+  // Entitlement is READ before the recap, not inferred from the recap's
+  // failure.
+  //
+  // This link is offered to every member of every household (HouseholdPage
+  // renders it unconditionally, on purpose — the recap is not admin-only),
+  // but the endpoint behind it is Garden-and-up and answers 402 to everyone
+  // else. The page handled that 402 correctly and still had a defect: the
+  // browser writes "Failed to load resource: 402 (Payment Required)" to the
+  // console for any non-2xx response, before a single line of our code runs.
+  // No amount of error HANDLING removes it — only not making the request.
+  // Same three-state plan read as AutoHandoffCard.
+  const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
+  const subscriptionQuery = useQuery({
+    queryKey: ['subscription', householdId],
+    queryFn: billingService.getCurrentSubscription,
+    enabled: householdId != null,
+    staleTime: 60_000,
+  });
+
+  const checkingPlan = plansQuery.isPending || subscriptionQuery.isPending;
+  const plan =
+    plansQuery.data && subscriptionQuery.data
+      ? plansQuery.data.plans.find((p) => p.id === subscriptionQuery.data.planId)
+      : undefined;
+  // `undefined` is "we could not determine it" — a failed catalog read, or an
+  // older backend whose plan summary carries no feature map. It is NOT
+  // `false`: "your plan doesn't include the Away Kit" is a claim, and we do
+  // not get to make it off a read that did not land (ADR 0010).
+  const hasAwayKit: boolean | undefined = plan?.features?.awayKit;
 
   const {
     data: recap,
@@ -178,7 +209,7 @@ export function AwayRecapPage() {
     householdQuery(
       (hh) => ['away-recap', hh, linkId ?? 'latest'],
       (hh) => awayRecapService.getRecap(hh, linkId),
-      { retry: false }
+      { retry: false, enabled: hasAwayKit === true }
     )
   );
 
@@ -189,26 +220,44 @@ export function AwayRecapPage() {
       <Card>
         <CardHeader title={t('awayRecap.title')} description={t('awayRecap.description')} />
 
-        {isLoading && (
+        {(checkingPlan || (hasAwayKit === true && isLoading)) && (
           <div className="flex min-h-[30vh] items-center justify-center" role="status">
             <LoadingSpinner size="lg" />
             <span className="sr-only">{t('awayRecap.loading')}</span>
           </div>
         )}
 
-        {isError && status === 402 && (
+        {!checkingPlan && hasAwayKit === undefined && (
+          // We could not read the plan. That is not "you don't have it" and
+          // it is certainly not an empty recap.
+          <Alert variant="warning" title={t('awayRecap.planUnknownTitle')}>
+            {t('awayRecap.planUnknownBody')}
+          </Alert>
+        )}
+
+        {/* Locked without ever calling the endpoint. */}
+        {!checkingPlan && hasAwayKit === false && (
           <Alert variant="info" title={t('awayRecap.lockedTitle')}>
             {t('awayRecap.lockedBody')}
           </Alert>
         )}
 
-        {isError && status === 404 && (
+        {/* Kept as defence in depth: if the plan read ever says we are
+            entitled and the server disagrees, the 402 must still render as
+            locked rather than as an error or an empty recap. */}
+        {hasAwayKit === true && isError && status === 402 && (
+          <Alert variant="info" title={t('awayRecap.lockedTitle')}>
+            {t('awayRecap.lockedBody')}
+          </Alert>
+        )}
+
+        {hasAwayKit === true && isError && status === 404 && (
           <Alert variant="info" title={t('awayRecap.noneTitle')}>
             {t('awayRecap.noneBody')}
           </Alert>
         )}
 
-        {isError && status !== 402 && status !== 404 && (
+        {hasAwayKit === true && isError && status !== 402 && status !== 404 && (
           // A failed read is never rendered as an empty recap: the household
           // would read "nothing happened while we were away" off a request
           // that never returned.
@@ -217,7 +266,7 @@ export function AwayRecapPage() {
           </Alert>
         )}
 
-        {!isLoading && !isError && recap && <RecapBody recap={recap} />}
+        {hasAwayKit === true && !isLoading && !isError && recap && <RecapBody recap={recap} />}
       </Card>
     </div>
   );

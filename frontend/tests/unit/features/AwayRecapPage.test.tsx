@@ -72,16 +72,63 @@ const recap = {
   generatedAt: '2026-08-25T00:00:00.000Z',
 };
 
+/** Every request the recap endpoint received, so a test can assert none. */
+const recapRequests: string[] = [];
+
+/**
+ * The plan reads the page now makes BEFORE the recap. Defaults to an
+ * entitled household so the state tests below still exercise what they were
+ * written for.
+ */
+function servePlan({
+  planId = 'garden',
+  awayKit = true,
+  plansStatus = 200,
+}: { planId?: string; awayKit?: boolean; plansStatus?: number } = {}) {
+  server.use(
+    http.get(`${API}/billing/plans`, () =>
+      plansStatus === 200
+        ? HttpResponse.json({
+            paymentsAvailable: true,
+            plans: [
+              {
+                id: 'seedling',
+                name: 'Seedling',
+                description: '',
+                maxPlants: 10,
+                maxMembers: 3,
+                features: { awayKit: false },
+              },
+              {
+                id: 'garden',
+                name: 'Garden',
+                description: '',
+                maxPlants: null,
+                maxMembers: null,
+                features: { awayKit },
+              },
+            ],
+          })
+        : HttpResponse.json({ message: 'boom' }, { status: plansStatus })
+    ),
+    http.get(`${API}/billing/me`, () => HttpResponse.json({ planId, status: 'active' }))
+  );
+}
+
 function serveRecap(body: unknown, status = 200) {
   server.use(
-    http.get(`${API}/households/hh-1/away-recap`, () =>
-      status === 200 ? HttpResponse.json(body) : HttpResponse.json(body, { status })
-    )
+    http.get(`${API}/households/hh-1/away-recap`, ({ request }) => {
+      recapRequests.push(request.url);
+      return status === 200 ? HttpResponse.json(body) : HttpResponse.json(body, { status });
+    })
   );
 }
 
 describe('AwayRecapPage', () => {
   beforeEach(() => {
+    recapRequests.length = 0;
+    // Entitled by default; the entitlement tests override it.
+    servePlan();
     useAuthStore.setState({
       isAuthenticated: true,
       idToken: 'id-token-1',
@@ -129,11 +176,50 @@ describe('AwayRecapPage', () => {
   });
 
   it('shows the locked state on 402 rather than an error or an empty recap', async () => {
+    // Defence in depth: if the plan read says entitled and the server
+    // disagrees, the 402 must still land on the locked state.
     serveRecap({ message: 'nope' }, 402);
     renderPage();
 
     expect(await screen.findByText(/The Away Kit is part of Garden/)).toBeInTheDocument();
     expect(screen.queryByText(/We couldn’t load your recap/)).not.toBeInTheDocument();
+  });
+
+  it('never calls the paid endpoint on a household without the Away Kit', async () => {
+    // The 402 was handled correctly and was still a defect: the browser logs
+    // every non-2xx response as a console error before any of our code runs,
+    // which is what fails the E2E console assertions. The fix is to not make
+    // the request.
+    servePlan({ planId: 'seedling', awayKit: false });
+    serveRecap(recap);
+    renderPage();
+
+    expect(await screen.findByText(/The Away Kit is part of Garden/)).toBeInTheDocument();
+    expect(recapRequests).toEqual([]);
+  });
+
+  it('says it could not check the plan rather than claiming the Away Kit is missing', async () => {
+    // A failed catalog read is not "your plan doesn't include it", and it is
+    // not an empty recap either (ADR 0010).
+    servePlan({ plansStatus: 500 });
+    serveRecap(recap);
+    renderPage();
+
+    expect(await screen.findByText(/We couldn’t check your plan/)).toBeInTheDocument();
+    expect(screen.queryByText(/The Away Kit is part of Garden/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing was recorded/)).not.toBeInTheDocument();
+    expect(recapRequests).toEqual([]);
+  });
+
+  it('still fetches and renders the recap for an entitled household', async () => {
+    // The gate must not become a wall: the whole point is that Garden
+    // households are unaffected.
+    servePlan({ planId: 'garden', awayKit: true });
+    serveRecap(recap);
+    renderPage();
+
+    expect(await screen.findByText(/The Smiths’ plants/)).toBeInTheDocument();
+    expect(recapRequests).toHaveLength(1);
   });
 
   it('states plainly when the window really was quiet — a settled zero, not a failure', async () => {
