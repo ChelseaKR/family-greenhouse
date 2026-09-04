@@ -8,6 +8,7 @@ import { NotFoundPage } from '@/components/NotFoundPage';
 import { Toaster } from '@/components/Toaster';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
+import { loadLegalCatalog } from '@/i18n/legalCatalog';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -17,6 +18,17 @@ const lazyNamed = <K extends string, T extends Record<string, React.ComponentTyp
   importer: () => Promise<T>,
   name: K
 ) => lazy(() => importer().then((m) => ({ default: m[name] })));
+
+// The legal pages' copy is a deferred catalog fragment, not part of the startup
+// i18n bundle (see src/i18n/legalCatalog.ts). Awaiting it inside the lazy
+// factory — in parallel with the page's own chunk — means the component never
+// mounts before its strings are registered, so a legal page cannot flash raw
+// `legal.foo.bar` keys on navigation, on hydration of a prerendered page, or in
+// the build-time prerender.
+const lazyLegal = <K extends string, T extends Record<string, React.ComponentType<unknown>>>(
+  importer: () => Promise<T>,
+  name: K
+) => lazyNamed(() => Promise.all([importer(), loadLegalCatalog()]).then(([m]) => m), name);
 
 const LandingPage = lazyNamed(() => import('@/features/landing/LandingPage'), 'LandingPage');
 const LoginPage = lazyNamed(() => import('@/features/auth/LoginPage'), 'LoginPage');
@@ -86,13 +98,13 @@ const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
 );
-const PrivacyPage = lazyNamed(() => import('@/features/legal/PrivacyPage'), 'PrivacyPage');
-const AccountDeletionPage = lazyNamed(
+const PrivacyPage = lazyLegal(() => import('@/features/legal/PrivacyPage'), 'PrivacyPage');
+const AccountDeletionPage = lazyLegal(
   () => import('@/features/legal/AccountDeletionPage'),
   'AccountDeletionPage'
 );
-const SupportPage = lazyNamed(() => import('@/features/legal/SupportPage'), 'SupportPage');
-const TermsPage = lazyNamed(() => import('@/features/legal/TermsPage'), 'TermsPage');
+const SupportPage = lazyLegal(() => import('@/features/legal/SupportPage'), 'SupportPage');
+const TermsPage = lazyLegal(() => import('@/features/legal/TermsPage'), 'TermsPage');
 const StatusPage = lazyNamed(() => import('@/features/status/StatusPage'), 'StatusPage');
 const PricingPage = lazyNamed(() => import('@/features/pricing/PricingPage'), 'PricingPage');
 

@@ -3,7 +3,9 @@ import { MemoryRouter } from 'react-router';
 import { createInstance, type i18n as I18nInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import { beforeAll, describe, expect, it } from 'vitest';
+import esLegal from '@/i18n/locales/es/legal.json';
 import es from '@/i18n/locales/es/translation.json';
+import { loadLegalCatalog } from '@/i18n/legalCatalog';
 import { AccountDeletionPage } from '@/features/legal/AccountDeletionPage';
 import { PrivacyPage } from '@/features/legal/PrivacyPage';
 import { SupportPage } from '@/features/legal/SupportPage';
@@ -38,11 +40,17 @@ const RAW_KEY = /\blegal\.(shell|support|accountDeletion|terms|privacy)\./;
 let spanish: I18nInstance;
 
 beforeAll(async () => {
+  // `legal.*` is a deferred catalog fragment: App.tsx awaits it inside the
+  // route's lazy() factory, but these tests mount the page components directly,
+  // so they have to register it themselves — on the shared instance for the
+  // English cases, and by hand for the standalone Spanish one.
+  await loadLegalCatalog();
+
   spanish = createInstance();
   await spanish.init({
     lng: 'es',
     fallbackLng: 'es',
-    resources: { es: { translation: es } },
+    resources: { es: { translation: { ...es, ...esLegal } } },
     interpolation: { escapeValue: false },
   });
 });

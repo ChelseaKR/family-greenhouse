@@ -1,11 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PricingPage } from '@/features/pricing/PricingPage';
 import { HelpPage } from '@/features/help/HelpPage';
 import { AccountDeletionPage } from '@/features/legal/AccountDeletionPage';
+import { loadLegalCatalog } from '@/i18n/legalCatalog';
 
 describe('native store policy surfaces', () => {
+  // AccountDeletionPage reads the deferred `legal.*` fragment, which App.tsx
+  // normally loads inside the route's lazy() factory. Mounting the component
+  // directly skips that, so register it here.
+  beforeAll(async () => {
+    await loadLegalCatalog();
+  });
+
   beforeEach(() => {
     (window as unknown as { Capacitor?: unknown }).Capacitor = {
       isNativePlatform: () => true,

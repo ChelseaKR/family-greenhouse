@@ -30,7 +30,13 @@ import { fileURLToPath } from 'node:url';
 const FRONTEND_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const LOCALES_DIR = path.join(FRONTEND_DIR, 'src', 'i18n', 'locales');
 const SOURCE_LOCALE = 'en';
-const NAMESPACES = ['translation'];
+// Every `<lng>/<file>.json` catalog under LOCALES_DIR, gated identically.
+// `translation` is the startup catalog; `legal` is the deferred fragment that
+// src/i18n/legalCatalog.ts merges into the `translation` namespace on demand
+// from the legal routes (its keys are already `legal.*`-rooted, so call sites
+// are the same either way). Both must satisfy every gate below — a key that
+// moves between files must not lose its Spanish twin on the way.
+const NAMESPACES = ['translation', 'legal'];
 const PLURAL_SUFFIXES = ['zero', 'one', 'two', 'few', 'many', 'other'];
 
 const errors = [];
