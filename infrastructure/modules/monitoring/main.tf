@@ -342,6 +342,92 @@ resource "aws_cloudwatch_log_metric_filter" "frontend_errors" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Scheduled-run outcome metrics
+#
+# The problem these exist for: `reminders.ts:834`, `digest.ts:396` and
+# `digest.ts:788` each catch a per-household error, increment a `failed`
+# counter and log at WARN — which was the right fix, because a swallowed
+# error used to abort the run for every member after a bad one. But WARN is
+# below every metric filter, and the handlers then RETURN NORMALLY. So a run
+# in which every household failed produced no Lambda `Errors` data point,
+# nothing in the DLQ, and no signal anywhere. It was byte-identical, from the
+# outside, to a quiet week.
+#
+# The counters are already in the run-summary log lines (`digest.run_complete`,
+# `recap.run_complete`, and `reminders.run_complete`, added alongside these
+# filters because the reminder scan had no summary line at all). These filters
+# turn them into metrics; the alarms below page on a non-zero `failed`.
+#
+# `sent` is published as its own metric but deliberately NOT alarmed on. A
+# "sent should not be zero" alarm needs a floor the product does not have yet:
+# at current volume a genuinely quiet week is possible, and an alarm that
+# fires on it would be trained away within a month. Publishing the series now
+# means the floor can be chosen from real data later rather than guessed.
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudwatch_log_metric_filter" "reminders_run_failed" {
+  count = var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-reminders-run-failed-${var.environment}"
+  log_group_name = var.reminders_lambda_log_group_name
+  pattern        = "{ $.msg = \"reminders.run_complete\" && $.failed > 0 }"
+
+  metric_transformation {
+    name          = "RemindersHouseholdsFailed"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.failed"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "reminders_run_sent" {
+  count = var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-reminders-run-sent-${var.environment}"
+  log_group_name = var.reminders_lambda_log_group_name
+  pattern        = "{ $.msg = \"reminders.run_complete\" }"
+
+  metric_transformation {
+    name          = "RemindersEmailsSent"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.sent"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "digests_run_failed" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-digests-run-failed-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  # One filter for both routines the function runs: the weekly digest and the
+  # yearly recap share a log group and a failure shape.
+  pattern = "{ ($.msg = \"digest.run_complete\" && $.failed > 0) || ($.msg = \"recap.run_complete\" && $.failed > 0) }"
+
+  metric_transformation {
+    name          = "DigestsHouseholdsFailed"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.failed"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "digests_run_sent" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-digests-run-sent-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ ($.msg = \"digest.run_complete\") || ($.msg = \"recap.run_complete\") }"
+
+  metric_transformation {
+    name          = "DigestsEmailsSent"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.sent"
+    default_value = "0"
+  }
+}
+
 # CloudWatch Alarms
 #
 # Alarm strategy (cost-driven consolidation): standard alarms are ~$0.10/mo
@@ -356,10 +442,27 @@ resource "aws_cloudwatch_log_metric_filter" "frontend_errors" {
 #     the user, an async one surfaces nowhere else) and `chat` (Bedrock
 #     tool-loop, the latency/cost outlier).
 locals {
-  critical_lambda_names = [
+  # Async, no-user-watching functions. `reminders` was already here; `digests`
+  # and `emailEvents` were not, for no stated reason — they are cron/SNS
+  # invoked and have no user to notice, which is verbatim the argument the
+  # strategy note above makes for keeping `reminders`.
+  scheduled_lambda_names = [
+    for name in var.lambda_function_names : name
+    if length(regexall("-(reminders|digests|emailEvents)-", name)) > 0
+  ]
+
+  # Functions whose LATENCY is worth its own alarm: the two the strategy note
+  # names. A weekly digest legitimately runs long, so a duration alarm on it
+  # would page for the job doing its work.
+  latency_lambda_names = [
     for name in var.lambda_function_names : name
     if length(regexall("-(reminders|chat)-", name)) > 0
   ]
+
+  error_alarm_lambda_names = distinct(concat(
+    local.scheduled_lambda_names,
+    [for name in var.lambda_function_names : name if length(regexall("-chat-", name)) > 0],
+  ))
 }
 
 # Any Lambda error anywhere in the account/region. Coarse by design — the
@@ -413,18 +516,32 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles_aggregate" {
   }
 }
 
-# Per-function alarms for the critical pair only (see strategy note above).
+# Per-function alarms for the functions the strategy note names (see above).
+#
+# The threshold is class-dependent, and that is the point of this block. At the
+# old flat `> 5 Sum over 2 consecutive 5-minute periods` a scheduled function
+# could never trip it: EventBridge retries a failed target at most 4 times
+# (infrastructure/modules/api/main.tf), so a completely broken hourly or weekly
+# run produces AT MOST 5 Errors data points, spread over a couple of minutes.
+# 5 is not > 5, and it certainly is not > 5 in each of two consecutive periods.
+# The alarm on `reminders` — kept per-function precisely because "an async
+# failure surfaces nowhere else" — was therefore unreachable for the failure it
+# was created for. A DLQ message still alarms separately, but only once every
+# retry is exhausted, and only for a target that actually threw.
+#
+# So: any error at all pages for a scheduled function, while `chat` keeps the
+# volume-based threshold that suits a user-facing, high-frequency path.
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  for_each = toset(var.enable_alarms ? local.critical_lambda_names : [])
+  for_each = toset(var.enable_alarms ? local.error_alarm_lambda_names : [])
 
   alarm_name          = "${each.value}-errors"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = contains(local.scheduled_lambda_names, each.value) ? 1 : 2
   metric_name         = "Errors"
   namespace           = "AWS/Lambda"
   period              = 300
   statistic           = "Sum"
-  threshold           = 5
+  threshold           = contains(local.scheduled_lambda_names, each.value) ? 0 : 5
   alarm_description   = "Lambda function ${each.value} errors exceeded threshold"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
@@ -443,7 +560,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  for_each = toset(var.enable_alarms ? local.critical_lambda_names : [])
+  for_each = toset(var.enable_alarms ? local.latency_lambda_names : [])
 
   alarm_name          = "${each.value}-duration"
   comparison_operator = "GreaterThanThreshold"
@@ -792,6 +909,129 @@ resource "aws_cloudwatch_metric_alarm" "mail_not_relayed_unverified" {
 
   tags = {
     Name = "${var.project_name}-mail-not-relayed-unverified-alarm-${var.environment}"
+  }
+}
+
+# Scheduled-run failure alarms. Any household that failed is worth knowing
+# about: these jobs run hourly and weekly, so a single alarm cannot be noisy in
+# the way a per-request one could, and "some households were not reminded" is
+# exactly the state the product promises will not happen.
+resource "aws_cloudwatch_metric_alarm" "reminders_run_failed" {
+  count = var.enable_alarms && var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-reminders-run-failed-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.reminders_run_failed[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  period              = 3600
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "The hourly reminder scan finished with households it could not remind. The run returns normally and logs at WARN, so without this alarm an hour in which EVERY household failed looks exactly like an hour with nothing due."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-reminders-run-failed-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "digests_run_failed" {
+  count = var.enable_alarms && var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-digests-run-failed-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.digests_run_failed[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  # A day, not an hour: the digest runs weekly and the recap yearly, so the
+  # evaluation window has to be wide enough to contain the run it is watching.
+  period             = 86400
+  statistic          = "Sum"
+  threshold          = 0
+  alarm_description  = "The weekly digest or the yearly recap finished with households it could not mail. Digests can go to zero households for weeks and the first signal is a user saying they stopped arriving — from the population least likely to say anything."
+  alarm_actions      = [aws_sns_topic.alerts.arn]
+  ok_actions         = [aws_sns_topic.alerts.arn]
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-digests-run-failed-alarm-${var.environment}"
+  }
+}
+
+# Bounce rate on the SES configuration set.
+#
+# `modules/email/events.tf` sets `reputation_metrics_enabled = true` precisely
+# so these reach CloudWatch, and until now nothing watched them. The module's
+# own header states the stake: sustained bounces cost a domain its sending
+# reputation, and that reputation is shared by every message the domain sends,
+# password resets included. AWS puts an identity under review at a 5% bounce
+# rate and can pause sending, at which point the first symptom anyone sees is
+# that nobody can complete a password reset.
+#
+# On the low-volume false-alarm risk, which is real: these are ROLLING RATE
+# metrics, so one bounce in a quiet week can spike the rate. The choice made
+# here is `datapoints_to_alarm = 3` over three consecutive hours rather than a
+# composite alarm gated on send volume — a single bad address resolves within
+# the rolling window, a suppression-list bug or a bad import does not. If this
+# proves noisy at current volume, raise `datapoints_to_alarm` before raising
+# the threshold: the threshold is set where it is because AWS acts at 5%, and
+# an alarm that only fires after AWS has already acted is not an alarm.
+resource "aws_cloudwatch_metric_alarm" "ses_bounce_rate" {
+  count = var.enable_alarms && var.ses_configuration_set_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-ses-bounce-rate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  metric_name         = "Reputation.BounceRate"
+  namespace           = "AWS/SES"
+  period              = 3600
+  statistic           = "Average"
+  # 3%, well under AWS's 5% review threshold, so there is room to act.
+  threshold         = 0.03
+  alarm_description = "SES bounce rate above 3% for 3 hours on ${var.ses_configuration_set_name}. AWS reviews at 5% and can pause the identity — at which point password resets stop. Check emailSuppression + recent imports."
+  alarm_actions     = [aws_sns_topic.alerts.arn]
+  ok_actions        = [aws_sns_topic.alerts.arn]
+  # A week with no sends legitimately has no data. Deliberate, not copied: a
+  # stopped sender is its own problem and the scheduled-run metrics above are
+  # what watch for that.
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    ConfigurationSetName = var.ses_configuration_set_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-ses-bounce-rate-alarm-${var.environment}"
+  }
+}
+
+# Complaint rate. AWS's review threshold is 0.1%; 0.05% leaves room to react.
+resource "aws_cloudwatch_metric_alarm" "ses_complaint_rate" {
+  count = var.enable_alarms && var.ses_configuration_set_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-ses-complaint-rate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  metric_name         = "Reputation.ComplaintRate"
+  namespace           = "AWS/SES"
+  period              = 3600
+  statistic           = "Average"
+  threshold           = 0.0005
+  alarm_description   = "SES complaint rate above 0.05% for 3 hours on ${var.ses_configuration_set_name}. AWS reviews at 0.1%. Someone is marking our mail as spam — check what changed in the last send."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    ConfigurationSetName = var.ses_configuration_set_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-ses-complaint-rate-alarm-${var.environment}"
   }
 }
 

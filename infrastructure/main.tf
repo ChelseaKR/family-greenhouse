@@ -338,17 +338,25 @@ module "monitoring" {
   api_access_log_group_name   = module.api.api_access_log_group_name
   api_lambda_log_group_name   = module.api.api_lambda_log_group_name
   auth_lambda_log_group_name  = module.api.auth_lambda_log_group_name
-  lambda_function_names       = module.api.lambda_function_names
-  alert_email                 = var.alert_email
-  alert_sms_number            = var.alert_sms_number
-  dynamodb_table_name         = module.database.table_name
-  monthly_budget_usd          = var.monthly_budget_usd
-  lambda_dlq_name             = module.api.lambda_dlq_name
+  # Scheduled-job log groups: the run-summary metric filters read these. Without
+  # them a run where every household failed is indistinguishable from a quiet
+  # week (see the filters in modules/monitoring/main.tf).
+  reminders_lambda_log_group_name = module.api.reminders_lambda_log_group_name
+  digests_lambda_log_group_name   = module.api.digests_lambda_log_group_name
+  lambda_function_names           = module.api.lambda_function_names
+  alert_email                     = var.alert_email
+  alert_sms_number                = var.alert_sms_number
+  dynamodb_table_name             = module.database.table_name
+  monthly_budget_usd              = var.monthly_budget_usd
+  lambda_dlq_name                 = module.api.lambda_dlq_name
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.
   email_forwarder_dlq_name       = var.domain_name == "" ? "" : module.email[0].forwarder_dlq_name
   email_forwarder_log_group_name = var.domain_name == "" ? "" : module.email[0].forwarder_log_group_name
+  # Same conditional wiring as the forwarder DLQ: the SES reputation alarms
+  # exist only when the email module does.
+  ses_configuration_set_name = var.domain_name == "" ? "" : module.email[0].configuration_set_name
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its

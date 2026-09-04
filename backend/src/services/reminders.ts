@@ -857,5 +857,17 @@ export async function remindAllHouseholds(
       logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
     }
   }
+  // The run's own summary, as a structured line, because the counters existed
+  // nowhere else: the per-household catch above logs at WARN (below every
+  // metric filter) and the handler then returns normally, so an hour in which
+  // EVERY household failed produced no Lambda error, nothing in the DLQ, and
+  // no data point anywhere. It was byte-identical, from the outside, to an
+  // hour with nothing due. `digest.run_complete` already existed and is what
+  // this mirrors; the metric filters in
+  // infrastructure/modules/monitoring/main.tf read both.
+  logger.info(
+    { households: ids.length, sent, failed, msg: 'reminders.run_complete' },
+    'reminders.run_complete'
+  );
   return { households: ids.length, sent, failed };
 }

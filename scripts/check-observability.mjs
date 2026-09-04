@@ -79,6 +79,46 @@ const checks = [
     'release SHA reaches Lambda configuration',
     /git_sha\s*=\s*var\.git_sha/u.test(rootInfrastructure),
   ],
+  // A scheduled run that swallowed every per-household error returns normally
+  // and logs at WARN, so it produces no Lambda Errors point, nothing in the
+  // DLQ and no signal at all — indistinguishable from a quiet week. These four
+  // checks are what stop that state coming back.
+  [
+    'reminders emits a run summary carrying its failure count',
+    /msg: 'reminders\.run_complete'/u.test(read('backend/src/services/reminders.ts')) &&
+      /failed,/u.test(read('backend/src/services/reminders.ts')),
+  ],
+  [
+    'scheduled-run failure metric filters exist for reminders and digests',
+    /reminders\.run_complete\\" && \$\.failed > 0/u.test(monitoring) &&
+      /digest\.run_complete\\" && \$\.failed > 0/u.test(monitoring) &&
+      /recap\.run_complete\\" && \$\.failed > 0/u.test(monitoring),
+  ],
+  [
+    'scheduled-run failures alarm above zero',
+    /aws_cloudwatch_metric_alarm" "reminders_run_failed/u.test(monitoring) &&
+      /aws_cloudwatch_metric_alarm" "digests_run_failed/u.test(monitoring),
+  ],
+  // The old flat `> 5 Sum over 2 consecutive periods` was unreachable for an
+  // async function: EventBridge retries a target at most 4 times, so a totally
+  // broken run emits AT MOST 5 Errors points and 5 is not > 5. The alarm on
+  // `reminders` — kept per-function precisely because an async failure
+  // surfaces nowhere else — could not fire for the failure it existed for.
+  [
+    'async lambdas alarm on a single error, and digests/emailEvents are covered',
+    /-\(reminders\|digests\|emailEvents\)-/u.test(monitoring) &&
+      /contains\(local\.scheduled_lambda_names, each\.value\) \? 0 : 5/u.test(monitoring),
+  ],
+  // reputation_metrics_enabled has been on since the email module shipped; the
+  // numbers it publishes were watched by nothing. A paused SES identity's
+  // first symptom is that password resets stop.
+  [
+    'SES bounce and complaint rates are alarmed',
+    /namespace\s*=\s*"AWS\/SES"/u.test(monitoring) &&
+      /Reputation\.BounceRate/u.test(monitoring) &&
+      /Reputation\.ComplaintRate/u.test(monitoring) &&
+      /ConfigurationSetName = var\.ses_configuration_set_name/u.test(monitoring),
+  ],
   [
     'production smoke uses component health',
     /API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url \}\}/u.test(productionDeployBackend) &&
