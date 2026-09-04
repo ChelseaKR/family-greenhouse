@@ -13,6 +13,47 @@ are build artifacts and gitignored.
   reads the injected `window.Capacitor` global so web visitors never download
   the Capacitor runtime.
 
+## Native capabilities
+
+This is the whole list. `scripts/validate-store-release.mjs` asserts that the
+table names exactly the Capacitor plugins in `frontend/package.json`, and that
+both native projects actually link each one — so a plugin cannot be added,
+removed, or left un-synced without this table moving with it.
+
+<!-- capacitor-plugins:start -->
+
+| Plugin                          | What it backs                                                                                                                                      |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below. |
+
+<!-- capacitor-plugins:end -->
+
+Everything else the apps do is the same web code running in a WebView. Two
+things that look native and are not, because both have been written into
+review notes before and neither is true:
+
+- **Photos.** Every photo path is a plain `<input type="file">`
+  (`PlantImageUpload.tsx`, `AddPlantPage.tsx`, `LeafHealthCard.tsx`,
+  `SitterPhotoBack.tsx`, `CaretakerPage.tsx`). There is no `@capacitor/camera`.
+  `LeafHealthCard` adds `capture="environment"`, which makes iOS open the
+  camera directly from the picker — **this is why `NSCameraUsageDescription`
+  and `NSPhotoLibraryUsageDescription` are in `Info.plist` and they must stay**;
+  iOS terminates the app if a purpose string is missing when the picker opens.
+  They are load-bearing for the WebView picker, not leftovers from a camera
+  plugin. What they are not is a native capability a reviewer can distinguish
+  from the mobile website.
+- **Offline.** The shells work offline because `dist/` is copied into the
+  binary, not because anything caches at runtime. On iOS the shell is served
+  from `capacitor://localhost`, a custom `WKURLSchemeHandler` scheme where
+  service workers are unavailable, so `initPwaRegistration()`
+  (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
+  The PWA offline story is a web-only feature.
+
+Not present anywhere in the tree: deep links (the only Android `intent-filter`
+is `MAIN`/`LAUNCHER`, there is no iOS entitlements file, and no
+`assetlinks.json` or `apple-app-site-association` is served), so every link the
+backend mails opens the browser even for a user who has the app installed.
+
 ## Build flow
 
 ```bash
@@ -137,10 +178,22 @@ Remaining work for delivery:
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra
-      scrutiny. Camera photo capture + the offline app shell are
-      the differentiation to call out in review notes. If rejected under 4.2,
-      the usual fixes are adding haptics, widgets, or native share — talk to
-      review, don't resubmit blind.
+      scrutiny, and **there is currently no native capability to point a
+      reviewer at.** Do not write review notes that claim otherwise. This item
+      used to name "camera photo capture + the offline app shell"; neither
+      survives a reviewer opening the app. Photo capture is the WebView file
+      picker, identical to the website in mobile Safari; the app opens offline
+      because the bundle is inside the binary, which is what wrapping a web app
+      means rather than a differentiator; and the one linked plugin, push
+      notifications, is deliberately unreachable from the UI. All three are
+      documented under "Native capabilities" above. Closing the gap is a
+      product decision tracked in
+      [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) — the
+      candidates are native camera capture, Universal Links / App Links, or
+      finishing push delivery. A 4.2 rejection is a multi-week loop, so decide
+      before submitting rather than after. If rejected under 4.2, the usual
+      fixes are haptics, widgets, or native share — talk to review, don't
+      resubmit blind.
 - [ ] Demo credentials for a seeded household in the review notes (both
       stores log into the app during review).
 
