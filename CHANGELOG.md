@@ -16,6 +16,77 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-04
+
+> `0.24.0` was tagged but never reached production: its deploy failed on two
+> infrastructure defects (fixed below) and the release was rolled back. Its
+> entry stands as the record of what that tag contained; everything in it
+> ships here, for the first time, together with the entries below.
+
+### Added
+
+- **Seasonal Move Day.** When tonight's already-cached forecast crosses the
+  frost line or today's crosses the heat line, every plant sitting somewhere
+  other than its home for the arriving season becomes a task — split
+  round-robin across the members who are actually around, so the move is not
+  one person's afternoon. Last year's move is re-armed rather than duplicated,
+  and any member can take over someone else's move.
+
+- **Auto-handoff.** A task nobody has done by a number of days you choose goes
+  up for grabs on its own, and the rest of the household is told once. The
+  person who always notices no longer has to be the one who asks. Off by
+  default, with a floor of five days, at most one handoff per occurrence, one
+  roll-up per person per run, and never to whoever just dropped it or anyone
+  who is away or inside quiet hours.
+
+- **Care rotation.** A space can take turns instead of always falling to the
+  same person. Free on every plan — rotation is how a household shares work,
+  not a feature to sell.
+
+- **Identification top-up packs.** Twenty extra plant identifications for
+  $1.99 when a household runs out, instead of pushing them to a bigger plan
+  they do not need. Credits last a year. The pack stays unsold until the price
+  is configured, and an unreadable credit balance reads as unknown, never as
+  zero.
+
+### Changed
+
+- **The plans are cut on homes and hands, not collection size.** What a
+  household pays for is now how many homes it spans and how many people share
+  the work, rather than how far its collection has grown.
+
+  So the plant caps moved both ways: Seedling doubles from 10 to 20, and
+  Garden comes down from 500 to 200 — a number no household of that size was
+  near, and no longer the thing being sold. In exchange, **Garden and
+  Greenhouse now take unlimited members**, where they were capped at 6 and 50.
+  The free tier covers three people instead of six, because the fourth pair of
+  hands is the point at which a household is really coordinating.
+
+  **Belonging to more than one household is now a Greenhouse capability** —
+  Seedling and Garden each cover one home. Care rotation stays free on every
+  plan; sharing the work is not something to sell.
+
+  Nothing is taken away from anyone: a household already past a new limit
+  keeps everything it has, and the cap only refuses the next addition.
+
+### Fixed
+
+- **The production deploy itself.** Two defects introduced with the email
+  deliverability work made `terraform plan` fail outright and left SES unable
+  to use its own topic key. Both were invisible to every gate that ran on the
+  PR that introduced them.
+
+- **A new household's first seconds.** The app refreshed its login token just
+  after recording the new household rather than just before, so the first
+  request went out on a token that predated the household and came back 403.
+  It recovered on its own, but a failed plants read is read as "this household
+  has already started" — so a brand-new home could be skipped past the guided
+  first run entirely.
+
+- **The release safety net could not see the release.** The post-deploy smoke
+  test still expected the pre-activation route and would have failed on a
+  correct deploy — and a failed smoke rolls the release back automatically.
+
 ## [0.24.0] - 2026-09-04
 
 ### Added
