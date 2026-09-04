@@ -199,10 +199,11 @@ export async function deleteUserScopedData(userId: string): Promise<void> {
  *
  * Most household data (metadata, members, spaces, plants, tasks, API keys,
  * chat state, and vacation windows) shares the HOUSEHOLD#{id} partition.
- * Activity events use a dedicated partition, while sitter credentials use a
- * secret-token partition projected onto GSI1. Account deletion must clear all
- * three boundaries; deleting only the visible plants leaves a usable sitter
- * link and a substantial amount of household data behind.
+ * Activity events use a dedicated partition, while sitter and kiosk
+ * credentials each use a secret-token partition projected onto GSI1. Account
+ * deletion must clear all four boundaries; deleting only the visible plants
+ * leaves a usable sitter link or a live wall display and a substantial amount
+ * of household data behind.
  *
  * Plant-specific S3 objects and per-plant rows are removed by
  * plantService.deletePlant before this runs. This final partition sweep is
@@ -218,6 +219,18 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
     ProjectionExpression: 'PK, SK',
   });
   await deleteItems(sitterItems);
+
+  // Kiosk links live in their own secret-token partition too, and unlike
+  // sitter links they never expire — a surviving row would leave a wall
+  // display reading a deleted household's task list forever.
+  const kioskItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#KIOSK` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(kioskItems);
 
   const activityItems = await queryAllItems({
     TableName: TABLE_NAME,
@@ -334,6 +347,33 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
       IndexName: 'GSI1',
       KeyConditionExpression: 'GSI1PK = :pk',
       ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#SITTER` },
+    },
+    (links) =>
+      mapBounded(
+        links.filter((link) => link.createdBy === userId),
+        async (link) => {
+          await dynamodb.send(
+            new UpdateCommand({
+              TableName: TABLE_NAME,
+              Key: { PK: link.PK, SK: link.SK },
+              UpdateExpression: 'SET #createdBy = :deletedId',
+              ExpressionAttributeNames: { '#createdBy': 'createdBy' },
+              ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },
+              ConditionExpression: 'attribute_exists(PK)',
+            })
+          );
+        }
+      )
+  );
+
+  // Kiosk credentials, same treatment: the household's wall display keeps
+  // working when one member leaves, but the departed member's id is scrubbed.
+  await forEachQueryPage(
+    {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#KIOSK` },
     },
     (links) =>
       mapBounded(

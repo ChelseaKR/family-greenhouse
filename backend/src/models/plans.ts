@@ -26,6 +26,18 @@ export interface PlanLimits {
   sitterLinksActive: number;
 }
 
+/**
+ * Capabilities a tier switches ON or OFF. The counterpart to `PlanLimits`:
+ * that one answers "how many / how long", this one answers "at all?". A
+ * capability that is either present or absent belongs here as a boolean, so a
+ * gate is a lookup in this catalog rather than a hardcoded plan id in a
+ * handler.
+ */
+export interface PlanFeatures {
+  /** Kiosk / wall-display link: a long-lived, read-mostly household token. */
+  kiosk: boolean;
+}
+
 export interface Plan {
   id: PlanId;
   name: string;
@@ -72,6 +84,11 @@ export interface Plan {
    * purchase is fully consumed after roughly 41 months. Monthly remains.
    */
   withdrawnIntervals?: readonly BillingInterval[];
+  /**
+   * Per-tier on/off capabilities, alongside `limits`' numeric caps. Kept
+   * deliberately small — this is the plan catalog, not a permission system.
+   */
+  features: PlanFeatures;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -84,6 +101,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxMembers: 6,
     // One live sitter link, a week long: the task list for a weekend away.
     limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1 },
+    features: { kiosk: false },
   },
   garden: {
     id: 'garden',
@@ -106,6 +124,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // Annual ($3.33/mo) and lifetime ($149 once) both earn less per month
     // than the tier's $3.48 AI-cost ceiling. Existing subscribers keep them.
     withdrawnIntervals: ['year', 'lifetime'],
+    features: { kiosk: false },
   },
   greenhouse: {
     id: 'greenhouse',
@@ -122,6 +141,7 @@ export const PLANS: Record<PlanId, Plan> = {
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
     // ceiling. Existing subscribers keep it.
     withdrawnIntervals: ['year'],
+    features: { kiosk: true },
   },
 };
 
@@ -148,6 +168,15 @@ export const PLAN_ORDER: readonly PlanId[] = ['seedling', 'garden', 'greenhouse'
 /** Rank of a tier in PLAN_ORDER; higher means strictly more entitlement. */
 export function planRank(id: PlanId): number {
   return PLAN_ORDER.indexOf(id);
+}
+
+/** Whether a tier switches on one feature. The single accessor every gate
+ *  uses, so adding a tier can never silently miss a check. */
+export function planHasFeature(
+  id: string | undefined | null,
+  feature: keyof PlanFeatures
+): boolean {
+  return getPlan(id).features[feature];
 }
 
 /** True iff `id` names a real plan in the catalog. */

@@ -750,6 +750,11 @@ export const completeSitterTask = createHandler(
   .use(rateLimit({ perWindowMs: 60_000, max: 30 }))
   .use(validateBody(sitterCompleteTaskSchema));
 
+// Kiosk (wall display) public routes. Separate file, same group: the tasks
+// Lambda already owns task listing + completion, and the kiosk is a second
+// token-scoped, no-account view of exactly those two operations.
+import { getKioskView, completeKioskTask } from './kiosk.js';
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'GET /tasks': listTasks,
@@ -771,4 +776,6 @@ export const handler = createRouter({
   'GET /sitter/{token}': getSitterView,
   'GET /sitter/{token}/brief': getSitterBrief,
   'POST /sitter/{token}/tasks/{taskId}/complete': completeSitterTask,
+  'GET /kiosk/{token}': getKioskView,
+  'POST /kiosk/{token}/tasks/{taskId}/complete': completeKioskTask,
 });

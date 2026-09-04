@@ -451,6 +451,61 @@ paths:
                   overdue: { type: boolean }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /kiosk/{token}:
+    get:
+      summary: Public kiosk (wall display) view — today's due/overdue tasks for a long-lived household token, plus the poll interval the display should use. No auth; the token is the only credential. Same PII-free projection as the sitter view. A read failure is a 5xx, never an empty list.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Today's tasks for the kiosk (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pollIntervalSeconds: { type: integer, minimum: 60, maximum: 3600 }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        plantName: { type: string }
+                        taskType: { type: string }
+                        dueDate: { type: string, format: date-time }
+                        spaceName: { type: string, nullable: true }
+                        placementNote: { type: string, nullable: true }
+                        overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /kiosk/{token}/tasks/{taskId}/complete:
+    post:
+      summary: Public kiosk task completion. Re-validates the token (so a revoke bites mid-session) and that the task belongs to the token's household; attributed as "the kiosk display". No auth, no PII.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: taskId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Task completed (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  plantName: { type: string }
+                  taskType: { type: string }
+                  dueDate: { type: string, format: date-time }
+                  spaceName: { type: string, nullable: true }
+                  placementNote: { type: string, nullable: true }
+                  overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /households:
     post:
       summary: Create a new household
@@ -973,6 +1028,75 @@ paths:
         - { name: linkId, in: path, required: true, schema: { type: string } }
       responses:
         '204': { description: Sitter link revoked }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /households/{id}/kiosk-link:
+    post:
+      summary: Issue (or re-issue) the household's kiosk wall-display link (admin only, Greenhouse plan). Returns the token/URL exactly once and revokes any previous link in the same call.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pollIntervalSeconds:
+                  type: integer
+                  minimum: 60
+                  maximum: 3600
+                  default: 300
+                  description: How often the display re-reads its task list. Cost scales with wall-clock time, not usage — ~$0.01/household/month at 300s, ~$0.05 at 60s.
+      responses:
+        '201':
+          description: Kiosk link issued (token returned once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  token: { type: string }
+                  url: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  status: { type: string, enum: [active, revoked] }
+                  pollIntervalSeconds: { type: integer }
+        '402': { description: The kiosk display requires the Greenhouse plan }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    get:
+      summary: The household's current kiosk link, or null when it has none (admin only). Never returns the token.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: The live kiosk link, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link:
+                    nullable: true
+                    type: object
+                    properties:
+                      id: { type: string }
+                      householdId: { type: string }
+                      createdBy: { type: string }
+                      createdAt: { type: string, format: date-time }
+                      status: { type: string, enum: [active, revoked] }
+                      pollIntervalSeconds: { type: integer }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      summary: Revoke the household's kiosk link immediately (admin only). Not plan-gated — turning a wall display off must always be possible.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '204': { description: Kiosk link revoked }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 

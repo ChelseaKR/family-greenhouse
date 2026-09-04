@@ -204,7 +204,7 @@ describe('account cleanup', () => {
     ]);
   });
 
-  it('deletes sitter credentials and every abandoned-household partition row', async () => {
+  it('deletes sitter + kiosk credentials and every abandoned-household partition row', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
       const command = raw as unknown as {
@@ -214,8 +214,13 @@ describe('account cleanup', () => {
       if (command.kind !== 'Query') return {} as never;
       const pk = command.input.ExpressionAttributeValues?.[':pk'];
       if (command.input.IndexName === 'GSI1') {
+        // Both secret-token partitions are swept: sitter links AND the
+        // never-expiring kiosk (wall display) link.
         return {
-          Items: [{ PK: 'SITTER#secret', SK: 'METADATA' }],
+          Items:
+            pk === 'HOUSEHOLD#hh#KIOSK'
+              ? [{ PK: 'KIOSK#secret', SK: 'METADATA' }]
+              : [{ PK: 'SITTER#secret', SK: 'METADATA' }],
         } as never;
       }
       if (pk === 'HOUSEHOLD#hh#ACTIVITY') {
@@ -248,12 +253,13 @@ describe('account cleanup', () => {
           };
         }
     );
-    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(3);
+    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(4);
     expect(
       commands.filter((command) => command.kind === 'Delete').map((command) => command.input.Key)
     ).toEqual(
       expect.arrayContaining([
         { PK: 'SITTER#secret', SK: 'METADATA' },
+        { PK: 'KIOSK#secret', SK: 'METADATA' },
         { PK: 'HOUSEHOLD#hh#ACTIVITY', SK: 'EVENT#1' },
         { PK: 'HOUSEHOLD#hh', SK: 'METADATA' },
         { PK: 'HOUSEHOLD#hh', SK: 'SPACE#s1' },

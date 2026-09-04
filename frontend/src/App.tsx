@@ -81,6 +81,7 @@ const CareGuidePage = lazyNamed(() => import('@/features/care/CareGuidePage'), '
 const PetSafePage = lazyNamed(() => import('@/features/petsafe/PetSafePage'), 'PetSafePage');
 const SitPage = lazyNamed(() => import('@/features/sitter/SitPage'), 'SitPage');
 const SitBriefPage = lazyNamed(() => import('@/features/sitter/SitBriefPage'), 'SitBriefPage');
+const KioskPage = lazyNamed(() => import('@/features/kiosk/KioskPage'), 'KioskPage');
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -186,6 +187,10 @@ function App() {
               <Route path="/sit/:token" element={<SitPage />} />
               {/* The printable handoff brief for the same token (ADR 0015). */}
               <Route path="/sit/:token/brief" element={<SitBriefPage />} />
+              {/* Public, no-account household wall display. Long-lived token,
+                  no navigation off this page by design — see
+                  backend/src/services/kioskService.ts for the threat model. */}
+              <Route path="/kiosk/:token" element={<KioskPage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />

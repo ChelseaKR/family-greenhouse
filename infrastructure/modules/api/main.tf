@@ -850,6 +850,14 @@ locals {
     "GET /sitter/{token}/brief"                    = { group = "tasks", auth = "none" }
     "POST /sitter/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
 
+    # Kiosk (wall display) PUBLIC endpoints (auth=none). Same token model as
+    # the sitter routes above, but LONG-LIVED: the token sits on a screen in a
+    # shared room and must be assumed leaked, so the surface is exactly two
+    # operations (read today's tasks, complete one), PII-free, IP-rate-limited,
+    # and revocable in one click. See backend/src/services/kioskService.ts.
+    "GET /kiosk/{token}"                          = { group = "tasks", auth = "none" }
+    "POST /kiosk/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+
     # --- households (invite preview is public) ---
     "POST /households"                                    = { group = "households", auth = "jwt" }
     "GET /households/{id}"                                = { group = "households", auth = "jwt" }
@@ -867,6 +875,12 @@ locals {
     "POST /households/{id}/sitter-links"            = { group = "households", auth = "jwt" }
     "GET /households/{id}/sitter-links"             = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/sitter-links/{linkId}" = { group = "households", auth = "jwt" }
+    # Kiosk-link management (authed, admin-gated, Greenhouse-gated). Issue
+    # returns the token once and revokes any previous one; get/revoke never
+    # expose it. The public kiosk routes are above.
+    "POST /households/{id}/kiosk-link"   = { group = "households", auth = "jwt" }
+    "GET /households/{id}/kiosk-link"    = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/kiosk-link" = { group = "households", auth = "jwt" }
 
     # --- me ---
     "DELETE /me"                = { group = "me", auth = "jwt" }
