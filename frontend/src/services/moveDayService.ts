@@ -29,6 +29,13 @@ export interface MoveDayList {
   items: MoveDayItem[];
   /** Winter only; presence-only (see backend services/moveDayPlan.ts). */
   tenderWithoutWinterHome: MoveDayTenderPlant[];
+  /**
+   * Winter only. Plants the frost check could not complete because their
+   * species record would not load. Absence from the list above means "not
+   * frost-tender" only while this is 0. Optional because records written
+   * before #454 do not carry it.
+   */
+  tenderCheckFailures?: number;
 }
 
 /**

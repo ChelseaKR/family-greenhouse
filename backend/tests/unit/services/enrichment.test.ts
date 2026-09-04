@@ -26,6 +26,7 @@ import {
   lookupSpeciesCached,
   getCareGuideCached,
   listPestsForSpeciesCached,
+  peekSpeciesCached,
   __testing,
 } from '../../../src/services/enrichment.js';
 
@@ -375,6 +376,42 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
       });
       const kinds = sentCommands().map((c) => c.kind);
       expect(kinds).toEqual(['Get', 'Update', 'Put']); // the empty result IS cached
+    });
+  });
+
+  // peekSpeciesCached is the ONLY reader that never falls through to Perenual,
+  // so it is the only one for which "no row" and "could not read the row" are
+  // different facts rather than the same instruction. #454.
+  describe('peekSpeciesCached (cache-only, so it must be three-state)', () => {
+    it('reports `unavailable` — not `absent` — when the cache read throws', async () => {
+      stubDynamo({ getRejects: true });
+      expect(await peekSpeciesCached(7)).toEqual({ status: 'unavailable' });
+    });
+
+    it('reports `absent` for a genuine miss, and never calls Perenual', async () => {
+      stubDynamo({ cacheItem: null });
+      expect(await peekSpeciesCached(7)).toEqual({ status: 'absent' });
+      expect(perenual.lookupSpecies).not.toHaveBeenCalled();
+    });
+
+    it('reports `absent` for an expired row', async () => {
+      stubDynamo({
+        cacheItem: { payload: { hardinessZone: '10-12' }, ttl: Math.floor(Date.now() / 1000) - 60 },
+      });
+      expect(await peekSpeciesCached(7)).toEqual({ status: 'absent' });
+    });
+
+    it('reports a cached 404 as `cached` with a null value, distinct from both', async () => {
+      stubDynamo({ cacheItem: { payload: null } });
+      expect(await peekSpeciesCached(7)).toEqual({ status: 'cached', value: null });
+    });
+
+    it('returns the cached detail on a hit', async () => {
+      stubDynamo({ cacheItem: { payload: { id: 7, hardinessZone: '10-12' } } });
+      expect(await peekSpeciesCached(7)).toEqual({
+        status: 'cached',
+        value: { id: 7, hardinessZone: '10-12' },
+      });
     });
   });
 });

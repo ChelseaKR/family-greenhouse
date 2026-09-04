@@ -64,6 +64,15 @@ export interface MoveDayList {
    * cached species record is simply absent, never "fine".
    */
   tenderWithoutWinterHome: MoveDayTenderPlant[];
+  /**
+   * Winter only. How many candidate plants the frost check could NOT complete
+   * because the species-cache read failed — as opposed to the ones it checked
+   * and cleared. Absence from `tenderWithoutWinterHome` means "not tender"
+   * only when this is 0; anything higher means the list above is incomplete
+   * and the card must say so (#454). Stored on the record, so a list frozen
+   * for MOVE_DAY_CARD_DAYS keeps carrying its own caveat.
+   */
+  tenderCheckFailures: number;
 }
 
 /** The plant's assigned home for `season`, or null when it has none. */

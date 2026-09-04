@@ -82,6 +82,11 @@ function itemToList(item: Record<string, unknown>): MoveDayList {
     items: (item.items as MoveDayItem[] | undefined) ?? [],
     tenderWithoutWinterHome:
       (item.tenderWithoutWinterHome as MoveDayTenderPlant[] | undefined) ?? [],
+    // Rows written before #454 carry no count. They were produced by the code
+    // that could not tell a failed check from a clear one, so "0 failures" is
+    // not something we know about them — but it is the only reading that does
+    // not invent a warning, and the 400-day record TTL retires them.
+    tenderCheckFailures: Number(item.tenderCheckFailures ?? 0) || 0,
   };
 }
 
@@ -153,27 +158,46 @@ async function availableAssignees(
  * Winter hint: outdoor plants with no winter home whose species the app has
  * ALREADY looked up (cache only — no Perenual call, no budget) are known to
  * be frost-tender. Presence-only by construction.
+ *
+ * The cache read is three-state on purpose. A plant whose species row could
+ * not be READ is not the same as one that was checked and cleared, and this
+ * function has no second chance to find out: it never calls Perenual, and the
+ * answer it returns is frozen on the record for MOVE_DAY_CARD_DAYS. So a
+ * failed read is counted and handed to the card, which says "we could not
+ * check N of these" rather than quietly shortening the frost warning (#454).
  */
 async function tenderWithoutWinterHome(
   plants: ReadonlyArray<Plant>,
   spaces: ReadonlyArray<PlantSpace>
-): Promise<MoveDayTenderPlant[]> {
+): Promise<{ tender: MoveDayTenderPlant[]; failures: number }> {
   const outdoor = new Set(spaces.filter((s) => s.environment === 'outside').map((s) => s.id));
   const candidates = plants.filter(
     (p) => !p.winterSpaceId && !!p.spaceId && outdoor.has(p.spaceId) && !!p.perenualSpeciesId
   );
   const found: MoveDayTenderPlant[] = [];
+  let failures = 0;
   for (const plant of candidates) {
     const species = await enrichment.peekSpeciesCached(plant.perenualSpeciesId as number);
-    if (species && isFrostTender(species.hardinessZone)) {
+    if (species.status === 'unavailable') {
+      failures += 1;
+      continue;
+    }
+    if (
+      species.status === 'cached' &&
+      species.value &&
+      isFrostTender(species.value.hardinessZone)
+    ) {
       found.push({
         plantId: plant.id,
         plantName: plant.name,
-        hardinessZone: species.hardinessZone as string,
+        hardinessZone: species.value.hardinessZone as string,
       });
     }
   }
-  return found.sort((a, b) => a.plantName.localeCompare(b.plantName));
+  if (failures > 0) {
+    logger.warn({ failures, candidates: candidates.length }, 'move_day.tender_check_incomplete');
+  }
+  return { tender: found.sort((a, b) => a.plantName.localeCompare(b.plantName)), failures };
 }
 
 /**
@@ -302,6 +326,11 @@ export async function evaluateMoveDay(
   // written, so the next dashboard load retries cleanly.
   const existingTasks = await taskService.getTasks(household.id);
 
+  const tender =
+    season === 'winter'
+      ? await tenderWithoutWinterHome(plants, spaces)
+      : { tender: [], failures: 0 };
+
   const list: MoveDayList = {
     season,
     firedAt: now.toISOString(),
@@ -312,8 +341,8 @@ export async function evaluateMoveDay(
       heatLineC: climate.HEAT_HIGH_C,
     },
     items,
-    tenderWithoutWinterHome:
-      season === 'winter' ? await tenderWithoutWinterHome(plants, spaces) : [],
+    tenderWithoutWinterHome: tender.tender,
+    tenderCheckFailures: tender.failures,
   };
 
   if (!(await claimSeason(household.id, list, now))) {

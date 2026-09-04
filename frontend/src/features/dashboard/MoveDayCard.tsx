@@ -70,6 +70,12 @@ export function MoveDayCard() {
     day: 'numeric',
   });
   const tender = isWinter ? list.tenderWithoutWinterHome : [];
+  // A plant whose species record would not load was NOT checked and NOT
+  // cleared. It is missing from `tender` for the same reason a hardy plant is,
+  // so the caveat has to be rendered from this count rather than inferred from
+  // an empty list — and it has to render even when `tender` is empty, which is
+  // exactly the case where the frost warning would otherwise vanish (#454).
+  const uncheckable = isWinter ? (list.tenderCheckFailures ?? 0) : 0;
 
   return (
     <Card>
@@ -116,24 +122,38 @@ export function MoveDayCard() {
         ))}
       </ul>
 
-      {tender.length > 0 && (
+      {(tender.length > 0 || uncheckable > 0) && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
-          <p className="flex items-start gap-2">
-            <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
-            <span>{t('moveDay.tender', { count: tender.length })}</span>
-          </p>
-          <ul className="ml-8 mt-1 list-disc">
-            {tender.map((p) => (
-              <li key={p.plantId}>
-                <Link to={`/plants/${p.plantId}`} className="font-medium hover:underline">
-                  {p.plantName}
-                </Link>{' '}
-                <span className="text-xs">
-                  ({t('moveDay.tenderZone', { zone: p.hardinessZone })})
-                </span>
-              </li>
-            ))}
-          </ul>
+          {tender.length > 0 && (
+            <>
+              <p className="flex items-start gap-2">
+                <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
+                <span>{t('moveDay.tender', { count: tender.length })}</span>
+              </p>
+              <ul className="ml-8 mt-1 list-disc">
+                {tender.map((p) => (
+                  <li key={p.plantId}>
+                    <Link to={`/plants/${p.plantId}`} className="font-medium hover:underline">
+                      {p.plantName}
+                    </Link>{' '}
+                    <span className="text-xs">
+                      ({t('moveDay.tenderZone', { zone: p.hardinessZone })})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {uncheckable > 0 && (
+            <p
+              className={
+                tender.length > 0 ? 'mt-2 flex items-start gap-2' : 'flex items-start gap-2'
+              }
+            >
+              <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
+              <span>{t('moveDay.tenderUnchecked', { count: uncheckable })}</span>
+            </p>
+          )}
           <p className="ml-6 mt-1 text-xs">{t('moveDay.tenderHint')}</p>
         </div>
       )}
