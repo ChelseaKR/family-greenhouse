@@ -254,6 +254,16 @@ export function TasksPage() {
   const overdueTasks = sortedTasks.filter((t) => isOverdue(t.nextDue));
   const todayTasks = sortedTasks.filter((t) => isToday(t.nextDue));
   const upcomingTasks = sortedTasks.filter((t) => !isOverdue(t.nextDue) && !isToday(t.nextDue));
+  // Announce the consequence of a filter press, not only the chip's own
+  // pressed state: the sections below re-render with a different set and
+  // nothing else says so (#447). Empty while the read is unsettled — "0 tasks
+  // shown" next to an error alert is the same failed-read-as-all-clear defect
+  // the overdue chip above was fixed for.
+  const taskCountSummary =
+    isLoading || error || tasks === undefined
+      ? ''
+      : `${sortedTasks.length} ${sortedTasks.length === 1 ? 'task' : 'tasks'} shown.`;
+
   const careRoundGroups = useMemo(
     () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, t('spaces.unplaced')),
     [plants, sortedTasks, spaces, t]
@@ -367,6 +377,10 @@ export function TasksPage() {
           </button>
         ))}
       </div>
+
+      <p aria-live="polite" className="text-sm text-gray-600">
+        {taskCountSummary}
+      </p>
 
       {/* Task list */}
       {isLoading ? (
