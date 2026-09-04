@@ -4769,6 +4769,59 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
  * `GET /notifications/email/dev-token?category=weekly_digest` is DEV ONLY:
  * it mints a link so the flow can be exercised without SES.
  */
+/**
+ * Per-IP throttle for the unauthenticated unsubscribe routes, mirroring the
+ * production limits in handlers/notifications/handler.ts (GET 30/min for link
+ * prefetchers, POST 10/min).
+ *
+ * Production is already protected three ways and this dev mirror is not
+ * internet-facing — it refuses to boot when NODE_ENV=production (top of this
+ * file). It gets a limiter anyway for two reasons. First, a dev mirror that
+ * behaves differently from production is its own class of bug: the whole
+ * point of this file is that what you exercise locally is what ships.
+ * Second, CodeQL reads `verifyTokenWithSecret` as an authorization decision
+ * on an unauthenticated route and flags the missing throttle
+ * (js/missing-rate-limiting) — correctly, on the code as written. Mirroring
+ * the real limit is cheaper and more honest than suppressing the alert.
+ */
+const unsubscribeRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function unsubscribeRateLimit(max: number) {
+  const windowMs = 60_000;
+  return (
+    req: { ip?: string; method: string; path: string; socket?: { remoteAddress?: string } },
+    res: HtmlResponse & { status: (code: number) => { json: (body: unknown) => unknown } },
+    next: () => void
+  ): unknown => {
+    const now = Date.now();
+    // Key on METHOD + path + IP. The method matters: production keys on API
+    // Gateway's routeKey ("GET /notifications/email/unsubscribe"), which is
+    // per-method, and without it a corporate scanner prefetching the GET would
+    // burn the POST budget and hand a 429 to the human who then clicks
+    // Unsubscribe. An integration test covers exactly that.
+    const key = `${req.method} ${req.path}|${req.ip ?? req.socket?.remoteAddress ?? 'unknown'}`;
+    const bucket = unsubscribeRateBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      unsubscribeRateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    if (bucket.count >= max) {
+      return res
+        .status(429)
+        .json({ message: 'Too many requests. Please slow down and try again.' });
+    }
+    bucket.count += 1;
+    return next();
+  };
+}
+
+/** Mirrors `__resetRateLimitForTests` in middleware/rateLimit.ts so an
+ *  integration test can exercise the limiter without leaking buckets into the
+ *  next case. */
+export function __resetUnsubscribeRateLimitForTests(): void {
+  unsubscribeRateBuckets.clear();
+}
+
 const emailCapabilitySecrets = new Map<string, string>();
 function localCapabilitySecret(userId: string): string {
   const existing = emailCapabilitySecrets.get(userId);
@@ -4812,7 +4865,7 @@ app.get('/notifications/email/dev-token', authMiddleware, (req, res) => {
   res.json({ token, url: `http://localhost:4000/notifications/email/unsubscribe?t=${token}` });
 });
 
-app.get('/notifications/email/unsubscribe', (req, res) => {
+app.get('/notifications/email/unsubscribe', unsubscribeRateLimit(30), (req, res) => {
   const locale = unsubscribeLang(req);
   const token = typeof req.query.t === 'string' ? req.query.t : '';
   const userId = token ? localTokenUserId(token) : null;
@@ -4830,7 +4883,7 @@ app.get('/notifications/email/unsubscribe', (req, res) => {
   );
 });
 
-app.post('/notifications/email/unsubscribe', (req, res) => {
+app.post('/notifications/email/unsubscribe', unsubscribeRateLimit(10), (req, res) => {
   const locale = unsubscribeLang(req);
   const token = typeof req.query.t === 'string' ? req.query.t : '';
   const userId = token ? localTokenUserId(token) : null;

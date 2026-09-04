@@ -10,7 +10,7 @@ import {
   rejectApiKeyPrincipal,
 } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
-import { authRateLimit, userRateLimit } from '../../middleware/rateLimit.js';
+import { authRateLimit, rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
 import * as deviceTokens from '../../services/deviceTokens.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
@@ -340,6 +340,26 @@ export const unsubscribe = createHandler(
  *          `List-Unsubscribe-Post: List-Unsubscribe=One-Click` hits, so the
  *          same route serves the human and the machine.
  *
+ * ## Rate limiting
+ *
+ * Both routes are unauthenticated and both make an authorization decision
+ * (`verifyUnsubscribeToken`), so both are throttled per source IP. The two
+ * limits differ on purpose:
+ *
+ *   - GET is generous (30/min). It mutates nothing, and the traffic that
+ *     actually hits it is machines: Outlook Safe Links, corporate scanning
+ *     proxies and mail-client prefetchers fetch every URL in a message. Those
+ *     arrive from a shared corporate egress IP, so a tight limit here would
+ *     spend one organisation's budget on its scanner and hand a 429 to the
+ *     employee who then clicks the link.
+ *   - POST is tight (10/min, `authRateLimit`). It is the one that writes, and
+ *     nothing legitimate needs to call it more than once or twice.
+ *
+ * Neither is load-bearing against forgery — the token is an HMAC-SHA256 over
+ * a per-user 256-bit secret, so guessing one is not a rate problem — but an
+ * unauthenticated route that decides anything gets a brake regardless, and
+ * both sit behind API Gateway's stage throttle (50 rps / 100 burst) as well.
+ *
  * Gmail and Yahoo's bulk-sender rules make this effectively mandatory for the
  * weekly digest and the annual recap. Transactional mail (welcome, password,
  * billing) is not unsubscribable and never carries the header.
@@ -387,7 +407,7 @@ export const emailUnsubscribeForm = createHandler(
       })
     );
   }
-).use(authRateLimit());
+).use(rateLimit({ perWindowMs: 60_000, max: 30 }));
 
 // POST /notifications/email/unsubscribe
 export const emailUnsubscribe = createHandler(

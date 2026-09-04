@@ -24,6 +24,9 @@ const disable = notificationPrefs.disableEmailCategory as unknown as ReturnType<
 const ctx = {} as Context;
 const event = (method: 'GET' | 'POST', query: Record<string, string> | null) =>
   ({
+    // API Gateway populates routeKey per method, and the rate limiter keys on
+    // it — so GET and POST get their own buckets, as they do in production.
+    routeKey: `${method} /notifications/email/unsubscribe`,
     httpMethod: method,
     path: '/notifications/email/unsubscribe',
     headers: {},
@@ -32,8 +35,12 @@ const event = (method: 'GET' | 'POST', query: Record<string, string> | null) =>
     isBase64Encoded: false,
   }) as never;
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  // The limiter's buckets are module-level and would otherwise carry over
+  // between cases in this file.
+  const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+  __resetRateLimitForTests();
   process.env.PUBLIC_API_URL = 'https://api.example/prod';
   process.env.FRONTEND_URL = 'https://app.example';
 });
@@ -112,5 +119,46 @@ describe('POST /notifications/email/unsubscribe', () => {
     const res = await handler.emailUnsubscribe(event('POST', { t: 'tok' }), ctx);
     expect(res.statusCode).toBe(410);
     expect(disable).not.toHaveBeenCalled();
+  });
+});
+
+describe('rate limiting (js/missing-rate-limiting)', () => {
+  // Both routes are unauthenticated and both make an authorization decision,
+  // so both carry a per-IP throttle. The limits differ on purpose: GET is
+  // generous because link prefetchers and corporate scanning proxies hammer
+  // it from a shared egress IP and it mutates nothing; POST is tight because
+  // it is the one that writes.
+  it('throttles the GET at 30/min per IP, above what a prefetcher needs', async () => {
+    verify.mockResolvedValue({ status: 'ok', userId: 'u1', category: 'weekly_digest' });
+    const codes: number[] = [];
+    for (let i = 0; i < 32; i++) {
+      const res = await handler.emailUnsubscribeForm(event('GET', { t: 'tok' }), ctx);
+      codes.push(res.statusCode);
+    }
+    expect(codes.slice(0, 30).every((c) => c === 200)).toBe(true);
+    expect(codes.at(-1)).toBe(429);
+  });
+
+  it('throttles the POST at 10/min per IP', async () => {
+    verify.mockResolvedValue({ status: 'ok', userId: 'u1', category: 'weekly_digest' });
+    disable.mockResolvedValue({});
+    const codes: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await handler.emailUnsubscribe(event('POST', { t: 'tok' }), ctx);
+      codes.push(res.statusCode);
+    }
+    expect(codes.slice(0, 10).every((c) => c === 200)).toBe(true);
+    expect(codes.at(-1)).toBe(429);
+    // The throttled requests never reached the write.
+    expect(disable.mock.calls.length).toBe(10);
+  });
+
+  it('keys the two routes separately, so a prefetched GET cannot lock out the POST', async () => {
+    verify.mockResolvedValue({ status: 'ok', userId: 'u1', category: 'weekly_digest' });
+    disable.mockResolvedValue({});
+    for (let i = 0; i < 31; i++)
+      await handler.emailUnsubscribeForm(event('GET', { t: 'tok' }), ctx);
+    const posted = await handler.emailUnsubscribe(event('POST', { t: 'tok' }), ctx);
+    expect(posted.statusCode).toBe(200);
   });
 });

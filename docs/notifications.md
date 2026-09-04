@@ -438,6 +438,19 @@ List-Unsubscribe-Post: List-Unsubscribe=One-Click
   **changes nothing** — link scanners fetch every URL in a message.
 - `POST` performs it, and is what a provider's automated one-click hits.
 
+Both are unauthenticated and both make an authorization decision, so both are
+throttled per source IP, keyed per method so one cannot starve the other:
+
+| Route  | Limit  | Why                                                                                                                                                                                                                                                          |
+| ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`  | 30/min | Mutates nothing, and the traffic that hits it is machines — Safe Links, scanning proxies, prefetchers — arriving from a shared corporate egress IP. A tight limit would spend one organisation's budget on its scanner and 429 the employee who then clicks. |
+| `POST` | 10/min | The one that writes. Nothing legitimate calls it more than once or twice.                                                                                                                                                                                    |
+
+Neither is load-bearing against forgery (the token is an HMAC-SHA256 over a
+per-user 256-bit secret), and both sit behind API Gateway's stage throttle of
+50 rps / 100 burst. The dev mirror in `local-server.ts` carries the same two
+limits so local behaviour matches production.
+
 The token is an HMAC over `userId`, category and expiry, signed with a random
 per-user secret on `USER#{id} / EMAILCAP` (its own row: an upsert onto `PREFS`
 would create a record reading `email: false` and silently unsubscribe the user
