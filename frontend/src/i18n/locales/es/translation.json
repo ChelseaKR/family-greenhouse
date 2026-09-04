@@ -228,6 +228,8 @@
     "plant": {
       "title": "Añade tu primera planta",
       "description": "Con una planta basta para empezar. Ponle un nombre y nosotros seguimos desde ahí.",
+      "joinedTitle": "Añade una planta que cuides tú",
+      "joinedDescription": "Este hogar ya está en marcha, así que no empiezas de cero. Añade una planta tuya y se sumará al mismo calendario compartido: todo el mundo la ve y quien esté en casa puede marcarla como hecha.",
       "nameLabel": "Nombre de la planta",
       "namePlaceholder": "Monstera de la cocina",
       "nameHelp": "El nombre con el que ya la llamáis en casa.",

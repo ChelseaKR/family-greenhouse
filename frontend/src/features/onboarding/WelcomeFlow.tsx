@@ -9,10 +9,16 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { usePrefsStore } from '@/store/prefsStore';
 import { useAuthStore } from '@/store/authStore';
 import { plantService } from '@/services/plantService';
+import { listMyHouseholds } from '@/services/householdService';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { decideFirstRun, firstRunStepsFor, type FirstRunStep } from './firstRunModel';
+import {
+  decideFirstRun,
+  firstRunStepsFor,
+  type FirstRunStep,
+  type FirstRunVariant,
+} from './firstRunModel';
 import { FirstPlantStep } from './FirstPlantStep';
 import { InviteStep } from './InviteStep';
 
@@ -52,20 +58,45 @@ export function WelcomeFlow() {
     )
   );
 
-  // Once the first run has begun it stays begun. Adding the first plant
-  // invalidates ['plants', hh] — which is this very query — so a decision
-  // recomputed from live data would see one plant, conclude "established
-  // household", and eject the user mid-flow, one step before the household
-  // idea is ever mentioned.
-  const [started, setStarted] = useState(false);
+  // The caller's own membership in this household. Shares the query key (and
+  // therefore the cache) with `useActiveHouseholdRole`, which the layout
+  // already loads app-wide, so this costs no extra request in practice.
+  const membershipsQuery = useQuery({
+    queryKey: ['me', 'households'],
+    queryFn: listMyHouseholds,
+    enabled: householdId != null,
+    staleTime: 60_000,
+  });
 
-  const decision = started
-    ? ({ kind: 'run' } as const)
+  // How long this person has been in the household, and — separately —
+  // whether we were able to find that out at all. A membership row we cannot
+  // read, cannot find, or cannot parse is NOT "joined at the epoch" and not
+  // "joined just now"; it is an unknown, and `decideFirstRun` treats it as
+  // one (ADR 0010).
+  const membership = membershipsQuery.isSuccess
+    ? membershipsQuery.data.find((m) => m.householdId === householdId)
+    : undefined;
+  const joinedAtMs = membership ? Date.parse(membership.joinedAt) : Number.NaN;
+  const membershipUnknown = membershipsQuery.isError || !Number.isFinite(joinedAtMs);
+  const membershipAgeMs =
+    membershipsQuery.isSuccess && Number.isFinite(joinedAtMs) ? Date.now() - joinedAtMs : null;
+
+  // Once the first run has begun it stays begun, in the variant it began in.
+  // Adding the first plant invalidates ['plants', hh] — which is this very
+  // query — so a decision recomputed from live data would see one plant,
+  // conclude "established household", and eject the user mid-flow, one step
+  // before the household idea is ever mentioned.
+  const [startedVariant, setStartedVariant] = useState<FirstRunVariant | null>(null);
+
+  const decision = startedVariant
+    ? ({ kind: 'run', variant: startedVariant } as const)
     : decideFirstRun({
         hasHousehold: householdId != null,
         welcomeSeen,
         plantCount: plantsQuery.isSuccess ? plantsQuery.data.length : null,
         plantsFailed: plantsQuery.isError,
+        membershipAgeMs,
+        membershipUnknown,
       });
 
   const shouldMarkSeen = decision.kind === 'leave' && decision.markSeen;
@@ -73,10 +104,10 @@ export function WelcomeFlow() {
     if (shouldMarkSeen) setWelcomeSeen(true);
   }, [shouldMarkSeen, setWelcomeSeen]);
 
-  const isRunning = decision.kind === 'run';
+  const runningVariant = decision.kind === 'run' ? decision.variant : null;
   useEffect(() => {
-    if (isRunning) setStarted(true);
-  }, [isRunning]);
+    if (runningVariant) setStartedVariant(runningVariant);
+  }, [runningVariant]);
 
   const steps = firstRunStepsFor(isAdmin);
   const [step, setStep] = useState<FirstRunStep>('plant');
@@ -148,6 +179,7 @@ export function WelcomeFlow() {
             headingId={headingId}
             headingRef={headingRef}
             householdId={householdId}
+            variant={decision.variant}
             onAdded={afterPlant}
             onSkip={afterPlant}
             onWantsFullForm={goToFullPlantForm}
