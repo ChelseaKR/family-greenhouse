@@ -95,6 +95,66 @@ function apiOrigin(): Plugin {
   };
 }
 
+/**
+ * Preload the one font face that decides Largest Contentful Paint.
+ *
+ * Measured on the throttled mobile profile: `/login` painted at FCP 2.5s but
+ * recorded LCP at **3.9s**, on an `<h1 class="font-serif">` that is already in
+ * the prerendered HTML. The markup was never the problem. The heading paints
+ * immediately in the Georgia fallback, then Bitter arrives and re-paints it —
+ * and that second paint is what Chrome records. The 1.4s between them is a
+ * real wait for a real person, not a metric artifact.
+ *
+ * `font-display: swap` (already on all 12 faces) is what allows the early
+ * fallback paint; it does not make the swap arrive sooner. Only a preload
+ * does, because the font is otherwise not discovered until the CSS that
+ * references it has been fetched and parsed.
+ *
+ * Exactly one face: latin, normal weight — the only one the above-the-fold
+ * heading can use. Preloading the italic, the extended ranges or the sans
+ * would compete for the same connection and make LCP worse, which is the
+ * usual way this optimisation backfires.
+ *
+ * `order: 'post'` is load-bearing: at `'pre'` the bundle is not yet populated,
+ * so the lookup finds nothing. That is not hypothetical — it is what the first
+ * version of this did, and the warning below is what caught it instead of
+ * shipping a page with no preload and no sign anything was missing.
+ */
+function fontPreload(): Plugin {
+  let isBuild = false;
+  let warn: (msg: string) => void = () => {};
+
+  return {
+    name: 'family-greenhouse:font-preload',
+    configResolved(config) {
+      isBuild = config.command === 'build';
+      warn = (msg) => config.logger.warn(msg);
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!isBuild) return html;
+        const lcpFont = Object.keys(ctx.bundle ?? {}).find((name) =>
+          /bitter-latin-wght-normal-[^/]*\.woff2$/.test(name)
+        );
+        if (!lcpFont) {
+          // Never fail a build over a preload, but never let it vanish in
+          // silence either: a font rename would otherwise cost 1.4s of LCP
+          // with nothing in the diff or the logs to show for it.
+          warn(
+            '[font-preload] no bitter-latin-wght-normal woff2 in the bundle — LCP preload not emitted'
+          );
+          return html;
+        }
+        return html.replace(
+          '</head>',
+          `    <link rel="preload" as="font" type="font/woff2" href="/${lcpFont}" crossorigin />\n  </head>`
+        );
+      },
+    },
+  };
+}
+
 // `revision` for the app-shell precache entry. scripts/prerender.mjs writes
 // dist/app-shell.html AFTER this build, so workbox can't hash it off disk; give
 // it the commit under CI (the deploy workflows set VITE_GIT_SHA) and a
@@ -105,6 +165,7 @@ export default defineConfig(({ isSsrBuild }) => ({
   plugins: [
     react(),
     apiOrigin(),
+    fontPreload(),
     // The SSR pass (`vite build --ssr src/entry-server.tsx`) exists only to
     // produce a Node bundle for the prerender to import. Running the PWA plugin
     // over it would regenerate a service worker from the server bundle and
