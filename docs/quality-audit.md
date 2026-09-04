@@ -41,7 +41,9 @@ Every finding cites the file/file-region that backs it.
 
 ### Standards compliance
 
-**Strong.** REST conventions consistent. OpenAPI spec at `docs/api-spec.yaml` now documents every one of the 117 handler routes, and `scripts/check-api-spec.mjs` fails CI on any drift (a handler route without a spec entry, or a stale spec entry without a handler). Adding `GET /me/export` in this pass exercised the loop: handler comment → spec entry → green check.
+**Strong.** REST conventions consistent. OpenAPI spec at `docs/api-spec.yaml` documents every handler route, and `scripts/check-api-spec.mjs` fails CI on any drift (a handler route without a spec entry, or a stale spec entry without a handler). Adding `GET /me/export` in this pass exercised the loop: handler comment → spec entry → green check.
+
+**The route count is derived, not documented.** `node scripts/check-doc-figures.mjs --print` prints the live handler-route count from the handlers themselves; `scripts/check-api-spec.mjs` reports the same number every time it runs. The figure used to be written into this document in two places and enforced by `check-doc-figures.mjs`, which kept it honest but made every PR that adds a route rewrite the same two sentences: on 2026-09-03 this file sat in the conflict set of most of the fifteen PRs open in parallel, and four rebase cycles were each spent hand-reconciling a number a script can compute. What a reader relies on is not the digit but the claim behind it — the spec covers every route and is gated on drift — so that is what the gate now checks, along with this document still saying where to get the number, and it refuses a re-introduced hard-coded count for the same reason `scripts/check-docs-testing.mjs` refuses a `Files` column (PR #410). This supersedes the route half of the 2026-08-29 correction above, which is left as written because it is a record of what was true then.
 
 ---
 
@@ -248,7 +250,7 @@ Every finding cites the file/file-region that backs it.
 
 ## Documentation
 
-**Strong.** `docs/` covers architecture, deployment, accessibility, billing, security, testing, notifications, roadmap, production checklist, and now Perenual + profile editing. Inline doc comments are dense and explain rationale. `api-spec.yaml` is complete (all 117 handler routes) and CI-enforced against drift via `scripts/check-api-spec.mjs`.
+**Strong.** `docs/` covers architecture, deployment, accessibility, billing, security, testing, notifications, roadmap, production checklist, and now Perenual + profile editing. Inline doc comments are dense and explain rationale. `api-spec.yaml` is complete — every handler route documented, no orphaned entries — and CI-enforced against drift via `scripts/check-api-spec.mjs`, which prints the live route count on each run.
 
 ---
 
