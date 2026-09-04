@@ -19,12 +19,43 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/node_modules/**', 'tests/e2e/**'],
-    // Keep the 70+ jsdom files inside a bounded thread pool. The fork pool
+    // Keep the jsdom files inside a bounded thread pool. The fork pool
     // intermittently times out while starting or terminating child processes
-    // on laptops and shared CI runners before tests execute. A serial thread
-    // runner trades a little wall time for deterministic execution.
+    // on laptops and shared CI runners before tests execute; worker threads
+    // are cheap to start and have never shown that failure.
     pool: 'threads',
-    fileParallelism: false,
+    // Run those files across the pool instead of one at a time. The serial
+    // setting was introduced alongside the fork -> thread switch above, but the
+    // instability it was working around was the *fork* pool's process
+    // start/stop, not concurrency — the thread pool never had it, so serial
+    // execution was paying for a problem it did not solve.
+    //
+    // What it cost, measured on the `Test Frontend` runner (157 files, 1214
+    // tests, 203s wall clock):
+    //
+    //   environment  67.2s   jsdom construction, per file
+    //   tests        51.7s   the actual test bodies
+    //   setup        36.6s   tests/setup.ts, per file
+    //   import       20.3s
+    //   transform     2.7s
+    //
+    // Only a quarter of the run is test bodies; the rest is per-file fixed cost
+    // that a serial runner pays end to end on one core (measured at 114% CPU)
+    // and a parallel one amortises across the runner's vCPUs.
+    //
+    // This does not weaken the gate. `isolate` stays at its default, so each
+    // file still gets a fresh jsdom and a fresh module registry — the same
+    // isolation serial execution gave, just several at a time. Every file still
+    // runs, in one process, under one v8 coverage collection, so the coverage
+    // thresholds below are still computed over the whole suite. Sharding across
+    // runners would have been the other way to parallelise this, and was
+    // rejected precisely because it splits that coverage computation: a
+    // per-shard percentage is not the suite's percentage, and stitching the
+    // reports back together is a new way for the coverage gate to end up
+    // measuring less than it claims.
+    //
+    // TZ (set above, in the main process) is unaffected: worker threads inherit
+    // the real environment however many of them there are.
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
