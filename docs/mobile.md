@@ -121,6 +121,13 @@ Current state: native registration and delivery are disabled in the product UI.
 Email/SMS reminders still work. Do not restore the toggle until the following
 delivery work is complete and verified end to end.
 
+This is now enforced rather than remembered. `scripts/validate-store-release.mjs`
+treats a call site for `registerNativePush()` anywhere in `frontend/src` as
+"the push UI is reachable", and from that point requires the committed iOS
+entitlements below in every mode, plus `google-services.json` in
+`--production`. Wiring the toggle back up without the delivery material fails
+the build instead of shipping a reminder switch that cannot deliver.
+
 Remaining work for delivery:
 
 1. **Android (FCM):** create a Firebase project, add the app
@@ -130,9 +137,12 @@ Remaining work for delivery:
    fine without it (push simply won't work).
 2. **iOS (APNs):** in the Apple Developer portal create an APNs key; in Xcode
    enable the **Push Notifications** capability on the App target (the
-   AppDelegate APNs forwarding is already wired). Easiest delivery path is
-   uploading the APNs key to the same Firebase project and sending everything
-   through FCM.
+   AppDelegate APNs forwarding is already wired). Commit the resulting
+   `App.entitlements` and its `CODE_SIGN_ENTITLEMENTS` build setting — an
+   uncommitted Xcode capability has to be redone on every fresh clone, and
+   without an `aps-environment` entitlement `PushNotifications.register()`
+   fails at runtime. Easiest delivery path is uploading the APNs key to the
+   same Firebase project and sending everything through FCM.
 3. **Backend sender:** a `sendDevicePush` sibling to
    `notifier.sendBrowserPush` that calls the FCM HTTP v1 API with the stored
    tokens, pruning tokens FCM reports as dead (mirror the 404/410 cleanup the
