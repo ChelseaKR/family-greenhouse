@@ -28,6 +28,16 @@ output "auth_lambda_log_group_name" {
   value       = aws_cloudwatch_log_group.lambda["auth"].name
 }
 
+output "reminders_lambda_log_group_name" {
+  description = "CloudWatch log group for the hourly reminder scan (source of the reminders.run_complete metric filters)"
+  value       = aws_cloudwatch_log_group.lambda["reminders"].name
+}
+
+output "digests_lambda_log_group_name" {
+  description = "CloudWatch log group for the weekly digest / yearly recap function (source of the digest.run_complete metric filters)"
+  value       = aws_cloudwatch_log_group.lambda["digests"].name
+}
+
 output "api_gateway_arn" {
   description = "API Gateway ARN"
   value       = aws_apigatewayv2_api.main.arn

@@ -46,6 +46,24 @@ variable "auth_lambda_log_group_name" {
   type        = string
 }
 
+variable "reminders_lambda_log_group_name" {
+  description = "CloudWatch log group of the hourly reminder scan. Metric filters read its run-summary line."
+  type        = string
+  default     = ""
+}
+
+variable "digests_lambda_log_group_name" {
+  description = "CloudWatch log group of the weekly digest / yearly recap function. Metric filters read its run-summary lines."
+  type        = string
+  default     = ""
+}
+
+variable "ses_configuration_set_name" {
+  description = "SES configuration set publishing Reputation.BounceRate/ComplaintRate. Empty (no email module) skips the SES alarms."
+  type        = string
+  default     = ""
+}
+
 variable "lambda_function_names" {
   description = "List of Lambda function names"
   type        = list(string)

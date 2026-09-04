@@ -68,8 +68,40 @@ The title of this page is deliberate: alarms and the dashboard are a
 `enable_monitoring_dashboard` (root variables, both defaulting to `true`) gate
 every `aws_cloudwatch_metric_alarm` and the `aws_cloudwatch_dashboard` in
 `infrastructure/modules/monitoring`. Production sets neither and therefore keeps
-all 19 alarms and its dashboard; `environments/staging/terraform.tfvars` sets
+all 26 alarms and its dashboard; `environments/staging/terraform.tfvars` sets
 both `false`.
+
+Six of those 26 were added on 2026-09-04 for two blind spots, at roughly
+$0.60/month:
+
+- **Scheduled-run failures** (`*-reminders-run-failed`, `*-digests-run-failed`).
+  The reminder and digest fan-outs catch each per-household error, count it and
+  log at WARN, then return normally — so a run in which EVERY household failed
+  produced no Lambda `Errors` point, nothing in the DLQ and no signal at all.
+  It was byte-identical, from the outside, to a quiet week. Metric filters over
+  the `reminders.run_complete` / `digest.run_complete` / `recap.run_complete`
+  lines publish `failed` and `sent`; the alarms fire on a non-zero `failed`.
+  `sent` is published but not alarmed on: a "sent must not be zero" alarm needs
+  a volume floor the product does not have data for yet, and one that fires on
+  a genuinely quiet week gets trained away within a month.
+- **Two more functions on the per-function `Errors` alarm** (`digests`,
+  `emailEvents`), and a threshold that can actually be reached. The old flat
+  `> 5 Sum over 2 consecutive 5-minute periods` was **unreachable for any
+  async function**: EventBridge retries a target at most 4 times, so a totally
+  broken run emits at most 5 `Errors` data points, and 5 is not > 5 — let alone
+  in each of two consecutive periods. The alarm on `reminders`, kept
+  per-function precisely because "an async failure surfaces nowhere else",
+  could not fire for the failure it existed for. Scheduled functions now alarm
+  at `> 0` over one period; `chat` keeps the volume threshold that suits a
+  user-facing path. `Duration` alarms stay on `reminders` + `chat` only — a
+  weekly digest legitimately runs long.
+- **SES reputation** (`*-ses-bounce-rate`, `*-ses-complaint-rate`).
+  `reputation_metrics_enabled` has been on since the email module shipped and
+  nothing watched what it published. AWS reviews an identity at a 5% bounce
+  rate and can pause sending; because transactional and non-transactional mail
+  share the domain, the first symptom is that nobody can complete a password
+  reset. Thresholds are 3% and 0.05%, both under AWS's, sustained over three
+  hourly datapoints so one bounce in a quiet week cannot page.
 
 Staging is off because its alerts SNS topic had no subscribers — `alert_email`
 is empty there, so 18 alarms plus a dashboard billed roughly $5.60/month to
