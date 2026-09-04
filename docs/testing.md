@@ -216,6 +216,46 @@ error class so presigned URL credentials cannot be written to CI output or
 reports. The deployed-smoke config therefore disables Playwright network traces
 (which archive full URLs); failure screenshots and video remain enabled.
 
+### Fixtures are marked, and swept when teardown never runs
+
+That teardown is careful and complete, and it still leaked. On 2026-09-04 the
+production table held 38 households, 35 of them left by smoke runs whose
+teardown never executed — a skipped job, a cancelled run, a dead runner. Against
+two real registered users, 92% of the household count was test debris, and
+nothing anywhere excluded it. Two additions close that:
+
+- **A structural marker, written at creation.** Every fixture row carries
+  `isTestFixture: true` plus `testFixtureRunId`, `testFixtureCreatedAt`, and
+  `testFixtureSource`. `TEST_FIXTURE` in `post-deploy-smoke-support.ts` is the
+  contract. It is an attribute, not a name: matching the string "Smoke Test
+  Household" would delete a real household the day somebody chose that name.
+  Anything that counts households can now exclude fixtures without this script.
+- **A claim row, written before the browser flow starts.**
+  `TESTFIXTURE#<runId> / METADATA` records the fixture's Cognito `sub`, so a run
+  that dies between "POST /households returned 201" and "the stamp landed" is
+  still traceable — the sweeper follows GSI1 from that `sub` to every household
+  the fixture joined. It carries no TTL on purpose: expiring the claim would
+  strand the very rows it is there to find. Teardown deletes it last, only once
+  the partitions it indexes verify empty.
+
+`scripts/sweep-test-fixtures.mjs` does the cleanup that does not depend on the
+run finishing. It is a **dry run by default** — it prints what it would delete
+and exits without touching anything — and needs `--apply` to act. It deletes
+only partitions reachable from a marked row, only fixtures older than
+`--min-age-hours` (default 3), refuses a plan above `--max-deletes`, re-checks
+every key against an allow-list of partition prefixes, and **skips any household
+holding a member who is not a fixture user**, reporting it rather than deleting
+it. The `sweep-test-fixtures` job in `cd-production.yml` runs it with `--apply`
+on every production deploy, under `if: always()` so that a failed, skipped, or
+cancelled smoke job still gets cleaned up by the next release.
+
+Rows created before the markers existed carry neither, so they cannot be swept
+by rule. `--include-legacy --user-pool-id <id>` proposes them on evidence — a
+household whose every member row's Cognito user is gone from the pool, older
+than the age gate — never on its name. Review the dry run, then re-run with
+`--apply`. The deploy job never passes `--include-legacy`; clearing the backlog
+is deliberately an operator action.
+
 ## Date / timezone tests
 
 `new Date('2024-04-15')` parses as UTC midnight. In any negative-offset timezone (e.g. PT in April → UTC-7), `.getDate()` returns 14, not 15. We hit this bug in the original `addDays` test and fixed it by using local-time constructors:
