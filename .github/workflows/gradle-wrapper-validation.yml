@@ -1,0 +1,52 @@
+name: Gradle wrapper validation
+
+# `frontend/android/gradle/wrapper/gradle-wrapper.jar` is the only binary
+# tracked in this repository (OpenSSF Scorecard alert #70, Binary-Artifacts,
+# high). It is a checked-in executable that Gradle runs at Android build time,
+# so a tampered copy is arbitrary code execution on whoever builds the app —
+# the exact reason Scorecard objects to committed binaries.
+#
+# Deleting it is not an option: Capacitor's `cap add android` generates the
+# wrapper and the Gradle build will not run without it. So prove it instead.
+# `gradle/actions/wrapper-validation` hashes every `gradle-wrapper.jar` in the
+# tree and fails if one does not match a SHA-256 that Gradle actually
+# published. The jar committed today matches Gradle's published checksum for
+# 8.14.3 exactly, so this starts green; it exists to catch the day it stops
+# matching.
+#
+# This also clears the Scorecard alert honestly rather than by suppression:
+# the Binary-Artifacts check stops counting gradle-wrapper.jar against a
+# repository once a workflow validates it this way.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Deliberate deviation from CI-CD-STANDARD §11e (which is why codeql.yml has
+# no `push: main`): §11e exists so an expensive analysis is not re-spent on
+# code a PR run already covered. This job is a checksum comparison that
+# finishes in seconds, and `main` has no `pull_request` ruleset rule, so a
+# direct push is possible and would otherwise never be validated. The cost of
+# covering that path is negligible.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Gradle wrapper checksums
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Validate wrapper checksums
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
