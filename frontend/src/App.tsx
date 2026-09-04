@@ -104,6 +104,14 @@ const SitBriefPage = lazyNamed(() => import('@/features/sitter/SitBriefPage'), '
 const KioskPage = lazyNamed(() => import('@/features/kiosk/KioskPage'), 'KioskPage');
 const ScanTagPage = lazyNamed(() => import('@/features/tags/ScanTagPage'), 'ScanTagPage');
 const PlantTagsPage = lazyNamed(() => import('@/features/tags/PlantTagsPage'), 'PlantTagsPage');
+const CaretakerPage = lazyNamed(
+  () => import('@/features/caretaker/CaretakerPage'),
+  'CaretakerPage'
+);
+const CaretakerReportPage = lazyNamed(
+  () => import('@/features/caretaker/CaretakerReportPage'),
+  'CaretakerReportPage'
+);
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -217,6 +225,9 @@ function App() {
                   256-bit token in the path is the only credential, and the
                   person holding the phone has no account. */}
               <Route path="/tag/:token" element={<ScanTagPage />} />
+              {/* Token-scoped caretaker page. Public like /sit — the 256-bit
+                  token is the only credential and there is no account. */}
+              <Route path="/caretaker/:token" element={<CaretakerPage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />
@@ -257,6 +268,7 @@ function App() {
                   <Route path="/chat" element={<ChatPage />} />
                   <Route path="/household" element={<HouseholdPage />} />
                   <Route path="/away-recap" element={<AwayRecapPage />} />
+                  <Route path="/household/caretaker-report" element={<CaretakerReportPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/settings/billing" element={<SettingsPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />

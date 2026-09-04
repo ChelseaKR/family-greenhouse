@@ -204,6 +204,11 @@ export async function deleteUserScopedData(userId: string): Promise<void> {
  * deletion must clear all four boundaries; deleting only the visible plants
  * leaves a usable sitter link or a live wall display and a substantial amount
  * of household data behind.
+ * Activity events and caretaker visit records use dedicated partitions, while
+ * sitter and caretaker credentials use secret-token partitions projected onto
+ * GSI1. Account deletion must clear every one of those boundaries; deleting
+ * only the visible plants leaves a usable sitter link or caretaker token and a
+ * substantial amount of household data behind.
  *
  * Plant-specific S3 objects and per-plant rows are removed by
  * plantService.deletePlant before this runs. This final partition sweep is
@@ -231,6 +236,26 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
     ProjectionExpression: 'PK, SK',
   });
   await deleteItems(kioskItems);
+  // Caretaker seats share the sitter posture: a secret-token partition
+  // projected onto GSI1. Their visit records live in a third partition. Both
+  // must go, for the same reason the sitter links do — a surviving token is a
+  // live credential into an erased household.
+  const caretakerItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#CARETAKER` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(caretakerItems);
+
+  const caretakerVisitItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#CARETAKER_VISIT` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(caretakerVisitItems);
 
   // Plant tags (ADR 0016) use the same secret-token-partition shape as sitter
   // links. The household PIN row sits in the base partition and is swept below.
@@ -421,6 +446,35 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
             new UpdateCommand({
               TableName: TABLE_NAME,
               Key: { PK: link.PK, SK: link.SK },
+              UpdateExpression: 'SET #createdBy = :deletedId',
+              ExpressionAttributeNames: { '#createdBy': 'createdBy' },
+              ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },
+              ConditionExpression: 'attribute_exists(PK)',
+            })
+          );
+        }
+      )
+  );
+
+  // Caretaker seats, like sitter links, outlive a departing member: the
+  // household may still be relying on them. Scrub only the departed creator's
+  // stable id. Visit records name the CARETAKER, never a member, so they need
+  // no scrub — and rewriting them would falsify the household's own record.
+  await forEachQueryPage(
+    {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#CARETAKER` },
+    },
+    (seats) =>
+      mapBounded(
+        seats.filter((seat) => seat.createdBy === userId),
+        async (seat) => {
+          await dynamodb.send(
+            new UpdateCommand({
+              TableName: TABLE_NAME,
+              Key: { PK: seat.PK, SK: seat.SK },
               UpdateExpression: 'SET #createdBy = :deletedId',
               ExpressionAttributeNames: { '#createdBy': 'createdBy' },
               ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },

@@ -10,6 +10,7 @@ import * as sitterService from '../../services/sitterService.js';
 import { buildSitterBrief } from '../../services/sitterBrief.js';
 import { sitterBriefIncluded } from '../../services/sitterPlanGate.js';
 import { sitterPhotoRoutes } from './sitterPhotos.js';
+import * as caretakerPublic from '../caretakers/public.js';
 import {
   createTaskSchema,
   updateTaskSchema,
@@ -1101,4 +1102,9 @@ export const handler = createRouter({
   'GET /kiosk/{token}': getKioskView,
   'POST /kiosk/{token}/tasks/{taskId}/complete': completeKioskTask,
   ...sitterPhotoRoutes,
+  // Caretaker seats (handlers/caretakers/public.ts) — token-scoped like the
+  // sitter routes above, but named, and every action lands on a visit record.
+  'GET /caretaker/{token}': caretakerPublic.getCaretakerView,
+  'POST /caretaker/{token}/tasks/{taskId}/complete': caretakerPublic.completeCaretakerTask,
+  'POST /caretaker/{token}/notes': caretakerPublic.addCaretakerNote,
 });

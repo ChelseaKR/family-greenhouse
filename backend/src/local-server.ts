@@ -119,6 +119,7 @@ import {
 } from './local-server-plant-tags.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
+import { buildCaretakerReport, resolveReportRange } from './services/caretakerReport.js';
 import {
   SITTER_PHOTO_BODY_MAX_BYTES,
   SITTER_PHOTO_EXTENSIONS,
@@ -315,6 +316,38 @@ interface SitterLink {
   photoCount?: number;
 }
 
+/** Mirrors caretakerService.Caretaker (CARETAKER#{token} row). Unlike a
+ *  sitter link this identity has a NAME, which is what every action it takes
+ *  is attributed to. */
+interface Caretaker {
+  id: string;
+  token: string;
+  householdId: string;
+  createdBy: string;
+  createdAt: string;
+  name: string;
+  startsAt: string;
+  expiresAt: string;
+  status: 'active' | 'revoked';
+}
+
+/** Mirrors caretakerService.CaretakerVisit. `startedAt` is the timestamp of
+ *  the visit's FIRST action — the arrival time, observed not claimed. */
+interface CaretakerVisit {
+  id: string;
+  householdId: string;
+  caretakerId: string;
+  caretakerName: string;
+  startedAt: string;
+  lastActionAt: string;
+  tasksCompleted: Array<Record<string, unknown>>;
+  photos: Array<Record<string, unknown>>;
+  notes: Array<Record<string, unknown>>;
+  taskCount: number;
+  photoCount: number;
+  noteCount: number;
+}
+
 /** Mirrors kioskService.KioskLink (KIOSK#{token} row). Long-lived by design —
  *  no expiry, revocation is the control. See services/kioskService.ts for the
  *  design rule and threat model. */
@@ -503,6 +536,11 @@ export const db = {
   calendarTokens: new Map<string, CalendarToken>(), // keyed by token (the secret)
   plantTags: new Map<string, LocalPlantTag>(), // ADR 0016 — keyed by token (the secret)
   plantTagPins: new Map<string, LocalPlantTagPin>(), // householdId -> PIN hash, never the PIN
+  caretakers: new Map<string, Caretaker>(), // keyed by token (the secret)
+  caretakerVisits: new Map<string, CaretakerVisit>(), // keyed by visit id
+  // Open-visit pointers, keyed `${householdId}|${caretakerId}` — mirrors the
+  // OPEN#{caretakerId} row in the visit partition.
+  caretakerOpenVisits: new Map<string, { visitId: string; lastActionAt: string }>(),
   kioskLinks: new Map<string, KioskLink>(), // keyed by token (the secret)
   // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
   // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
@@ -558,6 +596,9 @@ export function resetDb(): void {
   db.calendarTokens.clear();
   db.plantTags.clear();
   db.plantTagPins.clear();
+  db.caretakers.clear();
+  db.caretakerVisits.clear();
+  db.caretakerOpenVisits.clear();
   db.kioskLinks.clear();
   db.upgradeRequests.clear();
   db.helpAsks.clear();
@@ -1113,6 +1154,15 @@ app.delete('/me', authMiddleware, (req, res) => {
         if (tag.householdId === m.householdId) db.plantTags.delete(token);
       }
       db.plantTagPins.delete(m.householdId);
+      for (const [token, caretaker] of db.caretakers.entries()) {
+        if (caretaker.householdId === m.householdId) db.caretakers.delete(token);
+      }
+      for (const [vid, visit] of db.caretakerVisits.entries()) {
+        if (visit.householdId === m.householdId) db.caretakerVisits.delete(vid);
+      }
+      for (const key of [...db.caretakerOpenVisits.keys()]) {
+        if (key.startsWith(`${m.householdId}|`)) db.caretakerOpenVisits.delete(key);
+      }
       for (const [code, invite] of db.invites.entries()) {
         if (invite.householdId === m.householdId) db.invites.delete(code);
       }
@@ -1164,6 +1214,11 @@ app.delete('/me', authMiddleware, (req, res) => {
     for (const link of db.sitterLinks.values()) {
       if (link.householdId === m.householdId && link.createdBy === dbUser.id) {
         link.createdBy = 'deleted-user';
+      }
+    }
+    for (const caretaker of db.caretakers.values()) {
+      if (caretaker.householdId === m.householdId && caretaker.createdBy === dbUser.id) {
+        caretaker.createdBy = 'deleted-user';
       }
     }
     for (const link of db.kioskLinks.values()) {
@@ -2053,6 +2108,232 @@ app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHouseh
   });
   res.status(204).end();
 });
+
+// --- Caretaker seats (authed management) ----------------------------------
+// Mirrors handlers/caretakers/management.ts. Create/list/revoke are admin
+// gated like sitter links; the proof-of-visit report is open to any member.
+
+/** Mirrors caretakerService.CARETAKER_PERMISSIONS — the COMPLETE list of what
+ *  a caretaker may do, strictly narrower than a member. */
+const CARETAKER_PERMISSIONS = ['task.complete', 'photo.add', 'note.add'];
+/** Mirrors caretakerService.MAX_CARETAKER_DAYS. */
+const MAX_CARETAKER_DAYS = 180;
+/** Mirrors caretakerService.VISIT_IDLE_MS. */
+const CARETAKER_VISIT_IDLE_MS = 6 * 60 * 60 * 1000;
+
+/** Mirrors models/caretakerSchemas.createCaretakerSchema. */
+const createCaretakerSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    startsAt: z.string().datetime().optional(),
+    expiresAt: z.string().datetime(),
+  })
+  .superRefine((val, ctx) => {
+    const start = val.startsAt ? Date.parse(val.startsAt) : Date.now();
+    const end = Date.parse(val.expiresAt);
+    if (end <= start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expiresAt'],
+        message: 'expiresAt must be in the future (after startsAt)',
+      });
+    } else if (end - start > MAX_CARETAKER_DAYS * 24 * 60 * 60 * 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expiresAt'],
+        message: `A caretaker seat cannot last longer than ${MAX_CARETAKER_DAYS} days`,
+      });
+    }
+  });
+
+/** Non-secret view of a caretaker seat (no token). Mirrors toSummary. */
+function caretakerSummary(caretaker: Caretaker) {
+  const { token: _token, ...summary } = caretaker;
+  void _token;
+  return summary;
+}
+
+// POST /households/:id/caretakers
+app.post(
+  '/households/:id/caretakers',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody(createCaretakerSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const household = db.households.get(req.params.id);
+    if (!PLANS[household?.planId ?? 'seedling'].features.caretakerSeats) {
+      return res.status(402).json({
+        message:
+          'Caretaker seats are included with the Greenhouse plan. Upgrade to add a caretaker.',
+      });
+    }
+    const body = (req as any).validatedBody;
+    const now = new Date();
+    const token = randomBytes(32).toString('hex'); // 256-bit, like the service
+    const caretaker: Caretaker = {
+      id: uuidv4(),
+      token,
+      householdId: req.params.id,
+      createdBy: user.userId,
+      createdAt: now.toISOString(),
+      name: body.name,
+      startsAt: body.startsAt ?? now.toISOString(),
+      expiresAt: body.expiresAt,
+      status: 'active',
+    };
+    db.caretakers.set(token, caretaker);
+
+    const baseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+
+    res.status(201).json({
+      ...caretakerSummary(caretaker),
+      token,
+      url: `${baseUrl}/caretaker/${token}`,
+      permissions: CARETAKER_PERMISSIONS,
+    });
+  }
+);
+
+// GET /households/:id/caretakers
+app.get(
+  '/households/:id/caretakers',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const caretakers = [...db.caretakers.values()]
+      .filter((c) => c.householdId === req.params.id)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(caretakerSummary);
+    res.json(caretakers);
+  }
+);
+
+// DELETE /households/:id/caretakers/:caretakerId
+app.delete(
+  '/households/:id/caretakers/:caretakerId',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const target = [...db.caretakers.values()].find(
+      (c) => c.householdId === req.params.id && c.id === req.params.caretakerId
+    );
+    if (!target) {
+      return res.status(404).json({ message: 'Caretaker not found' });
+    }
+    // Revocation stops the token immediately. Visits already recorded stay:
+    // they are the record of work that actually happened.
+    target.status = 'revoked';
+    res.status(204).end();
+  }
+);
+
+// GET /households/:id/caretaker-report
+app.get('/households/:id/caretaker-report', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const range = resolveReportRange(
+    req.query.from ?? defaultFrom.toISOString(),
+    req.query.to ?? now.toISOString()
+  );
+  if (!range) {
+    return res
+      .status(400)
+      .json({ message: 'from and to must be valid dates, with to on or after from' });
+  }
+  const visits = [...db.caretakerVisits.values()].filter(
+    (v) =>
+      v.householdId === req.params.id && v.startedAt >= range.fromIso && v.startedAt <= range.toIso
+  );
+  res.json(
+    buildCaretakerReport({
+      householdId: req.params.id,
+      from: range.fromIso,
+      to: range.toIso,
+      visits: visits as any,
+      generatedAt: now.toISOString(),
+    })
+  );
+});
+
+/** Token → seat only if active and within [startsAt, expiresAt]. Generic null
+ *  on any miss, mirroring caretakerService.getActiveCaretaker. */
+function getActiveCaretaker(token: string): Caretaker | null {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const caretaker = db.caretakers.get(token);
+  if (!caretaker || caretaker.status !== 'active') return null;
+  const nowIso = new Date().toISOString();
+  if (nowIso < caretaker.startsAt || nowIso > caretaker.expiresAt) return null;
+  return caretaker;
+}
+
+/** Fold one action into the caretaker's visit, opening a new visit when the
+ *  last action is older than the idle window. Mirrors
+ *  caretakerService.recordCaretakerAction. */
+function recordCaretakerAction(
+  caretaker: Caretaker,
+  kind: 'task' | 'photo' | 'note',
+  entry: Record<string, unknown>
+): string {
+  const now = new Date();
+  const key = `${caretaker.householdId}|${caretaker.id}`;
+  const open = db.caretakerOpenVisits.get(key);
+  const existing = open ? db.caretakerVisits.get(open.visitId) : undefined;
+  const fresh =
+    existing !== undefined &&
+    now.getTime() - Date.parse(open!.lastActionAt) <= CARETAKER_VISIT_IDLE_MS;
+
+  const field = { task: 'tasksCompleted', photo: 'photos', note: 'notes' }[kind];
+  const counter = { task: 'taskCount', photo: 'photoCount', note: 'noteCount' }[kind];
+
+  if (fresh && existing) {
+    (existing as any)[field].push(entry);
+    (existing as any)[counter] += 1;
+    existing.lastActionAt = now.toISOString();
+    db.caretakerOpenVisits.set(key, { visitId: existing.id, lastActionAt: now.toISOString() });
+    return existing.id;
+  }
+
+  const visitId = uuidv4();
+  const visit: CaretakerVisit = {
+    id: visitId,
+    householdId: caretaker.householdId,
+    caretakerId: caretaker.id,
+    caretakerName: caretaker.name,
+    startedAt: now.toISOString(),
+    lastActionAt: now.toISOString(),
+    tasksCompleted: kind === 'task' ? [entry] : [],
+    photos: kind === 'photo' ? [entry] : [],
+    notes: kind === 'note' ? [entry] : [],
+    taskCount: kind === 'task' ? 1 : 0,
+    photoCount: kind === 'photo' ? 1 : 0,
+    noteCount: kind === 'note' ? 1 : 0,
+  };
+  db.caretakerVisits.set(visitId, visit);
+  db.caretakerOpenVisits.set(key, { visitId, lastActionAt: now.toISOString() });
+  return visitId;
+}
 
 // --- Kiosk (wall display) links (authed management) ------------------------
 // Mirrors handlers/households/kioskLink.ts: issue / get / revoke. Admin-gated
@@ -3830,6 +4111,278 @@ app.post(
       placementNote: null,
       overdue: false,
     });
+  }
+);
+
+// --- Caretaker seats PUBLIC endpoints (no auth) ---------------------------
+// Mirrors handlers/caretakers/public.ts + photos.ts. The 256-bit token is the
+// only credential. The permission surface is exactly CARETAKER_PERMISSIONS —
+// complete a task, add a note, add a photo — and nothing else: no plant
+// editing, no member list, no other caretakers, no billing, no settings.
+
+const CARETAKER_INACTIVE_MESSAGE = 'This caretaker link is invalid or has expired.';
+
+/** Mirrors handlers/caretakers/shared.ts lookaheadDays. */
+function caretakerLookaheadDays(expiresAt: string, now: Date): number {
+  const remainingMs = Date.parse(expiresAt) - now.getTime();
+  if (!Number.isFinite(remainingMs)) return 1;
+  return Math.max(1, Math.min(14, Math.ceil(remainingMs / (24 * 60 * 60 * 1000))));
+}
+
+/** Same PII-free projection as sitterTasksFor, with the caretaker's own
+ *  lookahead window. */
+function caretakerTasksFor(householdId: string, days: number) {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + days);
+  const cutoffIso = cutoff.toISOString();
+  const nowIso = now.toISOString();
+  return [...db.tasks.values()]
+    .filter((t) => t.householdId === householdId)
+    .filter((t) => (db.plants.get(t.plantId)?.status ?? 'active') === 'active')
+    .filter((t) => t.nextDue <= cutoffIso)
+    .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
+    .map((t) => {
+      const plant = db.plants.get(t.plantId);
+      const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+      return {
+        taskId: t.id,
+        // The caretaker projection adds the opaque plantId their photo routes
+        // need; the sitter projection deliberately does not carry it.
+        plantId: t.plantId,
+        plantName: t.plantName,
+        taskType: t.customType || t.type,
+        dueDate: t.nextDue,
+        spaceName: space?.name ?? plant?.location ?? null,
+        placementNote: plant?.placementNote ?? null,
+        overdue: t.nextDue < nowIso,
+      };
+    });
+}
+
+// GET /caretaker/:token
+app.get('/caretaker/:token', (req, res) => {
+  const caretaker = getActiveCaretaker(req.params.token);
+  if (!caretaker) {
+    return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+  }
+  res.json({
+    caretakerName: caretaker.name,
+    startsAt: caretaker.startsAt,
+    expiresAt: caretaker.expiresAt,
+    permissions: CARETAKER_PERMISSIONS,
+    tasks: caretakerTasksFor(
+      caretaker.householdId,
+      caretakerLookaheadDays(caretaker.expiresAt, new Date())
+    ),
+  });
+});
+
+const caretakerCompleteTaskSchema = z
+  .object({ expectedNextDue: z.string().datetime().optional() })
+  .nullish();
+
+// POST /caretaker/:token/tasks/:taskId/complete
+app.post(
+  '/caretaker/:token/tasks/:taskId/complete',
+  validateBody(caretakerCompleteTaskSchema),
+  (req, res) => {
+    const caretaker = getActiveCaretaker(req.params.token);
+    if (!caretaker) {
+      return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+    }
+    const task = db.tasks.get(req.params.taskId);
+    // Cross-household guard: the task must live in the token's household.
+    if (!task || task.householdId !== caretaker.householdId) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const expectedNextDue = (req as any).validatedBody?.expectedNextDue as string | undefined;
+    const taskType = task.customType || task.type;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({
+        taskId: task.id,
+        plantName: task.plantName,
+        taskType,
+        dueDate: task.nextDue,
+        overdue: false,
+        visitRecorded: true,
+      });
+    }
+
+    const now = new Date();
+    const nextDue = new Date(now);
+    nextDue.setDate(nextDue.getDate() + task.frequency);
+    task.lastCompleted = now.toISOString();
+    task.nextDue = nextDue.toISOString();
+
+    const actorId = `caretaker:${caretaker.id}`;
+    const completionId = uuidv4();
+    db.completions.set(completionId, {
+      id: completionId,
+      householdId: task.householdId,
+      plantId: task.plantId,
+      taskId: task.id,
+      taskType,
+      completedBy: actorId,
+      completedByName: caretaker.name,
+      completedAt: now.toISOString(),
+      notes: null,
+    });
+    recordCaretakerAction(caretaker, 'task', {
+      taskId: task.id,
+      plantId: task.plantId,
+      plantName: task.plantName,
+      taskType,
+      at: now.toISOString(),
+    });
+    recordActivity({
+      type: 'task.completed',
+      householdId: task.householdId,
+      actorId,
+      actorName: caretaker.name,
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType,
+        viaCaretaker: true,
+      },
+    });
+
+    res.json({
+      taskId: task.id,
+      plantName: task.plantName,
+      taskType,
+      dueDate: task.nextDue,
+      overdue: false,
+      visitRecorded: true,
+    });
+  }
+);
+
+const caretakerNoteSchema = z.object({ text: z.string().trim().min(1).max(500) });
+
+// POST /caretaker/:token/notes
+app.post('/caretaker/:token/notes', validateBody(caretakerNoteSchema), (req, res) => {
+  const caretaker = getActiveCaretaker(req.params.token);
+  if (!caretaker) {
+    return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+  }
+  const { text } = (req as any).validatedBody;
+  const at = new Date().toISOString();
+  recordCaretakerAction(caretaker, 'note', { text, at });
+  recordActivity({
+    type: 'caretaker.note',
+    householdId: caretaker.householdId,
+    actorId: `caretaker:${caretaker.id}`,
+    actorName: caretaker.name,
+    payload: { text },
+  });
+  res.json({ text, at, visitRecorded: true });
+});
+
+// POST /caretaker/:token/plants/:plantId/photo
+app.post(
+  '/caretaker/:token/plants/:plantId/photo',
+  validateBody(imageUploadRequestSchema),
+  (req, res) => {
+    const caretaker = getActiveCaretaker(req.params.token);
+    if (!caretaker) {
+      return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+    }
+    const plant = db.plants.get(req.params.plantId);
+    if (!plant || plant.householdId !== caretaker.householdId) {
+      return res.status(404).json({ message: 'Plant not found' });
+    }
+    const contentType = (req as any).validatedBody?.contentType ?? 'image/jpeg';
+    const ext = IMAGE_CONTENT_TYPES[contentType];
+    const key = `plants/${caretaker.householdId}/${String(req.params.plantId)}/${uuidv4()}.${ext}`;
+    const uploadToken = uuidv4();
+    db.mockUploadGrants.set(uploadToken, { key, contentType });
+    res.json({
+      uploadUrl: `http://localhost:${PORT}/mock-upload/${uploadToken}`,
+      imageUrl: `${imageBaseUrl()}/${key}`,
+    });
+  }
+);
+
+// POST /caretaker/:token/plants/:plantId/photo/confirm
+app.post(
+  '/caretaker/:token/plants/:plantId/photo/confirm',
+  validateBody(confirmImageUploadSchema),
+  (req, res) => {
+    const caretaker = getActiveCaretaker(req.params.token);
+    if (!caretaker) {
+      return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+    }
+    const plant = db.plants.get(req.params.plantId);
+    if (!plant || plant.householdId !== caretaker.householdId) {
+      return res.status(404).json({ message: 'Plant not found' });
+    }
+    const { imageUrl } = (req as any).validatedBody;
+    const keyPrefix = `plants/${caretaker.householdId}/${String(req.params.plantId)}/`;
+    const expectedPrefixes = [
+      `${imageBaseUrl()}/${keyPrefix}`,
+      `https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`,
+    ];
+    const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
+    if (!matchedPrefix) {
+      return res
+        .status(400)
+        .json({ message: 'imageUrl does not match a key issued for this plant' });
+    }
+    const filename = imageUrl.slice(matchedPrefix.length);
+    if (!/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(filename)) {
+      return res
+        .status(400)
+        .json({ message: 'imageUrl does not match a key issued for this plant' });
+    }
+    const uploaded = db.mockImages.get(`${keyPrefix}${filename}`);
+    if (!uploaded) {
+      return res
+        .status(400)
+        .json({ message: 'Uploaded image not found; upload it before confirming' });
+    }
+    if (uploaded.body.length === 0) {
+      return res.status(400).json({ message: 'Uploaded image is empty' });
+    }
+    if (uploaded.body.length > MAX_IMAGE_BYTES) {
+      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
+    }
+    if (!(uploaded.contentType in IMAGE_CONTENT_TYPES)) {
+      return res.status(400).json({ message: 'Uploaded file is not a valid image' });
+    }
+
+    const actorId = `caretaker:${caretaker.id}`;
+    const now = new Date().toISOString();
+    plant.imageUrl = imageUrl;
+    plant.updatedAt = now;
+    const photoId = uuidv4();
+    db.photos.set(photoId, {
+      id: photoId,
+      plantId: req.params.plantId,
+      householdId: plant.householdId,
+      imageUrl,
+      uploadedBy: actorId,
+      uploadedAt: now,
+      caption: null,
+    });
+    recordCaretakerAction(caretaker, 'photo', {
+      photoId,
+      plantId: req.params.plantId,
+      plantName: plant.name,
+      imageUrl,
+      at: now,
+    });
+    recordActivity({
+      type: 'photo.uploaded',
+      householdId: plant.householdId,
+      actorId,
+      actorName: caretaker.name,
+      payload: { plantId: req.params.plantId, photoId },
+    });
+    res.json({ imageUrl, photo: db.photos.get(photoId), visitRecorded: true });
   }
 );
 

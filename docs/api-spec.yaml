@@ -640,6 +640,161 @@ paths:
         '413': { description: Photo exceeds 300 KB }
         '429': { description: Per-IP or per-token upload rate exceeded }
 
+  /caretaker/{token}:
+    get:
+      summary: Public caretaker view — the worklist for a named, time-boxed caretaker seat. No auth; the 256-bit token is the only credential. Same PII-free projection as the sitter view, plus the caretaker's own name and their complete permission list.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The caretaker's due tasks (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  caretakerName: { type: string }
+                  startsAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  permissions:
+                    type: array
+                    items: { type: string, enum: [task.complete, photo.add, note.add] }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        plantName: { type: string }
+                        taskType: { type: string }
+                        dueDate: { type: string, format: date-time }
+                        spaceName: { type: string, nullable: true }
+                        placementNote: { type: string, nullable: true }
+                        overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/tasks/{taskId}/complete:
+    post:
+      summary: Public caretaker task completion, attributed to the caretaker by name and folded into their visit record. `visitRecorded` is false when the task completed but the visit line could not be written.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: taskId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedNextDue: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Task completed (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  plantName: { type: string }
+                  taskType: { type: string }
+                  dueDate: { type: string, format: date-time }
+                  overdue: { type: boolean }
+                  visitRecorded: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/notes:
+    post:
+      summary: Leave a note on the caretaker's current visit. The note IS the record, so a failed write is an error rather than a partial success.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Note recorded on the visit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+                  at: { type: string, format: date-time }
+                  visitRecorded: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/plants/{plantId}/photo:
+    post:
+      summary: Presign a photo upload for a plant in the caretaker's household. Nothing is attached until /confirm. No auth; the key is minted for this household and plant only.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+      responses:
+        '200':
+          description: Presigned PUT URL and the public image URL it will have
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl: { type: string }
+                  imageUrl: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/plants/{plantId}/photo/confirm:
+    post:
+      summary: Attach an uploaded photo to the plant's timeline, attributed to the caretaker and recorded on their visit. Verifies the object landed within the 5 MiB cap with an allowed content type.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl: { type: string }
+      responses:
+        '200':
+          description: Photo attached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imageUrl: { type: string }
+                  photo: { type: object }
+                  visitRecorded: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /households:
     post:
       summary: Create a new household
@@ -1558,6 +1713,106 @@ paths:
         '401': { description: PIN required or wrong }
         '404': { $ref: '#/components/responses/NotFound' }
         '423': { description: Locked after too many wrong PINs }
+
+  /households/{id}/caretakers:
+    post:
+      summary: Create a named, revocable, time-boxed caretaker seat (admin only, Greenhouse plan). Returns the token/URL exactly once, with the seat's complete permission list.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, expiresAt]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 60 }
+                startsAt: { type: string, format: date-time }
+                expiresAt: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Caretaker seat created (token returned once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  token: { type: string }
+                  url: { type: string }
+                  name: { type: string }
+                  startsAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  status: { type: string, enum: [active, revoked] }
+                  permissions:
+                    type: array
+                    items: { type: string, enum: [task.complete, photo.add, note.add] }
+        '402': { description: Caretaker seats require the Greenhouse plan }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    get:
+      summary: List the household's caretaker seats (admin only). Never returns tokens.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /households/{id}/caretakers/{caretakerId}:
+    delete:
+      summary: Revoke a caretaker seat by its non-secret id (admin only). Idempotent. Visits already recorded are kept — they are the record of work that happened.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: caretakerId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Caretaker revoked }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /households/{id}/caretaker-report:
+    get:
+      summary: Proof-of-visit report for a date range — who came, when they arrived, what they did. Available to any member, not only admins. A failed read is an error, never an empty report.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - {
+            name: from,
+            in: query,
+            required: false,
+            schema: { type: string },
+            description: 'Calendar date (YYYY-MM-DD) or ISO instant. Defaults to 30 days ago.',
+          }
+        - {
+            name: to,
+            in: query,
+            required: false,
+            schema: { type: string },
+            description: 'Calendar date (YYYY-MM-DD) or ISO instant. Defaults to now.',
+          }
+      responses:
+        '200':
+          description: The report for the range
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  householdId: { type: string }
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  generatedAt: { type: string, format: date-time }
+                  visits: { type: array, items: { type: object } }
+                  totals:
+                    type: object
+                    properties:
+                      visits: { type: integer }
+                      tasksCompleted: { type: integer }
+                      photos: { type: integer }
+                      notes: { type: integer }
+                      caretakers: { type: integer }
+                  byCaretaker: { type: array, items: { type: object } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /households/{id}/kiosk-link:
     post:

@@ -27,6 +27,7 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
 import { SitterLinksCard } from './SitterLinksCard';
+import { CaretakerSeatsCard } from './CaretakerSeatsCard';
 import { CareLoadCard } from './CareLoadCard';
 import { AutoHandoffCard } from './AutoHandoffCard';
 
@@ -302,6 +303,11 @@ export function HouseholdPage() {
       {isAdmin && householdId && (
         <AutoHandoffCard householdId={householdId} household={household} />
       )}
+
+      {/* Caretaker seats — named, revocable helper identities with a
+          proof-of-visit report. Admin-only, like sitter links. Plan gating is
+          read from the catalog inside, exactly like AutoHandoffCard. */}
+      {isAdmin && householdId && <CaretakerSeatsCard householdId={householdId} />}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

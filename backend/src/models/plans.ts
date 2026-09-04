@@ -118,7 +118,13 @@ export interface PlanFeatures {
   crossHomeToday: boolean;
   /** Kiosk / wall-display link: a long-lived, read-mostly household token. */
   kiosk: boolean;
-  /** Caretaker seats with attribution and proof-of-visit. */
+  /**
+   * Caretaker seats: named, revocable, time-boxed, token-scoped identities a
+   * household can hand to a paid helper, with proof-of-visit records. Token
+   * scoped rather than Cognito users, so an active seat costs ~$0.001/month
+   * (DynamoDB writes) rather than ~$0.06 (a Cognito MAU) — see
+   * docs/adr/0020-token-scoped-caretaker-seats.md.
+   */
   caretakerSeats: boolean;
   /** Seasonal Move Day (acts on summerSpaceId / winterSpaceId). */
   moveDay: boolean;
