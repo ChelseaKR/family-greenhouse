@@ -182,3 +182,53 @@ describe('sitterService.revokeSitterLink', () => {
     expect(update.input.ExpressionAttributeValues[':revoked']).toBe('revoked');
   });
 });
+
+// #449: a sitter link grants the whole household's task list plus completion
+// and photo upload, and its holder is whoever the departing member handed it
+// to. Expiry bounds it; it does not end it today.
+describe('sitterService.revokeSitterLinksCreatedBy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function row(overrides: Record<string, unknown> = {}) {
+    const now = Date.now();
+    return {
+      id: 'link-1',
+      token: 'a'.repeat(64),
+      householdId: HH,
+      createdBy: 'departing',
+      createdAt: new Date(now - 1000).toISOString(),
+      startsAt: new Date(now - 1000).toISOString(),
+      expiresAt: new Date(now + 60_000).toISOString(),
+      status: 'active',
+      label: null,
+      ...overrides,
+    };
+  }
+
+  it('revokes only the departing member’s active links', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          row(),
+          row({ id: 'link-2', token: 'b'.repeat(64), createdBy: 'staying' }),
+          row({ id: 'link-3', token: 'c'.repeat(64), status: 'revoked' }),
+        ],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeSitterLinksCreatedBy(HH, 'departing')).toBe(1);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`SITTER#${'a'.repeat(64)}`);
+  });
+
+  it('THROWS on a failed read rather than reporting 0 revoked', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('dynamo down') as never);
+    await expect(svc.revokeSitterLinksCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
+  });
+});

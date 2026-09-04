@@ -3,6 +3,9 @@ import { DeleteCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamod
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import * as billing from './billing.js';
+import * as kioskService from './kioskService.js';
+import * as plantTagService from './plantTagService.js';
+import * as sitterService from './sitterService.js';
 
 const DELETED_USER_ID = 'deleted-user';
 const DELETED_USER_NAME = 'Former member';
@@ -308,6 +311,53 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
  * happened. Names and stable user ids are replaced, active assignments are
  * cleared, and creator ids on retained household objects are anonymized.
  */
+export interface RevokedCredentialCounts {
+  plantTags: number;
+  sitterLinks: number;
+  kioskLinks: number;
+}
+
+/**
+ * Revoke the long-lived credentials a departing member minted.
+ *
+ * Removing someone used to revoke their session and nothing else: the JWT path
+ * re-reads the membership row on every request, so access died at once — but
+ * every capability token they had issued lived in the `HOUSEHOLD#{id}` or
+ * secret-token partitions and kept working. Plant tags and kiosk links never
+ * expire at all; sitter links last up to 7 days free / 90 paid (#449).
+ *
+ * MUST BE CALLED BEFORE `anonymizeUserInHousehold`. That function overwrites
+ * `createdBy` with DELETED_USER_ID on exactly these rows — deliberately, so a
+ * shared household keeps its labels working when someone deletes their
+ * ACCOUNT. Once it has run, nothing can tell which credentials the departing
+ * member created, so revocation is no longer possible.
+ *
+ * API keys are deliberately absent: `middleware/apiKey.ts` re-checks the
+ * creator's membership on every use, so the key stops working without the row
+ * disappearing — which leaves a remaining admin able to see in Settings why
+ * their integration stopped, and to re-mint deliberately.
+ *
+ * Failures propagate. A half-revoked departure is worth a 500 the caller can
+ * retry, not a silent "we tried".
+ */
+export async function revokeCredentialsCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<RevokedCredentialCounts> {
+  const [plantTags, sitterLinks, kioskLinks] = await Promise.all([
+    plantTagService.revokeTagsCreatedBy(householdId, userId),
+    sitterService.revokeSitterLinksCreatedBy(householdId, userId),
+    kioskService.revokeKioskLinksCreatedBy(householdId, userId),
+  ]);
+  if (plantTags + sitterLinks + kioskLinks > 0) {
+    logger.info(
+      { householdId, plantTags, sitterLinks, kioskLinks },
+      'member_removal.credentials_revoked'
+    );
+  }
+  return { plantTags, sitterLinks, kioskLinks };
+}
+
 export async function anonymizeUserInHousehold(householdId: string, userId: string): Promise<void> {
   const plantIds: string[] = [];
   await forEachQueryPage(

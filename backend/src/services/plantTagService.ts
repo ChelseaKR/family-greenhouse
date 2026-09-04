@@ -226,6 +226,26 @@ export async function revokeTag(householdId: string, tagId: string): Promise<boo
   return true;
 }
 
+/**
+ * Revoke every ACTIVE tag a given member issued. Called when that member is
+ * removed from the household.
+ *
+ * ADR 0016's argument that issuing a tag is not privilege escalation holds for
+ * a CURRENT member — a tag grants strictly less than they already have. It
+ * stops holding the moment they are not a member: the tag never expires, so
+ * revocation is the only control, and the token is printed on a label they may
+ * well have kept (or listed in bulk on the way out). Returns how many were
+ * revoked so the caller can tell the household what it cost them.
+ */
+export async function revokeTagsCreatedBy(householdId: string, userId: string): Promise<number> {
+  const active = (await listActiveTags(householdId)).filter((tag) => tag.createdBy === userId);
+  const now = new Date();
+  for (const tag of active) {
+    await revokeRow(tag.token, now);
+  }
+  return active.length;
+}
+
 /** Revoke every ACTIVE tag for a plant. Returns how many were revoked. */
 export async function revokeTagsForPlant(householdId: string, plantId: string): Promise<number> {
   const active = (await listActiveTags(householdId)).filter((tag) => tag.plantId === plantId);

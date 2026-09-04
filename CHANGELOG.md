@@ -18,6 +18,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Removing someone from a household now revokes what they issued, not just
+  their session.** Their API keys kept working (the key row records that its
+  creator _was_ a member, never that they still are), and so did every plant
+  tag, sitter link and kiosk link they had created — plant tags and kiosk links
+  have no expiry at all. API keys now re-check the creator's membership on
+  every use, the same rule sessions and calendar feeds already follow; the rest
+  are revoked as part of the removal, before the anonymisation sweep that would
+  otherwise make them unattributable. The confirmation dialog says so before
+  you remove someone, and the audit entry records what it cost.
+- **The plant-tag management list is rate-limited and audited.** It hands back
+  every active tag's raw, never-expiring token in one call — the only bulk read
+  of live secrets in the API — and was the one route in its file with neither a
+  limit nor an audit event.
+
+### Fixed
+
 - **The inbound-mail forwarder no longer relays a message whose scan never
   finished.** It refused only an explicit `FAIL`, so three states reached the
   maintainer's inbox untouched: `GRAY` (scanned, inconclusive),

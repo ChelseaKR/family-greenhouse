@@ -25,6 +25,9 @@ vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(),
   getStripe: vi.fn(),
 }));
+vi.mock('../../../src/services/plantTagService.js', () => ({ revokeTagsCreatedBy: vi.fn() }));
+vi.mock('../../../src/services/sitterService.js', () => ({ revokeSitterLinksCreatedBy: vi.fn() }));
+vi.mock('../../../src/services/kioskService.js', () => ({ revokeKioskLinksCreatedBy: vi.fn() }));
 
 describe('account cleanup', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -428,5 +431,41 @@ describe('cancelAbandonedHouseholdSubscription', () => {
     stripe.subscriptions.retrieve.mockRejectedValue(stripeError('socket hang up'));
 
     await expect(cancel('hh')).rejects.toBe(failure);
+  });
+  // #449: removing a member used to revoke the session and nothing else. Every
+  // capability token they had minted lived on in the household's partitions —
+  // plant tags and kiosk links with no expiry at all.
+});
+
+describe('revokeCredentialsCreatedBy', () => {
+  it("revokes only the departing member's active credentials, and counts them", async () => {
+    const plantTagService = await import('../../../src/services/plantTagService.js');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const kioskService = await import('../../../src/services/kioskService.js');
+    vi.mocked(plantTagService.revokeTagsCreatedBy).mockResolvedValue(3);
+    vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(1);
+    vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(1);
+
+    const { revokeCredentialsCreatedBy } = await import('../../../src/services/accountCleanup.js');
+    await expect(revokeCredentialsCreatedBy('hh', 'u1')).resolves.toEqual({
+      plantTags: 3,
+      sitterLinks: 1,
+      kioskLinks: 1,
+    });
+    expect(plantTagService.revokeTagsCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+    expect(sitterService.revokeSitterLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+    expect(kioskService.revokeKioskLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+  });
+
+  it('propagates a failure rather than reporting a partial revocation as done', async () => {
+    const plantTagService = await import('../../../src/services/plantTagService.js');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const kioskService = await import('../../../src/services/kioskService.js');
+    vi.mocked(plantTagService.revokeTagsCreatedBy).mockRejectedValue(new Error('ddb throttled'));
+    vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(0);
+    vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(0);
+
+    const { revokeCredentialsCreatedBy } = await import('../../../src/services/accountCleanup.js');
+    await expect(revokeCredentialsCreatedBy('hh', 'u1')).rejects.toThrow('ddb throttled');
   });
 });
