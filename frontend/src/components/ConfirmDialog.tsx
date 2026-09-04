@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useRef } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Button } from './Button';
@@ -26,9 +26,19 @@ export function ConfirmDialog({
   variant = 'danger',
   isLoading = false,
 }: ConfirmDialogProps) {
+  // Initial focus goes to Cancel, never to the confirm button. The confirm
+  // button is FIRST in DOM order (the wrapper reverses it visually on wide
+  // screens), so Headless UI's default — first tabbable element in the panel —
+  // lands a keyboard or screen-reader user directly on the destructive
+  // control, where Enter or Space is enough to destroy the record. Reordering
+  // the DOM instead would flip the button positions on the narrow two-column
+  // layout, so the ref is the change that fixes focus without moving anything
+  // a sighted user is looking at.
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+
   return (
     <Transition.Root show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="relative z-50" onClose={onClose} initialFocus={cancelRef}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -74,7 +84,16 @@ export function ConfirmDialog({
                       {title}
                     </Dialog.Title>
                     <div className="mt-2">
-                      <p className="text-sm leading-relaxed text-gray-600">{message}</p>
+                      {/* Dialog.Description, not a plain <p>: Headless UI wires
+                          the panel's aria-describedby from this component only.
+                          `message` is where the consequences live at all eight
+                          call sites — without the association a screen reader
+                          announces the title and the focused button and nothing
+                          in between, which for DoubleCarePrompt means the entire
+                          decision is never spoken. */}
+                      <Dialog.Description as="p" className="text-sm leading-relaxed text-gray-600">
+                        {message}
+                      </Dialog.Description>
                     </div>
                   </div>
                 </div>
@@ -86,7 +105,12 @@ export function ConfirmDialog({
                   >
                     {confirmLabel}
                   </Button>
-                  <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+                  <Button
+                    ref={cancelRef}
+                    variant="secondary"
+                    onClick={onClose}
+                    disabled={isLoading}
+                  >
                     {cancelLabel}
                   </Button>
                 </div>
