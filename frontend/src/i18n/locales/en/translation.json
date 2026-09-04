@@ -217,6 +217,8 @@
     "plant": {
       "title": "Add your first plant",
       "description": "One plant is enough to get started. Give it a name and we'll take it from there.",
+      "joinedTitle": "Add a plant you look after",
+      "joinedDescription": "This household is already going, so you're not starting from scratch. Add a plant of your own and it joins the same shared schedule — everyone sees it, and whoever is around can mark it done.",
       "nameLabel": "Plant name",
       "namePlaceholder": "Kitchen monstera",
       "nameHelp": "Whatever your household already calls it.",

@@ -14,6 +14,7 @@ import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { EmptyPlants } from '@/components/illustrations/EmptyPlants';
 import { toast } from '@/store/toastStore';
+import type { FirstRunVariant } from './firstRunModel';
 
 const makeFirstPlantSchema = (t: TFunction) =>
   z.object({
@@ -31,6 +32,14 @@ interface FirstPlantStepProps {
   headingId: string;
   headingRef: Ref<HTMLHeadingElement>;
   householdId: string;
+  /**
+   * Whose first run this is. The form, the endpoint and the schedule
+   * behaviour are identical; only the framing changes. Telling someone who
+   * just joined a household of twelve plants to "add your first plant" is
+   * false, and it was the reason joiners were skipped past this step
+   * entirely rather than spoken to differently.
+   */
+  variant: FirstRunVariant;
   /** Called once the plant genuinely exists server-side. */
   onAdded: () => void;
   onSkip: () => void;
@@ -46,11 +55,16 @@ interface FirstPlantStepProps {
  * smallest honest subset of AddPlantPage (name, optional species) and posts
  * to the same endpoint. Anyone who wants photos, spaces or photo-ID gets a
  * one-click handoff to the real page instead of a second-rate copy of it.
+ *
+ * For a `joiner` the same step is the moment they put something of their own
+ * into a shared household, which is the point at which they stop being a
+ * spectator of someone else's plants.
  */
 export function FirstPlantStep({
   headingId,
   headingRef,
   householdId,
+  variant,
   onAdded,
   onSkip,
   onWantsFullForm,
@@ -134,10 +148,12 @@ export function FirstPlantStep({
           tabIndex={-1}
           className="mt-4 font-serif text-3xl tracking-tight text-ink focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         >
-          {t('firstRun.plant.title')}
+          {variant === 'joiner' ? t('firstRun.plant.joinedTitle') : t('firstRun.plant.title')}
         </h1>
         <p className="mt-3 text-base leading-relaxed text-gray-700">
-          {t('firstRun.plant.description')}
+          {variant === 'joiner'
+            ? t('firstRun.plant.joinedDescription')
+            : t('firstRun.plant.description')}
         </p>
       </div>
 

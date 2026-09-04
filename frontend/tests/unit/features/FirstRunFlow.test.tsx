@@ -28,16 +28,24 @@ function signIn(role: 'admin' | 'member' = 'admin') {
   } as never);
 }
 
+/** A membership old enough that nobody would call this person new. */
+const LONG_STANDING = '2026-01-05T09:00:00.000Z';
+
 /** Every read the first run makes, with the household empty and the caller an admin. */
 function newHouseholdHandlers({
   plants = [] as unknown[],
   role = 'admin' as 'admin' | 'member',
   templates = [] as unknown[],
+  // The caller's join date. Defaults to long ago so the fixtures below mean
+  // what they say: an established household seen by an established member.
+  // It used to be `''`, which parses to NaN — the gate could not have told a
+  // new member from an old one even if it had tried to.
+  joinedAt = LONG_STANDING,
 } = {}) {
   server.use(
     http.get(`${API}/plants`, () => HttpResponse.json(plants)),
     http.get(`${API}/me/households`, () =>
-      HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role, joinedAt: '' }])
+      HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role, joinedAt }])
     ),
     http.get(`${API}/tasks/templates`, () => HttpResponse.json(templates))
   );
@@ -116,7 +124,7 @@ describe('HomeRedirect', () => {
 });
 
 describe('WelcomeFlow gating', () => {
-  it('steps aside for a household that already has plants, and records it', async () => {
+  it('steps aside for an established member of a household that already has plants, and records it', async () => {
     newHouseholdHandlers({ plants: [{ id: 'p1', name: 'Pothos' }] });
     renderFirstRun();
 
@@ -124,11 +132,32 @@ describe('WelcomeFlow gating', () => {
     await waitFor(() => expect(usePrefsStore.getState().welcomeSeen).toBe(true));
   });
 
+  it('welcomes someone who has just joined a household that already has plants', async () => {
+    // The household having started is not the same fact as this person
+    // having started. Every joiner used to take the branch above, because a
+    // household worth joining always has plants in it.
+    newHouseholdHandlers({
+      plants: [{ id: 'p1', name: 'Pothos' }],
+      role: 'member',
+      joinedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    });
+    renderFirstRun();
+
+    expect(
+      await screen.findByRole('heading', { name: /add a plant you look after/i })
+    ).toBeVisible();
+    // Not "add your first plant": there are already plants here.
+    expect(screen.queryByRole('heading', { name: /add your first plant/i })).toBeNull();
+    expect(usePrefsStore.getState().welcomeSeen).toBe(false);
+  });
+
   it('does not record a first run it skipped because the plants read failed', async () => {
     server.use(
       http.get(`${API}/plants`, () => HttpResponse.json({ message: 'boom' }, { status: 500 })),
       http.get(`${API}/me/households`, () =>
-        HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role: 'admin', joinedAt: '' }])
+        HttpResponse.json([
+          { householdId: 'hh-1', name: 'Home', role: 'admin', joinedAt: LONG_STANDING },
+        ])
       )
     );
     renderFirstRun();
@@ -136,6 +165,21 @@ describe('WelcomeFlow gating', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible();
     // A failed read is not "this household has no plants" and is not "the
     // first run happened" — the next successful load gets to decide.
+    expect(usePrefsStore.getState().welcomeSeen).toBe(false);
+  });
+
+  it('does not spend the first run when the membership read fails on an established household', async () => {
+    server.use(
+      http.get(`${API}/plants`, () => HttpResponse.json([{ id: 'p1', name: 'Pothos' }])),
+      http.get(`${API}/me/households`, () =>
+        HttpResponse.json({ message: 'boom' }, { status: 500 })
+      )
+    );
+    renderFirstRun();
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // We could not tell whether this person is new. Marking the tour seen
+    // would spend their one first run on a network error.
     expect(usePrefsStore.getState().welcomeSeen).toBe(false);
   });
 });
