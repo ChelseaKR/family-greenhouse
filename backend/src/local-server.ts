@@ -91,6 +91,7 @@ import {
   planMoves,
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
+import { identifyTopUpSummary } from './models/identifyTopUp.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -3122,9 +3123,17 @@ app.post('/plants/identify', authMiddleware, validateBody(identifySchema), async
   const { image } = (req as any).validatedBody;
   const meter = identifyMeterFor((req as any).user);
   if (meter.meteringEnabled && meter.used >= meter.allowance) {
-    // Mirrors the production 402 contract: plan name + upgrade pointer.
+    // Mirrors the production 402 contract: plan name + upgrade pointer, plus
+    // the top-up `details`. The mock sells no packs (checkout is 503 below),
+    // so the offer is never available and the balance is a real zero.
     return res.status(402).json({
       message: `Your ${meter.planName} plan is limited to ${meter.allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+      details: {
+        code: 'IDENTIFY_BUDGET_EXHAUSTED',
+        topUpAvailable: false,
+        credits: (req as any).user.householdId ? { remaining: 0, expiresAt: null } : null,
+        topUp: null,
+      },
     });
   }
   if (!process.env.PLANT_ID_API_KEY) {
@@ -4650,6 +4659,7 @@ app.get('/billing/plans', (_req, res) => {
       effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
     },
     plans: Object.values(PLANS).map((plan) => planSummary(plan, paymentsAvailable)),
+    identifyTopUp: identifyTopUpSummary(paymentsAvailable),
   });
 });
 
@@ -4678,6 +4688,8 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
     // shape and the additive nullable-capable shape with identical values.
     usage,
     usageDetail: usage,
+    // The mock sells no top-up packs, so the balance is a real zero.
+    identifyCredits: { remaining: 0, expiresAt: null },
   });
 });
 
@@ -4696,6 +4708,21 @@ app.post(
     // The mock mirrors production's fail-closed commercial status. Tests that
     // need a paid entitlement seed the in-memory fixture directly.
     res.status(503).json({ message: 'Payments are currently paused.' });
+  }
+);
+
+// Mirrors topUpCheckout in handlers/billing/handler.ts: the mock never has
+// a top-up price configured, so it answers the same fail-closed 400.
+app.post(
+  '/billing/top-up/checkout',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (_req, res) => {
+    res.status(400).json({
+      message: 'Identification top-up packs are not available in this environment.',
+      details: { code: 'TOP_UP_NOT_CONFIGURED' },
+    });
   }
 );
 

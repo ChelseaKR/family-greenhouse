@@ -112,12 +112,13 @@ All three guards reserve through a conditional DynamoDB `ADD` before the paid ca
 
 ### Billing
 
-| Variable                     | Effect                                          |
-| ---------------------------- | ----------------------------------------------- |
-| `STRIPE_SECRET_KEY`          | Stripe API key (`sk_live_...` or `sk_test_...`) |
-| `STRIPE_WEBHOOK_SECRET`      | Set on the webhook handler Lambda only          |
-| `STRIPE_PRICE_ID_GARDEN`     | Price ID for the $4.99 plan                     |
-| `STRIPE_PRICE_ID_GREENHOUSE` | Price ID for the $9.99 plan                     |
+| Variable                          | Effect                                                                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`               | Stripe API key (`sk_live_...` or `sk_test_...`)                                                                                                                                             |
+| `STRIPE_WEBHOOK_SECRET`           | Set on the webhook handler Lambda only                                                                                                                                                      |
+| `STRIPE_PRICE_ID_GARDEN`          | Price ID for the $4.99 plan                                                                                                                                                                 |
+| `STRIPE_PRICE_ID_GREENHOUSE`      | Price ID for the $9.99 plan                                                                                                                                                                 |
+| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` | One-time price ID for the 20-identification top-up pack ($1.99, ADR 0019). Blank = not for sale; checkout answers 400 `TOP_UP_NOT_CONFIGURED`. Terraform `stripe_price_id_identify_top_up`. |
 
 Use AWS Secrets Manager or SSM Parameter Store for any of these that look like secrets — Terraform pulls them in via `data` blocks rather than hardcoding.
 

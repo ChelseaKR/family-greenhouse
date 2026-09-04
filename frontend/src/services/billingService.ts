@@ -25,6 +25,26 @@ export interface Plan {
 /** Billing cadence accepted by POST /billing/checkout. */
 export type BillingInterval = 'month' | 'year' | 'lifetime';
 
+/**
+ * The identification top-up pack offer (ADR 0019), published by
+ * GET /billing/plans on the same fail-closed terms as the plan prices:
+ * `available` is true only when payments are on AND the server has a Stripe
+ * price configured; `priceUsd` is present only while payments are on.
+ */
+export interface IdentifyTopUpOffer {
+  available: boolean;
+  credits: number;
+  validityDays: number;
+  priceUsd?: number;
+}
+
+/** Identification credits a household holds. `expiresAt` is when the
+ *  soonest-expiring pack with credits runs out; null when none remain. */
+export interface IdentifyCreditBalance {
+  remaining: number;
+  expiresAt: string | null;
+}
+
 export interface PlanCatalog {
   paymentsAvailable: boolean;
   commercialHold: {
@@ -32,6 +52,8 @@ export interface PlanCatalog {
     effectiveDate: string;
   };
   plans: Plan[];
+  /** Absent from older backends. */
+  identifyTopUp?: IdentifyTopUpOffer;
 }
 
 /** Legacy numeric-only usage shape from GET /billing/me. */
@@ -69,6 +91,9 @@ export interface SubscriptionState {
   usage?: PlanUsage;
   /** Additive nullable shape. Older backends do not send it. */
   usageDetail?: PlanUsageDetail;
+  /** Identification top-up credits. `null` means the balance could not be
+   *  read — unknown, never zero. Absent from older backends. */
+  identifyCredits?: IdentifyCreditBalance | null;
 }
 
 /** Prefer the nullable contract, with rolling-deploy fallback to legacy usage. */
@@ -185,6 +210,18 @@ export const billingService = {
     // Both properties are closed enums already accepted by the server-side
     // schema (backend/src/models/telemetry.ts), so no free text is sent.
     track('subscription_upgraded', { upgradeTo: input.planId, interval: input.interval });
+    return response.data;
+  },
+
+  /**
+   * Start a one-time Stripe Checkout for an identification top-up pack
+   * (ADR 0019). Same idempotency contract as `createCheckout`: generate the
+   * attempt id at click time. The server answers 400 with
+   * `details.code: TOP_UP_NOT_CONFIGURED` when the pack is not for sale in
+   * its environment, 403 for non-admins, and 503 while payments are paused.
+   */
+  async createTopUpCheckout(input: { checkoutAttemptId: string }): Promise<{ url: string }> {
+    const response = await api.post<{ url: string }>('/billing/top-up/checkout', input);
     return response.data;
   },
 

@@ -192,17 +192,40 @@ describe('production IaC commercial-hold invariants', () => {
     }
   });
 
-  it('populates every production Stripe price id, or none at all', () => {
+  it('populates every production SUBSCRIPTION Stripe price id, or none at all', () => {
     // Half-configured is the dangerous state: a blank MONTHLY id makes a tier
     // unbuyable while the rest of the catalog still advertises it. All five
-    // are now live-mode ids, so all five must be present.
+    // subscription ids are now live-mode ids, so all five must be present.
+    //
+    // `stripe_price_id_identify_top_up` (ADR 0019) is deliberately excluded.
+    // It is not a tier: a blank value advertises nothing, because the offer
+    // itself is derived from the same env var — GET /billing/plans publishes
+    // `identifyTopUp.available: false` and POST /billing/top-up/checkout
+    // answers 400 TOP_UP_NOT_CONFIGURED. Blank is a complete, safe state for
+    // it, which is exactly what the five above cannot be. Its own invariant
+    // is below.
     const priceLines = productionVars
       .split('\n')
-      .filter((line) => /^stripe_price_id_[a-z_]+\s*=/.test(line.trim()));
+      .filter(
+        (line) =>
+          /^stripe_price_id_[a-z_]+\s*=/.test(line.trim()) &&
+          !/^stripe_price_id_identify_top_up\s*=/.test(line.trim())
+      );
 
     expect(priceLines).toHaveLength(5);
     for (const line of priceLines) {
       expect(line).toMatch(/^stripe_price_id_[a-z_]+\s*=\s*"price_[A-Za-z0-9]+"\s*$/);
+    }
+  });
+
+  it('leaves the identification top-up price blank or a real price id — never a placeholder', () => {
+    // The pack (ADR 0019) is unsold until the owner creates the Stripe price
+    // and pastes it here. Both states are legitimate; a half-typed or
+    // placeholder value is not, and would 502 every purchase attempt.
+    for (const vars of [productionVars, stagingVars]) {
+      expect(vars).toMatch(
+        /^stripe_price_id_identify_top_up\s*=\s*("" |""|"price_[A-Za-z0-9]+")\s*$/m
+      );
     }
   });
 

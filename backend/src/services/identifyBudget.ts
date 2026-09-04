@@ -27,6 +27,11 @@ import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import type { PlanId } from '../models/plans.js';
+import {
+  consumeCredit,
+  IdentifyCreditsExhaustedError,
+  type IdentifyCreditBalance,
+} from './identifyCredits.js';
 
 /**
  * Monthly identification allowances per plan. Defined here (not in
@@ -50,9 +55,20 @@ export function meteringEnabled(): boolean {
 }
 
 export class IdentifyBudgetExceededError extends Error {
-  constructor() {
+  /**
+   * Top-up credit balance at the moment of refusal, when credits were
+   * consulted: a real `{ remaining: 0 }` means every pack is spent or
+   * expired. `null` means credits were NOT consulted (a householdless
+   * caller has nowhere to hold a pack) — not "zero". A credit read that
+   * FAILS never reaches here: `reserveIdentification` propagates it so the
+   * caller fails closed instead of publishing a made-up balance.
+   */
+  readonly credits: IdentifyCreditBalance | null;
+
+  constructor(credits: IdentifyCreditBalance | null = null) {
     super('Monthly plant-identification allowance exhausted');
     this.name = 'IdentifyBudgetExceededError';
+    this.credits = credits;
   }
 }
 
@@ -180,5 +196,61 @@ export async function reserveUsage(
     }
     logger.error({ err: (err as Error).message, bucketId }, 'identify.budget_reserve_failed');
     throw err;
+  }
+}
+
+export interface IdentifyReservation {
+  /** Plan-allowance ticks used this month after this reservation. When the
+   *  reservation came from a credit, the month row is at (or past) the
+   *  allowance — the conditional ADD refused it — so this reports the
+   *  allowance itself: the meter is full, which is the fact that matters. */
+  used: number;
+  /** Which pool paid for this identification. */
+  source: 'allowance' | 'credit';
+  /** Balance AFTER a credit spend. Absent on the allowance path — credits
+   *  were not read, so nothing is claimed about them. */
+  credits?: IdentifyCreditBalance;
+}
+
+/**
+ * Reserve one paid identification in CONSUMPTION ORDER: the plan's monthly
+ * allowance first, then — only once that is spent — one top-up credit
+ * (`services/identifyCredits.ts`). A pack is never drawn on while the plan
+ * still has identifications this month, so a household that buys a pack in
+ * week one still has it after the allowance resets.
+ *
+ * Householdless callers (`user:{id}` buckets) have nowhere to hold a pack,
+ * so for them this is exactly `reserveUsage` and the refusal carries
+ * `credits: null` — not consulted, not zero.
+ *
+ * Failure modes, in order:
+ *   - allowance refused, credit spent      → `{ source: 'credit', credits }`
+ *   - allowance refused, no credits left   → `IdentifyBudgetExceededError`
+ *                                             with a real `{ remaining: 0 }`
+ *   - allowance refused, credit READ fails → propagates. The paid upstream
+ *                                             must not be hit unmetered, and
+ *                                             an unread balance is not 0.
+ */
+export async function reserveIdentification(
+  bucketId: string,
+  allowance: number,
+  householdId: string | null,
+  now: Date = new Date()
+): Promise<IdentifyReservation> {
+  try {
+    const used = await reserveUsage(bucketId, allowance, now);
+    return { used, source: 'allowance' };
+  } catch (err) {
+    if (!(err instanceof IdentifyBudgetExceededError)) throw err;
+    if (!householdId) throw new IdentifyBudgetExceededError(null);
+    try {
+      const credits = await consumeCredit(householdId, now);
+      return { used: allowance, source: 'credit', credits };
+    } catch (creditErr) {
+      if (creditErr instanceof IdentifyCreditsExhaustedError) {
+        throw new IdentifyBudgetExceededError({ remaining: 0, expiresAt: null });
+      }
+      throw creditErr;
+    }
   }
 }

@@ -13,6 +13,18 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   TABLE_NAME: 'test',
 }));
 
+// The credit pool is its own module with its own tests; here it is a
+// collaborator whose three outcomes (spent / exhausted / unreadable) drive
+// the consumption-order contract.
+const { consumeCredit, CreditsExhausted } = vi.hoisted(() => ({
+  consumeCredit: vi.fn(),
+  CreditsExhausted: class IdentifyCreditsExhaustedError extends Error {},
+}));
+vi.mock('../../../src/services/identifyCredits.js', () => ({
+  consumeCredit,
+  IdentifyCreditsExhaustedError: CreditsExhausted,
+}));
+
 import { dynamodb } from '../../../src/utils/dynamodb.js';
 
 describe('identifyBudget service', () => {
@@ -146,5 +158,74 @@ describe('identifyBudget service', () => {
     const { reserveUsage } = await import('../../../src/services/identifyBudget.js');
 
     await expect(reserveUsage('hh-1', 3)).rejects.toThrow('throttled');
+  });
+
+  describe('reserveIdentification — consumption order (ADR 0019)', () => {
+    const NOW = new Date('2026-09-03T12:00:00Z');
+    const conditional = () =>
+      Object.assign(new Error('conditional'), { name: 'ConditionalCheckFailedException' });
+
+    it('spends the plan allowance first and never consults credits while it lasts', async () => {
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: { used: 4 } } as never);
+      const { reserveIdentification } = await import('../../../src/services/identifyBudget.js');
+      await expect(reserveIdentification('hh-1', 30, 'hh-1', NOW)).resolves.toEqual({
+        used: 4,
+        source: 'allowance',
+      });
+      expect(consumeCredit).not.toHaveBeenCalled();
+    });
+
+    it('draws one credit only once the allowance is refused, and reports the balance after', async () => {
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(conditional() as never);
+      consumeCredit.mockResolvedValueOnce({ remaining: 19, expiresAt: '2027-09-03T12:00:00.000Z' });
+      const { reserveIdentification } = await import('../../../src/services/identifyBudget.js');
+      await expect(reserveIdentification('hh-1', 30, 'hh-1', NOW)).resolves.toEqual({
+        // The month meter is full — that is the fact the client renders.
+        used: 30,
+        source: 'credit',
+        credits: { remaining: 19, expiresAt: '2027-09-03T12:00:00.000Z' },
+      });
+      expect(consumeCredit).toHaveBeenCalledWith('hh-1', NOW);
+    });
+
+    it('refuses with a REAL zero when the allowance is spent and no pack has a credit', async () => {
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(conditional() as never);
+      consumeCredit.mockRejectedValueOnce(new CreditsExhausted('none'));
+      const { reserveIdentification, IdentifyBudgetExceededError } =
+        await import('../../../src/services/identifyBudget.js');
+      const err = await reserveIdentification('hh-1', 30, 'hh-1', NOW).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(IdentifyBudgetExceededError);
+      expect((err as InstanceType<typeof IdentifyBudgetExceededError>).credits).toEqual({
+        remaining: 0,
+        expiresAt: null,
+      });
+    });
+
+    it('a householdless caller has nowhere to hold a pack: credits are not consulted, not zero', async () => {
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(conditional() as never);
+      const { reserveIdentification, IdentifyBudgetExceededError } =
+        await import('../../../src/services/identifyBudget.js');
+      const err = await reserveIdentification('user:u-1', 3, null, NOW).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(IdentifyBudgetExceededError);
+      expect((err as InstanceType<typeof IdentifyBudgetExceededError>).credits).toBeNull();
+      expect(consumeCredit).not.toHaveBeenCalled();
+    });
+
+    it('fails CLOSED when the credit read fails — never "your pack is empty", never an unmetered call', async () => {
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(conditional() as never);
+      consumeCredit.mockRejectedValueOnce(new Error('credits throttled'));
+      const { reserveIdentification, IdentifyBudgetExceededError } =
+        await import('../../../src/services/identifyBudget.js');
+      const err = await reserveIdentification('hh-1', 30, 'hh-1', NOW).catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(IdentifyBudgetExceededError);
+      expect((err as Error).message).toBe('credits throttled');
+    });
+
+    it('propagates an allowance infrastructure failure without touching credits', async () => {
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('throttled') as never);
+      const { reserveIdentification } = await import('../../../src/services/identifyBudget.js');
+      await expect(reserveIdentification('hh-1', 30, 'hh-1', NOW)).rejects.toThrow('throttled');
+      expect(consumeCredit).not.toHaveBeenCalled();
+    });
   });
 });

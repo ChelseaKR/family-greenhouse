@@ -24,6 +24,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { AskToUpgrade } from '@/components/LockedFeature';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
+import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { isNativeApp } from '@/lib/platform';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
@@ -84,6 +85,11 @@ export function BillingSettings() {
   const [pollUntil] = useState(() =>
     searchParams.get('status') === 'success' ? Date.now() + CHECKOUT_POLL_MS : 0
   );
+  // A top-up checkout returns here with `purchase=identify-top-up`; the
+  // credits themselves arrive through the webhook, so the balance below may
+  // lag the redirect by a moment — say so rather than show an unchanged 0.
+  const returnedFromTopUp =
+    searchParams.get('status') === 'success' && searchParams.get('purchase') === 'identify-top-up';
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
   const subQuery = useQuery({
     // Plan state is per-household; the backend resolves the ACTIVE household
@@ -166,6 +172,15 @@ export function BillingSettings() {
   const hasLiveSubscription =
     !!subQuery.data?.stripeSubscriptionId &&
     (!subQuery.data.status || LIVE_SUBSCRIPTION_STATUSES.has(subQuery.data.status));
+  // The identification top-up pack (ADR 0019). Shown when it is for sale
+  // here, or when the household already holds credits it should be able to
+  // see. Older backends publish neither; then nothing renders.
+  const topUpOffer = plansQuery.data?.identifyTopUp;
+  const identifyCredits = subQuery.data?.identifyCredits;
+  const showTopUp =
+    !native &&
+    !!topUpOffer &&
+    (topUpOffer.available || (!!identifyCredits && identifyCredits.remaining > 0));
 
   return (
     <div className="space-y-6">
@@ -277,6 +292,24 @@ export function BillingSettings() {
           </div>
         )}
       </Card>
+
+      {showTopUp && topUpOffer && (
+        <div>
+          {returnedFromTopUp && (
+            <Alert variant="info" className="mb-4">
+              <p>{t('identifyTopUp.purchaseReturned')}</p>
+            </Alert>
+          )}
+          <IdentifyTopUpCard
+            variant="billing"
+            available={paymentsAvailable && topUpOffer.available}
+            credits={topUpOffer.credits}
+            priceUsd={topUpOffer.priceUsd ?? null}
+            validityDays={topUpOffer.validityDays}
+            balance={identifyCredits === undefined ? null : identifyCredits}
+          />
+        </div>
+      )}
 
       {paymentsAvailable && !native && (
         <Card>

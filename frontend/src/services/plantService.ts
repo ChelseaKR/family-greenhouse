@@ -1,5 +1,7 @@
+import axios from 'axios';
 import { api } from './api';
 import { track } from './analytics';
+import type { IdentifyCreditBalance } from './billingService';
 
 export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 
@@ -411,9 +413,71 @@ export interface IdentificationSuggestion {
   probability: number;
 }
 
+/** Mirrors the `usage` block of POST /plants/identify. `used` is null when the
+ *  server could not read its counter — unknown, never zero. `source` and
+ *  `credits` appear only on the enforced path (ADR 0019). */
+export interface IdentifyUsage {
+  used: number | null;
+  allowance: number;
+  meteringEnabled: boolean;
+  source?: 'allowance' | 'credit';
+  credits?: IdentifyCreditBalance;
+}
+
 export interface IdentifyResponse {
   configured: boolean;
   suggestions?: IdentificationSuggestion[];
+  usage?: IdentifyUsage;
+}
+
+/**
+ * The 402 POST /plants/identify answers once the month's allowance AND any
+ * top-up credits are spent. `topUp` is the pack on offer (null when it
+ * cannot be bought here: no household, payments paused, or no price
+ * configured); `credits` is the balance the refusal saw — a real 0, or null
+ * when credits were not consulted.
+ */
+export interface IdentifyBudgetExhausted {
+  message: string;
+  topUpAvailable: boolean;
+  credits: IdentifyCreditBalance | null;
+  topUp: { credits: number; priceUsd: number | null } | null;
+}
+
+/**
+ * Recognise the budget-exhausted refusal from any thrown error, so the
+ * caller can offer the pack instead of a generic failure. Anything that is
+ * not exactly that contract — a different status, a missing code — is null,
+ * and the caller falls back to `getErrorMessage`.
+ */
+export function identifyBudgetExhaustedFromError(error: unknown): IdentifyBudgetExhausted | null {
+  if (!axios.isAxiosError(error) || error.response?.status !== 402) return null;
+  const data = error.response.data as
+    { message?: unknown; details?: Record<string, unknown> | null } | null | undefined;
+  const details = data?.details;
+  if (!details || details.code !== 'IDENTIFY_BUDGET_EXHAUSTED') return null;
+  const rawCredits = details.credits as { remaining?: unknown; expiresAt?: unknown } | null;
+  const credits =
+    rawCredits && typeof rawCredits.remaining === 'number'
+      ? {
+          remaining: rawCredits.remaining,
+          expiresAt: typeof rawCredits.expiresAt === 'string' ? rawCredits.expiresAt : null,
+        }
+      : null;
+  const rawTopUp = details.topUp as { credits?: unknown; priceUsd?: unknown } | null;
+  const topUp =
+    rawTopUp && typeof rawTopUp.credits === 'number'
+      ? {
+          credits: rawTopUp.credits,
+          priceUsd: typeof rawTopUp.priceUsd === 'number' ? rawTopUp.priceUsd : null,
+        }
+      : null;
+  return {
+    message: typeof data?.message === 'string' ? data.message : '',
+    topUpAvailable: details.topUpAvailable === true && topUp !== null,
+    credits,
+    topUp,
+  };
 }
 
 /** Mirrors backend services/leafHealth.ts LeafHealthAssessment. */

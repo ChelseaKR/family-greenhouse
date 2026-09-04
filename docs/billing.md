@@ -250,6 +250,7 @@ repository hold must be inactive and `PAYMENTS_ENABLED` must be exactly `1`.
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | `environments/<env>/terraform.tfvars` — NOT secret, committed                                   |
 | `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                                                     |
+| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP`                                | same tfvars — one-time price; blank = pack not for sale, checkout refuses                       |
 | `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml)                                  |
 | `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`                                          |
 | `commercial-status.json`                                         | committed shared status; `commercialHoldActive: false` since 2026-09-01                         |
@@ -324,6 +325,43 @@ values. This is an intentional parity limit, not a claim that production
 counters are always available. The nullable and partial-counter paths are
 covered by the household-usage service, billing-handler, and frontend billing
 tests instead of a synthetic local-server failure switch.
+
+## Identification top-up packs
+
+Identification is the one bundled entitlement with a hard per-call vendor
+cost ($0.0585; ADR 0012), so beyond the plan's monthly allowance it is sold
+by the pack rather than raised in tiers (ADR 0019): **20 identifications for
+$1.99**, one-time, valid 12 months from purchase, never auto-renewed.
+
+- **Offer:** `GET /billing/plans` publishes `identifyTopUp`
+  (`{ available, credits, validityDays, priceUsd? }`). `available` is true
+  only when payments are on AND `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` is set;
+  `priceUsd` appears only when payments are on — the same fail-closed rule
+  as the plan prices.
+- **Purchase:** `POST /billing/top-up/checkout` (admin only) opens a
+  `mode: 'payment'` Checkout Session with `purchase: identify_top_up` and
+  `credits: 20` stamped on its metadata. With the env var blank it answers
+  **400 `details.code: TOP_UP_NOT_CONFIGURED`** before touching Stripe —
+  never a fallback price, never a free credit.
+- **Grant:** the webhook grants on a PAID `checkout.session.completed` (or
+  the later `async_payment_succeeded` for deferred methods) by creating one
+  pack row `HOUSEHOLD#{id}` / `IDCREDIT#{sessionId}` with a conditional put.
+  The Stripe **session id is the key**, so a redelivery, a retry after a
+  crash between grant and ledger write, or two concurrent deliveries all
+  grant nothing the second time — independently of the `STRIPE_EVENT#`
+  ledger, which is written after the grant like every other event.
+  The household METADATA row is never touched: a pack is credits, not
+  entitlement.
+- **Consumption:** `POST /plants/identify` draws on the plan allowance
+  first and a credit only once the month's allowance is spent
+  (`identifyBudget.reserveIdentification`), soonest-expiring pack first, via
+  a conditional decrement. The success `usage` object gains `source`
+  (`allowance` | `credit`) and, after a credit spend, `credits`
+  (`{ remaining, expiresAt }`). The 402 gains `details`:
+  `{ code: IDENTIFY_BUDGET_EXHAUSTED, topUpAvailable, credits, topUp }`.
+- **Balance:** `GET /billing/me` carries `identifyCredits`
+  (`{ remaining, expiresAt }`), or `null` when the read failed — unknown is
+  never published as zero.
 
 ## Plan caps and downgrades
 

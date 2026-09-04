@@ -28,6 +28,18 @@ vi.mock('../../../src/services/householdUsage.js', () => ({
 }));
 import { getHouseholdCounters } from '../../../src/services/householdUsage.js';
 
+// The identification top-up pack (ADR 0019): its credit balance read and its
+// checkout are separate services, mocked the same way as the counters.
+vi.mock('../../../src/services/identifyCredits.js', () => ({
+  getCreditBalance: vi.fn(),
+}));
+import { getCreditBalance } from '../../../src/services/identifyCredits.js';
+vi.mock('../../../src/services/identifyTopUp.js', () => ({
+  createIdentifyTopUpCheckoutSession: vi.fn(),
+  TOP_UP_NOT_CONFIGURED: 'TOP_UP_NOT_CONFIGURED',
+}));
+import { createIdentifyTopUpCheckoutSession } from '../../../src/services/identifyTopUp.js';
+
 function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
     body: null,
@@ -73,10 +85,14 @@ describe('billing handler', () => {
     setCachedMembership('user-1', 'hh-1', 'admin');
     // Counters default to "nothing recorded" — individual tests override.
     vi.mocked(getHouseholdCounters).mockResolvedValue({ plantCount: 0, memberCount: 0 });
+    // No packs bought is a real zero; individual tests override.
+    vi.mocked(getCreditBalance).mockResolvedValue({ remaining: 0, expiresAt: null });
+    delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
   });
 
   afterEach(() => {
     delete process.env.PAYMENTS_ENABLED;
+    delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
   });
 
   describe('listPlans', () => {
@@ -129,6 +145,31 @@ describe('billing handler', () => {
         annualPrice: null,
         lifetimePrice: null,
       });
+      // The top-up offer rides on the same gates: payments are on so the
+      // amount is published, but with no Stripe price configured it is NOT
+      // available — the client offers nothing the API would refuse.
+      expect(body.identifyTopUp).toEqual({
+        available: false,
+        credits: 20,
+        validityDays: 365,
+        priceUsd: 1.99,
+      });
+    });
+
+    it('publishes the top-up pack as available once a Stripe price is configured', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { listPlans } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await listPlans(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body).identifyTopUp).toEqual({
+        available: true,
+        credits: 20,
+        validityDays: 365,
+        priceUsd: 1.99,
+      });
     });
 
     it('withholds every price when the runtime gate alone is shut', async () => {
@@ -175,8 +216,43 @@ describe('billing handler', () => {
       )) as APIGatewayProxyResult;
 
       expect(res.statusCode).toBe(200);
-      expect(JSON.parse(res.body)).toMatchObject({ planId: 'garden', stripeCustomerId: 'cus_1' });
+      expect(JSON.parse(res.body)).toMatchObject({
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        identifyCredits: { remaining: 0, expiresAt: null },
+      });
       expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
+      expect(getCreditBalance).toHaveBeenCalledWith('hh-1');
+    });
+
+    it('publishes the top-up credit balance, and an UNREADABLE balance as null rather than 0', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+
+      vi.mocked(getCreditBalance).mockResolvedValueOnce({
+        remaining: 17,
+        expiresAt: '2027-09-03T12:00:00.000Z',
+      });
+      let res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body).identifyCredits).toEqual({
+        remaining: 17,
+        expiresAt: '2027-09-03T12:00:00.000Z',
+      });
+
+      vi.mocked(getCreditBalance).mockResolvedValueOnce(null);
+      res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('identifyCredits');
+      expect(body.identifyCredits).toBeNull();
     });
 
     it('includes matching legacy usage and nullable-capable detail when both counters are known', async () => {
@@ -568,6 +644,135 @@ describe('billing handler', () => {
       expect(res.statusCode).toBe(409);
       const body = JSON.parse(res.body);
       expect(body.message).toMatch(/manage subscription/i);
+    });
+  });
+
+  describe('topUpCheckout (ADR 0019)', () => {
+    const post = (body: unknown = {}) =>
+      buildEvent({
+        body: body === null ? null : JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    it('fails CLOSED with a 400 TOP_UP_NOT_CONFIGURED when no price is configured — nothing reaches Stripe', async () => {
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await topUpCheckout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.body);
+      expect(body.message).toMatch(/not available in this environment/i);
+      expect(body.details).toEqual({ code: 'TOP_UP_NOT_CONFIGURED' });
+      expect(createIdentifyTopUpCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('opens the one-time checkout and returns the URL, scoping the attempt id to the household', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(createIdentifyTopUpCheckoutSession).mockResolvedValueOnce({
+        url: 'https://checkout.stripe.test/topup',
+      });
+      const res = (await topUpCheckout(
+        post({ checkoutAttemptId: '0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ url: 'https://checkout.stripe.test/topup' });
+      expect(createIdentifyTopUpCheckoutSession).toHaveBeenCalledWith({
+        householdId: 'hh-1',
+        customerEmail: 'test@example.com',
+        successUrl: expect.stringContaining(
+          '/settings/billing?status=success&purchase=identify-top-up'
+        ),
+        cancelUrl: expect.stringContaining('/settings/billing?status=cancel'),
+        idempotencyKey: 'top-up:hh-1:0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11',
+      });
+    });
+
+    it('accepts an empty or missing body (there is one pack; nothing to choose)', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(createIdentifyTopUpCheckoutSession).mockResolvedValue({ url: 'https://s' });
+      for (const body of [{}, null]) {
+        const res = (await topUpCheckout(post(body), ctx, () => {})) as APIGatewayProxyResult;
+        expect(res.statusCode, JSON.stringify(body)).toBe(200);
+      }
+      expect(createIdentifyTopUpCheckoutSession).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: undefined })
+      );
+    });
+
+    it('rejects a malformed attempt id at the validation layer', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await topUpCheckout(
+        post({ checkoutAttemptId: 'not-a-uuid' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(createIdentifyTopUpCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 for a non-admin member — buying is admin-only like every purchase', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+      setCachedMembership('user-1', 'hh-1', 'member');
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await topUpCheckout(
+        buildEvent({
+          body: JSON.stringify({}),
+          headers: { 'content-type': 'application/json' },
+          requestContext: {
+            authorizer: {
+              claims: {
+                sub: 'user-1',
+                email: 'test@example.com',
+                'custom:household_id': 'hh-1',
+                'custom:household_role': 'member',
+              },
+            },
+            identity: { sourceIp: '127.0.0.1' },
+          } as APIGatewayProxyEvent['requestContext'],
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(403);
+      expect(createIdentifyTopUpCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('returns 503 while payment activity is paused', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      const error = new Error('Payment activity is disabled') as Error & { code?: string };
+      error.code = 'PAYMENTS_DISABLED';
+      vi.mocked(createIdentifyTopUpCheckoutSession).mockRejectedValueOnce(error);
+      const res = (await topUpCheckout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(503);
+      expect(JSON.parse(res.body).message).toMatch(/payments are currently paused/i);
+    });
+
+    it('maps the service-level TOP_UP_NOT_CONFIGURED guard to the same 400, for any path around the handler check', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(createIdentifyTopUpCheckoutSession).mockRejectedValueOnce(
+        new Error('TOP_UP_NOT_CONFIGURED: STRIPE_PRICE_ID_IDENTIFY_TOP_UP is not set')
+      );
+      const res = (await topUpCheckout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).details).toEqual({ code: 'TOP_UP_NOT_CONFIGURED' });
+    });
+
+    it('translates an upstream Stripe failure to an intentional, safe 502', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(createIdentifyTopUpCheckoutSession).mockRejectedValueOnce(
+        new Error('StripeConnectionError: secret internals')
+      );
+      const res = (await topUpCheckout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(502);
+      expect(JSON.parse(res.body).message).toMatch(/Stripe checkout failed/);
+      expect(res.body).not.toMatch(/secret internals/);
     });
   });
 

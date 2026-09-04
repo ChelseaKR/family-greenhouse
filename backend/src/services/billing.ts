@@ -20,6 +20,13 @@ import { capture } from '../utils/serverAnalytics.js';
 import type { ServerEventProps } from '../utils/serverAnalytics.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
 import { dispatchBillingEmails } from './billingEmails.js';
+import {
+  IDENTIFY_TOP_UP_PACK,
+  identifyTopUpGrantFromEvent,
+  isIdentifyTopUpSession,
+  type IdentifyTopUpGrant,
+} from '../models/identifyTopUp.js';
+import { grantCreditPack } from './identifyCredits.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -509,6 +516,12 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object;
+      // An identification top-up is a one-time payment that changes NOTHING
+      // on the subscription row: no plan, no cadence, no customer write. It
+      // is applied by `applyStripeEvent` before this function is consulted;
+      // returning null here keeps an unpaid (deferred) top-up from being
+      // read as a malformed lifetime purchase and logged as one.
+      if (isIdentifyTopUpSession(session)) return null;
       const householdId = session.metadata?.householdId ?? session.client_reference_id ?? '';
       if (!householdId) return null;
       const planId = planIdFromMetadata(event, session.metadata);
@@ -799,6 +812,63 @@ async function clearPendingStripeCancellation(
   }
 }
 
+/**
+ * Grant the credit pack a PAID identification top-up checkout bought.
+ *
+ * Idempotent on the Stripe Checkout Session id, independently of the dedupe
+ * ledger: the pack row's key IS the session id and it is created with a
+ * conditional put, so a second delivery of the same event — or a retry
+ * after a crash between the grant and the ledger write — creates nothing.
+ * The ledger is then written AFTER the grant, in the same order as every
+ * other event here (see `recordStripeEventOnce`), and the audit line is
+ * gated on the grant actually having been created, which is the one signal
+ * that is exactly-once by construction.
+ *
+ * Never touches the household METADATA row: a top-up is not entitlement.
+ */
+async function applyIdentifyTopUpGrant(
+  event: Stripe.Event,
+  grant: IdentifyTopUpGrant
+): Promise<void> {
+  const granted = await grantCreditPack({
+    ...grant,
+    validityDays: IDENTIFY_TOP_UP_PACK.validityDays,
+  });
+  const isNew = await recordStripeEventOnce(event.id);
+  if (!isNew) {
+    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_reapplied');
+  }
+  if (!granted) {
+    logger.info(
+      {
+        stripeEventId: event.id,
+        householdId: grant.householdId,
+        stripeSessionId: grant.stripeSessionId,
+      },
+      'identify_top_up_duplicate_grant_skipped'
+    );
+    return;
+  }
+  logger.info(
+    {
+      householdId: grant.householdId,
+      stripeSessionId: grant.stripeSessionId,
+      credits: grant.credits,
+      purchasedAt: grant.purchasedAt,
+    },
+    'identify_top_up_granted'
+  );
+  audit('billing.identify_top_up_granted', {
+    householdId: grant.householdId,
+    metadata: {
+      stripeEventType: event.type,
+      stripeSessionId: grant.stripeSessionId,
+      credits: grant.credits,
+      purchasedAt: grant.purchasedAt,
+    },
+  });
+}
+
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // Money-lifecycle emails, `charge` phase (ADR 0023): receipt, renewal
   // notice, payment failure, card expiring. Dispatched BEFORE any branch
@@ -810,6 +880,16 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // function then does with our row. Never throws.
   await dispatchBillingEmails(event, 'charge');
 
+  // A paid identification top-up is its own apply path: credits, not
+  // entitlement. Branch before the subscription delta so the subscription
+  // machinery (ordering guard, lifetime claim, lifecycle analytics) never
+  // sees it. It sits AFTER the email dispatch above precisely because that
+  // comment names this `return` as the one a receipt must survive.
+  const topUpGrant = identifyTopUpGrantFromEvent(event);
+  if (topUpGrant) {
+    await applyIdentifyTopUpGrant(event, topUpGrant);
+    return;
+  }
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
 
