@@ -449,7 +449,11 @@ throttled per source IP, keyed per method so one cannot starve the other:
 Neither is load-bearing against forgery (the token is an HMAC-SHA256 over a
 per-user 256-bit secret), and both sit behind API Gateway's stage throttle of
 50 rps / 100 burst. The dev mirror in `local-server.ts` carries the same two
-limits so local behaviour matches production.
+limits, via `express-rate-limit` with a separate store per route, so local
+behaviour matches production. That is a **devDependency** alongside `express`
+itself: the dev server is not in the Lambda bundle
+(`backend/esbuild.config.js` takes only `handlers/**/handler.ts`), so it adds
+no production bytes.
 
 The token is an HMAC over `userId`, category and expiry, signed with a random
 per-user secret on `USER#{id} / EMAILCAP` (its own row: an upsert onto `PREFS`

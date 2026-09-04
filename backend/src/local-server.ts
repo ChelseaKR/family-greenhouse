@@ -12,6 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // @ts-nocheck
 import express from 'express';
+import expressRateLimit, { MemoryStore } from 'express-rate-limit';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'node:crypto';
@@ -4777,49 +4778,50 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
  * Production is already protected three ways and this dev mirror is not
  * internet-facing — it refuses to boot when NODE_ENV=production (top of this
  * file). It gets a limiter anyway for two reasons. First, a dev mirror that
- * behaves differently from production is its own class of bug: the whole
- * point of this file is that what you exercise locally is what ships.
- * Second, CodeQL reads `verifyTokenWithSecret` as an authorization decision
- * on an unauthenticated route and flags the missing throttle
+ * behaves differently from production is its own class of bug: the point of
+ * this file is that what you exercise locally is what ships. Second, CodeQL
+ * reads `verifyTokenWithSecret` as an authorization decision on an
+ * unauthenticated route and flags the missing throttle
  * (js/missing-rate-limiting) — correctly, on the code as written. Mirroring
  * the real limit is cheaper and more honest than suppressing the alert.
+ *
+ * `express-rate-limit` rather than a hand-rolled bucket: a hand-rolled one
+ * worked but CodeQL only recognises known limiter libraries, so the alert
+ * stayed open on code that was actually rate-limited. It is a devDependency
+ * alongside `express` itself — `local-server.ts` is the dev server and is not
+ * in the Lambda bundle (backend/esbuild.config.js takes only
+ * `handlers/**\/handler.ts`), so this adds zero production bytes.
+ *
+ * The two routes get SEPARATE limiter instances, and therefore separate
+ * stores, so a scanning proxy prefetching the GET cannot spend the POST's
+ * budget and hand a 429 to the human who then clicks Unsubscribe. Production
+ * gets the same separation for free by keying on API Gateway's per-method
+ * routeKey.
  */
-const unsubscribeRateBuckets = new Map<string, { count: number; resetAt: number }>();
+const unsubscribeFormStore = new MemoryStore();
+const unsubscribeSubmitStore = new MemoryStore();
 
-function unsubscribeRateLimit(max: number) {
-  const windowMs = 60_000;
-  return (
-    req: { ip?: string; method: string; path: string; socket?: { remoteAddress?: string } },
-    res: HtmlResponse & { status: (code: number) => { json: (body: unknown) => unknown } },
-    next: () => void
-  ): unknown => {
-    const now = Date.now();
-    // Key on METHOD + path + IP. The method matters: production keys on API
-    // Gateway's routeKey ("GET /notifications/email/unsubscribe"), which is
-    // per-method, and without it a corporate scanner prefetching the GET would
-    // burn the POST budget and hand a 429 to the human who then clicks
-    // Unsubscribe. An integration test covers exactly that.
-    const key = `${req.method} ${req.path}|${req.ip ?? req.socket?.remoteAddress ?? 'unknown'}`;
-    const bucket = unsubscribeRateBuckets.get(key);
-    if (!bucket || bucket.resetAt <= now) {
-      unsubscribeRateBuckets.set(key, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-    if (bucket.count >= max) {
-      return res
-        .status(429)
-        .json({ message: 'Too many requests. Please slow down and try again.' });
-    }
-    bucket.count += 1;
-    return next();
-  };
+function unsubscribeLimiter(limit: number, store: MemoryStore) {
+  return expressRateLimit({
+    windowMs: 60_000,
+    limit,
+    store,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) =>
+      res.status(429).json({ message: 'Too many requests. Please slow down and try again.' }),
+  });
 }
+
+const unsubscribeFormRateLimit = unsubscribeLimiter(30, unsubscribeFormStore);
+const unsubscribeSubmitRateLimit = unsubscribeLimiter(10, unsubscribeSubmitStore);
 
 /** Mirrors `__resetRateLimitForTests` in middleware/rateLimit.ts so an
  *  integration test can exercise the limiter without leaking buckets into the
  *  next case. */
 export function __resetUnsubscribeRateLimitForTests(): void {
-  unsubscribeRateBuckets.clear();
+  void unsubscribeFormStore.resetAll?.();
+  void unsubscribeSubmitStore.resetAll?.();
 }
 
 const emailCapabilitySecrets = new Map<string, string>();
@@ -4865,7 +4867,7 @@ app.get('/notifications/email/dev-token', authMiddleware, (req, res) => {
   res.json({ token, url: `http://localhost:4000/notifications/email/unsubscribe?t=${token}` });
 });
 
-app.get('/notifications/email/unsubscribe', unsubscribeRateLimit(30), (req, res) => {
+app.get('/notifications/email/unsubscribe', unsubscribeFormRateLimit, (req, res) => {
   const locale = unsubscribeLang(req);
   const token = typeof req.query.t === 'string' ? req.query.t : '';
   const userId = token ? localTokenUserId(token) : null;
@@ -4883,7 +4885,7 @@ app.get('/notifications/email/unsubscribe', unsubscribeRateLimit(30), (req, res)
   );
 });
 
-app.post('/notifications/email/unsubscribe', unsubscribeRateLimit(10), (req, res) => {
+app.post('/notifications/email/unsubscribe', unsubscribeSubmitRateLimit, (req, res) => {
   const locale = unsubscribeLang(req);
   const token = typeof req.query.t === 'string' ? req.query.t : '';
   const userId = token ? localTokenUserId(token) : null;
