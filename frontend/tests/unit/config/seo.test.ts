@@ -39,7 +39,29 @@ describe('resolveHead', () => {
     expect(head.title).toBe(DEFAULT_META.title);
     expect(head.description).toBe(DEFAULT_META.description);
     expect(head.ogImage).toBe(DEFAULT_OG_IMAGE);
-    expect(head.robots).toBe('index, follow');
+  });
+
+  it('marks the SPA shell noindex, because it answers for arbitrary URLs', () => {
+    // dist/app-shell.html is CloudFront's 403/404 response, so it is what a
+    // crawler receives for /dashboard, /typo, and every token-scoped URL
+    // (/sit/<token>, /tag/<token>, /kiosk/<token>, /shared/<code>). ADR 0013
+    // decided it carries a noindex; this pins that decision to the code.
+    expect(resolveHead(null, null).robots).toBe('noindex, follow');
+    expect(headToTags(resolveHead(null, null))).toContain(
+      '<meta name="robots" content="noindex, follow" />'
+    );
+  });
+
+  it('keeps a rendered route indexable', () => {
+    expect(resolveHead(null, '/pricing').robots).toBe('index, follow');
+    expect(resolveHead({ title: 'Pothos Care' }, '/care/pothos').robots).toBe('index, follow');
+  });
+
+  it('lets a route override the shell default in either direction', () => {
+    expect(resolveHead({ robots: 'noindex, nofollow' }, '/tag/abc').robots).toBe(
+      'noindex, nofollow'
+    );
+    expect(resolveHead({ robots: 'index, follow' }, null).robots).toBe('index, follow');
   });
 
   it('mirrors a route title into the social cards, as the client hook does', () => {
