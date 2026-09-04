@@ -142,6 +142,56 @@ const capacitor = read('frontend/capacitor.config.ts');
 const appId = match(capacitor, /appId:\s*['"]([^'"]+)['"]/, 'Capacitor appId');
 const appName = match(capacitor, /appName:\s*['"]([^'"]+)['"]/, 'Capacitor appName');
 
+// docs/mobile.md's "Native capabilities" table is what App Review notes get
+// written from, and it drifted into claiming capabilities the binary does not
+// have: the Guideline 4.2 section pitched "camera photo capture + the offline
+// app shell" to a reviewer when there is no @capacitor/camera and no runtime
+// caching on iOS (#469). A doc overstating the app to a store reviewer is its
+// own risk, so the table is derived from the dependency list rather than
+// maintained by hand: adding or dropping a plugin fails this check until the
+// doc moves with it.
+//
+// The second half — that each plugin is linked by BOTH native projects — is
+// what makes the table mean "the shells can do this" rather than "an npm
+// package is installed". `cap sync` regenerates those two files; a plugin
+// added to package.json and never synced is in neither.
+const CAPACITOR_PLATFORM_PACKAGES = ['@capacitor/core', '@capacitor/ios', '@capacitor/android'];
+const installedPlugins = Object.keys(packages.frontend.dependencies ?? {})
+  .filter((name) => name.startsWith('@capacitor/'))
+  .filter((name) => !CAPACITOR_PLATFORM_PACKAGES.includes(name))
+  .sort();
+
+const mobileDoc = read('docs/mobile.md');
+const pluginTable = mobileDoc.match(
+  /<!--\s*capacitor-plugins:start\s*-->([\s\S]*?)<!--\s*capacitor-plugins:end\s*-->/
+);
+if (!pluginTable) {
+  fail('docs/mobile.md is missing the capacitor-plugins table markers');
+} else {
+  const documented = [...pluginTable[1].matchAll(/`(@capacitor\/[a-z0-9-]+)`/g)]
+    .map((row) => row[1])
+    .sort();
+  const undocumented = installedPlugins.filter((name) => !documented.includes(name));
+  const overclaimed = documented.filter((name) => !installedPlugins.includes(name));
+  for (const name of undocumented) {
+    fail(`docs/mobile.md "Native capabilities" does not list installed plugin ${name}`);
+  }
+  for (const name of overclaimed) {
+    fail(`docs/mobile.md "Native capabilities" claims ${name}, which is not installed`);
+  }
+}
+
+const androidPluginLinks = read('frontend/android/capacitor.settings.gradle');
+const iosPluginLinks = read('frontend/ios/App/CapApp-SPM/Package.swift');
+for (const name of installedPlugins) {
+  if (!androidPluginLinks.includes(`${name}/android`)) {
+    fail(`Android project does not link ${name}; run npx cap sync`);
+  }
+  if (!iosPluginLinks.includes(`node_modules/${name}`)) {
+    fail(`iOS project does not link ${name}; run npx cap sync`);
+  }
+}
+
 const androidBuild = read('frontend/android/app/build.gradle');
 assertEqual(
   match(androidBuild, /applicationId\s+['"]([^'"]+)['"]/, 'Android applicationId'),
