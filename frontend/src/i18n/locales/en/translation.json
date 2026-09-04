@@ -672,7 +672,26 @@
   },
   "sitter": {
     "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",
-    "openBrief": "Open the full plant-care brief (printable)"
+    "openBrief": "Open the full plant-care brief (printable)",
+    "photo": {
+      "heading": "Send a photo home",
+      "body": "If you took a picture, they’d love to see it. Photos go straight onto that plant’s timeline — no account needed.",
+      "remaining_one": "{{count}} photo left on this link",
+      "remaining_other": "{{count}} photos left on this link",
+      "remainingUnknown": "We couldn’t check how many photos are left on this link. You can still try sending one.",
+      "whichPlant": "Which plant is it?",
+      "choosePlant": "Choose a plant",
+      "choosePhoto": "Choose a photo",
+      "previewAlt": "The photo you picked",
+      "captionLabel": "Add a note (optional)",
+      "send": "Send photo",
+      "sent_one": "Sent {{count}} photo. Thank you!",
+      "sent_other": "Sent {{count}} photos. Thank you!",
+      "notAnImage": "That file isn’t an image. Please pick a photo.",
+      "tooLarge": "That photo is too large to send, even after shrinking it. Try a different one.",
+      "readFailed": "We couldn’t read that photo. Please try another one.",
+      "sendFailed": "We couldn’t send that photo just now. Please try again in a moment."
+    }
   },
   "sitterBrief": {
     "metaTitle": "Plant-care brief — Family Greenhouse",
@@ -1073,5 +1092,36 @@
       "garden_plan": "The Garden plan",
       "greenhouse_plan": "The Greenhouse plan"
     }
+  },
+  "awayRecap": {
+    "title": "While you were away",
+    "description": "What your plant sitter did during their window — tasks they checked off, photos they sent, and any notes.",
+    "householdCardDescription": "Back from a trip? See what your sitter did while you were away.",
+    "householdCardLink": "Open the return recap",
+    "loading": "Loading your return recap…",
+    "window": "{{label}} · {{from}} to {{to}}",
+    "untitledLink": "Sitter link",
+    "tasksLabel": "Tasks done",
+    "photosLabel": "Photos",
+    "notesLabel": "Notes",
+    "tasksHeading": "Tasks your sitter checked off",
+    "photosHeading": "Photos they sent",
+    "notesHeading": "Notes they left",
+    "taskLine": "{{taskType}} — {{plant}}",
+    "taskBy": "by {{who}} on {{when}}",
+    "noteLine": "{{plant}}: {{text}}",
+    "aPlant": "a plant",
+    "photoAlt": "Photo your sitter sent",
+    "photoUnavailable": "This photo is no longer available",
+    "quietTitle": "Nothing was recorded in this window",
+    "quietBody": "Your sitter didn’t check off any tasks or send any photos between those dates. That’s what the activity log says — it isn’t a loading problem.",
+    "truncatedTitle": "This recap is partial",
+    "truncatedBody": "There was more activity in this window than we can show at once, so the lists below are only the beginning of it.",
+    "lockedTitle": "The Away Kit is part of Garden",
+    "lockedBody": "Sitter photo-back and the return recap are included with Garden and Greenhouse. Your sitter links keep working either way.",
+    "noneTitle": "No sitter window has ended yet",
+    "noneBody": "Once a sitter link’s window closes, the recap of what happened during it appears here.",
+    "failedTitle": "We couldn’t load your recap",
+    "failedBody": "Something went wrong fetching it, so we can’t tell you what happened while you were away. Please refresh and try again — this is not the same as nothing having happened."
   }
 }

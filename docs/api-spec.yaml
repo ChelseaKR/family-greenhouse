@@ -573,6 +573,73 @@ paths:
                   overdue: { type: boolean }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /sitter/{token}/photos:
+    get:
+      summary: Away Kit photo-back status for a sitter link — whether the household's plan includes it and how much of the 60-photo cap is left. No auth; token is the only credential. `used`/`remaining` are null when the count could not be read.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Photo-back availability for this link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  max: { type: integer, example: 60 }
+                  used: { type: integer, nullable: true }
+                  remaining: { type: integer, nullable: true }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Sitter photo-back. Stores one JPEG/PNG/WebP photo (≤ 300 KB decoded, type verified by magic bytes) of the plant behind a task, under the household's photo timeline, attributed to the sitter link. Hard limits, all server-side — 60 photos per link (atomic), 300 KB per file, IP + per-token rate limits, refused once the link has expired or been revoked, refused (402) when the plan lacks the Away Kit. Never replaces the plant's primary image.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taskId, image]
+              properties:
+                taskId:
+                  {
+                    type: string,
+                    description: A task from the sitter view; resolved to its plant inside the token's household,
+                  }
+                image:
+                  {
+                    type: string,
+                    description: Data URL or bare base64 of the image bytes (≤ 409,
+                    600 chars),
+                  }
+                caption: { type: string, maxLength: 200 }
+      responses:
+        '201':
+          description: Photo stored (PII-free acknowledgement)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photoId: { type: string }
+                  plantName: { type: string }
+                  caption: { type: string, nullable: true }
+                  uploadedAt: { type: string, format: date-time }
+                  used: { type: integer }
+                  remaining: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402': { description: The household's plan does not include the Away Kit }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The link has reached its 60-photo limit }
+        '413': { description: Photo exceeds 300 KB }
+        '429': { description: Per-IP or per-token upload rate exceeded }
+
   /households:
     post:
       summary: Create a new household
@@ -1319,6 +1386,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /households/{id}/away-recap:
+    get:
+      summary: Away Kit return recap — replays the activity a sitter link produced inside its window (tasks checked off, photos sent back, notes). Any household member. Defaults to the most recently ended link; `linkId` selects one explicitly. 402 when the plan lacks the Away Kit; 404 when no window has ended yet; a failed read is a 5xx, never an empty recap.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: linkId, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: The recap for one sitter window
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      label: { type: string, nullable: true }
+                      startsAt: { type: string, format: date-time }
+                      expiresAt: { type: string, format: date-time }
+                      status: { type: string, enum: [active, revoked] }
+                      ended: { type: boolean }
+                  window:
+                    type: object
+                    properties:
+                      from: { type: string, format: date-time }
+                      to: { type: string, format: date-time }
+                  tasksCompleted:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        plantId: { type: string }
+                        plantName: { type: string, nullable: true }
+                        taskType: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                        actorName: { type: string }
+                        notes: { type: string, nullable: true }
+                  photos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        photoId: { type: string }
+                        plantId: { type: string }
+                        plantName: { type: string, nullable: true }
+                        imageUrl: { type: string, nullable: true }
+                        caption: { type: string, nullable: true }
+                        occurredAt: { type: string, format: date-time }
+                  notes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source: { type: string, enum: [photo, task] }
+                        plantId: { type: string }
+                        plantName: { type: string, nullable: true }
+                        text: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                  counts:
+                    type: object
+                    properties:
+                      tasks: { type: integer }
+                      photos: { type: integer }
+                      notes: { type: integer }
+                  truncated:
+                    {
+                      type: boolean,
+                      description: True when the activity scan hit its cap — the lists are a prefix,
+                    }
+                  generatedAt: { type: string, format: date-time }
+        '402': { description: The household's plan does not include the Away Kit }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   # --- Notifications ---
   /notifications/prefs:

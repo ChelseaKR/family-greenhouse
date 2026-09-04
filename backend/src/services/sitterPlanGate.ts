@@ -12,17 +12,19 @@
  * entitlement. That is the same code the plant cap uses, so the client's
  * upgrade prompt already knows how to read it.
  */
-import { PLANS, planRank, type Plan } from '../models/plans.js';
+import { PLANS, planIncludesAwayKit, type Plan } from '../models/plans.js';
 
 /**
  * Whether this tier includes the handoff brief (ADR 0015). Free keeps the
  * task list — complete, and enough for a weekend; the brief, with placements,
  * the household's own care words, pet-safety and photos, is the Away Kit and
- * starts at Garden. Expressed against PLAN_ORDER rather than a hardcoded id
- * so a future tier above Garden inherits it automatically.
+ * starts at Garden. The brief, the sitter photo-back and the return recap are
+ * one entitlement, so the line is drawn once in the plan catalog
+ * (`planIncludesAwayKit`, expressed against PLAN_ORDER so a future tier above
+ * Garden inherits it) and read here rather than restated.
  */
 export function sitterBriefIncluded(plan: Plan): boolean {
-  return planRank(plan.id) >= planRank('garden');
+  return planIncludesAwayKit(plan);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

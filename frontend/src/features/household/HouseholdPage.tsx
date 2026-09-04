@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -282,6 +283,19 @@ export function HouseholdPage() {
           create/copy/revoke state stays self-contained; it decides per link
           whether this member may revoke it. */}
       {householdId && <SitterLinksCard householdId={householdId} members={household.members} />}
+
+      {/* Return recap — deliberately NOT admin-gated: the sitter looked after
+          the whole household's plants, so every member can see what happened
+          while they were away. */}
+      <Card>
+        <CardHeader
+          title={t('awayRecap.title')}
+          description={t('awayRecap.householdCardDescription')}
+        />
+        <Link to="/away-recap" className="text-primary-700 underline hover:text-primary-800">
+          {t('awayRecap.householdCardLink')}
+        </Link>
+      </Card>
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

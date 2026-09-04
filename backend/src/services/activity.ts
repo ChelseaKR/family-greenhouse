@@ -102,7 +102,17 @@ export interface ActivityPayloadByType {
     overall: 'healthy' | 'monitor' | 'concern';
     demo: boolean;
   };
-  'photo.uploaded': { plantId: string; photoId: string };
+  'photo.uploaded': {
+    plantId: string;
+    photoId: string;
+    /** Set by the sitter photo-back route so the return recap can render
+     *  the photo from the event alone. Absent on member uploads. */
+    plantName?: string;
+    imageUrl?: string;
+    caption?: string | null;
+    viaSitter?: boolean;
+    sitterLinkId?: string;
+  };
   'member.joined': { role: 'admin' | 'member' };
   'member.left': { role?: 'admin' | 'member' };
   'sitter_link.created': SitterLinkActivityPayload;
@@ -210,6 +220,45 @@ export async function recordActivity(input: RecordActivityInput): Promise<void> 
 }
 
 /**
+ * Fold one row from the activity partition into the unified envelope. Both
+ * row kinds live on GSI1 `HOUSEHOLD#{id}#ACTIVITY`: typed ActivityEvent rows
+ * and the legacy TaskCompletion rows the task service projects there.
+ * Shared by the feed (below) and the Away Kit recap (awayRecapService).
+ */
+export function itemToActivityEvent(item: Record<string, unknown>): ActivityEvent {
+  if (item.entityType === 'ActivityEvent') {
+    // DynamoDB is a persistence boundary: historical rows predate the
+    // compile-time payload map, so preserve them verbatim. Producers are
+    // checked by RecordActivityInput; the frontend keeps runtime fallbacks
+    // for older/newer rows.
+    return {
+      id: item.id as string,
+      type: item.type as ActivityType,
+      householdId: item.householdId as string,
+      actorId: item.actorId as string,
+      actorName: item.actorName as string,
+      occurredAt: item.occurredAt as string,
+      payload: item.payload,
+    } as ActivityEvent;
+  }
+  // TaskCompletion legacy shape — fold into the envelope.
+  return {
+    id: item.id as string,
+    type: 'task.completed',
+    householdId: item.householdId as string,
+    actorId: item.completedBy as string,
+    actorName: (item.completedByName as string) ?? '',
+    occurredAt: (item.completedAt as string) ?? '',
+    payload: {
+      plantId: item.plantId as string,
+      taskId: item.taskId as string,
+      taskType: item.taskType as string,
+      notes: (item.notes as string | null) ?? null,
+    },
+  };
+}
+
+/**
  * Newest-first activity for a household. Includes both legacy TaskCompletion
  * rows (already on this GSI partition) and ActivityEvent rows; the response
  * shape is the unified envelope so the frontend renders them uniformly.
@@ -228,36 +277,5 @@ export async function listActivity(householdId: string, limit = 50): Promise<Act
     })
   );
 
-  return (result.Items ?? []).map((item) => {
-    if (item.entityType === 'ActivityEvent') {
-      // DynamoDB is a persistence boundary: historical rows predate the
-      // compile-time payload map, so preserve them verbatim. Producers are
-      // checked by RecordActivityInput; the frontend keeps runtime fallbacks
-      // for older/newer rows.
-      return {
-        id: item.id as string,
-        type: item.type as ActivityType,
-        householdId: item.householdId as string,
-        actorId: item.actorId as string,
-        actorName: item.actorName as string,
-        occurredAt: item.occurredAt as string,
-        payload: item.payload as unknown,
-      } as ActivityEvent;
-    }
-    // TaskCompletion legacy shape — fold into the envelope.
-    return {
-      id: item.id as string,
-      type: 'task.completed',
-      householdId: item.householdId as string,
-      actorId: item.completedBy as string,
-      actorName: (item.completedByName as string) ?? '',
-      occurredAt: (item.completedAt as string) ?? '',
-      payload: {
-        plantId: item.plantId as string,
-        taskId: item.taskId as string,
-        taskType: item.taskType as string,
-        notes: (item.notes as string | null) ?? null,
-      },
-    };
-  });
+  return (result.Items ?? []).map(itemToActivityEvent);
 }

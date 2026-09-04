@@ -812,19 +812,36 @@ export interface PlantPhoto {
   uploadedBy: string;
   uploadedAt: string;
   caption: string | null;
+  /** Present (true) when a plant sitter sent the photo through an Away Kit
+   *  link; `sitterLinkId` names which link. Absent on member uploads. */
+  viaSitter?: boolean;
+  sitterLinkId?: string;
+}
+
+export interface AppendPlantPhotoOptions {
+  /** Attribute the photo to a sitter link instead of a member. */
+  viaSitter?: { linkId: string };
+  /**
+   * Default true: the plant row's primary `imageUrl` follows the newest
+   * photo. Sitter uploads pass false — an unauthenticated writer may add to
+   * the timeline but never replace the picture the household chose.
+   */
+  setPrimaryImage?: boolean;
 }
 
 /**
- * Append a photo to the plant's timeline AND atomically update the primary
- * `imageUrl` on the plant row. The plant row keeps tracking the most-recent
- * photo (so existing UI continues to work); the timeline keeps history.
+ * Append a photo to the plant's timeline AND (by default) atomically update
+ * the primary `imageUrl` on the plant row. The plant row keeps tracking the
+ * most-recent photo (so existing UI continues to work); the timeline keeps
+ * history.
  */
 export async function appendPlantPhoto(
   householdId: string,
   plantId: string,
   imageUrl: string,
   uploadedBy: string,
-  caption: string | null = null
+  caption: string | null = null,
+  options: AppendPlantPhotoOptions = {}
 ): Promise<PlantPhoto> {
   const id = uuid();
   const now = new Date();
@@ -835,6 +852,7 @@ export async function appendPlantPhoto(
     uploadedBy,
     uploadedAt: now.toISOString(),
     caption,
+    ...(options.viaSitter ? { viaSitter: true, sitterLinkId: options.viaSitter.linkId } : {}),
   };
   const photoItem: DynamoDBItem = {
     PK: `HOUSEHOLD#${householdId}#PLANT#${plantId}`,
@@ -842,6 +860,27 @@ export async function appendPlantPhoto(
     entityType: 'PlantPhoto',
     ...photo,
   };
+
+  if (options.setPrimaryImage === false) {
+    // Timeline-only write. The condition still ties the row to a live plant
+    // — the plant item must exist — via the same key the transaction below
+    // guards, so a photo can't be appended to a deleted plant.
+    await dynamodb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: TABLE_NAME, Item: photoItem } },
+          {
+            ConditionCheck: {
+              TableName: TABLE_NAME,
+              Key: { PK: `HOUSEHOLD#${householdId}`, SK: `PLANT#${plantId}` },
+              ConditionExpression: 'attribute_exists(PK)',
+            },
+          },
+        ],
+      })
+    );
+    return photo;
+  }
 
   await dynamodb.send(
     new TransactWriteCommand({
@@ -894,6 +933,9 @@ export async function getPlantPhotos(
     uploadedBy: item.uploadedBy as string,
     uploadedAt: item.uploadedAt as string,
     caption: (item.caption as string | null) ?? null,
+    ...(item.viaSitter === true
+      ? { viaSitter: true, sitterLinkId: item.sitterLinkId as string | undefined }
+      : {}),
   }));
 }
 

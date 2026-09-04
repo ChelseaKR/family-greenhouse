@@ -157,6 +157,18 @@ export function hasHouseholdToolkit(plan: Plan): boolean {
   return plan.features.householdToolkit;
 }
 
+/**
+ * True when the tier includes the Away Kit — the handoff brief (ADR 0015),
+ * the sitter photo-back, and the return recap. One boundary, not three: the
+ * free tier keeps the plain task list, and everything the Away Kit adds on
+ * top starts at Garden. Expressed against PLAN_ORDER rather than a per-tier
+ * flag so a future tier above Garden inherits it automatically, and so this
+ * stays the single place the line is drawn — `sitterPlanGate` reads it too.
+ */
+export function planIncludesAwayKit(plan: Plan): boolean {
+  return planRank(plan.id) >= planRank('garden');
+}
+
 export function getPlan(id: string | undefined | null): Plan {
   // Object.hasOwn (not `in`): `in` also matches inherited prototype
   // properties, so e.g. getPlan('toString') would return undefined and crash

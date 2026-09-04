@@ -68,6 +68,10 @@ const HouseholdPage = lazyNamed(
   () => import('@/features/household/HouseholdPage'),
   'HouseholdPage'
 );
+const AwayRecapPage = lazyNamed(
+  () => import('@/features/household/AwayRecapPage'),
+  'AwayRecapPage'
+);
 const SettingsPage = lazyNamed(() => import('@/features/settings/SettingsPage'), 'SettingsPage');
 const AccountPage = lazyNamed(() => import('@/features/settings/AccountPage'), 'AccountPage');
 const HelpPage = lazyNamed(() => import('@/features/help/HelpPage'), 'HelpPage');
@@ -240,6 +244,7 @@ function App() {
                   <Route path="/tasks" element={<TasksPage />} />
                   <Route path="/chat" element={<ChatPage />} />
                   <Route path="/household" element={<HouseholdPage />} />
+                  <Route path="/away-recap" element={<AwayRecapPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/settings/billing" element={<SettingsPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />

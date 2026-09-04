@@ -40,7 +40,8 @@ export type AuditEvent =
   | 'rate_limit.tripped'
   | 'chat.message_sent'
   | 'chat.tools_called'
-  | 'chat.response_reported';
+  | 'chat.response_reported'
+  | 'sitter.photo_uploaded';
 
 export interface AuditFields {
   actorId?: string;

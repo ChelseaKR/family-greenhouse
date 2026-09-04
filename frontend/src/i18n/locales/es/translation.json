@@ -690,7 +690,28 @@
   },
   "sitter": {
     "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",
-    "openBrief": "Abre la guía de cuidados completa (imprimible)"
+    "openBrief": "Abre la guía de cuidados completa (imprimible)",
+    "photo": {
+      "heading": "Envía una foto a casa",
+      "body": "Si has hecho una foto, les encantará verla. Las fotos van directas al historial de esa planta, sin necesidad de crear una cuenta.",
+      "remaining_one": "Queda {{count}} foto en este enlace",
+      "remaining_many": "Quedan {{count}} fotos en este enlace",
+      "remaining_other": "Quedan {{count}} fotos en este enlace",
+      "remainingUnknown": "No hemos podido comprobar cuántas fotos quedan en este enlace. Aun así puedes intentar enviar una.",
+      "whichPlant": "¿De qué planta es?",
+      "choosePlant": "Elige una planta",
+      "choosePhoto": "Elige una foto",
+      "previewAlt": "La foto que has elegido",
+      "captionLabel": "Añade una nota (opcional)",
+      "send": "Enviar foto",
+      "sent_one": "Se ha enviado {{count}} foto. ¡Gracias!",
+      "sent_many": "Se han enviado {{count}} fotos. ¡Gracias!",
+      "sent_other": "Se han enviado {{count}} fotos. ¡Gracias!",
+      "notAnImage": "Ese archivo no es una imagen. Elige una foto, por favor.",
+      "tooLarge": "Esa foto es demasiado grande para enviarla, incluso después de reducirla. Prueba con otra.",
+      "readFailed": "No hemos podido leer esa foto. Prueba con otra, por favor.",
+      "sendFailed": "No hemos podido enviar esa foto ahora mismo. Vuelve a intentarlo en un momento."
+    }
   },
   "sitterBrief": {
     "metaTitle": "Guía de cuidados — Family Greenhouse",
@@ -1098,5 +1119,36 @@
       "garden_plan": "El plan Garden",
       "greenhouse_plan": "El plan Greenhouse"
     }
+  },
+  "awayRecap": {
+    "title": "Mientras no estabas",
+    "description": "Lo que hizo quien cuidó tus plantas durante su periodo: tareas completadas, fotos enviadas y las notas que dejó.",
+    "householdCardDescription": "¿Vuelves de viaje? Mira qué hizo quien cuidó tus plantas mientras no estabas.",
+    "householdCardLink": "Abrir el resumen de vuelta",
+    "loading": "Cargando tu resumen de vuelta…",
+    "window": "{{label}} · del {{from}} al {{to}}",
+    "untitledLink": "Enlace de cuidado",
+    "tasksLabel": "Tareas hechas",
+    "photosLabel": "Fotos",
+    "notesLabel": "Notas",
+    "tasksHeading": "Tareas que completó",
+    "photosHeading": "Fotos que envió",
+    "notesHeading": "Notas que dejó",
+    "taskLine": "{{taskType}} — {{plant}}",
+    "taskBy": "por {{who}} el {{when}}",
+    "noteLine": "{{plant}}: {{text}}",
+    "aPlant": "una planta",
+    "photoAlt": "Foto enviada por quien cuidó tus plantas",
+    "photoUnavailable": "Esta foto ya no está disponible",
+    "quietTitle": "No se registró nada en este periodo",
+    "quietBody": "Entre esas fechas no se completó ninguna tarea ni se envió ninguna foto. Eso es lo que dice el registro de actividad: no es un problema de carga.",
+    "truncatedTitle": "Este resumen está incompleto",
+    "truncatedBody": "En este periodo hubo más actividad de la que podemos mostrar de una vez, así que las listas de abajo son solo el principio.",
+    "lockedTitle": "El Kit de Viaje forma parte de Garden",
+    "lockedBody": "El envío de fotos y el resumen de vuelta se incluyen con Garden y Greenhouse. Tus enlaces de cuidado siguen funcionando igualmente.",
+    "noneTitle": "Todavía no ha terminado ningún periodo de cuidado",
+    "noneBody": "Cuando se cierre el periodo de un enlace de cuidado, aquí aparecerá el resumen de lo que ocurrió durante él.",
+    "failedTitle": "No hemos podido cargar tu resumen",
+    "failedBody": "Algo ha fallado al obtenerlo, así que no podemos decirte qué pasó mientras no estabas. Actualiza la página e inténtalo de nuevo: esto no significa que no haya pasado nada."
   }
 }

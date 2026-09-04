@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
+import { manualChunks } from './vite.manualChunks';
+
 /**
  * Strip HTML comments, repeatedly, until the output stops changing.
  *
@@ -225,25 +227,11 @@ export default defineConfig(({ isSsrBuild }) => ({
         // Vendor/feature splitting is a browser-payload concern. The SSR bundle
         // is loaded once by a Node build script, and chunking it only makes the
         // prerender's dynamic import harder to reason about.
-        manualChunks: isSsrBuild
-          ? undefined
-          : (id: string) => {
-              // Keep the React runtime in a single long-lived vendor chunk.
-              // A string-array manualChunks entry (['react', 'react-dom', ...])
-              // stopped capturing all of react-dom's submodules under React 19,
-              // which leaked the runtime into the entry chunk and ballooned it.
-              // Matching on the resolved node_modules path is version-robust.
-              if (/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) {
-                return 'vendor';
-              }
-              if (/node_modules\/@tanstack\/react-query\//.test(id)) {
-                return 'query';
-              }
-              if (/node_modules\/(@headlessui\/react|@heroicons\/react)\//.test(id)) {
-                return 'ui';
-              }
-              return undefined;
-            },
+        //
+        // The rules themselves live in ./vite.manualChunks.ts so that the test
+        // suite can import and run the exact function rollup is handed here,
+        // instead of re-deriving it from this file's source text.
+        manualChunks: isSsrBuild ? undefined : manualChunks,
       },
     },
   },
