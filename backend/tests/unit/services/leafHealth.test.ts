@@ -162,7 +162,8 @@ describe('assessLeafHealth (Bedrock vision wrapper)', () => {
     });
   });
 
-  it('falls back to the canned demo assessment when Bedrock access is unavailable', async () => {
+  it('falls back to the canned demo assessment when the environment DECLARES it has no Bedrock', async () => {
+    process.env.LEAF_HEALTH_DEMO = '1';
     const denied = new Error('not authorized to perform: bedrock:InvokeModel');
     denied.name = 'AccessDeniedException';
     bedrockSend.mockRejectedValueOnce(denied);
@@ -173,6 +174,40 @@ describe('assessLeafHealth (Bedrock vision wrapper)', () => {
     expect(result.demo).toBe(true);
     expect(result.overall).toBe('monitor');
     expect(result.disclaimer).toMatch(/not a plant-health diagnosis/);
+  });
+
+  // #463: an AccessDeniedException cannot tell a preview environment from a
+  // production credential regression. Gating the fallback on the ERROR made a
+  // Terraform apply that dropped bedrock:InvokeModel turn every check in
+  // production into the same fixture, at HTTP 200, with nothing to alarm on.
+  it.each([
+    ['AccessDeniedException'],
+    ['UnrecognizedClientException'],
+    ['CredentialsProviderError'],
+    ['ExpiredTokenException'],
+    ['InvalidSignatureException'],
+  ])('throws LeafHealthUnavailableError on %s when demo mode is NOT declared', async (name) => {
+    delete process.env.LEAF_HEALTH_DEMO;
+    const denied = new Error('nope');
+    denied.name = name;
+    bedrockSend.mockRejectedValueOnce(denied);
+    const { assessLeafHealth } = await subject();
+
+    await expect(assessLeafHealth('H'.repeat(100))).rejects.toMatchObject({
+      name: 'LeafHealthUnavailableError',
+    });
+  });
+
+  it('treats LEAF_HEALTH_DEMO="0" as not declared', async () => {
+    process.env.LEAF_HEALTH_DEMO = '0';
+    const denied = new Error('nope');
+    denied.name = 'AccessDeniedException';
+    bedrockSend.mockRejectedValueOnce(denied);
+    const { assessLeafHealth } = await subject();
+
+    await expect(assessLeafHealth('H'.repeat(100))).rejects.toMatchObject({
+      name: 'LeafHealthUnavailableError',
+    });
   });
 
   it('rethrows non-access transport errors (throttling) for the 502 path', async () => {

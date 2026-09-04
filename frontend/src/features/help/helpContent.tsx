@@ -276,13 +276,15 @@ export const HELP_SECTIONS: HelpSection[] = [
               you ran one and what the verdict was.
             </p>
             <p>
-              If the server can&rsquo;t reach the model you get a clearly-labelled demo result
-              instead of a real one — it says &ldquo;Demo result&rdquo; on the card. Don&rsquo;t act
-              on that.
+              If the server can&rsquo;t reach the model you are told so — the check fails with
+              &ldquo;temporarily unavailable&rdquo; and nothing is analysed. On a demo or preview
+              server you instead get a clearly-labelled demo result that says &ldquo;Demo
+              result&rdquo; on the card. Don&rsquo;t act on that. Either way, you never get an
+              assessment the model did not actually make.
             </p>
           </>
         ),
-        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped at 200 checks per household per calendar month, resetting on the 1st. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model you get a clearly labelled demo result instead of a real one; do not act on that.',
+        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped at 200 checks per household per calendar month, resetting on the 1st. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model the check fails with "temporarily unavailable" and nothing is analysed; on a demo or preview server you instead get a clearly labelled demo result, which you should not act on. Either way you never get an assessment the model did not actually make.',
       },
     ],
   },

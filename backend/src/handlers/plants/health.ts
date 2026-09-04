@@ -102,6 +102,19 @@ export const checkPlantHealth = createHandler(
     try {
       assessment = await leafHealth.assessLeafHealth(validatedBody.imageBase64);
     } catch (err) {
+      // Bedrock refused this deployment and this environment has NOT declared
+      // itself a demo. No paid work happened, so give the reservation back —
+      // same reasoning as the demo branch below — and answer honestly. A 503
+      // is what makes a credential regression visible to the existing api-5xx
+      // and Lambda-error alarms instead of shipping a fixture at 200 (#463).
+      if (err instanceof Error && err.name === 'LeafHealthUnavailableError') {
+        if (metered) await leafHealthBudget.releaseUsage(user.householdId!);
+        throw createHttpError(
+          503,
+          'Leaf-health checks are temporarily unavailable on this server. Nothing was analyzed — please try again later.',
+          { expose: true }
+        );
+      }
       // Both branches are intentionally exposed (5xx messages are hidden by
       // default) so the frontend can show why the check failed — mirrors the
       // identify handler's 502 contract.

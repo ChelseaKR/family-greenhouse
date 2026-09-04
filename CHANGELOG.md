@@ -16,6 +16,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **A leaf-health check can no longer answer with a fixture when the model is
+  unreachable.** The canned demo assessment was returned on any Bedrock access
+  error, at HTTP 200 — so a Terraform apply or model-access change that removed
+  `bedrock:InvokeModel` would have turned every check in production into the
+  same canned "monitor" result, with no 5xx, no error metric, and one WARN line
+  nothing reads. The fallback is now declared by the environment
+  (`leaf_health_demo`, default off) rather than inferred from the error: a
+  deployment that is supposed to reach Bedrock answers 503 and logs at ERROR,
+  which the existing api-5xx alarm already watches. Nothing was analysed, so
+  the month's allowance is returned rather than spent.
+
 ## [0.26.0] - 2026-09-04
 
 > `0.25.0` was tagged and, like `0.24.0` before it, never reached production.

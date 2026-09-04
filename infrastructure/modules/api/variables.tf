@@ -272,6 +272,16 @@ variable "leaf_health_monthly_cap_greenhouse" {
   default     = ""
 }
 
+# Declaring "this environment has no Bedrock" is what earns the canned demo
+# assessment on an AccessDeniedException. Off by default so an environment
+# that IS supposed to reach Bedrock fails loudly (503 + ERROR log) rather than
+# answering with a fixture at HTTP 200.
+variable "leaf_health_demo" {
+  description = "Return the canned demo leaf-health assessment when Bedrock refuses this deployment. Set true ONLY for an environment with no Bedrock access."
+  type        = bool
+  default     = false
+}
+
 variable "perenual_api_key_parameter_name" {
   description = "SSM SecureString parameter name (e.g. '/family-greenhouse/perenual-api-key') holding the Perenual API key. The Lambda fetches the value at cold start; the secret material never lands in Terraform state. Empty disables Perenual integration."
   type        = string
