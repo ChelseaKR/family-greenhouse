@@ -16,9 +16,15 @@ fi
 echo "Node.js version: $(node -v)"
 echo "npm version: $(npm -v)"
 
-# Install dependencies
+# Install dependencies.
+# `npm ci`, not `npm install`: ci installs the exact tree package-lock.json
+# pins, which is what CI runs and what OpenSSF Scorecard's pinned-dependencies
+# check wants. `npm install` is free to resolve a newer in-range version and
+# rewrite the lockfile, so a fresh dev environment could silently differ from
+# the one CI validated. If this step fails because package.json and the lock
+# have drifted apart, that is the bug — regenerate the lockfile and commit it.
 echo "Installing dependencies..."
-npm install
+npm ci
 
 # Set up Husky hooks
 echo "Setting up Git hooks..."
