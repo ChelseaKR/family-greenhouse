@@ -26,6 +26,8 @@ const ACTIVITY_CATEGORIES: Record<ActivityType, ActivityCategory> = {
   'photo.uploaded': 'plants',
   'member.joined': 'people',
   'member.left': 'people',
+  'sitter_link.created': 'people',
+  'sitter_link.revoked': 'people',
 };
 
 export function filterActivity(events: ActivityEvent[], filter: ActivityFilter): ActivityEvent[] {

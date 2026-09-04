@@ -1,13 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { SitterLinksCard } from '@/features/household/SitterLinksCard';
+import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
 
 const API = 'http://localhost:4000';
 const DAY = 24 * 60 * 60 * 1000;
+
+/** Sign the card's viewer in as `role` of hh-1 (the role the backend resolves). */
+function signInAs(role: 'admin' | 'member', id = 'user-1') {
+  useAuthStore.setState({
+    user: { id, email: 'me@example.com', name: 'Me', householdId: 'hh-1', householdRole: role },
+    isAuthenticated: true,
+    isLoading: false,
+  } as never);
+  server.use(
+    http.get(`${API}/me/households`, () =>
+      HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role, joinedAt: '' }])
+    )
+  );
+}
+
+beforeEach(() => {
+  useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false } as never);
+});
 
 /**
  * The card's shared-links section is the only place an admin can revoke a
@@ -19,10 +39,23 @@ const DAY = 24 * 60 * 60 * 1000;
  * access is open right now, so the state each row reports has to be the real
  * one — a row keeps `status: 'active'` for days after its window closes.
  */
-function renderCard(links: unknown[] | 'fail') {
+function renderCard(
+  links: unknown[] | 'fail',
+  role: 'admin' | 'member' = 'admin',
+  members: Array<{ userId: string; name: string }> = [],
+  plan: 'seedling' | 'garden' | 'greenhouse' | 'fail' = 'garden'
+) {
+  signInAs(role);
   server.use(
+    // The card now also renders the pre-trip gap prompt, which reads plants.
+    http.get(`${API}/plants`, () => HttpResponse.json([])),
     http.get(`${API}/households/hh-1/sitter-links`, () =>
       links === 'fail' ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(links)
+    ),
+    http.get(`${API}/billing/me`, () =>
+      plan === 'fail'
+        ? new HttpResponse(null, { status: 500 })
+        : HttpResponse.json({ planId: plan })
     )
   );
   const queryClient = new QueryClient({
@@ -30,7 +63,9 @@ function renderCard(links: unknown[] | 'fail') {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SitterLinksCard householdId="hh-1" />
+      <MemoryRouter>
+        <SitterLinksCard householdId="hh-1" members={members} />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -52,6 +87,61 @@ describe('SitterLinksCard existing-links read', () => {
       screen.queryByRole('button', { name: 'Revoke sitter link Old' })
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a member a Revoke control only on links they created, and names other creators', async () => {
+    renderCard(
+      [
+        {
+          id: 'l1',
+          label: 'Mine',
+          status: 'active',
+          createdBy: 'user-1',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+        {
+          id: 'l2',
+          label: 'Theirs',
+          status: 'active',
+          createdBy: 'user-2',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+      ],
+      'member',
+      [{ userId: 'user-2', name: 'Sam' }]
+    );
+
+    expect(await screen.findByText('Links you’ve shared')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke sitter link Mine' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Revoke sitter link Theirs' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Shared by Sam')).toBeInTheDocument();
+    expect(screen.getByText(/only its creator or an admin can revoke/i)).toBeInTheDocument();
+  });
+
+  it('lets an admin revoke every link, including ones other members created', async () => {
+    renderCard(
+      [
+        {
+          id: 'l2',
+          label: 'Theirs',
+          status: 'active',
+          createdBy: 'user-2',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+      ],
+      'admin'
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Revoke sitter link Theirs' })
+    ).toBeInTheDocument();
+    // Roster unknown for that id → honest fallback, never a made-up name.
+    expect(screen.getByText('Shared by another member')).toBeInTheDocument();
   });
 
   it('shows nothing extra for a genuinely empty list', async () => {
@@ -163,12 +253,18 @@ describe('SitterLinksCard creation window', () => {
         );
       })
     );
+    server.use(
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'garden' })),
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     render(
       <QueryClientProvider client={queryClient}>
-        <SitterLinksCard householdId="hh-1" />
+        <MemoryRouter>
+          <SitterLinksCard householdId="hh-1" />
+        </MemoryRouter>
       </QueryClientProvider>
     );
 
@@ -186,5 +282,71 @@ describe('SitterLinksCard creation window', () => {
     // Local midnight on the chosen day, not "now" and not UTC midnight.
     expect(new Date(startsAt).getFullYear()).toBe(2099);
     expect(new Date(startsAt).getHours()).toBe(0);
+  });
+});
+
+/**
+ * The plan sets the longest window and how many links may be live (ADR
+ * 0015). The card says which cap applies while the member types, bends the
+ * default to it, and — on the free tier — turns the wall into an upgrade
+ * prompt. An unsettled or failed plan read is stated as unknown: never the
+ * free tier by assumption, never unlimited.
+ */
+describe('SitterLinksCard plan caps', () => {
+  it('Seedling: caps the length input at 7, bends the default to it, and offers Garden', async () => {
+    renderCard([], 'admin', [], 'seedling');
+
+    const length = (await screen.findByLabelText('Lasts for (days)')) as HTMLInputElement;
+    await waitFor(() => expect(length).toHaveAttribute('max', '7'));
+    expect(length.value).toBe('7');
+    expect(screen.getByText(/Up to 7 days on your plan/)).toBeInTheDocument();
+    expect(screen.getByText(/Garden allows sitter links up to 90 days/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+  });
+
+  it('Garden: allows 90 days, keeps the 14-day default, and shows no upgrade prompt', async () => {
+    renderCard([], 'admin', [], 'garden');
+
+    const length = (await screen.findByLabelText('Lasts for (days)')) as HTMLInputElement;
+    await waitFor(() => expect(length).toHaveAttribute('max', '90'));
+    expect(length.value).toBe('14');
+    expect(screen.getByText(/Up to 90 days on your plan/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+  });
+
+  it('says the cap is unknown when the plan read fails — not 7, not 90', async () => {
+    renderCard([], 'admin', [], 'fail');
+
+    expect(
+      await screen.findByText(/couldn.t confirm your plan.s longest window/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Up to 7 days/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Up to 90 days/)).not.toBeInTheDocument();
+  });
+
+  it('Seedling with one live link: explains the one-at-a-time cap and disables Create', async () => {
+    renderCard(
+      [
+        {
+          id: 'l1',
+          label: 'Live',
+          status: 'active',
+          createdBy: 'user-1',
+          startsAt: iso(-DAY),
+          expiresAt: iso(DAY),
+        },
+      ],
+      'admin',
+      [],
+      'seedling'
+    );
+
+    expect(
+      await screen.findByText(/keeps 1 live sitter link at a time\. Revoke the current one/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create sitter link/i })).toBeDisabled();
   });
 });

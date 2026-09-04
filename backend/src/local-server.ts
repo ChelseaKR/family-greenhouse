@@ -46,6 +46,13 @@ import {
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary } from './models/plans.js';
 import { lookupToxicity } from './models/petToxicity.js';
+import {
+  checkSitterLinkPlanGate,
+  countLiveSitterLinks,
+  sitterBriefIncluded,
+  sitterWindowDays,
+} from './services/sitterPlanGate.js';
+import { resolveCareNote, resolvePetSafety } from './services/sitterBrief.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
@@ -1406,7 +1413,9 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
 
 // --- Plant-sitter links (authed management) -------------------------------
 // Mirrors handlers/households/handler.ts: createSitterLink / listSitterLinks /
-// revokeSitterLink. Admin-gated, like invites.
+// revokeSitterLink. Open to every household member (ADR 0015); an admin can
+// revoke any link, a member only their own; create/revoke are named in the
+// activity feed.
 
 /** Non-secret view of a sitter link (no token). Mirrors toSummary. */
 function sitterSummary(link: SitterLink) {
@@ -1420,7 +1429,6 @@ app.post(
   '/households/:id/sitter-links',
   authMiddleware,
   requireHousehold,
-  requireAdmin,
   validateBody(createSitterLinkSchema),
   (req, res) => {
     const user = (req as any).user;
@@ -1429,6 +1437,19 @@ app.post(
     }
     const body = (req as any).validatedBody;
     const now = new Date();
+    // Plan gate — mirrors the handler: window length + live-link count.
+    const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'] ?? PLANS.seedling;
+    const startsAt: string = body.startsAt ?? now.toISOString();
+    const gate = checkSitterLinkPlanGate(plan, {
+      windowDays: sitterWindowDays(startsAt, body.expiresAt),
+      liveLinks: countLiveSitterLinks(
+        [...db.sitterLinks.values()].filter((l) => l.householdId === req.params.id),
+        now
+      ),
+    });
+    if (!gate.ok) {
+      return res.status(402).json({ message: gate.message });
+    }
     const token = randomBytes(32).toString('hex'); // 256-bit, like the service
     const link: SitterLink = {
       id: uuidv4(),
@@ -1436,12 +1457,24 @@ app.post(
       householdId: req.params.id,
       createdBy: user.userId,
       createdAt: now.toISOString(),
-      startsAt: body.startsAt ?? now.toISOString(),
+      startsAt,
       expiresAt: body.expiresAt,
       status: 'active',
       label: body.label ?? null,
     };
     db.sitterLinks.set(token, link);
+    recordActivity({
+      type: 'sitter_link.created',
+      householdId: req.params.id,
+      actorId: user.userId,
+      actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+      payload: {
+        linkId: link.id,
+        label: link.label,
+        startsAt: link.startsAt,
+        expiresAt: link.expiresAt,
+      },
+    });
 
     const baseUrl =
       process.env.FRONTEND_URL ||
@@ -1453,45 +1486,50 @@ app.post(
 );
 
 // GET /households/:id/sitter-links
-app.get(
-  '/households/:id/sitter-links',
-  authMiddleware,
-  requireHousehold,
-  requireAdmin,
-  (req, res) => {
-    const user = (req as any).user;
-    if (user.householdId !== req.params.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const links = [...db.sitterLinks.values()]
-      .filter((l) => l.householdId === req.params.id)
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-      .map(sitterSummary);
-    res.json(links);
+app.get('/households/:id/sitter-links', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
   }
-);
+  const links = [...db.sitterLinks.values()]
+    .filter((l) => l.householdId === req.params.id)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map(sitterSummary);
+  res.json(links);
+});
 
 // DELETE /households/:id/sitter-links/:linkId
-app.delete(
-  '/households/:id/sitter-links/:linkId',
-  authMiddleware,
-  requireHousehold,
-  requireAdmin,
-  (req, res) => {
-    const user = (req as any).user;
-    if (user.householdId !== req.params.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const target = [...db.sitterLinks.values()].find(
-      (l) => l.householdId === req.params.id && l.id === req.params.linkId
-    );
-    if (!target) {
-      return res.status(404).json({ message: 'Sitter link not found' });
-    }
-    target.status = 'revoked';
-    res.status(204).end();
+app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
   }
-);
+  const target = [...db.sitterLinks.values()].find(
+    (l) => l.householdId === req.params.id && l.id === req.params.linkId
+  );
+  if (!target) {
+    return res.status(404).json({ message: 'Sitter link not found' });
+  }
+  if (user.householdRole !== 'admin' && target.createdBy !== user.userId) {
+    return res.status(403).json({
+      message: 'Only the member who created this sitter link, or a household admin, can revoke it',
+    });
+  }
+  target.status = 'revoked';
+  recordActivity({
+    type: 'sitter_link.revoked',
+    householdId: req.params.id,
+    actorId: user.userId,
+    actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+    payload: {
+      linkId: target.id,
+      label: target.label,
+      startsAt: target.startsAt,
+      expiresAt: target.expiresAt,
+    },
+  });
+  res.status(204).end();
+});
 
 /** Token → link only if active and within [startsAt, expiresAt]. Generic
  *  null on any miss, mirroring sitterService.getActiveLink. */
@@ -2653,13 +2691,12 @@ app.get('/plants/shared/:code', (req, res) => {
 // data are not.
 
 /** Minimal due/overdue tasks for a household. Mirrors taskService.getSitterTasks:
- *  due within 7 days OR overdue, active plants only, with sitter-safe location. */
-function sitterTasksFor(householdId: string) {
+ *  due on or before the link's own `expiresAt` OR overdue (never a fixed
+ *  seven days), active plants only, with sitter-safe location. */
+function sitterTasksFor(householdId: string, windowEndsAt: string) {
   const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() + 7);
-  const cutoffIso = cutoff.toISOString();
   const nowIso = now.toISOString();
+  const cutoffIso = windowEndsAt > nowIso ? windowEndsAt : nowIso;
   return [...db.tasks.values()]
     .filter((t) => t.householdId === householdId)
     .filter((t) => (db.plants.get(t.plantId)?.status ?? 'active') === 'active')
@@ -2686,11 +2723,89 @@ app.get('/sitter/:token', (req, res) => {
   if (!link) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
+  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
   res.json({
     label: link.label,
     expiresAt: link.expiresAt,
-    tasks: sitterTasksFor(link.householdId),
+    tasks: sitterTasksFor(link.householdId, link.expiresAt),
+    briefAvailable: sitterBriefIncluded(plan),
   });
+});
+
+/** The handoff brief for one household over one link window. Mirrors
+ *  services/sitterBrief.buildSitterBrief — plant by plant instead of task by
+ *  task, with the household's own care words, the VERIFIED pet-toxicity entry
+ *  (never generated, null when the curated table has no match), the latest
+ *  photo, and the tasks due inside the window. */
+function sitterBriefFor(link: SitterLink) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const cutoffIso = link.expiresAt > nowIso ? link.expiresAt : nowIso;
+
+  const plants = [...db.plants.values()].filter(
+    (p) => p.householdId === link.householdId && (p.status ?? 'active') === 'active'
+  );
+  const tasksByPlant = new Map<
+    string,
+    Array<{ taskId: string; taskType: string; dueDate: string; overdue: boolean }>
+  >();
+  for (const task of db.tasks.values()) {
+    if (task.householdId !== link.householdId || task.nextDue > cutoffIso) continue;
+    const list = tasksByPlant.get(task.plantId) ?? [];
+    list.push({
+      taskId: task.id,
+      taskType: task.customType || task.type,
+      dueDate: task.nextDue,
+      overdue: task.nextDue < nowIso,
+    });
+    tasksByPlant.set(task.plantId, list);
+  }
+  for (const list of tasksByPlant.values()) {
+    list.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+  }
+
+  const entries = plants.map((plant) => ({
+    plantId: plant.id,
+    name: plant.name,
+    spaceName: plant.spaceId
+      ? (db.spaces.get(plant.spaceId)?.name ?? plant.location ?? null)
+      : (plant.location ?? null),
+    placementNote: plant.placementNote?.trim() || null,
+    ...resolveCareNote(plant),
+    photoUrl: plant.imageUrl ?? null,
+    petSafety: resolvePetSafety(plant),
+    tasks: tasksByPlant.get(plant.id) ?? [],
+  }));
+  entries.sort((a, b) => {
+    const aDue = a.tasks[0]?.dueDate;
+    const bDue = b.tasks[0]?.dueDate;
+    if (aDue && bDue) return aDue < bDue ? -1 : aDue > bDue ? 1 : a.name.localeCompare(b.name);
+    if (aDue) return -1;
+    if (bDue) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return {
+    label: link.label,
+    startsAt: link.startsAt,
+    expiresAt: link.expiresAt,
+    plants: entries,
+  };
+}
+
+// GET /sitter/:token/brief
+app.get('/sitter/:token/brief', (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  // Paid half of the Away Kit. A plan without it answers the SAME generic 404
+  // as a bad token — an anonymous sitter is never told the household's tier.
+  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
+  if (!sitterBriefIncluded(plan)) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  res.json(sitterBriefFor(link));
 });
 
 const sitterCompleteTaskSchema = z

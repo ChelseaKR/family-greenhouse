@@ -83,13 +83,56 @@ describe('sitter link creation (authed)', () => {
     expect(list.body[0].id).toBe(res.body.id);
   });
 
-  it('rejects an over-long window (> 60 days)', async () => {
+  it('rejects a window past the 90-day ceiling (400, before any plan check)', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'garden';
     const res = await request(app)
       .post(`/households/${seedHouseholdId}/sitter-links`)
       .set('Authorization', `Bearer ${token}`)
       .send({ expiresAt: inFuture(120) });
     expect(res.status).toBe(400);
+  });
+
+  it('Seedling: refuses (402) an 8-day window and a second live link; Garden allows 30 days', async () => {
+    const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'seedling';
+
+    const tooLong = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(8) });
+    expect(tooLong.status).toBe(402);
+    expect(tooLong.body.message).toMatch(/up to 7 days/);
+
+    const first = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(7) });
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(3) });
+    expect(second.status).toBe(402);
+    expect(second.body.message).toMatch(/1 live sitter link at a time/);
+
+    // Revoking the live one frees the slot.
+    await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${first.body.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    const again = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(3) });
+    expect(again.status).toBe(201);
+
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const month = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(30) });
+    expect(month.status).toBe(201);
   });
 
   it('rejects creation for a household the caller is not in (403)', async () => {
@@ -103,12 +146,13 @@ describe('sitter link creation (authed)', () => {
 });
 
 describe('public sitter view (no auth)', () => {
-  async function createLink(): Promise<string> {
+  async function createLink(overrides: Record<string, unknown> = {}): Promise<string> {
     const token = await loginAsSeed();
     const res = await request(app)
       .post(`/households/${seedHouseholdId}/sitter-links`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ expiresAt: inFuture(7), label: 'Our plants' });
+      .send({ expiresAt: inFuture(7), label: 'Our plants', ...overrides });
+    expect(res.status).toBe(201);
     return res.body.token as string;
   }
 
@@ -149,6 +193,38 @@ describe('public sitter view (no auth)', () => {
     expect(blob).not.toContain('Private propagation plan');
     expect(blob).not.toContain('Use the private measuring cup');
     expect(blob).not.toMatch(/assignedTo|completedBy|createdBy|"notes"|email/);
+  });
+
+  it('shows the sitter every task due inside the link window, not only seven days ahead', async () => {
+    // A three-week trip: the sitter must see week-three work too. (The
+    // lookahead used to be hardcoded to 7 days regardless of the window.)
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    db.tasks.get(seedTaskId)!.nextDue = inFuture(18);
+    const sitterToken = await createLink({ expiresAt: inFuture(21) });
+    const res = await request(app).get(`/sitter/${sitterToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tasks.map((t: { taskId: string }) => t.taskId)).toContain(seedTaskId);
+    expect(res.body.tasks[0].overdue).toBe(false);
+  });
+
+  it('keeps a short link short: work due after the window is not shown', async () => {
+    db.tasks.get(seedTaskId)!.nextDue = inFuture(6);
+    const sitterToken = await createLink({ expiresAt: inFuture(3) });
+    const res = await request(app).get(`/sitter/${sitterToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tasks.map((t: { taskId: string }) => t.taskId)).not.toContain(seedTaskId);
+  });
+
+  it('tells the page whether the plan includes the brief, without naming the tier', async () => {
+    db.households.get(seedHouseholdId)!.planId = 'seedling';
+    const free = await request(app).get(`/sitter/${await createLink()}`);
+    expect(free.status).toBe(200);
+    expect(free.body.briefAvailable).toBe(false);
+    expect(JSON.stringify(free.body)).not.toContain('seedling');
+
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const paid = await request(app).get(`/sitter/${await createLink()}`);
+    expect(paid.body.briefAvailable).toBe(true);
   });
 
   it('404s on an unknown / malformed token (no enumeration oracle)', async () => {
@@ -257,5 +333,173 @@ describe('public sitter completion (no auth)', () => {
     db.sitterLinks.get(sitterToken)!.expiresAt = new Date(Date.now() - 1000).toISOString();
     const res = await request(app).post(`/sitter/${sitterToken}/tasks/${seedTaskId}/complete`);
     expect(res.status).toBe(404);
+  });
+});
+
+/** A confirmed non-admin member of the seed household; returns their token. */
+async function loginAsSeedMember(email = 'member@example.com', name = 'Member Person') {
+  const fixture = provisionLocalUserFixture({ email, password: 'password-123', name });
+  fixture.householdId = seedHouseholdId;
+  fixture.householdRole = 'member';
+  fixture.memberships.push({
+    householdId: seedHouseholdId,
+    role: 'member',
+    joinedAt: new Date().toISOString(),
+  });
+  const login = await request(app).post('/auth/login').send({ email, password: 'password-123' });
+  expect(login.status).toBe(200);
+  return login.body.accessToken as string;
+}
+
+describe('sitter links are open to every member; revocation is creator-or-admin', () => {
+  it('a plain member can create and list links, and the feed names them', async () => {
+    const member = await loginAsSeedMember();
+    const created = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${member}`)
+      .send({ expiresAt: inFuture(5), label: 'While I am away' });
+    expect(created.status).toBe(201);
+    expect(created.body.token).toMatch(/^[0-9a-f]{64}$/);
+
+    const listed = await request(app)
+      .get(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(listed.status).toBe(200);
+    expect(listed.body.map((l: { id: string }) => l.id)).toContain(created.body.id);
+
+    const feed = await request(app)
+      .get(`/households/${seedHouseholdId}/activity`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(feed.status).toBe(200);
+    const event = feed.body.find(
+      (e: { type: string; payload: { linkId: string } }) =>
+        e.type === 'sitter_link.created' && e.payload.linkId === created.body.id
+    );
+    expect(event).toBeDefined();
+    expect(event.actorName).toBe('Member Person');
+    expect(JSON.stringify(event)).not.toContain(created.body.token);
+  });
+
+  it('a member can revoke their own link but not another member’s; an admin can revoke any', async () => {
+    // Two live links at once needs a paid plan (the Seedling cap is 1).
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const admin = await loginAsSeed();
+    const member = await loginAsSeedMember();
+
+    const mine = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${member}`)
+      .send({ expiresAt: inFuture(5) });
+    const theirs = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ expiresAt: inFuture(5) });
+    expect(mine.status).toBe(201);
+    expect(theirs.status).toBe(201);
+
+    const forbidden = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${theirs.body.id}`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(forbidden.status).toBe(403);
+    // The other member's link still works after the refused attempt.
+    expect((await request(app).get(`/sitter/${theirs.body.token}`)).status).toBe(200);
+
+    const own = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${mine.body.id}`)
+      .set('Authorization', `Bearer ${member}`);
+    expect(own.status).toBe(204);
+    expect((await request(app).get(`/sitter/${mine.body.token}`)).status).toBe(404);
+
+    const byAdmin = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${theirs.body.id}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(byAdmin.status).toBe(204);
+    expect((await request(app).get(`/sitter/${theirs.body.token}`)).status).toBe(404);
+  });
+});
+
+describe('sitter handoff brief (public, paid half of the Away Kit)', () => {
+  async function link(planId: 'seedling' | 'garden' = 'garden'): Promise<string> {
+    db.households.get(seedHouseholdId)!.planId = planId;
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ expiresAt: inFuture(planId === 'garden' ? 21 : 7), label: 'Our plants' });
+    expect(res.status).toBe(201);
+    return res.body.token as string;
+  }
+
+  it('renders the household’s own notes, place, photo and window tasks — no auth, no PII', async () => {
+    const plant = db.plants.get(seedPlantId)!;
+    plant.placementNote = 'east window, top shelf';
+    plant.notes = 'Bottom-water this one';
+    plant.species = 'Monstera deliciosa';
+    db.tasks.get(seedTaskId)!.notes = 'Use the private measuring cup';
+    db.households.get(seedHouseholdId)!.location = { city: 'Private Climate City', lat: 1, lon: 2 };
+
+    const token = await link();
+    const res = await request(app).get(`/sitter/${token}/brief`); // no Authorization
+    expect(res.status).toBe(200);
+    expect(res.body.label).toBe('Our plants');
+
+    const entry = res.body.plants.find((p: { plantId: string }) => p.plantId === seedPlantId);
+    expect(entry).toMatchObject({
+      name: 'Monstera',
+      spaceName: 'Living Room',
+      placementNote: 'east window, top shelf',
+      careNote: 'Bottom-water this one',
+      careNoteSource: 'notes',
+    });
+    // Verdicts come from the curated table, never generated.
+    expect(entry.petSafety).toMatchObject({ slug: 'monstera', cats: 'toxic', dogs: 'toxic' });
+    expect(entry.tasks.map((t: { taskId: string }) => t.taskId)).toContain(seedTaskId);
+
+    const blob = JSON.stringify(res.body);
+    expect(blob).not.toContain(SEED_EMAIL);
+    expect(blob).not.toContain('Test User');
+    expect(blob).not.toContain(seedHouseholdId);
+    expect(blob).not.toContain('Private Climate City');
+    expect(blob).not.toContain('Use the private measuring cup');
+  });
+
+  it('renders a plant with no notes as having none, and no toxicity verdict it cannot source', async () => {
+    const plant = db.plants.get(seedPlantId)!;
+    plant.placementNote = null;
+    plant.notes = null;
+    plant.species = 'Nothing recognisable here';
+    plant.name = 'Doris';
+
+    const token = await link();
+    const res = await request(app).get(`/sitter/${token}/brief`);
+    expect(res.status).toBe(200);
+    const entry = res.body.plants.find((p: { plantId: string }) => p.plantId === seedPlantId);
+    expect(entry.careNote).toBeNull();
+    expect(entry.careNoteSource).toBeNull();
+    expect(entry.placementNote).toBeNull();
+    expect(entry.petSafety).toBeNull();
+  });
+
+  it('answers the same generic 404 on a free plan as it does for a bad token', async () => {
+    const token = await link('seedling');
+    const onFree = await request(app).get(`/sitter/${token}/brief`);
+    const onGarbage = await request(app).get(`/sitter/${'f'.repeat(64)}/brief`);
+    expect(onFree.status).toBe(404);
+    expect(onGarbage.status).toBe(404);
+    expect(onFree.body.message).toBe(onGarbage.body.message);
+    // The task list itself still works on the free tier.
+    expect((await request(app).get(`/sitter/${token}`)).status).toBe(200);
+  });
+
+  it('404s the brief once the link is revoked', async () => {
+    const token = await link();
+    const auth = await loginAsSeed();
+    const listed = await request(app)
+      .get(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${auth}`);
+    await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${listed.body[0].id}`)
+      .set('Authorization', `Bearer ${auth}`);
+    expect((await request(app).get(`/sitter/${token}/brief`)).status).toBe(404);
   });
 });

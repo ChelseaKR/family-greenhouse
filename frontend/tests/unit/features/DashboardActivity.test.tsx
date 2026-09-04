@@ -252,6 +252,26 @@ describe('dashboard activity rows', () => {
     expect(concernRow?.firstElementChild).toHaveClass('bg-red-50');
   });
 
+  it('names who opened and closed a sitter link, without the token', async () => {
+    const window = {
+      linkId: 'link-1',
+      label: 'Holiday plants',
+      startsAt: '2026-09-01T00:00:00.000Z',
+      expiresAt: '2026-09-21T00:00:00.000Z',
+    };
+    renderDashboardActivity([
+      event('sitter_link.created', window, 'created'),
+      event('sitter_link.revoked', window, 'revoked'),
+    ]);
+
+    expect(
+      await screen.findByText(/Chelsea shared a sitter link \(Holiday plants\) that works until/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Chelsea turned off a sitter link (Holiday plants)')
+    ).toBeInTheDocument();
+  });
+
   it('keeps rendering when a newer backend sends an activity type this build does not know', async () => {
     renderDashboardActivity([runtimeEvent('plant.future_event', {})]);
 

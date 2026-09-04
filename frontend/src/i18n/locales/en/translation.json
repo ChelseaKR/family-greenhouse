@@ -23,6 +23,8 @@
     "anotherPlant": "another plant",
     "anotherHousehold": "another household",
     "generic": "{{actor}} made an update",
+    "sitterLinkCreated": "{{actor}} shared a sitter link ({{label}}) that works until {{end}}",
+    "sitterLinkRevoked": "{{actor}} turned off a sitter link ({{label}})",
     "imported_one": "{{actor}} imported {{count}} plant",
     "imported_other": "{{actor}} imported {{count}} plants",
     "importedUnknown": "{{actor}} imported plants",
@@ -619,7 +621,13 @@
       "startsLabel": "Starts (optional)",
       "startsHelp": "Leave empty to start now. Set the day your trip starts and the link stays shut until then.",
       "lengthLabel": "Lasts for (days)",
-      "lengthHelp": "Up to 60 days, counted from the start day.",
+      "lengthHelpPlan": "Up to {{days}} days on your plan, counted from the start day.",
+      "lengthHelpChecking": "Checking how long your plan allows…",
+      "lengthHelpUnknown": "We couldn’t confirm your plan’s longest window just now. Your plan’s limit still applies when you create the link.",
+      "seedlingHint": "Longer trip? Garden allows sitter links up to 90 days, several at once, and a printable handoff brief.",
+      "seePlans": "See plans",
+      "activeCap_one": "Your plan keeps {{count}} live sitter link at a time. Revoke the current one to create another.",
+      "activeCap_other": "Your plan allows {{count}} live sitter links at a time. Revoke one to create another.",
       "labelLabel": "Label (optional)",
       "labelHelp": "A friendly name your sitter sees. No personal details.",
       "currentHeading": "Links you’ve shared",
@@ -630,11 +638,64 @@
       "badgeScheduled": "Scheduled",
       "endedHeading": "Recently ended",
       "endedBody": "These windows closed on their own. They no longer open anything.",
-      "endedOn": "{{label}} — ended {{date}}"
+      "endedOn": "{{label}} — ended {{date}}",
+      "sharedBy": "Shared by {{name}}",
+      "anotherMember": "another member",
+      "revokeNotYours": "Only its creator or an admin can revoke this"
+    },
+    "sitterGaps": {
+      "heading": "Before you go: your sitter can only read what you wrote down.",
+      "noCareNote_one": "{{count}} plant has no watering note — your sitter will be guessing:",
+      "noCareNote_other": "{{count}} plants have no watering note — your sitter will be guessing:",
+      "noPlacement_one": "{{count}} plant has no placement note — your sitter has to find it:",
+      "noPlacement_other": "{{count}} plants have no placement note — your sitter has to find them:",
+      "andMore_one": "and {{count}} more",
+      "andMore_other": "and {{count}} more",
+      "help": "Open a plant to add its note. A sentence each is enough — it is what the brief shows your sitter.",
+      "allCovered": "Every plant has a care note and a placement note. Your sitter has what they need.",
+      "checkFailed": "We couldn’t check which plants are missing notes just now, so this list may be incomplete. Your sitter only sees notes you have written."
     }
   },
   "sitter": {
-    "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own."
+    "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",
+    "openBrief": "Open the full plant-care brief (printable)"
+  },
+  "sitterBrief": {
+    "metaTitle": "Plant-care brief — Family Greenhouse",
+    "metaDescription": "Everything you need to look after these plants, written by the people who live with them.",
+    "title": "The plant-care brief",
+    "titleLabelled": "{{label}}: the plant-care brief",
+    "window": "Covering {{start}} to {{end}}.",
+    "intro": "Everything below was written by the household — nothing here is generated advice. If a plant has no note, it says so, and your judgement is as good as ours.",
+    "print": "Print",
+    "loading": "Loading the plant-care brief…",
+    "backToList": "Back to what needs doing today",
+    "noPlants": "There are no plants on this brief yet.",
+    "noPlace": "No placement note — ask where this one lives.",
+    "houseRule": "House rule",
+    "householdNote": "The household’s note",
+    "noCareNote": "No note for this plant. Water when the top of the soil is dry if you’re unsure, and let them know what you did.",
+    "whileYoureHere": "While you’re here",
+    "nothingDue": "Nothing due during your window.",
+    "due": "due {{date}}",
+    "overdueSince": "overdue since {{date}}",
+    "petToxic": "Keep away from pets — cats: {{cats}}, dogs: {{dogs}}.",
+    "petSafe": "Listed as non-toxic to cats and dogs.",
+    "petSource": "From our verified pet-safety list, matched to {{matched}} ({{scientific}}), grounded in the ASPCA database.",
+    "verdict": {
+      "toxic": "toxic",
+      "non-toxic": "non-toxic"
+    },
+    "task": {
+      "water": "Water",
+      "fertilize": "Feed",
+      "prune": "Prune",
+      "repot": "Repot"
+    },
+    "unavailableTitle": "This care brief isn’t available",
+    "unavailableBody": "The link may have expired, been turned off, or this household’s plan may not include the brief. The day-to-day task list may still work — try the link they sent you.",
+    "errorTitle": "Something went wrong",
+    "errorBody": "We couldn’t load the care brief just now. Please refresh and try again in a moment."
   },
   "settings": {
     "title": "Settings",
@@ -997,7 +1058,7 @@
       },
       "sitter": {
         "heading": "Sitter links",
-        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 60 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
+        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 90 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
       },
       "rights": {
         "heading": "Your rights",

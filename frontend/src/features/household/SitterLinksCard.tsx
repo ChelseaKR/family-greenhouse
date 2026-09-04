@@ -1,21 +1,30 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardDocumentIcon, KeyIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { householdService, type CreatedSitterLink } from '@/services/householdService';
+import { billingService } from '@/services/billingService';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { formatDate } from '@/i18n/format';
+import { useAuthStore } from '@/store/authStore';
+import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { groupSitterLinks, sitterLinkState } from './sitterLinkState';
+import { SitterGapPrompt } from './SitterGapPrompt';
+import { SITTER_LINK_MAX_DAYS_CEILING, sitterLinkLimitsFor } from './sitterPlanLimits';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Admin-only UI to create, copy, and revoke no-account plant-sitter links.
+ * UI for ANY household member to create, copy, and revoke no-account
+ * plant-sitter links (ADR 0015 — the traveller is rarely the admin). The
+ * revocation model is visible here: an admin may revoke every link, a member
+ * only the ones they created, and a link someone else made says who made it.
  * Mirrors the invite-link pattern: the secret token/URL is shown exactly once
  * (right after creation) and never again — the list only shows the link's
  * window + status, so a leaked screenshot of the management page can't be used
@@ -28,14 +37,26 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * reports each link's real state rather than its revocation flag — see
  * ./sitterLinkState.
  */
-export function SitterLinksCard({ householdId }: { householdId: string }) {
+interface SitterLinksCardProps {
+  householdId: string;
+  /** Household roster, used only to name who created a link. */
+  members?: ReadonlyArray<{ userId: string; name: string }>;
+}
+
+export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const myUserId = useAuthStore((s) => s.user?.id ?? null);
+  const isAdmin = useIsHouseholdAdmin();
+  const creatorName = (userId: string): string =>
+    members.find((m) => m.userId === userId)?.name ?? t('household.sitterLinks.anotherMember');
   const [created, setCreated] = useState<CreatedSitterLink | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  // Default the window to two weeks out — a typical trip length.
+  // Default the window to two weeks out — a typical trip length. Until the
+  // member edits it, the default bends to the plan's cap (see `shownDays`).
   const [days, setDays] = useState('14');
+  const [daysTouched, setDaysTouched] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [label, setLabel] = useState('');
 
@@ -44,9 +65,33 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
     queryFn: () => householdService.listSitterLinks(householdId),
   });
 
+  // The plan sets the longest window and how many links may be live (ADR
+  // 0015). Read it so the wall the traveller hits reads as an upgrade prompt
+  // while they type, not as a refusal after submitting. An unsettled or
+  // failed read is shown as unknown — never assumed to be the free tier, and
+  // never presented as unlimited. The backend enforces the cap regardless.
+  const subscriptionQuery = useQuery({
+    queryKey: ['subscription', householdId],
+    queryFn: billingService.getCurrentSubscription,
+    staleTime: 60_000,
+  });
+  const limits = subscriptionQuery.isSuccess
+    ? sitterLinkLimitsFor(subscriptionQuery.data.planId)
+    : null;
+  const maxDays = limits?.maxDays ?? SITTER_LINK_MAX_DAYS_CEILING;
+  const shownDays =
+    !daysTouched && limits && (parseInt(days, 10) || 0) > limits.maxDays
+      ? String(limits.maxDays)
+      : days;
+  const lengthHelp = limits
+    ? t('household.sitterLinks.lengthHelpPlan', { days: limits.maxDays })
+    : subscriptionQuery.isError
+      ? t('household.sitterLinks.lengthHelpUnknown')
+      : t('household.sitterLinks.lengthHelpChecking');
+
   const createMutation = useMutation({
     mutationFn: () => {
-      const n = Math.max(1, Math.min(60, parseInt(days, 10) || 14));
+      const n = Math.max(1, Math.min(SITTER_LINK_MAX_DAYS_CEILING, parseInt(shownDays, 10) || 14));
       // The length is counted from the day the sitter takes over, not from
       // "now" — otherwise scheduling a link a week ahead of the trip silently
       // spends a week of its own window before anyone needs it.
@@ -94,6 +139,10 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
   // and the sweeper lags), and listing those as active told the household a
   // neighbour still had access when they did not.
   const { current: currentLinks, ended: endedLinks } = groupSitterLinks(linksQuery.data ?? []);
+  // Live = active or scheduled, the same count the backend gates on. Only a
+  // SETTLED links read can say the cap is reached; a failed read cannot.
+  const atActiveCap =
+    limits !== null && linksQuery.isSuccess && currentLinks.length >= limits.maxActive;
 
   return (
     <Card>
@@ -169,10 +218,13 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
               label={t('household.sitterLinks.lengthLabel')}
               type="number"
               min={1}
-              max={60}
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
-              helperText={t('household.sitterLinks.lengthHelp')}
+              max={maxDays}
+              value={shownDays}
+              onChange={(e) => {
+                setDaysTouched(true);
+                setDays(e.target.value);
+              }}
+              helperText={lengthHelp}
             />
             <Input
               className="sm:col-span-2"
@@ -184,15 +236,36 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
               helperText={t('household.sitterLinks.labelHelp')}
             />
           </div>
+          {atActiveCap && limits && (
+            <Alert variant="info">
+              {t('household.sitterLinks.activeCap', { count: limits.maxActive })}
+            </Alert>
+          )}
           <Button
             type="submit"
             isLoading={createMutation.isPending}
+            disabled={atActiveCap}
             leftIcon={<KeyIcon className="h-4 w-4" aria-hidden="true" />}
           >
             Create sitter link
           </Button>
+          {limits?.planId === 'seedling' && (
+            <p className="text-xs text-gray-600">
+              {t('household.sitterLinks.seedlingHint')}{' '}
+              <Link
+                to="/settings/billing"
+                className="text-primary-700 underline hover:text-primary-800"
+              >
+                {t('household.sitterLinks.seePlans')}
+              </Link>
+            </p>
+          )}
         </form>
       )}
+
+      {/* Before the trip, not after: the brief is only as good as the notes,
+          so name the gaps while there is still time to fill them. */}
+      {!created && <SitterGapPrompt householdId={householdId} />}
 
       {createMutation.isError && (
         <Alert variant="error" className="mt-4">
@@ -217,12 +290,20 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
           <ul className="mt-2 divide-y divide-primary-100/60 rounded-lg border border-primary-100/70">
             {currentLinks.map((link) => {
               const scheduled = sitterLinkState(link) === 'scheduled';
+              const mine = link.createdBy === myUserId;
+              // Admins revoke anything; a member only what they created.
+              const canRevoke = isAdmin || mine;
               return (
                 <li key={link.id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-900">
                       {link.label || t('household.sitterLinks.untitled')}
                     </p>
+                    {!mine && (
+                      <p className="text-xs text-gray-600">
+                        {t('household.sitterLinks.sharedBy', { name: creatorName(link.createdBy) })}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-600">
                       {scheduled
                         ? t('household.sitterLinks.windowScheduled', {
@@ -250,16 +331,22 @@ export function SitterLinksCard({ householdId }: { householdId: string }) {
                         ? t('household.sitterLinks.badgeScheduled')
                         : t('household.sitterLinks.badgeActive')}
                     </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      isLoading={revokeMutation.isPending && revokeMutation.variables === link.id}
-                      onClick={() => revokeMutation.mutate(link.id)}
-                      leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
-                      aria-label={`Revoke sitter link ${link.label || ''}`.trim()}
-                    >
-                      Revoke
-                    </Button>
+                    {canRevoke ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        isLoading={revokeMutation.isPending && revokeMutation.variables === link.id}
+                        onClick={() => revokeMutation.mutate(link.id)}
+                        leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
+                        aria-label={`Revoke sitter link ${link.label || ''}`.trim()}
+                      >
+                        Revoke
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-gray-600">
+                        {t('household.sitterLinks.revokeNotYours')}
+                      </span>
+                    )}
                   </div>
                 </li>
               );

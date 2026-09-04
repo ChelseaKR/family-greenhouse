@@ -585,6 +585,22 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
+    case 'sitter_link.created':
+    case 'sitter_link.revoked': {
+      // Any member can open a sitter link now, so the feed names who did and
+      // until when — the household's view of who holds a door open.
+      const p = event.payload;
+      const label = p.label ?? t('household.sitterLinks.untitled');
+      body =
+        event.type === 'sitter_link.created'
+          ? t('activity.sitterLinkCreated', {
+              actor: actorName,
+              label,
+              end: new Date(p.expiresAt).toLocaleDateString(),
+            })
+          : t('activity.sitterLinkRevoked', { actor: actorName, label });
+      break;
+    }
     case 'plant.deleted':
       body = (
         <>

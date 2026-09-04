@@ -24,6 +24,8 @@
     "anotherPlant": "otra planta",
     "anotherHousehold": "otro hogar",
     "generic": "{{actor}} realizó una actualización",
+    "sitterLinkCreated": "{{actor}} compartió un enlace de cuidador ({{label}}) que funciona hasta el {{end}}",
+    "sitterLinkRevoked": "{{actor}} desactivó un enlace de cuidador ({{label}})",
     "imported_one": "{{actor}} importó {{count}} planta",
     "imported_many": "{{actor}} importó {{count}} plantas",
     "imported_other": "{{actor}} importó {{count}} plantas",
@@ -633,7 +635,14 @@
       "startsLabel": "Empieza (opcional)",
       "startsHelp": "Déjalo vacío para empezar ahora. Indica el día en que empieza tu viaje y el enlace no funcionará hasta entonces.",
       "lengthLabel": "Dura (días)",
-      "lengthHelp": "Hasta 60 días, contados desde el día de inicio.",
+      "lengthHelpPlan": "Hasta {{days}} días según tu plan, contados desde el día de inicio.",
+      "lengthHelpChecking": "Comprobando cuánto permite tu plan…",
+      "lengthHelpUnknown": "No pudimos confirmar la duración máxima de tu plan en este momento. El límite de tu plan se aplicará igualmente al crear el enlace.",
+      "seedlingHint": "¿Un viaje más largo? Garden permite enlaces de cuidador de hasta 90 días, varios a la vez y una guía de traspaso imprimible.",
+      "seePlans": "Ver planes",
+      "activeCap_one": "Tu plan mantiene {{count}} enlace de cuidador activo a la vez. Desactiva el actual para crear otro.",
+      "activeCap_many": "Tu plan permite {{count}} enlaces de cuidador activos a la vez. Desactiva uno para crear otro.",
+      "activeCap_other": "Tu plan permite {{count}} enlaces de cuidador activos a la vez. Desactiva uno para crear otro.",
       "labelLabel": "Etiqueta (opcional)",
       "labelHelp": "Un nombre amable que verá tu cuidador. Sin datos personales.",
       "currentHeading": "Enlaces que has compartido",
@@ -644,11 +653,67 @@
       "badgeScheduled": "Programado",
       "endedHeading": "Terminados hace poco",
       "endedBody": "Estos periodos se cerraron solos. Ya no dan acceso a nada.",
-      "endedOn": "{{label}}: terminó el {{date}}"
+      "endedOn": "{{label}}: terminó el {{date}}",
+      "sharedBy": "Compartido por {{name}}",
+      "anotherMember": "otro miembro",
+      "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo"
+    },
+    "sitterGaps": {
+      "heading": "Antes de irte: tu cuidador solo puede leer lo que hayas escrito.",
+      "noCareNote_one": "{{count}} planta no tiene nota de riego; tu cuidador tendrá que adivinar:",
+      "noCareNote_many": "{{count}} plantas no tienen nota de riego; tu cuidador tendrá que adivinar:",
+      "noCareNote_other": "{{count}} plantas no tienen nota de riego; tu cuidador tendrá que adivinar:",
+      "noPlacement_one": "{{count}} planta no tiene nota de ubicación; tu cuidador tendrá que buscarla:",
+      "noPlacement_many": "{{count}} plantas no tienen nota de ubicación; tu cuidador tendrá que buscarlas:",
+      "noPlacement_other": "{{count}} plantas no tienen nota de ubicación; tu cuidador tendrá que buscarlas:",
+      "andMore_one": "y {{count}} más",
+      "andMore_many": "y {{count}} más",
+      "andMore_other": "y {{count}} más",
+      "help": "Abre una planta para añadir su nota. Con una frase basta: es lo que la guía le mostrará a tu cuidador.",
+      "allCovered": "Todas las plantas tienen nota de cuidado y de ubicación. Tu cuidador tiene lo que necesita.",
+      "checkFailed": "No pudimos comprobar qué plantas no tienen notas en este momento, así que esta lista puede estar incompleta. Tu cuidador solo ve las notas que hayas escrito."
     }
   },
   "sitter": {
-    "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola."
+    "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",
+    "openBrief": "Abre la guía de cuidados completa (imprimible)"
+  },
+  "sitterBrief": {
+    "metaTitle": "Guía de cuidados — Family Greenhouse",
+    "metaDescription": "Todo lo que necesitas para cuidar estas plantas, escrito por quienes conviven con ellas.",
+    "title": "La guía de cuidados",
+    "titleLabelled": "{{label}}: la guía de cuidados",
+    "window": "Cubres del {{start}} al {{end}}.",
+    "intro": "Todo lo que aparece aquí lo escribió el hogar; nada son consejos generados. Si una planta no tiene nota, lo decimos, y tu criterio vale tanto como el nuestro.",
+    "print": "Imprimir",
+    "loading": "Cargando la guía de cuidados…",
+    "backToList": "Volver a lo que toca hoy",
+    "noPlants": "Todavía no hay plantas en esta guía.",
+    "noPlace": "Sin nota de ubicación: pregunta dónde vive esta planta.",
+    "houseRule": "Norma de la casa",
+    "householdNote": "La nota del hogar",
+    "noCareNote": "Sin nota para esta planta. Si dudas, riega cuando la capa superior de tierra esté seca y cuéntales qué hiciste.",
+    "whileYoureHere": "Mientras estés aquí",
+    "nothingDue": "No hay nada pendiente durante tu periodo.",
+    "due": "para el {{date}}",
+    "overdueSince": "pendiente desde el {{date}}",
+    "petToxic": "Manténla lejos de las mascotas: gatos: {{cats}}, perros: {{dogs}}.",
+    "petSafe": "Figura como no tóxica para gatos y perros.",
+    "petSource": "De nuestra lista verificada de seguridad para mascotas, coincidencia con {{matched}} ({{scientific}}), basada en la base de datos de la ASPCA.",
+    "verdict": {
+      "toxic": "tóxica",
+      "non-toxic": "no tóxica"
+    },
+    "task": {
+      "water": "Riega",
+      "fertilize": "Abona",
+      "prune": "Poda",
+      "repot": "Trasplanta"
+    },
+    "unavailableTitle": "Esta guía de cuidados no está disponible",
+    "unavailableBody": "Puede que el enlace haya caducado, se haya desactivado o que el plan de este hogar no incluya la guía. Puede que la lista diaria de tareas siga funcionando: prueba el enlace que te enviaron.",
+    "errorTitle": "Algo salió mal",
+    "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento."
   },
   "settings": {
     "title": "Ajustes",
@@ -1012,7 +1077,7 @@
       },
       "sitter": {
         "heading": "Enlaces de cuidador",
-        "body": "Un miembro del hogar puede crear un enlace temporal de cuidador sin necesidad de crear una cuenta para esa persona. Quien tenga ese enlace puede ver las tareas de cuidado pendientes, los nombres de las plantas, el espacio actual de cada planta y su breve nota de ubicación, y puede marcar esas tareas como completadas durante el periodo de cobertura que hayas seleccionado. Los enlaces de cuidador no exponen la ubicación guardada de tu hogar, las notas privadas de plantas o tareas, ni la identidad y los datos de contacto de los miembros del hogar. El enlace es una credencial al portador, así que envíaselo solo a alguien de confianza. Caduca como máximo a los 60 días y cualquier miembro del hogar puede revocarlo antes. No pedimos ni almacenamos la identidad del cuidador."
+        "body": "Un miembro del hogar puede crear un enlace temporal de cuidador sin necesidad de crear una cuenta para esa persona. Quien tenga ese enlace puede ver las tareas de cuidado pendientes, los nombres de las plantas, el espacio actual de cada planta y su breve nota de ubicación, y puede marcar esas tareas como completadas durante el periodo de cobertura que hayas seleccionado. Los enlaces de cuidador no exponen la ubicación guardada de tu hogar, las notas privadas de plantas o tareas, ni la identidad y los datos de contacto de los miembros del hogar. El enlace es una credencial al portador, así que envíaselo solo a alguien de confianza. Caduca como máximo a los 90 días y cualquier miembro del hogar puede revocarlo antes. No pedimos ni almacenamos la identidad del cuidador."
       },
       "rights": {
         "heading": "Tus derechos",

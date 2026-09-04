@@ -15,6 +15,10 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 vi.mock('../../../src/services/sitterService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js', () => ({ recordActivity: vi.fn(async () => {}) }));
+vi.mock('../../../src/services/sitterBrief.js', () => ({ buildSitterBrief: vi.fn() }));
+vi.mock('../../../src/services/billing.js', () => ({
+  getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
+}));
 
 const ctx = {} as Context;
 
@@ -93,6 +97,11 @@ describe('GET /sitter/{token} (public)', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.label).toBe('Our plants');
+    // Garden (the default mock) includes the brief, so the page may offer it.
+    expect(body.briefAvailable).toBe(true);
+    // The lookahead is the LINK'S window — the handler hands the service the
+    // link's own expiresAt, never a fixed number of days.
+    expect(getSitterTasks).toHaveBeenCalledWith('hh-1', '2999-01-01T00:00:00.000Z');
     expect(body.tasks[0]).toEqual({
       taskId: 't1',
       plantName: 'Monstera',
@@ -252,5 +261,110 @@ describe('POST /sitter/{token}/tasks/{taskId}/complete (public)', () => {
       () => {}
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(404);
+  });
+});
+
+/**
+ * The handoff brief rides the same token and the same generic 404 as the task
+ * view. It is the paid half of the Away Kit, and a plan without it answers
+ * that same 404 — an anonymous sitter is never told which tier a household is
+ * on, and the endpoint stays useless as an oracle.
+ */
+describe('GET /sitter/{token}/brief (public)', () => {
+  const briefFixture = {
+    label: 'Our plants',
+    startsAt: '2026-09-01T00:00:00.000Z',
+    expiresAt: '2999-01-01T00:00:00.000Z',
+    plants: [
+      {
+        plantId: 'p1',
+        name: 'Monstera',
+        spaceName: 'Living Room',
+        placementNote: 'east window',
+        careNote: null,
+        careNoteSource: null,
+        photoUrl: null,
+        petSafety: null,
+        tasks: [],
+      },
+    ],
+  };
+
+  it('returns the brief for a valid token on a plan that includes it', async () => {
+    const { getActiveLink } = await import('../../../src/services/sitterService.js');
+    const { buildSitterBrief } = await import('../../../src/services/sitterBrief.js');
+    vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
+    vi.mocked(buildSitterBrief).mockResolvedValueOnce(briefFixture as never);
+
+    const { getSitterBrief } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await getSitterBrief(
+      anonEvent({ path: `/sitter/${TOKEN}/brief`, pathParameters: { token: TOKEN } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).plants[0].name).toBe('Monstera');
+    // The link row itself never leaks through the brief response.
+    expect(res.body).not.toContain('hh-1');
+    expect(res.body).not.toContain('createdBy');
+  });
+
+  it('404s (the SAME generic message) on a plan without the brief, and does not build it', async () => {
+    const { getActiveLink } = await import('../../../src/services/sitterService.js');
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    const { buildSitterBrief } = await import('../../../src/services/sitterBrief.js');
+    vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
+    vi.mocked(getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' } as never);
+
+    const { getSitterBrief } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await getSitterBrief(
+      anonEvent({ path: `/sitter/${TOKEN}/brief`, pathParameters: { token: TOKEN } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).message).toBe('This sitter link is invalid or has expired.');
+    expect(buildSitterBrief).not.toHaveBeenCalled();
+  });
+
+  it('404s on an invalid token without consulting the plan', async () => {
+    const { getActiveLink } = await import('../../../src/services/sitterService.js');
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    vi.mocked(getActiveLink).mockResolvedValueOnce(null);
+
+    const { getSitterBrief } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await getSitterBrief(
+      anonEvent({ pathParameters: { token: 'bad' } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(404);
+    expect(getHouseholdSubscription).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /sitter/{token} — brief availability', () => {
+  it('tells the page the brief is NOT available on a free-tier household', async () => {
+    const { getActiveLink } = await import('../../../src/services/sitterService.js');
+    const { getSitterTasks } = await import('../../../src/services/taskService.js');
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
+    vi.mocked(getSitterTasks).mockResolvedValueOnce([] as never);
+    vi.mocked(getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' } as never);
+
+    const { getSitterView } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await getSitterView(
+      anonEvent({ path: `/sitter/${TOKEN}`, pathParameters: { token: TOKEN } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).briefAvailable).toBe(false);
+    // Still no plan name, price or tier leaked to an anonymous sitter.
+    expect(res.body).not.toContain('seedling');
   });
 });

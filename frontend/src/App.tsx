@@ -80,6 +80,7 @@ const CareIndex = lazyNamed(() => import('@/features/care/CareIndex'), 'CareInde
 const CareGuidePage = lazyNamed(() => import('@/features/care/CareGuidePage'), 'CareGuidePage');
 const PetSafePage = lazyNamed(() => import('@/features/petsafe/PetSafePage'), 'PetSafePage');
 const SitPage = lazyNamed(() => import('@/features/sitter/SitPage'), 'SitPage');
+const SitBriefPage = lazyNamed(() => import('@/features/sitter/SitBriefPage'), 'SitBriefPage');
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -183,6 +184,8 @@ function App() {
               {/* Public, no-account plant-sitting page — works logged-out (the
                   sitter endpoints have no auth; the token is the credential). */}
               <Route path="/sit/:token" element={<SitPage />} />
+              {/* The printable handoff brief for the same token (ADR 0015). */}
+              <Route path="/sit/:token/brief" element={<SitBriefPage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />

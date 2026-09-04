@@ -28,6 +28,52 @@ export interface SitterView {
   label: string | null;
   expiresAt: string;
   tasks: SitterTask[];
+  /** Whether this household's plan includes the handoff brief. Older
+   *  backends omit it; treat `undefined` as "unknown" and don't offer the
+   *  brief rather than sending the sitter to a page that 404s. */
+  briefAvailable?: boolean;
+}
+
+/** One verified pet-toxicity entry, straight from the curated ASPCA-grounded
+ *  table. `null` on a plant means NO VERDICT — never "safe". */
+export interface SitterBriefPetSafety {
+  slug: string;
+  commonName: string;
+  scientificName: string;
+  cats: 'toxic' | 'non-toxic';
+  dogs: 'toxic' | 'non-toxic';
+  note: string;
+  /** The plant name/species the table was matched on, so a reader can judge
+   *  the match instead of trusting a verdict pinned to a nickname. */
+  matchedOn: string;
+}
+
+export interface SitterBriefTask {
+  taskId: string;
+  taskType: string;
+  dueDate: string;
+  overdue: boolean;
+}
+
+export interface SitterBriefPlant {
+  plantId: string;
+  name: string;
+  spaceName: string | null;
+  placementNote: string | null;
+  /** The household's own care words. `null` means they wrote none — the page
+   *  says so plainly and never fills the gap with generated advice. */
+  careNote: string | null;
+  careNoteSource: 'rule' | 'notes' | null;
+  photoUrl: string | null;
+  petSafety: SitterBriefPetSafety | null;
+  tasks: SitterBriefTask[];
+}
+
+export interface SitterBrief {
+  label: string | null;
+  startsAt: string;
+  expiresAt: string;
+  plants: SitterBriefPlant[];
 }
 
 /** Thrown when the link is missing/expired/revoked (404) so the page can show
@@ -54,6 +100,26 @@ export const sitterService = {
       throw new Error(`Sitter view failed (${response.status})`);
     }
     return (await response.json()) as SitterView;
+  },
+
+  /**
+   * The handoff brief. A 404 here is deliberately ambiguous on the wire (an
+   * expired link and a plan without the brief answer identically), so the
+   * caller gets `SitterLinkInactiveError` and the page decides what to say
+   * from what it already knows about the link.
+   */
+  async getBrief(token: string, signal?: AbortSignal): Promise<SitterBrief> {
+    const response = await fetch(`${API_URL}/sitter/${encodeURIComponent(token)}/brief`, {
+      signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (response.status === 404 || response.status === 410) {
+      throw new SitterLinkInactiveError();
+    }
+    if (!response.ok) {
+      throw new Error(`Sitter brief failed (${response.status})`);
+    }
+    return (await response.json()) as SitterBrief;
   },
 
   async completeTask(token: string, taskId: string, expectedNextDue: string): Promise<SitterTask> {

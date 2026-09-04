@@ -7,6 +7,7 @@ vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/accountCleanup.js');
 vi.mock('../../../src/services/cognitoUsers.js');
+vi.mock('../../../src/services/sitterService.js');
 vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
 }));
@@ -816,5 +817,267 @@ describe('households handler', () => {
     expect(JSON.parse(retry.body)).toMatchObject({ id: 'hh-9', name: 'Home' });
     expect(householdService.addMember).toHaveBeenCalledOnce();
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Sitter links are open to every household member (ADR 0015), not only
+ * admins. The revocation model keeps that safe: an admin may revoke any of
+ * the household's links, a member only the ones they created, and every
+ * create/revoke is an activity event that names the actor.
+ */
+describe('sitter links — member access and revocation model', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const link = (overrides: Record<string, unknown> = {}) => ({
+    id: 'link-1',
+    token: 'a'.repeat(64),
+    householdId: 'hh-1',
+    createdBy: 'user-1',
+    createdAt: '2026-09-01T00:00:00.000Z',
+    startsAt: '2026-09-01T00:00:00.000Z',
+    expiresAt: new Date(Date.now() + 5 * DAY_MS).toISOString(),
+    status: 'active',
+    label: 'Holiday plants',
+    ...overrides,
+  });
+
+  async function warm(role: 'admin' | 'member') {
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', role);
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    process.env.FRONTEND_URL = 'https://test.familygreenhouse.net';
+    const activity = await import('../../../src/services/activity.js');
+    vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValue('Chelsea');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.toSummary).mockImplementation((l) => {
+      const { token: _token, ...rest } = l as never as Record<string, unknown>;
+      void _token;
+      return rest as never;
+    });
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValue([]);
+    vi.mocked(sitterService.createSitterLink).mockResolvedValue(link() as never);
+    vi.mocked(sitterService.revokeSitterLink).mockResolvedValue(true);
+  });
+
+  it('lets a plain member create a link and names them in the activity feed', async () => {
+    await warm('member');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const activity = await import('../../../src/services/activity.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({
+          expiresAt: new Date(Date.now() + 5 * DAY_MS).toISOString(),
+          label: 'Holiday plants',
+        }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).url).toContain('/sit/');
+    expect(activity.recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'sitter_link.created',
+        householdId: 'hh-1',
+        actorId: 'user-1',
+        actorName: 'Chelsea',
+        payload: expect.objectContaining({ linkId: 'link-1', label: 'Holiday plants' }),
+      })
+    );
+    // The token never rides along in the activity payload.
+    const call = vi.mocked(activity.recordActivity).mock.calls[0][0];
+    expect(JSON.stringify(call)).not.toContain('a'.repeat(64));
+  });
+
+  it('refuses (402) an over-cap window on Seedling and names what Garden lifts it to', async () => {
+    await warm('member');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+    } as never);
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 8 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    expect(JSON.parse(res.body).message).toMatch(/up to 7 days.*Garden allows up to 90 days/);
+    expect(sitterService.createSitterLink).not.toHaveBeenCalled();
+  });
+
+  it('refuses (402) a second live link on Seedling; ended and revoked rows do not count', async () => {
+    await warm('admin');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' } as never);
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const attempt = () =>
+      createSitterLink(
+        buildEvent(adminClaims, {
+          httpMethod: 'POST',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ expiresAt: new Date(Date.now() + 3 * DAY_MS).toISOString() }),
+        }),
+        fakeContext,
+        () => {}
+      ) as Promise<APIGatewayProxyResult>;
+
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([link() as never]);
+    const blocked = await attempt();
+    expect(blocked.statusCode).toBe(402);
+    expect(JSON.parse(blocked.body).message).toMatch(/1 live sitter link at a time/);
+
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([
+      link({ id: 'old', expiresAt: new Date(Date.now() - DAY_MS).toISOString() }) as never,
+      link({ id: 'off', status: 'revoked' }) as never,
+    ]);
+    const allowed = await attempt();
+    expect(allowed.statusCode).toBe(201);
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' } as never);
+  });
+
+  it('allows a 30-day window with several live links on Garden', async () => {
+    await warm('member');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([
+      link({ id: 'l1' }) as never,
+      link({ id: 'l2' }) as never,
+    ]);
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('rejects (400) a window past the 90-day ceiling before the plan is even consulted', async () => {
+    await warm('member');
+    const billing = await import('../../../src/services/billing.js');
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 120 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+  });
+
+  it('lets a plain member list the household links', async () => {
+    await warm('member');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.listSitterLinks).mockResolvedValueOnce([link() as never]);
+    const { listSitterLinks } = await import('../../../src/handlers/households/handler.js');
+    const res = (await listSitterLinks(
+      buildEvent(memberClaims, { pathParameters: { id: 'hh-1' } }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toHaveLength(1);
+    expect(res.body).not.toContain('a'.repeat(64));
+  });
+
+  it('lets a member revoke a link they created, and records it', async () => {
+    await warm('member');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.findSitterLink).mockResolvedValueOnce(link() as never);
+    const { revokeSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const activity = await import('../../../src/services/activity.js');
+    const res = (await revokeSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'DELETE',
+        pathParameters: { id: 'hh-1', linkId: 'link-1' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(204);
+    expect(sitterService.revokeSitterLink).toHaveBeenCalledWith('hh-1', 'link-1');
+    expect(activity.recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'sitter_link.revoked', actorName: 'Chelsea' })
+    );
+  });
+
+  it("refuses (403) a member revoking another member's link, without touching it", async () => {
+    await warm('member');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.findSitterLink).mockResolvedValueOnce(
+      link({ createdBy: 'user-2' }) as never
+    );
+    const { revokeSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await revokeSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'DELETE',
+        pathParameters: { id: 'hh-1', linkId: 'link-1' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(sitterService.revokeSitterLink).not.toHaveBeenCalled();
+  });
+
+  it("lets an admin revoke any member's link", async () => {
+    await warm('admin');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.findSitterLink).mockResolvedValueOnce(
+      link({ createdBy: 'user-2' }) as never
+    );
+    const { revokeSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await revokeSitterLink(
+      buildEvent(adminClaims, {
+        httpMethod: 'DELETE',
+        pathParameters: { id: 'hh-1', linkId: 'link-1' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(204);
+    expect(sitterService.revokeSitterLink).toHaveBeenCalledWith('hh-1', 'link-1');
+  });
+
+  it('404s revoking a link the household does not have', async () => {
+    await warm('admin');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(sitterService.findSitterLink).mockResolvedValueOnce(null);
+    const { revokeSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await revokeSitterLink(
+      buildEvent(adminClaims, {
+        httpMethod: 'DELETE',
+        pathParameters: { id: 'hh-1', linkId: 'nope' },
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(404);
   });
 });
