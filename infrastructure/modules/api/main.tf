@@ -895,6 +895,7 @@ locals {
     "POST /tasks/{id}/snooze"               = { group = "tasks", auth = "jwt" }
     "POST /tasks/{id}/claim"                = { group = "tasks", auth = "jwt" }
     "POST /tasks/{id}/unclaim"              = { group = "tasks", auth = "jwt" }
+    "POST /tasks/{id}/ask"                  = { group = "tasks", auth = "jwt" }
     # Vacation-mode care handoff. Exact-segment route keys win over {id}
     # params in HTTP API route selection, so /tasks/vacation never collides
     # with /tasks/{id}.

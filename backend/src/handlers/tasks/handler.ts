@@ -14,6 +14,7 @@ import {
   createTaskSchema,
   updateTaskSchema,
   snoozeTaskSchema,
+  askForHelpSchema,
   completeTaskSchema,
   applyTemplateSchema,
   applyTemplateBulkSchema,
@@ -21,6 +22,7 @@ import {
   CreateTaskInput,
   UpdateTaskInput,
   SnoozeTaskInput,
+  AskForHelpInput,
   CompleteTaskInput,
   ApplyTemplateInput,
   ApplyTemplateBulkInput,
@@ -28,6 +30,7 @@ import {
   TaskFilters,
 } from '../../models/schemas.js';
 import * as taskService from '../../services/taskService.js';
+import * as askFamily from '../../services/askFamily.js';
 import * as plantService from '../../services/plantService.js';
 import * as spaceService from '../../services/spaceService.js';
 import * as householdService from '../../services/householdService.js';
@@ -726,6 +729,60 @@ export const unclaimTask = createHandler(
   .use(userRateLimit())
   .use(requireHousehold());
 
+// POST /tasks/:id/ask — ask the household to pick up this occurrence, with
+// an optional short note (ADR 0024). Free on every tier: this is a person
+// talking to their own household, the same category as claim/unclaim.
+//
+// Refusals, all client-correctable and all exposed:
+//   403  somebody else explicitly holds this task (only they can release it)
+//   404  no such task in this household
+//   409  this occurrence has already been asked about, or it moved under you
+//   429  you already asked about this task inside the 24-hour window (the
+//        body carries `nextAllowedAt` when the marker could be read)
+export const askFamilyForTask = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<AskForHelpInput>;
+    const taskId = event.pathParameters?.id;
+    if (!taskId) {
+      throw createHttpError(400, 'Task ID is required');
+    }
+
+    try {
+      return successResponse(
+        await askFamily.askFamilyForHelp({
+          householdId: user.householdId!,
+          taskId,
+          asker: { userId: user.userId, email: user.email },
+          note: validatedBody.note ?? null,
+          expectedNextDue: validatedBody.expectedNextDue ?? null,
+        })
+      );
+    } catch (err) {
+      // `err.name` (not instanceof) so a test automock of the service module
+      // still maps — the repo's PlanLimitError convention.
+      const name = (err as { name?: string }).name;
+      if (name === 'TaskNotFoundError') throw createHttpError(404, (err as Error).message);
+      if (name === 'TaskHeldByAnotherMemberError') {
+        throw createHttpError(403, (err as Error).message);
+      }
+      if (name === 'HelpAlreadyRequestedError' || name === 'TaskChangedError') {
+        throw createHttpError(409, (err as Error).message);
+      }
+      if (name === 'AskHelpRateLimitedError') {
+        throw createHttpError(429, (err as Error).message, {
+          details: { nextAllowedAt: (err as askFamily.AskHelpRateLimitedError).nextAllowedAt },
+        });
+      }
+      throw err;
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(userRateLimit())
+  .use(requireHousehold())
+  .use(validateBody(askForHelpSchema));
+
 // PUT /tasks/vacation — set (upsert) a vacation window. Body userId defaults
 // to the caller; setting it for someone else requires the admin role.
 export const setVacation = createHandler(
@@ -1034,6 +1091,7 @@ export const handler = createRouter({
   'POST /tasks/{id}/snooze': snoozeTask,
   'POST /tasks/{id}/claim': claimTask,
   'POST /tasks/{id}/unclaim': unclaimTask,
+  'POST /tasks/{id}/ask': askFamilyForTask,
   'PUT /tasks/vacation': setVacation,
   'DELETE /tasks/vacation/{userId}': deleteVacation,
   'GET /tasks/vacation': listVacations,

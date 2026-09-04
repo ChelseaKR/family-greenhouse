@@ -178,6 +178,15 @@ export interface Task {
   escalatedAt?: string | null;
   escalatedForDue?: string | null;
   escalatedFrom?: string | null;
+  /** "Ask family to do it" marker (ADR 0024): `helpAskedForDue === nextDue`
+   *  AND nobody assigned means a housemate asked for this occurrence and it
+   *  is still waiting. Claiming or completing it closes the ask by itself —
+   *  there is no separate cancel. */
+  helpAskedAt?: string | null;
+  helpAskedBy?: string | null;
+  helpAskedByName?: string | null;
+  helpAskedNote?: string | null;
+  helpAskedForDue?: string | null;
   createdBy: string;
   createdAt: string;
 }

@@ -352,6 +352,13 @@ export interface ActivityPayloadByType {
    *  longer knows. */
   'upgrade.requested': { feature: string; plan: 'garden' | 'greenhouse' };
   /** Auto-handoff put an overdue task up for grabs. System-authored: no actor. */
+  /** "Ask family to do it" (ADR 0024): a member asked the household to pick
+   *  up this occurrence. Unlike `task.escalated` this one has a human actor. */
+  'task.help_requested': TaskAssignmentActivityPayload & {
+    note: string | null;
+    /** How many members were told; 0 is a real outcome (all away / in DND). */
+    notified: number;
+  };
   'task.escalated': TaskAssignmentActivityPayload & {
     previousAssigneeId: string | null;
     previousAssigneeName: string | null;
@@ -385,6 +392,7 @@ export const ACTIVITY_TYPES = [
   'sitter_link.revoked',
   'task.schedule_matched',
   'upgrade.requested',
+  'task.help_requested',
   'task.escalated',
 ] as const satisfies readonly ActivityType[];
 

@@ -10,7 +10,12 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
+import {
+  taskService,
+  type AskFamilyResult,
+  type SnoozeReason,
+  type TaskWithCoverage,
+} from '@/services/taskService';
 import { PlantWithTasks, Task } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
@@ -263,6 +268,47 @@ export function useUnclaimTaskMutation(householdId: string | null) {
       ),
     t('tasks.unclaimedToast')
   );
+}
+
+export interface AskFamilyVariables {
+  task: Task;
+  /** The asker's optional short note; blank is sent as no note at all. */
+  note?: string;
+}
+
+/**
+ * "Ask family to do it" (ADR 0024).
+ *
+ * Deliberately NOT optimistic: the point of the feature is who got told, and
+ * that answer only exists once the server has run the away/Do-Not-Disturb
+ * guardrails. The toast reports it honestly — reaching nobody (a one-person
+ * household, or everyone away or asleep) is a real outcome and says so
+ * instead of showing a success the household never received.
+ */
+export function useAskFamilyMutation(householdId: string | null) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ task, note }: AskFamilyVariables) =>
+      taskService.askFamily(task.id, note?.trim() || undefined, task.nextDue),
+    onSuccess: (result: AskFamilyResult) => {
+      if (result.recipients.length === 0) {
+        toast.info(t('tasks.askNobodyReachable'));
+      } else if (result.delivered === 0) {
+        toast.info(t('tasks.askNotDelivered', { count: result.recipients.length }));
+      } else {
+        toast.success(t('tasks.askedToast', { count: result.delivered }));
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      queryClient.invalidateQueries({
+        queryKey: ['household', householdId, 'activity'],
+        refetchType: 'none',
+      });
+    },
+  });
 }
 
 /** Skip-cycle snooze (one full frequency) tagged with a climate reason. */

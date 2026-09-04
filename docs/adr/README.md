@@ -38,5 +38,6 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 | [0021](0021-email-rendering-and-usefulness.md)                      | HTML email, localized, with one-click unsubscribe      | Accepted |
 | [0022](0022-email-deliverability-and-bounce-handling.md)            | Email deliverability and bounce handling               | Accepted |
 | [0023](0023-billing-lifecycle-emails.md)                            | Billing lifecycle emails                               | Accepted |
+| [0024](0024-ask-family-to-do-it.md)                                 | "Ask family to do it" is a second door onto one state  | Accepted |
 
 > Several earlier decisions (Cognito for auth, React+Vite+TanStack Query, gated external integrations) are documented inline in `docs/architecture.md` / `docs/strategy-review.md` and could be backfilled as ADRs when next touched.

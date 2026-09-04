@@ -204,6 +204,21 @@ export interface Task {
   escalatedForDue?: string | null;
   /** Who held the task when it was escalated (null when it was unassigned). */
   escalatedFrom?: string | null;
+  /**
+   * "Ask family to do it" (ADR 0024): a member asked the household to pick up
+   * THIS occurrence. Pinned to a `nextDue` exactly as `escalatedForDue` is, so
+   * the same occurrence cannot be asked about twice and a completion (which
+   * advances `nextDue`) naturally re-arms the ask. The ask reaches the same
+   * ESCALATED state the auto-handoff scan does — one state, two doors — so
+   * these fields record WHO asked and WHY, never a second precedence level.
+   * Absent on rows nobody has asked about.
+   */
+  helpAskedAt?: string | null;
+  helpAskedBy?: string | null;
+  helpAskedByName?: string | null;
+  /** The asker's short note ("I'm travelling until Sunday"), or null. */
+  helpAskedNote?: string | null;
+  helpAskedForDue?: string | null;
   createdBy: string;
   createdAt: string;
 }
