@@ -487,9 +487,30 @@ jobs:
             ver=$(aws lambda list-versions-by-function --function-name "$FUNCTION_NAME" \
               --query 'max_by(Versions[?Version!=`$LATEST`], &to_number(Version)).Version' \
               --output text | sort -n | tail -1)
+            # A function terraform created in THIS run has only $LATEST: no
+            # numbered version exists yet, because nothing has published one.
+            # That is not a broken snapshot, it is a function with nothing to
+            # roll back TO, and failing here would block the first deploy of
+            # every new Lambda this project ever adds. (Observed on v0.25.0:
+            # eight functions snapshotted, `emailEvents` — created minutes
+            # earlier by the same apply — had none.)
+            #
+            # Omitting it from prev-versions.txt is the correct outcome: the
+            # rollback job iterates that file, so an absent line means the new
+            # function is simply left alone, while every pre-existing function
+            # still restores. A function that has EVER deployed will always
+            # have a published version, so this can only be reached on a first
+            # deploy — an existing function reporting none still fails below.
             if [ -z "$ver" ] || [ "$ver" = "None" ]; then
-              echo "::error::${FUNCTION_NAME}: no published version is available for rollback"
-              exit 1
+              created=$(aws lambda get-function-configuration \
+                --function-name "$FUNCTION_NAME" \
+                --query 'LastModified' --output text 2>/dev/null || echo "")
+              if [ -z "$created" ] || [ "$created" = "None" ]; then
+                echo "::error::${FUNCTION_NAME}: function is missing entirely — terraform did not create it"
+                exit 1
+              fi
+              echo "  – ${FUNCTION_NAME} is new (only \$LATEST); nothing to snapshot, excluded from rollback"
+              continue
             fi
 
             # Materialize the captured package before mutating any function.
