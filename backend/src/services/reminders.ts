@@ -24,6 +24,22 @@
  * getUpcomingTasks), grouped by assignee in memory. The old shape was one GSI2
  * query per member, which both multiplied reads and silently dropped
  * unassigned tasks (they're in nobody's GSI2 partition).
+ *
+ * Content: `services/reminderEmail.ts` turns the rows this file already read
+ * into words. The reminder used to be two integers and a link to a filtered
+ * list while `Task[]` sat in scope on the line above the payload; it now names
+ * every plant and task, deep-links each to its own plant page, marks unclaimed
+ * tasks as claimable rather than folding them into an anonymous count, and
+ * says why a cover is covering.
+ *
+ * What "sent" means here: a finalized marker records that a PROVIDER ACCEPTED
+ * the notification, not that a person received it. `emailNotifier.sendEmail`
+ * returns true the moment SES resolves `SendEmailCommand`, and there is no SES
+ * configuration set, bounce destination or suppression list anywhere in
+ * `infrastructure/`, so a hard bounce still finalizes the day's marker as
+ * `sent`. That gap is real and is owned by the deliverability work, not by
+ * this file — nothing here may widen it. In particular, no code path may start
+ * treating `status: 'sent'` as evidence of receipt.
  */
 import { randomUUID } from 'node:crypto';
 import { GetCommand, PutCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
@@ -36,8 +52,23 @@ import * as plantService from './plantService.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as pestAlerts from './pestAlerts.js';
 import * as notifier from './notifier.js';
+import * as climate from './climate.js';
+import * as reminderEmail from './reminderEmail.js';
+import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The locale every reminder is composed in today.
+ *
+ * `reminderEmail` carries complete en + es catalogs, but nothing in the
+ * backend stores a user's language: `NotificationPreferences` has `timezone`
+ * and no locale, and Cognito's custom schema adds only household id/role. When
+ * the per-user locale field lands (branch `feat/useful-emails` owns it), this
+ * constant becomes a read of that field and nothing else here changes.
+ */
+const REMINDER_LOCALE_ADOPTION: reminderEmail.ReminderLocale = 'en';
 // Markers outlive their day by a comfortable margin; DynamoDB TTL sweeps them.
 const MARKER_TTL_SECONDS = 48 * 60 * 60;
 // Long enough for the notifier's provider calls, short enough that a killed
@@ -234,6 +265,78 @@ function frontendUrl(path: string): string {
 }
 
 /**
+ * Where one task sits relative to `now`.
+ *
+ * `unknown` is returned for a `nextDue` that does not parse. The digest's
+ * equivalent arithmetic renders `waiting NaN days for some care`; a named
+ * state means the reminder can say "we could not read this date" instead of
+ * printing a number it does not have.
+ */
+function dueStateFor(nextDue: string | null | undefined, now: Date): DueState {
+  const parsed = nextDue ? Date.parse(nextDue) : NaN;
+  if (!Number.isFinite(parsed)) return { kind: 'unknown' };
+  const diffMs = now.getTime() - parsed;
+  if (diffMs < 0) return { kind: 'upcoming' };
+  const days = Math.floor(diffMs / DAY_MS);
+  return days <= 0 ? { kind: 'today' } : { kind: 'overdue', days };
+}
+
+/** Most urgent first: longest-overdue, then today, then upcoming, then the
+ *  rows whose due date we could not read (last, but never dropped). */
+const DUE_RANK: Record<DueState['kind'], number> = {
+  overdue: 0,
+  today: 1,
+  upcoming: 2,
+  unknown: 3,
+};
+
+function compareRows(a: ReminderTaskRow, b: ReminderTaskRow): number {
+  const rank = DUE_RANK[a.due.kind] - DUE_RANK[b.due.kind];
+  if (rank !== 0) return rank;
+  if (a.due.kind === 'overdue' && b.due.kind === 'overdue') return b.due.days - a.due.days;
+  return (a.plantName ?? '').localeCompare(b.plantName ?? '');
+}
+
+/**
+ * Today's forecast for one household, reduced to the two signals a care
+ * reminder can act on.
+ *
+ * Deliberately derived here rather than reusing `climate.deriveClimateTips`:
+ * that function returns English prose with no stable identifier, and this
+ * email ships in two languages. The thresholds are the same ones, and
+ * `reminders.climate.test.ts` asserts the two agree on the same snapshot so
+ * they cannot drift apart silently.
+ *
+ * Every failure path returns `{ status: 'unavailable' }` — a NAMED state, not
+ * an empty one. A reminder that could not read the weather says nothing about
+ * the weather; it must never imply "no rain expected".
+ */
+async function readReminderClimate(householdId: string): Promise<ReminderClimate> {
+  try {
+    const household = await householdService.getHousehold(householdId);
+    if (!household?.location) return { status: 'unavailable' };
+    const snapshot = await climate.getWeatherCached(household.location.lat, household.location.lon);
+    if (!snapshot) return { status: 'unavailable' };
+    const condition = snapshot.condition.toLowerCase();
+    const todayLow = snapshot.forecast[0]?.minC ?? snapshot.tempC;
+    return {
+      status: 'read',
+      rain: condition.includes('rain') || condition.includes('storm'),
+      frostLowC: todayLow < 5 ? todayLow : null,
+    };
+  } catch (err) {
+    // Includes ClimateUnavailableError('not_configured'), which is the state
+    // every reminder run is in until the Terraform change in this PR grants
+    // the reminders Lambda `weather_environment`.
+    logger.info(
+      { householdId, err: (err as Error).message },
+      'reminders.climate_unavailable_no_tip'
+    );
+    return { status: 'unavailable' };
+  }
+}
+
+/**
  * Notify each member of one household about tasks due within the next 24h
  * (or already overdue): the member's own assigned tasks plus the household's
  * unassigned ones (otherwise unassigned tasks would notify nobody). Returns
@@ -243,7 +346,6 @@ export async function remindHousehold(
   householdId: string,
   now: Date = new Date()
 ): Promise<number> {
-  const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() + DUE_WINDOW_MS).toISOString();
 
   // One due-window query for the whole household. When nothing is due we
@@ -251,12 +353,18 @@ export async function remindHousehold(
   const dueWindowTasks = await taskService.getTasksDueBy(householdId, cutoff);
 
   let due: Task[] = [];
+  // Authoritative plant names for the rows we are about to list. Every task in
+  // `due` is filtered against this map's keys, so a lookup below can never
+  // miss for a reason other than an empty stored name.
+  const activePlantNames = new Map<string, string>();
   if (dueWindowTasks.length > 0) {
     // Don't remind about plants that are no longer active (died / gave away).
     // getPlants defaults to active-only, so any task whose plant isn't in this
     // set belongs to a past plant and is skipped.
-    const activePlantIds = new Set((await plantService.getPlants(householdId)).map((p) => p.id));
-    due = dueWindowTasks.filter((t) => activePlantIds.has(t.plantId));
+    for (const plant of await plantService.getPlants(householdId)) {
+      activePlantNames.set(plant.id, plant.name);
+    }
+    due = dueWindowTasks.filter((t) => activePlantNames.has(t.plantId));
   }
 
   let sent = 0;
@@ -289,6 +397,26 @@ export async function remindHousehold(
     // reached (left the household, or away with no valid cover) — roll up
     // into every member's reminder so they don't silently fall on the floor.
     const unassigned = due.filter((t) => !deliverable(effectiveAssignee(t)));
+
+    /** One rendered row. Plant names come from the active-plant read, which
+     *  every task in `due` already matched; an empty stored name resolves to
+     *  null so the composer says the name is missing rather than printing "". */
+    const rowFor = (t: Task, upForGrabs: boolean): ReminderTaskRow => ({
+      plantName: activePlantNames.get(t.plantId)?.trim() || null,
+      taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, REMINDER_LOCALE_ADOPTION),
+      due: dueStateFor(t.nextDue, now),
+      upForGrabs,
+      url: frontendUrl(`/plants/${encodeURIComponent(t.plantId)}`),
+    });
+
+    // The forecast is read at most once per household per run, and only when a
+    // member is actually about to be composed a reminder — the daily dedupe
+    // marker means that is at most once a day in practice, not once an hour.
+    let climateOnce: Promise<ReminderClimate> | null = null;
+    const householdClimate = (): Promise<ReminderClimate> => {
+      climateOnce ??= readReminderClimate(householdId);
+      return climateOnce;
+    };
 
     for (const member of members) {
       // A member who is away gets no reminders at all — that's the point of
@@ -337,35 +465,51 @@ export async function remindHousehold(
       }
       if (reservations.size === 0) continue;
 
-      const overdue = tasksForMember.filter((t) => t.nextDue < nowIso).length;
-      let body = overdue
-        ? `${overdue} ready for some catch-up care, ${tasksForMember.length - overdue} coming up soon`
-        : `${tasksForMember.length} task${tasksForMember.length === 1 ? '' : 's'} coming up in the next 24h`;
+      // Every row the member is on the hook for, named. `mine` are theirs;
+      // `unassigned` are nobody's, and are marked claimable rather than folded
+      // into an anonymous integer that five people each read as someone
+      // else's problem.
+      const rows = [
+        ...mine.map((t) => rowFor(t, false)),
+        ...unassigned.map((t) => rowFor(t, true)),
+      ].sort(compareRows);
 
-      // Tell the cover whose tasks they're picking up.
-      const coveringNames = [
+      // Tell the cover whose tasks they're picking up, and why. A member row
+      // that failed to load yields `name: null` — the composer renders that as
+      // an explicit failed lookup. It must never become a person called
+      // "a housemate", which is what the previous `?? 'a housemate'` did.
+      const coveredUserIds = [
         ...new Set(
           mine
             .filter((t) => t.assignedTo && t.assignedTo !== member.userId)
-            .map(
-              (t) =>
-                members.find((m) => m.userId === t.assignedTo)?.name ??
-                t.assignedToName ??
-                'a housemate'
-            )
+            .map((t) => t.assignedTo as string)
         ),
       ];
-      if (coveringNames.length > 0) {
-        body += ` (covering for ${coveringNames.join(', ')})`;
-      }
+      const covering = coveredUserIds.map((userId) => ({
+        name: reminderEmail.resolveCoveredName(
+          members,
+          userId,
+          mine.find((t) => t.assignedTo === userId)?.assignedToName ?? null
+        ),
+        awayUntil: vacations.get(userId)?.endDate ?? null,
+      }));
+
+      const composed = reminderEmail.composeReminderEmail({
+        rows,
+        covering,
+        climate: await householdClimate(),
+        locale: REMINDER_LOCALE_ADOPTION,
+        timeZone,
+      });
 
       let result: notifier.SendResult;
       try {
         result = await notifier.sendToUser(
           { userId: member.userId, email: member.email },
           {
-            title: 'Plant care reminder',
-            body,
+            title: composed.subject,
+            body: composed.body,
+            shortBody: composed.shortBody,
             tag: `reminder-${householdId}-${localDateKey(now, timeZone)}`,
             url: frontendUrl('/tasks?filter=due'),
           },
@@ -418,8 +562,10 @@ export async function remindHousehold(
               channel,
               reservationId
             ).catch((err) => {
-              // A provider accepted this channel. Never delete its marker on a
-              // finalize error: doing so would guarantee a duplicate next run.
+              // A provider ACCEPTED this channel — which is not the same as a
+              // person receiving it; see the file header. Never delete its
+              // marker on a finalize error: doing so would guarantee a
+              // duplicate next run.
               logger.warn(
                 {
                   err: (err as Error).message,

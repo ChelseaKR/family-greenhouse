@@ -14,7 +14,8 @@ Lambda runReminders
 For each member of the household:
   1. Read prefs from DDB (USER#{id} / PREFS)
   2. Roll up their assigned + unassigned tasks due in the next 24h
-  3. Compose one payload {title, body, url, tag}
+  3. Compose one payload {title, body, shortBody, url, tag}
+     via services/reminderEmail.composeReminderEmail
   4. Reserve each eligible channel's daily delivery marker
   5. notifier.sendToUser(recipient, payload, {channels})
         │
@@ -22,6 +23,106 @@ For each member of the household:
         ├─▶ if prefs.email   → SES SendEmailCommand
         └─▶ if prefs.sms && prefs.phone → SNS Publish
 ```
+
+## What the reminder actually says
+
+`services/reminderEmail.ts` holds the copy and layout; `services/reminders.ts`
+holds delivery. The composer is pure — no DynamoDB, no environment — which is
+what makes the rules below testable
+(`backend/tests/unit/services/reminderEmail.test.ts`).
+
+A rendered example, for a member with nine due rows, one of them unclaimed, who
+is covering for someone on holiday:
+
+```
+Subject: Plant care reminder: 3 overdue, 1 due today and 5 coming up,
+         including 1 nobody has claimed
+
+Here is where your household's plant care stands: 3 overdue, 1 due today and
+5 coming up, including 1 nobody has claimed.
+
+Yours, most urgent first:
+
+1. Monstera — water, 6 days overdue
+   https://familygreenhouse.net/plants/8f3c…
+2. Fiddle Leaf Fig — fertilize, 2 days overdue
+   https://familygreenhouse.net/plants/1a22…
+…
+
+Showing 6 of 8. The full list is linked at the end of this email.
+
+Up for grabs — nobody has claimed these, so anyone can:
+
+- Snake Plant — repot, 3 days overdue
+  https://familygreenhouse.net/plants/77bd…
+
+You're covering for Sam, who is away until 9 June 2026.
+
+Rain is forecast for your area — outdoor plants likely don't need watering
+today.
+
+Open any plant above to log the care, or see everything here:
+
+https://familygreenhouse.net/tasks?filter=due
+```
+
+The rules the composer enforces:
+
+- **Every row is named and deep-linked** to its own plant (`/plants/{id}`), not
+  to the filtered list. The list link is the footer only.
+- **A capped list always states the true total.** `rows` is the member's
+  complete set; `MAX_LISTED_ASSIGNED` / `MAX_LISTED_UNCLAIMED` cap the display
+  and the counts stay real. Same rule, and the same reason, as
+  `digest.composeDigestEmail`: under-reporting reassures precisely the
+  households that most need the nudge.
+- **Zero is never printed as information.** The old body read `5 ready for some
+catch-up care, 0 coming up soon`; empty buckets are simply omitted.
+- **Unassigned tasks are shown as claimable**, in their own section, instead of
+  being folded into an anonymous integer mailed to every member.
+- **A failed read is never rendered as a value.** A member row that will not
+  load yields "a household member whose name we couldn't load", never a person
+  called "a housemate"; an unparseable `nextDue` yields "due date could not be
+  read", never `NaN days`; a custom task with no `customType` yields "unnamed
+  care task", never the literal `custom`.
+- **Both locales.** `reminderEmail` carries complete `en` and `es` catalogs.
+  Nothing in the backend stores a user language yet, so `reminders.ts` passes
+  `'en'` from a single constant (`REMINDER_LOCALE_ADOPTION`) that becomes a
+  read of that field when it lands.
+
+### Weather
+
+The reminder reads the household's cached forecast and adds a rain or frost
+line when one applies — a watering reminder on a rain day is exactly the case
+`climate.deriveClimateTips` exists for. The read happens at most once per
+household per run, and only when a member is actually being composed a
+reminder, so the daily dedupe marker keeps it to roughly one forecast read per
+household per day.
+
+If the forecast cannot be read — the Lambda has no `OPENWEATHER_API_KEY`, the
+household has no saved location, the provider is down — the email says nothing
+about the weather. It never says "no rain expected", which would be a claim
+derived from a failed read.
+
+`OPENWEATHER_API_KEY` reaches the `reminders` Lambda through
+`local.weather_environment` in `infrastructure/modules/api/main.tf`. Until that
+is applied the reminder simply omits the line.
+
+### `shortBody`
+
+SMS is capped at one 140-byte segment and a push body shows two or three lines,
+so the payload carries a `shortBody` — the counts sentence on its own. Email
+gets the full list; SMS and browser push get `shortBody`. Callers that omit it
+are unchanged: `body` is used everywhere.
+
+### Accepted is not delivered
+
+A finalized reminder marker records that **a provider accepted** the
+notification. `emailNotifier.sendEmail` returns `true` the moment SES resolves
+`SendEmailCommand`; there is no SES configuration set, bounce destination or
+suppression list, so a hard bounce still finalizes the day's marker as `sent`.
+Nothing in the reminder path may treat `status: 'sent'` as evidence of receipt.
+Closing that gap (bounce/complaint handling and suppression) is deliberately
+outside this path.
 
 Failures in one channel never block the others — each call is wrapped in a
 per-channel try/catch that logs the failure and lets the other dispatches
@@ -127,6 +228,10 @@ Set `SES_FROM_EMAIL` to a verified SES identity. The Lambda role needs `ses:Send
 
 Out of the SES sandbox, you can send to anyone. In sandbox mode, the recipient address must also be verified — fine for staging, fatal for production. File a support case to get out of sandbox before launch.
 
+The reminder body is a multi-line list; see "What the reminder actually says"
+above for the layout and the rules it holds. The digest, recap and welcome
+emails compose their own bodies.
+
 We send plain-text only. No HTML. Reasons:
 
 - Templating overhead is not worth it for a household app
@@ -181,6 +286,9 @@ verified state.
 
 Code outside the reminder loop can call `notifier.sendToUser(recipient, payload)` to deliver any notification. Today the only caller is `runReminders`. Future callers (member-added, task-assigned, plant-shared) should use the same entry point so prefs are honoured.
 
+A payload whose `body` runs to more than a couple of lines should also set
+`shortBody`; SMS and browser push use it, email does not.
+
 ## Local development
 
 All channels degrade to structured `pino` log lines when their env vars aren't set:
@@ -207,6 +315,13 @@ curl -X POST http://localhost:4000/notifications/run-reminders \
 ## Testing
 
 - Unit tests for the prefs model, each notifier, and the fan-out logic in `notifier.ts`
+- `services/reminderEmail.test.ts` covers the reminder copy in both locales:
+  list rendering, the capped-subset-with-true-total rule, each honesty rule,
+  the vacation-cover path and the climate lines
+- `services/remindersContent.test.ts` runs the same rules end to end through
+  `remindHousehold`, including the once-per-run forecast read and a cross-check
+  that the reminder's rain/frost predicates agree with
+  `climate.deriveClimateTips`
 - Integration tests against the local server cover prefs CRUD and simulated
   recipient routing; they do not claim provider receipt
 - The notifier's per-channel error paths are unit-tested by mocking SES/SNS/web-push to throw and asserting the other channels still execute

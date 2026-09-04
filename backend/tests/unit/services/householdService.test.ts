@@ -538,17 +538,69 @@ describe('householdService', () => {
     await expect(removeMember('hh', 'admin')).rejects.toMatchObject({ name: 'LastAdminError' });
   });
 
-  it('every plan cap stays under the single-page member-query limit', async () => {
-    const { MEMBER_QUERY_LIMIT } = await import('../../../src/services/householdService.js');
+  it('getHouseholdMembers pages to exhaustion, so a big roster cannot truncate', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getHouseholdMembers, MEMBER_QUERY_LIMIT } =
+      await import('../../../src/services/householdService.js');
+
+    // This was a SINGLE un-paginated Query whose safety depended on a constant
+    // in another file (`plans.maxMembers` staying under the page limit). The
+    // failure mode was silent: past the cut a member is simply never reminded,
+    // with nothing anywhere recording it. Paging removes the mode entirely.
+    const member = (n: number) => ({
+      householdId: 'hh',
+      userId: `u${n}`,
+      name: `M${n}`,
+      email: `m${n}@x.com`,
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [member(1), member(2)],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh', SK: 'MEMBER#u2' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [member(3)] } as never);
+
+    const members = await getHouseholdMembers('hh');
+    expect(members.map((m) => m.userId)).toEqual(['u1', 'u2', 'u3']);
+
+    const calls = vi.mocked(dynamodb.send).mock.calls;
+    expect(calls).toHaveLength(2);
+    const second = calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown>; Limit: number };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'HOUSEHOLD#hh', SK: 'MEMBER#u2' });
+    // The constant is now a page size, not a roster cap.
+    expect(second.input.Limit).toBe(MEMBER_QUERY_LIMIT);
+  });
+
+  it('a roster larger than one page still returns every member', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getHouseholdMembers, MEMBER_QUERY_LIMIT } =
+      await import('../../../src/services/householdService.js');
     const { PLANS } = await import('../../../src/models/plans.js');
 
-    // `getHouseholdMembers` is one un-paginated Query. That is only safe while
-    // no plan can hold more members than a single page returns. Raise
-    // `maxMembers` past this and the roster silently truncates instead of
-    // erroring — and reminders iterate exactly that roster, so the members
-    // past the cut are simply never reminded, with nothing recording why.
-    for (const plan of Object.values(PLANS)) {
-      expect(plan.maxMembers).toBeLessThan(MEMBER_QUERY_LIMIT);
-    }
+    // Deliberately exceeds every plan cap AND the page size, which is exactly
+    // the case the old single-page read dropped on the floor.
+    const size = MEMBER_QUERY_LIMIT + 7;
+    expect(size).toBeGreaterThan(Math.max(...Object.values(PLANS).map((p) => p.maxMembers)));
+    const row = (n: number) => ({
+      householdId: 'hh',
+      userId: `u${n}`,
+      name: `M${n}`,
+      email: `m${n}@x.com`,
+      role: 'member',
+      joinedAt: '',
+    });
+    const all = Array.from({ length: size }, (_, i) => row(i));
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: all.slice(0, MEMBER_QUERY_LIMIT),
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh', SK: `MEMBER#u${MEMBER_QUERY_LIMIT - 1}` },
+      } as never)
+      .mockResolvedValueOnce({ Items: all.slice(MEMBER_QUERY_LIMIT) } as never);
+
+    await expect(getHouseholdMembers('hh')).resolves.toHaveLength(size);
   });
 });

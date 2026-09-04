@@ -22,6 +22,9 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 vi.mock('../../../src/services/householdService.js', () => ({
   getHouseholdMembers: vi.fn(),
   listAllHouseholdIds: vi.fn(),
+  // Read only by the reminder's climate lookup. No saved location by default,
+  // so these tests never reach the weather provider.
+  getHousehold: vi.fn(async () => null),
 }));
 vi.mock('../../../src/services/taskService.js', () => ({
   getTasksDueBy: vi.fn(),
@@ -111,7 +114,11 @@ function notificationPreferences(
 
 async function mockActivePlants(ids: string[] = ['p1']) {
   const plants = await import('../../../src/services/plantService.js');
-  vi.mocked(plants.getPlants).mockResolvedValue(ids.map((id) => ({ id })) as never);
+  // Names matter now: the reminder body lists each plant by name, so a
+  // nameless fixture would exercise the "name could not be loaded" path.
+  vi.mocked(plants.getPlants).mockResolvedValue(
+    ids.map((id) => ({ id, name: `Plant ${id}` })) as never
+  );
 }
 
 async function mockNoPestOptIns() {
@@ -190,8 +197,8 @@ describe('reminders service', () => {
     // u1 has one overdue + one due-soon; u2 has nothing (the far-future task
     // never comes back from the due-window query at all).
     vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
-      { nextDue: past, plantId: 'p1', assignedTo: 'u1' },
-      { nextDue: soon, plantId: 'p1', assignedTo: 'u1' },
+      { nextDue: past, plantId: 'p1', assignedTo: 'u1', type: 'water', customType: null },
+      { nextDue: soon, plantId: 'p1', assignedTo: 'u1', type: 'prune', customType: null },
     ] as never);
 
     const sent = await remindHousehold('hh', NOW);
@@ -200,10 +207,14 @@ describe('reminders service', () => {
     expect(notifier.sendToUser).toHaveBeenCalledOnce();
     const [recipient, payload] = vi.mocked(notifier.sendToUser).mock.calls[0];
     expect(recipient).toEqual({ userId: 'u1', email: 'a@x.com' });
-    expect((payload as { body: string }).body).toBe(
-      '1 ready for some catch-up care, 1 coming up soon'
-    );
+    // The body names both tasks and links each to its own plant, instead of
+    // reporting two integers against a filtered list.
+    const body = (payload as { body: string }).body;
+    expect(body).toContain('1 due today and 1 coming up');
+    expect(body).toContain('Plant p1 — water, due today');
+    expect(body).toContain('http://localhost:3000/plants/p1');
     expect(payload).toMatchObject({
+      title: 'Plant care reminder: 1 due today and 1 coming up',
       tag: 'reminder-hh-2026-06-01',
       url: 'http://localhost:3000/tasks?filter=due',
     });
@@ -308,9 +319,16 @@ describe('reminders service', () => {
     expect(sent).toBe(2);
     const recipients = vi.mocked(notifier.sendToUser).mock.calls.map((c) => c[0].userId);
     expect(recipients.sort()).toEqual(['u1', 'u2']);
-    expect((vi.mocked(notifier.sendToUser).mock.calls[0][1] as { body: string }).body).toBe(
-      '2 tasks coming up in the next 24h'
-    );
+    // Both rows are unassigned, so they are surfaced as claimable rather than
+    // rolled into an anonymous integer that every member reads as somebody
+    // else's problem.
+    const rollup = vi.mocked(notifier.sendToUser).mock.calls[0][1] as {
+      body: string;
+      shortBody: string;
+    };
+    expect(rollup.body).toContain('2 coming up, including 2 nobody has claimed');
+    expect(rollup.body).toContain('Up for grabs');
+    expect(rollup.shortBody).toBe('2 coming up, including 2 nobody has claimed');
   });
 
   it('dedupes across consecutive runs: second run the same day sends nothing', async () => {
@@ -690,9 +708,12 @@ describe('reminders service', () => {
       // Delivered to the cover, not the away member…
       expect(recipient.userId).toBe('u2');
       // …with the handoff called out in the message.
-      expect((payload as { body: string }).body).toBe(
-        '1 ready for some catch-up care, 0 coming up soon (covering for A)'
-      );
+      const body = (payload as { body: string }).body;
+      // The cover is told WHO they are covering and until when — the window's
+      // endDate, rendered in the recipient's zone.
+      expect(body).toContain("You're covering for A, who is away until June 5, 2026.");
+      // …and the summary never prints a zero bucket.
+      expect(body).not.toContain('0 ');
     });
 
     it('after the window expires, reminders revert to the original assignee (auto-revert)', async () => {
