@@ -57,6 +57,14 @@ vi.mock('../../../src/utils/serverAnalytics.js', () => ({
   capture: captureMock,
 }));
 
+// The money-lifecycle emails ride this same webhook path (ADR 0023) and have
+// their own suites (billingEmails.test.ts, billingEmailWebhook.test.ts).
+// Mocked here so their DynamoDB reads and SES sends don't consume the mock
+// responses this file queues for the subscription path.
+vi.mock('../../../src/services/billingEmails.js', () => ({
+  dispatchBillingEmails: vi.fn(),
+}));
+
 // Most of this file tests the retained Stripe implementation beneath the
 // repository hold. Keep the exact runtime env gate in place while treating the
 // status decision as reviewed-off for those mechanics tests. The real shared

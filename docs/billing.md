@@ -144,7 +144,69 @@ Webhook events we handle:
 
 Anything else is acknowledged and ignored.
 
+Four more event types are read only for the billing emails below and never
+change entitlement: `invoice.paid`, `invoice.upcoming`,
+`invoice.payment_failed`, `customer.source.expiring`.
+`invoice.payment_succeeded` is deliberately **not** handled — Stripe emits it
+alongside `invoice.paid` for the same money, and handling both would send two
+receipts for one charge.
+
 Three of these also emit a server-side product event (`backend/src/utils/serverAnalytics.ts`). The distinction that matters: every subscription checkout carries `trial_period_days: 14`, so checkout completion is a **trial start**, and the money-moved signal is the later `trialing → active` transition. See [`docs/analytics.md`](analytics.md) for the full contract — including why paid conversion keys off `customer.subscription.updated` rather than `invoice.payment_succeeded`, and how the dedupe ledger keeps an at-least-once redelivery from double-counting revenue.
+
+## Billing emails
+
+See [ADR 0023](adr/0023-billing-lifecycle-emails.md) for the reasoning; this is
+the operational summary.
+
+| Email                                               | Stripe event                                                                                                  | Phase          | Recipients        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------- | ----------------- |
+| Payment receipt (subscription)                      | `invoice.paid`                                                                                                | `charge`       | household admins  |
+| Payment receipt (one-time: a pack, a lifetime tier) | `checkout.session.completed` / `.async_payment_succeeded` with `mode: 'payment'` and `payment_status: 'paid'` | `charge`       | household admins  |
+| Renewal notice                                      | `invoice.upcoming`                                                                                            | `charge`       | household admins  |
+| Payment failed                                      | `invoice.payment_failed`                                                                                      | `charge`       | household admins  |
+| Card expiring                                       | `customer.source.expiring`                                                                                    | `charge`       | household admins  |
+| Cancellation scheduled                              | `customer.subscription.updated`, `cancel_at_period_end` false → true                                          | `state_change` | household admins  |
+| Cancellation complete                               | `customer.subscription.deleted`                                                                               | `state_change` | household admins  |
+| Account deletion confirmation                       | `DELETE /me` (not a Stripe event)                                                                             | —              | the deleting user |
+
+Three modules: `models/billingNotices.ts` (pure — what an event means and which
+facts it actually carried), `services/billingEmailCopy.ts` (pure — `en`/`es`
+copy and all `Intl` formatting), `services/billingEmails.ts` (recipients,
+exactly-once, SES).
+
+Operational notes:
+
+- **All transactional.** Not gated on any notification preference or on the
+  do-not-disturb window, and carrying no unsubscribe link. `notificationPrefs`
+  is read for `timezone` only, so dates render in the recipient's zone.
+- **Exactly once per recipient.** Each send takes
+  `PK: STRIPE_EVENT#{eventId}`, `SK: EMAIL#{kind}#{userId}` with the same
+  claim/send/finalize lease `welcomeEmail` uses. It is a _different sort key_
+  from the ledger's `METADATA` row on purpose: that row is written after the
+  apply so a failed apply stays retryable, and an email must not claim it.
+- **Dispatch never throws.** A 5xx would make Stripe redeliver an already
+  applied event. A failed send releases its marker, so replaying the event from
+  the Stripe dashboard delivers it.
+- **Nothing is claimed from a failed read.** An unreadable amount prints no
+  number; an unreadable renewal date sends no notice; a genuinely zero invoice
+  (every 14-day trial has one) sends no receipt.
+- **Payment failure links Stripe's hosted invoice page** (`hosted_invoice_url`
+  off the event, validated to an https `stripe.com` host) so a customer can
+  settle the invoice in one click. It deliberately does not say what tier the
+  household drops to: that depends on Stripe's "subscription status after all
+  retries fail" setting and on whether entitlement consults
+  `subscriptionStatus` (it does not on `main`; PR #364 changes that).
+- **`STRIPE_CUSTOMER#{id}` pointer.** `customer.source.expiring` carries only a
+  customer id, so any notice that knows both ids writes this pointer (400-day
+  TTL) and that one reads it. No pointer yet ⇒ no warning, never a guess.
+
+If nothing arrives: check that the billing Lambda has `SES_FROM_EMAIL` (an
+unset sender makes `emailNotifier.sendEmail` dry-run and return `false`), then
+check the endpoint actually subscribes the event
+(`docs/external-services-setup.md`), then grep the logs for
+`billing_email_household_unresolved`, `billing_email_no_recipient`,
+`billing_email_duplicate_skipped` and `billing_email_dispatch_failed` — each
+names a different reason for silence.
 
 ## Webhook signature verification
 
@@ -273,6 +335,10 @@ Invoice access goes through the Stripe Customer Portal. We don't ingest invoice 
 - `tests/unit/services/householdUsage.test.ts` and `tests/unit/handlers/billing.test.ts` — genuine-zero, partial/invalid counter, read-failure, and compatibility response shapes
 - `frontend/tests/unit/features/BillingSettings.test.tsx` — nullable meters, legacy fallback, independent per-dimension evaluation, and the invariant that an unknown counter never resolves to `within`
 - `tests/integration/local-server.test.ts` — `describe('billing')` and `describe('plan limits')` blocks exercise checkout, local `usage`/`usageDetail` parity, plan-flip, and plant-cap-402 via supertest
+- `tests/unit/models/billingNotices.test.ts` — every event → notice mapping, and the honesty rules: unreadable amounts/dates/expiry render as `null`, a zero invoice sends nothing, and the endpoint's documented event list is held to the code
+- `tests/unit/services/billingEmailCopy.test.ts` — both languages for every email, `Intl` money (including a zero-decimal currency) and dates in the recipient's timezone, and the rule that an unknown amount prints no number
+- `tests/unit/services/billingEmails.test.ts` — admins-only recipients, sends although every preference is off, the redelivered-webhook-sends-no-second-receipt case, marker release on a dry run, and the customer pointer
+- `tests/unit/services/billingEmailWebhook.test.ts` — the two dispatch phases in `applyStripeEvent`, and that a delivery the guards decline sends no cancellation confirmation
 
 The webhook signature verification is _not_ unit-tested here because mocking `stripe.webhooks.constructEvent` would just be testing our mock. We rely on Stripe's official typings + the `deltaForStripeEvent` test coverage.
 

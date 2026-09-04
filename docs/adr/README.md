@@ -30,5 +30,6 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 | [0012](0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md) | Plant.id unit cost withdraws annual and lifetime plans | Accepted |
 | [0013](0013-build-time-prerendering-of-public-routes.md)         | Build-time prerendering of public routes               | Accepted |
 | [0015](0015-the-away-kit.md)                                     | The Away Kit: sitter links as the paid differentiator  | Accepted |
+| [0023](0023-billing-lifecycle-emails.md)                         | Billing lifecycle emails                               | Accepted |
 
 > Several earlier decisions (Cognito for auth, React+Vite+TanStack Query, gated external integrations) are documented inline in `docs/architecture.md` / `docs/strategy-review.md` and could be backfilled as ADRs when next touched.

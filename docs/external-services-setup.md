@@ -110,7 +110,13 @@ reactivation runbook before changing any of these controls.
 4. **Create a webhook**:
    - Developers → Webhooks → Add endpoint
    - URL: `https://<api-id>.execute-api.us-east-1.amazonaws.com/production/billing/webhook`
-   - Events to send: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+   - Events to send — **subscription state** (entitlement; the app is wrong without these):
+     `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+     `customer.subscription.created`, `customer.subscription.updated`,
+     `customer.subscription.deleted`
+   - Events to send — **billing emails** (ADR 0023; the app is silent without these):
+     `invoice.paid`, `invoice.upcoming`, `invoice.payment_failed`,
+     `customer.source.expiring`
    - After creation, reveal + copy the **Signing secret** (`whsec_…`).
 5. **API key**: Developers → API keys → copy the **Secret key** (`sk_test_…` for test mode).
 6. tfvars:
@@ -143,6 +149,28 @@ When you're ready to actually charge:
 
 - The frontend sends a UUID for each checkout attempt. The API scopes it to the household and forwards it as Stripe's idempotency key, so transport retries return the original Checkout Session instead of creating another one.
 - Keep the webhook event list above narrow. The async-payment event is required for a lifetime purchase that completes after `checkout.session.completed` initially reports `unpaid`.
+- **The endpoint's event list is not Terraform-managed.** There is no Stripe
+  provider in `infrastructure/` (only `hashicorp/aws` and `hashicorp/archive`),
+  so subscribing an event is a Stripe dashboard action, and nothing in CI can
+  detect that one is missing. What CI _can_ do is hold this list to the code:
+  `backend/tests/unit/models/billingNotices.test.ts` fails if the notice model
+  reads an event type this document does not name. Adding a billing email
+  therefore means adding its event here, and then subscribing it in the
+  dashboard by hand.
+- The four **billing-email** events are optional for correctness and mandatory
+  for the product: without `invoice.paid` no customer ever gets a receipt,
+  without `invoice.payment_failed` a failing card churns silently, and the code
+  cannot tell the difference between "not subscribed" and "nothing happened".
+  Subscribe them in test mode first and confirm one of each arrives.
+- `invoice.payment_succeeded` is deliberately **not** subscribed and is ignored
+  by the code. Stripe emits it alongside `invoice.paid` for the same money, so
+  subscribing both would send two receipts for one charge — two events, two
+  ids, and a dedupe ledger that (correctly) cannot merge them.
+- `customer.source.expiring` fires for Card/Source objects. Cards saved as
+  PaymentMethods — which is what Checkout creates — do not reliably produce it,
+  so the card-expiring email is a best-effort early warning and
+  `invoice.payment_failed` remains the dependable dunning path. Do not describe
+  it to customers as complete coverage.
 - Stripe can deliver an event more than once and does not guarantee ordering. The app records processed event IDs and conditions household updates on Stripe's event timestamp; do not remove either guard.
 - Before going live, complete one monthly, annual, and lifetime test checkout; replay a webhook from Stripe Workbench; and verify the household plan, customer ID, subscription ID, and period end in DynamoDB.
 

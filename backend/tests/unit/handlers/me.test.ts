@@ -18,6 +18,7 @@ vi.mock('../../../src/services/deviceTokens.js');
 vi.mock('../../../src/services/accountCleanup.js');
 vi.mock('../../../src/services/apiKeys.js');
 vi.mock('../../../src/services/calendarTokens.js');
+vi.mock('../../../src/services/billingEmails.js');
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
@@ -474,6 +475,94 @@ describe('me handler', () => {
       expect(res.statusCode).toBe(204);
       expect(accountCleanup.deleteUserScopedData).toHaveBeenCalledWith('user-1');
       expect(cognitoUsers.deleteUser).toHaveBeenCalledWith('user-1');
+    });
+
+    // ADR 0023: DELETE /me had a documented pseudonymization caveat and
+    // nothing confirming it. These pin the two properties that make the
+    // confirmation honest — it is sent only after the deletion really
+    // happened, and its counts come from the work done, not an estimate.
+    it('confirms the deletion by email, only after every step succeeded', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const plantService = await import('../../../src/services/plantService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const apiKeys = await import('../../../src/services/apiKeys.js');
+      const billingEmails = await import('../../../src/services/billingEmails.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+
+      // One household the user is alone in (erased outright) and one they
+      // share (history retained under a pseudonym).
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '' },
+        { householdId: 'hh-2', role: 'member', name: 'Cabin', joinedAt: '' },
+      ]);
+      const self = {
+        householdId: 'hh-1',
+        userId: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'admin' as const,
+        joinedAt: '',
+      };
+      vi.mocked(householdService.getHouseholdMembers).mockImplementation(async (hh: string) =>
+        hh === 'hh-1'
+          ? [self]
+          : [
+              { ...self, householdId: 'hh-2', role: 'member' as const },
+              {
+                householdId: 'hh-2',
+                userId: 'user-2',
+                name: 'Other',
+                email: 'other@example.com',
+                role: 'admin' as const,
+                joinedAt: '',
+              },
+            ]
+      );
+      vi.mocked(plantService.getPlants).mockResolvedValue([]);
+      vi.mocked(apiKeys.listApiKeys).mockResolvedValue([]);
+      vi.mocked(householdService.removeMember).mockResolvedValue(undefined);
+      vi.mocked(cognitoUsers.deleteUser).mockResolvedValue(undefined);
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(204);
+      expect(billingEmails.sendAccountDeletionEmail).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        soleMemberHouseholds: 1,
+        sharedHouseholds: 1,
+      });
+      // Sent last: the Cognito user is already gone, so the email cannot
+      // promise a deletion that then failed.
+      const deleteOrder = vi.mocked(cognitoUsers.deleteUser).mock.invocationCallOrder[0];
+      const emailOrder = vi.mocked(billingEmails.sendAccountDeletionEmail).mock
+        .invocationCallOrder[0];
+      expect(emailOrder).toBeGreaterThan(deleteOrder);
+    });
+
+    it('still deletes the account when the confirmation email cannot be sent', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billingEmails = await import('../../../src/services/billingEmails.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([]);
+      vi.mocked(cognitoUsers.deleteUser).mockResolvedValueOnce(undefined);
+      vi.mocked(billingEmails.sendAccountDeletionEmail).mockResolvedValueOnce(false);
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      // The account is gone either way; refusing to confirm would not undo it.
+      expect(res.statusCode).toBe(204);
+      expect(billingEmails.sendAccountDeletionEmail).toHaveBeenCalled();
     });
   });
 
