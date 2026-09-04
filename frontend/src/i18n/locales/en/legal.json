@@ -77,11 +77,36 @@
       },
       "termination": {
         "heading": "Account termination",
-        "body": "You can delete your account at any time from <em>Settings → Account → Delete my account</em>. We can suspend or terminate accounts that violate these terms; we’ll try to give you a chance to fix the issue first unless the violation is serious (e.g. abuse of other users)."
+        "body": "You can delete your account at any time from <em>Settings → Account → Delete my account</em>. If you are the only member of a household with a paid subscription, deleting your account cancels that subscription straight away, so it is never left billing a household nobody can reach. We can suspend or terminate accounts that violate these terms; we’ll try to give you a chance to fix the issue first unless the violation is serious (e.g. abuse of other users)."
       },
       "planStatus": {
         "heading": "Plan status",
-        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly or yearly; Garden is also offered as a one-time lifetime purchase. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>, and a new monthly or yearly subscription starts with a 14-day free trial. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+      },
+      "trial": {
+        "heading": "Free trials",
+        "intro": "Every new subscription starts with a 14-day free trial. Checkout collects a card before the trial begins, and nothing is charged while it runs. The billing page shows the date the trial ends.",
+        "ending": "When the 14 days are up, the first payment is taken automatically and the subscription starts. To stop that, cancel before the trial ends — see <em>Cancelling</em> below. Cancelling during a trial costs nothing: the household keeps the paid features until the trial’s last day, then moves to the free Seedling plan."
+      },
+      "renewal": {
+        "heading": "Automatic renewal",
+        "cadence": "Subscriptions renew automatically until they are cancelled. A monthly plan renews every month, counting from the end of the free trial, and each renewal is charged to the card on file without asking again.",
+        "price": "The amount charged is the price of the plan your subscription is on — the price it was started at, not whatever is advertised later. Households still on a yearly plan renew once a year at the price they bought. The withdrawn Garden lifetime purchase never renews: it was a single payment, and there is nothing to cancel."
+      },
+      "cancellation": {
+        "heading": "Cancelling",
+        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. Cancelling is not available inside the mobile apps.",
+        "when": "Cancelling does not cut you off on the spot. It takes effect at the end of the period you have already paid for: until that date the household keeps the plan, its caps, and every paid feature, and the billing page shows the date. After it, the household moves to the free Seedling plan.",
+        "whatRemains": "Moving to the free plan deletes nothing. Every plant, photo, member, and record of care stays, and stays readable and editable; tasks keep being created and reminders keep arriving. What changes is that you cannot add plants or members while the household is over a free-plan cap, the monthly plant-identification allowance returns to the free plan’s, the AI care assistant needs Garden or above, API keys need Greenhouse, and plant-sitter links return to the free plan’s limit of one live link of up to seven days, with the task list but not the printable plant-care brief."
+      },
+      "priceChanges": {
+        "heading": "Price changes",
+        "body": "We can change what a plan costs. A change to the price you are charged is a material change under these terms, so it gets the same notice: announced in-app at least 14 days before it takes effect, in time to cancel. Until then your subscription keeps renewing at its own price — a new price applies to new subscriptions, and we do not move an existing one onto it without that notice."
+      },
+      "oneTimePurchases": {
+        "heading": "One-time purchases",
+        "body": "Not everything is a subscription. A one-time purchase is charged once and does not renew, so there is nothing recurring to cancel. A household admin buys it and it belongs to the household, not to the person who paid.",
+        "packs": "Where we sell a pack of plant identifications, it is a purchase of this kind. Its identifications sit on top of your plan’s monthly allowance and are drawn on only once that allowance is spent; they carry over from month to month and expire 12 months after the purchase. Cancelling a subscription or dropping to the free plan does not take them away — they stay with the household and can still be spent there. If the household itself is erased, when its last member deletes their account, anything unused goes with it. The withdrawn Garden lifetime purchase is the other kind: a single payment that does not expire and keeps its plan permanently."
       },
       "limitations": {
         "heading": "Limitations",

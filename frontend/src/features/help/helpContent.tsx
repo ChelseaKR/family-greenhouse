@@ -979,20 +979,29 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              <strong>No — and this is the one thing on this page we most want you to read.</strong>{' '}
-              Account deletion does not tell our payment provider anything. A subscription will keep
-              billing after your account is gone.
+              <strong>Only for a household you are the last member of.</strong> Plans belong to
+              households, not to people. Before anything is deleted we cancel the subscription of
+              every household where you are the only member — and if our payment provider does not
+              confirm it, the deletion is refused and nothing is touched.
             </p>
             <p>
-              <strong>Cancel first, delete second.</strong> Go to <em>Settings → Billing</em>, press{' '}
-              <strong>Manage subscription</strong>, cancel there, and only then delete your account.
-              If you have already deleted an account and think you are still being charged, email{' '}
+              A household with other people in it keeps its plan and keeps being billed; you are
+              just no longer in it. And if you are that household&rsquo;s only admin, deletion is
+              refused until you promote someone else, so a plan is never left running where nobody
+              can cancel it.
+            </p>
+            <p>
+              One thing to know: cancelling this way is <strong>immediate</strong>, not at the end
+              of the period. If you would rather use the time you have already paid for, go to{' '}
+              <em>Settings → Billing</em>, press <strong>Manage subscription</strong>, cancel there,
+              and delete your account once the period runs out. If you have already deleted an
+              account and think you are still being charged, email{' '}
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> straight away and we will sort
               it out.
             </p>
           </>
         ),
-        text: 'No, and this is the one thing on this page we most want you to read. Account deletion does not tell our payment provider anything: a subscription will keep billing after your account is gone. Cancel first, delete second. Go to Settings then Billing, press Manage subscription, cancel there, and only then delete your account. If you have already deleted an account and think you are still being charged, email support straight away and we will sort it out.',
+        text: 'Only for a household you are the last member of. Plans belong to households, not to people. Before anything is deleted we cancel the subscription of every household where you are the only member, and if our payment provider does not confirm it, the deletion is refused and nothing is touched. A household with other people in it keeps its plan and keeps being billed; you are just no longer in it. And if you are the only admin of that household, deletion is refused until you promote someone else, so a plan is never left running where nobody can cancel it. One thing to know: cancelling this way is immediate, not at the end of the period. If you would rather use the time you have already paid for, go to Settings then Billing, press Manage subscription, cancel there, and delete your account once the period runs out. If you have already deleted an account and think you are still being charged, email support straight away and we will sort it out.',
       },
       {
         id: 'delete-locked-out',
