@@ -68,7 +68,20 @@ SMS notifications are currently **gated off** (`SMS_NOTIFICATIONS_ENABLED` unset
 4. **Quiet hours / DND** — already implemented (`isInDndWindow`); keep it.
 5. **Records** — retain consent + opt-out records.
 
-Until #1–#3 are built, SMS stays off. Email + web push are unaffected (transactional, lower risk).
+Until #1–#3 are built, SMS stays off. Web push is unaffected (transactional, lower risk); email is covered by §4a below, which replaces the one-line claim that used to sit here.
+
+## 4a. Email — bulk-sender obligations
+
+The task reminder is transactional: the user created the task. **The Monday "plants at risk" digest and the January year-in-review are not** — they are lifecycle mail the recipient did not individually request, which puts them inside Gmail's and Yahoo's bulk-sender rules (in force since February 2024). [ADR 0022](adr/0022-email-deliverability-and-bounce-handling.md) is the decision record; this is the checklist.
+
+| Requirement                                                                                        | State                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SPF, DKIM and DMARC, all aligned**                                                               | Done, pending apply. A custom MAIL FROM subdomain aligns SPF; DKIM already aligned. Before this, DMARC rested on DKIM alone.                                                                                                                                                    |
+| **Spam complaints under 0.3%, ideally under 0.1%**                                                 | Now measurable (per-configuration-set complaint rate in CloudWatch) and now acted on — a complaint suppresses the address permanently.                                                                                                                                          |
+| **Honour unsubscribes promptly**                                                                   | A complaint is treated as a permanent withdrawal of consent and enforced at the send path within one event.                                                                                                                                                                     |
+| **One-click unsubscribe (`List-Unsubscribe` + `List-Unsubscribe-Post`) on non-transactional mail** | **NOT DONE.** `SendEmailCommand` (SES v1) cannot set custom headers; this needs the v2 API, which is the same migration multipart HTML needs. Until then the per-type toggles (`email`, `weeklyDigest`) are the opt-out, and the in-product help says so rather than hiding it. |
+
+Bounce and complaint handling itself (the suppression list, its policy, and how a suppressed address is un-suppressed) is documented in [`notifications.md`](notifications.md#deliverability-and-the-suppression-list).
 
 ---
 

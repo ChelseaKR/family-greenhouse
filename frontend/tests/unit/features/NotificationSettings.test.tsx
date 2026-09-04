@@ -20,6 +20,7 @@ vi.mock('@/services/notificationService', () => ({
     runReminders: vi.fn(),
     startPhoneVerification: vi.fn(),
     confirmPhoneVerification: vi.fn(),
+    clearEmailSuppression: vi.fn(),
   },
 }));
 
@@ -785,6 +786,76 @@ describe('NotificationSettings', () => {
     expect(
       screen.getByText('Turn on email notifications to receive household emails.')
     ).toBeInTheDocument();
+  });
+
+  describe('email deliverability', () => {
+    it('says nothing when the address is fine', async () => {
+      await renderSettings(prefs({ emailStatus: 'ok' }));
+      expect(screen.queryByText(/bouncing/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /resume email/i })).not.toBeInTheDocument();
+    });
+
+    it('says nothing when the server omits the field entirely', async () => {
+      // Absent is "this server never looked", which is different from a
+      // server that looked and failed — and must not raise an alarm.
+      await renderSettings(prefs());
+      expect(screen.queryByRole('button', { name: /resume email/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/couldn't check/i)).not.toBeInTheDocument();
+    });
+
+    it('explains a bounce and offers to resume, while the toggle still reads on', async () => {
+      await renderSettings(
+        prefs({ email: true, emailStatus: 'undeliverable', emailSuppressionReason: 'hard_bounce' })
+      );
+      expect(screen.getByRole('checkbox', { name: 'Email notifications' })).toBeChecked();
+      expect(screen.getByText(/bouncing/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /resume email/i })).toBeInTheDocument();
+    });
+
+    it('uses the complaint wording when the address was reported as spam', async () => {
+      await renderSettings(
+        prefs({ emailStatus: 'undeliverable', emailSuppressionReason: 'complaint' })
+      );
+      expect(screen.getByText(/reported as spam/i)).toBeInTheDocument();
+    });
+
+    it('reports an unreadable suppression store as uncertainty, not health', async () => {
+      await renderSettings(prefs({ emailStatus: 'unknown' }));
+      expect(screen.getByText(/couldn't check/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /resume email/i })).not.toBeInTheDocument();
+    });
+
+    it('resuming clears the banner from the refreshed preferences', async () => {
+      const user = userEvent.setup();
+      const { notificationService } = await renderSettings(
+        prefs({ emailStatus: 'undeliverable', emailSuppressionReason: 'hard_bounce' })
+      );
+      vi.mocked(notificationService.clearEmailSuppression).mockResolvedValue(
+        prefs({ emailStatus: 'ok', emailSuppressionReason: null })
+      );
+
+      await user.click(screen.getByRole('button', { name: /resume email/i }));
+
+      await waitFor(() => expect(notificationService.clearEmailSuppression).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /resume email/i })).not.toBeInTheDocument()
+      );
+    });
+
+    it('surfaces a failure to resume instead of pretending it worked', async () => {
+      const user = userEvent.setup();
+      const { notificationService } = await renderSettings(
+        prefs({ emailStatus: 'undeliverable', emailSuppressionReason: 'hard_bounce' })
+      );
+      vi.mocked(notificationService.clearEmailSuppression).mockRejectedValue(
+        new Error('Too many requests')
+      );
+
+      await user.click(screen.getByRole('button', { name: /resume email/i }));
+
+      expect(await screen.findByText('Too many requests')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /resume email/i })).toBeInTheDocument();
+    });
   });
 
   it('hides the nonfunctional device-push control in native shells', async () => {

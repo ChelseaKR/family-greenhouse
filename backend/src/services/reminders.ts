@@ -20,6 +20,12 @@
  * channel without letting email success suppress an SMS retry (or browser
  * push during DND suppress email/SMS once quiet hours end).
  *
+ * "Accepted" is the honest word for the email leg: SES taking custody is not
+ * receipt, and the bounce arrives minutes later (see `emailNotifier`). The
+ * marker is therefore protected from the other side — an address the feedback
+ * loop has already condemned is dropped from the channel plan before a lease
+ * is reserved, so no day can ever be marked sent against a dead mailbox.
+ *
  * Query shape: ONE GSI1 due-window query per household (the same pattern as
  * getUpcomingTasks), grouped by assignee in memory. The old shape was one GSI2
  * query per member, which both multiplied reads and silently dropped
@@ -55,6 +61,7 @@ import * as notifier from './notifier.js';
 import * as climate from './climate.js';
 import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
+import * as emailSuppression from './emailSuppression.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -212,6 +219,18 @@ async function releaseDailyReminderChannel(
   );
 }
 
+/**
+ * Close out one channel's daily slot. `status: 'sent'` records that a PROVIDER
+ * ACCEPTED the notification — for email that is SES taking custody, not
+ * receipt, and the bounce (if there is one) arrives minutes later on a
+ * different path entirely (`handlers/emailEvents`). Nothing synchronous can
+ * say more than that, so the marker does not pretend to.
+ *
+ * What keeps that from being a lie in practice is the other end: an address
+ * the feedback loop has condemned never reaches a reservation at all (see
+ * `eligibleReminderChannels`), so this can never stamp a day 'sent' against a
+ * mailbox already known to be dead.
+ */
 async function finalizeDailyReminderChannel(
   userId: string,
   householdId: string,
@@ -238,25 +257,67 @@ async function finalizeDailyReminderChannel(
   );
 }
 
-function eligibleReminderChannels(
+/**
+ * Which channels this member can be reached on right now.
+ *
+ * Preferences answer most of it. The one thing they cannot answer is whether
+ * the recipient's mailbox still accepts mail — a member's email is written
+ * once at join time and never re-examined — so the suppression list is
+ * consulted here, BEFORE any daily lease is reserved. That ordering is the
+ * point: a permanently dead mailbox drops out of the plan instead of
+ * reserving and releasing a marker every hour, forever, and no day can be
+ * finalized against an address the feedback loop has already condemned.
+ *
+ * It is a belt to the notifier's braces. A send that still reaches
+ * `emailNotifier` for a suppressed address is refused there too and comes back
+ * as `undeliverable`, which never finalizes.
+ *
+ * An `unknown` suppression lookup deliberately LEAVES email in the plan: the
+ * send path re-checks and declines if it still cannot tell, and that path
+ * releases the lease so the next hourly run retries. Dropping the channel on a
+ * failed read would silence a working mailbox over a DynamoDB blip — the same
+ * defect pointed the other way (ADR 0010).
+ */
+async function eligibleReminderChannels(
   prefs: notificationPrefs.NotificationPreferences,
-  now: Date
-): {
+  now: Date,
+  recipient: { email: string; householdId: string }
+): Promise<{
   eligible: notifier.NotificationChannel[];
   dndDeferred: notifier.NotificationChannel[];
-} {
+}> {
   const eligible: notifier.NotificationChannel[] = [];
   const dndDeferred: notifier.NotificationChannel[] = [];
   const inDnd = notificationPrefs.isInDndWindow(prefs, now);
 
   if (prefs.browser) eligible.push('browser');
-  if (prefs.email) {
+  if (prefs.email && (await emailIsReachable(recipient, now))) {
     (inDnd ? dndDeferred : eligible).push('email');
   }
   if (prefs.sms && prefs.phone && prefs.phoneVerified) {
     (inDnd ? dndDeferred : eligible).push('sms');
   }
   return { eligible, dndDeferred };
+}
+
+/** True unless the address is on the suppression list. See the note above for
+ *  why an unreadable list answers true rather than false. */
+async function emailIsReachable(
+  recipient: { email: string; householdId: string },
+  now: Date
+): Promise<boolean> {
+  const status = await emailSuppression.checkAddress(recipient.email);
+  if (status.status !== 'suppressed') return true;
+  logger.warn(
+    {
+      householdId: recipient.householdId,
+      reason: status.state.reason,
+      suppressedAt: status.state.suppressedAt,
+      now: now.toISOString(),
+    },
+    'reminders.email_address_suppressed'
+  );
+  return false;
 }
 
 function frontendUrl(path: string): string {
@@ -434,7 +495,10 @@ export async function remindHousehold(
       if (await hasAggregateReminderMarker(member.userId, householdId, now, timeZone)) {
         continue;
       }
-      const channelPlan = eligibleReminderChannels(memberPrefs, now);
+      const channelPlan = await eligibleReminderChannels(memberPrefs, now, {
+        email: member.email,
+        householdId,
+      });
       if (memberPrefs.sms && memberPrefs.phone && !memberPrefs.phoneVerified) {
         logger.info(
           { userId: member.userId, msg: 'sms_skipped_unverified' },

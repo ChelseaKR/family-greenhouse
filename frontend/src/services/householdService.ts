@@ -13,11 +13,27 @@ export interface Household {
 // Note: the household detail endpoint (GET /households/:id) never includes
 // email on member rows — other household members "cannot see your email"
 // per the Privacy Policy, with no admin exception.
+/**
+ * Whether the app can currently reach this member by email. Carries
+ * deliverability without carrying the address:
+ *
+ *   - `ok` — nothing says otherwise.
+ *   - `undeliverable` — suppressed after a hard bounce or a spam complaint.
+ *     No product email is reaching them. Deliberately does not say which of
+ *     the two it was; that is between the recipient and us.
+ *   - `unknown` — the server could not read the suppression state. NOT a
+ *     synonym for `ok`, and the UI must not render it as one.
+ *
+ * Older servers omit the field entirely; treat that as `unknown` too.
+ */
+export type MemberEmailStatus = 'ok' | 'undeliverable' | 'unknown';
+
 export interface HouseholdMember {
   userId: string;
   name: string;
   role: 'admin' | 'member';
   joinedAt: string;
+  emailStatus?: MemberEmailStatus;
 }
 
 export interface HouseholdWithMembers extends Household {

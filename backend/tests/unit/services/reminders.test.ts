@@ -220,6 +220,78 @@ describe('reminders service', () => {
     });
   });
 
+  it('drops the email channel for a suppressed address, and reserves no lease for it', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const markers = await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    // Browser stays on so the member is still reachable; only email is dead.
+    vi.mocked(prefs.getPreferences).mockImplementation(async (userId: string) =>
+      notificationPreferences(userId, { browser: true, email: true })
+    );
+    // a@x.com hard-bounced. The row lives in the same simulated store the
+    // markers do, so the real emailSuppression service reads it.
+    markers.set('EMAIL#a@x.com|DELIVERY_STATE', {
+      PK: 'EMAIL#a@x.com',
+      SK: 'DELIVERY_STATE',
+      email: 'a@x.com',
+      state: 'suppressed',
+      reason: 'hard_bounce',
+      softBounceCount: 0,
+      firstEventAt: '',
+      lastEventAt: '',
+    });
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { nextDue: past, plantId: 'p1', assignedTo: 'u1' },
+    ] as never);
+
+    await remindHousehold('hh', NOW);
+
+    const [, , options] = vi.mocked(notifier.sendToUser).mock.calls[0];
+    expect((options as { channels: string[] }).channels).toEqual(['browser']);
+    // No email lease was taken, so an address that will never work stops
+    // churning a reserve/release pair through DynamoDB every hour.
+    expect([...markers.keys()]).not.toContain(
+      'USER#u1|REMINDED#2026-06-01#HOUSEHOLD#hh#CHANNEL#email'
+    );
+  });
+
+  it('keeps email eligible when the suppression lookup fails — unknown is not a verdict', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { nextDue: past, plantId: 'p1', assignedTo: 'u1' },
+    ] as never);
+
+    const realSend = vi.mocked(dynamodb.send).getMockImplementation()!;
+    vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
+      const { kind, input } = cmd as { kind?: string; input: { Key?: { PK: string } } };
+      if (kind === 'Get' && input.Key?.PK?.startsWith('EMAIL#')) {
+        throw new Error('DynamoDB unavailable');
+      }
+      return realSend(cmd as never);
+    });
+
+    await remindHousehold('hh', NOW);
+
+    const [, , options] = vi.mocked(notifier.sendToUser).mock.calls[0];
+    // The send path re-checks and declines if it still cannot tell; that
+    // releases the lease and the next hourly run retries. Dropping the channel
+    // here would silence a working mailbox over a transient read failure.
+    expect((options as { channels: string[] }).channels).toContain('email');
+  });
+
   it('atomically reserves before delivery so overlapping runs send only once', async () => {
     const household = await import('../../../src/services/householdService.js');
     const tasks = await import('../../../src/services/taskService.js');

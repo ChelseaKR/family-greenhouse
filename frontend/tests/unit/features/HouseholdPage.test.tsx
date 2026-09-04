@@ -88,6 +88,66 @@ describe('HouseholdPage', () => {
     expect(screen.queryByText(/@example\.com/)).not.toBeInTheDocument();
   });
 
+  it('flags a member whose email is bouncing, without naming the address', async () => {
+    server.use(
+      http.get(`${API}/households/hh-1`, () =>
+        HttpResponse.json({
+          id: 'hh-1',
+          name: 'The Kelly-Reifs',
+          createdAt: '',
+          createdBy: 'user-1',
+          members: [
+            { userId: 'user-1', name: 'Alice', role: 'member', joinedAt: '', emailStatus: 'ok' },
+            {
+              userId: 'user-2',
+              name: 'Bob',
+              role: 'admin',
+              joinedAt: '',
+              emailStatus: 'undeliverable',
+            },
+          ],
+        })
+      )
+    );
+
+    renderPage();
+
+    // Exactly one badge — the member who is actually unreachable. Before this
+    // the failure was invisible: the roster looked identical either way.
+    expect(await screen.findByText('Email not arriving')).toBeInTheDocument();
+    expect(screen.getAllByText('Email not arriving')).toHaveLength(1);
+    expect(screen.queryByText(/@example\.com/)).not.toBeInTheDocument();
+  });
+
+  it('shows no badge for `unknown` — a failed check is not an accusation', async () => {
+    server.use(
+      http.get(`${API}/households/hh-1`, () =>
+        HttpResponse.json({
+          id: 'hh-1',
+          name: 'The Kelly-Reifs',
+          createdAt: '',
+          createdBy: 'user-1',
+          members: [
+            {
+              userId: 'user-1',
+              name: 'Alice',
+              role: 'member',
+              joinedAt: '',
+              emailStatus: 'unknown',
+            },
+          ],
+        })
+      )
+    );
+
+    renderPage();
+
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
+    // Telling the household "Alice is unreachable" on the strength of a failed
+    // lookup would be the same defect in the other direction.
+    expect(screen.queryByText('Email not arriving')).not.toBeInTheDocument();
+  });
+
   it('shows every member the same care split, admin or not', async () => {
     renderPage();
 

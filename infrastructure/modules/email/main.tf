@@ -9,9 +9,9 @@
 #    correct for sandbox or production — the ticket just lifts the cap.
 #
 # 2. DKIM alignment makes deliverability work. Without it the messages will
-#    land in spam regardless of how the body looks. SPF alignment would be
-#    nice-to-have but needs a custom MAIL FROM domain; DKIM alone is sufficient
-#    for DMARC `p=quarantine` to pass.
+#    land in spam regardless of how the body looks. SPF alignment additionally
+#    needs a custom MAIL FROM domain, which `aws_ses_domain_mail_from` below
+#    now provides — so DMARC no longer rests on DKIM alone. See ADR 0022.
 
 data "aws_route53_zone" "primary" {
   name         = var.domain_name
@@ -51,11 +51,67 @@ resource "aws_route53_record" "dkim" {
   records = ["${aws_ses_domain_dkim.main.dkim_tokens[count.index]}.dkim.amazonses.com"]
 }
 
+# --- Custom MAIL FROM domain ---------------------------------------------
+#
+# The envelope sender (Return-Path / SMTP MAIL FROM) is what SPF authenticates.
+# Without this block SES uses its own `*.amazonses.com` bounce domain, so the
+# apex SPF record below authenticates a domain that ISN'T the From: domain and
+# therefore cannot satisfy DMARC's SPF alignment. DKIM alone carried DMARC.
+#
+# One authentication mechanism is one bad day away from zero. A DKIM key that
+# gets rotated wrong, a forwarder that rewrites the body, a receiver that
+# happens to weight SPF — any of those turns "quarantine" from a policy into an
+# outage on password-reset mail. With this block the Return-Path becomes
+# `mail.<domain>`, an organizational-domain match for the From:, so SPF aligns
+# under the relaxed policy (`aspf=r`) and BOTH mechanisms carry DMARC.
+#
+# `behavior_on_mx_failure = "UseDefaultValue"` is the deliberate choice: if the
+# MX below is not resolvable (DNS not yet propagated, a zone edit gone wrong),
+# SES silently falls back to its own bounce domain instead of REFUSING TO SEND.
+# `RejectMessage` would turn a DNS hiccup into a total mail outage, and the
+# fallback state is exactly today's behaviour — worse than aligned, no worse
+# than before.
+locals {
+  mail_from_domain = "${var.mail_from_subdomain}.${var.domain_name}"
+}
+
+resource "aws_ses_domain_mail_from" "main" {
+  domain                 = aws_ses_domain_identity.main.domain
+  mail_from_domain       = local.mail_from_domain
+  behavior_on_mx_failure = "UseDefaultValue"
+}
+
+# Bounce/complaint feedback for the MAIL FROM subdomain has to route back to
+# SES, which is what this MX is for. NOTE this is a DIFFERENT record from the
+# apex MX in inbound.tf: that one points at `inbound-smtp` and delivers mail to
+# the receipt rules (support@, security@ ...); this one points at
+# `feedback-smtp` and exists only to receive bounce notifications for the
+# envelope sender. Neither replaces the other and they never share a name.
+resource "aws_route53_record" "mail_from_mx" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = local.mail_from_domain
+  type    = "MX"
+  ttl     = 600
+  records = ["10 feedback-smtp.${data.aws_region.current.name}.amazonses.com"]
+}
+
+# SPF for the MAIL FROM subdomain itself. This is the record receivers actually
+# evaluate for SPF once the Return-Path moves here; the apex record below stays
+# for receivers that check the header-From domain.
+resource "aws_route53_record" "mail_from_spf" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = local.mail_from_domain
+  type    = "TXT"
+  ttl     = 600
+  records = ["v=spf1 include:amazonses.com ~all"]
+}
+
 # Apex TXT record. Holds TWO things because both live at the zone apex as TXT
 # and must therefore share one record set:
-#   1. The SES SPF policy. Without a custom MAIL FROM domain the Return-Path
-#      aligns with amazonses.com (so SPF won't DMARC-align), but the record
-#      still helps receivers verify outbound mail belongs to SES.
+#   1. The SES SPF policy. The Return-Path now aligns to the MAIL FROM
+#      subdomain above (whose own SPF record is the one receivers evaluate),
+#      so this apex record covers anything checking the header-From domain and
+#      anything sent before the MAIL FROM change propagates.
 #   2. The Google Search Console domain-verification token. Managed here (not
 #      just via a one-off CLI change) so a terraform apply can't silently drop
 #      it and un-verify Search Console. Site-verification tokens are public, so

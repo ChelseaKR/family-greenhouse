@@ -28,6 +28,7 @@ import {
   DynamoDBItem,
 } from '../models/types.js';
 import { CreateHouseholdInput } from '../models/schemas.js';
+import * as emailSuppression from './emailSuppression.js';
 
 /**
  * Raised when a write would exceed the household's plan cap. Handlers map
@@ -367,17 +368,31 @@ export async function getHouseholdMembers(householdId: string): Promise<Househol
  * handler should call for the member-list response. Internal callers that
  * legitimately need email (reminders.ts, digest.ts — outbound mail) must
  * keep using getHouseholdMembers directly.
+ *
+ * Each row carries `emailStatus`, which is the address's deliverability
+ * without the address itself. A member whose email hard-bounced silently
+ * stops receiving every reminder and digest; before this field there was
+ * nowhere in the product that fact was visible to anyone.
  */
 export async function getHouseholdMembersPublic(
   householdId: string
 ): Promise<PublicHouseholdMember[]> {
   const members = await getHouseholdMembers(householdId);
+  const suppression = await emailSuppression.getDeliveryStates(members.map((m) => m.email));
   return members.map((m) => ({
     householdId: m.householdId,
     userId: m.userId,
     name: m.name,
     role: m.role,
     joinedAt: m.joinedAt,
+    // One failed batch read makes the whole roster `unknown`, never `ok`:
+    // a suppression lookup we could not perform is not evidence of health.
+    emailStatus:
+      suppression.status === 'unknown'
+        ? ('unknown' as const)
+        : suppression.states.get(emailSuppression.normalizeAddress(m.email))?.state === 'suppressed'
+          ? ('undeliverable' as const)
+          : ('ok' as const),
   }));
 }
 

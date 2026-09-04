@@ -264,6 +264,49 @@ The last two were added for the billing-lifecycle emails
 ([ADR 0023](adr/0023-billing-lifecycle-emails.md)); without it every receipt,
 renewal notice and account-deletion confirmation is a dry-run log line.
 
+#### Deliverability and the suppression list
+
+Two more env vars, both set by Terraform when the email module is provisioned
+(see [ADR 0022](adr/0022-email-deliverability-and-bounce-handling.md)):
+
+- `SES_CONFIGURATION_SET` — attached to every send. **This is what makes SES
+  publish bounce and complaint events at all.** Unset, mail still goes out and
+  nothing ever learns that it bounced.
+- `SES_REPLY_TO` — `Reply-To` header, pointing at the `support@` mailbox
+  `infrastructure/modules/email/inbound.tf` forwards to a human.
+
+The configuration set publishes to SNS, which invokes
+`backend/src/handlers/emailEvents/handler.ts`. That handler maintains one row
+per address:
+
+```
+PK: EMAIL#{lowercased address}
+SK: DELIVERY_STATE
+entityType: EmailDeliveryState
+state ('transient' | 'suppressed'), reason, detail,
+softBounceCount, firstEventAt, lastEventAt, suppressedAt, ttl
+```
+
+- A **hard bounce** or a **complaint** suppresses the address permanently
+  (no TTL). Every product email to it stops.
+- A **soft bounce** increments a counter under a 30-day TTL and keeps sending;
+  the fifth inside that window suppresses.
+- A **delivery** clears a transient counter. It never clears a suppression.
+
+`emailNotifier.sendEmail` checks the list before every send. A failed lookup
+returns `unknown` and the send is DECLINED rather than guessed either way —
+scheduled jobs release their marker and retry (ADR 0010).
+
+A suppressed address is visible in two places: the household roster carries
+`emailStatus` per member (deliverability without the address), and the owner's
+notification settings show the reason plus a **resume** button
+(`DELETE /notifications/email-suppression`, 5/hour, caller's own address only).
+There is no admin override and no automatic expiry.
+
+**`sendEmail` returning `true` means SES accepted the message, not that anyone
+received it.** Use `sendEmailAccepted` for the typed result. Delivery is
+reported asynchronously, by the events above.
+
 #### Transactional email is not governed by these preferences
 
 Everything on this page — reminders, digest, recap, pest alerts — is gated on

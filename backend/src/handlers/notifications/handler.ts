@@ -14,9 +14,11 @@ import { authRateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
 import * as deviceTokens from '../../services/deviceTokens.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
+import * as emailSuppression from '../../services/emailSuppression.js';
 import { remindHousehold } from '../../services/reminders.js';
 import { digestHousehold, recapHousehold, defaultRecapYear } from '../../services/digest.js';
 import { successResponse, noContentResponse } from '../../utils/response.js';
+import type { MemberEmailStatus } from '../../models/types.js';
 
 const subscribeSchema = z.object({
   endpoint: z
@@ -131,14 +133,75 @@ function withNotificationCapabilities<T extends object>(
   return { ...preferences, smsAvailable: smsAvailable() };
 }
 
+/**
+ * Attach the caller's own email deliverability to a preferences payload.
+ *
+ * The email toggle can read "on" while every message to the address bounces;
+ * before this, the settings screen was the last place that would have told
+ * you. `emailStatus` is the honest three-state answer and
+ * `emailSuppressionReason` says which of the two permanent conditions applies
+ * — to the account's owner only, never to their housemates.
+ */
+async function withEmailDeliverability<T extends object>(
+  preferences: T,
+  email: string
+): Promise<
+  T & {
+    emailStatus: MemberEmailStatus;
+    emailSuppressionReason: emailSuppression.SuppressionReason | null;
+  }
+> {
+  const status = await emailSuppression.checkAddress(email);
+  return {
+    ...preferences,
+    emailStatus:
+      status.status === 'suppressed'
+        ? 'undeliverable'
+        : status.status === 'unknown'
+          ? 'unknown'
+          : 'ok',
+    emailSuppressionReason: status.status === 'suppressed' ? (status.state.reason ?? null) : null,
+  };
+}
+
 // GET /notifications/prefs
 export const getPrefs = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const prefs = await notificationPrefs.getPreferences(user.userId);
-    return successResponse(withNotificationCapabilities(prefs));
+    return successResponse(
+      withNotificationCapabilities(await withEmailDeliverability(prefs, user.email))
+    );
   }
 ).use(authMiddleware());
+
+/**
+ * DELETE /notifications/email-suppression
+ *
+ * Put the caller's own address back on the send list after a bounce or a
+ * complaint suppressed it. The address is taken from the verified JWT, never
+ * from the request, so this can only ever un-suppress the caller's own
+ * mailbox — including for a complaint, where the recipient's own action is
+ * the only consent that counts.
+ *
+ * Rate limited hard: without it, an address that bounces on every send could
+ * be cleared and re-bounced in a loop, which is precisely the reputation
+ * damage the suppression list exists to prevent.
+ */
+// DELETE /notifications/email-suppression
+export const clearEmailSuppression = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    await emailSuppression.clearSuppression(user.email, user.userId);
+    const prefs = await notificationPrefs.getPreferences(user.userId);
+    return successResponse(
+      withNotificationCapabilities(await withEmailDeliverability(prefs, user.email))
+    );
+  }
+)
+  .use(authMiddleware())
+  .use(rejectApiKeyPrincipal())
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 5 }));
 
 // PUT /notifications/prefs
 export const updatePrefs = createHandler(
@@ -173,7 +236,9 @@ export const updatePrefs = createHandler(
       coverageUpdates: validatedBody.coverageUpdates,
       careCredit: validatedBody.careCredit,
     });
-    return successResponse(withNotificationCapabilities(updated));
+    return successResponse(
+      withNotificationCapabilities(await withEmailDeliverability(updated, user.email))
+    );
   }
 )
   .use(authMiddleware())
@@ -383,7 +448,9 @@ export const confirmPhoneVerification = createHandler(
       user.userId,
       validatedBody.code
     );
-    return successResponse(withNotificationCapabilities(updated));
+    return successResponse(
+      withNotificationCapabilities(await withEmailDeliverability(updated, user.email))
+    );
   }
 )
   .use(authRateLimit())
@@ -395,6 +462,7 @@ export const confirmPhoneVerification = createHandler(
 export const handler = createRouter({
   'GET /notifications/prefs': getPrefs,
   'PUT /notifications/prefs': updatePrefs,
+  'DELETE /notifications/email-suppression': clearEmailSuppression,
   'POST /notifications/subscribe': subscribe,
   'POST /notifications/unsubscribe': unsubscribe,
   'POST /notifications/devices': registerDevice,

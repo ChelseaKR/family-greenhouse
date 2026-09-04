@@ -34,7 +34,7 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 }));
 
 vi.mock('../../../src/services/emailNotifier.js', () => ({
-  sendEmail: vi.fn().mockResolvedValue(undefined),
+  sendEmailAccepted: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../../../src/services/smsNotifier.js', () => ({
   sendSms: vi.fn().mockResolvedValue(undefined),
@@ -253,12 +253,12 @@ async function loadSendToUser(prefsOverride: PrefsOverride): Promise<{
   const emailNotifier = await import('../../../src/services/emailNotifier.js');
   const smsNotifier = await import('../../../src/services/smsNotifier.js');
   const prefsModule = await import('../../../src/services/notificationPrefs.js');
-  const emailMock = emailNotifier.sendEmail as ReturnType<typeof vi.fn>;
+  const emailMock = emailNotifier.sendEmailAccepted as ReturnType<typeof vi.fn>;
   const smsMock = smsNotifier.sendSms as ReturnType<typeof vi.fn>;
 
   // Re-establish resolved-value behavior per-call. `vi.clearAllMocks` in
   // afterEach wipes call history; mock factories run once at module load.
-  emailMock.mockResolvedValue(true);
+  emailMock.mockResolvedValue({ accepted: true, reason: 'sent' });
   smsMock.mockResolvedValue(true);
 
   vi.mocked(prefsModule.getPreferences).mockResolvedValue(prefs(prefsOverride));
@@ -303,7 +303,8 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
 
   it('email enabled but dry-run (sendEmail → false) → not delivered, not DND-suppressed', async () => {
     const { sendToUser, emailMock } = await loadSendToUser({ email: true });
-    emailMock.mockResolvedValue(false); // SES unconfigured: logged, not sent
+    // SES unconfigured: logged, not sent.
+    emailMock.mockResolvedValue({ accepted: false, reason: 'dry_run' });
     const result = await sendToUser(RECIPIENT, PAYLOAD);
     expect(emailMock).toHaveBeenCalledTimes(1);
     expect(result.delivered).toBe(false);
@@ -313,10 +314,31 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
 
   it('email enabled and actually sent (sendEmail → true) → delivered', async () => {
     const { sendToUser, emailMock } = await loadSendToUser({ email: true });
-    emailMock.mockResolvedValue(true);
+    emailMock.mockResolvedValue({ accepted: true, reason: 'sent' });
     const result = await sendToUser(RECIPIENT, PAYLOAD);
     expect(result.delivered).toBe(true);
     expect(result.channels.email).toBe('delivered');
+  });
+
+  it('a suppressed address reports `undeliverable`, distinct from DND `suppressed`', async () => {
+    const { sendToUser, emailMock } = await loadSendToUser({ email: true });
+    emailMock.mockResolvedValue({ accepted: false, reason: 'suppressed' });
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    expect(result.channels.email).toBe('undeliverable');
+    expect(result.delivered).toBe(false);
+    // `dndSuppressedOnly` drives "retry once quiet hours lift". A dead mailbox
+    // is never going to work later, so it must NOT set that flag.
+    expect(result.dndSuppressedOnly).toBe(false);
+  });
+
+  it('an unreadable suppression list reports `failed`, not `undeliverable`', async () => {
+    const { sendToUser, emailMock } = await loadSendToUser({ email: true });
+    emailMock.mockResolvedValue({ accepted: false, reason: 'suppression_unknown' });
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    // "We could not check" is a retryable failure, not a verdict on the
+    // address. Reporting it as `undeliverable` would condemn a working
+    // mailbox on the strength of a DynamoDB blip.
+    expect(result.channels.email).toBe('failed');
   });
 
   it('still sends email when the browser subscription read fails', async () => {
@@ -326,7 +348,7 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     });
     const dynamo = (await import('../../../src/utils/dynamodb.js')).dynamodb;
     vi.mocked(dynamo.send).mockRejectedValueOnce(new Error('DynamoDB push query failed'));
-    emailMock.mockResolvedValue(true);
+    emailMock.mockResolvedValue({ accepted: true, reason: 'sent' });
 
     await expect(sendToUser(RECIPIENT, PAYLOAD)).resolves.toEqual({
       delivered: true,
