@@ -6,6 +6,12 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 // docs/adr/0007-i18n-json-catalogs-native-format.md. Key/placeholder/plural parity
 // across locales is enforced by `npm run i18n:check`
 // (frontend/scripts/check-i18n-catalogs.mjs), which CI runs on every PR.
+//
+// `locales/<lng>/legal.json` is deliberately NOT imported here. It holds the
+// privacy/terms/support/account-deletion prose — 101 keys per locale that only
+// four rarely-visited routes read — and ./legalCatalog.ts merges it into this
+// same `translation` namespace on demand, from those routes. Importing it here
+// would put ~37 kB of page copy back on the startup path for every visit.
 import en from './locales/en/translation.json';
 import es from './locales/es/translation.json';
 
