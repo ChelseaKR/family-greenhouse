@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { availableParallelism } from 'node:os';
 import { resolve } from 'path';
 
 // Pin the test timezone to one that observes DST so the date-math
@@ -78,6 +79,22 @@ export default defineConfig({
     // flaky test rather than reveal it, and this repo has a checker for gates
     // that quietly stop failing.
     testTimeout: 15_000,
+    //
+    // Cap the pool rather than letting it take the whole machine. On the CI
+    // runner this suite is the only thing running and the default is right,
+    // but `npm run verify` (scripts/run-gate.mjs) now runs it concurrently
+    // with the backend suite, two tsc passes and two eslint passes, so an
+    // uncapped pool on a developer's laptop just moves the contention instead
+    // of removing it. Halving and capping at four was the setting measured
+    // locally: 157 files in 58-81s across ten runs on a 10-core machine,
+    // against 263s serial, with the v8 coverage totals identical to the
+    // decimal (82.41 / 75.44 / 75.58 / 83.29) every time — which is the check
+    // that the schedule is not changing what the suite exercises.
+    //
+    // The halving also keeps CI where this landed: a 2-vCPU runner resolves
+    // to a single worker and a 4-vCPU one to two, so `Test Frontend` is not
+    // re-tuned by this.
+    maxWorkers: Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2))),
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
