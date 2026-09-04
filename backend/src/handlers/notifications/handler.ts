@@ -10,13 +10,23 @@ import {
   rejectApiKeyPrincipal,
 } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
-import { authRateLimit, userRateLimit } from '../../middleware/rateLimit.js';
+import { authRateLimit, rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
 import * as deviceTokens from '../../services/deviceTokens.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
 import * as emailSuppression from '../../services/emailSuppression.js';
 import { remindHousehold } from '../../services/reminders.js';
 import { digestHousehold, recapHousehold, defaultRecapYear } from '../../services/digest.js';
+import { verifyUnsubscribeToken } from '../../services/email/capability.js';
+import { isEmailLocale, type EmailLocale } from '../../services/email/catalog.js';
+import { unsubscribeUrl } from '../../services/email/links.js';
+import {
+  renderConfirmPage,
+  renderDonePage,
+  renderInvalidPage,
+  renderUnavailablePage,
+} from '../../services/email/unsubscribePage.js';
+import { logger } from '../../utils/logger.js';
 import { successResponse, noContentResponse } from '../../utils/response.js';
 import type { MemberEmailStatus } from '../../models/types.js';
 
@@ -320,6 +330,120 @@ export const unsubscribe = createHandler(
   .use(validateBody(unsubscribeSchema));
 
 /**
+ * One-click unsubscribe (RFC 8058). Two routes, no authentication, the
+ * capability token in the query string is the whole credential.
+ *
+ *   GET  — renders a confirm form. It does NOT unsubscribe, because mail
+ *          clients and corporate link scanners fetch every URL in a message
+ *          and a mutating GET would unsubscribe people who never clicked.
+ *   POST — performs it. This is also the target a mail provider's automated
+ *          `List-Unsubscribe-Post: List-Unsubscribe=One-Click` hits, so the
+ *          same route serves the human and the machine.
+ *
+ * ## Rate limiting
+ *
+ * Both routes are unauthenticated and both make an authorization decision
+ * (`verifyUnsubscribeToken`), so both are throttled per source IP. The two
+ * limits differ on purpose:
+ *
+ *   - GET is generous (30/min). It mutates nothing, and the traffic that
+ *     actually hits it is machines: Outlook Safe Links, corporate scanning
+ *     proxies and mail-client prefetchers fetch every URL in a message. Those
+ *     arrive from a shared corporate egress IP, so a tight limit here would
+ *     spend one organisation's budget on its scanner and hand a 429 to the
+ *     employee who then clicks the link.
+ *   - POST is tight (10/min, `authRateLimit`). It is the one that writes, and
+ *     nothing legitimate needs to call it more than once or twice.
+ *
+ * Neither is load-bearing against forgery — the token is an HMAC-SHA256 over
+ * a per-user 256-bit secret, so guessing one is not a rate problem — but an
+ * unauthenticated route that decides anything gets a brake regardless, and
+ * both sit behind API Gateway's stage throttle (50 rps / 100 burst) as well.
+ *
+ * Gmail and Yahoo's bulk-sender rules make this effectively mandatory for the
+ * weekly digest and the annual recap. Transactional mail (welcome, password,
+ * billing) is not unsubscribable and never carries the header.
+ */
+function unsubscribeLocale(event: APIGatewayProxyEvent): EmailLocale {
+  const raw = event.queryStringParameters?.lang;
+  return isEmailLocale(raw) ? raw : 'en';
+}
+
+function htmlResponse(statusCode: number, body: string): APIGatewayProxyResult {
+  return {
+    statusCode,
+    // `Cache-Control: no-store` matters: the token is in the URL, and a shared
+    // or proxy cache holding this page would hand the next person a working
+    // capability link.
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+    body,
+  };
+}
+
+// GET /notifications/email/unsubscribe
+export const emailUnsubscribeForm = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const locale = unsubscribeLocale(event);
+    const token = event.queryStringParameters?.t;
+    if (!token) return htmlResponse(400, renderInvalidPage(locale));
+
+    const verified = await verifyUnsubscribeToken(token);
+    if (verified.status === 'unavailable') {
+      // We could not read the capability secret, so we do not know whether
+      // this link is good. Saying "invalid" would be a failed read rendered
+      // as a fact about the user's link.
+      return htmlResponse(503, renderUnavailablePage(locale));
+    }
+    if (verified.status !== 'ok') return htmlResponse(410, renderInvalidPage(locale));
+
+    const action = unsubscribeUrl(token);
+    if (!action) return htmlResponse(503, renderUnavailablePage(locale));
+    return htmlResponse(
+      200,
+      renderConfirmPage({
+        locale,
+        actionUrl: `${action}&lang=${locale}`,
+        category: verified.category,
+      })
+    );
+  }
+).use(rateLimit({ perWindowMs: 60_000, max: 30 }));
+
+// POST /notifications/email/unsubscribe
+export const emailUnsubscribe = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const locale = unsubscribeLocale(event);
+    const token = event.queryStringParameters?.t;
+    if (!token) return htmlResponse(400, renderInvalidPage(locale));
+
+    const verified = await verifyUnsubscribeToken(token);
+    if (verified.status === 'unavailable') {
+      return htmlResponse(503, renderUnavailablePage(locale));
+    }
+    if (verified.status !== 'ok') return htmlResponse(410, renderInvalidPage(locale));
+
+    try {
+      await notificationPrefs.disableEmailCategory(verified.userId, verified.category);
+    } catch (err) {
+      // Never claim an unsubscribe we did not manage to write. A provider
+      // that gets a 200 here will not retry, and the recipient would keep
+      // receiving mail they believe they turned off.
+      logger.warn(
+        {
+          err: (err as Error).message,
+          userId: verified.userId,
+          category: verified.category,
+          msg: 'email_unsubscribe.write_failed',
+        },
+        'email_unsubscribe.write_failed'
+      );
+      return htmlResponse(503, renderUnavailablePage(locale));
+    }
+    return htmlResponse(200, renderDonePage(locale, verified.category));
+  }
+).use(authRateLimit());
+
+/**
  * POST /notifications/run-reminders
  *
  * Walks through every member of the caller's household, finds their assigned
@@ -467,6 +591,8 @@ export const handler = createRouter({
   'POST /notifications/unsubscribe': unsubscribe,
   'POST /notifications/devices': registerDevice,
   'POST /notifications/devices/remove': unregisterDevice,
+  'GET /notifications/email/unsubscribe': emailUnsubscribeForm,
+  'POST /notifications/email/unsubscribe': emailUnsubscribe,
   'POST /notifications/run-reminders': runReminders,
   'POST /notifications/run-digests': runDigests,
   'POST /notifications/run-year-recap': runYearRecap,

@@ -909,6 +909,13 @@
     "coverageUpdatesDescription": "When a household member sets an away window and names you as their cover.",
     "careCreditTitle": "Someone covered for you",
     "careCreditDescription": "When another member does a task that had your name on it. No counts, no rankings, nothing to do.",
+    "yearRecapTitle": "Year in review",
+    "yearRecapDescription": "One email each January with your household's year of plant care.",
+    "yearRecapRequiresEmail": "Turn on email notifications to receive the year in review.",
+    "emailLanguageTitle": "Email language",
+    "emailLanguageDescription": "The language we write your emails in. Set from the language you are using the app in.",
+    "emailLanguageEnglish": "English",
+    "emailLanguageSpanish": "Spanish",
     "phoneSendCode": "Send code",
     "phoneCodeSent": "Code sent! Enter the 6-digit code we texted you.",
     "phoneCodeLabel": "Verification code",
@@ -990,6 +997,7 @@
     }
   },
   "analytics": {
+    "unknownMember": "A household member",
     "atRisk": {
       "unknown": "We couldn’t check which plants are at risk just now.",
       "allClear": "Nothing is overdue — every plant is on schedule."

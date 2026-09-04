@@ -929,6 +929,13 @@
     "coverageUpdatesDescription": "Cuando alguien del hogar fija sus fechas de ausencia y te pone como cobertura.",
     "careCreditTitle": "Alguien te ha cubierto",
     "careCreditDescription": "Cuando otra persona hace una tarea que estaba a tu nombre. Sin recuentos, sin clasificaciones y sin nada que hacer.",
+    "yearRecapTitle": "Resumen del año",
+    "yearRecapDescription": "Un correo cada enero con el año de cuidados de tu hogar.",
+    "yearRecapRequiresEmail": "Activa las notificaciones por correo para recibir el resumen del año.",
+    "emailLanguageTitle": "Idioma de los correos",
+    "emailLanguageDescription": "El idioma en el que te escribimos. Se toma del idioma en el que estás usando la aplicación.",
+    "emailLanguageEnglish": "Inglés",
+    "emailLanguageSpanish": "Español",
     "phoneSendCode": "Enviar código",
     "phoneCodeSent": "¡Código enviado! Introduce el código de 6 dígitos que te enviamos por SMS.",
     "phoneCodeLabel": "Código de verificación",
@@ -1011,6 +1018,7 @@
     }
   },
   "analytics": {
+    "unknownMember": "Alguien del hogar",
     "atRisk": {
       "unknown": "No hemos podido comprobar qué plantas están en riesgo en este momento.",
       "allClear": "No hay nada atrasado: todas tus plantas van al día."

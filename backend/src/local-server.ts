@@ -12,6 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // @ts-nocheck
 import express from 'express';
+import expressRateLimit, { MemoryStore } from 'express-rate-limit';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'node:crypto';
@@ -103,6 +104,16 @@ import {
   takeSitterPhotoToken,
 } from './services/sitterPhotoPolicy.js';
 import { buildAwayRecap, pickRecapLink, recapWindow } from './services/awayRecapModel.js';
+import {
+  isEmailCategory,
+  signToken,
+  verifyTokenWithSecret,
+} from './services/email/capabilityToken.js';
+import {
+  renderConfirmPage,
+  renderDonePage,
+  renderInvalidPage,
+} from './services/email/unsubscribePage.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
@@ -318,6 +329,8 @@ interface NotificationPrefsRecord {
   taskUpForGrabs: boolean;
   coverageUpdates: boolean;
   careCredit: boolean;
+  yearRecap: boolean;
+  emailLocale: '' | 'en' | 'es';
   phoneVerified: boolean;
   updatedAt: string;
 }
@@ -4572,6 +4585,9 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     taskUpForGrabs: true,
     coverageUpdates: true,
     careCredit: true,
+    yearRecap: true,
+    // '' is "never chosen" — deliberately distinguishable from 'en'.
+    emailLocale: '',
     phoneVerified: false,
     updatedAt: new Date().toISOString(),
   };
@@ -4611,6 +4627,8 @@ const prefsSchema = z
     taskUpForGrabs: z.boolean().optional(),
     coverageUpdates: z.boolean().optional(),
     careCredit: z.boolean().optional(),
+    yearRecap: z.boolean().optional(),
+    emailLocale: z.enum(['', 'en', 'es']).optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
     message: 'Quiet hours require both a start and end time',
@@ -4733,11 +4751,160 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     taskUpForGrabs: body.taskUpForGrabs ?? current.taskUpForGrabs,
     coverageUpdates: body.coverageUpdates ?? current.coverageUpdates,
     careCredit: body.careCredit ?? current.careCredit,
+    yearRecap: body.yearRecap ?? current.yearRecap,
+    emailLocale: body.emailLocale ?? current.emailLocale,
     phoneVerified,
     updatedAt: new Date().toISOString(),
   };
   db.notificationPrefs.set(user.userId, updated);
   res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
+});
+
+/**
+ * One-click unsubscribe (RFC 8058), mirroring
+ * handlers/notifications/handler.ts. Secrets live in memory here instead of
+ * `USER#{id}/EMAILCAP`, but the token format and the verification rules are
+ * the production ones — `verifyTokenWithSecret` is the same function the
+ * Lambda calls, so a dev-minted link behaves exactly like a real one.
+ *
+ * `GET /notifications/email/dev-token?category=weekly_digest` is DEV ONLY:
+ * it mints a link so the flow can be exercised without SES.
+ */
+/**
+ * Per-IP throttle for the unauthenticated unsubscribe routes, mirroring the
+ * production limits in handlers/notifications/handler.ts (GET 30/min for link
+ * prefetchers, POST 10/min).
+ *
+ * Production is already protected three ways and this dev mirror is not
+ * internet-facing — it refuses to boot when NODE_ENV=production (top of this
+ * file). It gets a limiter anyway for two reasons. First, a dev mirror that
+ * behaves differently from production is its own class of bug: the point of
+ * this file is that what you exercise locally is what ships. Second, CodeQL
+ * reads `verifyTokenWithSecret` as an authorization decision on an
+ * unauthenticated route and flags the missing throttle
+ * (js/missing-rate-limiting) — correctly, on the code as written. Mirroring
+ * the real limit is cheaper and more honest than suppressing the alert.
+ *
+ * `express-rate-limit` rather than a hand-rolled bucket: a hand-rolled one
+ * worked but CodeQL only recognises known limiter libraries, so the alert
+ * stayed open on code that was actually rate-limited. It is a devDependency
+ * alongside `express` itself — `local-server.ts` is the dev server and is not
+ * in the Lambda bundle (backend/esbuild.config.js takes only
+ * `handlers/**\/handler.ts`), so this adds zero production bytes.
+ *
+ * The two routes get SEPARATE limiter instances, and therefore separate
+ * stores, so a scanning proxy prefetching the GET cannot spend the POST's
+ * budget and hand a 429 to the human who then clicks Unsubscribe. Production
+ * gets the same separation for free by keying on API Gateway's per-method
+ * routeKey.
+ */
+const unsubscribeFormStore = new MemoryStore();
+const unsubscribeSubmitStore = new MemoryStore();
+
+function unsubscribeLimiter(limit: number, store: MemoryStore) {
+  return expressRateLimit({
+    windowMs: 60_000,
+    limit,
+    store,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) =>
+      res.status(429).json({ message: 'Too many requests. Please slow down and try again.' }),
+  });
+}
+
+const unsubscribeFormRateLimit = unsubscribeLimiter(30, unsubscribeFormStore);
+const unsubscribeSubmitRateLimit = unsubscribeLimiter(10, unsubscribeSubmitStore);
+
+/** Mirrors `__resetRateLimitForTests` in middleware/rateLimit.ts so an
+ *  integration test can exercise the limiter without leaking buckets into the
+ *  next case. */
+export function __resetUnsubscribeRateLimitForTests(): void {
+  void unsubscribeFormStore.resetAll?.();
+  void unsubscribeSubmitStore.resetAll?.();
+}
+
+const emailCapabilitySecrets = new Map<string, string>();
+function localCapabilitySecret(userId: string): string {
+  const existing = emailCapabilitySecrets.get(userId);
+  if (existing) return existing;
+  const fresh = randomBytes(32).toString('base64url');
+  emailCapabilitySecrets.set(userId, fresh);
+  return fresh;
+}
+
+function localTokenUserId(token: string): string | null {
+  const parts = token.split('.');
+  if (parts.length !== 5 || parts[0] !== 'v1') return null;
+  try {
+    const userId = Buffer.from(parts[1], 'base64url').toString('utf8');
+    return userId || null;
+  } catch {
+    return null;
+  }
+}
+
+function unsubscribeLang(req: { query: Record<string, unknown> }): 'en' | 'es' {
+  return req.query.lang === 'es' ? 'es' : 'en';
+}
+
+type HtmlResponse = {
+  status: (code: number) => HtmlResponse;
+  type: (kind: string) => HtmlResponse;
+  set: (header: string, value: string) => HtmlResponse;
+  send: (body: string) => unknown;
+};
+
+function sendUnsubscribeHtml(res: HtmlResponse, status: number, body: string): void {
+  res.status(status).type('html').set('Cache-Control', 'no-store').send(body);
+}
+
+app.get('/notifications/email/dev-token', authMiddleware, (req, res) => {
+  const user = (req as any).user;
+  const category = isEmailCategory(req.query.category) ? req.query.category : 'weekly_digest';
+  const expiresAt = Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60;
+  const token = signToken(localCapabilitySecret(user.userId), user.userId, category, expiresAt);
+  res.json({ token, url: `http://localhost:4000/notifications/email/unsubscribe?t=${token}` });
+});
+
+app.get('/notifications/email/unsubscribe', unsubscribeFormRateLimit, (req, res) => {
+  const locale = unsubscribeLang(req);
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  const userId = token ? localTokenUserId(token) : null;
+  if (!token || !userId) return sendUnsubscribeHtml(res, 400, renderInvalidPage(locale));
+  const verified = verifyTokenWithSecret(token, localCapabilitySecret(userId));
+  if (verified.status !== 'ok') return sendUnsubscribeHtml(res, 410, renderInvalidPage(locale));
+  return sendUnsubscribeHtml(
+    res,
+    200,
+    renderConfirmPage({
+      locale,
+      actionUrl: `http://localhost:4000/notifications/email/unsubscribe?t=${encodeURIComponent(token)}&lang=${locale}`,
+      category: verified.category,
+    })
+  );
+});
+
+app.post('/notifications/email/unsubscribe', unsubscribeSubmitRateLimit, (req, res) => {
+  const locale = unsubscribeLang(req);
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  const userId = token ? localTokenUserId(token) : null;
+  if (!token || !userId) return sendUnsubscribeHtml(res, 400, renderInvalidPage(locale));
+  const verified = verifyTokenWithSecret(token, localCapabilitySecret(userId));
+  if (verified.status !== 'ok') return sendUnsubscribeHtml(res, 410, renderInvalidPage(locale));
+  const current = db.notificationPrefs.get(verified.userId) ?? defaultPrefs(verified.userId);
+  const field =
+    verified.category === 'weekly_digest'
+      ? 'weeklyDigest'
+      : verified.category === 'year_recap'
+        ? 'yearRecap'
+        : 'pestAlerts';
+  db.notificationPrefs.set(verified.userId, {
+    ...current,
+    [field]: false,
+    updatedAt: new Date().toISOString(),
+  });
+  return sendUnsubscribeHtml(res, 200, renderDonePage(locale, verified.category));
 });
 
 app.post(

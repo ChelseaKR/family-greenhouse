@@ -53,6 +53,10 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
     taskUpForGrabs: true,
     coverageUpdates: true,
     careCredit: true,
+    yearRecap: true,
+    // Already chosen, so the locale back-fill below does not fire. Cases that
+    // exercise the back-fill pass emailLocale: '' explicitly.
+    emailLocale: 'en',
     phoneVerified: false,
     updatedAt: '',
     ...over,
@@ -261,10 +265,40 @@ describe('NotificationSettings', () => {
         taskUpForGrabs: true,
         coverageUpdates: true,
         careCredit: true,
+        yearRecap: true,
+        emailLocale: 'en',
       });
       await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('America/Chicago'));
       // A write the user did not ask for shows no "saved" banner.
       expect(screen.queryByText('Preferences saved.')).not.toBeInTheDocument();
+    });
+
+    it('back-fills the email language on first load, without waiting for a Save', async () => {
+      // The timezone trap this deliberately does not repeat: 'UTC' cannot be
+      // told apart from a deliberate choice, so a stored value stays wrong
+      // until someone presses Save. `emailLocale: ''` IS distinguishable, so
+      // the back-fill is safe and happens on load.
+      stubBrowserTimeZone('UTC');
+      const { notificationService } = await import('@/services/notificationService');
+      vi.mocked(notificationService.updatePreferences).mockResolvedValue(
+        prefs({ emailLocale: 'en' })
+      );
+
+      await renderSettings(prefs({ emailLocale: '' }));
+
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+      expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
+        emailLocale: 'en',
+      });
+      expect(screen.queryByText('Preferences saved.')).not.toBeInTheDocument();
+    });
+
+    it('leaves an already-chosen email language alone', async () => {
+      stubBrowserTimeZone('UTC');
+      const { notificationService } = await import('@/services/notificationService');
+      await renderSettings(prefs({ emailLocale: 'es' }));
+      await waitFor(() => expect(screen.getByLabelText('Email language')).toHaveValue('es'));
+      expect(notificationService.updatePreferences).not.toHaveBeenCalled();
     });
 
     it('evaluates quiet hours saved without touching the Timezone field in the browser zone', async () => {

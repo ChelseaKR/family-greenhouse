@@ -270,7 +270,9 @@ export function AnalyticsPage() {
               const pct = (m.count / max) * 100;
               return (
                 <li key={m.userId} className="flex items-center gap-3 px-6 py-3 text-sm">
-                  <span className="w-32 truncate text-gray-900">{m.name}</span>
+                  <span className="w-32 truncate text-gray-900">
+                    {m.name ?? t('analytics.unknownMember')}
+                  </span>
                   <span
                     className="h-3 rounded-full bg-primary-600"
                     style={{ width: `${pct}%`, minWidth: '4px' }}

@@ -29,6 +29,15 @@ export interface NotificationPreferences {
   taskUpForGrabs: boolean;
   coverageUpdates: boolean;
   careCredit: boolean;
+  /** End-of-year recap email. Defaults on when email is enabled. */
+  yearRecap: boolean;
+  /**
+   * Language outbound email is written in. `''` means "never chosen" — a real
+   * state, unlike `timezone`, whose 'UTC' default is indistinguishable from a
+   * deliberate choice. The settings page back-fills it from the active UI
+   * language rather than waiting for a Save.
+   */
+  emailLocale: '' | 'en' | 'es';
   /** True once the current phone number was confirmed via SMS code. Read-only:
    *  only the confirm-verification endpoint can set it. */
   phoneVerified: boolean;
@@ -96,6 +105,8 @@ export const notificationService = {
       | 'taskUpForGrabs'
       | 'coverageUpdates'
       | 'careCredit'
+      | 'yearRecap'
+      | 'emailLocale'
     >
   ): Promise<NotificationPreferences> {
     const response = await api.put<NotificationPreferences>('/notifications/prefs', prefs);
