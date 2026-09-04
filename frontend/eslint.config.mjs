@@ -88,6 +88,12 @@ export default tseslint.config(
     // enrolled: they render entirely from `legal.*` keys. The Help FAQ is
     // *deliberately* not enrolled — translating curated articles is a
     // separate workstream from translating UI chrome.
+    //
+    // Scope, precisely: `markupOnly: true` restricts this rule to JSX TEXT
+    // NODES, and `ignoreAttribute` below is an EXCLUSION list, not a coverage
+    // list — `aria-label` and `placeholder` are on it. So this rule checks no
+    // attributes. Attribute coverage lives in the per-file ratchet in
+    // scripts/check-hardcoded-strings.mjs; see docs/i18n.md.
     files: ['src/features/settings/PreferencesSettings.tsx', 'src/features/legal/**/*.tsx'],
     plugins: {
       i18next,

@@ -122,6 +122,12 @@ export default tseslint.config(
   },
   {
     // i18n enforcement is opt-in per-folder — see frontend/eslint.config.mjs.
+    //
+    // Scope, precisely: `markupOnly: true` restricts this rule to JSX TEXT
+    // NODES, and `ignoreAttribute` below is an EXCLUSION list, not a coverage
+    // list. So this rule checks no attributes at all. Attribute coverage
+    // (aria-label, alt, title, placeholder) is a per-file ratchet in
+    // frontend/scripts/check-hardcoded-strings.mjs — see docs/i18n.md.
     files: ['frontend/src/features/settings/PreferencesSettings.tsx'],
     plugins: { i18next },
     rules: {
