@@ -158,4 +158,49 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
     await page.waitForLoadState('networkidle');
     await expectNoA11yViolations(page, 'sitter');
   });
+
+  // Content and legal routes. These need no fixtures at all — they render
+  // from bundled content — and none of them had ever been scanned (#448).
+  // `/legal/*` and `/support` are the pages a user is sent to at exactly the
+  // moment they are already unhappy.
+  const CONTENT_ROUTES = [
+    ['blog index', '/blog'],
+    ['care guide index', '/care'],
+    ['changelog', '/changelog'],
+    ['privacy policy', '/legal/privacy'],
+    ['terms', '/legal/terms'],
+    ['support', '/support'],
+    ['account deletion instructions', '/account-deletion'],
+    ['status', '/status'],
+    ['help centre', '/help'],
+  ] as const;
+
+  for (const [label, path] of CONTENT_ROUTES) {
+    test(label, async ({ page }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      await expectNoA11yViolations(page, label);
+    });
+  }
+
+  // Token routes in their INVALID-token state. A seeded tag/kiosk/brief
+  // fixture is real work and is why these were skipped; the invalid state
+  // still renders a full page with headings, buttons and an error, and that
+  // page had never been checked either. This is the cheap half of the
+  // coverage — the populated states remain unscanned, and docs/accessibility.md
+  // now says so rather than claiming every route is covered.
+  const INVALID_TOKEN_ROUTES = [
+    ['plant tag (invalid token)', '/tag/' + 'a'.repeat(32)],
+    ['kiosk (invalid token)', '/kiosk/' + 'a'.repeat(32)],
+    ['sitter brief (invalid token)', '/sit/' + 'a'.repeat(64) + '/brief'],
+    ['household invite (invalid code)', '/join/' + 'a'.repeat(12)],
+  ] as const;
+
+  for (const [label, path] of INVALID_TOKEN_ROUTES) {
+    test(label, async ({ page }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      await expectNoA11yViolations(page, label);
+    });
+  }
 });

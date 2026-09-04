@@ -142,4 +142,26 @@ test.describe('A11y — authenticated routes', () => {
     await page.waitForLoadState('networkidle');
     await expectNoA11yViolations(page, 'chat');
   });
+
+  // Routes this spec could always have reached — it is already signed in —
+  // and never did (#448). `/plants/new` is the longest form in the app and
+  // the primary create flow; `/welcome` and `/account` are both first-run
+  // surfaces. responsive-ux.spec.ts visits some of these at 320px for reflow
+  // and target size, but never ran axe over them.
+  const ROUTES = [
+    ['add plant', '/plants/new'],
+    ['import plants', '/plants/import'],
+    ['welcome', '/welcome'],
+    ['account', '/account'],
+    ['plant tags', '/tags'],
+    ['today across homes', '/today'],
+  ] as const;
+
+  for (const [label, path] of ROUTES) {
+    test(label, async ({ page }) => {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      await expectNoA11yViolations(page, label);
+    });
+  }
 });

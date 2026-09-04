@@ -15,8 +15,8 @@ document maps criteria to where they're enforced or to a deliberate choice.
 
 Four layers, all gating:
 
-1. **Lighthouse CI** runs the `accessibility` category against `/` and `/login` on every PR — both desktop and mobile. The mobile config is the tighter target. Threshold: 0.95 minimum (currently 1.00 on every page tested).
-2. **Playwright + `@axe-core/playwright`** scans every public + authenticated route. `ENFORCED_TAGS` is `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`/`wcag22aa` — **AA only** (both spec files removed the `wcag2aaa`/`wcag21aaa` tags; see the constant at the top of each). Zero violations required at that level. (`tests/e2e/a11y.spec.ts`, `a11y-authenticated.spec.ts`). The AAA criteria below (contrast-enhanced, target size) are real but are **not** axe-gated — they're maintained by convention + manual review, per criterion below.
+1. **Lighthouse CI** runs the `accessibility` category against **exactly two URLs**, `/` and `/login` (`frontend/lighthouserc.cjs`, `lighthouserc.mobile.cjs`), on every PR — both desktop and mobile. The mobile config is the tighter target. Threshold: 0.95 minimum (currently 1.00 on those two pages). Every authenticated surface, every other prerendered marketing route and every public token route is outside this gate; `/` and `/login` are also the two simplest pages in the app, so "1.00" is a narrower statement than it looks.
+2. **Playwright + `@axe-core/playwright`** scans the routes enumerated in the two spec files — not every route in `frontend/src/App.tsx`; see [What the axe sweep does not reach](#what-the-axe-sweep-does-not-reach) for the gap. `ENFORCED_TAGS` is `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`/`wcag22aa` — **AA only** (both spec files removed the `wcag2aaa`/`wcag21aaa` tags; see the constant at the top of each). Zero violations required at that level. (`tests/e2e/a11y.spec.ts`, `a11y-authenticated.spec.ts`). The AAA criteria below (contrast-enhanced, target size) are real but are **not** axe-gated — they're maintained by convention + manual review, per criterion below.
 3. **`eslint-plugin-jsx-a11y` at `strict`** (not just `recommended`) — static analysis at lint time catches missing alt text, invalid ARIA, unlabeled controls, etc., and fails the build.
 4. **`jest-axe`** structural checks on shared primitives in the unit suite (`tests/unit/a11y/components.a11y.test.tsx`) — fast feedback in jsdom (contrast, which needs layout, is left to layer 2).
 
@@ -24,7 +24,35 @@ Four layers, all gating:
 
 **Contrast (1.4.6 AAA):** body/helper text uses `gray-600`+ (≥7:1 on white), status/type badges use `text-*-900` on `*-100` tints (≥7:1), placeholders are `gray-500` (AA — placeholders are never the only label, so AAA is not required of them). This is a design-token discipline, not an automated gate — the axe suite enforces AA (`color-contrast`) only; a regression to a lower-contrast AAA token would not fail CI today. Tracked as a gap in the conformance table (README).
 
-Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` logs in via the local-server seed account (`test@example.com`) before scanning `/dashboard`, `/plants`, `/plants/:id`, `/tasks`, `/household`, `/settings` (including deep-linked sections), `/analytics`, `/help`, and `/chat`. This suite runs against the local-server (Cognito mock); production a11y is verified on every deploy by Lighthouse + manual axe DevTools spot-checks.
+Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` logs in via the local-server seed account (`test@example.com`) before scanning `/dashboard`, `/plants`, `/plants/:id`, `/plants/new`, `/plants/import`, `/tasks`, `/tags`, `/today`, `/welcome`, `/account`, `/household`, `/settings` (including deep-linked sections), `/analytics`, `/help`, and `/chat`. This suite runs against the local-server (Cognito mock); production a11y is verified on every deploy by Lighthouse + manual axe DevTools spot-checks.
+
+### What the axe sweep does not reach
+
+The two axe specs enumerate the routes they visit. That list is deliberately
+narrower than `frontend/src/App.tsx`'s route table, and the difference is the
+honest statement of coverage:
+
+- **Token routes are scanned only in their invalid-token state.** `/tag/:token`
+  (ADR 0016), `/kiosk/:token`, `/sit/:token/brief` and `/join/:inviteCode` each
+  render a full page with headings, buttons and an error state, and that page is
+  now checked. The **populated** states are not: they need seeded fixtures (a
+  real plant tag, a kiosk link, a sitter brief), which is why they were skipped
+  originally. `/tag/:token` is the sharpest remaining gap — its whole premise is
+  a stranger with no account and no context acting on what a QR code shows them.
+- **Per-item content routes are not scanned.** `/blog/:slug`, `/care/:slug` and
+  `/help/:topicId` share a template with their index pages, which are scanned;
+  an individual article is not.
+- **`/confirm-email` and `/reset-password`** need a live code/token in the URL
+  and are not scanned.
+- **Five modals are opened by no test at all** and so are never in the DOM for
+  axe to see: `CommandPalette` (Cmd/Ctrl+K, mounted on every authenticated
+  page), `CareRuleDialog`, `DoubleCarePrompt`, `MovePlantsDialog`, and the
+  mobile sidebar drawer in `Layout.tsx` — the only navigation on mobile.
+  `responsive-ux.spec.ts` does open and scan eight other dialogs at 320px, so
+  modal coverage is better than route coverage; these five are the remainder.
+
+A modal that is never opened is never scanned, so that last bullet matters more
+than the route gap does.
 
 ## Per-criterion status
 
@@ -87,7 +115,7 @@ Authenticated routes are covered too. `tests/e2e/a11y-authenticated.spec.ts` log
 - **2.5.2 Pointer Cancellation (A)** — Buttons fire on click (mouseup), never mousedown alone. ✅
 - **2.5.3 Label in Name (A)** — Visible label and accessible name match. Icon-only buttons have `aria-label`. ✅
 - **2.5.4 Motion Actuation (A)** — N/A. ✅
-- **2.5.7 Dragging Movements (AA)** — _WCAG 2.2 new_. No drag interactions. ✅
+- **2.5.7 Dragging Movements (AA)** — _WCAG 2.2 new_. There **is** a drag interaction: the CSV drop zone in `frontend/src/features/plants/ImportPlantsPage.tsx` implements `onDragOver`/`onDragLeave`/`onDrop`. The criterion is met because the same region provides the single-pointer alternative 2.5.7 requires — a real file-picker button and an `<input type="file">` with an `aria-label`, so nothing can be done by dragging alone. Any future drag interaction must ship its own equivalent; this ✅ is earned by that alternative, not by the absence of dragging. ✅
 - **2.5.8 Target Size (Minimum) (AA)** — _WCAG 2.2 new_. All tap targets ≥24×24 CSS px. Button has `min-h-touch` (44px) baked in. The "Sign up free" header link previously failed Lighthouse mobile (Button size="sm" was 32px); bumped to size="md". ✅
 
 ### 3.1 — Readable
