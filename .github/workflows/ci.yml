@@ -315,7 +315,23 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-frontend, test-backend]
+    # No `needs:`. This job consumes nothing that lint/typecheck/test produce —
+    # it checks out, installs, and builds from source like every other job — so
+    # depending on them bought no correctness, only latency: `Build` used to sit
+    # idle until the slowest gate (`Test Frontend`, ~320s) finished, and the
+    # three jobs behind it then queued another ~320s later. Measured on run
+    # 33914673891: everything parallel finished by t+322s, `Build` ran
+    # t+322..389s, and E2E/Lighthouse/Bundle size only started at t+392s, for
+    # ~706s of wall clock.
+    #
+    # Nothing is skipped and nothing is weakened. `Build`, `Lint`, `Type Check`,
+    # `Test Frontend` and `Test Backend` are all in the `protect-main` ruleset's
+    # required-status-checks list, so the merge is blocked by the checks
+    # themselves, not by the job graph — a red test still blocks the merge
+    # exactly as before. The only behaviour change is that a broken build is now
+    # reported alongside a failing test instead of after it, and a run whose
+    # tests fail also spends the runner minutes to build. Actions minutes are
+    # free on this public repository, so that costs nothing.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -354,7 +370,10 @@ jobs:
   lighthouse:
     name: Lighthouse (mobile + desktop)
     runs-on: ubuntu-latest
-    needs: [build]
+    # No `needs: [build]`. This job never downloaded the `frontend-dist`
+    # artifact — it runs its own `npm run build` below — so the dependency was
+    # pure serialized waiting. It is its own required status check, so it still
+    # has to pass before the branch can merge.
     strategy:
       fail-fast: false
       matrix:
@@ -422,7 +441,9 @@ jobs:
   bundle-size:
     name: Bundle size
     runs-on: ubuntu-latest
-    needs: [build]
+    # No `needs: [build]` — same reason as `lighthouse`: this job builds the
+    # frontend itself rather than downloading `frontend-dist`, so waiting for
+    # `Build` measured the same bundle a minute later. Still a required check.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -449,7 +470,13 @@ jobs:
   e2e-a11y:
     name: E2E + accessibility (Playwright)
     runs-on: ubuntu-latest
-    needs: [build]
+    # No `needs: [build]`. Playwright's `webServer` block builds and previews
+    # the frontend itself (`npm run build && npm run preview`, see
+    # frontend/playwright.config.ts), so this job never used the `Build`
+    # artifact either. It was the tail of the critical path — ~315s starting
+    # only after `Build`, which started only after `Test Frontend` — and it is
+    # the single change that takes a frontend PR from ~12 minutes to ~5.5.
+    # Still a required check.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
