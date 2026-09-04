@@ -16,6 +16,63 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-04
+
+> `0.25.0` was tagged and, like `0.24.0` before it, never reached production.
+> Its deploy applied the new CloudFront routing and then stopped before the
+> frontend shipped, which took the site down until the routing was given
+> something to point at. Both defects behind that are fixed below. Everything
+> in the `0.24.0` and `0.25.0` entries ships here, for the first time.
+
+### Added
+
+- **Ask family to do it.** A task you cannot get to can be handed back to the
+  household instead of quietly going stale: it becomes claimable by anyone and
+  the rest of the house is told once, with an optional note. It reuses the same
+  "up for grabs" state auto-handoff already reaches, so a task asked about and
+  a task escalated behave identically from then on. Free on every plan, once
+  per task per person per day, and never sent to whoever just asked, anyone
+  who is away, or anyone inside quiet hours.
+
+### Fixed
+
+- **The site went down mid-deploy, and the deploy could not finish.** Two
+  separate defects, one behind the other:
+
+  The production deploy role could create every resource the stack needs
+  except a KMS key — `kms` was missing from its permission list entirely. The
+  SES event key added in `0.24.0` was the first one the stack ever asked for,
+  so nothing had exercised the gap before.
+
+  Past that, the deploy stopped again on its own safety mechanism: it refuses
+  to ship unless it can snapshot a rollback copy of every function, and a
+  function created minutes earlier by that same run has no previous version to
+  copy. That would have blocked the first deploy of every new function
+  indefinitely. A brand-new function is now allowed to have no snapshot — but
+  only after confirming it really exists, so a function that failed to be
+  created is still a hard stop.
+
+  Because the frontend upload runs after the backend, neither shipped, and the
+  new routing was left pointing at files the previous release had never
+  uploaded. Every page but the home page returned an error until the deploy
+  completed.
+
+### Security
+
+- **CI stops leaving credentials on disk.** Checkout steps across every
+  workflow no longer persist the git token into the runner's config once they
+  are done with it, and the deploy workflows no longer interpolate values
+  directly into shell commands — they pass through environment variables,
+  where a value cannot be read as script. The static-analysis image is pinned
+  by digest, and the committed Gradle wrapper is checked against Gradle's own
+  published checksums on every run.
+
+- **Dependency updates**, including `brace-expansion` and `tar` past
+  denial-of-service advisories, plus Stripe, i18next, Middy and Capacitor.
+  Every dependency ecosystem now waits a cooling-off period before proposing
+  an update, so a compromised release is less likely to be picked up
+  automatically on its first day.
+
 ## [0.25.0] - 2026-09-04
 
 > `0.24.0` was tagged but never reached production: its deploy failed on two
