@@ -8,12 +8,13 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
 
 - `FamilyGreenhouse/API/{environment} ApplicationRequests` and `Application5xx` are derived from structured API
   Gateway access logs and exclude `GET /health`. They measure application traffic rather than the
-  30-second synthetic probe.
+  external uptime probe (see "External availability checks" below).
 - `ApplicationLatency` records the same health-excluded request population and pages when p95 is
   above 500 ms in two of three five-minute periods.
 - Native `AWS/ApiGateway Count`, `4xx`, and `5xx` use the real HTTP API `ApiId` and catch gateway-level
-  failures. Lambda errors, Lambda throttles, DynamoDB read/write throttles, DLQs, auth failures, and
-  Route53 health have separate alarms.
+  failures. Lambda errors, Lambda throttles, DynamoDB read/write throttles, DLQs, and auth failures
+  have separate alarms. There is no Route53 health check — external availability is checked from
+  GitHub Actions instead; see "External availability checks" below and issue #464.
 - **Server-side logs are redacted at the logger.** `backend/src/utils/logger.ts` censors `email`,
   `to`, `phone`, `password`, `pin`, `token`/`refreshToken`/`accessToken`/`idToken`, `apiKey`,
   `imageBase64` and `authorization` — at the top level and one or two levels down — with
@@ -31,6 +32,34 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
   Those events land in the API Lambda log group. Trusted `signup_completed` events land in the auth
   Lambda log group because Cognito confirmation precedes login; Stripe-confirmed events land in the
   billing Lambda log group. Select all three groups for a complete funnel query.
+
+## External availability checks
+
+Every alarm in `infrastructure/modules/monitoring` uses
+`treat_missing_data = "notBreaching"`, so "traffic went to zero" is
+indistinguishable from "everything is healthy". The only signals that can see a
+total outage are external, and they live in `.github/workflows/uptime.yml`
+(`*/15 * * * *`, plus `workflow_dispatch`):
+
+| Job                | What it fetches                                           | What it proves                                                                                                                    |
+| ------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `health`           | `vars.HEALTHCHECK_URL` (the API's `GET /health`)          | The API and its database dependency answer.                                                                                       |
+| `pages`            | `/`, `/register`, `/login`, `/pricing` on `vars.SITE_URL` | Each route returns HTML that is **this app** — app root, module script, `og:site_name`, non-empty `<title>` — not merely a 200.   |
+| `pages` (2nd step) | `/robots.txt` with `--expect-failure`                     | The page check can still fail. If the assertions ever soften to "any 200 passes", this step goes red while production is healthy. |
+
+`scripts/synthetic-page-check.mjs` is the page check. It has no dependencies
+(global `fetch`) so the job is a checkout plus one `node` invocation.
+
+The `pages` job exists because the `health` job passed fourteen minutes into a
+total frontend outage on 2026-09-04 (issue #464): the API was healthy and every
+route except `/` was answering 403, and nothing in the check ever loaded a page.
+
+Two gaps in this arrangement are known and tracked in issue #464, not closed
+here: the cadence is fifteen minutes rather than the 30 seconds this document
+once claimed, and a failure arrives as a workflow-failure email rather than
+through the alerts SNS topic every CloudWatch alarm routes to. There is no
+`aws_route53_health_check` in `infrastructure/`; choosing between adding one and
+routing these jobs into SNS is an open owner decision.
 
 ## Where alarms are created
 
