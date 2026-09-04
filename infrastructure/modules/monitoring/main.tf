@@ -749,6 +749,52 @@ resource "aws_cloudwatch_metric_alarm" "email_forwarder_dlq_depth" {
   }
 }
 
+# Inbound mail refused because its scan verdict was not an explicit PASS —
+# GRAY, PROCESSING_FAILED, or no verdict at all. The forwarder is fail-closed
+# (modules/email/lambda/forwarder.mjs), so this message did NOT reach the
+# maintainer's inbox: it is sitting in the inbound-mail bucket at the `key` the
+# log line names, waiting for someone to decide. That is exactly the sort of
+# thing that must not be discoverable only by reading logs, because the
+# addresses this forwarder carries are security@ and abuse@.
+#
+# Deliberately NOT filtering the everyday `mail_dropped_scan_fail`: a FAIL is
+# a scan that ran and worked, on mail nobody wants, and paging on it would
+# turn ordinary spam into an alert.
+resource "aws_cloudwatch_log_metric_filter" "mail_not_relayed_unverified" {
+  count = var.email_forwarder_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-mail-not-relayed-unverified-${var.environment}"
+  log_group_name = var.email_forwarder_log_group_name
+  pattern        = "{ $.msg = \"mail_not_relayed_scan_unverified\" }"
+
+  metric_transformation {
+    name          = "MailNotRelayedUnverifiedScan"
+    namespace     = "FamilyGreenhouse/Audit/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "mail_not_relayed_unverified" {
+  count = var.enable_alarms && var.email_forwarder_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-mail-not-relayed-unverified-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.mail_not_relayed_unverified[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Audit/${var.environment}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "Inbound mail to security@/abuse@/support@ was NOT relayed because its spam/virus scan verdict was not an explicit PASS. The raw message is in the inbound-mail bucket at the key named in the log line — retrieve and triage it by hand."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-mail-not-relayed-unverified-alarm-${var.environment}"
+  }
+}
+
 # Audit alarm: failed-login spike (possible credential stuffing / brute force).
 # A metric filter turns the structured audit log line (pino JSON,
 # `event: "auth.login.failure"`) on the auth Lambda's log group into a metric;

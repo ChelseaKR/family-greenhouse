@@ -81,33 +81,89 @@ export function rewrite(rawBytes, originalRecipient) {
   return Buffer.concat([Buffer.from(kept.join(eol) + sep, 'latin1'), bodyBytes]);
 }
 
+/**
+ * Normalize one SES verdict. SES emits PASS, FAIL, GRAY (scanned, unsure) and
+ * PROCESSING_FAILED (the scan did not complete) — and omits the field entirely
+ * when scanning was not performed at all. `MISSING` stands in for absent so
+ * every outcome is a value the log line can carry, rather than an `undefined`
+ * that silently compares unequal to everything.
+ */
+function verdictOf(value) {
+  return typeof value === 'string' && value ? value : 'MISSING';
+}
+
+const OUTCOME_REASON = {
+  fail: 'scan_failed',
+  inconclusive: 'scan_inconclusive',
+  unscanned: 'scan_unscanned',
+};
+
+/**
+ * Whether this message may be relayed, and — when it may not — which of the
+ * three refusals it is. Pure over the receipt shape; exported for tests.
+ *
+ * FAIL-CLOSED: an explicit PASS on BOTH scans is the only thing that relays.
+ * The old gate was `spam === 'FAIL' || virus === 'FAIL'`, which let three
+ * states through: GRAY, PROCESSING_FAILED, and an absent verdict (because
+ * `undefined === 'FAIL'` is false). Two of those are a scan that could not be
+ * completed, published as a scan that passed — inside a security control, on
+ * the path that re-sends from our DKIM-aligned domain into the maintainer's
+ * inbox, so anything it lets through arrives with our reputation applied.
+ * PROCESSING_FAILED in particular is what SES reports under load or on a
+ * message too large to scan, which correlates with exactly the traffic you
+ * would want scrutinised.
+ *
+ * The refusals stay distinct because they are different facts: `fail` is an
+ * expected verdict on hostile mail and is routine; `inconclusive` is "we
+ * scanned it and are unsure"; `unscanned` is "we did not scan it", which is
+ * the one a human should go and look at.
+ */
+export function scanDecision(receipt) {
+  const spam = verdictOf(receipt?.spamVerdict?.status);
+  const virus = verdictOf(receipt?.virusVerdict?.status);
+  if (spam === 'FAIL' || virus === 'FAIL') return { relay: false, outcome: 'fail', spam, virus };
+  if (spam === 'PASS' && virus === 'PASS') return { relay: true, outcome: 'pass', spam, virus };
+  const scanned = spam === 'GRAY' || virus === 'GRAY';
+  return { relay: false, outcome: scanned ? 'inconclusive' : 'unscanned', spam, virus };
+}
+
 export const handler = async (event) => {
   const record = event.Records?.[0]?.ses;
   if (!record) return { skipped: true };
   const messageId = record.mail?.messageId;
   const recipient = record.receipt?.recipients?.[0] ?? 'unknown@unknown';
+  const key = `${PREFIX}${messageId}`;
 
   // SES stamps spam/virus scan verdicts on the receipt (the receipt rule sets
-  // scan_enabled = true). Refuse to relay anything that FAILED the virus or
-  // spam scan: this forwarder re-sends from our DKIM-aligned domain, so passing
-  // malware/phishing through would launder it under our domain's reputation
-  // straight into the maintainer's inbox. We gate ONLY on virus/spam — not
-  // DKIM/SPF/DMARC, which legitimately fail for plenty of forwarded list mail.
-  // A FAIL is an expected verdict, not a processing error, so we drop and
-  // return cleanly (no throw → no retry, no DLQ).
-  const spam = record.receipt?.spamVerdict?.status;
-  const virus = record.receipt?.virusVerdict?.status;
-  if (spam === 'FAIL' || virus === 'FAIL') {
+  // scan_enabled = true). We gate ONLY on virus/spam — not DKIM/SPF/DMARC,
+  // which legitimately fail for plenty of forwarded list mail.
+  //
+  // Nothing is destroyed by refusing: the receipt rule's S3 action has already
+  // written the raw MIME to `key` before this Lambda runs, so a wrongly-refused
+  // security@ report is still retrievable — which is why the log line names the
+  // bucket and key. None of these is a processing error, so we return cleanly
+  // (no throw → no retry, no DLQ); `mail_not_relayed_scan_unverified` carries
+  // its own CloudWatch alarm so an unscanned message is not just a log line.
+  const scan = scanDecision(record.receipt);
+  if (!scan.relay) {
     console.log(
-      JSON.stringify({ msg: 'mail_dropped_scan_fail', messageId, recipient, spam, virus })
+      JSON.stringify({
+        msg:
+          scan.outcome === 'fail' ? 'mail_dropped_scan_fail' : 'mail_not_relayed_scan_unverified',
+        messageId,
+        recipient,
+        spam: scan.spam,
+        virus: scan.virus,
+        outcome: scan.outcome,
+        bucket: BUCKET,
+        key,
+      })
     );
-    return { dropped: true, reason: 'scan_failed' };
+    return { dropped: true, reason: OUTCOME_REASON[scan.outcome] };
   }
 
   try {
-    const obj = await s3.send(
-      new GetObjectCommand({ Bucket: BUCKET, Key: `${PREFIX}${messageId}` })
-    );
+    const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
     // Read the raw MIME as BYTES, not a UTF-8 string — see rewrite().
     const rawBytes = Buffer.from(await obj.Body.transformToByteArray());
 
