@@ -9,17 +9,21 @@
  *     with the admin manual triggers (`POST /notifications/run-digests` and
  *     `POST /notifications/run-year-recap` in handlers/notifications).
  *
+ * This file owns DELIVERY: the scan, the dedupe markers, the per-recipient
+ * locale and unsubscribe token, the send loop. What the digest actually SAYS
+ * lives in `services/digestReport.ts`.
+ *
  * Spam control mirrors services/reminders.ts: TTL'd conditional-Put dedupe
  * markers. The digest uses a per-user, per-household, per-ISO-week marker; the
  * recap uses a per-user, per-household, per-year marker held for ~60 days.
  * That scope skips successful retries without hiding a second household's
  * distinct summary.
  *
- * Both emails are plain text (see emailNotifier — no HTML email yet) and are
- * sent directly through `emailNotifier.sendEmail` rather than the
- * `notifier.sendToUser` fan-out: these are email-only products, and a weekly/
- * yearly summary shouldn't be silently rerouted to SMS or suppressed by a DND
- * window aimed at real-time pings.
+ * Both emails are sent directly through `emailNotifier.sendEmail` rather than
+ * the `notifier.sendToUser` fan-out: these are email-only products, and a
+ * weekly/yearly summary shouldn't be silently rerouted to SMS or suppressed by
+ * a DND window aimed at real-time pings. Both carry a `List-Unsubscribe`
+ * header and an HTML part (ADR 0021).
  */
 import { randomUUID } from 'node:crypto';
 import { PutCommand, GetCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
@@ -30,12 +34,15 @@ import * as taskService from './taskService.js';
 import * as plantService from './plantService.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
+import * as digestReport from './digestReport.js';
+import { mintUnsubscribeToken, type EmailCategory } from './email/capability.js';
+import { t, tn, formatYear, type EmailLocale } from './email/catalog.js';
+import { analyticsUrl, plantUrl, settingsUrl, unsubscribeUrl } from './email/links.js';
+import { householdLocaleFrom, resolveEmailLocale } from './email/locale.js';
+import { renderEmail, type EmailBlock } from './email/template.js';
+import type { HouseholdMember } from '../models/types.js';
 import type { YearInReview } from './taskService.js';
 
-/** Digest LISTS at most this many plants — it's a nudge, not an inventory.
- *  It does not cap what the digest may *count*: `composeDigestEmail` applies
- *  this to the body only, and the subject states the real total. */
-const TOP_PLANTS = 5;
 /** The recap LISTS this many "most pampered" plants. `review.topPlants` is
  *  complete; the cap is a display concern and lives here. */
 const RECAP_TOP_PLANTS = 10;
@@ -47,107 +54,55 @@ const DIGEST_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
 const RECAP_MARKER_TTL_SECONDS = 60 * 24 * 60 * 60;
 const DELIVERY_LEASE_SECONDS = 5 * 60;
 
-export interface PlantAtRisk {
-  plantId: string;
-  plantName: string;
-  /** Task type of the plant's MOST overdue task (custom label when custom). */
-  taskType: string;
-  /** Whole days the most overdue task has been overdue (0 = overdue today). */
-  daysOverdue: number;
-}
-
-function taskTypeLabel(t: { type: string; customType: string | null }): string {
-  return t.type === 'custom' ? (t.customType ?? 'custom') : t.type;
-}
-
 /**
- * The household's plants most at risk: EVERY ACTIVE plant with at least one
- * overdue task, ranked by the max days-overdue across its tasks. One
- * due-window GSI1 query (cutoff = now ⇒ overdue only) plus the active-plant
- * read — the same shape the reminder scan uses.
+ * Per-recipient locale + unsubscribe capability, resolved once per member.
  *
- * Deliberately uncapped. This used to `.slice(0, TOP_PLANTS)` before
- * returning, which made `atRisk.length` a number that could never exceed 5 —
- * and `composeDigestEmail` then built the subject from it, telling a
- * household with 23 neglected plants that "5 plants could use some care".
- * A cap is a display concern, so the cap now lives in the composer (which
- * still lists only the top few) and the count stays true.
+ * `localeSource` is logged with the send so a fallback to English is
+ * countable rather than silent, and `unsubscribeUrl` is null (rather than a
+ * guessed URL) when `PUBLIC_API_URL` is unset — a 404ing unsubscribe link is
+ * worse for deliverability than no `List-Unsubscribe` header at all.
  */
-export async function computePlantsAtRisk(
-  householdId: string,
-  now: Date = new Date()
-): Promise<PlantAtRisk[]> {
-  const overdue = await taskService.getTasksDueBy(householdId, now.toISOString());
-  if (overdue.length === 0) return [];
-
-  // Don't flag plants that are no longer active (died / gave_away) —
-  // getPlants defaults to active-only.
-  const activePlants = new Map(
-    (await plantService.getPlants(householdId)).map((p) => [p.id, p.name])
-  );
-
-  const byPlant = new Map<string, PlantAtRisk>();
-  for (const task of overdue) {
-    const plantName = activePlants.get(task.plantId);
-    if (plantName === undefined) continue;
-    const daysOverdue = Math.floor(
-      (now.getTime() - new Date(task.nextDue).getTime()) / (24 * 60 * 60 * 1000)
-    );
-    const current = byPlant.get(task.plantId);
-    if (!current || daysOverdue > current.daysOverdue) {
-      byPlant.set(task.plantId, {
-        plantId: task.plantId,
-        plantName,
-        taskType: taskTypeLabel(task),
-        daysOverdue,
-      });
-    }
+async function recipientContext(
+  member: HouseholdMember,
+  storedLocale: string,
+  household: EmailLocale | null,
+  category: EmailCategory
+): Promise<{ locale: EmailLocale; localeSource: string; unsubscribeUrl: string | null }> {
+  const { locale, source } = resolveEmailLocale(storedLocale, household);
+  const minted = await mintUnsubscribeToken(member.userId, category);
+  let url: string | null = null;
+  if (minted.status === 'ok') {
+    const built = unsubscribeUrl(minted.token);
+    url = built ? `${built}&lang=${locale}` : null;
   }
-
-  return [...byPlant.values()].sort((a, b) => b.daysOverdue - a.daysOverdue);
-}
-
-function overduePhrase(days: number): string {
-  if (days <= 0) return 'ready for a little care today';
-  return days === 1 ? 'waiting a day for some care' : `waiting ${days} days for some care`;
+  if (!url) {
+    logger.warn(
+      { userId: member.userId, category, msg: 'digest.unsubscribe_link_unavailable' },
+      'digest.unsubscribe_link_unavailable'
+    );
+  }
+  return { locale, localeSource: source, unsubscribeUrl: url };
 }
 
 /**
- * Plain-text weekly digest email body + subject.
- *
- * `atRisk` is the household's FULL ranked at-risk list. The subject reports
- * its real length; the body lists only the `TOP_PLANTS` waiting longest and
- * says so when it is showing a subset. Counting the listed rows instead —
- * what this did before — under-reported every household with more than five
- * neglected plants, and under-reporting is the dangerous direction for a
- * care-reminder product: it reassures precisely the households that most
- * need the nudge.
+ * Read every member's preferences once, in join order, and derive the
+ * household's prevailing email locale from them. One pass, no extra reads: the
+ * send loop needs each member's prefs anyway.
  */
-export function composeDigestEmail(atRisk: PlantAtRisk[]): { subject: string; text: string } {
-  const total = atRisk.length;
-  const listed = atRisk.slice(0, TOP_PLANTS);
-  const subject =
-    total === 1
-      ? 'Weekly digest: 1 plant could use some care'
-      : `Weekly digest: ${total} plants could use some care`;
-  const lines = listed.map(
-    (p, i) => `${i + 1}. ${p.plantName} — ${p.taskType} ${overduePhrase(p.daysOverdue)}`
+async function readMemberPrefs(members: HouseholdMember[]): Promise<{
+  ordered: HouseholdMember[];
+  prefs: Map<string, notificationPrefs.NotificationPreferences>;
+  householdLocale: EmailLocale | null;
+}> {
+  const ordered = [...members].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt));
+  const prefs = new Map<string, notificationPrefs.NotificationPreferences>();
+  for (const member of ordered) {
+    prefs.set(member.userId, await notificationPrefs.getPreferences(member.userId));
+  }
+  const householdLocale = householdLocaleFrom(
+    ordered.map((member) => prefs.get(member.userId)?.emailLocale)
   );
-  const plantWord = total === 1 ? 'plant' : 'plants';
-  const intro =
-    listed.length < total
-      ? `${total} ${plantWord} could use some catch-up care. Here are the ${listed.length} waiting longest:`
-      : `${total} ${plantWord} could use some catch-up care (the ${total === 1 ? 'one' : 'ones'} waiting longest first):`;
-  const text = [
-    'Your weekly Family Greenhouse check-in.',
-    '',
-    intro,
-    '',
-    ...lines,
-    '',
-    'A few minutes of care goes a long way. Your plants thank you!',
-  ].join('\n');
-  return { subject, text };
+  return { ordered, prefs, householdLocale };
 }
 
 /** ISO-8601 week key (UTC), e.g. "2026-W24". Stable across the whole week, so
@@ -274,24 +229,53 @@ async function finalizeWeeklyDigestSlot(
 }
 
 /**
- * Send the weekly digest for ONE household. Households with nothing overdue
- * are skipped entirely (no member/prefs reads). Each member receives it only
- * when their email channel AND the weeklyDigest pref are on, at most once
- * per ISO week. Returns how many digests were sent.
+ * Send the weekly digest for ONE household.
+ *
+ * The old shape was `if (atRisk.length === 0) return 0` before reading
+ * anything else, which meant a broken query and a healthy week were the same
+ * thing to the recipient: no email. The help copy actively teaches users to
+ * read silence as health. So now:
+ *
+ *   - a FAILED at-risk read still sends, carrying a line that says we could
+ *     not check and that an empty list is not an all-clear;
+ *   - a genuinely quiet week (nothing overdue, nothing failed) is skipped and
+ *     LOGGED with its reason, so silence is at least observable to us;
+ *   - the report is gathered once and rendered per recipient, because the
+ *     greeting, the language and the unsubscribe token are per person.
+ *
+ * A member who is away (an active vacation window) receives nothing: that is
+ * what vacation mode is for, and their plants are named in the cover's copy.
+ *
+ * Each member receives it only when their email channel AND the weeklyDigest
+ * pref are on, at most once per ISO week. Returns how many digests were sent.
  */
 export async function digestHousehold(
   householdId: string,
   now: Date = new Date()
 ): Promise<number> {
-  const atRisk = await computePlantsAtRisk(householdId, now);
-  if (atRisk.length === 0) return 0;
+  const report = await digestReport.gatherDigestReport(householdId, now);
+  if (!digestReport.digestIsWorthSending(report)) {
+    logger.info(
+      {
+        householdId,
+        atRisk: report.atRisk.status,
+        msg: 'digest.skipped_nothing_to_say',
+      },
+      'digest.skipped_nothing_to_say'
+    );
+    return 0;
+  }
 
-  const { subject, text } = composeDigestEmail(atRisk);
   const members = await householdService.getHouseholdMembers(householdId);
+  const { ordered, prefs: allPrefs, householdLocale } = await readMemberPrefs(members);
+
   let sent = 0;
-  for (const member of members) {
-    const prefs = await notificationPrefs.getPreferences(member.userId);
-    if (!prefs.email || !prefs.weeklyDigest) continue;
+  for (const member of ordered) {
+    const prefs = allPrefs.get(member.userId);
+    if (!prefs || !prefs.email || !prefs.weeklyDigest) continue;
+    // Vacation mode means "do not bother me". Their tasks are already routed
+    // to the covering member, who is named on the row.
+    if (report.awayUserIds.has(member.userId)) continue;
     // EventBridge retries at several UTC hours on Monday. Skip (without
     // claiming the weekly slot) during this recipient's local quiet window;
     // the next invocation can deliver once they are awake.
@@ -302,11 +286,24 @@ export async function digestHousehold(
     const reservationId = await reserveWeeklyDigestSlot(member.userId, householdId, now);
     if (!reservationId) continue;
 
+    const context = await recipientContext(
+      member,
+      prefs.emailLocale,
+      householdLocale,
+      'weekly_digest'
+    );
+    const { subject, text, html, headers } = digestReport.composeDigestEmail(report, {
+      userId: member.userId,
+      name: member.name,
+      locale: context.locale,
+      unsubscribeUrl: context.unsubscribeUrl,
+    });
+
     // Isolate each member's send. A false dry-run or provider exception
     // releases the reservation, so the next run retries that recipient.
     let delivered: boolean;
     try {
-      delivered = await emailNotifier.sendEmail({ to: member.email, subject, text });
+      delivered = await emailNotifier.sendEmail({ to: member.email, subject, text, html, headers });
     } catch (err) {
       await releaseWeeklyDigestSlot(member.userId, householdId, now, reservationId).catch(
         (cleanupErr) => {
@@ -324,6 +321,16 @@ export async function digestHousehold(
     }
     if (delivered) {
       sent += 1;
+      logger.info(
+        {
+          householdId,
+          userId: member.userId,
+          locale: context.locale,
+          localeSource: context.localeSource,
+          msg: 'digest.sent',
+        },
+        'digest.sent'
+      );
       await finalizeWeeklyDigestSlot(member.userId, householdId, now, reservationId).catch(
         (err) => {
           logger.warn(
@@ -382,44 +389,119 @@ export function defaultRecapYear(now: Date = new Date()): number {
   return now.getUTCFullYear() - 1;
 }
 
-/** Celebratory plain-text recap of a household's year of plant care. */
+/**
+ * The plant names a recap needs, or an honest "we could not look them up".
+ *
+ * `'A former plant'` used to stand in for a missing lookup, which announced a
+ * *fact about the plant's lifecycle* — that it is gone — on the strength of a
+ * failed read. `plantNames` comes from `getPlants(householdId, 'all')`; any
+ * plant absent from that read for a non-throwing reason was reported to the
+ * household as dead or given away.
+ */
+export type RecapPlantNames =
+  { status: 'ok'; names: Map<string, string> } | { status: 'unavailable' };
+
+/** Recap email for a household's year of plant care, HTML + text. */
 export function composeRecapEmail(
   review: YearInReview,
-  plantNames: Map<string, string>
-): { subject: string; text: string } {
-  const subject = `Your ${review.year} plant care year in review 🌱`;
-  const taskWord = review.totalCompletions === 1 ? 'task' : 'tasks';
-  const lines: string[] = [
-    `What a year! Your household completed ${review.totalCompletions} plant-care ${taskWord} in ${review.year}.`,
-    '',
+  plantNames: RecapPlantNames,
+  recipient: { name: string | null; locale: EmailLocale; unsubscribeUrl: string | null },
+  householdName: string | null = null
+): { subject: string; text: string; html: string; headers?: Record<string, string> } {
+  const locale = recipient.locale;
+  const year = formatYear(locale, review.year);
+  const blocks: EmailBlock[] = [
+    {
+      kind: 'text',
+      text: tn(locale, 'recap.total', review.totalCompletions, { year }),
+    },
   ];
+
   if (review.byMember.length > 0) {
-    lines.push('Who did the work:');
-    for (const m of review.byMember) {
-      lines.push(`  - ${m.name}: ${m.count}`);
+    blocks.push({ kind: 'heading', text: t(locale, 'recap.whoHeading') });
+    for (const member of review.byMember) {
+      blocks.push({
+        kind: 'row',
+        // A completion row with no display name used to print the raw Cognito
+        // sub under this heading, as if a UUID were a person.
+        title: member.name ?? t(locale, 'recap.memberUnknown'),
+        lines: [tn(locale, 'recap.count', member.count)],
+      });
     }
-    lines.push('');
   }
+
   if (review.byTaskType.length > 0) {
-    lines.push('By task type:');
-    for (const t of review.byTaskType) {
-      lines.push(`  - ${t.type}: ${t.count}`);
+    blocks.push({ kind: 'heading', text: t(locale, 'recap.typeHeading') });
+    for (const entry of review.byTaskType) {
+      const label =
+        entry.type === 'water' ||
+        entry.type === 'fertilize' ||
+        entry.type === 'prune' ||
+        entry.type === 'repot'
+          ? t(locale, `taskType.${entry.type}`)
+          : // A custom task type stores the user's own label; an empty one is
+            // a missing label, not a task literally named "custom".
+            entry.type.trim() || t(locale, 'taskType.custom');
+      blocks.push({ kind: 'row', title: label, lines: [tn(locale, 'recap.count', entry.count)] });
     }
-    lines.push('');
   }
+
   if (review.topPlants.length > 0) {
-    lines.push('Most pampered plants:');
-    for (const p of review.topPlants.slice(0, RECAP_TOP_PLANTS)) {
-      lines.push(
-        `  - ${plantNames.get(p.plantId) ?? 'A former plant'}: ${p.count} ${p.count === 1 ? 'task' : 'tasks'}`
-      );
+    blocks.push({ kind: 'heading', text: t(locale, 'recap.plantsHeading') });
+    if (plantNames.status === 'unavailable') {
+      blocks.push({ kind: 'notice', text: t(locale, 'recap.plantsUnavailable') });
     }
-    lines.push('');
+    for (const plant of review.topPlants.slice(0, RECAP_TOP_PLANTS)) {
+      const name =
+        plantNames.status === 'ok'
+          ? (plantNames.names.get(plant.plantId) ?? t(locale, 'recap.plantUnknown'))
+          : t(locale, 'recap.plantUnknown');
+      blocks.push({
+        kind: 'row',
+        title: name,
+        href: plantUrl(plant.plantId),
+        lines: [tn(locale, 'recap.count', plant.count)],
+      });
+    }
   }
-  lines.push(
-    `Thanks for keeping things growing — here's to an even greener ${review.year + 1}! 🌿`
-  );
-  return { subject, text: lines.join('\n') };
+
+  blocks.push({ kind: 'button', label: t(locale, 'recap.cta'), href: analyticsUrl() });
+  blocks.push({
+    kind: 'text',
+    text: t(locale, 'recap.closing', { year: formatYear(locale, review.year + 1) }),
+    tone: 'muted',
+  });
+
+  const links = [{ label: t(locale, 'footer.manage'), href: settingsUrl() }];
+  if (recipient.unsubscribeUrl) {
+    links.push({ label: t(locale, 'footer.unsubscribe'), href: recipient.unsubscribeUrl });
+  }
+
+  const { html, text } = renderEmail({
+    locale,
+    title: t(locale, 'recap.title', { year }),
+    preheader: t(locale, 'recap.preheader'),
+    blocks,
+    footer: {
+      reason: householdName
+        ? t(locale, 'footer.reason.household', { household: householdName })
+        : t(locale, 'footer.reason.householdGeneric'),
+      safety: t(locale, 'footer.safety'),
+      links,
+    },
+  });
+
+  return {
+    subject: t(locale, 'recap.subject', { year }),
+    text,
+    html,
+    headers: recipient.unsubscribeUrl
+      ? {
+          'List-Unsubscribe': `<${recipient.unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        }
+      : undefined,
+  };
 }
 
 /**
@@ -535,10 +617,14 @@ async function finalizeYearRecapSlot(
 
 /**
  * Send the year recap for ONE household to every member whose email channel
- * is enabled. Households with zero completions that year are skipped. Delivery
- * and dedupe are tracked per recipient, so an unconfigured SES sender or one
- * failed member never burns every household member's annual retry. Returns
- * how many recap emails went out.
+ * AND `yearRecap` pref are on. Households with zero completions that year are
+ * skipped. Delivery and dedupe are tracked per recipient, so an unconfigured
+ * SES sender or one failed member never burns every household member's annual
+ * retry. Returns how many recap emails went out.
+ *
+ * `yearRecap` is new. The recap used to be gated on `prefs.email` alone, so a
+ * user who explicitly unticked "Weekly plant digest" — the only summary
+ * opt-out the UI offered — still received the annual summary every January.
  */
 export async function recapHousehold(
   householdId: string,
@@ -548,17 +634,32 @@ export async function recapHousehold(
   const review = await taskService.getYearInReview(householdId, year);
   if (review.totalCompletions === 0) return 0;
 
-  // 'all' filter: a plant that died in December still earned its spot.
-  const plantNames = new Map(
-    (await plantService.getPlants(householdId, 'all')).map((p) => [p.id, p.name])
-  );
-  const { subject, text } = composeRecapEmail(review, plantNames);
+  // 'all' filter: a plant that died in December still earned its spot. A
+  // FAILED read is reported as such rather than letting every row render an
+  // "A former plant" label that asserts those plants are gone.
+  let plantNames: RecapPlantNames;
+  try {
+    plantNames = {
+      status: 'ok',
+      names: new Map((await plantService.getPlants(householdId, 'all')).map((p) => [p.id, p.name])),
+    };
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, householdId, msg: 'recap.plant_names_read_failed' },
+      'recap.plant_names_read_failed'
+    );
+    plantNames = { status: 'unavailable' };
+  }
+
+  const nameResult = await digestReport.readHouseholdName(householdId);
+  const householdName = nameResult.status === 'ok' ? nameResult.name : null;
 
   const members = await householdService.getHouseholdMembers(householdId);
+  const { ordered, prefs: allPrefs, householdLocale } = await readMemberPrefs(members);
   let sent = 0;
-  for (const member of members) {
-    const prefs = await notificationPrefs.getPreferences(member.userId);
-    if (!prefs.email) continue;
+  for (const member of ordered) {
+    const prefs = allPrefs.get(member.userId);
+    if (!prefs || !prefs.email || !prefs.yearRecap) continue;
     // The Jan 2 schedule is retried at several UTC hours for the same reason
     // as the weekly digest: respect each recipient's local quiet hours without
     // burning the annual marker.
@@ -566,9 +667,31 @@ export async function recapHousehold(
     if (await alreadyRecappedThisYear(member.userId, householdId, year, now)) continue;
     const reservationId = await reserveYearRecapSlot(member.userId, householdId, year, now);
     if (!reservationId) continue;
+    const context = await recipientContext(
+      member,
+      prefs.emailLocale,
+      householdLocale,
+      'year_recap'
+    );
+    const { subject, text, html, headers } = composeRecapEmail(
+      review,
+      plantNames,
+      {
+        name: member.name,
+        locale: context.locale,
+        unsubscribeUrl: context.unsubscribeUrl,
+      },
+      householdName
+    );
     try {
       // Count only real deliveries; a dry-run (unconfigured SES) returns false.
-      const delivered = await emailNotifier.sendEmail({ to: member.email, subject, text });
+      const delivered = await emailNotifier.sendEmail({
+        to: member.email,
+        subject,
+        text,
+        html,
+        headers,
+      });
       if (delivered) {
         sent += 1;
         await finalizeYearRecapSlot(member.userId, householdId, year, reservationId).catch(

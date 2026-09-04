@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
 import { householdService } from '@/services/householdService';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
@@ -21,6 +22,7 @@ const TYPE_LABELS: Record<string, string> = {
  * than show empty bars.
  */
 export function YearInReviewCard() {
+  const { t } = useTranslation();
   const { householdQuery } = useActiveHousehold();
   const year = new Date().getFullYear();
 
@@ -48,7 +50,7 @@ export function YearInReviewCard() {
         <Stat label="Total tasks completed" value={review.totalCompletions.toLocaleString()} />
         <Stat
           label="Top contributor"
-          value={topMember ? topMember.name : '—'}
+          value={topMember ? (topMember.name ?? t('analytics.unknownMember')) : '—'}
           sub={topMember ? `${topMember.count} tasks` : undefined}
         />
         <Stat

@@ -184,6 +184,45 @@ export async function getWeatherCached(lat: number, lon: number): Promise<Weathe
   return fresh.value;
 }
 
+export type CachedWeatherResult =
+  { status: 'ok'; snapshot: WeatherSnapshot } | { status: 'miss' } | { status: 'unavailable' };
+
+/**
+ * Read the household's cached weather snapshot and NOTHING else — no upstream
+ * call, no budget increment, no API key required.
+ *
+ * `getWeatherCached` above cannot be used from the email path for three
+ * reasons: it throws `not_configured` without `OPENWEATHER_API_KEY`, which the
+ * digests Lambda deliberately does not have (`local.email_environment`); it
+ * calls OpenWeatherMap on a cache miss; and it spends from the shared daily
+ * budget. A weekly digest is not worth widening any of that. If a fresh
+ * snapshot happens to be in the cache — put there by the household opening the
+ * app, which is the common case — the digest uses it, and otherwise it says
+ * nothing about the weather.
+ *
+ * Three outcomes, kept distinct. `miss` means there is no recent snapshot, so
+ * the digest makes no weather claim. `unavailable` means the cache READ
+ * failed, so the digest says it could not check. Collapsing those two would
+ * render a DynamoDB blip as "no weather worth mentioning", which is this
+ * repo's named defect class (ADR 0010) — and it is why this does not reuse
+ * `readCache`, whose catch returns null for both.
+ */
+export async function peekCachedWeather(lat: number, lon: number): Promise<CachedWeatherResult> {
+  const sk = `WEATHER#${quantize(lat)},${quantize(lon)}`;
+  try {
+    const result = await dynamodb.send(
+      new GetCommand({ TableName: TABLE_NAME, Key: { PK: 'WEATHER#CACHE', SK: sk } })
+    );
+    const row = result.Item as CacheRow<WeatherSnapshot> | undefined;
+    if (!row) return { status: 'miss' };
+    if (row.ttl && row.ttl < Math.floor(Date.now() / 1000)) return { status: 'miss' };
+    return { status: 'ok', snapshot: row.payload };
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, sk }, 'weather.peek_read_failed');
+    return { status: 'unavailable' };
+  }
+}
+
 /**
  * Derived care advice from current conditions. The advisor is intentionally
  * blunt — we don't want a five-paragraph essay on the dashboard. Each tip

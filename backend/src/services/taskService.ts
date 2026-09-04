@@ -779,7 +779,14 @@ export async function getHouseholdActivity(
 export interface YearInReview {
   year: number;
   totalCompletions: number;
-  byMember: Array<{ userId: string; name: string; count: number }>;
+  /**
+   * Per-member completion counts. `name` is null when the completion rows
+   * carried no display name: it used to fall back to the raw `userId`, which
+   * printed a Cognito sub under the recap email's "Who did the work" heading
+   * as though it were a person's name. Null is "we do not have a name",
+   * rendered as an explicit unknown by every consumer.
+   */
+  byMember: Array<{ userId: string; name: string | null; count: number }>;
   byTaskType: Array<{ type: string; count: number }>;
   /**
    * EVERY plant with at least one completion this year, most-completed
@@ -815,17 +822,19 @@ export async function getYearInReview(householdId: string, year: number): Promis
   });
 
   const items = allItems.filter((i) => i.entityType === 'TaskCompletion');
-  const memberCounts = new Map<string, { name: string; count: number }>();
+  const memberCounts = new Map<string, { name: string | null; count: number }>();
   const typeCounts = new Map<string, number>();
   const plantCounts = new Map<string, number>();
 
   for (const it of items) {
     const userId = it.completedBy as string;
-    const name = (it.completedByName as string) ?? userId;
+    const name = (it.completedByName as string | undefined) ?? null;
     const type = it.taskType as string;
     const plantId = it.plantId as string;
     const m = memberCounts.get(userId);
-    memberCounts.set(userId, { name, count: (m?.count ?? 0) + 1 });
+    // Keep the first real name we see: one unnamed row must not erase a
+    // member whose other completions do carry a name.
+    memberCounts.set(userId, { name: m?.name ?? name, count: (m?.count ?? 0) + 1 });
     typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
     plantCounts.set(plantId, (plantCounts.get(plantId) ?? 0) + 1);
   }

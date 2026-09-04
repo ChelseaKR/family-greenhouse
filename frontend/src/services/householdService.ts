@@ -397,7 +397,10 @@ export async function listMyHouseholds(): Promise<Membership[]> {
 export interface YearInReview {
   year: number;
   totalCompletions: number;
-  byMember: Array<{ userId: string; name: string; count: number }>;
+  /** `name` is null when the stored completion rows carried no display name.
+   *  It used to be the raw userId, which rendered a Cognito sub as a person's
+   *  name; consumers render an explicit unknown label instead. */
+  byMember: Array<{ userId: string; name: string | null; count: number }>;
   byTaskType: Array<{ type: string; count: number }>;
   /** Every plant with ≥1 completion this year, most-completed first — NOT a
    *  capped top-N, so absence from this list is a genuine zero. */
