@@ -51,6 +51,9 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 playwright-report/
+# Per-shard Playwright output (`--reporter=blob`), merged back into one
+# playwright-report/ by CI's "E2E report (merged)" job.
+blob-report/
 test-results/
 .lighthouseci/
 

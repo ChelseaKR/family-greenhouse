@@ -467,16 +467,35 @@ jobs:
         working-directory: frontend
         run: npm run size
 
-  e2e-a11y:
-    name: E2E + accessibility (Playwright)
+  e2e-shard:
+    name: E2E shard
     runs-on: ubuntu-latest
-    # No `needs: [build]`. Playwright's `webServer` block builds and previews
-    # the frontend itself (`npm run build && npm run preview`, see
-    # frontend/playwright.config.ts), so this job never used the `Build`
-    # artifact either. It was the tail of the critical path — ~315s starting
-    # only after `Build`, which started only after `Test Frontend` — and it is
-    # the single change that takes a frontend PR from ~12 minutes to ~5.5.
-    # Still a required check.
+    # No `needs: [build]` — #499 removed it, and it stays removed. Playwright's
+    # `webServer` block builds and previews the frontend itself, so this job
+    # starts at t+0. Reusing the `Build` job's `frontend-dist` artifact instead
+    # was measured and rejected: `Build` finishes ~67s in, and downloading it
+    # saves only the ~18s rebuild, so `needs: [build]` would cost ~47s net.
+    #
+    # #499 took this job off the critical path's *tail position*; it did not
+    # make it fast. It was still ~314s of wall clock, 260s of which was 109
+    # tests on a single Playwright worker. Splitting `--shard=N/4` across four
+    # runners is the part that makes it fast.
+    #
+    # Why sharding and not `workers: > 1` inside one job: the local backend
+    # boots ONE in-memory DB per server, and specs that touch the well-known
+    # seed account (test@example.com) race each other when they run
+    # concurrently against it — the collision that `tests/e2e/helpers.ts` was
+    # written to document. Each shard is a separate runner with its own backend
+    # and its own fresh seed, so partitioning across shards cannot reintroduce
+    # that race, while raising in-job workers would. Each shard stays at one
+    # worker.
+    strategy:
+      # Every shard reports; a failure in shard 2 must not hide a different
+      # failure in shard 4. The gate job below is what turns these into one
+      # required check.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -492,17 +511,135 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Resolve the installed Playwright version
+        # Keyed off the version npm actually installed from the lockfile, not a
+        # hand-copied string: a lockfile bump then misses the cache and
+        # redownloads, which is the correct behaviour. Browser builds are
+        # version-locked to the client, so a stale cache would fail loudly
+        # ("Executable doesn't exist"), never silently run the wrong browser.
+        id: playwright
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('@playwright/test/package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Run e2e + a11y suite
+      - name: Install Playwright OS dependencies
+        # The cache holds the browser build, not the apt packages it links
+        # against, so the OS deps are still installed on a cache hit — this is
+        # the cheap half of the ~27s the full install cost.
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run e2e + a11y suite (shard ${{ matrix.shard }} of 4)
         working-directory: frontend
-        run: npm run test:e2e -- --project=chromium
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: npm run test:e2e -- --project=chromium --shard="$SHARD/4" --reporter=blob
+
+      - name: Upload shard blob report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-blob-${{ matrix.shard }}
+          path: frontend/blob-report
+          if-no-files-found: ignore
+
+  e2e-a11y:
+    # Name is load-bearing: `E2E + accessibility (Playwright)` is a required
+    # status check on `main`. Sharding renames the job that does the work to
+    # `E2E shard (N)`, so this aggregate keeps the required context reporting
+    # and the ruleset needs no edit. It is deliberately a real gate, not a
+    # formality — it fails whenever the shard matrix is anything but wholly
+    # successful, including cancelled and skipped, so there is no result value
+    # that lets a broken suite through.
+    name: E2E + accessibility (Playwright)
+    runs-on: ubuntu-latest
+    needs: [e2e-shard]
+    if: always()
+    steps:
+      - name: Require every E2E shard to have passed
+        env:
+          SHARDS_RESULT: ${{ needs.e2e-shard.result }}
+        run: |
+          set -euo pipefail
+          echo "E2E shard matrix result: $SHARDS_RESULT"
+          if [ "$SHARDS_RESULT" != "success" ]; then
+            echo "::error::E2E shards did not all pass (aggregate result: $SHARDS_RESULT)."
+            exit 1
+          fi
+
+  e2e-report:
+    # Merges the four shard blobs back into the single HTML report this job used
+    # to publish, and prints the executed/skipped totals so a shard silently
+    # dropping tests is visible in the log. That printout is also the standing
+    # evidence that `visual-regression.spec.ts`'s ten specs are skipped in CI
+    # (#472) — today that fact is invisible unless you open the report.
+    #
+    # Not a required check: it produces an artifact, so keeping it off the
+    # required list means report generation never sits on merge latency. The
+    # pass/fail decision lives entirely in `e2e-a11y` above.
+    name: E2E report (merged)
+    runs-on: ubuntu-latest
+    needs: [e2e-shard]
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download shard blob reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: e2e-blob-*
+          merge-multiple: true
+          path: all-blob-reports
+
+      - name: Merge into one HTML report
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Report the executed test totals
+        # The suite is sharded, so "did every test still run?" is no longer
+        # answerable from one job's summary. Merge to JSON and print the counts.
+        # Deliberately printed rather than asserted against a hand-written
+        # expected number: a checked-in test-count constant is the kind of gate
+        # that makes every test-adding PR rewrite the same line and jams the
+        # merge queue (see the note in docs/testing.md about this file's own
+        # retired Files column).
+        run: |
+          set -euo pipefail
+          npx playwright merge-reports --reporter json ./all-blob-reports > merged.json
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync("merged.json", "utf8")).stats;
+            console.log(`expected(passed)=${s.expected} unexpected(failed)=${s.unexpected} flaky=${s.flaky} skipped=${s.skipped} total=${s.expected + s.unexpected + s.flaky + s.skipped}`);
+          '
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
-          path: frontend/playwright-report
+          path: playwright-report
           if-no-files-found: ignore

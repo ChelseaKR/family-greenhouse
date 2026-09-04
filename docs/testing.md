@@ -156,14 +156,31 @@ beforeEach(async () => {
 
 ## End-to-end
 
-Playwright runs against the real Vite dev server + the real Express mock backend. The config at `frontend/playwright.config.ts` boots both webservers automatically:
+Playwright runs against the real production bundle (`vite preview`, not `vite dev` — the dev server's Firefox parser uses `eval`, which our production CSP correctly blocks) plus the real Express mock backend. The config at `frontend/playwright.config.ts` boots both webservers automatically:
 
 ```ts
 webServer: [
-  { command: 'npm --workspace backend run dev', url: 'http://localhost:4000/health', cwd: '..' },
-  { command: 'npm run dev', url: 'http://localhost:3000' },
+  {
+    command: 'ALLOW_TEST_ACCOUNT_PROVISIONING=1 npm --workspace backend run dev',
+    url: 'http://localhost:4000/health',
+    cwd: '..',
+  },
+  { command: 'npm run build && npm run preview', url: 'http://localhost:3000' },
 ],
 ```
+
+**Sharding.** CI splits the suite across four runners with Playwright's
+`--shard=N/4`, each at one worker. One worker per shard is deliberate: the local
+backend boots a single in-memory DB, so specs touching the shared seed account
+(`test@example.com`) race each other if they run concurrently against the _same_
+server — the collision documented at the top of `tests/e2e/helpers.ts`. Separate
+shards are separate runners with separate backends and separate seeds, so
+partitioning across them is safe where raising in-job workers would not be.
+
+Shards publish `--reporter=blob` output that the `E2E report (merged)` job merges
+back into one `playwright-report/`, printing the executed and skipped totals as
+it goes. The required `E2E + accessibility (Playwright)` check is an aggregate
+job that fails unless every shard succeeded.
 
 Twenty-two specs run across Chromium, Firefox, WebKit, Mobile Chrome and Mobile
 Safari. They fall into four groups:
