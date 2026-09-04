@@ -18,6 +18,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **The inbound-mail forwarder no longer relays a message whose scan never
+  finished.** It refused only an explicit `FAIL`, so three states reached the
+  maintainer's inbox untouched: `GRAY` (scanned, inconclusive),
+  `PROCESSING_FAILED` (the scan did not complete — what SES reports under load
+  or on a message too large to scan), and no verdict at all. Since the
+  forwarder re-sends from the project's DKIM-aligned domain, anything it let
+  through arrived with that reputation applied, on the addresses `security@`
+  and `abuse@`. It now relays only on an explicit `PASS` from both scans, logs
+  the three refusals distinctly with the S3 key the raw message is kept at, and
+  raises a CloudWatch alarm when a message is refused for an unverified scan so
+  a wrongly-refused report is not lost in a log group.
+
 - **Move Day's frost warning no longer shrinks when a lookup fails.** A plant
   whose saved species record could not be read was dropped from the
   frost-tender list exactly as though it had been checked and found hardy —

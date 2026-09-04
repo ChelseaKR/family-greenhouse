@@ -86,3 +86,9 @@ variable "email_forwarder_dlq_name" {
   type        = string
   default     = ""
 }
+
+variable "email_forwarder_log_group_name" {
+  description = "CloudWatch log group of the inbound-mail forwarder. Empty (no domain / email module not provisioned) disables the unverified-scan filter and alarm."
+  type        = string
+  default     = ""
+}

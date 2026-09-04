@@ -347,7 +347,8 @@ module "monitoring" {
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.
-  email_forwarder_dlq_name = var.domain_name == "" ? "" : module.email[0].forwarder_dlq_name
+  email_forwarder_dlq_name       = var.domain_name == "" ? "" : module.email[0].forwarder_dlq_name
+  email_forwarder_log_group_name = var.domain_name == "" ? "" : module.email[0].forwarder_log_group_name
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its

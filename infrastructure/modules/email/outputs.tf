@@ -13,6 +13,11 @@ output "forwarder_dlq_name" {
   value       = aws_sqs_queue.forwarder_dlq.name
 }
 
+output "forwarder_log_group_name" {
+  description = "CloudWatch log group of the inbound-mail forwarder — feed into the monitoring module so a message refused for an unverified scan raises an alarm instead of only a log line."
+  value       = aws_cloudwatch_log_group.forwarder.name
+}
+
 output "configuration_set_name" {
   description = "SES configuration set the backend attaches to every send — feed into the api module so SES_CONFIGURATION_SET reaches the Lambdas. Without it SES publishes no bounce/complaint events at all."
   value       = aws_sesv2_configuration_set.main.configuration_set_name
