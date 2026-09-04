@@ -22,7 +22,7 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,633 vitest cases** — 1,773 backend, 860 frontend — as of 2026-09-02. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,633 vitest cases** — 1,773 backend, 860 frontend — as of 2026-09-02. The backend suite runs in ~17s. The frontend suite runs its files in parallel across a worker-thread pool (`frontend/vitest.config.ts`); it took ~80s here when it ran them one at a time, and roughly a quarter of that once spread across cores. Each file still gets its own jsdom and module registry, and coverage is still collected over the whole suite in one process, so the floors below mean what they say.
 
 All Playwright specs but two run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 
