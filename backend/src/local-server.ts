@@ -51,6 +51,7 @@ import {
   planHasFeature,
   hasHouseholdToolkit,
   planIncludesAwayKit,
+  planIncludesCrossHomeToday,
 } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
@@ -73,6 +74,12 @@ import {
   resolveTargetPlan,
   type UpgradeFeature,
 } from './models/upgradeFeatures.js';
+import {
+  CROSS_HOME_TODAY_LOCKED_MESSAGE,
+  InvalidUntilError,
+  isDueBy,
+  resolveCutoff,
+} from './models/crossHomeToday.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -1148,6 +1155,56 @@ app.get('/me/households', authMiddleware, (req, res) => {
     };
   });
   res.json(list);
+});
+
+// GET /me/today
+// Cross-home Today (ADR 0017). Mirrors handlers/me/today.ts +
+// services/crossHomeToday.ts: due-by-cutoff and overdue tasks across EVERY
+// membership, grouped by household with the household name on every row,
+// the membership's own role per group, and a household whose row is gone
+// returned as an explicit `unavailable` entry rather than dropped. Not
+// household-pinned; the gate is per user across every membership.
+app.get('/me/today', authMiddleware, (req, res) => {
+  const user = (req as any).user;
+  const memberships = db.users.get(user.userId)?.memberships ?? [];
+
+  let cutoff: string;
+  try {
+    cutoff = resolveCutoff(typeof req.query.until === 'string' ? req.query.until : undefined);
+  } catch (err) {
+    if (err instanceof InvalidUntilError) return res.status(400).json({ message: err.message });
+    throw err;
+  }
+
+  const entitled = memberships.some((m) =>
+    planIncludesCrossHomeToday(PLANS[db.households.get(m.householdId)?.planId ?? 'seedling'])
+  );
+  if (!entitled) {
+    return res.status(402).json({ message: CROSS_HOME_TODAY_LOCKED_MESSAGE });
+  }
+
+  const households = memberships.map((m) => {
+    const h = db.households.get(m.householdId);
+    if (!h) {
+      return {
+        householdId: m.householdId,
+        name: null,
+        role: m.role,
+        status: 'unavailable' as const,
+      };
+    }
+    const due = [...db.tasks.values()]
+      .filter(
+        (t) => t.householdId === h.id && isActivePlant(t.plantId) && isDueBy(t.nextDue, cutoff)
+      )
+      .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
+      .map((t) => ({ ...t, plantName: db.plants.get(t.plantId)?.name ?? t.plantName }));
+    const tasks = annotateCoverage(due, h.id).map((t) => ({ ...t, householdName: h.name }));
+    return { householdId: m.householdId, name: h.name, role: m.role, status: 'ok' as const, tasks };
+  });
+
+  res.set('Cache-Control', 'private, no-store');
+  res.json({ generatedAt: new Date().toISOString(), cutoff, households });
 });
 
 // GET /me/export

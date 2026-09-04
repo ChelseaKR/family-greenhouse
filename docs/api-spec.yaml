@@ -807,6 +807,56 @@ paths:
               schema:
                 type: array
                 items: { type: object }
+  /me/today:
+    get:
+      summary: Cross-home Today — due-today and overdue tasks across every household the caller belongs to, grouped by household
+      description: |
+        A work queue, not a global inventory (ADR 0017). Each household the
+        caller is a member of is resolved with that household's membership
+        role and returned as its own group with the household name on every
+        row; nothing is merged across homes. A household whose read fails is
+        returned as an explicit `status: unavailable` entry, never dropped.
+        Not pinned to the active household — `X-Household-Id` is ignored for
+        the read. Acting on a row goes through the ordinary task routes with
+        an explicit `X-Household-Id` for that row's household. Greenhouse
+        plan: 402 when no household of the caller's includes it.
+      tags: [Me]
+      parameters:
+        - in: query
+          name: until
+          required: false
+          description: The caller's local end-of-day as an ISO-8601 date-time. Defaults to the end of the UTC day; must be within 48 hours of now.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Due and overdue work, grouped by household
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generatedAt, cutoff, households]
+                properties:
+                  generatedAt: { type: string, format: date-time }
+                  cutoff: { type: string, format: date-time }
+                  households:
+                    type: array
+                    items:
+                      type: object
+                      required: [householdId, name, role, status]
+                      properties:
+                        householdId: { type: string, format: uuid }
+                        name: { type: string, nullable: true }
+                        role: { type: string, enum: [admin, member] }
+                        status: { type: string, enum: [ok, unavailable] }
+                        tasks:
+                          description: Present only when status is `ok`. Each row is a task plus `householdName`.
+                          type: array
+                          items: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402':
+          description: No household of the caller's is on a plan that includes cross-home Today
+        '503':
+          description: Plan entitlement could not be verified; retry later
   /me/calendar.ics:
     get:
       summary: Authenticated one-shot iCalendar download of the active household's tasks. JWT-guarded, so it is NOT a subscription URL — calendar apps carry no session. Subscribe via /calendar/{token}/family-greenhouse.ics instead.

@@ -247,7 +247,8 @@
     "tasks": "Tareas",
     "household": "Hogar",
     "settings": "Ajustes",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "today": "Hoy, en todos tus hogares"
   },
   "publicShell": {
     "careGuides": "Guías de cuidado",
@@ -593,6 +594,38 @@
       "title": "Antes de marcar {{plant}} como hecha",
       "confirm": "Marcar como hecha"
     }
+  },
+  "today": {
+    "title": "Hoy, en todos tus hogares",
+    "eyebrow": "Cada hogar que cuidas",
+    "description": "Todo lo que vence hoy, y lo que ya está atrasado, en cada hogar al que perteneces. Cada fila indica de qué hogar es: es la lista de trabajo del día, no una lista de plantas mezcladas.",
+    "loading": "Cargando el trabajo de hoy en todos tus hogares…",
+    "lockedTitle": "Incluido con Greenhouse",
+    "lockedDescription": "Greenhouse es para muchos hogares y muchas manos: hogares ilimitados, miembros ilimitados y esta única lista de lo que vence hoy en todos ellos. Tus hogares siguen separados; solo ves el trabajo del día en un mismo lugar.",
+    "lockedUpgrade": "Mejora cualquiera de tus hogares a Greenhouse y todos los hogares a los que perteneces aparecerán aquí.",
+    "lockedPaused": "Los cambios de plan de pago están en pausa por ahora, así que todavía no se puede activar.",
+    "viewPlanStatus": "Ver estado del plan",
+    "roleAdmin": "administrador",
+    "roleMember": "miembro",
+    "overdueCount_one": "{{count}} atrasada",
+    "overdueCount_many": "{{count}} atrasadas",
+    "overdueCount_other": "{{count}} atrasadas",
+    "dueTodayCount_one": "{{count}} vence hoy",
+    "dueTodayCount_many": "{{count}} vencen hoy",
+    "dueTodayCount_other": "{{count}} vencen hoy",
+    "dueToday": "Vence hoy",
+    "assignedTo": "Asignada a {{name}}",
+    "inHome": "En {{name}}",
+    "openHome": "Abrir {{name}}",
+    "nothingDue": "Nada vence hoy en {{name}}.",
+    "unavailableTitle": "No pudimos conectar con este hogar",
+    "unavailableBody": "{{name}} no respondió en este momento, así que sus tareas no se muestran. Eso no significa que no tenga nada pendiente.",
+    "unavailableUnnamed": "Uno de tus hogares",
+    "retry": "Reintentar",
+    "noHomes": "Todavía no formas parte de ningún hogar.",
+    "addHome": "Añadir un hogar",
+    "completeAria": "Marcar {{plant}} como hecho en {{name}}",
+    "completedToast": "Hecho: {{plant}} en {{name}}"
   },
   "household": {
     "climateChecking": "Comprobando la disponibilidad del clima…",

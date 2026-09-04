@@ -237,7 +237,8 @@
     "tasks": "Tasks",
     "household": "Household",
     "settings": "Settings",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "today": "Today, across your homes"
   },
   "publicShell": {
     "careGuides": "Care guides",
@@ -579,6 +580,36 @@
       "title": "Before you mark {{plant}} done",
       "confirm": "Mark done"
     }
+  },
+  "today": {
+    "title": "Today, across your homes",
+    "eyebrow": "Every home you help with",
+    "description": "Everything due today, and anything overdue, in each home you belong to. Each row says which home it's in — this is one day's work queue, not one merged plant list.",
+    "loading": "Loading today's work across your homes…",
+    "lockedTitle": "Included with Greenhouse",
+    "lockedDescription": "Greenhouse is for many homes and many hands: unlimited homes, unlimited members, and this one list of what's due today across all of them. Your homes stay separate — you just see the day's work in one place.",
+    "lockedUpgrade": "Upgrade any one of your households to Greenhouse and every home you belong to shows up here.",
+    "lockedPaused": "Paid plan changes are paused right now, so this can't be switched on yet.",
+    "viewPlanStatus": "View plan status",
+    "roleAdmin": "admin",
+    "roleMember": "member",
+    "overdueCount_one": "{{count}} overdue",
+    "overdueCount_other": "{{count}} overdue",
+    "dueTodayCount_one": "{{count}} due today",
+    "dueTodayCount_other": "{{count}} due today",
+    "dueToday": "Due today",
+    "assignedTo": "Assigned to {{name}}",
+    "inHome": "In {{name}}",
+    "openHome": "Open {{name}}",
+    "nothingDue": "Nothing due today at {{name}}.",
+    "unavailableTitle": "We couldn't reach this home",
+    "unavailableBody": "{{name}} didn't answer just now, so its tasks aren't shown. That is not the same as having nothing due.",
+    "unavailableUnnamed": "One of your homes",
+    "retry": "Try again",
+    "noHomes": "You're not part of any household yet.",
+    "addHome": "Add a household",
+    "completeAria": "Mark {{plant}} done at {{name}}",
+    "completedToast": "Done: {{plant}} at {{name}}"
   },
   "household": {
     "climateChecking": "Checking climate availability…",

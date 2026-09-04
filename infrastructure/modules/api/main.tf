@@ -970,6 +970,7 @@ locals {
     "DELETE /me"                = { group = "me", auth = "jwt" }
     "GET /me/export"            = { group = "me", auth = "jwt" }
     "GET /me/households"        = { group = "me", auth = "jwt" }
+    "GET /me/today"             = { group = "me", auth = "jwt" }
     "GET /me/calendar.ics"      = { group = "me", auth = "jwt" }
     "GET /me/calendar-token"    = { group = "me", auth = "jwt" }
     "POST /me/calendar-token"   = { group = "me", auth = "jwt" }

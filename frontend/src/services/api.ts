@@ -67,7 +67,14 @@ api.interceptors.request.use(
     // header still can't read another household's data. See buildAuthHeaders.
     if (config.headers) {
       const headers = buildAuthHeaders(useAuthStore.getState());
+      // A request that already carries X-Household-Id addressed a specific
+      // home on purpose — cross-home Today acting on a row from a household
+      // other than the active one (ADR 0017). The active-household pin must
+      // not overwrite it; the backend still membership-checks whatever is
+      // sent, so this widens nothing.
+      const explicitHousehold = config.headers.get('X-Household-Id');
       for (const [k, v] of Object.entries(headers)) {
+        if (k === 'X-Household-Id' && explicitHousehold) continue;
         config.headers[k] = v;
       }
     }
