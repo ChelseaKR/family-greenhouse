@@ -120,7 +120,20 @@ export function resolveHead(meta: MetaTags | null, path: string | null): Resolve
     twitterTitle: ogTitle,
     twitterDescription,
     twitterImage: meta?.ogImage ?? DEFAULT_TWITTER_IMAGE,
-    robots: meta?.robots ?? 'index, follow',
+    // Same `path === null` condition as the canonical above, for the same
+    // reason. That output is `dist/app-shell.html`, which CloudFront returns
+    // for EVERY path the prerender did not produce a file for — so one
+    // indexable shell would offer Google `/dashboard`, `/typo`, and every
+    // token-scoped URL (`/sit/<token>`, `/tag/<token>`, `/kiosk/<token>`,
+    // `/shared/<code>`) as a real page. ADR 0013 decided the shell carries a
+    // `noindex` for exactly this reason; it was the one part of that decision
+    // the code never implemented. `follow` rather than `nofollow` because the
+    // shell's `#root` is empty — there is nothing to follow — and `noindex,
+    // follow` is the conservative catch-all.
+    //
+    // A route that renders its own page is unaffected: prerendered files pass
+    // a real `path` and keep `index, follow`.
+    robots: meta?.robots ?? (path === null ? 'noindex, follow' : 'index, follow'),
     jsonLd: meta?.jsonLd,
   };
 }
