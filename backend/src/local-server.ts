@@ -59,6 +59,13 @@ import {
   nextDueAfterMatch,
   pickRecentDuplicate,
 } from './services/doubleCareRules.js';
+import {
+  UPGRADE_FEATURES,
+  REQUEST_WINDOW_MS,
+  composeUpgradeRequestEmail,
+  resolveTargetPlan,
+  type UpgradeFeature,
+} from './models/upgradeFeatures.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -395,6 +402,9 @@ export const db = {
   sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
   calendarTokens: new Map<string, CalendarToken>(), // keyed by token (the secret)
   kioskLinks: new Map<string, KioskLink>(), // keyed by token (the secret)
+  // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
+  // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
+  upgradeRequests: new Map<string, { requestedAt: string }>(),
   // Tiny local object store used by the real browser upload flow. A presign
   // creates a capability token, PUT stores the bytes, confirm verifies the
   // object exists, and /mock-images serves the confirmed URL from this API.
@@ -431,6 +441,7 @@ export function resetDb(): void {
   db.sitterLinks.clear();
   db.calendarTokens.clear();
   db.kioskLinks.clear();
+  db.upgradeRequests.clear();
   db.mockUploadGrants.clear();
   db.mockImages.clear();
 
@@ -1697,6 +1708,111 @@ function getActiveKioskLink(token: string): KioskLink | null {
   if (!link || link.status !== 'active') return null;
   return link;
 }
+
+// --- Member → admin upgrade requests -----------------------------------------
+// Mirrors handlers/households/upgradeRequests.ts + services/upgradeRequests.ts:
+// a MEMBER names a locked feature; every admin is told (the email is printed
+// here, like invites) and the ask lands in the activity feed. Once per member
+// per feature per 7 days.
+
+// Mirrors upgradeRequestSchema in handlers/households/upgradeRequests.ts.
+const upgradeRequestSchema = z.object({ feature: z.enum(UPGRADE_FEATURES) });
+
+// POST /households/:id/upgrade-requests
+app.post(
+  '/households/:id/upgrade-requests',
+  authMiddleware,
+  requireHousehold,
+  validateBody(upgradeRequestSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const householdId = String(req.params.id);
+    if (user.householdId !== householdId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (user.householdRole === 'admin') {
+      return res.status(409).json({
+        message:
+          'You are an admin of this household — you can change the plan yourself in Settings → Billing.',
+      });
+    }
+    if (!paymentsAreAvailable()) {
+      return res.status(503).json({ message: 'Payments are currently paused.' });
+    }
+    const feature = (req as any).validatedBody.feature as UpgradeFeature;
+    const household = db.households.get(householdId);
+    const targetPlanId = resolveTargetPlan(feature, household?.planId ?? 'seedling');
+    if (!targetPlanId) {
+      return res
+        .status(409)
+        .json({ message: 'Your household already has this. Reload to see it.' });
+    }
+    const members = membersOf(householdId);
+    const admins = members.filter((m) => m.role === 'admin' && m.userId !== user.userId);
+    if (admins.length === 0) {
+      return res.status(409).json({ message: 'This household has no admin to ask.' });
+    }
+
+    const key = `${householdId}|${feature}|${String(user.userId)}`;
+    const now = new Date();
+    const previous = db.upgradeRequests.get(key);
+    if (previous && now.getTime() - Date.parse(previous.requestedAt) < REQUEST_WINDOW_MS) {
+      return res.status(429).json({
+        message: 'You already asked for this recently. You can ask again once a week.',
+        details: {
+          nextAllowedAt: new Date(
+            Date.parse(previous.requestedAt) + REQUEST_WINDOW_MS
+          ).toISOString(),
+        },
+      });
+    }
+    db.upgradeRequests.set(key, { requestedAt: now.toISOString() });
+
+    const memberName =
+      members.find((m) => m.userId === user.userId)?.name?.trim() || 'A household member';
+    const householdName = household?.name?.trim() || 'your household';
+    const appUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+    for (const admin of admins) {
+      const { subject, text } = composeUpgradeRequestEmail({
+        adminName: admin.name,
+        memberName,
+        householdName,
+        feature,
+        targetPlanId,
+        appUrl,
+      });
+      console.log('\n========================================');
+      console.log('UPGRADE REQUEST EMAIL (dev — nothing sent)');
+      console.log(`To: ${admin.email}`);
+      console.log(`Subject: ${subject}`);
+      console.log(text);
+      console.log('========================================\n');
+    }
+
+    recordActivity({
+      type: 'upgrade.requested',
+      householdId,
+      actorId: user.userId,
+      actorName: memberName,
+      payload: { feature, plan: targetPlanId },
+    });
+
+    res.status(201).json({
+      feature,
+      targetPlanId,
+      requestedAt: now.toISOString(),
+      nextAllowedAt: new Date(now.getTime() + REQUEST_WINDOW_MS).toISOString(),
+      admins: admins.map((a) => ({ userId: a.userId, name: a.name })),
+      // The dev server prints the email; nothing leaves the building, and the
+      // response says so instead of claiming a delivery.
+      emailDelivered: false,
+      pushDelivered: false,
+    });
+  }
+);
 
 /** Token → link only if active and within [startsAt, expiresAt]. Generic
  *  null on any miss, mirroring sitterService.getActiveLink. */

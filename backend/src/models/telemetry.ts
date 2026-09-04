@@ -103,6 +103,7 @@ export const productEventNames = [
   'shared_care_pulse_action',
   'climate_location_set',
   'experiment_viewed',
+  'upgrade_requested',
 ] as const;
 
 export const productTelemetrySchema = z

@@ -74,6 +74,24 @@ The "Upgrade to X" button on `BillingSettings` does:
 
 The portal flow ("Manage subscription") is the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI.
 
+### Members ask, admins buy
+
+Checkout and the portal are `requireAdmin`, so a plain member who hits a paid feature cannot buy it. Rather than hiding the feature, the UI renders it **locked** (`frontend/src/components/LockedFeature.tsx`): what it is, which plan includes it at what monthly price, and a one-tap "Ask _admin name_ to upgrade". The tap calls `POST /households/{id}/upgrade-requests` (`backend/src/handlers/households/upgradeRequests.ts`), which:
+
+- resolves the tier the ask is really for from the household's current plan (`backend/src/models/upgradeFeatures.ts` — cap-shaped features resolve against the live catalog, so a re-cut of `plans.ts` does not strand them);
+- resolves **every** admin of the household from the membership rows (never the requester), and sends each an email through SES plus a browser/native push through the normal notifier fan-out, both naming the feature;
+- records an `upgrade.requested` row in the household activity feed so the ask stays visible in-app;
+- refuses a repeat for the same member + feature inside **7 days** with a DynamoDB conditional Put on `HOUSEHOLD#{id} / UPGRADE_REQUEST#{feature}#{userId}` (429, `details.nextAllowedAt`), which is also what bounds the feature's cost to at most one SES send per admin per member per feature per week;
+- answers 409 to an admin (they hold the real controls), 409 when the plan already includes the feature, and 503 while payment activity is paused — an ask nobody can act on is noise.
+
+Nothing on this path touches Stripe. Delivery flags in the response are honest: `emailDelivered: false` means no email left the building (failed or unconfigured), and the card says so instead of claiming success.
+
+Adopting the lock on a new gated surface is three steps: add the feature id to `FEATURE_CATALOG` in `backend/src/models/upgradeFeatures.ts` (mirror it in `frontend/src/services/upgradeRequestService.ts`), add `locked.features.<id>` to both i18n catalogs, and wrap the gated UI in `<LockedFeature feature="<id>">`.
+
+### Split the bill
+
+On each paid tier card in Settings → Billing, `frontend/src/features/pricing/SplitTheBill.tsx` prints "$4.99 ÷ 4 members ≈ $1.25 each" from the live catalog price and the household's active member count (`usageDetail.memberCount` from `GET /billing/me`). The arithmetic is integer cents (`billSplit.ts`): the shares always sum to the total and an uneven split states the exact breakdown. A share action uses the Web Share API where available and copies a plain-text line otherwise. It hides itself for a household of one and whenever the member count is unknown — an unreadable count is never rendered as a split. The app never collects from members; one subscription covers the household.
+
 ## Usage response contract
 
 `GET /billing/me` returns the household's subscription state and two usage

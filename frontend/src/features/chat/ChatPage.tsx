@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   PaperAirplaneIcon,
@@ -20,11 +19,10 @@ import { ProposalCard } from './ProposalCard';
 import { historyToDisplayMessages, type DisplayMessage } from './chatHistory';
 import { ReportResponseControl } from './ReportResponseControl';
 import { billingService } from '@/services/billingService';
-import { COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 import { Alert } from '@/components/Alert';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
-import { buttonStyles } from '@/components/buttonStyles';
+import { LockedFeature } from '@/components/LockedFeature';
 
 /**
  * Plant care chat — Bedrock-backed Claude with read-only tool access to the
@@ -226,21 +224,13 @@ export function ChatPage() {
   }
 
   if (!chatAvailable) {
+    // Locked, not hidden (brief §7d): the member sees what chat is, which
+    // plan includes it, and can ask the admins for it in one tap. Admins get
+    // the change-plan link instead.
     return (
-      <Card>
-        <CardHeader
-          title={t('chat.seedlingUnavailableTitle')}
-          description={t('chat.seedlingUnavailableDescription')}
-        />
-        <Alert variant="info">
-          {COMMERCIAL_HOLD_ACTIVE
-            ? t('chat.seedlingUnavailablePaused')
-            : t('chat.seedlingUnavailableUpgrade')}
-        </Alert>
-        <Link to="/settings/billing" className={buttonStyles({ className: 'mt-4' })}>
-          {t('chat.viewPlanStatus')}
-        </Link>
-      </Card>
+      <LockedFeature feature="chat" title={t('chat.seedlingUnavailableTitle')}>
+        {t('chat.seedlingUnavailableDescription')}
+      </LockedFeature>
     );
   }
 

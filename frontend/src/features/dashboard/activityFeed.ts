@@ -29,6 +29,7 @@ const ACTIVITY_CATEGORIES: Record<ActivityType, ActivityCategory> = {
   'sitter_link.created': 'people',
   'sitter_link.revoked': 'people',
   'task.schedule_matched': 'tasks',
+  'upgrade.requested': 'people',
 };
 
 export function filterActivity(events: ActivityEvent[], filter: ActivityFilter): ActivityEvent[] {

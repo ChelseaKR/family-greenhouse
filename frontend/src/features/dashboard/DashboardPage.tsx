@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import {
   CheckIcon,
   ExclamationTriangleIcon,
@@ -610,6 +611,17 @@ function ActivityRow({ event }: ActivityRowProps) {
               end: new Date(p.expiresAt).toLocaleDateString(),
             })
           : t('activity.sitterLinkRevoked', { actor: actorName, label });
+      break;
+    }
+    case 'upgrade.requested': {
+      const p = event.payload;
+      // Feature ids resolve through the LockedFeature catalog; an id this
+      // build does not know (older/newer row) falls back to the plain form
+      // rather than printing a raw key.
+      const featureKey = `locked.features.${p.feature}`;
+      body = i18n.exists(featureKey)
+        ? t('activity.upgradeRequested', { actor: actorName, feature: t(featureKey) })
+        : t('activity.upgradeRequestedUnknown', { actor: actorName });
       break;
     }
     case 'plant.deleted':

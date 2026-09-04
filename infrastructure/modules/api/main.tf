@@ -423,10 +423,12 @@ locals {
   })
 
   handler_integration_environment = {
-    auth       = {}
-    plants     = merge(local.plant_integration_environment, local.perenual_environment)
-    tasks      = {}
-    households = local.email_environment
+    auth   = {}
+    plants = merge(local.plant_integration_environment, local.perenual_environment)
+    tasks  = {}
+    # Email for the welcome mail + member upgrade requests; VAPID so the
+    # upgrade request can also reach admins as a browser/native push.
+    households = local.notification_environment
     # SES_FROM_EMAIL: DELETE /me sends the account-deletion confirmation
     # (ADR 0023). Without it `emailNotifier.sendEmail` dry-runs and the
     # confirmation is a log line nobody reads.
@@ -902,6 +904,9 @@ locals {
     "POST /households/{id}/kiosk-link"   = { group = "households", auth = "jwt" }
     "GET /households/{id}/kiosk-link"    = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/kiosk-link" = { group = "households", auth = "jwt" }
+    # A member asks the household's admins to upgrade for a locked feature
+    # (email + push + activity row; once per member per feature per week).
+    "POST /households/{id}/upgrade-requests" = { group = "households", auth = "jwt" }
 
     # --- me ---
     "DELETE /me"                = { group = "me", auth = "jwt" }

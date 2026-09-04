@@ -19,6 +19,8 @@ import {
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { getErrorMessage } from '@/services/api';
+import { billingService } from '@/services/billingService';
+import { LockedFeature } from '@/components/LockedFeature';
 
 /**
  * Manage household API keys. Existing Greenhouse-entitled households retain
@@ -66,6 +68,18 @@ export function ApiKeysSettings() {
   // with no error and no Revoke control to reach them. The count is only
   // publishable when it was actually read. See ADR 0010.
   const keysUnavailable = !keysQuery.isLoading && keysQuery.data === undefined;
+
+  // Issuing keys is Greenhouse-only (the API answers 402 below it). When the
+  // tier is KNOWN to be lower, the create form gives way to a locked card
+  // that says so and lets a member ask the admins (brief §7d). An unknown
+  // tier (read failed / still loading) keeps the form: the server enforces.
+  const subQuery = useQuery({
+    queryKey: ['subscription', householdId],
+    queryFn: billingService.getCurrentSubscription,
+    enabled: !!householdId,
+    staleTime: 60_000,
+  });
+  const issuingLocked = subQuery.data !== undefined && subQuery.data.planId !== 'greenhouse';
 
   const createMutation = useMutation({
     mutationFn: (vars: { label: string; scopes: ApiScope[] }) =>
@@ -158,7 +172,13 @@ export function ApiKeysSettings() {
           </Alert>
         )}
 
-        {isAdmin && (
+        {issuingLocked && (
+          <LockedFeature feature="api_keys" className="mb-4">
+            {t('settings.apiKeys.lockedBody')}
+          </LockedFeature>
+        )}
+
+        {isAdmin && !issuingLocked && (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">

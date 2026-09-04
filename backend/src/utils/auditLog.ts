@@ -24,6 +24,7 @@ export type AuditEvent =
   | 'household.member_removed'
   | 'household.role_changed'
   | 'billing.subscription_changed'
+  | 'billing.upgrade_requested'
   | 'apikey.created'
   | 'apikey.revoked'
   | 'calendar_token.created'
