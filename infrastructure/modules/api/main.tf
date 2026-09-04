@@ -436,12 +436,20 @@ locals {
     # money-lifecycle emails (receipt, renewal notice, payment failure, card
     # expiring, cancellation — ADR 0023). Merged rather than replaced so the
     # Stripe keys are untouched.
-    billing   = merge(local.stripe_environment, local.email_environment)
-    species   = local.perenual_environment
-    climate   = local.weather_environment
-    apiKeys   = {}
-    api       = {}
-    reminders = merge(local.notification_environment, local.perenual_environment)
+    billing = merge(local.stripe_environment, local.email_environment)
+    species = local.perenual_environment
+    climate = local.weather_environment
+    apiKeys = {}
+    api     = {}
+    # Reminders also get weather: services/reminders.ts adds a rain/frost line
+    # to the daily reminder ("Rain is forecast — outdoor plants likely don't
+    # need watering today"), which is the exact case that advice exists for.
+    # Until this is applied the Lambda has no OPENWEATHER_API_KEY, climate
+    # reads raise ClimateUnavailableError('not_configured'), and the reminder
+    # simply omits the line — it never asserts "no rain expected".
+    # Cost: the forecast is read at most once per household per reminder run,
+    # cached for an hour per ~10km cell and shared with the climate endpoint.
+    reminders = merge(local.notification_environment, local.perenual_environment, local.weather_environment)
     digests   = local.email_environment
     chat      = local.chat_environment
   }

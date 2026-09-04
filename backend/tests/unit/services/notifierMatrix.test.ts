@@ -424,4 +424,54 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
       },
     });
   });
+
+  describe('shortBody keeps space-constrained channels short', () => {
+    const LONG = {
+      title: 'Plant care reminder: 3 overdue',
+      body: '3 overdue.\n\nYours:\n\n1. Monstera — water, 6 days overdue\n   https://x/plants/p1',
+      shortBody: '3 overdue',
+    };
+
+    it('SMS uses shortBody, not the multi-line body', async () => {
+      const { sendToUser, smsMock } = await loadSendToUser({
+        email: false,
+        sms: true,
+        phone: '+15551234567',
+        phoneVerified: true,
+      });
+
+      await sendToUser(RECIPIENT, LONG);
+
+      expect(smsMock).toHaveBeenCalledWith({
+        to: '+15551234567',
+        text: 'Plant care reminder: 3 overdue: 3 overdue',
+      });
+    });
+
+    it('email still gets the full body', async () => {
+      const { sendToUser, emailMock } = await loadSendToUser({ email: true });
+
+      await sendToUser(RECIPIENT, { ...LONG, url: 'https://x/tasks?filter=due' });
+
+      const [msg] = emailMock.mock.calls[0] as [{ text: string }];
+      expect(msg.text).toContain('1. Monstera — water, 6 days overdue');
+      expect(msg.text).toContain('https://x/tasks?filter=due');
+    });
+
+    it('a payload without shortBody is unchanged on every channel', async () => {
+      const { sendToUser, smsMock } = await loadSendToUser({
+        email: false,
+        sms: true,
+        phone: '+15551234567',
+        phoneVerified: true,
+      });
+
+      await sendToUser(RECIPIENT, PAYLOAD);
+
+      expect(smsMock).toHaveBeenCalledWith({
+        to: '+15551234567',
+        text: 'Time to water: Your monstera is due.',
+      });
+    });
+  });
 });

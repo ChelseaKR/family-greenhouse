@@ -31,10 +31,23 @@ function ensureWebPushConfigured(): boolean {
 export interface NotificationPayload {
   title: string;
   body: string;
+  /**
+   * One-line rendering of the same content for space-constrained channels.
+   * SMS is truncated to a single 140-byte segment and a push body shows two
+   * or three lines, so a caller whose `body` is a multi-line list (the daily
+   * reminder) supplies a summary here. Omitted means `body` is already short
+   * enough and is used as-is on every channel.
+   */
+  shortBody?: string;
   /** Optional deep link the email/push will reference. */
   url?: string;
   /** De-dupe tag for browser-push (replaces a previous notification with the same tag). */
   tag?: string;
+}
+
+/** `shortBody` when the caller supplied one, else the full body. */
+function compactBody(payload: NotificationPayload): string {
+  return payload.shortBody?.trim() || payload.body;
 }
 
 /**
@@ -204,7 +217,7 @@ export async function sendToUser(
   if (requested.has('browser') && prefs.browser) {
     channels.browser = 'failed';
     work.push(
-      sendBrowserPush(recipient.userId, payload)
+      sendBrowserPush(recipient.userId, { ...payload, body: compactBody(payload) })
         .then((sent) => {
           channels.browser = sent ? 'delivered' : 'failed';
         })
@@ -263,7 +276,7 @@ export async function sendToUser(
       channels.sms = 'failed';
       work.push(
         smsNotifier
-          .sendSms({ to: prefs.phone, text: `${payload.title}: ${payload.body}` })
+          .sendSms({ to: prefs.phone, text: `${payload.title}: ${compactBody(payload)}` })
           .then((sent) => {
             channels.sms = sent ? 'delivered' : 'failed';
           })
