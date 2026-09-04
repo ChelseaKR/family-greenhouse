@@ -63,20 +63,25 @@ import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
 import * as emailSuppression from './emailSuppression.js';
 import * as escalation from './escalation.js';
+import { resolveEmailLocale } from './email/locale.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * The locale every reminder is composed in today.
+ * The language a reminder is composed in when its recipient has never chosen
+ * one. Not a pin: the per-member locale is read below from
+ * `NotificationPreferences.emailLocale` through the canonical resolver in
+ * `services/email/locale.ts`, and this is only the last step of that chain.
  *
- * `reminderEmail` carries complete en + es catalogs, but nothing in the
- * backend stores a user's language: `NotificationPreferences` has `timezone`
- * and no locale, and Cognito's custom schema adds only household id/role. When
- * the per-user locale field lands (branch `feat/useful-emails` owns it), this
- * constant becomes a read of that field and nothing else here changes.
+ * It used to be a constant every reminder was pinned to, with a docstring
+ * saying "nothing in the backend stores a user's language". That stopped being
+ * true when `emailLocale` landed; the reminder path kept sending English to
+ * users who had chosen Spanish, with a complete Spanish catalog sitting in
+ * `reminderEmail`. The push and SMS bodies fanned out from
+ * `notifier.sendToUser` inherited the same English.
  */
-const REMINDER_LOCALE_ADOPTION: reminderEmail.ReminderLocale = 'en';
+const REMINDER_LOCALE_DEFAULT: reminderEmail.ReminderLocale = 'en';
 // Markers outlive their day by a comfortable margin; DynamoDB TTL sweeps them.
 const MARKER_TTL_SECONDS = 48 * 60 * 60;
 // Long enough for the notifier's provider calls, short enough that a killed
@@ -463,9 +468,13 @@ export async function remindHousehold(
     /** One rendered row. Plant names come from the active-plant read, which
      *  every task in `due` already matched; an empty stored name resolves to
      *  null so the composer says the name is missing rather than printing "". */
-    const rowFor = (t: Task, upForGrabs: boolean): ReminderTaskRow => ({
+    const rowFor = (
+      t: Task,
+      upForGrabs: boolean,
+      locale: reminderEmail.ReminderLocale
+    ): ReminderTaskRow => ({
       plantName: activePlantNames.get(t.plantId)?.trim() || null,
-      taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, REMINDER_LOCALE_ADOPTION),
+      taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, locale),
       due: dueStateFor(t.nextDue, now),
       upForGrabs,
       url: frontendUrl(`/plants/${encodeURIComponent(t.plantId)}`),
@@ -534,9 +543,17 @@ export async function remindHousehold(
       // `unassigned` are nobody's, and are marked claimable rather than folded
       // into an anonymous integer that five people each read as someone
       // else's problem.
+      // The recipient's own stored language, or English when nobody has told
+      // us. Passed `null` for the household step deliberately: that step is a
+      // member fan-out and this loop already runs per member per hour.
+      const memberLocale =
+        resolveEmailLocale(memberPrefs.emailLocale, null).locale === 'es'
+          ? 'es'
+          : REMINDER_LOCALE_DEFAULT;
+
       const rows = [
-        ...mine.map((t) => rowFor(t, false)),
-        ...unassigned.map((t) => rowFor(t, true)),
+        ...mine.map((t) => rowFor(t, false, memberLocale)),
+        ...unassigned.map((t) => rowFor(t, true, memberLocale)),
       ].sort(compareRows);
 
       // Tell the cover whose tasks they're picking up, and why. A member row
@@ -563,7 +580,7 @@ export async function remindHousehold(
         rows,
         covering,
         climate: await householdClimate(),
-        locale: REMINDER_LOCALE_ADOPTION,
+        locale: memberLocale,
         timeZone,
       });
 

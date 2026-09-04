@@ -381,6 +381,58 @@ describe('reminder content', () => {
     expect(shortBody).toBe('9 overdue');
     expect(body.split('\n').length).toBeGreaterThan(5);
   });
+
+  // #465. `reminderEmail` has carried a complete Spanish catalog the whole
+  // time; `reminders.ts` pinned every send to a named `'en'` constant whose
+  // docstring said no per-user language field existed. `emailLocale` does
+  // exist, so the pin was sending English to people who had chosen Spanish —
+  // and, because notifier.sendToUser fans this payload out, the push and SMS
+  // bodies too.
+  it('writes the whole payload in the recipient’s stored language', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    await setup([
+      {
+        nextDue: iso(-2 * DAY),
+        plantId: 'p1',
+        assignedTo: 'u1',
+        type: 'water',
+        customType: null,
+      },
+    ]);
+    vi.mocked(prefs.getPreferences).mockImplementation(async (userId: string) =>
+      prefsFor(userId, { emailLocale: 'es' })
+    );
+
+    await remindHousehold('hh', NOW);
+
+    const payload = await lastPayload();
+    expect(payload.title).toContain('Recordatorio de cuidado de plantas');
+    expect(payload.body).not.toContain('Plant care reminder');
+    // The row itself, not just the subject: taskLabelFor takes the locale too.
+    expect(payload.body).toMatch(/riego|regar|agua/i);
+  });
+
+  it('keeps English for a recipient who has never chosen a language', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    await setup([
+      {
+        nextDue: iso(-2 * DAY),
+        plantId: 'p1',
+        assignedTo: 'u1',
+        type: 'water',
+        customType: null,
+      },
+    ]);
+    vi.mocked(prefs.getPreferences).mockImplementation(async (userId: string) =>
+      prefsFor(userId, { emailLocale: '' })
+    );
+
+    await remindHousehold('hh', NOW);
+
+    expect((await lastPayload()).title).toContain('Plant care reminder');
+  });
 });
 
 describe('reminder climate', () => {

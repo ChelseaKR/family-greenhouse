@@ -729,6 +729,45 @@ describe('flushUser', () => {
     );
   });
 
+  // #465. `preferredEmailLocale` probed the preferences record for a field
+  // named `locale`; the field is `emailLocale`, so the probe was never true
+  // and every household email went out in English — to users who had
+  // explicitly chosen Spanish in Settings, for copy that is fully translated.
+  // The unit test that was supposed to cover it asserted against a literal no
+  // caller constructs, so it passed throughout. This drives the real
+  // preferences record through a real send.
+  it('writes to a Spanish-preferring recipient in Spanish', async () => {
+    await mockQueue([pendingRow()]);
+    await mockPrefs({ u1: { emailLocale: 'es' } });
+    const { flushUser } = await import('../../../src/services/householdEmails.js');
+    const emailNotifier = await import('../../../src/services/emailNotifier.js');
+
+    const summary = await flushUser('u1', NOW);
+
+    expect(summary.sent).toBe(1);
+    expect(emailNotifier.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'sam@x.com',
+        subject: 'Priya se ha unido a The Kim House',
+      })
+    );
+    const { text } = vi.mocked(emailNotifier.sendEmail).mock.calls[0][0];
+    expect(text).toContain('ha aceptado la invitación');
+  });
+
+  it('still writes English to a recipient who has never chosen a language', async () => {
+    await mockQueue([pendingRow()]);
+    await mockPrefs({ u1: { emailLocale: '' } });
+    const { flushUser } = await import('../../../src/services/householdEmails.js');
+    const emailNotifier = await import('../../../src/services/emailNotifier.js');
+
+    await flushUser('u1', NOW);
+
+    expect(emailNotifier.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: 'Priya joined The Kim House' })
+    );
+  });
+
   it('holds a row during the recipient quiet hours instead of dropping it', async () => {
     await mockQueue([pendingRow()]);
     const prefs = await import('../../../src/services/notificationPrefs.js');
