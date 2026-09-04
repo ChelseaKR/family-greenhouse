@@ -176,20 +176,40 @@ export async function getActiveTag(token: string): Promise<PlantTag | null> {
   return tag.status === 'active' ? tag : null;
 }
 
+/**
+ * Page size for the plant-tag listing. A transport detail, NOT a cap:
+ * `listTags` follows `LastEvaluatedKey` to exhaustion.
+ *
+ * Tags are the sharpest case of the three. They NEVER expire (ADR 0016), the
+ * query is newest-first, and `revokeTag`, `revokeTagsCreatedBy` and
+ * `revokeTagsForPlant` all read through here — so under a bare `Limit: 500`
+ * the labels that dropped off the end were the OLDEST ones, which are exactly
+ * the ones physically stuck to pots and least likely to be missed. A departed
+ * member's oldest tags survived the removal sweep added for #449.
+ */
+const TAG_PAGE_SIZE = 500;
+
 /** Every tag row for a household (active + not-yet-swept revoked), newest
  *  first. Tokens are included: the household needs them to print. */
 export async function listTags(householdId: string): Promise<PlantTag[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk',
-      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#PLANTTAG` },
-      ScanIndexForward: false,
-      Limit: 500,
-    })
-  );
-  return (result.Items ?? []).map(itemToTag);
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#PLANTTAG` },
+        ScanIndexForward: false,
+        Limit: TAG_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map(itemToTag);
 }
 
 export async function listActiveTags(householdId: string): Promise<PlantTag[]> {

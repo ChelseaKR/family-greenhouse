@@ -264,3 +264,56 @@ describe('kioskService.revokeKioskLinksCreatedBy', () => {
     await expect(svc.revokeKioskLinksCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
   });
 });
+
+/**
+ * `revokeKioskLinks` and `revokeKioskLinksCreatedBy` both read through
+ * `listKioskLinks`, so a truncated listing made "revoke everything live"
+ * quietly not revoke everything — and returned a count that said it had.
+ * (#455 / #457 gap 2)
+ */
+describe('kioskService — the link list is the whole link list', () => {
+  // mockReset, not clearAllMocks: a queued mockResolvedValueOnce that a
+  // previous test never consumed would otherwise answer the first query here.
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('follows LastEvaluatedKey and resumes where the first page stopped', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'kiosk-new' })],
+        LastEvaluatedKey: { PK: 'KIOSK#new' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [activeRow({ id: 'kiosk-old' })] } as never);
+
+    const links = await svc.listKioskLinks(HH);
+    expect(links.map((l) => l.id)).toEqual(['kiosk-new', 'kiosk-old']);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'KIOSK#new' });
+  });
+
+  it('revoke-all reaches a live link on the second page, and counts it', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'kiosk-new', token: 'n'.repeat(64), status: 'revoked' })],
+        LastEvaluatedKey: { PK: 'KIOSK#new' },
+      } as never)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'kiosk-old', token: 'o'.repeat(64) })],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeKioskLinks(HH)).toBe(1);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`KIOSK#${'o'.repeat(64)}`);
+  });
+});

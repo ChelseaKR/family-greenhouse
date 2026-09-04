@@ -354,3 +354,56 @@ describe('plantTagService.revokeTagsCreatedBy', () => {
     await expect(svc.revokeTagsCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
   });
 });
+
+/**
+ * Tags never expire (ADR 0016) and the listing is newest-first, so a
+ * truncated page dropped the OLDEST labels — the ones actually stuck to pots.
+ * `revokeTag` and `revokeTagsCreatedBy` (the departed-member sweep) both read
+ * through it. (#455 / #457 gap 2)
+ */
+describe('plantTagService — the tag list is the whole tag list', () => {
+  // mockReset, not clearAllMocks: a queued mockResolvedValueOnce that a
+  // previous test never consumed would otherwise answer the first query here.
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('follows LastEvaluatedKey and resumes where the first page stopped', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [tagRow({ id: 'tag-new' })],
+        LastEvaluatedKey: { PK: 'PLANTTAG#new' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [tagRow({ id: 'tag-old' })] } as never);
+
+    const tags = await svc.listTags(HH);
+    expect(tags.map((t) => t.id)).toEqual(['tag-new', 'tag-old']);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'PLANTTAG#new' });
+  });
+
+  it("revokes a departed member's oldest tag, which lived past the first page", async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [tagRow({ id: 'tag-new', token: 'n'.repeat(64), createdBy: 'someone-else' })],
+        LastEvaluatedKey: { PK: 'PLANTTAG#new' },
+      } as never)
+      .mockResolvedValueOnce({
+        Items: [tagRow({ id: 'tag-old', token: 'o'.repeat(64), createdBy: 'departing' })],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeTagsCreatedBy(HH, 'departing')).toBe(1);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`PLANTTAG#${'o'.repeat(64)}`);
+  });
+});
