@@ -45,12 +45,15 @@ import {
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import { PLANS, planSummary, planHasFeature } from './models/plans.js';
+// From models/, NOT services/kioskService.js: that module imports
+// utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
+// would take this whole dev server down before it could serve a request.
 import {
   KIOSK_DEFAULT_POLL_SECONDS,
   KIOSK_MIN_POLL_SECONDS,
   KIOSK_MAX_POLL_SECONDS,
   KIOSK_LOOKAHEAD_DAYS,
-} from './services/kioskService.js';
+} from './models/kiosk.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
