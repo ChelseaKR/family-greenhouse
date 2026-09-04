@@ -20,7 +20,13 @@
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
 import * as taskService from './taskService.js';
-import { lookupToxicity, type PetToxicityMatch } from '../models/petToxicity.js';
+import { type PetToxicityMatch } from '../models/petToxicity.js';
+import { resolveCareNote, resolvePetSafety } from '../models/sitterBriefFields.js';
+
+// Re-exported from models/ so this module stays the one import for brief
+// building, while the dev server can take the two pure resolvers WITHOUT
+// pulling the DynamoDB-backed services below in with them.
+export { resolveCareNote, resolvePetSafety } from '../models/sitterBriefFields.js';
 
 export interface SitterBriefTask {
   taskId: string;
@@ -55,42 +61,6 @@ export interface SitterBrief {
   startsAt: string;
   expiresAt: string;
   plants: SitterBriefPlant[];
-}
-
-/**
- * A plant's care words, preferring a structured care rule ("we bottom-water
- * this one") over free-text notes. `careRule` is read defensively: it is not
- * on every deployment's Plant row yet, and a brief must work either way.
- */
-export function resolveCareNote(plant: { notes?: string | null; careRule?: string | null }): {
-  careNote: string | null;
-  careNoteSource: 'rule' | 'notes' | null;
-} {
-  const rule = plant.careRule?.trim();
-  if (rule) return { careNote: rule, careNoteSource: 'rule' };
-  const notes = plant.notes?.trim();
-  if (notes) return { careNote: notes, careNoteSource: 'notes' };
-  return { careNote: null, careNoteSource: null };
-}
-
-/**
- * Look the plant up in the curated pet-toxicity table. The species field is
- * tried first (it is the botanical name the table indexes); the display name
- * is a fallback for the many plants recorded as just "Monstera". We return
- * the matched entry's own names as `matchedOn` so the brief can show WHAT it
- * matched — a reader can see for themselves whether the match is right,
- * instead of trusting a verdict attached to a nickname.
- */
-export function resolvePetSafety(plant: {
-  name: string;
-  species?: string | null;
-}): (PetToxicityMatch & { matchedOn: string }) | null {
-  for (const query of [plant.species, plant.name]) {
-    if (!query) continue;
-    const [match] = lookupToxicity(query, 1);
-    if (match) return { ...match, matchedOn: query };
-  }
-  return null;
 }
 
 /**

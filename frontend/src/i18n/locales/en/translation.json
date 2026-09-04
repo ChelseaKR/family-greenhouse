@@ -607,6 +607,7 @@
       "assignedColumn": "Assigned now",
       "you": "you",
       "sitterLabel": "Plant sitter",
+      "kioskLabel": "Wall display",
       "formerMember": "no longer in the household",
       "unnamedMember": "Someone who has left",
       "nothingLogged": "No care has been logged in this period yet.",
@@ -697,6 +698,62 @@
     "errorTitle": "Something went wrong",
     "errorBody": "We couldn’t load the care brief just now. Please refresh and try again in a moment."
   },
+  "kiosk": {
+    "title": "Plant care today",
+    "loading": "Loading today’s plant care…",
+    "done": "Done",
+    "allDone": "Nothing due right now. Everything on the schedule has been looked after.",
+    "stale": "Couldn’t refresh just now — showing the last list we were able to load.",
+    "staleAt": "Couldn’t refresh just now — showing the list from {{time}}.",
+    "publicNotice": "This screen is showing your household’s plant tasks. Anyone standing here can see them and mark them done.",
+    "sleepHint": "To keep this display on, turn off the device’s sleep or screen-timeout setting.",
+    "due": {
+      "overdue": "Overdue",
+      "today": "Due today",
+      "tomorrow": "Due tomorrow"
+    },
+    "taskType": {
+      "water": "Water",
+      "fertilize": "Feed",
+      "prune": "Prune",
+      "repot": "Repot"
+    },
+    "inactive": {
+      "title": "This display has been turned off",
+      "body": "Someone in the household revoked this link. Set up a new one in Settings to bring the screen back."
+    },
+    "error": {
+      "title": "Couldn’t load today’s plant care",
+      "body": "We couldn’t reach the plant list. This screen is NOT saying everything is done — it’s saying it doesn’t know. Trying again in {{seconds}} seconds."
+    },
+    "settings": {
+      "title": "Wall display",
+      "description": "Turn a spare tablet or screen into a household plant-care display: what’s due today, tap to mark it done, no login.",
+      "securityNotice": "The web address on the display is the password. Anyone who can see or photograph the screen can see the same task list and mark tasks done — they can’t see your notes, your members, or anything else. If the screen gets photographed, issue a new link: it revokes the old one immediately.",
+      "issue": "Set up a wall display",
+      "reissue": "Issue a new link (revokes the old one)",
+      "revoke": "Turn the display off",
+      "issuedTitle": "Your wall display link is ready",
+      "issuedBody": "Open it on the display and leave it there. Copy it now — for security we won’t show the full link again.",
+      "urlLabel": "Wall display link",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "copyFailed": "Could not copy automatically. Select the link and copy it manually.",
+      "none": "No wall display is set up for this household.",
+      "loadFailed": "We couldn’t check whether a wall display is running. This is not the same as “no display” — please retry.",
+      "runningSince": "A wall display has been running since {{date}}.",
+      "currentInterval": "It refreshes {{label}}.",
+      "adminOnly": "Only household admins can set up or turn off the wall display.",
+      "intervalLabel": "How often the display refreshes",
+      "intervalHelp": "This is the one feature whose cost depends on how long the screen is on rather than how much anyone uses it, so the monthly figure is shown with each choice.",
+      "interval": {
+        "60": "Every minute (about $0.05 per month)",
+        "300": "Every 5 minutes (about $0.01 per month)",
+        "900": "Every 15 minutes (under a cent per month)",
+        "3600": "Every hour (under a cent per month)"
+      }
+    }
+  },
   "settings": {
     "title": "Settings",
     "description": "Manage notifications and view your household plan status.",
@@ -705,6 +762,7 @@
       "preferences": "Preferences",
       "billing": "Plan status",
       "apiKeys": "API keys",
+      "kiosk": "Wall display",
       "account": "Account",
       "help": "Help"
     },

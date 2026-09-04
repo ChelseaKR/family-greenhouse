@@ -44,7 +44,16 @@ import {
   createSitterLinkSchema,
 } from './models/schemas.js';
 import { TEMPLATES } from './models/taskTemplates.js';
-import { PLANS, planSummary } from './models/plans.js';
+import { PLANS, planSummary, planHasFeature } from './models/plans.js';
+// From models/, NOT services/kioskService.js: that module imports
+// utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
+// would take this whole dev server down before it could serve a request.
+import {
+  KIOSK_DEFAULT_POLL_SECONDS,
+  KIOSK_MIN_POLL_SECONDS,
+  KIOSK_MAX_POLL_SECONDS,
+  KIOSK_LOOKAHEAD_DAYS,
+} from './models/kiosk.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -52,7 +61,11 @@ import {
   sitterBriefIncluded,
   sitterWindowDays,
 } from './services/sitterPlanGate.js';
-import { resolveCareNote, resolvePetSafety } from './services/sitterBrief.js';
+// From models/, NOT services/sitterBrief.js: that module imports
+// plantService/spaceService/taskService, which reach utils/dynamodb.ts and
+// call requireEnv('TABLE_NAME') at import time — which took this dev server
+// down before it could answer /health.
+import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
@@ -212,6 +225,19 @@ interface SitterLink {
   label: string | null;
 }
 
+/** Mirrors kioskService.KioskLink (KIOSK#{token} row). Long-lived by design —
+ *  no expiry, revocation is the control. See services/kioskService.ts for the
+ *  design rule and threat model. */
+interface KioskLink {
+  id: string;
+  token: string;
+  householdId: string;
+  createdBy: string;
+  createdAt: string;
+  status: 'active' | 'revoked';
+  pollIntervalSeconds: number;
+}
+
 interface PushSubscriptionRecord {
   userId: string;
   endpoint: string;
@@ -361,6 +387,7 @@ export const db = {
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
   sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
   calendarTokens: new Map<string, CalendarToken>(), // keyed by token (the secret)
+  kioskLinks: new Map<string, KioskLink>(), // keyed by token (the secret)
   // Tiny local object store used by the real browser upload flow. A presign
   // creates a capability token, PUT stores the bytes, confirm verifies the
   // object exists, and /mock-images serves the confirmed URL from this API.
@@ -396,6 +423,7 @@ export function resetDb(): void {
   db.pendingConfirmations.clear();
   db.sitterLinks.clear();
   db.calendarTokens.clear();
+  db.kioskLinks.clear();
   db.mockUploadGrants.clear();
   db.mockImages.clear();
 
@@ -892,6 +920,9 @@ app.delete('/me', authMiddleware, (req, res) => {
       for (const [token, link] of db.sitterLinks.entries()) {
         if (link.householdId === m.householdId) db.sitterLinks.delete(token);
       }
+      for (const [token, link] of db.kioskLinks.entries()) {
+        if (link.householdId === m.householdId) db.kioskLinks.delete(token);
+      }
       for (const [code, invite] of db.invites.entries()) {
         if (invite.householdId === m.householdId) db.invites.delete(code);
       }
@@ -941,6 +972,11 @@ app.delete('/me', authMiddleware, (req, res) => {
       }
     }
     for (const link of db.sitterLinks.values()) {
+      if (link.householdId === m.householdId && link.createdBy === dbUser.id) {
+        link.createdBy = 'deleted-user';
+      }
+    }
+    for (const link of db.kioskLinks.values()) {
       if (link.householdId === m.householdId && link.createdBy === dbUser.id) {
         link.createdBy = 'deleted-user';
       }
@@ -1531,6 +1567,125 @@ app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHouseh
   res.status(204).end();
 });
 
+// --- Kiosk (wall display) links (authed management) ------------------------
+// Mirrors handlers/households/kioskLink.ts: issue / get / revoke. Admin-gated
+// like sitter links, and Greenhouse-gated (features.kiosk in models/plans.ts).
+// The design rule and threat model live in services/kioskService.ts.
+
+/** Non-secret view of a kiosk link (no token). Mirrors kioskService.toSummary. */
+function kioskSummary(link: KioskLink) {
+  const { token: _token, ...summary } = link;
+  void _token;
+  return summary;
+}
+
+const issueKioskLinkSchemaLocal = z
+  .object({
+    pollIntervalSeconds: z
+      .number()
+      .int()
+      .min(KIOSK_MIN_POLL_SECONDS)
+      .max(KIOSK_MAX_POLL_SECONDS)
+      .optional(),
+  })
+  .nullish();
+
+// POST /households/:id/kiosk-link
+app.post(
+  '/households/:id/kiosk-link',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody(issueKioskLinkSchemaLocal),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const h = db.households.get(user.householdId);
+    if (!planHasFeature(h?.planId ?? 'seedling', 'kiosk')) {
+      return res.status(402).json({
+        message:
+          'The kiosk display is included with the Greenhouse plan. Upgrade to set up a wall display.',
+      });
+    }
+    // Re-issue revokes the previous token first — that is the household's
+    // one-click remedy for a photographed screen, so it has to actually kill
+    // the old one.
+    for (const link of db.kioskLinks.values()) {
+      if (link.householdId === req.params.id && link.status === 'active') link.status = 'revoked';
+    }
+    const body = (req as any).validatedBody;
+    const token = randomBytes(32).toString('hex'); // 256-bit, like the service
+    const link: KioskLink = {
+      id: uuidv4(),
+      token,
+      householdId: req.params.id,
+      createdBy: user.userId,
+      createdAt: new Date().toISOString(),
+      status: 'active',
+      pollIntervalSeconds: body?.pollIntervalSeconds ?? KIOSK_DEFAULT_POLL_SECONDS,
+    };
+    db.kioskLinks.set(token, link);
+
+    const baseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+
+    res.status(201).json({ ...kioskSummary(link), token, url: `${baseUrl}/kiosk/${token}` });
+  }
+);
+
+// GET /households/:id/kiosk-link
+app.get(
+  '/households/:id/kiosk-link',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const active = [...db.kioskLinks.values()].find(
+      (l) => l.householdId === req.params.id && l.status === 'active'
+    );
+    res.json({ link: active ? kioskSummary(active) : null });
+  }
+);
+
+// DELETE /households/:id/kiosk-link
+app.delete(
+  '/households/:id/kiosk-link',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const active = [...db.kioskLinks.values()].filter(
+      (l) => l.householdId === req.params.id && l.status === 'active'
+    );
+    if (active.length === 0) {
+      return res.status(404).json({ message: 'No active kiosk link to revoke' });
+    }
+    for (const link of active) link.status = 'revoked';
+    res.status(204).end();
+  }
+);
+
+/** Token → link only if active. Long-lived by design: no window check, only
+ *  revocation. Mirrors kioskService.getActiveKioskLink. */
+function getActiveKioskLink(token: string): KioskLink | null {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const link = db.kioskLinks.get(token);
+  if (!link || link.status !== 'active') return null;
+  return link;
+}
+
 /** Token → link only if active and within [startsAt, expiresAt]. Generic
  *  null on any miss, mirroring sitterService.getActiveLink. */
 function getActiveSitterLink(token: string): SitterLink | null {
@@ -1737,6 +1892,11 @@ app.delete(
       }
     }
     for (const link of db.sitterLinks.values()) {
+      if (link.householdId === householdId && link.createdBy === userId) {
+        link.createdBy = 'deleted-user';
+      }
+    }
+    for (const link of db.kioskLinks.values()) {
       if (link.householdId === householdId && link.createdBy === userId) {
         link.createdBy = 'deleted-user';
       }
@@ -2692,7 +2852,9 @@ app.get('/plants/shared/:code', (req, res) => {
 
 /** Minimal due/overdue tasks for a household. Mirrors taskService.getSitterTasks:
  *  due on or before the link's own `expiresAt` OR overdue (never a fixed
- *  seven days), active plants only, with sitter-safe location. */
+ *  seven days), active plants only, with sitter-safe location. The kiosk
+ *  reuses this with a cutoff of its own (now + KIOSK_LOOKAHEAD_DAYS), since a
+ *  wall display has no expiry to honour. */
 function sitterTasksFor(householdId: string, windowEndsAt: string) {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -2869,6 +3031,108 @@ app.post(
         plantName: task.plantName,
         taskType: task.customType || task.type,
         viaSitter: true,
+      },
+    });
+
+    res.json({
+      taskId: task.id,
+      plantName: task.plantName,
+      taskType: task.customType || task.type,
+      dueDate: task.nextDue,
+      spaceName: null,
+      placementNote: null,
+      overdue: false,
+    });
+  }
+);
+
+// --- Kiosk (wall display) PUBLIC endpoints (no auth) ----------------------
+// Mirrors handlers/tasks/kiosk.ts. Same token-in-path credential as the sitter
+// routes, but the token is LONG-LIVED and permanently displayed — see the
+// threat model at the top of services/kioskService.ts.
+
+/** The kiosk's own lookahead cutoff. A wall display has no `expiresAt` to
+ *  honour — it answers "what needs doing today" — so it supplies a rolling
+ *  cutoff instead of a link window. Mirrors handlers/tasks/kiosk.ts. */
+function kioskWindowEndsAt(now: Date = new Date()): string {
+  return new Date(now.getTime() + KIOSK_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+// GET /kiosk/:token
+app.get('/kiosk/:token', (req, res) => {
+  const link = getActiveKioskLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This kiosk link is invalid or has been turned off.' });
+  }
+  res.json({
+    pollIntervalSeconds: link.pollIntervalSeconds,
+    tasks: sitterTasksFor(link.householdId, kioskWindowEndsAt()),
+  });
+});
+
+const kioskCompleteTaskSchema = z
+  .object({ expectedNextDue: z.string().datetime().optional() })
+  .nullish();
+
+// POST /kiosk/:token/tasks/:taskId/complete
+app.post(
+  '/kiosk/:token/tasks/:taskId/complete',
+  validateBody(kioskCompleteTaskSchema),
+  (req, res) => {
+    const link = getActiveKioskLink(req.params.token);
+    if (!link) {
+      return res
+        .status(404)
+        .json({ message: 'This kiosk link is invalid or has been turned off.' });
+    }
+    const task = db.tasks.get(req.params.taskId);
+    // Cross-household guard: the task must live in the token's household.
+    if (!task || task.householdId !== link.householdId) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const expectedNextDue = (req as any).validatedBody?.expectedNextDue as string | undefined;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({
+        taskId: task.id,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        dueDate: task.nextDue,
+        spaceName: null,
+        placementNote: null,
+        overdue: false,
+      });
+    }
+
+    const now = new Date();
+    const nextDue = new Date(now);
+    nextDue.setDate(nextDue.getDate() + task.frequency);
+    task.lastCompleted = now.toISOString();
+    task.nextDue = nextDue.toISOString();
+
+    const completionId = uuidv4();
+    db.completions.set(completionId, {
+      id: completionId,
+      householdId: task.householdId,
+      plantId: task.plantId,
+      taskId: task.id,
+      taskType: task.customType || task.type,
+      completedBy: `kiosk:${link.id}`,
+      completedByName: 'the kiosk display',
+      completedAt: now.toISOString(),
+      notes: null,
+    });
+    recordActivity({
+      type: 'task.completed',
+      householdId: task.householdId,
+      actorId: `kiosk:${link.id}`,
+      actorName: 'the kiosk display',
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        viaKiosk: true,
       },
     });
 

@@ -5,18 +5,20 @@ import { NotificationSettings } from './NotificationSettings';
 import { BillingSettings } from './BillingSettings';
 import { PreferencesSettings } from './PreferencesSettings';
 import { ApiKeysSettings } from './ApiKeysSettings';
+import { KioskSettings } from './KioskSettings';
 import { AccountSettings } from './AccountSettings';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
-type Tab = 'preferences' | 'notifications' | 'billing' | 'api-keys' | 'account';
+type Tab = 'preferences' | 'notifications' | 'billing' | 'kiosk' | 'api-keys' | 'account';
 
-const TABS: Tab[] = ['preferences', 'notifications', 'billing', 'api-keys', 'account'];
+const TABS: Tab[] = ['preferences', 'notifications', 'billing', 'kiosk', 'api-keys', 'account'];
 
 const TAB_LABEL: Record<Tab, string> = {
   preferences: 'settings.tabs.preferences',
   notifications: 'settings.tabs.notifications',
   billing: 'settings.tabs.billing',
+  kiosk: 'settings.tabs.kiosk',
   'api-keys': 'settings.tabs.apiKeys',
   account: 'settings.tabs.account',
 };
@@ -114,6 +116,7 @@ export function SettingsPage() {
         {tab === 'preferences' && <PreferencesSettings />}
         {tab === 'notifications' && <NotificationSettings />}
         {tab === 'billing' && <BillingSettings />}
+        {tab === 'kiosk' && <KioskSettings />}
         {tab === 'api-keys' && <ApiKeysSettings />}
         {tab === 'account' && <AccountSettings />}
       </div>

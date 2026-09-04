@@ -13,6 +13,7 @@ import {
   buildCareLoad,
   CARE_LOAD_WINDOW_DAYS,
   SITTER_ENTRY_KEY,
+  KIOSK_ENTRY_KEY,
   type CareLoadEntry,
 } from './careLoad';
 
@@ -87,6 +88,7 @@ export function CareLoadCard({ householdId, members, currentUserId }: CareLoadCa
 
   const nameFor = (entry: CareLoadEntry): string => {
     if (entry.key === SITTER_ENTRY_KEY) return t('household.careLoad.sitterLabel');
+    if (entry.key === KIOSK_ENTRY_KEY) return t('household.careLoad.kioskLabel');
     return entry.name || t('household.careLoad.unnamedMember');
   };
 

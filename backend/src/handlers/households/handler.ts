@@ -746,6 +746,10 @@ export const revokeSitterLink = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
+// Kiosk (wall display) link management. Separate file, same group: it mints a
+// household-scoped credential exactly like the sitter links above.
+import { issueKioskLink, getKioskLink, revokeKioskLink } from './kioskLink.js';
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'POST /households': createHousehold,
@@ -761,4 +765,7 @@ export const handler = createRouter({
   'POST /households/{id}/sitter-links': createSitterLink,
   'GET /households/{id}/sitter-links': listSitterLinks,
   'DELETE /households/{id}/sitter-links/{linkId}': revokeSitterLink,
+  'POST /households/{id}/kiosk-link': issueKioskLink,
+  'GET /households/{id}/kiosk-link': getKioskLink,
+  'DELETE /households/{id}/kiosk-link': revokeKioskLink,
 });

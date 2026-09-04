@@ -621,6 +621,7 @@
       "assignedColumn": "Asignadas ahora",
       "you": "tú",
       "sitterLabel": "Cuidador de plantas",
+      "kioskLabel": "Pantalla de pared",
       "formerMember": "ya no está en la casa",
       "unnamedMember": "Alguien que ya se fue",
       "nothingLogged": "Todavía no se han registrado cuidados en este periodo.",
@@ -715,6 +716,62 @@
     "errorTitle": "Algo salió mal",
     "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento."
   },
+  "kiosk": {
+    "title": "Cuidado de plantas de hoy",
+    "loading": "Cargando el cuidado de plantas de hoy…",
+    "done": "Hecho",
+    "allDone": "No hay nada pendiente ahora mismo. Ya se atendió todo lo programado.",
+    "stale": "No se pudo actualizar en este momento: se muestra la última lista que se pudo cargar.",
+    "staleAt": "No se pudo actualizar en este momento: se muestra la lista de las {{time}}.",
+    "publicNotice": "Esta pantalla muestra las tareas de plantas de tu hogar. Cualquiera que esté aquí puede verlas y marcarlas como hechas.",
+    "sleepHint": "Para que esta pantalla siga encendida, desactiva la suspensión o el apagado automático del dispositivo.",
+    "due": {
+      "overdue": "Atrasada",
+      "today": "Para hoy",
+      "tomorrow": "Para mañana"
+    },
+    "taskType": {
+      "water": "Regar",
+      "fertilize": "Abonar",
+      "prune": "Podar",
+      "repot": "Trasplantar"
+    },
+    "inactive": {
+      "title": "Esta pantalla se ha desactivado",
+      "body": "Alguien del hogar revocó este enlace. Crea uno nuevo en Configuración para volver a activar la pantalla."
+    },
+    "error": {
+      "title": "No se pudo cargar el cuidado de plantas de hoy",
+      "body": "No pudimos acceder a la lista de plantas. Esta pantalla NO está diciendo que todo esté hecho: está diciendo que no lo sabe. Se reintentará en {{seconds}} segundos."
+    },
+    "settings": {
+      "title": "Pantalla de pared",
+      "description": "Convierte una tableta o pantalla que no uses en una pantalla de cuidado de plantas del hogar: lo que toca hoy, se toca para marcarlo hecho, sin iniciar sesión.",
+      "securityNotice": "La dirección web que aparece en la pantalla es la contraseña. Cualquiera que vea o fotografíe la pantalla puede ver la misma lista de tareas y marcarlas como hechas; no puede ver tus notas, tus miembros ni nada más. Si alguien fotografía la pantalla, genera un enlace nuevo: eso revoca el anterior de inmediato.",
+      "issue": "Configurar una pantalla de pared",
+      "reissue": "Generar un enlace nuevo (revoca el anterior)",
+      "revoke": "Apagar la pantalla",
+      "issuedTitle": "Tu enlace de pantalla de pared está listo",
+      "issuedBody": "Ábrelo en la pantalla y déjalo ahí. Cópialo ahora: por seguridad no volveremos a mostrar el enlace completo.",
+      "urlLabel": "Enlace de la pantalla de pared",
+      "copy": "Copiar",
+      "copied": "¡Copiado!",
+      "copyFailed": "No se pudo copiar automáticamente. Selecciona el enlace y cópialo manualmente.",
+      "none": "No hay ninguna pantalla de pared configurada para este hogar.",
+      "loadFailed": "No pudimos comprobar si hay una pantalla de pared en funcionamiento. Esto no es lo mismo que «no hay ninguna pantalla»: inténtalo de nuevo.",
+      "runningSince": "Hay una pantalla de pared en funcionamiento desde el {{date}}.",
+      "currentInterval": "Se actualiza {{label}}.",
+      "adminOnly": "Solo los administradores del hogar pueden configurar o apagar la pantalla de pared.",
+      "intervalLabel": "Cada cuánto se actualiza la pantalla",
+      "intervalHelp": "Esta es la única función cuyo coste depende del tiempo que la pantalla esté encendida y no de cuánto se use, así que la cifra mensual se muestra junto a cada opción.",
+      "interval": {
+        "60": "Cada minuto (unos 0,05 $ al mes)",
+        "300": "Cada 5 minutos (unos 0,01 $ al mes)",
+        "900": "Cada 15 minutos (menos de un centavo al mes)",
+        "3600": "Cada hora (menos de un centavo al mes)"
+      }
+    }
+  },
   "settings": {
     "title": "Ajustes",
     "description": "Administra notificaciones y consulta el estado del plan de tu hogar.",
@@ -723,6 +780,7 @@
       "preferences": "Preferencias",
       "billing": "Estado del plan",
       "apiKeys": "Claves API",
+      "kiosk": "Pantalla de pared",
       "account": "Cuenta",
       "help": "Ayuda"
     },

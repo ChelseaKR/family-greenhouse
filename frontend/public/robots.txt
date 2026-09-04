@@ -27,6 +27,9 @@ Disallow: /confirm-email
 Disallow: /reset-password
 Disallow: /forgot-password
 Disallow: /join/
+# Token-scoped, no-account surfaces. Not linked from anywhere and not in the
+# sitemap, but a wall-display URL that leaks into a crawl is a leaked token.
+Disallow: /kiosk/
 Disallow: /coming-soon
 
 Sitemap: https://familygreenhouse.net/sitemap.xml

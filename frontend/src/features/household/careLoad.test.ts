@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivityEvent, HouseholdMember } from '@/services/householdService';
 import type { TaskWithCoverage } from '@/services/taskService';
-import { buildCareLoad, SITTER_ENTRY_KEY } from './careLoad';
+import { buildCareLoad, KIOSK_ENTRY_KEY, SITTER_ENTRY_KEY } from './careLoad';
 
 const NOW = Date.parse('2026-06-15T12:00:00.000Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -107,6 +107,23 @@ describe('buildCareLoad', () => {
     const sitter = summary.entries.find((e) => e.key === SITTER_ENTRY_KEY);
     expect(sitter).toMatchObject({ kind: 'sitter', completed: 2, holding: 0 });
     expect(summary.entries.some((e) => e.key.includes('link-a'))).toBe(false);
+  });
+
+  it('pools wall-display completions into their own row, never as a "past" member', () => {
+    const summary = build({
+      activity: [
+        completion('kiosk:link-1', 'the kiosk display', 1),
+        completion('kiosk:link-1', 'the kiosk display', 2),
+        completion('u1', 'Alice', 3),
+      ],
+    });
+
+    const kiosk = summary.entries.find((e) => e.key === KIOSK_ENTRY_KEY);
+    // 'past' renders as "no longer in the household", which would be a false
+    // statement about a screen on the kitchen wall.
+    expect(kiosk).toMatchObject({ kind: 'kiosk', completed: 2, holding: 0 });
+    expect(kiosk?.name).toBe('');
+    expect(summary.entries.some((e) => e.key.includes('link-1'))).toBe(false);
   });
 
   it('keeps a departed member in the tally so the remaining shares still add up', () => {

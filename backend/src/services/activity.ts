@@ -21,6 +21,10 @@ export interface TaskCompletedActivityPayload {
   taskType: string;
   notes?: string | null;
   viaSitter?: boolean;
+  /** Completed by tapping a household wall display (`kiosk:{linkId}` actor).
+   *  Distinct from viaSitter: nobody is named, and the household needs to be
+   *  able to tell a kiosk tap from a person so an unexpected one is visible. */
+  viaKiosk?: boolean;
 }
 
 export interface TaskSnoozedActivityPayload {

@@ -28,6 +28,14 @@ const SITTER_ACTOR_PREFIX = 'sitter:';
 /** Aggregate key for every sitter completion, whichever link it came through. */
 export const SITTER_ENTRY_KEY = 'sitter';
 
+/** Activity actor id prefix the kiosk-completion path writes (`kiosk:{linkId}`). */
+const KIOSK_ACTOR_PREFIX = 'kiosk:';
+
+/** Aggregate key for every wall-display completion. Its own row rather than a
+ *  'past' member: the kiosk is a surface, not a person who left, and labelling
+ *  it "Former member" would state something untrue on a shared screen. */
+export const KIOSK_ENTRY_KEY = 'kiosk';
+
 /**
  * Below this many completions a "share" is noise — three tasks in a month is
  * not evidence about how a household divides its work.
@@ -39,12 +47,13 @@ const LEAD_CARRIER_SHARE = 0.6;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type CareLoadKind = 'member' | 'sitter' | 'past';
+export type CareLoadKind = 'member' | 'sitter' | 'kiosk' | 'past';
 
 export interface CareLoadEntry {
-  /** userId for a member, `SITTER_ENTRY_KEY` for the pooled sitter row. */
+  /** userId for a member, `SITTER_ENTRY_KEY` for the pooled sitter row,
+   *  `KIOSK_ENTRY_KEY` for the pooled wall-display row. */
   key: string;
-  /** Display name. Empty for the sitter row — the UI supplies that label. */
+  /** Display name. Empty for the sitter and kiosk rows — the UI labels those. */
   name: string;
   kind: CareLoadKind;
   /** Care completions recorded inside the covered period. */
@@ -84,7 +93,7 @@ export interface CareLoadInputs {
   windowDays?: number;
 }
 
-const KIND_ORDER: Record<CareLoadKind, number> = { member: 0, sitter: 1, past: 2 };
+const KIND_ORDER: Record<CareLoadKind, number> = { member: 0, sitter: 1, kiosk: 2, past: 3 };
 
 export function buildCareLoad({
   members,
@@ -119,20 +128,23 @@ export function buildCareLoad({
     if (!Number.isFinite(at) || at < periodStartMs) continue;
 
     const viaSitter = event.actorId.startsWith(SITTER_ACTOR_PREFIX);
-    // Every sitter link collapses into one row: which link a completion came
-    // through is management detail, and pooling keeps link ids off the page.
-    const key = viaSitter ? SITTER_ENTRY_KEY : event.actorId;
+    const viaKiosk = event.actorId.startsWith(KIOSK_ACTOR_PREFIX);
+    // Every sitter link collapses into one row, and so does the wall display:
+    // which link a completion came through is management detail, and pooling
+    // keeps link ids off the page.
+    const key = viaSitter ? SITTER_ENTRY_KEY : viaKiosk ? KIOSK_ENTRY_KEY : event.actorId;
     const tally = tallies.get(key);
     if (tally) {
       tally.completed += 1;
     } else {
-      // An actor who is not a current member: someone who has since left. The
-      // activity feed already shows their name against these same events, so
-      // naming them here exposes nothing new — and dropping them would make
-      // the remaining shares add up to more than the household actually did.
+      // An actor who is not a current member and not one of the token-scoped
+      // surfaces: someone who has since left. The activity feed already shows
+      // their name against these same events, so naming them here exposes
+      // nothing new — and dropping them would make the remaining shares add
+      // up to more than the household actually did.
       tallies.set(key, {
-        name: viaSitter ? '' : event.actorName,
-        kind: viaSitter ? 'sitter' : 'past',
+        name: viaSitter || viaKiosk ? '' : event.actorName,
+        kind: viaSitter ? 'sitter' : viaKiosk ? 'kiosk' : 'past',
         completed: 1,
       });
     }
