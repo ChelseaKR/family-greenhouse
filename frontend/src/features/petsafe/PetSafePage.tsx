@@ -101,10 +101,14 @@ export function PetSafePage() {
         />
       </form>
 
-      {/* Live region so screen readers hear the result as it loads. */}
+      {/* Live region so screen readers hear the result as it loads. Every
+          child passes `live="off"`: this is a debounced search-as-you-type
+          surface, so an Alert that declares its own region here would announce
+          a second time per keystroke, and an assertive one would interrupt the
+          polite announcement this wrapper exists to make. */}
       <div className="mt-8 space-y-4" aria-live="polite" aria-busy={status === 'loading'}>
         {status === 'error' && (
-          <Alert variant="error" title="Something went wrong">
+          <Alert variant="error" title="Something went wrong" live="off">
             We couldn’t check that just now. Give it another moment and try again.
           </Alert>
         )}
@@ -114,7 +118,7 @@ export function PetSafePage() {
         ))}
 
         {showEmpty && (
-          <Alert variant="info" title="No match yet">
+          <Alert variant="info" title="No match yet" live="off">
             We don’t have that one in our checker yet. Double-check the spelling, or try the plant’s
             common name. When in doubt, assume it’s unsafe and keep it out of reach until you can
             confirm with your vet or the ASPCA.
@@ -174,8 +178,9 @@ function ToxicityCard({ match }: { match: ToxicityMatch }) {
     ? `${match.commonName} is pet-safe`
     : `${match.commonName} can be harmful to pets`;
 
+  // `live="off"`: PetSafePage renders these inside its own polite region.
   return (
-    <Alert variant={variant} title={title}>
+    <Alert variant={variant} title={title} live="off">
       <p className="italic">{match.scientificName}</p>
       <ul className="mt-2 space-y-1">
         <li>

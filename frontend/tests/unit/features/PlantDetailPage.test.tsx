@@ -172,7 +172,9 @@ describe('PlantDetailPage', () => {
 
     renderDetail('p1', { photoUploadFailed: true });
 
-    const recovery = await screen.findByRole('alert');
+    // `variant="info"` announces politely (role="status"): the plant did
+    // save, so this must not interrupt whatever is being read.
+    const recovery = await screen.findByRole('status');
     expect(recovery).toHaveTextContent('Plant saved; photo not uploaded');
     expect(recovery).toHaveTextContent('Choose the photo again below to retry');
     expect(screen.getByLabelText(/upload photo/i)).toBeEnabled();
