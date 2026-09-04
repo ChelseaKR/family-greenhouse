@@ -37,6 +37,9 @@ import { matchesSpaceFilter, plantLocationLabel, spaceMap, type SpaceFilter } fr
 
 type ViewMode = 'grid' | 'list' | 'spaces';
 
+/** Target of the Manage-spaces button's `aria-controls`. */
+const SPACE_MANAGER_PANEL_ID = 'plants-space-manager-panel';
+
 export function PlantsPage() {
   useDocumentTitle('Plants');
   const { t } = useTranslation();
@@ -95,6 +98,18 @@ export function PlantsPage() {
     });
   }, [plants, searchQuery, spaceFilter, spacesById]);
 
+  const trimmedQuery = searchQuery.trim();
+  const settled = !isLoading && !error && filteredPlants !== undefined;
+  const matchCount = filteredPlants?.length ?? 0;
+  const plantNoun = matchCount === 1 ? 'plant' : 'plants';
+  const filterSummary = !settled
+    ? ''
+    : trimmedQuery
+      ? `${matchCount} ${plantNoun} ${matchCount === 1 ? 'matches' : 'match'} \u201C${trimmedQuery}\u201D.`
+      : spaceFilter !== 'all'
+        ? `${matchCount} ${plantNoun} in this view.`
+        : '';
+
   // Propagation cue: plants that have cuttings get a 🌱 mark on their card.
   // Derived from the already-fetched list (parentPlantId is on every plant),
   // so it costs no extra request. Note the current view only sees parents
@@ -141,20 +156,25 @@ export function PlantsPage() {
       <BulkApplyTemplateDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
       <MovePlantsDialog isOpen={moveOpen} onClose={() => setMoveOpen(false)} />
 
-      {spaceManagerOpen && <SpaceManagerPanel />}
-
-      {/* Active vs past (archived / died / gave away) collection */}
+      {/* Active vs past (archived / died / gave away) collection.
+          Toggle buttons, NOT a tablist: there is no tab panel here — the same
+          grid below re-queries — and nothing implements roving tabIndex or
+          arrow-key movement. `role="tab"` made NVDA/JAWS announce "1 of 2" and
+          switch into tab-interaction mode, after which the arrow keys it had
+          just promised did nothing. `aria-pressed` describes what these
+          actually are, and matches the View-mode group 30 lines below.
+          SettingsPage is the one surface here that warrants the full pattern
+          and it implements all of it. */}
       <div
         className="flex gap-1 border-b border-primary-100/70"
-        role="tablist"
+        role="group"
         aria-label="Plant collection"
       >
         {(['active', 'past'] as const).map((v) => (
           <button
             key={v}
             type="button"
-            role="tab"
-            aria-selected={view === v}
+            aria-pressed={view === v}
             onClick={() => setView(v)}
             className={clsx(
               '-mb-px border-b-2 px-3 py-2 text-sm font-medium min-h-touch',
@@ -188,6 +208,10 @@ export function PlantsPage() {
           type="button"
           variant="secondary"
           onClick={() => setSpaceManagerOpen((open) => !open)}
+          aria-expanded={spaceManagerOpen}
+          // Only while the panel exists: an `aria-controls` pointing at an id
+          // that is not in the document is a dangling reference.
+          aria-controls={spaceManagerOpen ? SPACE_MANAGER_PANEL_ID : undefined}
           leftIcon={<Cog6ToothIcon className="h-5 w-5" aria-hidden="true" />}
         >
           {t('spaces.manageAction')}
@@ -238,6 +262,18 @@ export function PlantsPage() {
         </div>
       </div>
 
+      {/* Mounted immediately after the row that holds its toggle, so the panel
+          a user just revealed is reachable by continuing to Tab. It used to
+          render ~40 lines earlier in the JSX — above the toggle, the search box
+          and the collection switch — so pressing the button inserted content
+          behind the caret and forward Tab walked straight past it into the
+          grid, reachable only by Shift+Tab back through everything. */}
+      {spaceManagerOpen && (
+        <div id={SPACE_MANAGER_PANEL_ID}>
+          <SpaceManagerPanel />
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2" role="group" aria-label={t('spaces.filterAria')}>
         {(['all', 'inside', 'outside', 'unplaced'] as const).map((filter) => (
           <button
@@ -256,6 +292,20 @@ export function PlantsPage() {
           </button>
         ))}
       </div>
+
+      {/* Announce the filtered count, not just the visual change: this list
+          re-filters on every keystroke and on every space chip, and a
+          keyboard/screen-reader user otherwise gets no feedback that the page
+          under them has shrunk — or emptied. Same pattern (and the same
+          reasoning) as HelpPage's search summary.
+
+          Empty while the read is unsettled: "0 plants match" from a failed or
+          in-flight load is a number we do not have, and publishing it would be
+          exactly the settled-read defect the overdue chip on /tasks was fixed
+          for. */}
+      <p aria-live="polite" className="text-sm text-gray-600">
+        {filterSummary}
+      </p>
 
       {/* Plant list */}
       {isLoading ? (

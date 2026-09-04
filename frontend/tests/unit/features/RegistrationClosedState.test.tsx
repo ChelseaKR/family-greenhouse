@@ -30,7 +30,8 @@ describe('public registration emergency-off state', () => {
     );
 
     expect(screen.queryByRole('button', { name: /create account/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(/registration is currently paused/i);
+    // Informational, so polite (role="status") rather than interrupting.
+    expect(screen.getByRole('status')).toHaveTextContent(/registration is currently paused/i);
     expect(screen.queryByText(/registration is open/i)).not.toBeInTheDocument();
   });
 });

@@ -236,3 +236,75 @@ describe('TasksPage overdue chip', () => {
     expect(overdueChip()).not.toHaveAttribute('aria-label');
   });
 });
+
+describe('TasksPage filter announcements', () => {
+  const climate = http.get(`${API}/households/hh-1/climate`, () =>
+    HttpResponse.json({ configured: false, weather: null, tips: [] })
+  );
+  const task = (id: string, plantName: string, overdue: boolean) => {
+    const due = new Date();
+    due.setHours(12, 0, 0, 0);
+    due.setDate(due.getDate() + (overdue ? -2 : 5));
+    return {
+      id,
+      plantId: `plant-${id}`,
+      plantName,
+      type: 'water',
+      customType: null,
+      frequency: 7,
+      lastCompleted: null,
+      nextDue: due.toISOString(),
+      assignedTo: null,
+      assignedToName: null,
+      notes: null,
+      createdBy: 'u1',
+      createdAt: '',
+    };
+  };
+  function signIn() {
+    useAuthStore.setState({
+      accessToken: 'access-1',
+      user: { id: 'u1', email: 'me@example.com', name: 'Me', householdId: 'hh-1' } as User,
+    });
+  }
+
+  // The chips are correct — `role="group"` with a label, `aria-pressed` per
+  // chip — so pressing "Overdue" announces that the button is now pressed.
+  // What was never announced is the consequence: the sections below re-render
+  // with a different set. axe cannot see a transition (#447).
+  it('announces how many tasks the chosen filter leaves', async () => {
+    signIn();
+    server.use(
+      http.get(`${API}/tasks`, () =>
+        HttpResponse.json([
+          task('a', 'Overdue Fern', true),
+          task('b', 'Later Palm', false),
+          task('c', 'Later Pothos', false),
+        ])
+      ),
+      climate,
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
+    renderTasksPage();
+
+    const summary = await screen.findByText(/3 tasks shown/i);
+    expect(summary.getAttribute('aria-live')).toBe('polite');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Overdue/ }));
+
+    expect(await screen.findByText(/1 task shown/i)).toBeInTheDocument();
+  });
+
+  it('says nothing rather than "0 tasks shown" when the read failed', async () => {
+    signIn();
+    server.use(
+      http.get(`${API}/tasks`, () => new HttpResponse(null, { status: 500 })),
+      climate,
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
+    );
+    renderTasksPage();
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText(/tasks? shown/i)).not.toBeInTheDocument();
+  });
+});

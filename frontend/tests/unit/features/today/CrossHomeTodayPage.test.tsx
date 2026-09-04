@@ -141,7 +141,9 @@ describe('CrossHomeTodayPage', () => {
       '/settings/billing'
     );
     expect(screen.queryByText(/Nothing due today/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toHaveTextContent(/unexpected error/i);
+    // Document-wide, and so independent of which live-region role the
+    // upgrade card carries: a 402 must never be reported as a crash.
+    expect(screen.queryByText(/unexpected error/i)).not.toBeInTheDocument();
   });
 
   it('surfaces any other failure as an error with a retry, never as an empty queue', async () => {

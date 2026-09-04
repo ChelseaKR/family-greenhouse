@@ -121,7 +121,10 @@ test.describe('Create plant flow', () => {
     // lands on that exact record and replaces the submitted /plants/new entry.
     await expect(page).toHaveURL(/\/plants\/[^/]+$/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: uniqueName })).toBeVisible();
-    await expect(page.getByRole('alert')).toContainText('Plant saved; photo not uploaded');
+    // `variant="info"` — the plant DID save, so the recovery notice is
+    // announced politely (role="status") rather than interrupting whatever the
+    // screen reader is mid-sentence on. See components/Alert.tsx.
+    await expect(page.getByRole('status')).toContainText('Plant saved; photo not uploaded');
     expect(createRequests).toBe(1);
     expect(putAttempts).toBe(1);
 

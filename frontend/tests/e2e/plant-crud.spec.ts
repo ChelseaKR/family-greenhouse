@@ -101,7 +101,8 @@ test.describe('Plant CRUD', () => {
     await page.getByRole('button', { name: /archive for later/i }).click();
 
     await expect(page).toHaveURL(/\/plants$/);
-    await page.getByRole('tab', { name: /past plants/i }).click();
+    // Toggle button, not a tab — see #445.
+    await page.getByRole('button', { name: /past plants/i }).click();
     const archivedPlant = page.getByRole('link', { name: new RegExp(plantName, 'i') });
     await expect(archivedPlant).toBeVisible();
     await expect(archivedPlant.getByText('Archived')).toBeVisible();

@@ -102,4 +102,39 @@ describe('PetSafePage', () => {
     expect(screen.getByLabelText(/plant or species name/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /get started/i })).toHaveAttribute('href', '/register');
   });
+
+  // The page deliberately wraps its results in one polite live region so a
+  // search-as-you-type surface reads its own results calmly (#446). Every child
+  // of that region used to be an assertive `Alert`, so each keystroke's result
+  // set interrupted the previous announcement mid-word — the polite wrapper was
+  // defeated by its own children. Nothing in axe can see this: assertive
+  // nested inside polite is valid ARIA.
+  it('never nests an assertive region inside its own polite results region', async () => {
+    lookup.mockResolvedValue([spiderPlant]);
+    const user = userEvent.setup();
+    const { container } = renderPage();
+
+    await user.type(screen.getByLabelText(/plant or species name/i), 'spider plant');
+    expect(await screen.findByText(/is pet-safe/i)).toBeInTheDocument();
+
+    const polite = container.querySelector('[aria-live="polite"]');
+    expect(polite).not.toBeNull();
+    expect(polite!.querySelector('[role="alert"], [aria-live="assertive"], [role="status"]')).toBe(
+      null
+    );
+  });
+
+  it('still announces an error, once, through the same polite region', async () => {
+    lookup.mockRejectedValue(new Error('network down'));
+    const user = userEvent.setup();
+    const { container } = renderPage();
+
+    await user.type(screen.getByLabelText(/plant or species name/i), 'spider plant');
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+
+    const polite = container.querySelector('[aria-live="polite"]');
+    expect(polite).not.toBeNull();
+    expect(polite!.textContent).toMatch(/something went wrong/i);
+    expect(polite!.querySelector('[role="alert"], [aria-live="assertive"]')).toBe(null);
+  });
 });
