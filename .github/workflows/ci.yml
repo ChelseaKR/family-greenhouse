@@ -527,35 +527,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Resolve the installed Playwright version
-        # Keyed off the version npm actually installed from the lockfile, not a
-        # hand-copied string: a lockfile bump then misses the cache and
-        # redownloads, which is the correct behaviour. Browser builds are
-        # version-locked to the client, so a stale cache would fail loudly
-        # ("Executable doesn't exist"), never silently run the wrong browser.
-        id: playwright
-        run: |
-          set -euo pipefail
-          version="$(node -p "require('@playwright/test/package.json').version")"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
-
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        # Deliberately NOT cached on ~/.cache/ms-playwright. That was tried and
+        # measured on this branch (run 33918873452, cold then warm) and it is a
+        # wash: the cache saves only the browser *download*, while the apt work
+        # behind `--with-deps` has to happen either way. Cold `install
+        # --with-deps` came in at 22-23s across four shards; warm, the restore
+        # cost 3-5s and `install-deps` alone still cost 11, 12, 15 and 41s. The
+        # median gain was ~5s on a ~140s job, the worst case was a ~23s loss,
+        # and it bought a cache key to keep correct. Not worth either.
         run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright OS dependencies
-        # The cache holds the browser build, not the apt packages it links
-        # against, so the OS deps are still installed on a cache hit — this is
-        # the cheap half of the ~27s the full install cost.
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
 
       - name: Run e2e + a11y suite (shard ${{ matrix.shard }} of 4)
         working-directory: frontend
