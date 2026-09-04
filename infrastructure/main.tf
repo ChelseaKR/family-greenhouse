@@ -215,6 +215,7 @@ module "api" {
   leaf_health_monthly_cap_seedling   = var.leaf_health_monthly_cap_seedling
   leaf_health_monthly_cap_garden     = var.leaf_health_monthly_cap_garden
   leaf_health_monthly_cap_greenhouse = var.leaf_health_monthly_cap_greenhouse
+  leaf_health_demo                   = var.leaf_health_demo
   chat_budget_input_tokens           = var.chat_budget_input_tokens
   chat_budget_output_tokens          = var.chat_budget_output_tokens
   # Per-tier chat budgets; a blank one inherits the flat pair above.

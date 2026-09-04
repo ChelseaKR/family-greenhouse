@@ -11,12 +11,22 @@
  * the exact same InvokeModel API; the image is an Anthropic image content
  * block ({ type: 'image', source: { type: 'base64', media_type, data } }).
  *
- * Demo mode: when Bedrock isn't reachable for ACCESS reasons (no credentials,
- * AccessDenied, model-access not granted) we return a canned 'monitor'
- * assessment flagged `demo: true`, mirroring identify's not-configured
- * fallback. We can't gate on the env var alone — Terraform intentionally
- * passes BEDROCK_CHAT_MODEL_ID="" to mean "use code default" while the
- * Lambda role DOES have Bedrock access, so env-emptiness is not a signal.
+ * Demo mode is declared by the ENVIRONMENT (`LEAF_HEALTH_DEMO=1`), not
+ * inferred from an error. A deployment that says it has no Bedrock gets the
+ * canned 'monitor' assessment flagged `demo: true` on an access error, which
+ * is what lets a preview environment exercise the feature without
+ * credentials. A deployment that has NOT said so treats the same
+ * AccessDeniedException as an outage: ERROR log, LeafHealthUnavailableError,
+ * 503 from the handler.
+ *
+ * That split exists because the two are indistinguishable at the SDK layer,
+ * and collapsing them meant a Terraform apply or model-access change that
+ * removed `bedrock:InvokeModel` would silently turn every leaf-health check
+ * in production into the same fixture at HTTP 200 — no 5xx, no Lambda error
+ * metric, and one WARN line below every metric filter (#463).
+ *
+ * BEDROCK_CHAT_MODEL_ID is NOT the signal: Terraform intentionally passes ""
+ * to mean "use the code default" while the Lambda role does have access.
  * Genuine runtime failures (timeout, throttle, malformed output) still throw
  * so the handler can surface a 502.
  */
@@ -70,6 +80,37 @@ export class LeafHealthParseError extends Error {
     super(message);
     this.name = 'LeafHealthParseError';
   }
+}
+
+/**
+ * Thrown when this deployment cannot reach Bedrock at all and has NOT declared
+ * itself a demo environment. The handler maps it to a 503 — an honest "we
+ * could not look" — rather than the canned demo assessment, which at HTTP 200
+ * is an unavailable model rendered as a real assessment of someone's plant.
+ */
+export class LeafHealthUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LeafHealthUnavailableError';
+  }
+}
+
+/**
+ * Whether THIS deployment has no Bedrock and knows it. Read per call rather
+ * than at module load so a config change does not need a cold start, and so
+ * tests can exercise both sides without re-importing.
+ *
+ * The distinction matters because an `AccessDeniedException` cannot tell a
+ * preview environment with no model access from a production credential
+ * regression — the branch used to treat both as "return the fixture", so a
+ * Terraform apply that dropped `bedrock:InvokeModel` would have turned every
+ * leaf-health check in production into the same canned answer at HTTP 200,
+ * with nothing louder than a WARN below every metric filter. Declaring demo
+ * mode is an environment fact; an access error is not.
+ */
+function demoModeEnabled(): boolean {
+  const raw = process.env.LEAF_HEALTH_DEMO;
+  return raw === '1' || raw === 'true';
 }
 
 /** Strict response contract the model must emit. Anything else is a 502. */
@@ -185,8 +226,9 @@ function extractAssessment(text: string): LeafHealthAssessment {
  *
  * Throws LeafHealthParseError when the model answered but unparseably (the
  * handler maps that to an exposed 502 "could not analyze"), and rethrows
- * transport errors (timeout, throttle) for the generic 502 path. Access
- * errors return the canned demo assessment instead — see module docs.
+ * transport errors (timeout, throttle) for the generic 502 path. An access
+ * error is the canned demo assessment only in a declared demo environment,
+ * and LeafHealthUnavailableError (-> 503) everywhere else — see module docs.
  */
 export async function assessLeafHealth(image: string): Promise<LeafHealthAssessment> {
   const { mediaType, data } = parseImageInput(image);
@@ -229,11 +271,24 @@ export async function assessLeafHealth(image: string): Promise<LeafHealthAssessm
     result = await client.send(command, { abortSignal: ctrl.signal });
   } catch (err) {
     if (isAccessError(err)) {
-      logger.warn(
+      if (demoModeEnabled()) {
+        logger.warn(
+          { err: (err as Error).name, modelId: MODEL_ID },
+          'leaf_health_bedrock_unavailable_demo_fallback'
+        );
+        return DEMO_ASSESSMENT;
+      }
+      // ERROR, not WARN: this environment is supposed to have Bedrock, so a
+      // credential/model-access regression here is an outage. The handler
+      // turns it into a 503, which the existing api-5xx and Lambda-error
+      // alarms can already see — a 200 carrying a fixture cannot be alarmed on.
+      logger.error(
         { err: (err as Error).name, modelId: MODEL_ID },
-        'leaf_health_bedrock_unavailable_demo_fallback'
+        'leaf_health.bedrock_access_denied'
       );
-      return DEMO_ASSESSMENT;
+      throw new LeafHealthUnavailableError(
+        `Bedrock rejected this deployment (${(err as Error).name})`
+      );
     }
     if ((err as Error).name === 'AbortError') {
       throw new Error(`Bedrock timed out after ${TIMEOUT_MS}ms`, { cause: err });

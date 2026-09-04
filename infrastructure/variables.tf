@@ -265,6 +265,19 @@ variable "leaf_health_monthly_cap_greenhouse" {
   }
 }
 
+# Whether this environment is allowed to answer a leaf-health check with the
+# canned demo assessment when Bedrock refuses it. FALSE by default, and that
+# default is the point: an environment that is supposed to reach Bedrock must
+# surface a credential or model-access regression as a 503 the api-5xx alarm
+# can see, not as a fixture at HTTP 200 that reads like a real assessment of
+# someone's plant. Set true only for a preview/dev environment whose Lambda
+# role genuinely has no Bedrock access.
+variable "leaf_health_demo" {
+  description = "Allow the canned demo leaf-health assessment when Bedrock refuses this deployment. True ONLY for an environment with no Bedrock access."
+  type        = bool
+  default     = false
+}
+
 # Chat (services/chat/budget.ts). The flat pair has been declared in
 # modules/api/variables.tf since the chat budget shipped, but never at this
 # level and never passed through main.tf — so a tfvars value was silently

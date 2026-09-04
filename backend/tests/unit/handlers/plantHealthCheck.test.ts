@@ -246,6 +246,25 @@ describe('plants health-check handler', () => {
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
+  // #463: a Bedrock access regression in an environment that is supposed to
+  // have Bedrock must be a 5xx the existing alarms can see, not a 200 carrying
+  // a canned assessment of someone's plant.
+  it('maps a Bedrock access refusal to an exposed 503, releases the reservation, and records no activity', async () => {
+    const unavailable = new Error('Bedrock rejected this deployment (AccessDeniedException)');
+    unavailable.name = 'LeafHealthUnavailableError';
+    vi.mocked(leafHealth.assessLeafHealth).mockRejectedValue(unavailable);
+    const checkPlantHealth = await subject();
+
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatch(/temporarily unavailable on this server/);
+    expect(res.body).toMatch(/Nothing was analyzed/);
+    // No paid work happened, so the month's allowance is not spent.
+    expect(leafHealthBudget.releaseUsage).toHaveBeenCalledWith('hh-1');
+    expect(activity.recordActivity).not.toHaveBeenCalled();
+  });
+
   it('surfaces transport failures as an exposed 502 message and records no activity', async () => {
     vi.mocked(leafHealth.assessLeafHealth).mockRejectedValue(
       new Error('Bedrock timed out after 5000ms')

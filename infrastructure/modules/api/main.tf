@@ -424,6 +424,9 @@ locals {
     LEAF_HEALTH_MONTHLY_CAP_SEEDLING   = var.leaf_health_monthly_cap_seedling
     LEAF_HEALTH_MONTHLY_CAP_GARDEN     = var.leaf_health_monthly_cap_garden
     LEAF_HEALTH_MONTHLY_CAP_GREENHOUSE = var.leaf_health_monthly_cap_greenhouse
+    # "This environment has no Bedrock." Only then does an access error become
+    # the canned demo assessment; everywhere else it is a 503 (services/leafHealth.ts).
+    LEAF_HEALTH_DEMO = var.leaf_health_demo ? "1" : "0"
   }
 
   weather_environment = {
