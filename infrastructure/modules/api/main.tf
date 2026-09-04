@@ -1181,8 +1181,24 @@ resource "aws_lambda_permission" "year_recap_eventbridge" {
 # `count` rather than an unconditional resource: an environment with no domain
 # has no email module, hence no topic. The function is still deployed there;
 # it just never receives anything.
+#
+# The count reads `var.ses_events_enabled`, NOT `var.ses_event_topic_arn`. The
+# ARN is a resource attribute of a topic that lives in another module, so on any
+# run where that topic has not been created yet it is unknown at plan time and
+# Terraform refuses the whole plan:
+#
+#   Error: Invalid count argument
+#   The "count" value depends on resource attributes that cannot be determined
+#   until apply
+#
+# That is a plan-time failure of the ENTIRE root module, so it cannot be reached
+# by `terraform validate` (which never resolves cross-module values) and it only
+# shows up against a state where the topic is absent. `ses_events_enabled` comes
+# from `var.domain_name != ""` in the root — a plain input variable, known before
+# anything is refreshed. The ARN is still used for the values below, where an
+# unknown is perfectly fine.
 resource "aws_sns_topic_subscription" "email_events" {
-  count = var.ses_event_topic_arn == "" ? 0 : 1
+  count = var.ses_events_enabled ? 1 : 0
 
   topic_arn = var.ses_event_topic_arn
   protocol  = "lambda"
@@ -1190,7 +1206,7 @@ resource "aws_sns_topic_subscription" "email_events" {
 }
 
 resource "aws_lambda_permission" "email_events_sns" {
-  count = var.ses_event_topic_arn == "" ? 0 : 1
+  count = var.ses_events_enabled ? 1 : 0
 
   statement_id  = "AllowSNSInvokeEmailEvents"
   action        = "lambda:InvokeFunction"

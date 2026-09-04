@@ -175,8 +175,13 @@ module "api" {
   ses_reply_to_email = var.email_reply_to
   # Attaching the configuration set is what makes SES publish bounce/complaint
   # events at all; the topic ARN is what the emailEvents Lambda subscribes to.
-  ses_configuration_set      = var.domain_name == "" ? "" : module.email[0].configuration_set_name
-  ses_event_topic_arn        = var.domain_name == "" ? "" : module.email[0].event_topic_arn
+  ses_configuration_set = var.domain_name == "" ? "" : module.email[0].configuration_set_name
+  ses_event_topic_arn   = var.domain_name == "" ? "" : module.email[0].event_topic_arn
+  # The SAME predicate that gates `module.email` above, passed down separately
+  # because the api module needs it at PLAN time. `ses_event_topic_arn` is a
+  # resource attribute and is unknown until the topic exists, which makes it
+  # illegal in a `count` — see modules/api/main.tf "SES delivery feedback".
+  ses_events_enabled         = var.domain_name != ""
   web_push_vapid_public_key  = var.web_push_vapid_public_key
   web_push_vapid_private_key = var.web_push_vapid_private_key
   web_push_vapid_subject     = var.web_push_vapid_subject
