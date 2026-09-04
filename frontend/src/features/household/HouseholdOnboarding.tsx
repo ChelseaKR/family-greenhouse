@@ -65,13 +65,31 @@ export function HouseholdOnboarding() {
         queryClient.invalidateQueries();
         navigate('/dashboard');
       } else {
-        setHousehold(household.id, 'admin');
-        // The `custom:household_id` claim was just written to Cognito, but our
-        // current access token predates it. Refresh now so the very first
-        // /dashboard request carries valid household claims instead of eating
-        // a 403 and bouncing through the interceptor's on-demand refresh.
-        // Best-effort: if the refresh fails, the interceptor still recovers on
-        // the first failing request.
+        // Refresh BEFORE `setHousehold`, not after. The `custom:household_id`
+        // claim is written (and awaited) by POST /households before it answers
+        // 201, so a refresh here is guaranteed to pick it up — but our current
+        // token still predates it.
+        //
+        // Ordering is the whole fix. `setHousehold` sets `user.householdId`,
+        // which flips `hasHousehold` in App.tsx, and `OnboardingGate` renders
+        // `<Navigate to="/welcome" replace />` on that very render. WelcomeFlow
+        // then mounts and fires its plants query IMMEDIATELY — synchronously,
+        // before an `await` placed after `setHousehold` could ever resolve. So
+        // refreshing afterwards, as this did, could not prevent the 403 it was
+        // written to prevent: the request was already in flight.
+        //
+        // Measured against deployed staging: refreshing after the store flip
+        // produced a 403 on `GET /plants` every run. The pre-#394 path, which
+        // fanned out the whole dashboard instead of the one welcome query,
+        // produced EIGHT. They self-heal via the interceptor, but a failed
+        // plants read is not nothing — `decideFirstRun` treats `plantsFailed`
+        // as "step aside to /dashboard", so a brand-new household could be
+        // skipped past first-run activation entirely by a transient 403.
+        //
+        // Still best-effort: if the refresh fails we fall through and set the
+        // household anyway, and the 401 interceptor recovers as before. The
+        // ordering only removes the guaranteed race, it does not add a new
+        // way to fail.
         const { refreshToken, setTokens } = useAuthStore.getState();
         if (refreshToken) {
           try {
@@ -81,6 +99,7 @@ export function HouseholdOnboarding() {
             // fall through — the 401-refresh interceptor will catch up.
           }
         }
+        setHousehold(household.id, 'admin');
         // If this signup began on a shared cutting card, bring the new member
         // back to it so they can graft it into the household they just made —
         // the lineage continues across people. Otherwise land on home.
