@@ -61,7 +61,11 @@ import {
   sitterBriefIncluded,
   sitterWindowDays,
 } from './services/sitterPlanGate.js';
-import { resolveCareNote, resolvePetSafety } from './services/sitterBrief.js';
+// From models/, NOT services/sitterBrief.js: that module imports
+// plantService/spaceService/taskService, which reach utils/dynamodb.ts and
+// call requireEnv('TABLE_NAME') at import time — which took this dev server
+// down before it could answer /health.
+import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
