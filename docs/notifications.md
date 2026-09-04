@@ -158,17 +158,37 @@ PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
 userId, browser, email, sms, phone, phoneVerified,
-dndStart, dndEnd, timezone, pestAlerts, weeklyDigest,
-memberJoined, taskUpForGrabs, coverageUpdates, careCredit, updatedAt
+dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, yearRecap,
+emailLocale, memberJoined, taskUpForGrabs, coverageUpdates, careCredit,
+updatedAt
 ```
 
-The last four are the household-email switches. Like `weeklyDigest`, they are
-optional in the PUT body and default-on at read time _only when `email` is on_,
-so a row written before they existed is not silently opted into new mail it
-never accepted, and an older client that omits them keeps the stored value
-instead of resetting it.
+`memberJoined`, `taskUpForGrabs`, `coverageUpdates` and `careCredit` are the
+household-email switches; `yearRecap` gates the annual recap, which used to
+have no control at all — it was gated on `email` alone, so a user who unticked
+the weekly digest, the only summary opt-out the UI offered, still received the
+January summary. Like `weeklyDigest`, all of them are optional in the PUT body
+and default-on at read time _only when `email` is on_, so a row written before
+they existed is not silently opted into new mail it never accepted, and an
+older client that omits them keeps the stored value instead of resetting it.
+
+`emailLocale` is the exception to that pattern: it defaults to `''`, not to a
+language, because "never chosen" has to stay distinguishable from a choice.
 
 One row per user. Read on every reminder fan-out; written when the user saves the settings page.
+
+### Email capability secret
+
+```
+PK: USER#{userId}
+SK: EMAILCAP
+entityType: EmailCapabilitySecret
+secret
+```
+
+A random 256-bit value used to sign unsubscribe capability URLs. On its own row
+so a capability write can never touch delivery preferences. Rotating it revokes
+every outstanding link for that user.
 
 ### Push subscriptions
 
@@ -250,11 +270,11 @@ The reminder body is a multi-line list; see "What the reminder actually says"
 above for the layout and the rules it holds. The digest, recap and welcome
 emails compose their own bodies.
 
-We send plain-text only. No HTML. Reasons:
-
-- Templating overhead is not worth it for a household app
-- Plain-text avoids a class of phishing-look-alike risk
-- Email clients render it fine
+Replies to an app email reach `support@` via `SES_REPLY_TO` (Terraform:
+`ses_reply_to_email`), which the inbound SES rule set forwards to a human —
+see [ADR 0022](adr/0022-email-deliverability-and-bounce-handling.md). Under
+`SendRawEmailCommand` that value becomes a `Reply-To:` MIME header rather than
+a command parameter, because raw sends have no `ReplyToAddresses`.
 
 Without `SES_FROM_EMAIL`, the notifier logs an `email_dry_run` line and returns.
 
@@ -318,6 +338,117 @@ They read `notificationPrefs` for the `timezone` field only, and they carry no
 unsubscribe link — instead a footer states that they are billing messages and
 why there is no unsubscribe. The welcome email is the third member of this
 group: it also ignores preferences, by design.
+
+#### Multipart HTML + text (ADR 0021)
+
+Every email may carry both an HTML and a plain-text part. The send path is
+`SendRawEmailCommand`, not `SendEmailCommand`: the simple API has no header
+surface at all, so `List-Unsubscribe` was unreachable and every body was
+text-only. ADR 0021 records why raw MIME over SESv2, and answers the
+phishing rationale the old text-only policy rested on point by point.
+
+The rendering kit lives in `backend/src/services/email/`:
+
+| File                 | What it owns                                                                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `template.ts`        | `renderEmail(doc)` → `{ html, text }`. Blocks: heading, text, notice, row, button, divider. Tables + inline styles, 600px cap, dark-mode palette, preheader. Escapes every interpolated value. |
+| `links.ts`           | The only place an email builds a URL. `plantUrl`, `taskUrl`, `tasksUrl`, `settingsUrl`, `unsubscribeUrl`, plus `safeLinkUrl` and `isOwnAssetUrl`.                                              |
+| `catalog.ts`         | English + Spanish strings, `t()` / `tn()`, `formatCount`, `formatDaysAgo`.                                                                                                                     |
+| `locale.ts`          | `resolveEmailLocaleForUser(userId, householdId?)` — **the accessor every composer should call.**                                                                                               |
+| `capability.ts`      | Revocable per-user tokens for one-click unsubscribe.                                                                                                                                           |
+| `mime.ts`            | `multipart/alternative` assembly and RFC 2047 subject encoding.                                                                                                                                |
+| `unsubscribePage.ts` | The (deliberately unstyled) landing page.                                                                                                                                                      |
+
+The plain-text part is generated from the same block list by its own layout
+rules, so it reads as a real document rather than stripped HTML.
+
+Adopted so far: the welcome email, the weekly digest, the annual recap. The
+reminder and pest-alert payloads still go out text-only through
+`notifier.sendToUser`'s generic `{title, body, url}` shape; converting them
+means giving the notifier a structured payload.
+
+#### Email language
+
+`emailLocale` on the preferences row: `'en'`, `'es'`, or `''` for **never
+chosen**. The empty sentinel is the fix for the timezone trap documented below
+— `timezone` cannot distinguish "never set" from "chose UTC", so quiet hours
+can silently apply in the wrong zone. `emailLocale` can, and the settings page
+back-fills the detected language on load rather than waiting for a Save.
+
+Resolution order, via `resolveEmailLocaleForUser`:
+
+1. the recipient's own `emailLocale`
+2. the household's — the most common language its members chose, ties broken by
+   earliest joiner
+3. `en`
+
+Every resolution returns a `source` (`user` / `household` / `default` /
+`unavailable`) and callers log it, so a fallback to English is countable rather
+than silent.
+
+The catalog is backend-local because a Lambda cannot reach the frontend
+workspace. **Every i18n CI gate scans `frontend/` only, so none of them sees
+it.** Its guard is `backend/tests/unit/services/email/catalog.test.ts`, which
+enforces key parity, placeholder parity and the CLDR plural categories each
+locale requires, and runs inside `npm run verify`.
+
+#### What the weekly digest says
+
+`services/digestReport.ts` gathers it; `services/digest.ts` delivers it. Every
+data source returns a discriminated result, so a failed read renders as a
+sentence saying we could not look — never as an empty list or a zero.
+
+| Section                                             | Source                                                            | Failure renders as                                     |
+| --------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| At-risk plants (unclaimed first, then most overdue) | `getTasksDueBy` + `getPlants('all')`                              | "We could not check which plants need care this week…" |
+| Who last did it, and when                           | `getTaskCompletions(plantId, 1)` per listed row                   | "Care history could not be loaded for this plant."     |
+| Weather tip                                         | `climate.peekCachedWeather` — cache only                          | "We could not read your local forecast this week."     |
+| 7-vs-7-day trend                                    | `getDailyCompletionCounts(30)`                                    | "We could not load your household's 30-day trend."     |
+| Pet safety                                          | curated `models/petToxicity.ts` × `PlantSpace.petAccess === true` | "We could not check which spaces your pets can reach." |
+
+Reading plants with the `'all'` filter costs the same single query and lets the
+gather step tell a task on a plant that legitimately died from a task whose
+plant row is missing entirely; the latter is counted and logged as
+`digest.orphan_overdue_tasks`.
+
+**The weather is cache-only on purpose.** `climate.getWeatherCached` calls
+OpenWeatherMap on a miss, spends from the shared daily budget, and throws
+without `OPENWEATHER_API_KEY` — which the digests Lambda deliberately does not
+have. `peekCachedWeather` reads the cached row and nothing else, so the digest
+uses a fresh snapshot when the household's own app use put one there and says
+nothing about the weather otherwise.
+
+**When no digest is sent.** A quiet week — nothing overdue, nothing failed —
+is skipped and logged as `digest.skipped_nothing_to_say` rather than mailing a
+cheerful nothing. A week whose at-risk read FAILED still sends, carrying the
+line above, because silence would otherwise read as an all-clear. Members with
+an active vacation window receive nothing; their plants are named on the
+covering member's copy.
+
+#### One-click unsubscribe (RFC 8058)
+
+Non-transactional email carries:
+
+```
+List-Unsubscribe: <https://api.../notifications/email/unsubscribe?t=TOKEN>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+```
+
+- `GET /notifications/email/unsubscribe?t=…` renders a confirm form and
+  **changes nothing** — link scanners fetch every URL in a message.
+- `POST` performs it, and is what a provider's automated one-click hits.
+
+The token is an HMAC over `userId`, category and expiry, signed with a random
+per-user secret on `USER#{id} / EMAILCAP` (its own row: an upsert onto `PREFS`
+would create a record reading `email: false` and silently unsubscribe the user
+from everything). It can turn one category off for one user and nothing else.
+Revoke by rotating the secret.
+
+Categories: `weekly_digest`, `year_recap`, `pest_alerts`. Transactional mail is
+not unsubscribable and carries no header.
+
+Requires `PUBLIC_API_URL` in the Lambda environment. Unset in production, the
+header and footer link are omitted rather than pointing somewhere that 404s.
 
 ### SMS (SNS)
 

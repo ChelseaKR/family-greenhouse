@@ -363,6 +363,14 @@ locals {
     # var-shaped contract so a future dedicated assets domain is a wiring
     # change only.
     ASSETS_BASE_URL = var.allowed_origin
+    # PUBLIC_API_URL: this API's externally reachable base, stage path
+    # included. Email capability links (RFC 8058 one-click unsubscribe) must
+    # resolve with no session, so they point at the API — pointing them at the
+    # SPA origin would land on the app shell and 404. `aws_apigatewayv2_api`
+    # does not depend on the Lambdas (only the integrations do), so reading it
+    # here introduces no cycle. Unset means services/email/links.ts omits the
+    # unsubscribe header rather than shipping a link it knows is wrong.
+    PUBLIC_API_URL = "${aws_apigatewayv2_api.main.api_endpoint}/${var.environment}"
     # Source maps in stack traces: esbuild already emits them; this flag
     # tells Node 20 to actually use them when printing CloudWatch errors.
     NODE_OPTIONS = "--enable-source-maps"
@@ -990,6 +998,14 @@ locals {
     # the APNs/FCM sender ships (docs/mobile.md § Push notifications).
     "POST /notifications/devices"        = { group = "notifications", auth = "jwt" }
     "POST /notifications/devices/remove" = { group = "notifications", auth = "jwt" }
+    # RFC 8058 one-click unsubscribe (auth=none). The capability token in the
+    # query string is the whole credential; it can only turn ONE email
+    # category off for ONE user and is revocable per user. GET renders a
+    # confirm form (link scanners must not be able to unsubscribe anyone),
+    # POST performs it and is also what a mail provider's automated
+    # List-Unsubscribe-Post hits. Both are IP rate-limited in the handler.
+    "GET /notifications/email/unsubscribe"  = { group = "notifications", auth = "none" }
+    "POST /notifications/email/unsubscribe" = { group = "notifications", auth = "none" }
 
     # --- billing (plans + webhook public; webhook is Stripe-signed) ---
     "GET /billing/plans"     = { group = "billing", auth = "none" }

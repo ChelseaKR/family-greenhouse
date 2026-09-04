@@ -1677,6 +1677,36 @@ paths:
       tags: [Notifications]
       responses:
         '204': { description: Device token removed }
+  /notifications/email/unsubscribe:
+    get:
+      summary:
+        RFC 8058 one-click unsubscribe landing page. Public; the capability token in `t` is the
+        only credential. Renders a confirm form and changes nothing, so mail-client link scanners
+        cannot unsubscribe anyone.
+      tags: [Notifications]
+      security: []
+      parameters:
+        - { name: t, in: query, required: true, schema: { type: string } }
+        - { name: lang, in: query, required: false, schema: { type: string, enum: [en, es] } }
+      responses:
+        '200': { description: Confirmation page (text/html) }
+        '400': { description: Missing token }
+        '410': { description: Token invalid or expired }
+        '503': { description: Capability store unreachable; nothing was changed }
+    post:
+      summary:
+        Turn off one email category for the token's user. Also the target of a mail provider's
+        automated `List-Unsubscribe-Post`. Public and idempotent.
+      tags: [Notifications]
+      security: []
+      parameters:
+        - { name: t, in: query, required: true, schema: { type: string } }
+        - { name: lang, in: query, required: false, schema: { type: string, enum: [en, es] } }
+      responses:
+        '200': { description: Unsubscribed (text/html) }
+        '400': { description: Missing token }
+        '410': { description: Token invalid or expired }
+        '503': { description: Preference write failed; nothing was changed }
 
   # --- Billing ---
   /billing/plans:

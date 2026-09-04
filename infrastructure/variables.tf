@@ -87,7 +87,7 @@ variable "email_from_address" {
 }
 
 variable "email_reply_to" {
-  description = "Reply-To header for Cognito mail. Defaults to email_from_address when blank."
+  description = "Reply-To header for Cognito mail and for the app's own SES sends (reminders, digest, recap). Defaults to email_from_address when blank."
   type        = string
   default     = ""
 }

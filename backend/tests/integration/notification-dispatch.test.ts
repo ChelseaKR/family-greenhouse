@@ -38,14 +38,14 @@ import { seedHousehold, seedPlant } from './support/seed.js';
 import type { NotificationPreferences } from '../../src/services/notificationPrefs.js';
 
 // --- Outbound boundary mocks ------------------------------------------------
-// SES: capture every SendEmailCommand the real emailNotifier issues.
+// SES: capture every SendRawEmailCommand the real emailNotifier issues.
 const sesSendMock = vi.fn();
 vi.mock('@aws-sdk/client-ses', () => ({
   SESClient: vi.fn(function () {
     return { send: sesSendMock };
   }),
-  SendEmailCommand: vi.fn(function (input) {
-    return { input, kind: 'SendEmail' };
+  SendRawEmailCommand: vi.fn(function (input) {
+    return { input, kind: 'SendRawEmail' };
   }),
 }));
 // SNS: capture every PublishCommand the real smsNotifier issues.
@@ -171,9 +171,7 @@ async function clearReminderMarkers(): Promise<void> {
 /** The recipients that actually received an email / SMS / push this run. */
 function emailRecipients(): string[] {
   return sesSendMock.mock.calls.map(
-    (c) =>
-      (c[0] as { input: { Destination: { ToAddresses: string[] } } }).input.Destination
-        .ToAddresses[0]
+    (c) => (c[0] as { input: { Destinations: string[] } }).input.Destinations[0]
   );
 }
 function smsRecipients(): string[] {

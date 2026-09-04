@@ -2,10 +2,16 @@
  * One-time welcome email, sent when a brand-new user finishes setup by
  * creating their very first household.
  *
- * Like the digest/recap emails this is plain text (emailNotifier ships no HTML
- * yet) and goes straight through `emailNotifier.sendEmail` — it's a single
+ * Goes straight through `emailNotifier.sendEmail` — it's a single
  * transactional onboarding touch, not a real-time ping, so it skips the
- * `notifier.sendToUser` channel fan-out and the DND window.
+ * `notifier.sendToUser` channel fan-out and the DND window. It is also the
+ * first adopter of the shared email kit (`services/email/`), which is why it
+ * is short: the layout, the escaping, the plain-text twin and the footer all
+ * come from `renderEmail`, and this file only chooses the words.
+ *
+ * No `List-Unsubscribe`: this is transactional mail sent once, at the moment
+ * a person asks for an account, and there is nothing recurring to opt out of.
+ * The recurring mail (digest, recap, pest alerts) carries the header.
  *
  * A per-user delivery marker makes retries and overlapping first-household
  * requests safe. Failed/dry-run sends release their short lease so a later
@@ -17,44 +23,60 @@ import { DeleteCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { logger } from '../utils/logger.js';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import * as emailNotifier from './emailNotifier.js';
+import { t, type EmailLocale } from './email/catalog.js';
+import { renderEmail, type EmailBlock } from './email/template.js';
+import { settingsUrl } from './email/links.js';
+import { resolveEmailLocaleForUser } from './email/locale.js';
 
 const WELCOME_MARKER_SK = 'WELCOME#FIRST_HOUSEHOLD';
 const DELIVERY_LEASE_SECONDS = 5 * 60;
 
-/** Compose the plain-text welcome email. Pure + exported so it's unit-testable
- *  and the copy can be asserted without reaching SES. `appUrl` is the
- *  FRONTEND_URL base (no trailing slash); links hang off it. */
+/**
+ * Compose the welcome email. Pure + exported so the copy can be asserted
+ * without reaching SES. `appUrl` is the FRONTEND_URL base (no trailing
+ * slash); links hang off it.
+ *
+ * Note there is no hard wrapping. The old version broke its prose at ~72
+ * characters, which reads as ragged short lines on a phone; one logical line
+ * per paragraph lets the client wrap to its own width.
+ */
 export function composeWelcomeEmail(
   userName: string,
-  appUrl: string
-): { subject: string; text: string } {
+  appUrl: string,
+  locale: EmailLocale = 'en'
+): { subject: string; text: string; html: string } {
   const base = appUrl.replace(/\/+$/, '');
-  // A genuine first name when we have one, otherwise a warm generic greeting.
-  const greeting = userName.trim() ? `Hi ${userName.trim()},` : 'Hi there,';
-  const subject = 'Welcome to Family Greenhouse 🌱';
-  const text = [
-    greeting,
-    '',
-    "You're all set up — welcome to Family Greenhouse. We're glad you're here.",
-    '',
-    'The best first step is to add your first plant. It takes less than a',
-    'minute: give it a name, or start from a species suggestion and we’ll fill',
-    'in the care details for you.',
-    '',
-    `Add your first plant: ${base}/plants/new`,
-    '',
-    'A couple of small tips to get started:',
-    '  - Most houseplants would rather be a little too dry than too wet — when',
-    '    in doubt, wait a day and check the soil with your finger.',
-    '  - Bright, indirect light suits the widest range of plants. A spot near a',
-    '    window that never gets harsh midday sun is a safe bet.',
-    '',
-    `Not sure where to begin? Our care guides cover the popular plants: ${base}/care`,
-    '',
-    'Happy growing,',
-    'The Family Greenhouse team',
-  ].join('\n');
-  return { subject, text };
+  const trimmed = userName.trim();
+  const blocks: EmailBlock[] = [
+    {
+      kind: 'text',
+      text: trimmed
+        ? t(locale, 'welcome.greeting', { name: trimmed })
+        : t(locale, 'welcome.greetingGeneric'),
+    },
+    { kind: 'text', text: t(locale, 'welcome.intro') },
+    { kind: 'text', text: t(locale, 'welcome.firstStep') },
+    { kind: 'button', label: t(locale, 'welcome.cta'), href: `${base}/plants/new` },
+    { kind: 'heading', text: t(locale, 'welcome.tipsHeading') },
+    { kind: 'text', text: t(locale, 'welcome.tip1'), tone: 'muted' },
+    { kind: 'text', text: t(locale, 'welcome.tip2'), tone: 'muted' },
+    { kind: 'divider' },
+    { kind: 'text', text: t(locale, 'welcome.guides') },
+    { kind: 'button', label: t(locale, 'welcome.guidesCta'), href: `${base}/care` },
+    { kind: 'text', text: t(locale, 'welcome.signoff'), tone: 'muted' },
+  ];
+  const { html, text } = renderEmail({
+    locale,
+    title: t(locale, 'welcome.title'),
+    preheader: t(locale, 'welcome.preheader'),
+    blocks,
+    footer: {
+      reason: t(locale, 'footer.reason.welcome'),
+      safety: t(locale, 'footer.safety'),
+      links: [{ label: t(locale, 'footer.manage'), href: settingsUrl() }],
+    },
+  });
+  return { subject: t(locale, 'welcome.subject'), text, html };
 }
 
 /**
@@ -101,10 +123,22 @@ export async function sendWelcomeEmail(
     return false;
   }
 
+  // Resolved OUTSIDE the delivery try/catch. `resolveEmailLocaleForUser`
+  // handles its own read failure and reports `source: 'unavailable'`, so a
+  // locale problem can never be silently collapsed into "the send failed".
+  // The recipient has no preferences row yet at first-household time, so this
+  // is `source: 'default'` for almost everyone; logging the source keeps that
+  // visible rather than making English look chosen.
+  const { locale, source } = await resolveEmailLocaleForUser(userId);
+  logger.info(
+    { userId, locale, localeSource: source, msg: 'welcome_email_locale' },
+    'welcome_email_locale'
+  );
+
   let delivered = false;
   try {
-    const { subject, text } = composeWelcomeEmail(userName, appUrl);
-    delivered = await emailNotifier.sendEmail({ to: email, subject, text });
+    const { subject, text, html } = composeWelcomeEmail(userName, appUrl, locale);
+    delivered = await emailNotifier.sendEmail({ to: email, subject, text, html });
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, userId, msg: 'welcome_email_failed' },

@@ -104,6 +104,16 @@ import {
 } from './services/sitterPhotoPolicy.js';
 import { buildAwayRecap, pickRecapLink, recapWindow } from './services/awayRecapModel.js';
 import {
+  isEmailCategory,
+  signToken,
+  verifyTokenWithSecret,
+} from './services/email/capabilityToken.js';
+import {
+  renderConfirmPage,
+  renderDonePage,
+  renderInvalidPage,
+} from './services/email/unsubscribePage.js';
+import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
   paymentsAreAvailable,
@@ -318,6 +328,8 @@ interface NotificationPrefsRecord {
   taskUpForGrabs: boolean;
   coverageUpdates: boolean;
   careCredit: boolean;
+  yearRecap: boolean;
+  emailLocale: '' | 'en' | 'es';
   phoneVerified: boolean;
   updatedAt: string;
 }
@@ -4572,6 +4584,9 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     taskUpForGrabs: true,
     coverageUpdates: true,
     careCredit: true,
+    yearRecap: true,
+    // '' is "never chosen" — deliberately distinguishable from 'en'.
+    emailLocale: '',
     phoneVerified: false,
     updatedAt: new Date().toISOString(),
   };
@@ -4611,6 +4626,8 @@ const prefsSchema = z
     taskUpForGrabs: z.boolean().optional(),
     coverageUpdates: z.boolean().optional(),
     careCredit: z.boolean().optional(),
+    yearRecap: z.boolean().optional(),
+    emailLocale: z.enum(['', 'en', 'es']).optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
     message: 'Quiet hours require both a start and end time',
@@ -4733,11 +4750,106 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     taskUpForGrabs: body.taskUpForGrabs ?? current.taskUpForGrabs,
     coverageUpdates: body.coverageUpdates ?? current.coverageUpdates,
     careCredit: body.careCredit ?? current.careCredit,
+    yearRecap: body.yearRecap ?? current.yearRecap,
+    emailLocale: body.emailLocale ?? current.emailLocale,
     phoneVerified,
     updatedAt: new Date().toISOString(),
   };
   db.notificationPrefs.set(user.userId, updated);
   res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
+});
+
+/**
+ * One-click unsubscribe (RFC 8058), mirroring
+ * handlers/notifications/handler.ts. Secrets live in memory here instead of
+ * `USER#{id}/EMAILCAP`, but the token format and the verification rules are
+ * the production ones — `verifyTokenWithSecret` is the same function the
+ * Lambda calls, so a dev-minted link behaves exactly like a real one.
+ *
+ * `GET /notifications/email/dev-token?category=weekly_digest` is DEV ONLY:
+ * it mints a link so the flow can be exercised without SES.
+ */
+const emailCapabilitySecrets = new Map<string, string>();
+function localCapabilitySecret(userId: string): string {
+  const existing = emailCapabilitySecrets.get(userId);
+  if (existing) return existing;
+  const fresh = randomBytes(32).toString('base64url');
+  emailCapabilitySecrets.set(userId, fresh);
+  return fresh;
+}
+
+function localTokenUserId(token: string): string | null {
+  const parts = token.split('.');
+  if (parts.length !== 5 || parts[0] !== 'v1') return null;
+  try {
+    const userId = Buffer.from(parts[1], 'base64url').toString('utf8');
+    return userId || null;
+  } catch {
+    return null;
+  }
+}
+
+function unsubscribeLang(req: { query: Record<string, unknown> }): 'en' | 'es' {
+  return req.query.lang === 'es' ? 'es' : 'en';
+}
+
+type HtmlResponse = {
+  status: (code: number) => HtmlResponse;
+  type: (kind: string) => HtmlResponse;
+  set: (header: string, value: string) => HtmlResponse;
+  send: (body: string) => unknown;
+};
+
+function sendUnsubscribeHtml(res: HtmlResponse, status: number, body: string): void {
+  res.status(status).type('html').set('Cache-Control', 'no-store').send(body);
+}
+
+app.get('/notifications/email/dev-token', authMiddleware, (req, res) => {
+  const user = (req as any).user;
+  const category = isEmailCategory(req.query.category) ? req.query.category : 'weekly_digest';
+  const expiresAt = Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60;
+  const token = signToken(localCapabilitySecret(user.userId), user.userId, category, expiresAt);
+  res.json({ token, url: `http://localhost:4000/notifications/email/unsubscribe?t=${token}` });
+});
+
+app.get('/notifications/email/unsubscribe', (req, res) => {
+  const locale = unsubscribeLang(req);
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  const userId = token ? localTokenUserId(token) : null;
+  if (!token || !userId) return sendUnsubscribeHtml(res, 400, renderInvalidPage(locale));
+  const verified = verifyTokenWithSecret(token, localCapabilitySecret(userId));
+  if (verified.status !== 'ok') return sendUnsubscribeHtml(res, 410, renderInvalidPage(locale));
+  return sendUnsubscribeHtml(
+    res,
+    200,
+    renderConfirmPage({
+      locale,
+      actionUrl: `http://localhost:4000/notifications/email/unsubscribe?t=${encodeURIComponent(token)}&lang=${locale}`,
+      category: verified.category,
+    })
+  );
+});
+
+app.post('/notifications/email/unsubscribe', (req, res) => {
+  const locale = unsubscribeLang(req);
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  const userId = token ? localTokenUserId(token) : null;
+  if (!token || !userId) return sendUnsubscribeHtml(res, 400, renderInvalidPage(locale));
+  const verified = verifyTokenWithSecret(token, localCapabilitySecret(userId));
+  if (verified.status !== 'ok') return sendUnsubscribeHtml(res, 410, renderInvalidPage(locale));
+  const current = db.notificationPrefs.get(verified.userId) ?? defaultPrefs(verified.userId);
+  const field =
+    verified.category === 'weekly_digest'
+      ? 'weeklyDigest'
+      : verified.category === 'year_recap'
+        ? 'yearRecap'
+        : 'pestAlerts';
+  db.notificationPrefs.set(verified.userId, {
+    ...current,
+    [field]: false,
+    updatedAt: new Date().toISOString(),
+  });
+  return sendUnsubscribeHtml(res, 200, renderDonePage(locale, verified.category));
 });
 
 app.post(
