@@ -56,6 +56,28 @@ export default defineConfig({
     //
     // TZ (set above, in the main process) is unaffected: worker threads inherit
     // the real environment however many of them there are.
+    //
+    // Give a test more than vitest's 5s default. Almost nothing here needs it:
+    // the suite runs 1214 tests in ~70s of actual test time, about 58ms each.
+    // But these are jsdom render-and-query tests, and on a contended machine
+    // the wait is for a CPU slice, not for the code under test. Measured on a
+    // 10-core laptop at load average 97 — several agents each running the full
+    // `npm run verify` — a single run produced 37 failures across ten files,
+    // 28 of them literally `Test timed out in 5000ms` and the rest
+    // `findBy*` queries expiring on the same starvation. That run had no
+    // frontend changes in it at all; it was blocking an unrelated push.
+    //
+    // This does not weaken anything. No test here asserts a duration, so a
+    // longer ceiling cannot make a broken test pass — it only stops a busy
+    // machine failing a correct one, which is the failure that teaches people
+    // to reach for `--no-verify`. `backend/vitest.config.ts` made the same
+    // call at 10s for the same reason; 15s here because the jsdom render path
+    // starves harder than the backend's in-memory Express roundtrips.
+    //
+    // Deliberately NOT paired with a `retry`. A retry would hide a genuinely
+    // flaky test rather than reveal it, and this repo has a checker for gates
+    // that quietly stop failing.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
