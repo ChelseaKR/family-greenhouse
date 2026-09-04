@@ -64,22 +64,27 @@ import type {
   ToolUseBlock,
 } from './types.js';
 import { BUDGET_CONFIG, budgetConfigForPlan } from './budget.js';
+import {
+  GROUNDING_BLOCK_COPY,
+  PET_SAFETY_BLOCK_COPY,
+  detectChatLocale,
+  groundingBlockMessage,
+  petSafetyBlockMessage,
+} from './blockCopy.js';
 
 const MAX_TOOL_CALLS_PER_TURN = 5;
 const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
 const MAX_HISTORY_MESSAGES = 24;
 
-export const GROUNDING_BLOCK_MESSAGE =
-  "I couldn't verify every quantitative detail in that answer against the care knowledge I retrieved. Please rephrase the question or check a trusted horticultural source before acting.";
-
 /**
- * Replaces an answer that asserted a plant is safe for pets without a
- * non-toxic verdict from the curated table behind it (ADR 0011). A
- * refusal-with-pointer rather than a bare refusal: the verified checker is
- * one click away, and the acute case needs a phone number, not a chat.
+ * The English forms of the two block messages, kept as named exports because
+ * that is how the eval suite and the tests refer to them. Both messages now
+ * live in `blockCopy.ts` in every language the product ships, and the turn
+ * picks the one that matches the language the user asked in — see that file
+ * for why the question's language, and not a stored preference, decides it.
  */
-export const PET_SAFETY_BLOCK_MESSAGE =
-  "I can't confirm that plant is safe for pets: this answer didn't come from our verified pet-toxicity table, so I've held it back. Please use the pet-safety checker at /pet-safe (grounded in the ASPCA toxic and non-toxic plant list) or ask your vet. If an animal has already eaten or chewed a plant, or is showing symptoms, contact your vet or the ASPCA Animal Poison Control Center (888-426-4435) right away.";
+export const GROUNDING_BLOCK_MESSAGE = GROUNDING_BLOCK_COPY.en;
+export const PET_SAFETY_BLOCK_MESSAGE = PET_SAFETY_BLOCK_COPY.en;
 
 // Tokens reserved up front by the atomic budget gate (reserveBudget), then
 // reconciled to actual usage when the turn finishes. A modest representative
@@ -813,12 +818,20 @@ async function* turnEvents(
           );
           // A pet-safety block takes precedence: its message carries the
           // pointer to the verified checker and the poison-control line.
+          //
+          // Written in the language the user asked in. The model answers a
+          // Spanish question in Spanish; replacing that answer with an English
+          // constant switched language at the one moment the system decided the
+          // answer was too risky to give (#466).
+          const blockLocale = detectChatLocale(input.message);
           response = {
             ...response,
             content: [
               {
                 type: 'text',
-                text: blockedOnSafety ? PET_SAFETY_BLOCK_MESSAGE : GROUNDING_BLOCK_MESSAGE,
+                text: blockedOnSafety
+                  ? petSafetyBlockMessage(blockLocale)
+                  : groundingBlockMessage(blockLocale),
               },
             ],
           };
@@ -871,7 +884,9 @@ async function* turnEvents(
           );
           response = {
             ...response,
-            content: [{ type: 'text', text: PET_SAFETY_BLOCK_MESSAGE }],
+            content: [
+              { type: 'text', text: petSafetyBlockMessage(detectChatLocale(input.message)) },
+            ],
           };
         }
       }
