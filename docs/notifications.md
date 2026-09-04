@@ -135,6 +135,24 @@ We send plain-text only. No HTML. Reasons:
 
 Without `SES_FROM_EMAIL`, the notifier logs an `email_dry_run` line and returns.
 
+`SES_FROM_EMAIL` reaches the `households`, `notifications`, `reminders`,
+`digests`, `billing` and `me` Lambdas (`infrastructure/modules/api/main.tf`).
+The last two were added for the billing-lifecycle emails
+([ADR 0023](adr/0023-billing-lifecycle-emails.md)); without it every receipt,
+renewal notice and account-deletion confirmation is a dry-run log line.
+
+#### Transactional email is not governed by these preferences
+
+Everything on this page — reminders, digest, recap, pest alerts — is gated on
+`notificationPrefs` and the do-not-disturb window. The billing emails
+([`docs/billing.md`](billing.md#billing-emails)) deliberately are **not**: a
+person who turned off plant reminders has not agreed to be charged silently,
+and a quiet hour is not a reason to delay telling someone their card failed.
+They read `notificationPrefs` for the `timezone` field only, and they carry no
+unsubscribe link — instead a footer states that they are billing messages and
+why there is no unsubscribe. The welcome email is the third member of this
+group: it also ignores preferences, by design.
+
 ### SMS (SNS)
 
 SMS is paid. SNS direct-publish to a phone number costs ~$0.0075 per US message and varies internationally. To prevent accidental cost from a misconfigured staging stack, we require an explicit `SMS_NOTIFICATIONS_ENABLED=1` environment flag on top of the AWS credentials.

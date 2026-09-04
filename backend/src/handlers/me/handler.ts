@@ -12,6 +12,7 @@ import * as notificationPrefs from '../../services/notificationPrefs.js';
 import * as apiKeys from '../../services/apiKeys.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as calendarTokens from '../../services/calendarTokens.js';
+import * as billingEmails from '../../services/billingEmails.js';
 import { buildIcs } from '../../services/icsExport.js';
 import { createdResponse, noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
@@ -126,10 +127,14 @@ export const deleteMe = createHandler(
       }
     }
 
-    // Destructive pass.
+    // Destructive pass. The two counters are what the confirmation email
+    // reports; they are counted from the work actually done, never estimated.
+    let soleMemberHouseholds = 0;
+    let sharedHouseholds = 0;
     for (const m of memberships) {
       const members = membersByHousehold.get(m.householdId) ?? [];
       if (members.length === 1) {
+        soleMemberHouseholds += 1;
         // Sole member: the household is being abandoned. Cascade-delete its
         // plants and revoke its API keys so no orphaned credential keeps
         // reading the dead household's data.
@@ -145,6 +150,7 @@ export const deleteMe = createHandler(
         await accountCleanup.deleteAbandonedHouseholdData(m.householdId);
         continue;
       }
+      sharedHouseholds += 1;
       await accountCleanup.anonymizeUserInHousehold(m.householdId, user.userId);
       await householdService.removeMember(m.householdId, user.userId);
     }
@@ -153,11 +159,32 @@ export const deleteMe = createHandler(
 
     await cognitoUsers.deleteUser(user.userId);
 
+    // Confirmation, sent only once every destructive step has succeeded — a
+    // failure above throws before this line, so the email can never promise a
+    // deletion that did not happen. It states what was retained (shared care
+    // history under a pseudonym, Stripe's own payment records, database
+    // backups within their retention window) as plainly as what was removed:
+    // `docs/compliance.md` §3 requires disclosing the pseudonymization caveat,
+    // and this is the moment a person is actually reading. Best-effort — the
+    // account is already gone and refusing to confirm it would not bring it
+    // back (ADR 0023).
+    const emailDelivered = await billingEmails.sendAccountDeletionEmail({
+      email: user.email,
+      soleMemberHouseholds,
+      sharedHouseholds,
+    });
+
     audit('auth.account_deleted', {
       actorId: user.userId,
       actorEmail: user.email,
       householdId: user.householdId ?? undefined,
-      metadata: { householdsCleaned: memberships.map((m) => m.householdId) },
+      metadata: {
+        householdsCleaned: memberships.map((m) => m.householdId),
+        // `false` covers both a failed send and an unconfigured sender. It is
+        // recorded rather than smoothed over: "we told them" is a compliance
+        // claim, and it must not be made on a delivery that did not happen.
+        confirmationEmailDelivered: emailDelivered,
+      },
     });
 
     return noContentResponse();

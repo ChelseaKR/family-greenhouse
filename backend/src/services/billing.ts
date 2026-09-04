@@ -19,6 +19,7 @@ import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
 import type { ServerEventProps } from '../utils/serverAnalytics.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
+import { dispatchBillingEmails } from './billingEmails.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -799,6 +800,16 @@ async function clearPendingStripeCancellation(
 }
 
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
+  // Money-lifecycle emails, `charge` phase (ADR 0023): receipt, renewal
+  // notice, payment failure, card expiring. Dispatched BEFORE any branch
+  // here for two reasons. Their events — invoice.paid, invoice.upcoming,
+  // invoice.payment_failed, customer.source.expiring — carry no subscription
+  // delta, so the short-circuit below would drop them; and a one-time
+  // purchase handled by an earlier `return` (a credit pack) still deserves
+  // its receipt, because the charge is already final at Stripe whatever this
+  // function then does with our row. Never throws.
+  await dispatchBillingEmails(event, 'charge');
+
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
 
@@ -1125,6 +1136,16 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       if (churnReason) churnProps.churnReason = churnReason;
       void capture(delta.householdId, 'subscription_deactivated', churnProps);
     }
+
+    // Money-lifecycle emails, `state_change` phase (ADR 0023): the two
+    // cancellation confirmations. These describe OUR state changing, so they
+    // wait until the delta has actually been applied — every guard above
+    // `return`s before this point, so a delivery we declined to act on (out
+    // of order, or for a subscription this household no longer references)
+    // never tells a household its plan ended. Never throws: a 5xx from here
+    // would make Stripe redeliver an apply, and a lifetime cancellation, that
+    // already happened.
+    await dispatchBillingEmails(event, 'state_change');
   } catch (err) {
     if (lifetimeClaimOwner && !lifetimeClaimSettled) {
       try {

@@ -202,7 +202,10 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = "arn:aws:cognito-idp:*:*:userpool/${var.cognito_user_pool_id}"
       },
       {
-        # Reminder email via SES. Scoped to the verified domain identity when
+        # Outbound app email via SES — reminders, digests, the welcome mail and
+        # the billing-lifecycle mail (ADR 0023). One role serves every handler
+        # Lambda, so no per-handler grant is needed; only the SES_FROM_EMAIL
+        # environment variable is per-handler. Scoped to the verified domain identity when
         # one is provisioned (prod). Identity-less environments (dev/staging
         # without a domain) can't send at all — no identity is verified — but
         # rather than fall back to "*", scope to THIS account's SES identities
@@ -420,20 +423,27 @@ locals {
   })
 
   handler_integration_environment = {
-    auth          = {}
-    plants        = merge(local.plant_integration_environment, local.perenual_environment)
-    tasks         = {}
-    households    = local.email_environment
-    me            = {}
+    auth       = {}
+    plants     = merge(local.plant_integration_environment, local.perenual_environment)
+    tasks      = {}
+    households = local.email_environment
+    # SES_FROM_EMAIL: DELETE /me sends the account-deletion confirmation
+    # (ADR 0023). Without it `emailNotifier.sendEmail` dry-runs and the
+    # confirmation is a log line nobody reads.
+    me            = local.email_environment
     notifications = merge(local.notification_environment, local.perenual_environment)
-    billing       = local.stripe_environment
-    species       = local.perenual_environment
-    climate       = local.weather_environment
-    apiKeys       = {}
-    api           = {}
-    reminders     = merge(local.notification_environment, local.perenual_environment)
-    digests       = local.email_environment
-    chat          = local.chat_environment
+    # SES_FROM_EMAIL alongside the Stripe config: the webhook sends the
+    # money-lifecycle emails (receipt, renewal notice, payment failure, card
+    # expiring, cancellation — ADR 0023). Merged rather than replaced so the
+    # Stripe keys are untouched.
+    billing   = merge(local.stripe_environment, local.email_environment)
+    species   = local.perenual_environment
+    climate   = local.weather_environment
+    apiKeys   = {}
+    api       = {}
+    reminders = merge(local.notification_environment, local.perenual_environment)
+    digests   = local.email_environment
+    chat      = local.chat_environment
   }
 
   handler_environments = {
