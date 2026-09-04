@@ -7,8 +7,18 @@ import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskServ
 import { plantService } from '@/services/plantService';
 import { climateService } from '@/services/climateService';
 import { deriveClimateSignals, climateSkipSuggestion } from './climateSignals';
-import { ClaimControls, ClimateSkipChip, CoveringBadge, UpForGrabsBadge } from './taskRowExtras';
 import {
+  AskedForHelpBadge,
+  AskFamilyButton,
+  ClaimControls,
+  ClimateSkipChip,
+  CoveringBadge,
+  UpForGrabsBadge,
+} from './taskRowExtras';
+import { isHelpRequestOpen } from './helpRequest';
+import { AskFamilyDialog } from './AskFamilyDialog';
+import {
+  useAskFamilyMutation,
   useClaimTaskMutation,
   useCompleteTaskMutation,
   useSkipCycleMutation,
@@ -190,6 +200,9 @@ export function TasksPage() {
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
   const skipMutation = useSkipCycleMutation(householdId);
+  const askMutation = useAskFamilyMutation(householdId);
+  // The task an ask is being composed for; null closes the dialog.
+  const [askTarget, setAskTarget] = useState<TaskWithCoverage | null>(null);
 
   const skipReasonFor = (task: TaskWithCoverage) => {
     const spaceId = plantsById.get(task.plantId)?.spaceId;
@@ -204,8 +217,10 @@ export function TasksPage() {
         : t('spaces.unplaced'),
     onClaim: (id) => claimMutation.mutate(id),
     onUnclaim: (id) => unclaimMutation.mutate(id),
+    onAsk: (task) => setAskTarget(task),
     onSkip: (task, reason) => skipMutation.mutate({ task, reason }),
     claimPending: claimMutation.isPending || unclaimMutation.isPending,
+    askPending: askMutation.isPending,
     skipPending: skipMutation.isPending,
   };
 
@@ -464,6 +479,17 @@ export function TasksPage() {
         </div>
       )}
       {careRuleGate.dialog}
+      <AskFamilyDialog
+        isOpen={askTarget !== null}
+        plantName={askTarget?.plantName ?? ''}
+        isPending={askMutation.isPending}
+        onClose={() => setAskTarget(null)}
+        onConfirm={(note) => {
+          if (!askTarget) return;
+          askMutation.mutate({ task: askTarget, note });
+          setAskTarget(null);
+        }}
+      />
     </div>
   );
 }
@@ -474,8 +500,10 @@ interface TaskRowExtras {
   locationFor: (task: TaskWithCoverage) => string;
   onClaim: (taskId: string) => void;
   onUnclaim: (taskId: string) => void;
+  onAsk: (task: TaskWithCoverage) => void;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
   claimPending: boolean;
+  askPending: boolean;
   skipPending: boolean;
 }
 
@@ -558,9 +586,16 @@ function TaskSection({
                   <TaskLocation label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {!task.assignedTo && (
-                        <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
-                      )}
+                      {!task.assignedTo &&
+                        (isHelpRequestOpen(task) ? (
+                          // A housemate asked: say who, not "auto-handoff".
+                          <AskedForHelpBadge
+                            name={task.helpAskedByName ?? null}
+                            note={task.helpAskedNote}
+                          />
+                        ) : (
+                          <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
+                        ))}
                       {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
                       {skipReason && (
                         <ClimateSkipChip
@@ -580,6 +615,7 @@ function TaskSection({
                   onUnclaim={extras.onUnclaim}
                   isPending={extras.claimPending}
                 />
+                <AskFamilyButton task={task} onAsk={extras.onAsk} isPending={extras.askPending} />
                 <Button
                   variant="secondary"
                   size="sm"

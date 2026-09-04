@@ -124,6 +124,14 @@ export interface ActivityPayloadByType {
   /** A member asked the household's admins to upgrade for a locked feature
    *  (services/upgradeRequests.ts). `plan` is the tier the ask resolves to. */
   'upgrade.requested': { feature: string; plan: 'garden' | 'greenhouse' };
+  /** "Ask family to do it" (ADR 0024): a member asked the household to pick
+   *  up this occurrence. Unlike `task.escalated` this one HAS a human actor —
+   *  the asker — and may carry their short note. */
+  'task.help_requested': TaskAssignmentActivityPayload & {
+    note: string | null;
+    /** How many members were told; 0 is a real outcome (all away / in DND). */
+    notified: number;
+  };
   /** Auto-handoff (ADR 0018): the scan put an overdue task up for grabs. The
    *  actor is the system, so renderers must not lead with `actorName`. */
   'task.escalated': TaskAssignmentActivityPayload & {
@@ -160,6 +168,7 @@ export const ACTIVITY_TYPES = [
   'sitter_link.revoked',
   'task.schedule_matched',
   'upgrade.requested',
+  'task.help_requested',
   'task.escalated',
 ] as const satisfies readonly ActivityType[];
 

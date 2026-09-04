@@ -9,6 +9,7 @@ import {
   InformationCircleIcon,
   QuestionMarkCircleIcon,
   HandRaisedIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -17,11 +18,13 @@ import { climateService } from '@/services/climateService';
 import { householdService, type ActivityEvent } from '@/services/householdService';
 import { deriveClimateSignals, climateSkipSuggestion } from '@/features/tasks/climateSignals';
 import {
+  AskedForHelpBadge,
   ClaimControls,
   ClimateSkipChip,
   CoveringBadge,
   UpForGrabsBadge,
 } from '@/features/tasks/taskRowExtras';
+import { isHelpRequestOpen } from '@/features/tasks/helpRequest';
 import {
   useClaimTaskMutation,
   useCompleteTaskMutation,
@@ -636,6 +639,23 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
+    case 'task.help_requested': {
+      // A PERSON asked (ADR 0024) — unlike task.escalated this row has an
+      // actor, and their note is the reason the ask beats a silent unclaim.
+      const p = event.payload;
+      icon = <MegaphoneIcon className="h-4 w-4 text-amber-700" aria-hidden="true" />;
+      iconTone = 'bg-amber-50 ring-amber-200';
+      const task = p.taskType ?? t('activity.aTask');
+      const plant = p.plantName ?? t('activity.aPlant');
+      const note = typeof p.note === 'string' && p.note.trim() ? p.note.trim() : null;
+      body = (
+        <>
+          {t('activity.helpRequested', { actor: actorName, task, plant })}
+          {note && <span className="italic"> {t('activity.helpRequestedNote', { note })}</span>}
+        </>
+      );
+      break;
+    }
     case 'task.escalated': {
       // System-authored: the row must not lead with an actor name (it is
       // empty). The copy names the lapse, not a person — nobody is blamed.
@@ -736,9 +756,16 @@ function TaskItem({
           <TaskLocation label={locationLabel} />
           {(!task.assignedTo || task.coveringFor || skipReason) && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              {!task.assignedTo && (
-                <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
-              )}
+              {!task.assignedTo &&
+                (isHelpRequestOpen(task) ? (
+                  // A housemate asked (ADR 0024): say who, and show the note.
+                  <AskedForHelpBadge
+                    name={task.helpAskedByName ?? null}
+                    note={task.helpAskedNote}
+                  />
+                ) : (
+                  <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
+                ))}
               {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
               {skipReason && (
                 <ClimateSkipChip

@@ -197,6 +197,75 @@ describe('taskService writes', () => {
     expect(hit).toEqual(['claim', 'unclaim']);
   });
 
+  it('askFamily omits an absent note and pins the occurrence it is asking about', async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${API}/tasks/t1/ask`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          task: mockTask,
+          note: null,
+          askedAt: '2026-08-09T00:00:00.000Z',
+          nextAllowedAt: '2026-08-10T00:00:00.000Z',
+          recipients: [{ userId: 'u2', name: 'Priya' }],
+          skipped: [],
+          delivered: 1,
+        });
+      })
+    );
+
+    const result = await taskService.askFamily('t1', undefined, '2026-08-10');
+
+    // A blank note is left out entirely rather than sent as '' — the server
+    // treats "no note" as a real state, not an empty string.
+    expect(body).toEqual({ expectedNextDue: '2026-08-10' });
+    expect(result.delivered).toBe(1);
+    expect(result.recipients).toEqual([{ userId: 'u2', name: 'Priya' }]);
+  });
+
+  it('askFamily sends the note when there is one', async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${API}/tasks/t1/ask`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          task: mockTask,
+          note: 'travelling',
+          askedAt: '',
+          nextAllowedAt: '',
+          recipients: [],
+          skipped: [{ userId: 'u2', name: 'Priya', reason: 'dnd' }],
+          delivered: 0,
+        });
+      })
+    );
+
+    const result = await taskService.askFamily('t1', 'travelling', '2026-08-10');
+
+    expect(body).toEqual({ note: 'travelling', expectedNextDue: '2026-08-10' });
+    // Reaching nobody comes back as data, not as an error.
+    expect(result.recipients).toEqual([]);
+    expect(result.skipped).toEqual([{ userId: 'u2', name: 'Priya', reason: 'dnd' }]);
+  });
+
+  it('surfaces a 429 when this member already asked about the task today', async () => {
+    server.use(
+      http.post(`${API}/tasks/t1/ask`, () =>
+        HttpResponse.json(
+          {
+            message: 'You already asked about this task today.',
+            details: { nextAllowedAt: '2026-08-10T00:00:00.000Z' },
+          },
+          { status: 429 }
+        )
+      )
+    );
+
+    await expect(taskService.askFamily('t1')).rejects.toMatchObject({
+      response: { status: 429 },
+    });
+  });
+
   it('surfaces a 409 when someone else claimed the task first', async () => {
     server.use(
       http.post(`${API}/tasks/t1/claim`, () =>

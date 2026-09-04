@@ -2149,6 +2149,27 @@ paths:
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /tasks/{id}/ask:
+    post:
+      summary: Ask the household to pick up this task occurrence, with an optional note (free on every tier)
+      description: >
+        Puts THIS occurrence up for grabs — the same state auto-handoff
+        escalation reaches (ADR 0018), through a human door (ADR 0024) — and
+        notifies every household member except the asker, anyone away, and
+        anyone inside their Do-Not-Disturb window. The response reports who
+        was reached and who was deliberately skipped: an empty `recipients`
+        means nobody could be reached right now, which is a real outcome and
+        not a failure. One ask per task per member per 24 hours.
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403':
+          description: Another member explicitly holds this task; only they can release it
+        '409':
+          description: This occurrence has already been asked about, or it changed under you
+        '429':
+          description: Already asked about this task inside the 24-hour window (`nextAllowedAt` when known)
   /tasks/vacation:
     get:
       summary: List active and upcoming vacation coverage windows

@@ -233,6 +233,17 @@ export const snoozeTaskSchema = z.object({
   expectedNextDue: z.string().datetime().optional(),
 });
 
+// "Ask family to do it" (ADR 0024). A member asks the household to pick up
+// this occurrence, optionally with a short note. The note is the only field:
+// who is asking comes from the token, and which occurrence comes from the
+// row (echoed back via expectedNextDue, exactly as snoozeTaskSchema does, so
+// a retry after a lost response cannot ask about the next occurrence).
+export const ASK_HELP_NOTE_MAX_LENGTH = 200;
+export const askForHelpSchema = z.object({
+  note: z.string().trim().max(ASK_HELP_NOTE_MAX_LENGTH).optional(),
+  expectedNextDue: z.string().datetime().optional(),
+});
+
 // Vacation window (care handoff). userId defaults to the caller; setting it
 // for someone else requires the admin role (enforced in the handler, which
 // knows the caller). coveredBy membership + coveredBy !== userId are also
@@ -389,6 +400,7 @@ export type ApplyTemplateBulkInput = z.infer<typeof applyTemplateBulkSchema>;
 export type ConfirmImageUploadInput = z.infer<typeof confirmImageUploadSchema>;
 export type CompleteTaskInput = z.infer<typeof completeTaskSchema>;
 export type SnoozeTaskInput = z.infer<typeof snoozeTaskSchema>;
+export type AskForHelpInput = z.infer<typeof askForHelpSchema>;
 export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
 export type SetVacationInput = z.infer<typeof setVacationSchema>;
 export type SetEscalationRuleInput = z.infer<typeof setEscalationRuleSchema>;

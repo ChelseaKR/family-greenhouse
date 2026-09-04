@@ -272,6 +272,57 @@ describe('dashboard activity rows', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the housemate who asked and quotes their note', async () => {
+    renderDashboardActivity([
+      event('task.help_requested', {
+        taskId: 'task-1',
+        plantId: 'plant-monstera',
+        plantName: 'Monstera',
+        taskType: 'water',
+        note: 'I’m travelling until Sunday',
+        notified: 2,
+      }),
+    ]);
+
+    const text = await screen.findByText(/Chelsea asked the household to take water for Monstera/);
+    // Unlike an auto-handoff row this one HAS an actor, and the reason the
+    // ask beats a silent unclaim is the note — so it is rendered.
+    const row = text.closest('li') as HTMLElement;
+    expect(within(row).getByText(/travelling until Sunday/)).toBeInTheDocument();
+  });
+
+  it('renders an ask with no note without an empty quotation', async () => {
+    renderDashboardActivity([
+      event('task.help_requested', {
+        taskId: 'task-2',
+        plantId: 'plant-fern',
+        plantName: 'Fern',
+        taskType: 'fertilize',
+        note: null,
+        notified: 0,
+      }),
+    ]);
+
+    const text = await screen.findByText(/Chelsea asked the household to take fertilize for Fern/);
+    const row = text.closest('li') as HTMLElement;
+    expect(within(row).queryByText('“”')).not.toBeInTheDocument();
+  });
+
+  it('renders an ask row whose note field is missing entirely', async () => {
+    renderDashboardActivity([
+      runtimeEvent('task.help_requested', {
+        taskId: 'task-3',
+        plantId: 'plant-ivy',
+        plantName: 'Ivy',
+        taskType: 'water',
+      }),
+    ]);
+
+    expect(
+      await screen.findByText(/Chelsea asked the household to take water for Ivy/)
+    ).toBeInTheDocument();
+  });
+
   it('renders an auto-handoff escalation without an actor and without blame', async () => {
     renderDashboardActivity([
       event('task.escalated', {

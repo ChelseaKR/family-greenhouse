@@ -1337,7 +1337,13 @@ export function annotateTasksWithCoverage(
   });
 }
 
-function itemToTask(item: Record<string, unknown>): Task {
+/**
+ * The single row → Task mapper. Exported so a service that performs its own
+ * conditional write on a task row and needs the `ALL_NEW` result back as a
+ * Task (services/askFamily.ts) maps it through THIS function rather than a
+ * second copy that can silently stop carrying a field.
+ */
+export function itemToTask(item: Record<string, unknown>): Task {
   return {
     id: item.id as string,
     householdId: item.householdId as string,
@@ -1355,6 +1361,11 @@ function itemToTask(item: Record<string, unknown>): Task {
     escalatedAt: (item.escalatedAt as string | null | undefined) ?? null,
     escalatedForDue: (item.escalatedForDue as string | null | undefined) ?? null,
     escalatedFrom: (item.escalatedFrom as string | null | undefined) ?? null,
+    helpAskedAt: (item.helpAskedAt as string | null | undefined) ?? null,
+    helpAskedBy: (item.helpAskedBy as string | null | undefined) ?? null,
+    helpAskedByName: (item.helpAskedByName as string | null | undefined) ?? null,
+    helpAskedNote: (item.helpAskedNote as string | null | undefined) ?? null,
+    helpAskedForDue: (item.helpAskedForDue as string | null | undefined) ?? null,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
   };

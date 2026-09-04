@@ -3,16 +3,19 @@
  * upcoming-tasks card:
  *
  *   - "Up for grabs" badge + Claim / Unclaim buttons (task claiming)
+ *   - "X asked for help" badge + their note (ADR 0024)
+ *   - "Ask family to do it" button
  *   - "Covering for X" badge (vacation-mode read-time annotation)
  *   - climate skip chip ("Rain expected — skip this cycle?")
  *
  * Components only — the matching mutation hooks live in taskMutations.ts.
  */
 import { useTranslation } from 'react-i18next';
-import { HandRaisedIcon, CloudIcon } from '@heroicons/react/24/outline';
+import { HandRaisedIcon, CloudIcon, MegaphoneIcon } from '@heroicons/react/24/outline';
 import { SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
+import { isHelpRequestOpen } from './helpRequest';
 
 /**
  * `escalated` marks an occurrence that auto-handoff put up for grabs (ADR
@@ -25,6 +28,63 @@ export function UpForGrabsBadge({ escalated = false }: { escalated?: boolean }) 
     <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-300/70">
       {escalated ? t('tasks.upForGrabsEscalated') : t('tasks.upForGrabs')}
     </span>
+  );
+}
+
+/**
+ * "Sam asked for help" — and, on its own line, why. The note is the whole
+ * reason the ask beats a silent `unclaim`, so it is rendered rather than
+ * hidden behind a tooltip; the badge row is `flex-wrap`, so `basis-full`
+ * puts the quote underneath the chips.
+ */
+export function AskedForHelpBadge({ name, note }: { name: string | null; note?: string | null }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900 ring-1 ring-amber-300/70">
+        <MegaphoneIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        {name ? t('tasks.askedByBadge', { name }) : t('tasks.askedBadge')}
+      </span>
+      {note && (
+        <span className="basis-full text-xs italic text-primary-800">
+          {t('tasks.askedNote', { note })}
+        </span>
+      )}
+    </>
+  );
+}
+
+interface AskFamilyButtonProps {
+  task: TaskWithCoverage;
+  onAsk: (task: TaskWithCoverage) => void;
+  isPending: boolean;
+}
+
+/**
+ * The other way out of "I can't do this one". `unclaim` releases the task and
+ * tells nobody; this asks. Hidden once an ask is already open on the
+ * occurrence (asking twice would just be noise) and when somebody else
+ * explicitly holds the task — releasing their work is their call, and the
+ * server refuses it with a 403 anyway.
+ */
+export function AskFamilyButton({ task, onAsk, isPending }: AskFamilyButtonProps) {
+  const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  if (isHelpRequestOpen(task)) return null;
+  const heldByAnother =
+    !!task.assignedTo && task.assignmentSource === null && task.assignedTo !== user?.id;
+  if (heldByAnother) return null;
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => onAsk(task)}
+      disabled={isPending}
+      leftIcon={<MegaphoneIcon className="h-4 w-4" aria-hidden="true" />}
+      aria-label={t('tasks.askFamilyAria', { plant: task.plantName })}
+    >
+      {t('tasks.askFamily.button')}
+    </Button>
   );
 }
 

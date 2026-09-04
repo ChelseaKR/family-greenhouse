@@ -39,6 +39,7 @@ import {
   updateTaskSchema,
   completeTaskSchema,
   snoozeTaskSchema,
+  askForHelpSchema,
   setVacationSchema,
   applyTemplateSchema,
   applyTemplateBulkSchema,
@@ -47,6 +48,7 @@ import {
 } from './models/schemas.js';
 import type { SpaceRotation } from './models/types.js';
 import { resolveInheritedAssignee, isExplicitAssignment } from './services/assignmentResolver.js';
+import { ASK_HELP_WINDOW_MS, normalizeHelpNote } from './services/askFamilyRule.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import {
   PLANS,
@@ -286,6 +288,12 @@ interface Task {
   escalatedAt?: string | null;
   escalatedForDue?: string | null;
   escalatedFrom?: string | null;
+  /** "Ask family to do it" marker (ADR 0024); mirrors models/types.ts. */
+  helpAskedAt?: string | null;
+  helpAskedBy?: string | null;
+  helpAskedByName?: string | null;
+  helpAskedNote?: string | null;
+  helpAskedForDue?: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -499,6 +507,10 @@ export const db = {
   // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
   // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
   upgradeRequests: new Map<string, { requestedAt: string }>(),
+  // "Ask family to do it" rate-limit markers, keyed
+  // `${householdId}|${taskId}|${userId}` (mirrors the
+  // TASK_HELP_ASK#{taskId}#{userId} marker + its 24-hour window, ADR 0024).
+  helpAsks: new Map<string, { askedAt: string }>(),
   // Tiny local object store used by the real browser upload flow. A presign
   // creates a capability token, PUT stores the bytes, confirm verifies the
   // object exists, and /mock-images serves the confirmed URL from this API.
@@ -548,6 +560,7 @@ export function resetDb(): void {
   db.plantTagPins.clear();
   db.kioskLinks.clear();
   db.upgradeRequests.clear();
+  db.helpAsks.clear();
   db.mockUploadGrants.clear();
   db.mockImages.clear();
 
@@ -4191,6 +4204,116 @@ app.post('/tasks/:id/unclaim', authMiddleware, requireHousehold, (req, res) => {
   });
   res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
 });
+
+// POST /tasks/:id/ask — mirrors services/askFamily.askFamilyForHelp: the
+// occurrence goes up for grabs through the SAME escalated state auto-handoff
+// uses, the ask is recorded on the row, and everyone but the asker, anyone
+// away and anyone inside Do-Not-Disturb is notified. Free on every tier.
+app.post(
+  '/tasks/:id/ask',
+  authMiddleware,
+  requireHousehold,
+  validateBody(askForHelpSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const body = (req as any).validatedBody as { note?: string; expectedNextDue?: string };
+    const task = db.tasks.get(req.params.id);
+    if (!task || task.householdId !== user.householdId) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    if (body.expectedNextDue && body.expectedNextDue !== task.nextDue) {
+      return res
+        .status(409)
+        .json({ message: 'This task changed while you were asking. Reload and try again.' });
+    }
+    // Somebody else's explicit claim is theirs to release; inherited
+    // assignments stay askable, exactly as they stay claimable.
+    if (task.assignedTo && task.assignmentSource === null && task.assignedTo !== user.userId) {
+      return res.status(403).json({
+        message:
+          'This task is assigned to someone else — only they can ask the household to take it.',
+      });
+    }
+    if (task.helpAskedForDue === task.nextDue) {
+      return res
+        .status(409)
+        .json({ message: 'Someone has already asked the household about this one.' });
+    }
+
+    const now = new Date();
+    const markerKey = `${user.householdId}|${task.id}|${String(user.userId)}`;
+    const previous = db.helpAsks.get(markerKey);
+    if (previous && now.getTime() - Date.parse(previous.askedAt) < ASK_HELP_WINDOW_MS) {
+      return res.status(429).json({
+        message: 'You already asked about this task today. You can ask again tomorrow.',
+        details: {
+          nextAllowedAt: new Date(Date.parse(previous.askedAt) + ASK_HELP_WINDOW_MS).toISOString(),
+        },
+      });
+    }
+    db.helpAsks.set(markerKey, { askedAt: now.toISOString() });
+
+    const members = membersOf(user.householdId);
+    const askerName =
+      members.find((m) => m.userId === user.userId)?.name?.trim() || 'A household member';
+    const note = normalizeHelpNote(body.note);
+    const vacations = activeVacationMap(user.householdId, now.toISOString());
+    const recipients = members.filter(
+      (m) =>
+        m.userId !== user.userId &&
+        !vacations.has(m.userId) &&
+        !localInDndWindow(db.notificationPrefs.get(m.userId) ?? defaultPrefs(m.userId), now)
+    );
+    const skipped = members
+      .filter((m) => m.userId !== user.userId && !recipients.some((r) => r.userId === m.userId))
+      .map((m) => ({
+        userId: m.userId,
+        name: m.name,
+        reason: vacations.has(m.userId) ? 'away' : 'dnd',
+      }));
+
+    task.helpAskedAt = now.toISOString();
+    task.helpAskedBy = user.userId;
+    task.helpAskedByName = askerName;
+    task.helpAskedNote = note;
+    task.helpAskedForDue = task.nextDue;
+    task.escalatedAt = now.toISOString();
+    task.escalatedForDue = task.nextDue;
+    task.escalatedFrom = task.assignedTo ?? task.escalatedFrom ?? null;
+    task.assignedTo = null;
+    task.assignedToName = null;
+    task.assignmentSource = null;
+
+    recordActivity({
+      type: 'task.help_requested',
+      householdId: user.householdId,
+      actorId: user.userId,
+      actorName: askerName,
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        note,
+        notified: recipients.length,
+      },
+    });
+
+    // The mock never sends: `delivered` counts what actually left the
+    // building, and in dev nothing does. Reporting the recipient count here
+    // would be exactly the "absence rendered as a value" defect the real
+    // service is written to avoid.
+    res.json({
+      task: { ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName },
+      note,
+      askedAt: now.toISOString(),
+      nextAllowedAt: new Date(now.getTime() + ASK_HELP_WINDOW_MS).toISOString(),
+      recipients: recipients.map((r) => ({ userId: r.userId, name: r.name })),
+      skipped,
+      delivered: 0,
+    });
+  }
+);
 
 app.post(
   '/plants/apply-template-bulk',

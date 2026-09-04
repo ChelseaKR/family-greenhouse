@@ -30,6 +30,7 @@ const ACTIVITY_CATEGORIES: Record<ActivityType, ActivityCategory> = {
   'sitter_link.revoked': 'people',
   'task.schedule_matched': 'tasks',
   'upgrade.requested': 'people',
+  'task.help_requested': 'tasks',
   'task.escalated': 'tasks',
 };
 
