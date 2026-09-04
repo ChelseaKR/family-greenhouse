@@ -24,3 +24,43 @@ jobs:
           test -n "$HEALTHCHECK_URL"
           response="$(curl --fail --silent --show-error --max-time 20 "$HEALTHCHECK_URL")"
           printf '%s' "$response" | jq -e '.status == "ok"' >/dev/null
+
+  pages:
+    name: Synthetic page check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      # The `health` job above passed fourteen minutes into a total frontend
+      # outage on 2026-09-04 (issue #464): it curls the API and never loads a
+      # page, so a CloudFront/S3 failure that 403s every route but `/` is
+      # invisible to it. This job fetches the pages themselves and asserts the
+      # HTML is this app, not merely that something answered 200.
+      - name: Synthetic page check
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+        run: node scripts/synthetic-page-check.mjs --base-url "$SITE_URL"
+
+      # A check that cannot fail is worse than no check. Point the same script
+      # at a URL on the same origin that is definitely NOT an app page and
+      # require it to report a failure. If the assertions ever soften to the
+      # point where anything with a 200 passes, this step goes red while
+      # production is healthy — which is the correct way to find out.
+      - name: Negative control (the check must still be able to fail)
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+        run: |
+          node scripts/synthetic-page-check.mjs \
+            --base-url "$SITE_URL" \
+            --route /robots.txt \
+            --expect-failure
