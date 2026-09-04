@@ -12,6 +12,8 @@ coverage
 # Compiled config artifacts (emitted from *.config.ts — never hand-edited)
 frontend/vite.config.js
 frontend/vite.config.d.ts
+frontend/vite.manualChunks.js
+frontend/vite.manualChunks.d.ts
 
 # Capacitor native shells — generated Xcode/Gradle projects managed by the
 # Capacitor CLI and native tooling, not Prettier (reformatting them churns

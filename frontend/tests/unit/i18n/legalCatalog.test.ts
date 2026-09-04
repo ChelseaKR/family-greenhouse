@@ -10,6 +10,8 @@ import esLegal from '@/i18n/locales/es/legal.json';
 import enTranslation from '@/i18n/locales/en/translation.json';
 import esTranslation from '@/i18n/locales/es/translation.json';
 
+import { manualChunks } from '../../../vite.manualChunks';
+
 /**
  * The `legal.*` copy is deliberately NOT in the startup catalog: it is ~37 kB
  * of prose that only /legal/privacy, /legal/terms, /support and
@@ -82,49 +84,56 @@ describe('deferred legal catalog', () => {
     // PR #419's `i18n` pin, the deferred chunk collapsed to 154 B and the whole
     // catalog reappeared inside a modulepreloaded chunk.
     //
-    // This used to be a text search for the word `legal` in vite.config.ts,
-    // which any comment satisfied without the rule doing anything. Run the
-    // rules instead: lift every `/…/.test(id)` predicate out of the config
-    // source, keep whether it was negated, and ask what each locale file
-    // resolves to. That holds for a denylist (match the directory, exclude
-    // legal.json) and for an allowlist (match translation.json by name), and it
-    // fails on a rule that only claims to handle the split.
+    // Run the real rule. Two earlier shapes of this check did not:
     //
-    // Read the source rather than `await import('../../../vite.config')`:
-    // measured, a config patched to return a sentinel chunk name still came
-    // back from that import as the previous build's rule, so an import-based
-    // version of this test passes on a config it never actually read.
-    const source = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
-    // The three alternatives are kept mutually exclusive on their FIRST
-    // character — `\` starts an escape, `[` starts a character class, and the
-    // final branch excludes both. Letting `[` and `]` fall into two branches
-    // is what CodeQL flags as js/redos: on `/` followed by many `[]` pairs the
-    // engine has an exponential number of ways to split the same text.
-    const PREDICATE = /(!)?\/((?:\\.|\[[^\]]*\]|[^/\\\n[])+)\/\.test\(id\)/g;
-    const rules = [...source.matchAll(PREDICATE)]
-      .map(([, bang, body]) => ({ negated: bang === '!', test: new RegExp(body) }))
-      .filter((rule) => rule.test.source.includes('locales'));
-    if (rules.length === 0) return; // no locales rule at all: nothing to swallow.
-
-    const pinned = (file: string) => {
-      const id = `/repo/frontend/src/i18n/locales/en/${file}`;
-      return (
-        rules.some((rule) => !rule.negated && rule.test.test(id)) &&
-        !rules.some((rule) => rule.negated && rule.test.test(id))
-      );
-    };
+    //   - a text search for the word `legal` in vite.config.ts, which any
+    //     comment satisfied without the rule doing anything;
+    //   - `await import('../../../vite.config')`, which — measured — handed
+    //     back a config Vite had already bundled and cached, so a config
+    //     patched to return a sentinel chunk name still reported the previous
+    //     build's rule.
+    //
+    // Lifting the `/…/.test(id)` predicates back out of the config's SOURCE
+    // TEXT fixed the staleness, but parsing regex literals needs an
+    // alternation over escapes and character classes that is ambiguous by
+    // construction — the polynomial backtracking CodeQL flags as js/redos.
+    // vite.manualChunks.ts exists so there is nothing left to parse: the
+    // import below is the exact function rollup is handed.
+    const chunkFor = (file: string) => manualChunks(`/repo/frontend/src/i18n/locales/en/${file}`);
+    const startupChunk = chunkFor('translation.json');
+    const legalChunk = chunkFor('legal.json');
 
     expect(
-      pinned('legal.json'),
-      'a manualChunks rule in vite.config.ts captures locales/<lng>/legal.json. That prose is ' +
-        'loaded on demand by src/i18n/legalCatalog.ts; naming it in a chunk rule folds it back ' +
-        'onto the startup path. Match translation.json by name, or exclude the legal fragments.'
-    ).toBe(false);
+      startupChunk,
+      'the locales rule in vite.manualChunks.ts no longer captures the startup catalog, so it ' +
+        'is not doing what it says. Pin locales/<lng>/translation.json or drop the rule.'
+    ).toBeTypeOf('string');
     expect(
-      pinned('translation.json'),
-      'vite.config.ts has a locales chunk rule that does not capture the startup catalog, so ' +
-        'the rule is not doing what it says. Pin locales/<lng>/translation.json or drop the rule.'
-    ).toBe(true);
+      legalChunk,
+      `a manualChunks rule captures locales/<lng>/legal.json into '${String(startupChunk)}', the ` +
+        'same chunk as the startup catalog. That prose is loaded on demand by ' +
+        'src/i18n/legalCatalog.ts; naming it in a chunk rule folds it back onto the startup ' +
+        'path. Match translation.json by name, or exclude the legal fragments.'
+    ).not.toBe(startupChunk);
+
+    // The rest of the rule chain, so this exercises the real function rather
+    // than one branch of it — and so a reordering that shadows the locales
+    // rule shows up here.
+    expect(manualChunks('/repo/frontend/node_modules/react-dom/client.js')).toBe('vendor');
+    expect(manualChunks('/repo/frontend/node_modules/@tanstack/react-query/build/x.js')).toBe(
+      'query'
+    );
+    expect(manualChunks('/repo/frontend/node_modules/@headlessui/react/dist/x.js')).toBe('ui');
+    expect(manualChunks('/repo/frontend/src/App.tsx')).toBeUndefined();
+
+    // And the config still delegates here, so the module cannot quietly become
+    // dead code while an inline rule does the real chunking. Plain substring
+    // checks over whitespace-collapsed source — no pattern to backtrack.
+    const config = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8')
+      .split(/\s+/)
+      .join(' ');
+    expect(config).toContain("import { manualChunks } from './vite.manualChunks'");
+    expect(config).toContain('manualChunks: isSsrBuild ? undefined : manualChunks');
   });
 
   it('is never imported eagerly: the chunk module has exactly one importer', () => {

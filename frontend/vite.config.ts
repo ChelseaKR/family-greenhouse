@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
+import { manualChunks } from './vite.manualChunks';
+
 /**
  * Strip HTML comments, repeatedly, until the output stops changing.
  *
@@ -225,59 +227,11 @@ export default defineConfig(({ isSsrBuild }) => ({
         // Vendor/feature splitting is a browser-payload concern. The SSR bundle
         // is loaded once by a Node build script, and chunking it only makes the
         // prerender's dynamic import harder to reason about.
-        manualChunks: isSsrBuild
-          ? undefined
-          : (id: string) => {
-              // Keep the React runtime in a single long-lived vendor chunk.
-              // A string-array manualChunks entry (['react', 'react-dom', ...])
-              // stopped capturing all of react-dom's submodules under React 19,
-              // which leaked the runtime into the entry chunk and ballooned it.
-              // Matching on the resolved node_modules path is version-robust.
-              if (/node_modules\/(react|react-dom|scheduler|react-router)\//.test(id)) {
-                return 'vendor';
-              }
-              if (/node_modules\/@tanstack\/react-query\//.test(id)) {
-                return 'query';
-              }
-              if (/node_modules\/(@headlessui\/react|@heroicons\/react)\//.test(id)) {
-                return 'ui';
-              }
-              // Pin the STARTUP translation catalogs to their own chunk.
-              // Rollup already extracts them most of the time, but that is an
-              // emergent property of the module graph, not a rule, and it
-              // flips on unrelated merges. Measured, same source, one worktree,
-              // one npm ci: with this branch on base 98b44398, dropping this
-              // line folded both catalogs into the entry chunk and took
-              // `Initial JS` 17.91 -> 57.16 kB brotli without a line of new
-              // startup code; one merge later (#423) the identical source split
-              // cleanly again and the line was worth 6 B. Naming the chunk turns
-              // that coin flip into a stated invariant, which is what the
-              // vendor/query/ui rules above already do.
-              //
-              // What it does NOT do is bound the critical path. `Initial JS`
-              // globs dist/assets/index-*.js only, and dist/index.html
-              // modulepreloads six more chunks — vendor, ui, query, api,
-              // authStore and this one — so the flip above moved 27 kB between
-              // two files a visitor downloads either way (measured critical
-              // path 191.8 vs 191.9 kB). Read a swing in `Initial JS` as chunk
-              // boundaries moving until the preload set says otherwise.
-              //
-              // ALLOWLIST, NOT DENYLIST. This matches `translation.json` by
-              // name rather than matching the locales directory and excluding
-              // what must not be captured. #428 moved the privacy/terms/
-              // support/account-deletion prose into `locales/<lng>/legal.json`
-              // so that src/i18n/legalCatalog.ts can pull it in on demand; a
-              // path-wide rule swallows that fragment back onto the startup
-              // path silently, because the dynamic import still resolves and
-              // the pages still render (tests/unit/i18n/legalCatalog.test.ts
-              // is what catches it). Every future deferred namespace would
-              // need another exclusion; matching the one file that is loaded
-              // at startup needs none.
-              if (/src\/i18n\/locales\/[\w-]+\/translation\.json$/.test(id)) {
-                return 'i18n';
-              }
-              return undefined;
-            },
+        //
+        // The rules themselves live in ./vite.manualChunks.ts so that the test
+        // suite can import and run the exact function rollup is handed here,
+        // instead of re-deriving it from this file's source text.
+        manualChunks: isSsrBuild ? undefined : manualChunks,
       },
     },
   },
