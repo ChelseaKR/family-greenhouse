@@ -173,6 +173,26 @@ jobs:
         working-directory: frontend
         run: npm run test:coverage
 
+      - name: Run the CloudFront SPA router test (#472)
+        # `test:edge` covers infrastructure/modules/frontend/functions/
+        # spa-router.js — the viewer-request function that maps /pricing and
+        # the other prerendered routes onto their index.html objects. It has
+        # existed, passed, and run in NO CI job: `frontend`'s `test` script is
+        # `vitest run`, and vitest.config.ts includes only
+        # tests|src/**/*.{test,spec}.{ts,tsx}, which a .mjs file under
+        # frontend/scripts/ matches neither. The root `verify` chain does not
+        # call it either, so pre-push missed it too.
+        #
+        # On 2026-09-04 that gap cost a production outage: every route but `/`
+        # returned 403 for ~40 minutes. One of these six cases is literally
+        # "a trailing slash resolves to the same object, not a 403".
+        #
+        # Six cases, ~0.1s. It is a separate step rather than folded into
+        # `test:coverage` because it is `node --test`, not vitest, and a
+        # distinct step names the thing that failed.
+        working-directory: frontend
+        run: npm run test:edge
+
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
