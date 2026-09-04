@@ -158,19 +158,45 @@ export async function createApiKey(
   return { record, plaintext };
 }
 
+/**
+ * Page size for the key listing. This is a transport detail, NOT a cap: the
+ * query below follows `LastEvaluatedKey` to exhaustion, so the number only
+ * decides how many round trips a household's keys take.
+ *
+ * It used to be a bare `Limit: 50` with no paging, which made the fiftieth
+ * key the last one anybody could see. The keys past it kept authenticating —
+ * `lookupApiKey` resolves by GSI3 hash and never touches this query — while
+ * Settings rendered "Active keys (50)" as a total and revocation is only
+ * possible by an id this list is the sole source of. A credential you cannot
+ * see and cannot revoke is the worst form of ADR 0010's defect: not a failed
+ * read published as empty, but a truncated read published as complete.
+ *
+ * The sort key is `APIKEY#{uuid v4}` and Query returns ascending SK order, so
+ * *which* keys fell off the end was decided by random UUID — a key could be
+ * invisible from the moment it was minted.
+ */
+const KEY_PAGE_SIZE = 50;
+
 export async function listApiKeys(householdId: string): Promise<ApiKeyRecord[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}`,
-        ':sk': 'APIKEY#',
-      },
-      Limit: 50,
-    })
-  );
-  return (result.Items ?? []).map(mapRecord);
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `HOUSEHOLD#${householdId}`,
+          ':sk': 'APIKEY#',
+        },
+        Limit: KEY_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map(mapRecord);
 }
 
 /**

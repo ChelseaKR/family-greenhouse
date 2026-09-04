@@ -13,7 +13,22 @@ import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { getMemberByUserId } from './householdService.js';
 import { resolveInheritedAssignee, type AssignmentContext } from './assignmentResolver.js';
 
-const MAX_SPACES = 100;
+/**
+ * Page size for the space listing. A transport detail, NOT a cap: `getSpaces`
+ * follows `LastEvaluatedKey` to exhaustion, so this only decides how many
+ * round trips a household's rooms take.
+ *
+ * It was previously spelled `MAX_SPACES` and used as a bare `Limit` with no
+ * paging, which read as a cap and behaved as a silent truncation — nothing
+ * anywhere enforced it on create. Past 100 spaces the consequences compounded
+ * quietly: `assertUniqueName` reads through this function, so duplicate names
+ * became creatable; `sitterBrief` builds its `spaceNames` map from it, so a
+ * plant in an unseen room told the sitter it had no location; and `moveDay`
+ * builds its `outdoor` set from it, dropping frost-tender plants by a second
+ * independent route. None of those is a failed read — the read succeeded and
+ * returned part of the answer as though it were all of it.
+ */
+const SPACE_PAGE_SIZE = 100;
 
 function itemToSpace(item: Record<string, unknown>): PlantSpace {
   const environment = item.environment as PlantSpace['environment'];
@@ -127,20 +142,25 @@ async function assertUniqueName(
 }
 
 export async function getSpaces(householdId: string): Promise<PlantSpace[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}`,
-        ':sk': 'SPACE#',
-      },
-      Limit: MAX_SPACES,
-    })
-  );
-  return (result.Items ?? [])
-    .map((item) => itemToSpace(item as Record<string, unknown>))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `HOUSEHOLD#${householdId}`,
+          ':sk': 'SPACE#',
+        },
+        Limit: SPACE_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map((item) => itemToSpace(item)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function getSpace(householdId: string, id: string): Promise<PlantSpace | null> {
