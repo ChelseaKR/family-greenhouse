@@ -14,6 +14,15 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
 - Native `AWS/ApiGateway Count`, `4xx`, and `5xx` use the real HTTP API `ApiId` and catch gateway-level
   failures. Lambda errors, Lambda throttles, DynamoDB read/write throttles, DLQs, auth failures, and
   Route53 health have separate alarms.
+- **Server-side logs are redacted at the logger.** `backend/src/utils/logger.ts` censors `email`,
+  `to`, `phone`, `password`, `pin`, `token`/`refreshToken`/`accessToken`/`idToken`, `apiKey`,
+  `imageBase64` and `authorization` — at the top level and one or two levels down — with
+  `[redacted]`. It is a backstop against an accidental `logger.info({ ...body })`, not a licence to
+  log personal data on purpose. **`actorEmail` is deliberately exempt**: the audit trail in
+  `backend/src/utils/auditLog.ts` exists to answer "who did this" without a Cognito join, so the
+  Lambda log groups are an in-scope store of member email addresses. The mitigation is the 30-day
+  retention on every group, which means an erasure request reaches log data in 30 days rather than
+  immediately — see [`compliance.md`](compliance.md).
 - The browser reports sanitized error summaries plus LCP, CLS, and INP to `/telemetry/frontend`.
   Payloads contain an anonymous session UUID and normalized route, never a user id, query string,
   stack trace, email, phone, token, plant name, or household name.

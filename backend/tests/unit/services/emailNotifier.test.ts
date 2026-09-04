@@ -10,6 +10,16 @@ vi.mock('@aws-sdk/client-ses', () => ({
   }),
 }));
 
+const loggerInfoMock = vi.fn();
+vi.mock('../../../src/utils/logger.js', () => ({
+  logger: {
+    info: (...args: unknown[]) => (loggerInfoMock as (...a: unknown[]) => void)(...args),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
 const checkAddressMock = vi.fn(async () => ({ status: 'sendable' }));
 vi.mock('../../../src/services/emailSuppression.js', () => ({
   checkAddress: (...args: unknown[]) =>
@@ -43,6 +53,33 @@ describe('emailNotifier', () => {
     // A dry run must not even look at the suppression list — nothing is going
     // out, so there is nothing to check.
     expect(checkAddressMock).not.toHaveBeenCalled();
+  });
+
+  // #452: this branch fires on the WHOLE notification path wherever
+  // SES_FROM_EMAIL is unset, so it was the highest-volume way a recipient
+  // address could reach a 30-day CloudWatch retention.
+  it('logs the recipient DOMAIN on a dry run, never the address', async () => {
+    process.env = { ...ORIGINAL };
+    delete process.env.SES_FROM_EMAIL;
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'Nadia.Okafor@Example.COM', subject: 'hi', text: 'hello' });
+
+    expect(loggerInfoMock).toHaveBeenCalledTimes(1);
+    const [fields] = loggerInfoMock.mock.calls[0] as [Record<string, unknown>];
+    expect(fields).toMatchObject({ msg: 'email_dry_run', subject: 'hi', toDomain: 'example.com' });
+    expect(JSON.stringify(fields)).not.toContain('Nadia');
+    expect(JSON.stringify(fields)).not.toContain('nadia');
+    expect(fields).not.toHaveProperty('to');
+  });
+
+  it('renders an address with no @ as unknown rather than echoing it', async () => {
+    process.env = { ...ORIGINAL };
+    delete process.env.SES_FROM_EMAIL;
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'not-an-address', subject: 'hi', text: 'hello' });
+    const [fields] = loggerInfoMock.mock.calls[0] as [Record<string, unknown>];
+    expect(fields.toDomain).toBe('unknown');
+    expect(JSON.stringify(fields)).not.toContain('not-an-address');
   });
 
   it('sends through SES when configured', async () => {

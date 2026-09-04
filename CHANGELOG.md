@@ -18,6 +18,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Server-side logs are redacted, and the dry-run branch no longer logs a
+  recipient's address.** The pino logger had no `redact` config at all, so the
+  only thing standing between a `logger.info({ ...body })` and a 30-day
+  CloudWatch retention was whoever wrote that line. It now censors `email`,
+  `to`, `phone`, `password`, `pin`, the token family, `apiKey`, `imageBase64`
+  and `authorization`. The email dry-run branch — which fires on the whole
+  notification path wherever `SES_FROM_EMAIL` is unset — now logs the
+  recipient's domain instead of the address. `actorEmail` stays, deliberately:
+  the audit trail's value is naming the actor, and the consequence (the log
+  groups are an in-scope PII store, bounded by their 30-day retention) is now
+  written down in `docs/compliance.md` and `docs/observability.md` rather than
+  left implicit.
+
+### Fixed
+
 - **A leaf-health check can no longer answer with a fixture when the model is
   unreachable.** The canned demo assessment was returned on any Bedrock access
   error, at HTTP 200 — so a Terraform apply or model-access change that removed
