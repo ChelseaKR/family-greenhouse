@@ -1298,6 +1298,8 @@
     "quietBody": "Entre esas fechas no se completó ninguna tarea ni se envió ninguna foto. Eso es lo que dice el registro de actividad: no es un problema de carga.",
     "truncatedTitle": "Este resumen está incompleto",
     "truncatedBody": "En este periodo hubo más actividad de la que podemos mostrar de una vez, así que las listas de abajo son solo el principio.",
+    "planUnknownTitle": "No hemos podido comprobar tu plan",
+    "planUnknownBody": "Así que no sabemos si tu hogar tiene el Kit de Viaje, y preferimos decírtelo antes que mostrarte una página en blanco. Actualiza la página e inténtalo de nuevo.",
     "lockedTitle": "El Kit de Viaje forma parte de Garden",
     "lockedBody": "El envío de fotos y el resumen de vuelta se incluyen con Garden y Greenhouse. Tus enlaces de cuidado siguen funcionando igualmente.",
     "noneTitle": "Todavía no ha terminado ningún periodo de cuidado",
