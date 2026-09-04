@@ -141,6 +141,7 @@ function record(over: Partial<MoveDayList> & Pick<MoveDayList, 'season' | 'fired
     signal: { tempC: 8, lowC: 2, frostLineC: 5, heatLineC: 32 },
     items: [],
     tenderWithoutWinterHome: [],
+    tenderCheckFailures: 0,
     ...over,
   };
 }
@@ -161,6 +162,8 @@ async function setup(opts: {
   away?: string[];
   existingTasks?: Partial<Task>[];
   putFails?: boolean;
+  /** Perenual species ids whose cache row cannot be READ this time. */
+  speciesUnavailable?: number[];
 }) {
   const { dynamodb } = await import('../../../src/utils/dynamodb.js');
   (globalThis as unknown as { __ddb: unknown }).__ddb = dynamodb;
@@ -196,13 +199,12 @@ async function setup(opts: {
       }) as never
   );
   vi.mocked(taskService.updateTask).mockResolvedValue(null);
-  vi.mocked(enrichment.peekSpeciesCached).mockImplementation(async (id) =>
-    id === 7
-      ? ({ hardinessZone: '10-12' } as never)
-      : id === 8
-        ? ({ hardinessZone: '5-9' } as never)
-        : null
-  );
+  vi.mocked(enrichment.peekSpeciesCached).mockImplementation(async (id) => {
+    if (opts.speciesUnavailable?.includes(id)) return { status: 'unavailable' } as never;
+    if (id === 7) return { status: 'cached', value: { hardinessZone: '10-12' } } as never;
+    if (id === 8) return { status: 'cached', value: { hardinessZone: '5-9' } } as never;
+    return { status: 'absent' } as never;
+  });
 
   vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
     const { kind } = cmd as Sent;
@@ -357,6 +359,56 @@ describe('evaluateMoveDay', () => {
     expect(list.tenderWithoutWinterHome).toEqual([
       { plantId: 'p-cactus', plantName: 'Cactus', hardinessZone: '10-12' },
     ]);
+    // Every candidate was checked, so the card carries no incompleteness caveat.
+    expect(list.tenderCheckFailures).toBe(0);
+  });
+
+  // #454: a failed species-cache read used to be byte-identical to "we never
+  // looked this species up", so the plant vanished from the frost warning — and
+  // the whole amber block, caveat included, disappeared with it for 14 days.
+  it('counts a plant whose species read FAILED instead of dropping it from the frost warning', async () => {
+    const { evaluateMoveDay } = await setup({
+      plants: [monstera, basil, cactus, rose, untyped],
+      speciesUnavailable: [7], // the cactus — the one genuinely frost-tender plant
+    });
+    const result = await evaluateMoveDay(household, 'u-a', NOW);
+    if (result.status !== 'ready') throw new Error('expected ready');
+
+    // The cactus cannot be named (we never read its zone) — but the household
+    // is told the check did not cover everything, rather than shown a shorter
+    // list that reads as complete.
+    expect(result.list.tenderWithoutWinterHome).toEqual([]);
+    expect(result.list.tenderCheckFailures).toBe(1);
+
+    // And the caveat is persisted, so the 14-day frozen record keeps it.
+    const put = sent().find((c) => c.kind === 'Put');
+    expect((put?.input as { Item: Record<string, unknown> }).Item).toMatchObject({
+      tenderCheckFailures: 1,
+    });
+  });
+
+  it('does not count a hardy plant or a plant with no cached species as a failure', async () => {
+    const { evaluateMoveDay } = await setup({ plants: [monstera, basil, rose, untyped] });
+    const result = await evaluateMoveDay(household, 'u-a', NOW);
+    if (result.status !== 'ready') throw new Error('expected ready');
+    expect(result.list.tenderWithoutWinterHome).toEqual([]);
+    expect(result.list.tenderCheckFailures).toBe(0);
+  });
+
+  it('carries the caveat forward when it re-serves a stored list inside the card window', async () => {
+    const { evaluateMoveDay } = await setup({
+      records: [
+        record({
+          season: 'winter',
+          firedAt: daysAgo(1),
+          items: [{ plantId: 'p-basil' } as never],
+          tenderCheckFailures: 2,
+        }),
+      ],
+    });
+    const result = await evaluateMoveDay(household, 'u-a', NOW);
+    if (result.status !== 'ready') throw new Error('expected ready');
+    expect(result.list.tenderCheckFailures).toBe(2);
   });
 
   it('skips members on vacation when splitting the work', async () => {

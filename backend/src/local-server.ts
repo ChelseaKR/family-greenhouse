@@ -1761,6 +1761,9 @@ app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res
     },
     items,
     tenderWithoutWinterHome: [],
+    // The in-memory store has no species cache to fail, so the check is
+    // always complete here.
+    tenderCheckFailures: 0,
   };
   moveDayRecords.set(key, list);
   res.json({ status: 'ready', list });

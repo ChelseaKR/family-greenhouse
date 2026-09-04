@@ -18,6 +18,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Move Day's frost warning no longer shrinks when a lookup fails.** A plant
+  whose saved species record could not be read was dropped from the
+  frost-tender list exactly as though it had been checked and found hardy —
+  and because the whole amber block was hidden when that list came back empty,
+  the "these aren't cleared, just unchecked" caveat disappeared along with the
+  plants it described. The check now counts what it could not read, the count
+  is stored with the list so the fortnight the card stays up keeps carrying it,
+  and the card says how many plants it could not check.
+
 - **Server-side logs are redacted, and the dry-run branch no longer logs a
   recipient's address.** The pino logger had no `redact` config at all, so the
   only thing standing between a `logger.info({ ...body })` and a 30-day

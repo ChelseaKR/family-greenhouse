@@ -71,6 +71,7 @@ function list(overrides: Partial<MoveDayList> = {}): MoveDayList {
       },
     ],
     tenderWithoutWinterHome: [],
+    tenderCheckFailures: 0,
     ...overrides,
   };
 }
@@ -180,6 +181,59 @@ describe('MoveDayCard', () => {
     );
     expect(screen.getByText(/hardy to zone 10-12/i)).toBeInTheDocument();
     expect(screen.getByText(/aren.t cleared, just unchecked/i)).toBeInTheDocument();
+  });
+
+  // #454: the plants whose species record would not load are missing from
+  // `tenderWithoutWinterHome` for the same reason a hardy plant is. Gating the
+  // whole amber block on that list made a FAILED check render as a clean one.
+  it('warns that the frost check was incomplete even when it named nobody', async () => {
+    mock(climate(), ready(list({ tenderWithoutWinterHome: [], tenderCheckFailures: 2 })));
+    renderCard();
+
+    expect(await screen.findByText(/bring these plants in/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/couldn.t check 2 outdoor plants for frost tenderness/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/aren.t cleared, just unchecked/i)).toBeInTheDocument();
+    // Nothing is named, because nothing was read.
+    expect(screen.queryByText(/frost-tender plants? outdoors/i)).not.toBeInTheDocument();
+  });
+
+  it('shows both the named plants and the incomplete-check warning together', async () => {
+    mock(
+      climate(),
+      ready(
+        list({
+          tenderWithoutWinterHome: [
+            { plantId: 'p-cactus', plantName: 'Cactus', hardinessZone: '10-12' },
+          ],
+          tenderCheckFailures: 1,
+        })
+      )
+    );
+    renderCard();
+    expect(
+      await screen.findByText(/1 frost-tender plant outdoors has no winter space yet/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/couldn.t check 1 outdoor plant for frost tenderness/i)
+    ).toBeInTheDocument();
+  });
+
+  it('shows no incomplete-check warning in summer, where the check never runs', async () => {
+    mock(
+      climate(),
+      ready(
+        list({
+          season: 'summer',
+          signal: { tempC: 33.6, lowC: 19, frostLineC: 5, heatLineC: 32 },
+          tenderCheckFailures: 3,
+        })
+      )
+    );
+    renderCard();
+    expect(await screen.findByText(/these plants can go back out/i)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t check/i)).not.toBeInTheDocument();
   });
 
   it.each<MoveDayResult['status']>(['locked', 'not_applicable', 'unavailable', 'quiet'])(

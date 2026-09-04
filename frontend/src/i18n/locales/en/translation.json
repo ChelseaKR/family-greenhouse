@@ -1129,6 +1129,8 @@
     "noCurrentSpace": "No space set",
     "tender_one": "{{count}} frost-tender plant outdoors has no winter space yet:",
     "tender_other": "{{count}} frost-tender plants outdoors have no winter space yet:",
+    "tenderUnchecked_one": "We couldn’t check {{count}} outdoor plant for frost tenderness — its species record didn’t load. It hasn’t been cleared, so check it yourself before the frost.",
+    "tenderUnchecked_other": "We couldn’t check {{count}} outdoor plants for frost tenderness — their species records didn’t load. They haven’t been cleared, so check them yourself before the frost.",
     "tenderZone": "hardy to zone {{zone}}",
     "tenderHint": "Only plants with a saved species record are checked — the rest aren’t cleared, just unchecked.",
     "listedOn": "Listed {{date}}",
