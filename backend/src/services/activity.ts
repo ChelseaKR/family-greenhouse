@@ -28,6 +28,8 @@ export interface TaskCompletedActivityPayload {
   /** Completed from a printed plant tag (ADR 0016); `actorName` is the
    *  display name the scanner typed, e.g. "Grandma". */
   viaTag?: boolean;
+  /** Completed through a named caretaker seat; `actorName` is their name. */
+  viaCaretaker?: boolean;
 }
 
 export interface TaskSnoozedActivityPayload {
@@ -141,6 +143,8 @@ export interface ActivityPayloadByType {
     /** How many members were told; 0 is a real outcome (all away / in DND). */
     notified: number;
   };
+  /** A note left by a named caretaker during a visit (`actorName` is theirs). */
+  'caretaker.note': { text: string };
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -170,6 +174,7 @@ export const ACTIVITY_TYPES = [
   'upgrade.requested',
   'task.help_requested',
   'task.escalated',
+  'caretaker.note',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;

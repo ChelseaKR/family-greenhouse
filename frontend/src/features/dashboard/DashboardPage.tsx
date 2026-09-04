@@ -674,6 +674,12 @@ function ActivityRow({ event }: ActivityRowProps) {
           : t('activity.escalated', { task, plant, count: days });
       break;
     }
+    case 'caretaker.note':
+      // `actorName` is the caretaker's own name — attribution is the whole
+      // reason caretaker seats are named rather than anonymous like a sitter
+      // link, so the feed says who wrote it.
+      body = t('activity.caretakerNote', { actor: actorName, note: event.payload.text });
+      break;
     default: {
       const _exhaustive: never = event;
       void _exhaustive;

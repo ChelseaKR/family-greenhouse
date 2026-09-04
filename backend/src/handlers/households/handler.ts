@@ -26,6 +26,7 @@ import * as inviteEmail from '../../services/inviteEmail.js';
 import * as householdEmails from '../../services/householdEmails.js';
 import * as taskService from '../../services/taskService.js';
 import * as sitterService from '../../services/sitterService.js';
+import * as caretakers from '../caretakers/management.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
@@ -1076,4 +1077,10 @@ export const handler = createRouter({
   'POST /households/{id}/upgrade-requests': createUpgradeRequest,
   'GET /households/{id}/away-recap': getAwayRecap,
   'PUT /households/{id}/escalation': setEscalationRule,
+  // Caretaker seats (handlers/caretakers/management.ts) — same posture as
+  // sitter links: create/list/revoke are admin-gated, the report is not.
+  'POST /households/{id}/caretakers': caretakers.createCaretaker,
+  'GET /households/{id}/caretakers': caretakers.listCaretakers,
+  'DELETE /households/{id}/caretakers/{caretakerId}': caretakers.revokeCaretaker,
+  'GET /households/{id}/caretaker-report': caretakers.getCaretakerReport,
 });

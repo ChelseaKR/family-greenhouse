@@ -96,6 +96,9 @@ describe('HouseholdPage', () => {
         })
       ),
       http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'seedling' })),
+      // The admin-only caretaker-seats card lists existing seats regardless of
+      // plan — revoking a live credential is never paywalled.
+      http.get(`${API}/households/hh-1/caretakers`, () => HttpResponse.json([])),
       http.get(`${API}/me/households`, () =>
         HttpResponse.json([
           { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'member', joinedAt: '' },

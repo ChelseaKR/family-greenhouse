@@ -881,6 +881,12 @@ locals {
     "GET /plants/shared/{code}"         = { group = "plants", auth = "none" }
     "POST /plants/shared/{code}/accept" = { group = "plants", auth = "jwt" }
 
+    # Caretaker photo upload (auth=none, token-scoped). Served by the plants
+    # group because it owns the presign/confirm S3 pipeline; the key is minted
+    # for the token's household + plant, so a crafted URL cannot cross either.
+    "POST /caretaker/{token}/plants/{plantId}/photo"         = { group = "plants", auth = "none" }
+    "POST /caretaker/{token}/plants/{plantId}/photo/confirm" = { group = "plants", auth = "none" }
+
     # --- tasks (templates list is public) ---
     "GET /tasks"                = { group = "tasks", auth = "jwt" }
     "GET /tasks/upcoming"       = { group = "tasks", auth = "jwt" }
@@ -928,6 +934,14 @@ locals {
     # and revocable in one click. See backend/src/services/kioskService.ts.
     "GET /kiosk/{token}"                          = { group = "tasks", auth = "none" }
     "POST /kiosk/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+    # Caretaker seats PUBLIC endpoints (auth=none). Same token-scoped model as
+    # the sitter routes above, but the identity is NAMED and every action is
+    # folded into a proof-of-visit record. The permission surface is exactly
+    # these three plus the two photo routes in the plants group below —
+    # complete a task, leave a note, add a photo — and nothing else.
+    "GET /caretaker/{token}"                          = { group = "tasks", auth = "none" }
+    "POST /caretaker/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+    "POST /caretaker/{token}/notes"                   = { group = "tasks", auth = "none" }
 
     # --- households (invite preview is public) ---
     "POST /households"                                    = { group = "households", auth = "jwt" }
@@ -959,6 +973,13 @@ locals {
     # Away Kit return recap (authed, any member): replays sitter-attributed
     # activity inside a link's window — handlers/households/awayRecap.ts.
     "GET /households/{id}/away-recap" = { group = "households", auth = "jwt" }
+    # Caretaker-seat management (authed). Create/list/revoke are admin-gated
+    # like sitter links; the proof-of-visit report is open to any member,
+    # because the person handing it to whoever is paying need not be an admin.
+    "POST /households/{id}/caretakers"                 = { group = "households", auth = "jwt" }
+    "GET /households/{id}/caretakers"                  = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/caretakers/{caretakerId}" = { group = "households", auth = "jwt" }
+    "GET /households/{id}/caretaker-report"            = { group = "households", auth = "jwt" }
 
     # Auto-handoff rule (ADR 0018): admin-only, plan-gated in the handler.
     "PUT /households/{id}/escalation" = { group = "households", auth = "jwt" }

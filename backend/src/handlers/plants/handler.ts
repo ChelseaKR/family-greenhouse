@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v4 as uuid } from 'uuid';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
 import { createHandler, firstAllowedOrigin } from '../../middleware/handler.js';
@@ -23,7 +22,15 @@ import {
   CreateSpaceInput,
   UpdateSpaceInput,
 } from '../../models/schemas.js';
+import {
+  IMAGE_CONTENT_TYPES,
+  MAX_IMAGE_BYTES,
+  mintImageKey,
+  publicImageUrl,
+  resolveIssuedImageKey,
+} from '../../services/plantImageRules.js';
 import * as plantService from '../../services/plantService.js';
+import * as caretakerPhotos from '../caretakers/photos.js';
 import * as spaceService from '../../services/spaceService.js';
 import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
@@ -636,17 +643,6 @@ export const deletePlant = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
-// Allowlisted upload content types → file extension used in the S3 key.
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
-
-// Hard cap enforced at confirm time (the presigned PUT itself can't bound
-// size). Keep in sync with the frontend's client-side downscale target.
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
 // Body is optional: legacy clients POST with no body and get the jpeg default.
 const imageUploadRequestSchema = z
   .object({
@@ -654,18 +650,6 @@ const imageUploadRequestSchema = z
   })
   .nullable();
 type ImageUploadRequest = z.infer<typeof imageUploadRequestSchema>;
-
-/**
- * Public base URL for a stored image key. When ASSETS_BASE_URL is set
- * (production: the site origin, served via the CloudFront /plants/* behavior)
- * we mint `${ASSETS_BASE_URL}/plants/...`; otherwise (local dev) we fall back
- * to the raw S3 URL form.
- */
-function publicImageUrl(key: string): string {
-  const base = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
-  if (base) return `${base}/${key}`;
-  return `https://${IMAGES_BUCKET}.s3.amazonaws.com/${key}`;
-}
 
 // POST /plants/:id/image
 // Returns a presigned PUT URL but does NOT yet attach the image to the plant.
@@ -691,8 +675,7 @@ export const getImageUploadUrl = createHandler(
     }
 
     const contentType = validatedBody?.contentType ?? 'image/jpeg';
-    const ext = IMAGE_CONTENT_TYPES[contentType];
-    const key = `plants/${user.householdId}/${plantId}/${uuid()}.${ext}`;
+    const key = mintImageKey(user.householdId!, plantId, contentType);
 
     const command = new PutObjectCommand({
       Bucket: IMAGES_BUCKET,
@@ -726,22 +709,10 @@ export const confirmImageUpload = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
     const imageUrl = validatedBody.imageUrl;
-    const keyPrefix = `plants/${user.householdId}/${plantId}/`;
-    // Accept whichever URL forms we can mint; both map to the same S3 key.
-    const assetsBase = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
-    const expectedPrefixes = [`https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`];
-    if (assetsBase) expectedPrefixes.unshift(`${assetsBase}/${keyPrefix}`);
-    const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
-    if (!matchedPrefix) {
+    const key = resolveIssuedImageKey(user.householdId!, plantId, imageUrl);
+    if (!key) {
       throw createHttpError(400, 'imageUrl does not match a key issued for this plant');
     }
-    // The remainder must look exactly like a key we minted (uuid.ext) — no
-    // slashes, dots, or query strings smuggling a different object.
-    const filename = imageUrl.slice(matchedPrefix.length);
-    if (!/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(filename)) {
-      throw createHttpError(400, 'imageUrl does not match a key issued for this plant');
-    }
-    const key = `${keyPrefix}${filename}`;
     const plant = await plantService.getPlant(user.householdId!, plantId);
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
@@ -1035,4 +1006,8 @@ export const handler = createRouter({
   'POST /plants/{id}/image/confirm': confirmImageUpload,
   'GET /plants/{id}/photos': listPhotos,
   'GET /plants/{plantId}/history': getPlantHistory,
+  // Caretaker photo upload (handlers/caretakers/photos.ts). Token-scoped, no
+  // auth; lives in this group because this group owns the S3 image pipeline.
+  'POST /caretaker/{token}/plants/{plantId}/photo': caretakerPhotos.getCaretakerPhotoUploadUrl,
+  'POST /caretaker/{token}/plants/{plantId}/photo/confirm': caretakerPhotos.confirmCaretakerPhoto,
 });

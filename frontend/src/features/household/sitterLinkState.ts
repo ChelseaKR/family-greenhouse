@@ -19,10 +19,19 @@ import type { SitterLinkSummary } from '@/services/householdService';
  */
 export type SitterLinkState = 'active' | 'scheduled' | 'expired' | 'revoked';
 
-export function sitterLinkState(
-  link: SitterLinkSummary,
-  now: number = Date.now()
-): SitterLinkState {
+/**
+ * The window fields any time-boxed, revocable grant carries. Sitter links and
+ * caretaker seats have the same lifecycle for the same reason (a row outlives
+ * its window by the TTL buffer), so they resolve their real state here rather
+ * than each guessing from `status`.
+ */
+export interface TimeBoxedGrant {
+  status: 'active' | 'revoked';
+  startsAt: string;
+  expiresAt: string;
+}
+
+export function sitterLinkState(link: TimeBoxedGrant, now: number = Date.now()): SitterLinkState {
   if (link.status === 'revoked') return 'revoked';
 
   const expiresAt = Date.parse(link.expiresAt);

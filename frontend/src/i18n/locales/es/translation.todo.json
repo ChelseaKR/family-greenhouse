@@ -11,6 +11,9 @@
   "intentionallyEqual": [
     "awayRecap.noteLine",
     "awayRecap.taskLine",
+    "caretaker.page.instructionOther",
+    "caretaker.report.byCaretakerRange",
+    "caretaker.report.noteAt",
     "common.no",
     "firstRun.plant.speciesPlaceholder",
     "plantTags.scan.pinLabel",

@@ -290,7 +290,45 @@ export async function getSitterTasks(
   windowEndsAt: string,
   now: Date = new Date()
 ): Promise<SitterTask[]> {
-  const cutoffIso = sitterWindowCutoff(windowEndsAt, now);
+  // One implementation, two projections: the caretaker view needs the opaque
+  // plantId (to attach a photo to the right plant), the sitter view has no
+  // route that takes one, so it never receives it. The two differ only in how
+  // far ahead they look — a sitter sees their whole link window, a caretaker
+  // sees at most a fortnight of a possibly months-long engagement — so the
+  // cutoff is computed by each caller and the body below is shared.
+  const tasks = await dueTasksThrough(householdId, sitterWindowCutoff(windowEndsAt, now), now);
+  return tasks.map(({ plantId: _plantId, ...rest }) => rest);
+}
+
+/**
+ * The caretaker projection: everything a sitter sees, plus the opaque plantId
+ * their photo routes need. Still no member identity, private notes, or
+ * household climate location.
+ */
+export interface CaretakerTask extends SitterTask {
+  plantId: string;
+}
+
+export async function getCaretakerTasks(
+  householdId: string,
+  now: Date = new Date(),
+  dueWithinDays = 7
+): Promise<CaretakerTask[]> {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + dueWithinDays);
+  return dueTasksThrough(householdId, cutoff.toISOString(), now);
+}
+
+/**
+ * Shared body of both projections: every active-plant task due on or before
+ * `cutoffIso` (which therefore also covers everything already overdue), in
+ * the PII-free CaretakerTask shape.
+ */
+async function dueTasksThrough(
+  householdId: string,
+  cutoffIso: string,
+  now: Date
+): Promise<CaretakerTask[]> {
   const nowIso = now.toISOString();
 
   // getTasks already lifecycle-filters (active plants only) and returns the
@@ -315,6 +353,7 @@ export async function getSitterTasks(
         : (plant?.location ?? null);
       return {
         taskId: t.id,
+        plantId: t.plantId,
         plantName: t.plantName,
         taskType: t.customType || t.type,
         dueDate: t.nextDue,
