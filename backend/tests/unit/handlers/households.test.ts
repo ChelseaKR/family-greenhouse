@@ -3,6 +3,13 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 
 vi.mock('../../../src/services/householdService.js');
 vi.mock('../../../src/services/welcomeEmail.js');
+vi.mock('../../../src/services/inviteEmail.js', () => ({
+  sendInviteEmail: vi.fn(async () => 'accepted'),
+  DAILY_INVITE_EMAIL_CAP: 10,
+}));
+vi.mock('../../../src/services/householdEmails.js', () => ({
+  notifyMemberJoined: vi.fn(async () => 1),
+}));
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/accountCleanup.js');
@@ -393,6 +400,232 @@ describe('households handler', () => {
     expect(body.url).toContain('ABC');
   });
 
+  // --- POST /households/:id/invites/email ---------------------------------
+
+  /** The two identity reads the email path refuses to send without. */
+  async function mockInviteIdentity(
+    overrides: { inviterName?: string | null; householdName?: string | null } = {}
+  ) {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { inviterName = 'Sam', householdName = 'The Kim House' } = overrides;
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValue(
+      inviterName === null
+        ? null
+        : {
+            householdId: 'hh-1',
+            userId: 'user-1',
+            name: inviterName,
+            email: 'a@b.com',
+            role: 'admin',
+            joinedAt: '',
+          }
+    );
+    vi.mocked(householdService.getHousehold).mockResolvedValue(
+      householdName === null
+        ? null
+        : { id: 'hh-1', name: householdName, createdAt: '', createdBy: 'user-1' }
+    );
+    vi.mocked(householdService.createInvite).mockResolvedValue({
+      code: 'ABC',
+      householdId: 'hh-1',
+      createdBy: 'user-1',
+      createdAt: '',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+  }
+
+  function emailInviteEvent(body: unknown, claims = adminClaims) {
+    return buildEvent(claims, {
+      httpMethod: 'POST',
+      pathParameters: { id: 'hh-1' },
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('emailInvite sends the invitation and returns the link alongside the status', async () => {
+    await mockInviteIdentity();
+    const inviteEmail = await import('../../../src/services/inviteEmail.js');
+    const { emailInvite } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await emailInvite(
+      emailInviteEvent({ email: 'friend@example.com', locale: 'es' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('accepted');
+    // The link always comes back so the UI can fall back to copy-and-paste.
+    expect(body.url).toContain('ABC');
+    expect(inviteEmail.sendInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'friend@example.com',
+        inviterName: 'Sam',
+        householdName: 'The Kim House',
+        locale: 'es',
+      })
+    );
+  });
+
+  it('emailInvite requires admin role', async () => {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    await mockInviteIdentity();
+    const { emailInvite } = await import('../../../src/handlers/households/handler.js');
+    const res = (await emailInvite(
+      emailInviteEvent({ email: 'friend@example.com' }, memberClaims),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('emailInvite rejects a body that is not an email address', async () => {
+    await mockInviteIdentity();
+    const { emailInvite } = await import('../../../src/handlers/households/handler.js');
+    const res = (await emailInvite(
+      emailInviteEvent({ email: 'not-an-address' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('emailInvite mints no invite code when it cannot name the sender', async () => {
+    // An invite that cannot say who it is from is the shape we refuse, and a
+    // refused invite must not leave a live code behind.
+    await mockInviteIdentity({ inviterName: null });
+    const householdService = await import('../../../src/services/householdService.js');
+    const inviteEmail = await import('../../../src/services/inviteEmail.js');
+    const { emailInvite } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await emailInvite(
+      emailInviteEvent({ email: 'friend@example.com' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(503);
+    expect(householdService.createInvite).not.toHaveBeenCalled();
+    expect(inviteEmail.sendInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('emailInvite answers 429 when the household has spent its daily allowance', async () => {
+    await mockInviteIdentity();
+    const inviteEmail = await import('../../../src/services/inviteEmail.js');
+    vi.mocked(inviteEmail.sendInviteEmail).mockResolvedValueOnce('rate_limited');
+    const { emailInvite } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await emailInvite(
+      emailInviteEvent({ email: 'friend@example.com' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(429);
+  });
+
+  it('emailInvite never claims a send that did not happen', async () => {
+    await mockInviteIdentity();
+    const inviteEmail = await import('../../../src/services/inviteEmail.js');
+    vi.mocked(inviteEmail.sendInviteEmail).mockResolvedValueOnce('unavailable');
+    const { emailInvite } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await emailInvite(
+      emailInviteEvent({ email: 'friend@example.com' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('unavailable');
+    expect(body.url).toContain('ABC');
+  });
+
+  it('joinHousehold tells the household, naming whoever minted the invite', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'inviter-1',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    });
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    vi.mocked(householdService.addMember).mockResolvedValueOnce({
+      householdId: 'hh-9',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    const event = buildEvent(
+      { sub: 'user-2', email: 'b@b.com' },
+      { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+    );
+
+    const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(householdEmails.notifyMemberJoined).toHaveBeenCalledWith({
+      householdId: 'hh-9',
+      joinedUserId: 'user-2',
+      invitedBy: 'inviter-1',
+    });
+  });
+
+  it('joinHousehold still succeeds when the join email cannot be queued', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    vi.mocked(householdEmails.notifyMemberJoined).mockRejectedValueOnce(new Error('ddb down'));
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'inviter-1',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    });
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    vi.mocked(householdService.addMember).mockResolvedValueOnce({
+      householdId: 'hh-9',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    const event = buildEvent(
+      { sub: 'user-2', email: 'b@b.com' },
+      { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+    );
+
+    const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+  });
+
   it('validateInvite returns valid:false for unknown code', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const { validateInvite } = await import('../../../src/handlers/households/handler.js');
@@ -764,7 +997,14 @@ describe('households handler', () => {
     // the plan's maxMembers down (default billing mock = garden → 6) and no
     // longer pre-counts member rows.
     expect(householdService.addMember).toHaveBeenCalledWith('hh-9', 'user-2', 'Bob', 'b@b.com', 6);
-    expect(householdService.getHouseholdMembers).not.toHaveBeenCalled();
+    // The roster IS read after the join now, to address the "someone joined
+    // your household" email. What must not come back is the pre-count that the
+    // cap used to depend on, so this asserts ordering rather than absence: any
+    // roster read happens strictly after addMember.
+    const addMemberOrder = vi.mocked(householdService.addMember).mock.invocationCallOrder[0];
+    for (const order of vi.mocked(householdService.getHouseholdMembers).mock.invocationCallOrder) {
+      expect(order).toBeGreaterThan(addMemberOrder);
+    }
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-9', 'member');
   });
 

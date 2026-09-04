@@ -38,6 +38,21 @@ export interface JoinHouseholdData {
   inviteCode: string;
 }
 
+/**
+ * What actually happened when an invite was emailed.
+ *
+ * The link comes back in every case, so the UI falls back to copy-and-paste
+ * rather than telling someone an email went out when it did not. `accepted`
+ * means the mail provider took the message, which is not the same as it
+ * arriving — the field is named for what the server knows.
+ */
+export type InviteEmailStatus =
+  'accepted' | 'unavailable' | 'identity_unavailable' | 'recipient_cooldown';
+
+export interface EmailedInvite extends InviteLink {
+  status: InviteEmailStatus;
+}
+
 /** The non-secret view of a sitter link (list/management). No token. */
 export interface SitterLinkSummary {
   id: string;
@@ -84,6 +99,26 @@ export const householdService = {
 
   async createInvite(householdId: string): Promise<InviteLink> {
     const response = await api.post<InviteLink>(`/households/${householdId}/invites`);
+    track('invite_sent');
+    return response.data;
+  },
+
+  /**
+   * Mint an invite and have the server email it.
+   *
+   * `locale` is the inviter's current UI language: the invitee has no account
+   * and therefore no stored preference, and the person inviting them is the
+   * best available signal for what language they read.
+   */
+  async emailInvite(
+    householdId: string,
+    email: string,
+    locale?: 'en' | 'es'
+  ): Promise<EmailedInvite> {
+    const response = await api.post<EmailedInvite>(`/households/${householdId}/invites/email`, {
+      email,
+      ...(locale ? { locale } : {}),
+    });
     track('invite_sent');
     return response.data;
   },

@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
+import { z } from 'zod';
 import { createHandler, firstAllowedOrigin } from '../../middleware/handler.js';
 import { createRouter } from '../../middleware/router.js';
 import {
@@ -19,6 +20,8 @@ import {
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
 import * as welcomeEmail from '../../services/welcomeEmail.js';
+import * as inviteEmail from '../../services/inviteEmail.js';
+import * as householdEmails from '../../services/householdEmails.js';
 import * as taskService from '../../services/taskService.js';
 import * as sitterService from '../../services/sitterService.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
@@ -34,7 +37,7 @@ import {
 import * as doubleCare from '../../services/doubleCare.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
-import { rateLimit } from '../../middleware/rateLimit.js';
+import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { logger } from '../../utils/logger.js';
 
 async function sendFirstHouseholdWelcome(
@@ -226,6 +229,121 @@ export const createInvite = createHandler(
   .use(requireHousehold())
   .use(requireAdmin());
 
+/** Body for `POST /households/:id/invites/email`. Deliberately only an address
+ *  and a language: no subject, no note, no free text of any kind. Anything the
+ *  inviter could write is prose we would send on their behalf to someone who
+ *  has not consented to hear from them. */
+const inviteEmailSchema = z.object({
+  email: z.string().trim().email().max(254),
+  /** The inviter's UI language; the invitee has no stored preference because
+   *  they have no account. */
+  locale: z.enum(['en', 'es']).optional(),
+});
+
+type InviteEmailInput = z.infer<typeof inviteEmailSchema>;
+
+/**
+ * POST /households/:id/invites/email
+ *
+ * Mint an invite and email it. This is the missing first step of the product's
+ * core loop: `createInvite` has always produced a link and the app has never
+ * been able to send one, so `invite_sent → invite_accepted` could only happen
+ * through whatever channel the inviter already had.
+ *
+ * Always returns the link as well as the outcome, so the UI degrades to the
+ * existing copy-and-paste flow in every failure case rather than telling
+ * someone an email went out when it did not. The response never says whether
+ * the address belongs to an existing user or member: other members' email
+ * addresses are not visible to admins anywhere else in the product (see
+ * `getHouseholdMembersPublic`) and this endpoint is not the exception.
+ */
+// POST /households/:id/invites/email
+export const emailInvite = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<InviteEmailInput>;
+    const householdId = event.pathParameters?.id;
+
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+
+    const baseUrl = process.env.FRONTEND_URL || firstAllowedOrigin();
+    if (!baseUrl) {
+      throw createHttpError(
+        500,
+        'FRONTEND_URL / ALLOWED_ORIGIN must be set to generate invite URLs',
+        { expose: true }
+      );
+    }
+
+    // Read both identities BEFORE minting, so an invite that could not name
+    // its sender never becomes a code sitting in the table.
+    const [inviter, household] = await Promise.all([
+      householdService.getMemberByUserId(householdId, user.userId),
+      householdService.getHousehold(householdId),
+    ]);
+    if (!inviter?.name || !household?.name) {
+      throw createHttpError(
+        503,
+        'We could not load your name or the household name, so we did not send an invitation that could not say who it was from. Generate a link instead.',
+        { expose: true }
+      );
+    }
+
+    const invite = await householdService.createInvite(householdId, user.userId);
+    const url = `${baseUrl}/join/${invite.code}`;
+
+    const status = await inviteEmail.sendInviteEmail({
+      householdId,
+      to: validatedBody.email,
+      inviterName: inviter.name,
+      householdName: household.name,
+      joinUrl: url,
+      expiresAt: invite.expiresAt,
+      locale: validatedBody.locale,
+    });
+
+    if (status === 'rate_limited') {
+      throw createHttpError(
+        429,
+        `This household has sent its ${inviteEmail.DAILY_INVITE_EMAIL_CAP} invite emails for today. The link below still works.`,
+        { expose: true }
+      );
+    }
+
+    audit('household.member_added', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { stage: 'invite_emailed', expiresAt: invite.expiresAt, status },
+    });
+
+    return createdResponse({
+      code: invite.code,
+      expiresAt: invite.expiresAt,
+      url,
+      // 'accepted' means SES took the message, which is not the same as
+      // delivery — there is no bounce destination wired yet. The field is
+      // named for what we know.
+      status,
+    });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(inviteEmailSchema))
+  // Sending mail to an address the service has never seen is the one action
+  // here that reaches outside the household. The service enforces a household
+  // daily cap and a per-address cooldown; this caps the caller as well, per
+  // user rather than per IP so one household on a shared NAT cannot lock out
+  // another.
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 10 }));
+
 // GET /households/invites/:inviteCode
 //
 // Unauthenticated by design — invite recipients haven't signed in yet. Rate-
@@ -355,6 +473,24 @@ export const joinHousehold = createHandler(
       .catch((err) => {
         logger.warn({ err }, 'activity_record_failed');
       });
+
+    // Close the invite loop: `member.joined` has been a logged activity kind
+    // all along and the person who minted the invite was never told it was
+    // accepted. Awaited, not fire-and-forget — Lambda can freeze a dangling
+    // promise the moment the handler returns — but every failure is swallowed
+    // so joining a household can never fail because of an email.
+    try {
+      await householdEmails.notifyMemberJoined({
+        householdId: invite.householdId,
+        joinedUserId: user.userId,
+        invitedBy: invite.createdBy,
+      });
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, householdId: invite.householdId },
+        'household_email.member_joined_failed'
+      );
+    }
 
     return successResponse(household);
   }
@@ -779,6 +915,7 @@ export const handler = createRouter({
   'POST /households': createHousehold,
   'GET /households/{id}': getHousehold,
   'POST /households/{id}/invites': createInvite,
+  'POST /households/{id}/invites/email': emailInvite,
   'GET /households/invites/{inviteCode}': validateInvite,
   'POST /households/join/{inviteCode}': joinHousehold,
   'GET /households/{id}/activity': getActivity,

@@ -186,4 +186,56 @@ describe('notificationPrefs', () => {
     const empty = await setPreferences({ ...BASE_INPUT, timezone: '' });
     expect(empty.timezone).toBe('UTC');
   });
+
+  describe('household email toggles', () => {
+    it('defaults every household email on for a user with no row', async () => {
+      await mockStore(undefined);
+      const { getPreferences, HOUSEHOLD_EMAIL_PREF_KEYS } =
+        await import('../../../src/services/notificationPrefs.js');
+      const result = await getPreferences('user-1');
+      for (const key of HOUSEHOLD_EMAIL_PREF_KEYS) {
+        expect(result[key]).toBe(true);
+      }
+    });
+
+    it('defaults a legacy row on only when that user accepts email at all', async () => {
+      const { HOUSEHOLD_EMAIL_PREF_KEYS, getPreferences } =
+        await import('../../../src/services/notificationPrefs.js');
+      await mockStore({ ...STORED_VERIFIED, email: true });
+      const opted = await getPreferences('user-1');
+      for (const key of HOUSEHOLD_EMAIL_PREF_KEYS) expect(opted[key]).toBe(true);
+
+      await mockStore({ ...STORED_VERIFIED, email: false });
+      const off = await getPreferences('user-1');
+      for (const key of HOUSEHOLD_EMAIL_PREF_KEYS) expect(off[key]).toBe(false);
+    });
+
+    it('reads a stored false back as false', async () => {
+      await mockStore({ ...STORED_VERIFIED, careCredit: false, taskUpForGrabs: false });
+      const { getPreferences } = await import('../../../src/services/notificationPrefs.js');
+      const result = await getPreferences('user-1');
+      expect(result.careCredit).toBe(false);
+      expect(result.taskUpForGrabs).toBe(false);
+      // Untouched neighbours keep their derived value.
+      expect(result.memberJoined).toBe(true);
+    });
+
+    it('lets each toggle move independently', async () => {
+      const puts = await mockStore(STORED_VERIFIED);
+      const { setPreferences } = await import('../../../src/services/notificationPrefs.js');
+      const saved = await setPreferences({ ...BASE_INPUT, taskUpForGrabs: false });
+      expect(saved.taskUpForGrabs).toBe(false);
+      expect(saved.careCredit).toBe(true);
+      expect(saved.memberJoined).toBe(true);
+      expect(puts.at(-1)).toMatchObject({ taskUpForGrabs: false, careCredit: true });
+    });
+
+    it('keeps the stored value when an older client omits the field', async () => {
+      await mockStore({ ...STORED_VERIFIED, coverageUpdates: false });
+      const { setPreferences } = await import('../../../src/services/notificationPrefs.js');
+      // BASE_INPUT is the pre-household-emails client payload.
+      const saved = await setPreferences(BASE_INPUT);
+      expect(saved.coverageUpdates).toBe(false);
+    });
+  });
 });

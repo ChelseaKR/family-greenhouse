@@ -47,6 +47,14 @@ export interface NotificationPreferences {
    * email channel's consent); a user who turned email off gets neither.
    */
   weeklyDigest: boolean;
+  /** "Someone joined your household" (services/householdEmails.ts). */
+  memberJoined: boolean;
+  /** "A task is up for grabs" — overdue and assigned to nobody. */
+  taskUpForGrabs: boolean;
+  /** "X is away, you're covering these" when a vacation window names you. */
+  coverageUpdates: boolean;
+  /** "X covered for you" — credit when someone does a task of yours. */
+  careCredit: boolean;
   /**
    * True once the current `phone` was confirmed via SMS code. Never settable
    * directly through `setPreferences` — only `confirmPhoneVerification`
@@ -55,6 +63,25 @@ export interface NotificationPreferences {
   phoneVerified: boolean;
   updatedAt: string;
 }
+
+/**
+ * The household-email toggles, as one list so the read path, the defaults, the
+ * HTTP schema and the settings UI cannot drift apart.
+ *
+ * Each email gets its own switch on purpose. Before this, `weeklyDigest` was
+ * the only per-email control in the product: every other email was governed by
+ * the `email` master switch, so a user who wanted reminders but not summaries
+ * had to choose between all of it and none of it. Adding four emails behind one
+ * shared boolean would have made that worse.
+ */
+export const HOUSEHOLD_EMAIL_PREF_KEYS = [
+  'memberJoined',
+  'taskUpForGrabs',
+  'coverageUpdates',
+  'careCredit',
+] as const;
+
+export type HouseholdEmailPrefKey = (typeof HOUSEHOLD_EMAIL_PREF_KEYS)[number];
 
 const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   browser: false,
@@ -66,6 +93,14 @@ const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   timezone: 'UTC',
   pestAlerts: false,
   weeklyDigest: true, // default-on iff email is on; DEFAULTS.email is true
+  // Same rule as weeklyDigest: default-on iff email is on. Each of these is
+  // capped at one send per household per recipient-local day by
+  // services/householdEmails.ts, and three of the four only fire on an event
+  // that is rare by construction (a join, a vacation window, a covered task).
+  memberJoined: true,
+  taskUpForGrabs: true,
+  coverageUpdates: true,
+  careCredit: true,
   phoneVerified: false,
 };
 
@@ -103,6 +138,14 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
     // default-on only when the user already accepts email notifications.
     weeklyDigest:
       item.weeklyDigest === undefined ? Boolean(item.email) : Boolean(item.weeklyDigest),
+    // Same read-time defaulting for every row written before these existed.
+    memberJoined:
+      item.memberJoined === undefined ? Boolean(item.email) : Boolean(item.memberJoined),
+    taskUpForGrabs:
+      item.taskUpForGrabs === undefined ? Boolean(item.email) : Boolean(item.taskUpForGrabs),
+    coverageUpdates:
+      item.coverageUpdates === undefined ? Boolean(item.email) : Boolean(item.coverageUpdates),
+    careCredit: item.careCredit === undefined ? Boolean(item.email) : Boolean(item.careCredit),
     phoneVerified: Boolean(item.phoneVerified),
     updatedAt: (item.updatedAt as string) ?? '',
   };
@@ -170,11 +213,12 @@ export function isInDndWindow(prefs: NotificationPreferences, now = new Date()):
 }
 
 /** What callers may set. `phoneVerified` is derived, never accepted as input;
- *  `weeklyDigest` is optional so older clients keep the stored/derived value. */
+ *  `weeklyDigest` and the household-email toggles are optional so older clients
+ *  keep the stored/derived value instead of resetting it to a default. */
 export type PreferencesInput = Omit<
   NotificationPreferences,
-  'updatedAt' | 'phoneVerified' | 'weeklyDigest'
-> & { weeklyDigest?: boolean };
+  'updatedAt' | 'phoneVerified' | 'weeklyDigest' | HouseholdEmailPrefKey
+> & { weeklyDigest?: boolean } & Partial<Record<HouseholdEmailPrefKey, boolean>>;
 
 /**
  * Replace the user's prefs row. We always write all fields so partial update
@@ -205,9 +249,13 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
   if (prefs.sms && !phoneVerified && !(existing.sms && existing.phone === prefs.phone)) {
     throw createHttpError(400, 'Phone number must be verified before enabling SMS reminders');
   }
+  const householdEmailPrefs = Object.fromEntries(
+    HOUSEHOLD_EMAIL_PREF_KEYS.map((key) => [key, prefs[key] ?? existing[key]])
+  ) as Record<HouseholdEmailPrefKey, boolean>;
   const updated: NotificationPreferences = {
     ...prefs,
     weeklyDigest: prefs.weeklyDigest ?? existing.weeklyDigest,
+    ...householdEmailPrefs,
     phoneVerified,
     timezone,
     updatedAt: new Date().toISOString(),

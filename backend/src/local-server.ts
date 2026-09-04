@@ -74,6 +74,7 @@ import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
+import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
@@ -279,6 +280,10 @@ interface NotificationPrefsRecord {
   timezone: string;
   pestAlerts: boolean;
   weeklyDigest: boolean;
+  memberJoined: boolean;
+  taskUpForGrabs: boolean;
+  coverageUpdates: boolean;
+  careCredit: boolean;
   phoneVerified: boolean;
   updatedAt: string;
 }
@@ -400,7 +405,14 @@ export const db = {
   // object exists, and /mock-images serves the confirmed URL from this API.
   mockUploadGrants: new Map<string, MockUploadGrant>(),
   mockImages: new Map<string, MockImageObject>(),
+  // Invite-email abuse bounds, mirrored from services/inviteEmail.ts so the
+  // 429 and cooldown branches are reachable in development.
+  inviteEmailCounts: new Map<string, number>(), // `${householdId}|${utcDay}` -> count
+  inviteEmailRecipients: new Set<string>(), // `${householdId}|${utcDay}|${address}`
 };
+
+/** Mirrors DAILY_INVITE_EMAIL_CAP in services/inviteEmail.ts. */
+const LOCAL_DAILY_INVITE_EMAIL_CAP = 10;
 
 export const seedHouseholdId = '550e8400-e29b-41d4-a716-446655440001';
 export const seedUserId = '550e8400-e29b-41d4-a716-446655440000';
@@ -411,6 +423,8 @@ export function resetDb(): void {
   db.users.clear();
   db.households.clear();
   db.invites.clear();
+  db.inviteEmailCounts.clear();
+  db.inviteEmailRecipients.clear();
   db.plants.clear();
   db.spaces.clear();
   db.shares.clear();
@@ -1458,6 +1472,102 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
 
   res.status(201).json(payload);
 });
+
+// Mirrors inviteEmailSchema in handlers/households/handler.ts.
+const inviteEmailSchema = z.object({
+  email: z.string().trim().email().max(254),
+  locale: z.enum(['en', 'es']).optional(),
+});
+
+/**
+ * POST /households/:id/invites/email — mirrors handlers/households/handler.ts.
+ *
+ * The mock's delivery channel is the console: it composes the real localized
+ * email through `services/emailCopy.ts` and prints it, so the copy can be read
+ * (in both languages) without SES. That is why it answers `accepted` rather
+ * than `unavailable` — something really was delivered, to the terminal.
+ *
+ * The two abuse bounds are mirrored in memory so the 429 and cooldown paths
+ * are reachable in development: a per-household daily cap and one email per
+ * address per household per day.
+ */
+app.post(
+  '/households/:id/invites/email',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody(inviteEmailSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const body = (req as any).validatedBody as { email: string; locale?: 'en' | 'es' };
+    const householdId = String(req.params.id);
+    if (user.householdId !== householdId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const household = db.households.get(householdId);
+    if (!household) {
+      return res.status(404).json({ message: 'Household not found' });
+    }
+    const inviter = membersOf(householdId).find((m) => m.userId === user.userId);
+    if (!inviter?.name || !household.name) {
+      return res.status(503).json({
+        message:
+          'We could not load your name or the household name, so we did not send an invitation that could not say who it was from. Generate a link instead.',
+      });
+    }
+
+    const day = new Date().toISOString().slice(0, 10);
+    const recipientKey = `${householdId}|${day}|${body.email.trim().toLowerCase()}`;
+    if (db.inviteEmailRecipients.has(recipientKey)) {
+      return res.status(200).json({ status: 'recipient_cooldown' });
+    }
+    const countKey = `${householdId}|${day}`;
+    const used = db.inviteEmailCounts.get(countKey) ?? 0;
+    if (used >= LOCAL_DAILY_INVITE_EMAIL_CAP) {
+      return res.status(429).json({
+        message: `This household has sent its ${LOCAL_DAILY_INVITE_EMAIL_CAP} invite emails for today. The link below still works.`,
+      });
+    }
+
+    const code = uuidv4().replace(/-/g, '');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    db.invites.set(code, {
+      code,
+      householdId,
+      createdBy: user.userId,
+      createdAt: now.toISOString(),
+      expiresAt,
+    });
+    const baseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+    const url = `${baseUrl}/join/${code}`;
+
+    db.inviteEmailCounts.set(countKey, used + 1);
+    db.inviteEmailRecipients.add(recipientKey);
+
+    const { subject, text } = composeInviteEmail(
+      {
+        inviterName: inviter.name,
+        householdName: household.name,
+        joinUrl: url,
+        expiresAt,
+      },
+      normalizeEmailLocale(body.locale)
+    );
+    console.log('\n========================================');
+    console.log('INVITE EMAIL (console delivery)');
+    console.log(`To: ${body.email}`);
+    console.log(`Subject: ${subject}`);
+    console.log('----------------------------------------');
+    console.log(text);
+    console.log('========================================\n');
+
+    res.status(201).json({ code, expiresAt, url, status: 'accepted' });
+  }
+);
 
 // --- Plant-sitter links (authed management) -------------------------------
 // Mirrors handlers/households/handler.ts: createSitterLink / listSitterLinks /
@@ -4267,6 +4377,11 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     pestAlerts: false,
     // Mirrors production read-defaulting: weeklyDigest on iff email is on.
     weeklyDigest: true,
+    // Household emails (services/householdEmails.ts) follow the same rule.
+    memberJoined: true,
+    taskUpForGrabs: true,
+    coverageUpdates: true,
+    careCredit: true,
     phoneVerified: false,
     updatedAt: new Date().toISOString(),
   };
@@ -4302,6 +4417,10 @@ const prefsSchema = z
       .default('UTC'),
     pestAlerts: z.boolean().default(false),
     weeklyDigest: z.boolean().optional(),
+    memberJoined: z.boolean().optional(),
+    taskUpForGrabs: z.boolean().optional(),
+    coverageUpdates: z.boolean().optional(),
+    careCredit: z.boolean().optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
     message: 'Quiet hours require both a start and end time',
@@ -4388,6 +4507,10 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     timezone: body.timezone,
     pestAlerts: body.pestAlerts,
     weeklyDigest: body.weeklyDigest ?? current.weeklyDigest,
+    memberJoined: body.memberJoined ?? current.memberJoined,
+    taskUpForGrabs: body.taskUpForGrabs ?? current.taskUpForGrabs,
+    coverageUpdates: body.coverageUpdates ?? current.coverageUpdates,
+    careCredit: body.careCredit ?? current.careCredit,
     phoneVerified,
     updatedAt: new Date().toISOString(),
   };

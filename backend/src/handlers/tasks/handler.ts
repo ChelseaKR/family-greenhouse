@@ -34,6 +34,7 @@ import * as billing from '../../services/billing.js';
 import * as doubleCare from '../../services/doubleCare.js';
 import { nextDueAfterMatch } from '../../services/doubleCareRules.js';
 import { getPlan, hasHouseholdToolkit, Plan } from '../../models/plans.js';
+import * as householdEmails from '../../services/householdEmails.js';
 import { recordActivity } from '../../services/activity.js';
 import {
   successResponse,
@@ -348,6 +349,22 @@ export const completeTask = createHandler(
 
     if (!task) {
       throw createHttpError(404, 'Task not found');
+    }
+
+    // Credit, not a scoreboard: when somebody else's task gets done, the person
+    // whose task it was hears about it. `assignedTo` is untouched by
+    // completion, so the returned task still names the owner. Best-effort and
+    // swallowed — a completion must never fail because of an email — but
+    // awaited, because Lambda can freeze a dangling promise on return.
+    try {
+      await householdEmails.notifyCoveredCompletion({
+        householdId: user.householdId!,
+        task,
+        completedBy: user.userId,
+        notes: validatedBody.notes ?? null,
+      });
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, taskId }, 'household_email.care_credit_failed');
     }
 
     return successResponse(task);
@@ -723,6 +740,23 @@ export const setVacation = createHandler(
       },
       user.userId
     );
+
+    // Tell the cover now, with the list, instead of leaving them to discover it
+    // as "(covering for Sam)" inside a reminder on the day the window opens.
+    // Keyed on the window's dates in the service, so re-saving is silent and
+    // moving the dates is a fresh heads-up.
+    try {
+      await householdEmails.notifyCoverageAssigned({
+        householdId,
+        awayUserId: targetUserId,
+        coveredBy: validatedBody.coveredBy,
+        startDate: validatedBody.startDate,
+        endDate: validatedBody.endDate,
+      });
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, householdId }, 'household_email.coverage_failed');
+    }
+
     return successResponse(window);
   }
 )
