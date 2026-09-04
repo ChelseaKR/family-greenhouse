@@ -461,16 +461,23 @@ function renderPlanCta({
  */
 function UsageMeters({ usage, limits }: { usage: PlanUsageDetail; limits: PlanLimitEvaluation }) {
   const { t } = useTranslation();
+  // A null CAP is unlimited (Garden and Greenhouse members, ADR 0014): the
+  // row states the count with no ceiling and draws no bar, because there is
+  // nothing to fill. A null COUNT is still "unknown" and still says so.
   const meters = [
     {
       key: 'plants',
       label:
-        usage.plantCount === null
-          ? t('settings.billing.plantsUsageUnavailable', { max: usage.maxPlants })
-          : t('settings.billing.plantsUsage', {
-              n: usage.plantCount,
-              max: usage.maxPlants,
-            }),
+        usage.maxPlants === null
+          ? usage.plantCount === null
+            ? t('settings.billing.plantsCountUnavailable')
+            : t('settings.billing.plantsUsageUnlimited', { n: usage.plantCount })
+          : usage.plantCount === null
+            ? t('settings.billing.plantsUsageUnavailable', { max: usage.maxPlants })
+            : t('settings.billing.plantsUsage', {
+                n: usage.plantCount,
+                max: usage.maxPlants,
+              }),
       count: usage.plantCount,
       max: usage.maxPlants,
       state: limits.plants,
@@ -478,12 +485,16 @@ function UsageMeters({ usage, limits }: { usage: PlanUsageDetail; limits: PlanLi
     {
       key: 'members',
       label:
-        usage.memberCount === null
-          ? t('settings.billing.membersUsageUnavailable', { max: usage.maxMembers })
-          : t('settings.billing.membersUsage', {
-              n: usage.memberCount,
-              max: usage.maxMembers,
-            }),
+        usage.maxMembers === null
+          ? usage.memberCount === null
+            ? t('settings.billing.membersCountUnavailable')
+            : t('settings.billing.membersUsageUnlimited', { n: usage.memberCount })
+          : usage.memberCount === null
+            ? t('settings.billing.membersUsageUnavailable', { max: usage.maxMembers })
+            : t('settings.billing.membersUsage', {
+                n: usage.memberCount,
+                max: usage.maxMembers,
+              }),
       count: usage.memberCount,
       max: usage.maxMembers,
       state: limits.members,
@@ -496,10 +507,13 @@ function UsageMeters({ usage, limits }: { usage: PlanUsageDetail; limits: PlanLi
       </p>
       <div className="mt-3 space-y-3" role="list" aria-labelledby="billing-usage-title">
         {meters.map((m) => {
-          const available = m.state !== 'unknown' && m.count !== null;
+          // A bar needs both a count and a ceiling; unlimited has no ceiling.
+          const available = m.state !== 'unknown' && m.count !== null && m.max !== null;
           const over = m.state === 'over';
           const pct =
-            m.count !== null && m.max > 0 ? Math.min(100, Math.round((m.count / m.max) * 100)) : 0;
+            m.count !== null && m.max !== null && m.max > 0
+              ? Math.min(100, Math.round((m.count / m.max) * 100))
+              : 0;
           return (
             <div
               key={m.key}

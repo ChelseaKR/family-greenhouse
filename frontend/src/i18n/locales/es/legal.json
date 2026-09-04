@@ -66,7 +66,7 @@
         "service": "<strong>El servicio, tal como se describe.</strong> Procuramos que la aplicación esté disponible, sea precisa y no tenga errores básicos. No prometemos cero interrupciones; consulta <em>Limitaciones</em> más abajo.",
         "data": "<strong>Tus datos, tratados con cuidado.</strong> Consulta nuestra <privacyLink>Política de privacidad</privacyLink> para conocer los detalles.",
         "notice": "<strong>Aviso razonable antes de los cambios.</strong> Las funciones principales y los límites de uso se mantienen estables durante al menos 14 días desde su anuncio. Las correcciones de errores y las mejoras se publican de forma continua.",
-        "plans": "<strong>Un nivel gratuito y planes de pago que eliges tú.</strong> Family Greenhouse admite cuentas gratuitas Plántula (Seedling) con hasta 10 plantas. También hay planes de pago Garden y Greenhouse; no se cobra nada a menos que una persona administradora del hogar compre uno."
+        "plans": "<strong>Un nivel gratuito y planes de pago que eliges tú.</strong> Family Greenhouse admite cuentas gratuitas Plántula (Seedling) para un hogar, con hasta 3 personas y 20 plantas. También hay planes de pago Garden y Greenhouse; no se cobra nada a menos que una persona administradora del hogar contrate uno."
       },
       "fromYou": {
         "heading": "Qué esperamos de ti",

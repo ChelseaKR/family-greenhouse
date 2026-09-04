@@ -101,8 +101,11 @@ describe('GET /me/today (cross-home Today, ADR 0017)', () => {
 
   it('groups due + overdue work by household, names every row, and resolves the role per household', async () => {
     const token = await loginAsSeed();
-    const beachId = await createHousehold(token, 'Beach Cottage');
+    // The plan goes on FIRST: since ADR 0014 a second home is itself a paid
+    // capability (`limits.homes`), so `POST /households` would answer 402
+    // while the caller's strongest plan is still Seedling.
     db.households.get(seedHouseholdId)!.planId = 'greenhouse';
+    const beachId = await createHousehold(token, 'Beach Cottage');
     const fernTaskId = await addPlantWithTask(token, beachId, 'Fern', daysFromNow(-2)); // overdue
     await addPlantWithTask(token, beachId, 'Cactus', daysFromNow(6)); // next week: not today
     // The caller is only a member at the cottage — the role must come from
@@ -169,9 +172,15 @@ describe('GET /me/today (cross-home Today, ADR 0017)', () => {
 
   it('follows the person: membership in ANY greenhouse household unlocks every home they belong to', async () => {
     const token = await loginAsSeed();
+    // Reaching the state under test — one paid home, one free — needs the
+    // homes gate (ADR 0014) satisfied at CREATE time, so the seed household
+    // carries the plan for that one call and is put back on the free tier
+    // immediately. What the assertion then reads is the real shape: the seed
+    // household free, the second home on Greenhouse.
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
     const paidId = await createHousehold(token, 'Paid Home');
     db.households.get(paidId)!.planId = 'greenhouse';
-    // The default (seed) household stays free.
+    db.households.get(seedHouseholdId)!.planId = 'seedling';
 
     const res = await request(app).get('/me/today').set('Authorization', `Bearer ${token}`);
 

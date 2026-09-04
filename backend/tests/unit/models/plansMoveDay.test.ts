@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { PLANS, getPlan, planHasMoveDay } from '../../../src/models/plans.js';
 
 // Seasonal Move Day (ideation brief §4.9) is a Garden+ entitlement. One
-// boolean per tier + one accessor; the handler consults nothing else.
+// boolean per tier in the catalog's single `features` map (ADR 0014) + one
+// accessor; the handler consults nothing else.
 describe('plan catalog: Seasonal Move Day', () => {
   it('is off on the free tier and on for both paid tiers', () => {
-    expect(PLANS.seedling.moveDay).toBe(false);
-    expect(PLANS.garden.moveDay).toBe(true);
-    expect(PLANS.greenhouse.moveDay).toBe(true);
+    expect(PLANS.seedling.features.moveDay).toBe(false);
+    expect(PLANS.garden.features.moveDay).toBe(true);
+    expect(PLANS.greenhouse.features.moveDay).toBe(true);
   });
 
   it('planHasMoveDay reads the tier flag', () => {

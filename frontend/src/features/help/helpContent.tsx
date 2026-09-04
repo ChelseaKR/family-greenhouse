@@ -179,13 +179,14 @@ export const HELP_SECTIONS: HelpSection[] = [
               caring for frees a slot immediately, and keeps all of its history.
             </p>
             <p>
-              The caps are 10 plants on the free Seedling plan, 500 on Garden and 5,000 on
+              The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on
               Greenhouse. Nothing is ever deleted for being over a cap; you just can&rsquo;t add
-              more until you are back under it.
+              more until you are back under it. A household that was already above a cap when it
+              changed keeps every plant it has.
             </p>
           </>
         ),
-        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 10 plants on the free Seedling plan, 500 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it.',
+        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it. A household that was already above a cap when it changed keeps every plant it has.',
       },
       {
         id: 'plant-died',
@@ -240,7 +241,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
             <p>
               It is metered per household, per calendar month, and resets on the 1st:{' '}
-              <strong>3 identifications on Seedling, 30 on Garden, 100 on Greenhouse</strong>. The
+              <strong>1 identification on Seedling, 30 on Garden, 100 on Greenhouse</strong>. The
               app does not show a running count, so the first you&rsquo;ll hear of the limit is a
               message when you reach it. An attempt is counted even if the service then fails, so a
               timeout can still use one.
@@ -252,7 +253,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. It is metered per household per calendar month and resets on the 1st: 3 identifications on Seedling, 30 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
+        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. It is metered per household per calendar month and resets on the 1st: 1 identification on Seedling, 30 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
       },
       {
         id: 'leaf-health',
@@ -747,20 +748,25 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              The free <strong>Seedling</strong> plan is a real plan, not a trial: up to 10 plants
-              and 6 members, with no card required and no expiry. It includes plants and photos,
-              unlimited tasks and reminders, households and sharing, plant sitters, climate tips,
-              analytics, data export, and up to 200 leaf-health checks a month.
+              The free <strong>Seedling</strong> plan is a real plan, not a trial: a couple and
+              their plants &mdash; one home, up to 3 members and 20 plants, with no card required
+              and no expiry. It includes plants and photos, unlimited tasks and reminders, invites
+              and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the
+              last 30 days of analytics, the calendar feed, data export, and leaf-health checks each
+              month.
             </p>
             <p>
-              Paid plans raise the caps and add two things: <strong>Garden</strong> (500 plants, 6
-              members) adds the AI care assistant, and <strong>Greenhouse</strong> (5,000 plants, 50
-              members) adds API keys on top. Plant identification is available on every plan, with a
-              monthly allowance that grows with the tier.
+              The paid plans are drawn on homes and hands, not on how many plants you own.{' '}
+              <strong>Garden</strong> is for a household that has to coordinate: one home, unlimited
+              members, 200 plants, your full analytics history, and the AI care assistant.{' '}
+              <strong>Greenhouse</strong> is for many homes and many hands: belong to every
+              household you help with, unlimited members, 5,000 plants, and API keys on top. Plant
+              identification is available on every plan, with a monthly allowance that grows with
+              the tier. Export and your care history are never behind a plan.
             </p>
           </>
         ),
-        text: 'The free Seedling plan is a real plan, not a trial: up to 10 plants and 6 members, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, households and sharing, plant sitters, climate tips, analytics, data export, and up to 200 leaf-health checks a month. Paid plans raise the caps and add two things: Garden with 500 plants and 6 members adds the AI care assistant, and Greenhouse with 5,000 plants and 50 members adds API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier.',
+        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 3 members and 20 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
       },
       {
         id: 'who-can-buy',

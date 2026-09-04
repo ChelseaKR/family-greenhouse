@@ -587,10 +587,14 @@ describe('householdService', () => {
       await import('../../../src/services/householdService.js');
     const { PLANS } = await import('../../../src/models/plans.js');
 
-    // Deliberately exceeds every plan cap AND the page size, which is exactly
-    // the case the old single-page read dropped on the floor.
+    // Deliberately exceeds the page size, which is exactly the case the old
+    // single-page read dropped on the floor. Since the re-cut (ADR 0014)
+    // membership is UNLIMITED on the paid tiers, so no plan cap bounds a
+    // roster any more — paging is the only thing keeping it whole, which is
+    // why this can no longer be expressed as "bigger than the largest cap".
     const size = MEMBER_QUERY_LIMIT + 7;
-    expect(size).toBeGreaterThan(Math.max(...Object.values(PLANS).map((p) => p.maxMembers)));
+    expect(size).toBeGreaterThan(MEMBER_QUERY_LIMIT);
+    expect(Object.values(PLANS).some((p) => p.limits.members === null)).toBe(true);
     const row = (n: number) => ({
       householdId: 'hh',
       userId: `u${n}`,

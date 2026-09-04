@@ -23,7 +23,9 @@ describe('RegisterPage', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: /start your greenhouse/i })
     ).toBeInTheDocument();
-    expect(screen.getByText(/free for up to 10 plants/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/free for one home, up to 3 household members and 20 plants/i)
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password\s*\*?$/i)).toHaveAttribute('minlength', '12');

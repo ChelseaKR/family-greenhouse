@@ -29,6 +29,7 @@ One file per decision: `NNNN-short-title.md`, numbered sequentially. Each has: *
 | [0011](0011-categorical-pet-safety-claims-block.md)                 | Ungrounded pet-safety claims block                     | Accepted |
 | [0012](0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md)    | Plant.id unit cost withdraws annual and lifetime plans | Accepted |
 | [0013](0013-build-time-prerendering-of-public-routes.md)            | Build-time prerendering of public routes               | Accepted |
+| [0014](0014-plans-drawn-on-homes-and-hands.md)                      | Plan line drawn on homes and hands                     | Accepted |
 | [0015](0015-the-away-kit.md)                                        | The Away Kit: sitter links as the paid differentiator  | Accepted |
 | [0016](0016-plant-tags-account-free-care-actions.md)                | Plant Tags: account-free care actions                  | Accepted |
 | [0017](0017-cross-home-today-is-a-work-queue-not-a-global-view.md)  | Cross-home Today is a work queue, not a global view    | Accepted |

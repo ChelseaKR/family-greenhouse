@@ -32,6 +32,30 @@ Resource handlers refuse cross-household access by checking `user.householdId ==
 
 The one cross-household read is `GET /me/today`, and it is a work queue, not that view ([ADR 0017](adr/0017-cross-home-today-is-a-work-queue-not-a-global-view.md)). For every membership it runs the same due/overdue task query the dashboard runs, with that household's role from its membership row, and returns the result **grouped by household with the household name on every row** — never merged. A household whose read fails is returned as an explicit `status: 'unavailable'` entry rather than dropped. The read is not pinned to a household (`X-Household-Id` is irrelevant to it); acting on a row goes back through the ordinary single-household task routes with an explicit `X-Household-Id` for that row's home, so the refusal above is untouched. It is a Greenhouse feature (`crossHomeToday` in `models/plans.ts`), gated per user across every household they belong to.
 
+## How many households a user may belong to
+
+Belonging to several households is a PAID capability as of ADR 0014: the plan
+catalog's `limits.homes` is one on Seedling and Garden and unlimited on
+Greenhouse, and `services/homesGate.ts` enforces it on the two routes that
+grow the set — `POST /households` and `POST /households/join/:inviteCode`.
+
+Because plans belong to households and people belong to several, the cap is
+resolved against the **strongest plan the user would hold after the action**:
+every household they are already in, plus the one being joined. Two
+consequences are deliberate.
+
+- A Greenhouse household never turns a hand away. Joining one always passes,
+  whatever the joiner already belongs to — "many homes, many hands" is the
+  tier's whole story, and it would be self-defeating to refuse the helper.
+- A Greenhouse member may help at any number of homes, because one of the
+  homes they hold has no ceiling.
+
+**The cap limits new growth only.** The gate answers "may one more be added?",
+so a user who already belongs to five households keeps all five, reads and
+acts in every one of them, and is told no only on the sixth. Nothing here
+removes, hides, or downgrades an existing membership; the same rule the plant
+and member caps follow.
+
 ## Adding a household
 
 The switcher exposes a "+ Add a household" affordance that links to `/onboarding?mode=add`. The same `HouseholdOnboarding` component handles both first-time setup and additional households; the `mode` param flips two behaviors:

@@ -40,7 +40,11 @@ import {
  * are soft upstream-cost budgets.
  */
 export const IDENTIFY_ALLOWANCES: Record<PlanId, number> = {
-  seedling: 3,
+  // Free drops 3 -> 1 (ADR 0012 decision 2, the half that had not landed
+  // when the leaf-health and chat tiering did). At $0.0585 per call this is
+  // the single largest line in the free tier's AI ceiling; ADR 0014 re-cuts
+  // the tiers so the reason to upgrade is coordination, not this allowance.
+  seedling: 1,
   garden: 30,
   greenhouse: 100,
 };

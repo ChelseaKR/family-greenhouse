@@ -19,6 +19,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { atCap, type Limit } from '../models/plans.js';
 import { invalidateMembership } from '../utils/membershipCache.js';
 import {
   Household,
@@ -322,16 +323,18 @@ export async function listAllHouseholdIds(): Promise<string[]> {
  * follows `LastEvaluatedKey` to exhaustion.
  *
  * This used to be a single un-paginated page, safe only because of a constant
- * in another file — the largest plan's `maxMembers` is 50 (`models/plans.ts`),
+ * in another file — the largest plan's member cap was 50 (`models/plans.ts`),
  * under the 100 here. That coupling was the hazard the old docstring named:
- * raise `maxMembers` past the `Limit` and callers stop getting an error, they
+ * raise the cap past the `Limit` and callers stop getting an error, they
  * get a silently short roster. Reminder fan-out (`services/reminders.ts`)
  * iterates exactly this list, so a truncated one was a member who is simply
- * never reminded, with nothing anywhere saying so.
+ * never reminded, with nothing anywhere saying so. The re-cut (ADR 0014)
+ * makes Garden and Greenhouse membership unlimited, which would have made
+ * that hazard live rather than theoretical.
  *
  * Paging removes the failure mode instead of documenting it — the same shape
  * `plantService.queryAllPages` and `taskService.queryAllPages` already use, so
- * `maxMembers` and this number are no longer coupled at all.
+ * the member cap and this number are no longer coupled at all.
  */
 export const MEMBER_QUERY_LIMIT = 100;
 
@@ -487,7 +490,7 @@ export async function addMember(
   userId: string,
   userName: string,
   userEmail: string,
-  maxMembers: number,
+  maxMembers: Limit,
   role: 'admin' | 'member' = 'member'
 ): Promise<HouseholdMember> {
   const now = new Date().toISOString();
@@ -523,10 +526,14 @@ export async function addMember(
   if (typeof meta.Item.memberCount !== 'number') {
     const members = await getHouseholdMembers(householdId);
     base = members.length;
-    if (base >= maxMembers) {
+    if (atCap(base, maxMembers)) {
       throw new PlanLimitError(`Member limit of ${maxMembers} reached`);
     }
   }
+  // An unlimited plan (`null`, models/plans.ts) carries no cap condition and
+  // no `:max` value — DynamoDB rejects an ExpressionAttributeValue that the
+  // expression never references.
+  const capped = maxMembers !== null;
 
   try {
     await dynamodb.send(
@@ -544,9 +551,12 @@ export async function addMember(
               TableName: TABLE_NAME,
               Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
               UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :base) + :one',
-              ConditionExpression:
-                'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)',
-              ExpressionAttributeValues: { ':base': base, ':one': 1, ':max': maxMembers },
+              ConditionExpression: capped
+                ? 'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)'
+                : 'attribute_exists(PK)',
+              ExpressionAttributeValues: capped
+                ? { ':base': base, ':one': 1, ':max': maxMembers }
+                : { ':base': base, ':one': 1 },
             },
           },
         ],

@@ -1,33 +1,78 @@
 import { describe, it, expect } from 'vitest';
 import {
   PLANS,
+  PLAN_ORDER,
+  UNLIMITED,
+  atCap,
   getPlan,
+  hasFeature,
   isPlanId,
   isIntervalOffered,
   isIntervalWithdrawn,
+  isUnlimited,
+  limitOf,
   planSummary,
   hasHouseholdToolkit,
+  strongestPlan,
   type Plan,
+  type PlanFeatures,
+  type PlanLimits,
 } from '../../../src/models/plans.js';
 
-describe('plan catalog', () => {
+const LIMIT_KEYS: Array<keyof PlanLimits> = [
+  'homes',
+  'members',
+  'plants',
+  'tags',
+  'analyticsHistoryDays',
+  'sitterLinkMaxDays',
+  'sitterLinksActive',
+];
+
+const FEATURE_KEYS: Array<keyof PlanFeatures> = [
+  'awayKit',
+  'householdToolkit',
+  'plantTags',
+  'crossHomeToday',
+  'kiosk',
+  'caretakerSeats',
+  'moveDay',
+  'chat',
+  'apiKeys',
+];
+
+describe('plan catalog (ADR 0014: the line is homes and hands)', () => {
   it('exposes exactly the three known tiers', () => {
     expect(Object.keys(PLANS).sort()).toEqual(['garden', 'greenhouse', 'seedling']);
   });
 
-  it('pins the per-tier caps the handlers enforce', () => {
-    expect(PLANS.seedling).toMatchObject({ monthlyPrice: 0, maxPlants: 10, maxMembers: 6 });
-    expect(PLANS.garden).toMatchObject({ monthlyPrice: 4.99, maxPlants: 500, maxMembers: 6 });
-    expect(PLANS.greenhouse).toMatchObject({ monthlyPrice: 9.99, maxPlants: 5000, maxMembers: 50 });
-  });
-
-  it('pins the numeric caps per tier (ADR 0015 sitter links: free keeps one 7-day link, paid gets 90 days and several; ADR 0016 plant tags: none free, 50 on Garden, unlimited above)', () => {
-    expect(PLANS.seedling.limits).toEqual({ sitterLinkMaxDays: 7, sitterLinksActive: 1, tags: 0 });
-    expect(PLANS.garden.limits).toEqual({ sitterLinkMaxDays: 90, sitterLinksActive: 10, tags: 50 });
+  it('pins the re-cut limits the handlers enforce', () => {
+    expect(PLANS.seedling.limits).toEqual({
+      homes: 1,
+      members: 3,
+      plants: 20,
+      tags: 0,
+      analyticsHistoryDays: 30,
+      sitterLinkMaxDays: 7,
+      sitterLinksActive: 1,
+    });
+    expect(PLANS.garden.limits).toEqual({
+      homes: 1,
+      members: null,
+      plants: 200,
+      tags: 50,
+      analyticsHistoryDays: null,
+      sitterLinkMaxDays: 90,
+      sitterLinksActive: 10,
+    });
     expect(PLANS.greenhouse.limits).toEqual({
+      homes: null,
+      members: null,
+      plants: 5000,
+      tags: null,
+      analyticsHistoryDays: null,
       sitterLinkMaxDays: 90,
       sitterLinksActive: 25,
-      tags: Number.POSITIVE_INFINITY,
     });
   });
 
@@ -41,6 +86,104 @@ describe('plan catalog', () => {
     // without hardcoding tier names.
     expect(planSummary(PLANS.seedling).householdToolkit).toBe(false);
     expect(planSummary(PLANS.garden).householdToolkit).toBe(true);
+  });
+
+  it('pins the capability map per tier', () => {
+    expect(PLANS.seedling.features).toEqual({
+      awayKit: false,
+      householdToolkit: false,
+      plantTags: false,
+      crossHomeToday: false,
+      kiosk: false,
+      caretakerSeats: false,
+      moveDay: false,
+      chat: false,
+      apiKeys: false,
+    });
+    expect(PLANS.garden.features).toEqual({
+      awayKit: true,
+      householdToolkit: true,
+      plantTags: true,
+      crossHomeToday: false,
+      kiosk: false,
+      caretakerSeats: false,
+      moveDay: true,
+      chat: true,
+      apiKeys: false,
+    });
+    expect(PLANS.greenhouse.features).toEqual({
+      awayKit: true,
+      householdToolkit: true,
+      plantTags: true,
+      crossHomeToday: true,
+      kiosk: true,
+      caretakerSeats: true,
+      moveDay: true,
+      chat: true,
+      apiKeys: true,
+    });
+  });
+
+  it('every tier carries every limit key and every feature key (other domains read them by name)', () => {
+    for (const plan of Object.values(PLANS)) {
+      expect(Object.keys(plan.limits).sort()).toEqual([...LIMIT_KEYS].sort());
+      expect(Object.keys(plan.features).sort()).toEqual([...FEATURE_KEYS].sort());
+    }
+  });
+
+  it('never represents unlimited as Infinity — only as null', () => {
+    for (const plan of Object.values(PLANS)) {
+      for (const key of LIMIT_KEYS) {
+        const value = plan.limits[key];
+        expect(value === null || Number.isFinite(value)).toBe(true);
+      }
+    }
+    expect(UNLIMITED).toBeNull();
+    // Survives the wire: what the client reads is exactly what the catalog says.
+    expect(JSON.parse(JSON.stringify(PLANS.greenhouse.limits)).homes).toBeNull();
+  });
+
+  it('entitlement never goes DOWN the ladder on a limit', () => {
+    // A higher tier may equal a lower one on a cap but never sit below it —
+    // the whole point of the ladder. `null` (unlimited) is above any number.
+    const rank = (v: number | null) => (v === null ? Number.POSITIVE_INFINITY : v);
+    for (const key of LIMIT_KEYS) {
+      for (let i = 1; i < PLAN_ORDER.length; i++) {
+        const lower = PLANS[PLAN_ORDER[i - 1]].limits[key];
+        const higher = PLANS[PLAN_ORDER[i]].limits[key];
+        expect(rank(higher)).toBeGreaterThanOrEqual(rank(lower));
+      }
+    }
+    for (const key of FEATURE_KEYS) {
+      for (let i = 1; i < PLAN_ORDER.length; i++) {
+        const lower = PLANS[PLAN_ORDER[i - 1]].features[key];
+        const higher = PLANS[PLAN_ORDER[i]].features[key];
+        if (lower) expect(higher).toBe(true);
+      }
+    }
+  });
+
+  it('keeps the monthly prices exactly where they were (price changes are owner decisions)', () => {
+    expect(PLANS.seedling.monthlyPrice).toBe(0);
+    expect(PLANS.garden.monthlyPrice).toBe(4.99);
+    expect(PLANS.greenhouse.monthlyPrice).toBe(9.99);
+  });
+
+  it('pins the sitter-link caps per tier (ADR 0015: free keeps one 7-day link; paid gets 90 days, several) and the plant-tag caps (ADR 0016: none free, 50 on Garden, unlimited above)', () => {
+    // Asserted per key rather than as a whole-object `toEqual`: the re-cut
+    // (ADR 0014) gave `limits` five more keys, so pinning the whole map here
+    // would restate the block above instead of pinning what ADR 0015 and ADR
+    // 0016 each decided.
+    expect(PLANS.seedling.limits.sitterLinkMaxDays).toBe(7);
+    expect(PLANS.seedling.limits.sitterLinksActive).toBe(1);
+    expect(PLANS.garden.limits.sitterLinkMaxDays).toBe(90);
+    expect(PLANS.garden.limits.sitterLinksActive).toBe(10);
+    expect(PLANS.greenhouse.limits.sitterLinkMaxDays).toBe(90);
+    expect(PLANS.greenhouse.limits.sitterLinksActive).toBe(25);
+    expect(PLANS.seedling.limits.tags).toBe(0);
+    expect(PLANS.garden.limits.tags).toBe(50);
+    // Unlimited is the typed `null` of ADR 0014, never Infinity.
+    expect(PLANS.greenhouse.limits.tags).toBeNull();
   });
 
   it('only paid tiers carry a Stripe price env var; free tier has none', () => {
@@ -79,6 +222,70 @@ describe('plan catalog', () => {
     for (const [key, plan] of Object.entries(PLANS)) {
       expect(plan.id).toBe(key);
     }
+  });
+
+  it('names each tier by its story, not its collection size', () => {
+    expect(PLANS.seedling.description).toBe('A couple and their plants');
+    expect(PLANS.garden.description).toBe('A household that has to coordinate');
+    expect(PLANS.greenhouse.description).toBe('Many homes, many hands');
+  });
+});
+
+describe('the accessors every gate uses', () => {
+  it('limitOf reads the named cap', () => {
+    expect(limitOf(PLANS.seedling, 'members')).toBe(3);
+    expect(limitOf(PLANS.garden, 'members')).toBeNull();
+    expect(limitOf(PLANS.greenhouse, 'homes')).toBeNull();
+  });
+
+  it('isUnlimited is true only for null', () => {
+    expect(isUnlimited(null)).toBe(true);
+    expect(isUnlimited(0)).toBe(false);
+    expect(isUnlimited(5000)).toBe(false);
+  });
+
+  it('atCap answers "may one more be added?" as its negation', () => {
+    expect(atCap(2, 3)).toBe(false);
+    expect(atCap(3, 3)).toBe(true);
+    expect(atCap(0, 0)).toBe(true);
+  });
+
+  it('atCap: an unlimited cap is never reached', () => {
+    expect(atCap(0, null)).toBe(false);
+    expect(atCap(1_000_000, null)).toBe(false);
+  });
+
+  it('atCap: a household ABOVE the cap is at cap (grandfathered: blocked on the next add, nothing else)', () => {
+    // A free household with 6 members from before the re-cut, or a Garden
+    // household with 300 plants: `atCap` is the only thing that consults the
+    // count, and it only ever says "not one more". Nothing reads it to
+    // reduce, delete, or hide.
+    expect(atCap(6, 3)).toBe(true);
+    expect(atCap(300, 200)).toBe(true);
+  });
+
+  it('hasFeature reads the named flag', () => {
+    expect(hasFeature(PLANS.seedling, 'chat')).toBe(false);
+    expect(hasFeature(PLANS.garden, 'chat')).toBe(true);
+    expect(hasFeature(PLANS.garden, 'apiKeys')).toBe(false);
+    expect(hasFeature(PLANS.greenhouse, 'apiKeys')).toBe(true);
+    expect(hasFeature(PLANS.greenhouse, 'crossHomeToday')).toBe(true);
+  });
+});
+
+describe('strongestPlan', () => {
+  it('picks the highest-entitlement tier among several households', () => {
+    expect(strongestPlan(['seedling', 'garden'])).toBe(PLANS.garden);
+    expect(strongestPlan(['garden', 'greenhouse', 'seedling'])).toBe(PLANS.greenhouse);
+  });
+
+  it('treats unknown, null and undefined ids as the free tier', () => {
+    expect(strongestPlan([undefined, null, 'enterprise'])).toBe(PLANS.seedling);
+    expect(strongestPlan(['toString'])).toBe(PLANS.seedling);
+  });
+
+  it('is the free tier for no households at all', () => {
+    expect(strongestPlan([])).toBe(PLANS.seedling);
   });
 });
 
@@ -130,6 +337,33 @@ describe('isPlanId', () => {
   });
 });
 
+describe('planSummary (what the client receives)', () => {
+  it('publishes the full limits and features maps so the UI can gate without a second call', () => {
+    const summary = planSummary(PLANS.garden);
+    expect(summary.limits).toEqual(PLANS.garden.limits);
+    expect(summary.features).toEqual(PLANS.garden.features);
+    // Copies, not the catalog objects: a consumer mutating a summary must
+    // not rewrite the source of truth.
+    expect(summary.limits).not.toBe(PLANS.garden.limits);
+    expect(summary.features).not.toBe(PLANS.garden.features);
+  });
+
+  it('keeps the legacy maxPlants / maxMembers fields, with null for unlimited', () => {
+    expect(planSummary(PLANS.seedling)).toMatchObject({ maxPlants: 20, maxMembers: 3 });
+    expect(planSummary(PLANS.garden)).toMatchObject({ maxPlants: 200, maxMembers: null });
+    expect(planSummary(PLANS.greenhouse)).toMatchObject({ maxPlants: 5000, maxMembers: null });
+  });
+
+  it('publishes limits and features whether or not prices are included', () => {
+    const withoutPrices = planSummary(PLANS.greenhouse);
+    const withPrices = planSummary(PLANS.greenhouse, true);
+    expect(withoutPrices.limits).toEqual(withPrices.limits);
+    expect(withoutPrices.features).toEqual(withPrices.features);
+    expect(withoutPrices.monthlyPrice).toBeUndefined();
+    expect(withPrices.monthlyPrice).toBe(9.99);
+  });
+});
+
 describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden lifetime)', () => {
   it('pins exactly which cadences are withdrawn on each tier', () => {
     expect(PLANS.seedling.withdrawnIntervals).toBeUndefined();
@@ -167,13 +401,6 @@ describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden life
     expect(PLANS.garden.lifetimeStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_LIFETIME');
     expect(PLANS.greenhouse.annualPrice).toBe(79.99);
     expect(PLANS.greenhouse.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE_ANNUAL');
-  });
-
-  it('leaves the caps and monthly prices exactly where they were', () => {
-    // Entitlement reads planId alone, so an annual or lifetime household
-    // resolves to the same tier object with the same caps as before.
-    expect(PLANS.garden).toMatchObject({ monthlyPrice: 4.99, maxPlants: 500, maxMembers: 6 });
-    expect(PLANS.greenhouse).toMatchObject({ monthlyPrice: 9.99, maxPlants: 5000, maxMembers: 50 });
   });
 
   it('publishes a withdrawn cadence as null while still publishing monthly', () => {

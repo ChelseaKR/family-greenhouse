@@ -57,7 +57,7 @@ describe('plants identify handler', () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValue(true);
     vi.mocked(identifyBudget.allowanceForPlan).mockImplementation(
-      (planId) => ({ seedling: 3, garden: 30, greenhouse: 100 })[planId]
+      (planId) => ({ seedling: 1, garden: 30, greenhouse: 100 })[planId]
     );
   });
 
@@ -99,7 +99,7 @@ describe('plants identify handler', () => {
     });
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).usage).toEqual({ used: 1, allowance: 3, meteringEnabled: false });
+    expect(JSON.parse(res.body).usage).toEqual({ used: 1, allowance: 1, meteringEnabled: false });
     // No household claim → personal bucket on the free-tier allowance, and no
     // subscription lookup at all.
     expect(identifyBudget.incrementUsage).toHaveBeenCalledWith('user:user-1');
@@ -149,7 +149,7 @@ describe('plants identify handler', () => {
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
-    expect(JSON.parse(res.body).usage).toEqual({ used: 0, allowance: 3, meteringEnabled: false });
+    expect(JSON.parse(res.body).usage).toEqual({ used: 0, allowance: 1, meteringEnabled: false });
   });
 
   it('a failed budget READ is published as unknown, not as "0 used this month"', async () => {
@@ -168,7 +168,7 @@ describe('plants identify handler', () => {
     // is told the total is unknown rather than being handed a confident zero.
     expect(JSON.parse(res.body).usage).toEqual({
       used: null,
-      allowance: 3,
+      allowance: 1,
       meteringEnabled: false,
     });
   });
@@ -203,7 +203,7 @@ describe('plants identify handler', () => {
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
     const body = JSON.parse(res.body);
-    expect(body.message).toMatch(/Seedling plan is limited to 3 plant identifications/);
+    expect(body.message).toMatch(/Seedling plan is limited to 1 plant identifications/);
     expect(body.message).toMatch(/Upgrade/);
     // A householdless caller has nowhere to hold a pack, so none is offered.
     expect(body.details).toEqual({
@@ -335,7 +335,7 @@ describe('plants identify handler', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).usage).toEqual({
       used: 51,
-      allowance: 3,
+      allowance: 1,
       meteringEnabled: false,
     });
   });

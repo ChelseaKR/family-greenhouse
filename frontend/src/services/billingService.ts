@@ -4,12 +4,51 @@ import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config
 
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
 
+/**
+ * A plan cap as the API publishes it (backend/src/models/plans.ts). A number
+ * is the ceiling; `null` is UNLIMITED — a deliberate, typed value, never a
+ * missing one. `undefined` (an older backend that did not send the field) is
+ * "unknown", and must not be read as either.
+ */
+export type Limit = number | null;
+
+/** Mirrors `PlanLimits` in backend/src/models/plans.ts — keys are a contract. */
+export interface PlanLimits {
+  homes: Limit;
+  members: Limit;
+  plants: Limit;
+  tags: Limit;
+  analyticsHistoryDays: Limit;
+  sitterLinkMaxDays: Limit;
+  sitterLinksActive: Limit;
+}
+
+/** Mirrors `PlanFeatures` in backend/src/models/plans.ts — keys are a contract. */
+export interface PlanFeatures {
+  awayKit: boolean;
+  householdToolkit: boolean;
+  plantTags: boolean;
+  crossHomeToday: boolean;
+  kiosk: boolean;
+  caretakerSeats: boolean;
+  moveDay: boolean;
+  chat: boolean;
+  apiKeys: boolean;
+}
+
 export interface Plan {
   id: PlanId;
   name: string;
   description: string;
-  maxPlants: number;
-  maxMembers: number;
+  /** Legacy caps; the same values as `limits.plants` / `limits.members`.
+   *  `null` is unlimited (Garden and Greenhouse members). */
+  maxPlants: Limit;
+  maxMembers: Limit;
+  /** The full cap map (ADR 0014). Absent only from an older backend, in
+   *  which case the UI gates on the legacy fields and claims nothing more. */
+  limits?: PlanLimits;
+  /** The capability map, likewise. */
+  features?: PlanFeatures;
   /** Price fields are present ONLY when the API reports paymentsAvailable —
    *  see planSummary() in backend/src/models/plans.ts, which omits them
    *  entirely while payment activity is disabled. `null` is the explicit
@@ -56,20 +95,23 @@ export interface PlanCatalog {
   identifyTopUp?: IdentifyTopUpOffer;
 }
 
-/** Legacy numeric-only usage shape from GET /billing/me. */
+/** Legacy usage shape from GET /billing/me: counters are always numeric here;
+ *  a cap is `null` when the plan has no ceiling on it. */
 export interface PlanUsage {
   plantCount: number;
-  maxPlants: number;
+  maxPlants: Limit;
   memberCount: number;
-  maxMembers: number;
+  maxMembers: Limit;
 }
 
-/** Nullable usage shape for counters that may be unseeded or unavailable. */
+/** Nullable usage shape for counters that may be unseeded or unavailable.
+ *  A null COUNTER is "unknown"; a null CAP is "unlimited" — two different
+ *  fields, two different meanings, never conflated. */
 export interface PlanUsageDetail {
   plantCount: number | null;
-  maxPlants: number;
+  maxPlants: Limit;
   memberCount: number | null;
-  maxMembers: number;
+  maxMembers: Limit;
 }
 
 export interface SubscriptionState {
@@ -122,7 +164,11 @@ export interface PlanLimitEvaluation {
   overall: PlanLimitState;
 }
 
-function limitState(count: number | null | undefined, max: number): PlanLimitState {
+function limitState(count: number | null | undefined, max: Limit): PlanLimitState {
+  // No ceiling means nothing can be over it, whatever the counter says — and
+  // `count > null` would otherwise coerce to `count > 0`, reporting every
+  // Garden household with a member as "over".
+  if (max === null) return 'within';
   if (typeof count !== 'number' || !Number.isFinite(count)) return 'unknown';
   return count > max ? 'over' : 'within';
 }
@@ -165,13 +211,17 @@ export const billingService = {
           active: COMMERCIAL_HOLD_ACTIVE,
           effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
         },
-        plans: response.data.map(({ id, name, description, maxPlants, maxMembers }) => ({
-          id,
-          name,
-          description,
-          maxPlants,
-          maxMembers,
-        })),
+        plans: response.data.map(
+          ({ id, name, description, maxPlants, maxMembers, limits, features }) => ({
+            id,
+            name,
+            description,
+            maxPlants,
+            maxMembers,
+            ...(limits ? { limits } : {}),
+            ...(features ? { features } : {}),
+          })
+        ),
       };
     }
     return response.data;

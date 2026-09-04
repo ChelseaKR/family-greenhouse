@@ -84,11 +84,17 @@ describe('households handler', () => {
     setCachedMembership('user-1', 'hh-1', 'admin');
   });
 
-  it('createHousehold allows a user with an existing household to create another (multi-household)', async () => {
+  it('createHousehold allows a user with an existing household to create another when a plan they hold includes more homes', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const billing = await import('../../../src/services/billing.js');
     const { createHousehold } = await import('../../../src/handlers/households/handler.js');
     vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+    // One existing home, on Greenhouse → unlimited homes (ADR 0014).
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+      { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '2026-01-01T00:00:00.000Z' },
+    ]);
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'greenhouse' });
     vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
       id: 'hh-second',
       name: 'Vacation',
@@ -105,6 +111,287 @@ describe('households handler', () => {
     // First-household-wins for the JWT default: a user who already has a
     // household keeps their original Cognito claim untouched.
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+  });
+
+  describe('homes gate (ADR 0014: the one per-user cap)', () => {
+    const membership = (householdId: string) => ({
+      householdId,
+      role: 'member' as const,
+      name: 'Home',
+      joinedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    it('createHousehold refuses a second home with 402 when the strongest plan held is Garden', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+      // Default billing mock = garden → 1 home.
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([membership('hh-1')]);
+      const event = buildEvent(adminClaims, {
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Vacation' }),
+        headers: { 'content-type': 'application/json' },
+      });
+      const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(JSON.parse(res.body).message).toBe(
+        'Your Garden plan includes 1 home and you already belong to 1 household. Upgrade to Greenhouse for unlimited homes.'
+      );
+      expect(householdService.createHousehold).not.toHaveBeenCalled();
+    });
+
+    it('grandfathers a user already in three homes: every home still reads, only the fourth is refused', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { createHousehold, getHousehold } =
+        await import('../../../src/handlers/households/handler.js');
+      const three = [membership('hh-1'), membership('hh-2'), membership('hh-3')];
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValue(three);
+      // All three on the free tier: over the cap of 1 from before the re-cut.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' });
+
+      // Reading an existing home is untouched by the gate.
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-1',
+        name: 'Home',
+        createdAt: '',
+        createdBy: 'user-1',
+      });
+      vi.mocked(householdService.getHouseholdMembersPublic).mockResolvedValueOnce([]);
+      const read = (await getHousehold(
+        buildEvent(adminClaims, { httpMethod: 'GET', pathParameters: { id: 'hh-1' } }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(read.statusCode).toBe(200);
+
+      // The fourth is refused; nothing is removed to make room.
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+      const res = (await createHousehold(
+        buildEvent(adminClaims, {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'Fourth' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(JSON.parse(res.body).message).toMatch(/already belong to 3 households/);
+      expect(householdService.createHousehold).not.toHaveBeenCalled();
+      expect(householdService.removeMember).not.toHaveBeenCalled();
+
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([]);
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+    });
+
+    it('joinHousehold refuses a joiner who already has a home when the target is on Garden', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+        code: 'CODE',
+        householdId: 'hh-target',
+        createdBy: 'user-9',
+        createdAt: '',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-target',
+        name: 'Target',
+        createdAt: '',
+        createdBy: 'user-9',
+      });
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        membership('hh-mine'),
+      ]);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(JSON.parse(res.body).message).toMatch(/includes 1 home/);
+      expect(householdService.addMember).not.toHaveBeenCalled();
+    });
+
+    it('joinHousehold always admits a hand into a Greenhouse household, whatever the joiner already holds', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+        code: 'CODE',
+        householdId: 'hh-gh',
+        createdBy: 'user-9',
+        createdAt: '',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-gh',
+        name: 'Clients',
+        createdAt: '',
+        createdBy: 'user-9',
+      });
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        membership('hh-a'),
+        membership('hh-b'),
+      ]);
+      // The joined household is Greenhouse; the joiner's own two are free.
+      vi.mocked(billing.getHouseholdSubscription).mockImplementation(async (id: string) => ({
+        planId: id === 'hh-gh' ? 'greenhouse' : 'seedling',
+      }));
+      vi.mocked(householdService.addMember).mockResolvedValueOnce({
+        householdId: 'hh-gh',
+        userId: 'user-2',
+        name: 'Bob',
+        email: 'b@b.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      // Unlimited members on Greenhouse: the cap handed to the service is null.
+      expect(householdService.addMember).toHaveBeenCalledWith(
+        'hh-gh',
+        'user-2',
+        'Bob',
+        'b@b.com',
+        null
+      );
+      vi.mocked(billing.getHouseholdSubscription).mockImplementation(async () => ({
+        planId: 'garden',
+      }));
+    });
+  });
+
+  describe('analytics window (ADR 0014: free renders the trailing 30 days, nothing is deleted)', () => {
+    it('clamps the daily series to 30 days on Seedling and says which window applied', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      // `doubleCare` is the neighbouring feature's field on this same
+      // response: not_in_plan on Seedling, which has no household toolkit.
+      expect(JSON.parse(res.body)).toEqual({
+        days: 30,
+        series: [],
+        historyLimitDays: 30,
+        doubleCare: { status: 'not_in_plan' },
+      });
+      expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 30);
+    });
+
+    it('serves the full requested range on Garden with historyLimitDays null (no limit, not unknown)', async () => {
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      // Garden HAS the toolkit, so the roll-up is attempted; the service is
+      // unmocked here and reports its own explicit absence rather than a 0.
+      expect(JSON.parse(res.body)).toEqual({
+        days: 180,
+        series: [],
+        historyLimitDays: null,
+        doubleCare: { status: 'unavailable' },
+      });
+      expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 180);
+    });
+
+    it('windows the year-in-review on Seedling to the trailing 30 days of that year, never trimming rows', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+      vi.mocked(taskService.getCompletionReview).mockResolvedValueOnce({
+        totalCompletions: 2,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+      });
+      const year = new Date().getFullYear();
+      const res = (await getYearInReview(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { year: String(year) },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toMatchObject({ year, totalCompletions: 2, historyLimitDays: 30 });
+      expect(typeof body.windowStart).toBe('string');
+      expect(typeof body.windowEnd).toBe('string');
+      // The window is a read range, not a mutation: the year-shaped query is
+      // simply not used, and nothing else is called.
+      const [, start, end] = vi.mocked(taskService.getCompletionReview).mock.calls[0];
+      expect(new Date(end).getTime() - new Date(start).getTime()).toBeLessThanOrEqual(
+        30 * 24 * 60 * 60 * 1000
+      );
+      expect(taskService.getYearInReview).not.toHaveBeenCalled();
+    });
+
+    it('serves the whole year on Garden', async () => {
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(taskService.getYearInReview).mockResolvedValueOnce({
+        year: 2026,
+        totalCompletions: 9,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+      });
+      const res = (await getYearInReview(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { year: '2026' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toEqual({
+        year: 2026,
+        totalCompletions: 9,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+        historyLimitDays: null,
+      });
+      expect(taskService.getCompletionReview).not.toHaveBeenCalled();
+    });
   });
 
   it('createHousehold creates one and promotes user to admin via Cognito', async () => {
@@ -920,16 +1207,20 @@ describe('households handler', () => {
     // The memberCount increment lost against the plan cap inside the
     // service's TransactWriteCommand (e.g. a concurrent join took the last
     // Garden slot) — distinguishable from duplicate-join by error name.
+    // Seedling: Garden and Greenhouse have no member cap to lose (ADR 0014).
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' });
     vi.mocked(householdService.addMember).mockRejectedValueOnce(
-      Object.assign(new Error('Member limit of 6 reached'), { name: 'PlanLimitError' })
+      Object.assign(new Error('Member limit of 3 reached'), { name: 'PlanLimitError' })
     );
     const event = buildEvent(
       { sub: 'user-2', email: 'b@b.com' },
       { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
     );
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
     expect(res.statusCode).toBe(402);
-    expect(res.body).toMatch(/Garden plan, limited to 6 members/);
+    expect(res.body).toMatch(/Seedling plan, limited to 3 members/);
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
 
@@ -995,13 +1286,20 @@ describe('households handler', () => {
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     // Cap enforcement moved into the service transaction — the handler hands
-    // the plan's maxMembers down (default billing mock = garden → 6) and no
-    // longer pre-counts member rows.
-    expect(householdService.addMember).toHaveBeenCalledWith('hh-9', 'user-2', 'Bob', 'b@b.com', 6);
+    // the plan's member limit down (default billing mock = garden, whose
+    // member cap is `null`/unlimited per ADR 0014) and no longer pre-counts
+    // member rows.
+    expect(householdService.addMember).toHaveBeenCalledWith(
+      'hh-9',
+      'user-2',
+      'Bob',
+      'b@b.com',
+      null
+    );
     // The roster IS read after the join now, to address the "someone joined
-    // your household" email. What must not come back is the pre-count that the
-    // cap used to depend on, so this asserts ordering rather than absence: any
-    // roster read happens strictly after addMember.
+    // your household" email (#431). What must not come back is the pre-count
+    // the cap used to depend on, so this asserts ordering rather than
+    // absence: any roster read happens strictly after addMember.
     const addMemberOrder = vi.mocked(householdService.addMember).mock.invocationCallOrder[0];
     for (const order of vi.mocked(householdService.getHouseholdMembers).mock.invocationCallOrder) {
       expect(order).toBeGreaterThan(addMemberOrder);

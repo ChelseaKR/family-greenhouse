@@ -40,8 +40,8 @@ describe('identifyBudget service', () => {
   it('exposes the per-plan monthly allowances (seedling 3 / garden 30 / greenhouse 100)', async () => {
     const { allowanceForPlan, IDENTIFY_ALLOWANCES } =
       await import('../../../src/services/identifyBudget.js');
-    expect(IDENTIFY_ALLOWANCES).toEqual({ seedling: 3, garden: 30, greenhouse: 100 });
-    expect(allowanceForPlan('seedling')).toBe(3);
+    expect(IDENTIFY_ALLOWANCES).toEqual({ seedling: 1, garden: 30, greenhouse: 100 });
+    expect(allowanceForPlan('seedling')).toBe(1);
     expect(allowanceForPlan('garden')).toBe(30);
     expect(allowanceForPlan('greenhouse')).toBe(100);
   });

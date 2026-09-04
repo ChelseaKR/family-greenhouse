@@ -643,6 +643,11 @@ paths:
   /households:
     post:
       summary: Create a new household
+      description: >-
+        The caller's plan decides how many households they may belong to (`limits.homes`; Seedling
+        and Garden include one, Greenhouse is unlimited). The first household is always allowed. A
+        caller already at or above the cap keeps every household they have and every right in them
+        — only this new one is refused.
       tags: [Households]
       requestBody:
         required: true
@@ -657,6 +662,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Household'
+        '402':
+          description: The caller's plan does not include another home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /households/{id}:
     get:
@@ -1095,11 +1106,22 @@ paths:
   /households/join/{inviteCode}:
     post:
       summary: Join a household with a valid invite code
+      description: >-
+        Two plan gates apply. The joined household's member cap (`limits.members`; unlimited on
+        Garden and Greenhouse) and the caller's own home cap (`limits.homes`), which is resolved
+        against the strongest plan the caller would then hold — so joining a Greenhouse household
+        always succeeds however many homes the caller already has.
       tags: [Households]
       parameters: [{ $ref: '#/components/parameters/InviteCode' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '402':
+          description: The household is at its member cap, or the caller's plan includes no further home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /households/{id}/invites:
     post:
       summary: Generate a fresh household invite (admin only)
@@ -1155,6 +1177,11 @@ paths:
         confirmed double-care completions this UTC calendar month on
         household-toolkit tiers (`status: ok` with a count), `not_in_plan`
         otherwise, or `unavailable` when the plan or the log could not be read.
+      description: >-
+        `days` is clamped to the plan's analytics window (`limits.analyticsHistoryDays`; 30 on the
+        free tier, unlimited on paid). The response echoes the window actually served in `days` and
+        the plan's ceiling in `historyLimitDays` — a number, or `null` for no ceiling. Only the
+        RENDERED range is narrowed; no completion record is ever trimmed or deleted.
       tags: [Households]
       parameters:
         - { $ref: '#/components/parameters/HouseholdId' }
@@ -1162,10 +1189,20 @@ paths:
           in: query
           schema: { type: integer, minimum: 1, maximum: 90 }
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: Daily completion counts over the window actually served
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyAnalytics'
   /households/{id}/year-in-review:
     get:
       summary: Year-in-review aggregation for a given calendar year
+      description: >-
+        On a plan with an analytics window the aggregation covers that calendar year INTERSECTED
+        with the trailing window, reported as `windowStart`/`windowEnd`; a past year therefore
+        comes back genuinely empty rather than silently relabelled. `historyLimitDays` is the
+        plan's ceiling, or `null` for no ceiling. Completion records are never trimmed.
       tags: [Households]
       parameters:
         - { $ref: '#/components/parameters/HouseholdId' }
@@ -1173,7 +1210,12 @@ paths:
           in: query
           schema: { type: integer, minimum: 2024 }
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: Completion aggregates over the year, or over the plan's window within it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YearInReview'
   /households/{householdId}/members/{userId}/role:
     put:
       summary: Promote/demote a household member (admin only)
@@ -2338,22 +2380,23 @@ components:
       required: [plantCount, maxPlants, memberCount, maxMembers]
       properties:
         plantCount: { type: integer, minimum: 0 }
-        maxPlants: { type: integer, minimum: 0 }
+        maxPlants: { type: integer, minimum: 0, nullable: true }
         memberCount: { type: integer, minimum: 0 }
-        maxMembers: { type: integer, minimum: 0 }
+        maxMembers: { type: integer, minimum: 0, nullable: true }
 
     BillingUsageDetail:
       type: object
       additionalProperties: false
       description: >-
-        Best-known usage. A null counter means its value is unavailable; it never means zero. Plan
-        caps remain known and non-null.
+        Best-known usage. A null COUNTER means its value is unavailable; it never means zero. A
+        null CAP means the plan has no ceiling on that dimension (unlimited members on Garden and
+        Greenhouse). The two nulls are different answers and must not be conflated.
       required: [plantCount, maxPlants, memberCount, maxMembers]
       properties:
         plantCount: { type: integer, minimum: 0, nullable: true }
-        maxPlants: { type: integer, minimum: 0 }
+        maxPlants: { type: integer, minimum: 0, nullable: true }
         memberCount: { type: integer, minimum: 0, nullable: true }
-        maxMembers: { type: integer, minimum: 0 }
+        maxMembers: { type: integer, minimum: 0, nullable: true }
 
     BillingSubscriptionState:
       type: object
@@ -2397,6 +2440,139 @@ components:
           type: [string, 'null']
           format: date-time
           description: When the soonest-expiring pack with credits runs out; null when none remain.
+
+    PlanLimits:
+      type: object
+      additionalProperties: false
+      description: >-
+        Per-tier structural caps. A number is the ceiling; `null` is UNLIMITED — a deliberate,
+        typed value, never a missing one, and never `Infinity` (which JSON cannot carry). Caps
+        limit new growth only: a household already above one keeps everything it has and is
+        refused only the next add.
+      required:
+        [homes, members, plants, tags, analyticsHistoryDays, sitterLinkMaxDays, sitterLinksActive]
+      properties:
+        homes: { type: integer, minimum: 0, nullable: true }
+        members: { type: integer, minimum: 0, nullable: true }
+        plants: { type: integer, minimum: 0, nullable: true }
+        tags: { type: integer, minimum: 0, nullable: true }
+        analyticsHistoryDays: { type: integer, minimum: 1, nullable: true }
+        sitterLinkMaxDays: { type: integer, minimum: 1, nullable: true }
+        sitterLinksActive: { type: integer, minimum: 0, nullable: true }
+
+    PlanFeatures:
+      type: object
+      additionalProperties: false
+      description: Per-tier capability flags. True means the tier includes the capability.
+      required:
+        [
+          awayKit,
+          householdToolkit,
+          plantTags,
+          crossHomeToday,
+          kiosk,
+          caretakerSeats,
+          moveDay,
+          chat,
+          apiKeys,
+        ]
+      properties:
+        awayKit: { type: boolean }
+        householdToolkit: { type: boolean }
+        plantTags: { type: boolean }
+        crossHomeToday: { type: boolean }
+        kiosk: { type: boolean }
+        caretakerSeats: { type: boolean }
+        moveDay: { type: boolean }
+        chat: { type: boolean }
+        apiKeys: { type: boolean }
+
+    DailyAnalytics:
+      type: object
+      additionalProperties: false
+      required: [days, series, doubleCare]
+      properties:
+        days:
+          type: integer
+          minimum: 1
+          description: The window actually served, after clamping to the plan's ceiling.
+        series:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer, minimum: 0 }
+        historyLimitDays:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: >-
+            The plan's analytics window; `null` means no ceiling, never "unknown". ABSENT when the
+            plan itself could not be read — the one genuinely unknown state, and the reason this
+            field is not required.
+        doubleCare:
+          type: object
+          description: >-
+            Confirmed double-care completions this UTC calendar month. Three explicit states, so a
+            failed read is never rendered as "0 duplicates".
+          required: [status]
+          properties:
+            status: { type: string, enum: [ok, unavailable, not_in_plan] }
+            month: { type: string }
+            confirmedDuplicates: { type: integer, minimum: 0 }
+
+    YearInReview:
+      type: object
+      additionalProperties: false
+      required: [year, totalCompletions, byMember, byTaskType, topPlants, historyLimitDays]
+      properties:
+        year: { type: integer }
+        totalCompletions: { type: integer, minimum: 0 }
+        byMember:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [userId, name, count]
+            properties:
+              userId: { type: string }
+              name: { type: string }
+              count: { type: integer, minimum: 0 }
+        byTaskType:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [type, count]
+            properties:
+              type: { type: string }
+              count: { type: integer, minimum: 0 }
+        topPlants:
+          type: array
+          description: Every plant with at least one completion in the window — not a capped top-N.
+          items:
+            type: object
+            additionalProperties: false
+            required: [plantId, count]
+            properties:
+              plantId: { type: string, format: uuid }
+              count: { type: integer, minimum: 0 }
+        historyLimitDays:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: The plan's analytics window; `null` means the whole year was aggregated.
+        windowStart:
+          type: string
+          format: date-time
+          description: Present only when a window applied — the start of the range aggregated.
+        windowEnd:
+          type: string
+          format: date-time
+          description: Present only when a window applied — the end of the range aggregated.
 
     FrontendTelemetryEvent:
       oneOf:

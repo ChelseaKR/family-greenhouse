@@ -31,7 +31,7 @@ import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
 import * as plantTagService from '../../services/plantTagService.js';
-import { getPlan } from '../../models/plans.js';
+import { getPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
 import { audit } from '../../utils/auditLog.js';
@@ -320,7 +320,7 @@ export const createPlant = createHandler(
         },
         user.householdId!,
         user.userId,
-        plan.maxPlants
+        limitOf(plan, 'plants')
       );
     } catch (err) {
       // Name check (not instanceof) so test automocks of the service module
@@ -328,7 +328,7 @@ export const createPlant = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
+          `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -546,13 +546,13 @@ export const updatePlant = createHandler(
         user.householdId!,
         plantId,
         { ...validatedBody, canonicalSpecies },
-        plan.maxPlants
+        limitOf(plan, 'plants')
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
+          `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -973,13 +973,13 @@ export const acceptSharedPlant = createHandler(
         },
         user.householdId!,
         user.userId,
-        plan.maxPlants
+        limitOf(plan, 'plants')
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
+          `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;

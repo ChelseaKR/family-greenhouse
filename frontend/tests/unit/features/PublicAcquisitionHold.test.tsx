@@ -87,10 +87,13 @@ describe('free registration with paid activity on hold', () => {
       'frontend/src/i18n/locales/en/translation.json',
     ]) {
       const source = readFileSync(resolve(repositoryRoot, relativePath), 'utf8');
-      expect(source, `${relativePath} must state the 10-plant cap`).toMatch(/10 plants/i);
-      expect(source, `${relativePath} must state the 6-member cap`).toMatch(
-        /6 (?:household )?members|6 people/i
+      // The free tier is "a couple and their plants" (ADR 0014): one home,
+      // three hands, twenty plants. Every acquisition surface says so.
+      expect(source, `${relativePath} must state the 20-plant cap`).toMatch(/20 plants/i);
+      expect(source, `${relativePath} must state the 3-member cap`).toMatch(
+        /3 (?:household )?members|3 people/i
       );
+      expect(source, `${relativePath} must state the one-home cap`).toMatch(/one home/i);
     }
   });
 

@@ -21,7 +21,7 @@ import {
   createIdentifyTopUpCheckoutSession,
   TOP_UP_NOT_CONFIGURED,
 } from '../../services/identifyTopUp.js';
-import { getPlan, isIntervalOffered } from '../../models/plans.js';
+import { getPlan, isIntervalOffered, limitOf } from '../../models/plans.js';
 import { identifyTopUpSummary, isIdentifyTopUpConfigured } from '../../models/identifyTopUp.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
@@ -120,17 +120,17 @@ export const getCurrentSubscription = createHandler(
     const plan = getPlan(sub.planId);
     const usageDetail = {
       plantCount: counters.plantCount,
-      maxPlants: plan.maxPlants,
+      maxPlants: limitOf(plan, 'plants'),
       memberCount: counters.memberCount,
-      maxMembers: plan.maxMembers,
+      maxMembers: limitOf(plan, 'members'),
     };
     const usage =
       counters.plantCount !== null && counters.memberCount !== null
         ? {
             plantCount: counters.plantCount,
-            maxPlants: plan.maxPlants,
+            maxPlants: limitOf(plan, 'plants'),
             memberCount: counters.memberCount,
-            maxMembers: plan.maxMembers,
+            maxMembers: limitOf(plan, 'members'),
           }
         : undefined;
     return successResponse({

@@ -13,7 +13,7 @@
 🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
 > **Paid activity hold — July 14, 2026; free registration reopened July 19, 2026.**
-> Family Greenhouse accepts free accounts for households with up to 10 plants.
+> Family Greenhouse accepts free accounts for one home with up to 3 people and 20 plants.
 > It is not currently accepting payments, offering paid plans, or generating
 > revenue. Pricing and billing material is retained as historical product-design
 > documentation. See

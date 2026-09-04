@@ -303,8 +303,8 @@ describe('cutting shares', () => {
       .set('Authorization', `Bearer ${token}`);
 
     const otherToken = await createUserWithHousehold('capped@example.com', 'Capped House');
-    // Fill the Seedling plan's 10-plant cap.
-    for (let i = 0; i < 10; i++) {
+    // Fill the Seedling plan's 20-plant cap (ADR 0014).
+    for (let i = 0; i < 20; i++) {
       const created = await request(app)
         .post('/plants')
         .set('Authorization', `Bearer ${otherToken}`)
@@ -316,7 +316,7 @@ describe('cutting shares', () => {
       .post(`/plants/shared/${share.body.code}/accept`)
       .set('Authorization', `Bearer ${otherToken}`);
     expect(accept.status).toBe(402);
-    expect(accept.body.message).toMatch(/limited to 10 plants/);
+    expect(accept.body.message).toMatch(/limited to 20 plants/);
   });
 
   it('requires auth to share and to accept (but not to preview)', async () => {

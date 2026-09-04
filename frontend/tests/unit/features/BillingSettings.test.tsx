@@ -718,3 +718,65 @@ describe('BillingSettings — identification top-up pack (ADR 0019)', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('usage meters against an unlimited cap (ADR 0014)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('states the count with no ceiling and draws no bar', async () => {
+    await renderBilling({
+      planId: 'garden',
+      usageDetail: { plantCount: 12, maxPlants: 200, memberCount: 40, maxMembers: null },
+    });
+
+    expect(await screen.findByText('40 members · no limit')).toBeInTheDocument();
+    expect(screen.getByText('12 of 200 plants')).toBeInTheDocument();
+    // A bar needs a ceiling to fill; unlimited has none, so there is nothing
+    // to draw — and 40/null must never render as a full or empty bar.
+    expect(screen.queryByTestId('usage-meter-members-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-plants-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-members')).toHaveAttribute('data-state', 'within');
+    expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+  });
+
+  it('still says "usage unavailable" when the COUNT is unknown under an unlimited cap', async () => {
+    await renderBilling({
+      planId: 'garden',
+      usageDetail: { plantCount: 4, maxPlants: 200, memberCount: null, maxMembers: null },
+    });
+
+    expect(await screen.findByText('Members — usage unavailable')).toBeInTheDocument();
+    // The ROW says it could not read the count — never "0 members", the
+    // repo's named defect. The BANNER does not appear, and that is not the
+    // same failure: it asks "are you within your limits?", and against a cap
+    // of null that is answerable without the counter. The plant count, which
+    // does have a ceiling, was read fine.
+    expect(screen.queryByText(/0 members/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('usage-meter-members-bar')).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't check your plan usage")).not.toBeInTheDocument();
+  });
+
+  it('does raise the can\u2019t-check banner when a CAPPED dimension is unreadable', async () => {
+    await renderBilling({
+      planId: 'garden',
+      usageDetail: { plantCount: null, maxPlants: 200, memberCount: 5, maxMembers: null },
+    });
+
+    expect(await screen.findByText("We couldn't check your plan usage")).toBeInTheDocument();
+    expect(screen.getByText('— of 200 plants — usage unavailable')).toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-plants')).toHaveAttribute('data-state', 'unknown');
+  });
+
+  it('keeps the over-limit banner for a grandfathered household above a capped dimension', async () => {
+    await renderBilling({
+      planId: 'garden',
+      usageDetail: { plantCount: 300, maxPlants: 200, memberCount: 5, maxMembers: null },
+    });
+
+    expect(await screen.findByText('Over your plan limit')).toBeInTheDocument();
+    expect(screen.getByText('300 of 200 plants')).toBeInTheDocument();
+    expect(screen.getByTestId('usage-meter-plants')).toHaveAttribute('data-state', 'over');
+    expect(screen.getByTestId('usage-meter-members')).toHaveAttribute('data-state', 'within');
+  });
+});

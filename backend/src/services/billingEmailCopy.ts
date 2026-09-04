@@ -39,7 +39,7 @@
  * subject and nothing else, so nothing here has to be unpicked first.
  */
 import type { BillingNotice, Money, PurchasedItem } from '../models/billingNotices.js';
-import { getPlan, type Plan } from '../models/plans.js';
+import { getPlan, isUnlimited, type Limit, type Plan } from '../models/plans.js';
 
 export type BillingEmailLocale = 'en' | 'es';
 
@@ -114,6 +114,40 @@ function formatMonthYear(month: number, year: number, locale: BillingEmailLocale
 
 function formatCount(value: number, locale: BillingEmailLocale): string {
   return new Intl.NumberFormat(INTL_LOCALES[locale]).format(value);
+}
+
+/** Nouns for the two caps the cancellation email states. */
+const PLANTS_NOUN = {
+  en: 'plants',
+  es: 'plantas',
+  enUnlimited: 'unlimited plants',
+  esUnlimited: 'plantas ilimitadas',
+};
+const MEMBERS_NOUN = {
+  en: 'members',
+  es: 'miembros',
+  enUnlimited: 'unlimited members',
+  esUnlimited: 'miembros ilimitados',
+};
+
+/**
+ * One cap, as a phrase. A plan cap is `number | null` since ADR 0014, where
+ * `null` is UNLIMITED — so the two cases need different wording, not a number
+ * with a missing value ("20 plants" vs "unlimited plants"). Rendering the
+ * phrase rather than the bare figure keeps "no ceiling" a stated fact instead
+ * of an absent one. Spanish carries its own unlimited phrasing because the
+ * adjective agrees with the noun's gender.
+ */
+function formatLimitPhrase(
+  value: Limit,
+  locale: BillingEmailLocale,
+  noun: { en: string; es: string; enUnlimited: string; esUnlimited: string }
+): string {
+  if (isUnlimited(value)) {
+    return locale === 'es' ? noun.esUnlimited : noun.enUnlimited;
+  }
+  const n = formatCount(value, locale);
+  return locale === 'es' ? `${n} ${noun.es}` : `${n} ${noun.en}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -502,7 +536,7 @@ function cancellationComplete(
     if (currentPlan) {
       body.push(`  - Tu hogar está en el plan ${currentPlan.name}.`);
       body.push(
-        `  - Sus límites: hasta ${formatCount(currentPlan.maxPlants, locale)} plantas y ${formatCount(currentPlan.maxMembers, locale)} miembros.`
+        `  - Sus límites: ${formatLimitPhrase(currentPlan.limits.plants, locale, PLANTS_NOUN)} y ${formatLimitPhrase(currentPlan.limits.members, locale, MEMBERS_NOUN)}.`
       );
     }
     body.push('  - No se ha borrado nada: tus plantas, tareas, fotos e historial siguen ahí,');
@@ -522,7 +556,7 @@ function cancellationComplete(
     if (currentPlan) {
       body.push(`  - Your household is on the ${currentPlan.name} plan.`);
       body.push(
-        `  - Its limits: up to ${formatCount(currentPlan.maxPlants, locale)} plants and ${formatCount(currentPlan.maxMembers, locale)} members.`
+        `  - Its limits: ${formatLimitPhrase(currentPlan.limits.plants, locale, PLANTS_NOUN)} and ${formatLimitPhrase(currentPlan.limits.members, locale, MEMBERS_NOUN)}.`
       );
     }
     body.push('  - Nothing has been deleted: your plants, tasks, photos and care history');
