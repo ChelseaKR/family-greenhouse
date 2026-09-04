@@ -9,10 +9,13 @@
  *
  *   1. `member_joined`  — the invite you sent was accepted (services/inviteEmail.ts
  *                         sends the invite; this closes the loop).
- *   2. `up_for_grabs`   — an overdue task nobody is assigned to. Today those
- *                         roll into every member's reminder as an anonymous
- *                         integer, which is the bystander-effect shape the
- *                         product exists to prevent.
+ *   2. `up_for_grabs`   — upcoming tasks nobody has claimed, scoped strictly
+ *                         OUTSIDE the daily reminder's 24-hour window so the
+ *                         two can never name the same task on the same day
+ *                         (see REMINDER_DUE_WINDOW_MS). Unclaimed work is the
+ *                         bystander-effect shape the product exists to
+ *                         prevent; this is the half of it nobody is being told
+ *                         about at all.
  *   3. `coverage`       — a `VacationWindow` named you as someone's cover.
  *                         Today the cover finds out as a parenthetical inside
  *                         a reminder, on the day.
@@ -38,7 +41,9 @@
  *     repeated trigger cannot produce a second email.
  *   - **Roll-up for free.** `care_credit` appends to one row per recipient per
  *     local day, so a household that covers ten tasks in an afternoon produces
- *     one email, not ten.
+ *     one email, not ten. `up_for_grabs` is keyed per ISO week for the same
+ *     reason: it is the one kind whose trigger is a standing state rather than
+ *     an event, so it is the one that could otherwise repeat daily.
  *
  * A row is never a claim of delivery: `sent` means SES accepted the message,
  * which the audit correctly notes is not the same thing. Bounce handling lives
@@ -53,7 +58,7 @@
  *     `services/emailCopy.ts` writes a sentence that says the name is missing.
  *     It never becomes "a housemate" (`reminders.ts`) or "A former plant"
  *     (`digest.ts` recap).
- *   - A household with unassigned overdue tasks but an empty active-plant read
+ *   - A household with unclaimed upcoming tasks but an empty active-plant read
  *     is reported as `unknown`, not as "nothing to do" — the exact hole the
  *     audit found in `computePlantsAtRisk`, where a non-throwing short read
  *     makes a broken week and a healthy week identical.
@@ -74,7 +79,7 @@ import {
   composeCoverageEmail,
   composeMemberJoinedEmail,
   composeUpForGrabsEmail,
-  daysOverdue,
+  daysUntilDue,
   preferredEmailLocale,
   taskLabel,
   type ComposedEmail,
@@ -91,11 +96,34 @@ const QUEUE_MAX_AGE_MS = 36 * 60 * 60 * 1000;
  *  job as a dedupe marker for the rest of the day it belongs to. */
 const QUEUE_TTL_SECONDS = 4 * 24 * 60 * 60;
 
-/** A task must be overdue by at least this long before it counts as "up for
- *  grabs". The daily reminder has already listed it twice by then; this email
- *  is for the case where the reminder demonstrably did not get it picked up,
- *  and the delay is what keeps this from becoming a second daily email. */
-export const UP_FOR_GRABS_MIN_DAYS_OVERDUE = 2;
+/**
+ * The daily reminder's due window (`reminders.DUE_WINDOW_MS`), duplicated here
+ * as the boundary that keeps the two emails disjoint.
+ *
+ * `remindHousehold` queries `nextDue <= now + 24h`, which includes *everything*
+ * already overdue, and #427 gives that email an explicit "Up for grabs" section
+ * for the unclaimed rows in it. So a dedicated email about unclaimed overdue
+ * tasks would be pure duplication: every recipient would get the same task
+ * named twice on the same morning.
+ *
+ * This email therefore takes the other side of the line — unclaimed tasks the
+ * reminder is *not* mentioning at all, because they are not due yet. That is
+ * the long tail nobody is being told about, and it is the more on-thesis half:
+ * asking for a hand before anything is late is the anti-nag version of the ask.
+ *
+ * Change this one constant and the two overlap; nothing else encodes the split.
+ */
+const REMINDER_DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * How far past the reminder's window this email looks.
+ *
+ * Deliberately equal to the send cadence (one per recipient per ISO week), so
+ * the two surfaces hand off with no gap: a task further out than this is picked
+ * up by a later weekly pass while still unclaimed, and one that crosses inside
+ * `REMINDER_DUE_WINDOW_MS` before the next pass is picked up by the daily
+ * reminder that morning. No unclaimed task can fall between them.
+ */
+const UP_FOR_GRABS_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1000;
 /** How many tasks the up-for-grabs email NAMES. It always states the real
  *  total — the digest's docstring records what happens when a display cap
  *  becomes the reported count. */
@@ -411,7 +439,7 @@ export function renderQueued(
           tasks: item.tasks.map((t) => ({
             plantName: t.plantName,
             taskLabel: taskLabel(t, locale),
-            daysOverdue: daysOverdue(t.nextDue, now),
+            daysUntilDue: daysUntilDue(t.nextDue, now),
             plantUrl: plantUrl(t.plantId),
           })),
           claimUrl: appLink('/tasks?filter=overdue'),
@@ -653,13 +681,18 @@ export async function notifyMemberJoined(
 export type UpForGrabsOutcome = 'queued' | 'none' | 'unknown';
 
 /**
- * Find overdue tasks nobody is assigned to and offer them to the household.
+ * Offer the household the upcoming tasks nobody has claimed.
+ *
+ * Scope is `REMINDER_DUE_WINDOW_MS < nextDue <= UP_FOR_GRABS_LOOKAHEAD_MS`:
+ * strictly outside the daily reminder's window, so this email and the
+ * reminder's own "Up for grabs" section can never name the same task on the
+ * same day. See the constants for why the line is drawn there.
  *
  * `unknown` is a real outcome and not the same as `none`. `computePlantsAtRisk`
  * has the bug this avoids: it intersects overdue tasks against the active-plant
  * set, so a short or empty non-throwing `getPlants` silently drops every task
  * and the household is skipped — and the product's own help copy teaches users
- * to read that silence as health. Here, unassigned overdue tasks with an empty
+ * to read that silence as health. Here, unclaimed tasks with an empty
  * active-plant read is reported as a state we could not settle, and the run
  * summary carries it separately from "nothing was due".
  */
@@ -667,11 +700,11 @@ export async function upForGrabsHousehold(
   householdId: string,
   now: Date = new Date()
 ): Promise<UpForGrabsOutcome> {
-  const cutoff = new Date(
-    now.getTime() - UP_FOR_GRABS_MIN_DAYS_OVERDUE * 24 * 60 * 60 * 1000
-  ).toISOString();
-  const dueTasks = await taskService.getTasksDueBy(householdId, cutoff);
-  const unassigned = dueTasks.filter((t) => !t.assignedTo);
+  const lookahead = new Date(now.getTime() + UP_FOR_GRABS_LOOKAHEAD_MS).toISOString();
+  // The reminder owns everything at or inside its window, overdue included.
+  const reminderEdge = new Date(now.getTime() + REMINDER_DUE_WINDOW_MS).toISOString();
+  const dueTasks = await taskService.getTasksDueBy(householdId, lookahead);
+  const unassigned = dueTasks.filter((t) => !t.assignedTo && t.nextDue > reminderEdge);
   if (unassigned.length === 0) return 'none';
 
   const plants = await plantService.getPlants(householdId);
@@ -712,9 +745,14 @@ export async function upForGrabsHousehold(
       email: member.email,
       householdId,
       kind: 'up_for_grabs',
-      // One per recipient per THEIR local day, so a household spread across
-      // zones does not get everyone's copy on the sender's calendar.
-      dedupeKey: `up_for_grabs#${householdId}#${localDateKey(now, prefs.timezone)}`,
+      // Once per ISO week, not once a day. A forward-looking list of unclaimed
+      // work barely changes between one morning and the next, so a daily
+      // cadence would be the same email again — and this is the one household
+      // email whose trigger is a standing state rather than an event, so it is
+      // the one that could actually become noise. Weekly is also what makes
+      // UP_FOR_GRABS_LOOKAHEAD_MS a complete cover of the gap above the
+      // reminder's window.
+      dedupeKey: `up_for_grabs#${householdId}#${isoWeekKey(now)}`,
       item,
       maxItems: 1,
       accumulate: false,
@@ -723,6 +761,24 @@ export async function upForGrabsHousehold(
     if (outcome === 'queued') queued += 1;
   }
   return queued > 0 ? 'queued' : 'none';
+}
+
+/**
+ * ISO-8601 week key, `YYYY-Www`. Same shape and purpose as `digest.isoWeekKey`,
+ * written here rather than imported because `digest.ts` belongs to the branch
+ * rewriting the shared template layer and this module should not pin its export
+ * surface. UTC-based on purpose: unlike the daily keys, a week boundary is not
+ * something a recipient perceives, and a per-timezone week would let a member
+ * who travels receive two copies for one week.
+ */
+export function isoWeekKey(now: Date): string {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // ISO weeks run Monday–Sunday and are numbered by the Thursday they contain.
+  const dayNumber = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
 /** Recipient-local calendar date. Same shape as `reminders.localDateKey`;
@@ -914,7 +970,7 @@ export interface HouseholdEmailRunSummary {
 }
 
 /**
- * One pass over every household: offer up any long-overdue unassigned tasks,
+ * One pass over every household: offer up any unclaimed upcoming tasks,
  * then deliver whatever is queued for each member.
  *
  * Runs on the existing hourly reminder schedule (`handlers/reminders`) rather

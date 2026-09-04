@@ -30,6 +30,14 @@
  * without reaching SES.
  */
 
+/**
+ * Bodies are written as one logical line per paragraph, never hard-wrapped at
+ * ~72 characters the way `composeWelcomeEmail` is. A hard-wrapped body reflows
+ * into visibly ragged short lines on a phone in portrait; letting the client
+ * wrap is what makes the digest and recap read better there than the welcome
+ * email does.
+ */
+
 /** Languages the product ships. Mirrors the frontend catalog set. */
 export const EMAIL_LOCALES = ['en', 'es'] as const;
 export type EmailLocale = (typeof EMAIL_LOCALES)[number];
@@ -91,13 +99,13 @@ function formatNumber(value: number, locale: EmailLocale): string {
   return new Intl.NumberFormat(locale).format(value);
 }
 
-/** Whole days `iso` is in the past, or null when the date is unusable.
+/** Whole days until `iso`, or null when the date is unusable.
  *  The digest renders `waiting NaN days for some care` because it does this
  *  arithmetic without the guard. */
-export function daysOverdue(iso: string, now: Date): number | null {
+export function daysUntilDue(iso: string, now: Date): number | null {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return null;
-  const days = Math.floor((now.getTime() - ms) / 86_400_000);
+  const days = Math.floor((ms - now.getTime()) / 86_400_000);
   return Number.isFinite(days) ? Math.max(0, days) : null;
 }
 
@@ -191,14 +199,9 @@ export function composeInviteEmail(input: InviteCopyInput, locale: EmailLocale):
       text: [
         'Hola:',
         '',
-        `${input.inviterName} te ha invitado a unirte a "${input.householdName}" en`,
-        'Family Greenhouse, una app donde quienes comparten casa cuidan las plantas',
-        'juntas: cada planta tiene su calendario de riego y abono, los recordatorios',
-        'llegan a quien corresponde, y el historial queda a la vista de todo el mundo.',
+        `${input.inviterName} te ha invitado a unirte a "${input.householdName}" en Family Greenhouse, una app donde quienes comparten casa cuidan las plantas juntas: cada planta tiene su calendario de riego y abono, los recordatorios llegan a quien corresponde, y el historial queda a la vista de todo el mundo.`,
         '',
-        'Si aceptas, verás las plantas de ese hogar y su historial de cuidados, podrás',
-        'marcar tareas como hechas y el resto del hogar verá lo que hagas. No compartes',
-        'nada de tus otros hogares, y puedes salir cuando quieras.',
+        'Si aceptas, verás las plantas de ese hogar y su historial de cuidados, podrás marcar tareas como hechas y el resto del hogar verá lo que hagas. No compartes nada de tus otros hogares, y puedes salir cuando quieras.',
         '',
         `Acepta la invitación: ${input.joinUrl}`,
         '',
@@ -206,8 +209,7 @@ export function composeInviteEmail(input: InviteCopyInput, locale: EmailLocale):
           ? `El enlace caduca el ${expires}. Después habrá que pedir otro.`
           : 'El enlace caduca a los siete días. Después habrá que pedir otro.',
         '',
-        `Si no conoces a ${input.inviterName}, ignora este correo: sin abrir el enlace no`,
-        'ocurre nada y no volveremos a escribirte.',
+        `Si no conoces a ${input.inviterName}, ignora este correo: sin abrir el enlace no ocurre nada y no volveremos a escribirte.`,
         '',
         'Un saludo,',
         'Family Greenhouse',
@@ -219,14 +221,9 @@ export function composeInviteEmail(input: InviteCopyInput, locale: EmailLocale):
     text: [
       'Hi,',
       '',
-      `${input.inviterName} invited you to join "${input.householdName}" on Family`,
-      'Greenhouse — an app where the people who share a home share the plant care:',
-      'each plant has its own watering and feeding schedule, reminders go to whoever',
-      'the task belongs to, and everyone can see what has already been done.',
+      `${input.inviterName} invited you to join "${input.householdName}" on Family Greenhouse — an app where the people who share a home share the plant care: each plant has its own watering and feeding schedule, reminders go to whoever the task belongs to, and everyone can see what has already been done.`,
       '',
-      "If you accept, you'll see that household's plants and their care history, you",
-      'can mark tasks done, and the rest of the household will see what you do. None',
-      'of your other households are shared, and you can leave whenever you like.',
+      "If you accept, you'll see that household's plants and their care history, you can mark tasks done, and the rest of the household will see what you do. None of your other households are shared, and you can leave whenever you like.",
       '',
       `Accept the invitation: ${input.joinUrl}`,
       '',
@@ -234,8 +231,7 @@ export function composeInviteEmail(input: InviteCopyInput, locale: EmailLocale):
         ? `The link stops working on ${expires}. After that you'd need a new one.`
         : "The link stops working after seven days. After that you'd need a new one.",
       '',
-      `If you don't know ${input.inviterName}, you can ignore this email — nothing`,
-      "happens unless you open the link, and we won't write again.",
+      `If you don't know ${input.inviterName}, you can ignore this email — nothing happens unless you open the link, and we won't write again.`,
       '',
       'Warmly,',
       'Family Greenhouse',
@@ -321,17 +317,18 @@ export function composeMemberJoinedEmail(
 export interface UpForGrabsTask {
   plantName: string;
   taskLabel: string;
-  /** null when `nextDue` was unparseable — the line says "overdue" with no
-   *  count rather than "NaN days". */
-  daysOverdue: number | null;
+  /** Whole days until the task is due. `null` when `nextDue` was unparseable —
+   *  the line then says the date could not be read rather than "NaN days". */
+  daysUntilDue: number | null;
   plantUrl: string;
 }
 
 export interface UpForGrabsCopyInput {
   householdName: string | null;
-  /** The tasks named in the body. */
+  /** The tasks named in the body — upcoming and unclaimed, never overdue: the
+   *  daily reminder owns everything inside its own 24-hour window. */
   tasks: UpForGrabsTask[];
-  /** The real number of unclaimed overdue tasks, which may exceed
+  /** The real number of unclaimed upcoming tasks, which may exceed
    *  `tasks.length`. The digest's own docstring records why a listed count
    *  must never become the reported total. */
   totalCount: number;
@@ -339,13 +336,15 @@ export interface UpForGrabsCopyInput {
   settingsUrl: string;
 }
 
-function overdueSuffix(days: number | null, locale: EmailLocale): string {
-  if (days === null) return locale === 'es' ? '(atrasada)' : '(overdue)';
-  if (days <= 0) return locale === 'es' ? '(para hoy)' : '(due today)';
-  if (locale === 'es') {
-    return days === 1 ? '(1 día de retraso)' : `(${formatNumber(days, 'es')} días de retraso)`;
+/** How far off a task is. Never guesses: an unreadable date says so. */
+function dueInSuffix(days: number | null, locale: EmailLocale): string {
+  if (days === null) {
+    return locale === 'es' ? '(no hemos podido leer la fecha)' : "(we couldn't read the date)";
   }
-  return days === 1 ? '(1 day overdue)' : `(${formatNumber(days, 'en')} days overdue)`;
+  if (locale === 'es') {
+    return days <= 1 ? '(mañana)' : `(en ${formatNumber(days, 'es')} días)`;
+  }
+  return days <= 1 ? '(tomorrow)' : `(in ${formatNumber(days, 'en')} days)`;
 }
 
 export function composeUpForGrabsEmail(
@@ -355,18 +354,18 @@ export function composeUpForGrabsEmail(
   const es = locale === 'es';
   const listed = input.tasks.map(
     (t) =>
-      `  - ${t.plantName} — ${t.taskLabel} ${overdueSuffix(t.daysOverdue, locale)}\n    ${t.plantUrl}`
+      `  - ${t.plantName} — ${t.taskLabel} ${dueInSuffix(t.daysUntilDue, locale)}\n    ${t.plantUrl}`
   );
   const hidden = input.totalCount - input.tasks.length;
   if (es) {
     const subject =
       input.totalCount === 1
-        ? 'Una tarea sigue sin dueño'
-        : `${formatNumber(input.totalCount, 'es')} tareas siguen sin dueño`;
+        ? 'Una tarea de la próxima semana no tiene dueño'
+        : `${formatNumber(input.totalCount, 'es')} tareas de la próxima semana no tienen dueño`;
     const lines = [
       input.totalCount === 1
-        ? `Esta tarea de ${input.householdName ?? 'vuestro hogar'} lleva días atrasada y no la ha cogido nadie:`
-        : `Estas tareas de ${input.householdName ?? 'vuestro hogar'} llevan días atrasadas y no las ha cogido nadie:`,
+        ? `Esta tarea de ${input.householdName ?? 'vuestro hogar'} toca la semana que viene y todavía no la tiene nadie:`
+        : `Estas tareas de ${input.householdName ?? 'vuestro hogar'} tocan la semana que viene y todavía no las tiene nadie:`,
       '',
       ...listed,
     ];
@@ -376,13 +375,14 @@ export function composeUpForGrabsEmail(
     lines.push(
       '',
       input.totalCount === 1
-        ? 'Si te viene bien, cógela y quien la vea sabrá que ya tiene dueño. Si no, no pasa nada: este correo va a todo el hogar, no solo a ti.'
-        : 'Si te viene bien, coge las que puedas y el resto del hogar verá que ya tienen dueño. Si no, no pasa nada: este correo va a todo el hogar, no solo a ti.',
+        ? 'Nada de esto va con retraso todavía, y por eso te escribimos ahora: si te viene bien, cógela y el resto del hogar verá que ya tiene dueño.'
+        : 'Nada de esto va con retraso todavía, y por eso te escribimos ahora: coge las que te vengan bien y el resto del hogar verá que ya tienen dueño.',
+      'Si no te viene bien, no pasa nada: este correo va a todo el hogar, no solo a ti.',
       '',
       `Coger una tarea: ${input.claimUrl}`,
       ...footer(
         input.settingsUrl,
-        'Recibes este correo porque hay tareas atrasadas sin asignar en tu hogar.',
+        'Recibes este correo una vez por semana cuando hay tareas próximas sin asignar en tu hogar.',
         locale
       )
     );
@@ -390,12 +390,12 @@ export function composeUpForGrabsEmail(
   }
   const subject =
     input.totalCount === 1
-      ? 'One task is up for grabs'
-      : `${input.totalCount} tasks are up for grabs`;
+      ? 'One task next week has nobody on it'
+      : `${input.totalCount} tasks next week have nobody on them`;
   const lines = [
     input.totalCount === 1
-      ? `This task in ${input.householdName ?? 'your household'} has been overdue for a few days and nobody has picked it up:`
-      : `These tasks in ${input.householdName ?? 'your household'} have been overdue for a few days and nobody has picked them up:`,
+      ? `This task in ${input.householdName ?? 'your household'} comes up in the next week and nobody has claimed it yet:`
+      : `These tasks in ${input.householdName ?? 'your household'} come up in the next week and nobody has claimed them yet:`,
     '',
     ...listed,
   ];
@@ -405,13 +405,14 @@ export function composeUpForGrabsEmail(
   lines.push(
     '',
     input.totalCount === 1
-      ? "If it suits you, claim it and everyone else will see it has a name on it. If not, that's fine — this went to the whole household, not just you."
-      : "If any of them suit you, claim them and everyone else will see they have a name on them. If not, that's fine — this went to the whole household, not just you.",
+      ? "None of this is late yet — that's why we're mentioning it now. If it suits you, claim it and everyone else will see it has a name on it."
+      : "None of this is late yet — that's why we're mentioning it now. Claim whichever suit you and everyone else will see they have a name on them.",
+    "If none of them do, that's fine: this went to the whole household, not just you.",
     '',
     `Claim a task: ${input.claimUrl}`,
     ...footer(
       input.settingsUrl,
-      'You get this because your household has overdue tasks nobody is assigned to.',
+      'You get this once a week when your household has upcoming tasks nobody is assigned to.',
       locale
     )
   );

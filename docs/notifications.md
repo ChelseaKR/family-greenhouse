@@ -314,7 +314,7 @@ These are about the household as a group of people, which is the thing
 | --------------------------- | ----------------------------------------------- | ----------------------- | ------------------------------------------------ | ----------------------------- | ------------------------------------ |
 | **Invite**                  | `POST /households/{id}/invites/email` (admin)   | one address, no account | the join link                                    | n/a — recipient is not a user | 10/household/day + 1/address/day     |
 | **Someone joined**          | a successful `POST /households/join/{code}`     | every existing member   | `/household`                                     | `memberJoined`                | once per join                        |
-| **Up for grabs**            | hourly scan: unassigned and ≥2 days overdue     | every member            | `/plants/{id}` per task, `/tasks?filter=overdue` | `taskUpForGrabs`              | 1/household/recipient-local day      |
+| **Up for grabs**            | hourly scan: unclaimed, due in (24h, 7d]        | every member            | `/plants/{id}` per task, `/tasks?filter=overdue` | `taskUpForGrabs`              | 1/household/ISO week                 |
 | **You're covering**         | `PUT /tasks/vacation`                           | the named cover         | `/plants/{id}` per task, `/tasks`                | `coverageUpdates`             | once per window (keyed on its dates) |
 | **Someone covered for you** | a completion by someone other than the assignee | the assignee only       | `/plants/{id}` per task, `/dashboard`            | `careCredit`                  | 1/recipient-local day, rolled up     |
 
@@ -338,6 +338,35 @@ The response always carries the link and a `status` (`accepted` /`unavailable` /
 `identity_unavailable` / `recipient_cooldown`). `accepted` means SES took the
 message — which is not delivery, since there is no bounce destination wired yet
 — and the field is named for what we actually know.
+
+### Why "up for grabs" only looks forward
+
+The daily reminder queries `nextDue <= now + 24h`, which includes everything
+already overdue, and [#427](https://github.com/ChelseaKR/family-greenhouse/pull/427)
+gives that email its own "Up for grabs" section for the unclaimed rows in it. A
+dedicated email about unclaimed _overdue_ tasks would therefore name the same
+task twice on the same morning, to every member.
+
+So the two are **disjoint by construction**, which is the split #427 proposed:
+the reminder owns everything at or inside its 24-hour window, and this email
+owns `(24h, 7d]` — the unclaimed work nobody is being told about at all.
+`REMINDER_DUE_WINDOW_MS` in `services/householdEmails.ts` is the only place the
+line is encoded, and there is no shared state between the two paths.
+
+It is also the better half to own. Asking for a hand _before_ anything is late
+is the anti-nag version of the ask; asking after is the nag.
+
+The cadence is one per recipient per ISO week, not per day, because this is the
+only household email whose trigger is a standing state rather than an event — a
+forward list of unclaimed work barely changes overnight, so a daily cadence
+would be the same email again. The lookahead equals the cadence on purpose, so
+nothing falls between the two surfaces: a task further out is caught by a later
+weekly pass while still unclaimed, and one that crosses inside 24 hours first is
+caught by the daily reminder that morning.
+
+**If #427 does not land**, unclaimed overdue tasks stay an anonymous integer in
+the reminder and no email names them. The fix is one constant
+(`REMINDER_DUE_WINDOW_MS` → `0`), not a redesign.
 
 ### Why "someone covered for you" is not a leaderboard
 
@@ -373,7 +402,9 @@ overflow, status: pending|sent, createdAt, expiresAt, ttl
   the row `pending`.
 - **Dedupe** — the sort key _is_ the marker, and a delivered row is kept as `sent`
   until TTL rather than deleted, so a repeated trigger cannot produce a second
-  email. Daily keys use the **recipient's** local date, not the server's.
+  email. Daily keys use the **recipient's** local date, not the server's; the
+  weekly `up_for_grabs` key is UTC-based, so a member who travels cannot collect
+  two copies of one week.
 - **Roll-up** — `care_credit` appends, so ten covered tasks in an afternoon
   produce one email. Past the list cap the surplus becomes an `overflow` count
   the email states truthfully.

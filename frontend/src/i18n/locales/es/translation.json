@@ -886,7 +886,7 @@
     "memberJoinedTitle": "Alguien se une al hogar",
     "memberJoinedDescription": "Cuando se acepta una invitación.",
     "taskUpForGrabsTitle": "Una tarea está libre",
-    "taskUpForGrabsDescription": "Cuando una tarea lleva un par de días atrasada y no la tiene asignada nadie. Como máximo, uno al día.",
+    "taskUpForGrabsDescription": "Una vez por semana, las tareas de los próximos siete días que no tiene asignadas nadie. Lo que ya toca o va con retraso aparece en tu recordatorio diario.",
     "coverageUpdatesTitle": "Estás cubriendo a alguien",
     "coverageUpdatesDescription": "Cuando alguien del hogar fija sus fechas de ausencia y te pone como cobertura.",
     "careCreditTitle": "Alguien te ha cubierto",

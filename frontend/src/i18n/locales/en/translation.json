@@ -868,7 +868,7 @@
     "memberJoinedTitle": "Someone joins the household",
     "memberJoinedDescription": "When an invitation is accepted.",
     "taskUpForGrabsTitle": "A task is up for grabs",
-    "taskUpForGrabsDescription": "When a task has been overdue for a couple of days with nobody assigned to it. At most one a day.",
+    "taskUpForGrabsDescription": "Once a week, the tasks coming up in the next seven days that nobody is assigned to. Anything already due or overdue is in your daily reminder instead.",
     "coverageUpdatesTitle": "You're covering for someone",
     "coverageUpdatesDescription": "When a household member sets an away window and names you as their cover.",
     "careCreditTitle": "Someone covered for you",

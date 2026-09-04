@@ -39,6 +39,7 @@ vi.mock('../../../src/services/emailNotifier.js', () => ({
 const NOW = new Date('2026-09-03T12:00:00.000Z');
 const DAY = 24 * 60 * 60 * 1000;
 const overdueBy = (days: number) => new Date(NOW.getTime() - days * DAY).toISOString();
+const dueIn = (days: number) => new Date(NOW.getTime() + days * DAY).toISOString();
 
 const ALL_PREFS = {
   email: true,
@@ -219,7 +220,9 @@ const unassignedTask = {
   customType: null,
   frequency: 7,
   lastCompleted: null,
-  nextDue: overdueBy(4),
+  // Outside the daily reminder's 24h window on purpose — that is the whole
+  // point of the split with #427.
+  nextDue: dueIn(3),
   assignedTo: null,
   assignedToName: null,
   assignmentSource: null,
@@ -229,7 +232,7 @@ const unassignedTask = {
 };
 
 describe('upForGrabsHousehold', () => {
-  it('offers a long-overdue unassigned task to the whole household', async () => {
+  it('offers an upcoming unclaimed task to the whole household', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     const plantService = await import('../../../src/services/plantService.js');
     vi.mocked(taskService.getTasksDueBy).mockResolvedValue([unassignedTask] as never);
@@ -244,16 +247,48 @@ describe('upForGrabsHousehold', () => {
     expect(pks).toEqual(['USER#u1', 'USER#u2']);
   });
 
-  it('only looks at tasks already overdue by the grace period', async () => {
+  it('queries a week ahead, not the reminder window', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     vi.mocked(taskService.getTasksDueBy).mockResolvedValue([] as never);
-    const { upForGrabsHousehold, UP_FOR_GRABS_MIN_DAYS_OVERDUE } =
-      await import('../../../src/services/householdEmails.js');
+    const { upForGrabsHousehold } = await import('../../../src/services/householdEmails.js');
 
     await upForGrabsHousehold('hh', NOW);
 
     const cutoff = vi.mocked(taskService.getTasksDueBy).mock.calls[0][1];
-    expect(Date.parse(cutoff)).toBe(NOW.getTime() - UP_FOR_GRABS_MIN_DAYS_OVERDUE * DAY);
+    expect(Date.parse(cutoff)).toBe(NOW.getTime() + 7 * DAY);
+  });
+
+  it('leaves everything inside the daily reminder window to the reminder', async () => {
+    // PR #427 gives the daily reminder its own "Up for grabs" section for
+    // unclaimed rows due within 24h, overdue included. Naming those here too
+    // would mail the same task twice on the same morning.
+    const taskService = await import('../../../src/services/taskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([
+      { ...unassignedTask, id: 'overdue', nextDue: overdueBy(4) },
+      { ...unassignedTask, id: 'today', nextDue: dueIn(0) },
+      { ...unassignedTask, id: 'edge', nextDue: new Date(NOW.getTime() + DAY).toISOString() },
+    ] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([{ id: 'p1', name: 'Monstera' }] as never);
+    const { upForGrabsHousehold } = await import('../../../src/services/householdEmails.js');
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+
+    expect(await upForGrabsHousehold('hh', NOW)).toBe('none');
+    expect(dynamodb.send).not.toHaveBeenCalled();
+  });
+
+  it('takes a task one second past the reminder edge', async () => {
+    // The boundary is exclusive on the reminder's side, so nothing can fall
+    // between the two emails.
+    const taskService = await import('../../../src/services/taskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([
+      { ...unassignedTask, nextDue: new Date(NOW.getTime() + DAY + 1000).toISOString() },
+    ] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([{ id: 'p1', name: 'Monstera' }] as never);
+    const { upForGrabsHousehold } = await import('../../../src/services/householdEmails.js');
+
+    expect(await upForGrabsHousehold('hh', NOW)).toBe('queued');
   });
 
   it('ignores tasks that already have an assignee', async () => {
@@ -294,7 +329,8 @@ describe('upForGrabsHousehold', () => {
       ...unassignedTask,
       id: `t${i}`,
       plantId: `p${i}`,
-      nextDue: overdueBy(9 - i),
+      // All inside (24h, 7d]; deliberately out of order.
+      nextDue: dueIn(6 - i * 0.5),
     }));
     const taskService = await import('../../../src/services/taskService.js');
     const plantService = await import('../../../src/services/plantService.js');
@@ -314,18 +350,18 @@ describe('upForGrabsHousehold', () => {
     const item = JSON.parse(call.input.ExpressionAttributeValues[':one'][0]);
     expect(item.totalCount).toBe(9);
     expect(item.tasks).toHaveLength(5);
-    // Longest-waiting first.
-    expect(item.tasks[0].nextDue).toBe(overdueBy(9));
+    // Soonest-due first — the ones a claim helps most.
+    expect(item.tasks[0].nextDue).toBe(dueIn(2));
   });
 
-  it('keys the daily marker on the recipient local date, not the server date', async () => {
+  it('sends at most one a week, not one a day', async () => {
+    // The only kind whose trigger is a standing state rather than an event, so
+    // the only one that could repeat itself into noise.
     const taskService = await import('../../../src/services/taskService.js');
     const plantService = await import('../../../src/services/plantService.js');
     vi.mocked(taskService.getTasksDueBy).mockResolvedValue([unassignedTask] as never);
     vi.mocked(plantService.getPlants).mockResolvedValue([{ id: 'p1', name: 'Monstera' }] as never);
     await mockRoster([memberA]);
-    // 12:00 UTC on the 3rd is already the 4th at UTC+14.
-    await mockPrefs({ u1: { timezone: 'Pacific/Kiritimati' } });
     const { upForGrabsHousehold } = await import('../../../src/services/householdEmails.js');
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
 
@@ -333,7 +369,26 @@ describe('upForGrabsHousehold', () => {
 
     const sk = (vi.mocked(dynamodb.send).mock.calls[0][0] as { input: { Key: { SK: string } } })
       .input.Key.SK;
-    expect(sk).toBe('HHEMAIL#up_for_grabs#hh#2026-09-04');
+    // 2026-09-03 is a Thursday in ISO week 36.
+    expect(sk).toBe('HHEMAIL#up_for_grabs#hh#2026-W36');
+  });
+
+  it('uses the same week key for every member, so one household gets one round', async () => {
+    const taskService = await import('../../../src/services/taskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([unassignedTask] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([{ id: 'p1', name: 'Monstera' }] as never);
+    // A household split across time zones must not straddle two week keys.
+    await mockPrefs({ u1: { timezone: 'Pacific/Kiritimati' }, u2: { timezone: 'Pacific/Midway' } });
+    const { upForGrabsHousehold } = await import('../../../src/services/householdEmails.js');
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+
+    await upForGrabsHousehold('hh', NOW);
+
+    const sks = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => (c[0] as { input: { Key: { SK: string } } }).input.Key.SK);
+    expect(new Set(sks)).toEqual(new Set(['HHEMAIL#up_for_grabs#hh#2026-W36']));
   });
 
   it('skips members who turned the up-for-grabs email off', async () => {
@@ -643,7 +698,7 @@ describe('renderQueued', () => {
                 plantName: 'Monstera',
                 type: 'water',
                 customType: null,
-                nextDue: overdueBy(4),
+                nextDue: dueIn(3),
               },
             ],
           }),
@@ -653,7 +708,10 @@ describe('renderQueued', () => {
       NOW
     );
     expect(composed?.text).toContain('https://app.example.net/plants/p1');
-    expect(composed?.text).toContain('4 days overdue');
+    expect(composed?.text).toContain('in 3 days');
+    // Nothing here is late — that is the reminder's half of the split. (The
+    // claim link is /tasks?filter=overdue, so match the prose, not the URL.)
+    expect(composed?.text).not.toMatch(/days overdue|is overdue|has been overdue/i);
   });
 });
 

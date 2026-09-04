@@ -5,7 +5,7 @@ import {
   composeInviteEmail,
   composeMemberJoinedEmail,
   composeUpForGrabsEmail,
-  daysOverdue,
+  daysUntilDue,
   formatDate,
   normalizeEmailLocale,
   preferredEmailLocale,
@@ -53,9 +53,9 @@ describe('emailCopy formatting primitives', () => {
 
   it('never produces NaN days from a malformed due date', () => {
     // The weekly digest renders `waiting NaN days for some care` here.
-    expect(daysOverdue('garbage', NOW)).toBeNull();
-    expect(daysOverdue('2026-09-01T12:00:00.000Z', NOW)).toBe(2);
-    expect(daysOverdue('2026-09-04T12:00:00.000Z', NOW)).toBe(0);
+    expect(daysUntilDue('garbage', NOW)).toBeNull();
+    expect(daysUntilDue('2026-09-06T12:00:00.000Z', NOW)).toBe(3);
+    expect(daysUntilDue('2026-09-01T12:00:00.000Z', NOW)).toBe(0);
   });
 
   it('never prints the internal enum value for an unnamed custom task', () => {
@@ -159,7 +159,7 @@ describe('composeUpForGrabsEmail', () => {
   const task = {
     plantName: 'Monstera',
     taskLabel: 'water',
-    daysOverdue: 4,
+    daysUntilDue: 4,
     plantUrl: 'https://app.example.net/plants/p1',
   };
   const base = {
@@ -170,9 +170,22 @@ describe('composeUpForGrabsEmail', () => {
 
   it('names the plant and the task and links to the plant', () => {
     const { text } = composeUpForGrabsEmail({ ...base, tasks: [task], totalCount: 1 }, 'en');
-    expect(text).toContain('Monstera — water (4 days overdue)');
+    expect(text).toContain('Monstera — water (in 4 days)');
     expect(text).toContain('https://app.example.net/plants/p1');
     expect(text).toContain('https://app.example.net/tasks?filter=overdue');
+  });
+
+  it('is forward-looking — it never claims anything is late', () => {
+    // Everything at or inside the daily reminder's 24h window belongs to the
+    // reminder (PR #427), so this email is only ever about what is coming.
+    const { subject, text } = composeUpForGrabsEmail(
+      { ...base, tasks: [task], totalCount: 1 },
+      'en'
+    );
+    expect(subject).toBe('One task next week has nobody on it');
+    expect(text).toContain('comes up in the next week and nobody has claimed it yet');
+    expect(text).toContain('None of this is late yet');
+    expect(text).not.toMatch(/days overdue|has been overdue/i);
   });
 
   it('reports the real total even when it lists fewer', () => {
@@ -191,20 +204,34 @@ describe('composeUpForGrabsEmail', () => {
     expect(text).toMatch(/went to the whole household, not just you/);
   });
 
-  it('says "overdue" with no count when the due date is unusable', () => {
+  it('says tomorrow rather than "in 1 days" at the near edge', () => {
     const { text } = composeUpForGrabsEmail(
-      { ...base, tasks: [{ ...task, daysOverdue: null }], totalCount: 1 },
+      { ...base, tasks: [{ ...task, daysUntilDue: 1 }], totalCount: 1 },
       'en'
     );
-    expect(text).toContain('(overdue)');
+    expect(text).toContain('(tomorrow)');
+    expect(text).not.toContain('in 1 days');
+  });
+
+  it('admits an unreadable due date instead of guessing at it', () => {
+    const { text } = composeUpForGrabsEmail(
+      { ...base, tasks: [{ ...task, daysUntilDue: null }], totalCount: 1 },
+      'en'
+    );
+    expect(text).toContain("(we couldn't read the date)");
     expect(text).not.toContain('NaN');
     expect(text).not.toContain('null');
   });
 
   it('has a Spanish body', () => {
-    const { text } = composeUpForGrabsEmail({ ...base, tasks: [task], totalCount: 1 }, 'es');
-    expect(text).toContain('no la ha cogido nadie');
-    expect(text).toContain('(4 días de retraso)');
+    const { subject, text } = composeUpForGrabsEmail(
+      { ...base, tasks: [task], totalCount: 1 },
+      'es'
+    );
+    expect(subject).toBe('Una tarea de la próxima semana no tiene dueño');
+    expect(text).toContain('todavía no la tiene nadie');
+    expect(text).toContain('(en 4 días)');
+    expect(text).toContain('Nada de esto va con retraso todavía');
   });
 });
 
