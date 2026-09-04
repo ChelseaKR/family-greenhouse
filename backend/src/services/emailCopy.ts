@@ -61,24 +61,6 @@ export function normalizeEmailLocale(value: unknown): EmailLocale {
     : DEFAULT_EMAIL_LOCALE;
 }
 
-/**
- * The locale to write a member's email in.
- *
- * `NotificationPreferences` has no `locale` field on main today — the audit's
- * finding was that "there is no field an email composer could read even if it
- * wanted to". A parallel branch (`feat/useful-emails`) adds one. This reads it
- * structurally so that the day the field lands, every household email switches
- * language with no change here; until then every caller gets the default.
- * Deliberately not a `notificationPrefs` edit: that file is being changed on
- * the other branch and a duplicate field would collide.
- */
-export function preferredEmailLocale(prefs: unknown): EmailLocale {
-  if (prefs && typeof prefs === 'object' && 'locale' in prefs) {
-    return normalizeEmailLocale((prefs as { locale?: unknown }).locale);
-  }
-  return DEFAULT_EMAIL_LOCALE;
-}
-
 // ---------------------------------------------------------------------------
 // Formatting primitives
 // ---------------------------------------------------------------------------

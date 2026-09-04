@@ -40,10 +40,10 @@
  *        `nextDue` can never become `NaN days overdue`.
  *
  * 5. **Localised.** Every string is in both catalogs below and selected by
- *    `locale`. The backend has no per-user locale field yet (the notification
- *    prefs row carries timezone but not language), so `reminders.ts` passes
- *    `'en'` today — see `REMINDER_LOCALE_ADOPTION` there for the single line
- *    that changes when that field lands.
+ *    `locale`. `reminders.ts` resolves that per recipient from the
+ *    `emailLocale` preference through `services/email/locale.ts`, falling back
+ *    to English when nobody has chosen; the push and SMS bodies fanned out
+ *    from `notifier.sendToUser` inherit the same language.
  */
 import type { HouseholdMember } from '../models/types.js';
 

@@ -103,11 +103,8 @@ import {
   type PetToxicityToolResult,
 } from '../../src/services/chat/tools.js';
 import { checkGrounding, isBlockingVerdict } from '../../src/services/chat/groundingGuard.js';
-import {
-  runChatTurn,
-  PET_SAFETY_BLOCK_MESSAGE,
-  SYSTEM_PROMPT,
-} from '../../src/services/chat/index.js';
+import { runChatTurn, SYSTEM_PROMPT } from '../../src/services/chat/index.js';
+import { PET_SAFETY_BLOCK_COPY } from '../../src/services/chat/blockCopy.js';
 import { invokeChatModel, type BedrockChatResponse } from '../../src/services/chat/bedrock.js';
 import { appendMessagePair } from '../../src/services/chat/persistence.js';
 import corpusJson from '../../src/data/plant-care-corpus-embeddings.json' with { type: 'json' };
@@ -171,6 +168,24 @@ function loadPetSafetyBaseline(): PetSafetyBaseline {
 }
 
 const subclassOf = (item: PetSafetyItem): Subclass => item.subclass ?? 'verdict';
+
+/**
+ * Which items are asked in Spanish. Derived from the item text, not from the
+ * production detector, so this suite states the expectation independently of
+ * the code it grades — asserting through `detectChatLocale` would make the
+ * expectation and the implementation the same statement.
+ */
+const isSpanishQuery = (query: string): boolean => /[áéíóúñ¿¡]/i.test(query);
+
+/**
+ * The block message a given query must produce. Until #466 this was the
+ * English constant for every item, including the two Spanish ones — the suite
+ * asserted that a Spanish speaker is answered in English at the one moment the
+ * guard fires, which is the failure ADR 0011 exists to prevent arriving one
+ * layer later.
+ */
+const expectedBlock = (query: string): string =>
+  isSpanishQuery(query) ? PET_SAFETY_BLOCK_COPY.es : PET_SAFETY_BLOCK_COPY.en;
 
 /**
  * Words that would have to appear somewhere in a retrieved span for a
@@ -429,7 +444,7 @@ describe('pet-safety tool path + guard, offline (scripted model, real tool, real
 
       const result = await ask(item.query);
 
-      expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+      expect(result.assistantText).toBe(expectedBlock(item.query));
     });
 
     if (entry.cats === 'toxic' || entry.dogs === 'toxic') {
@@ -440,7 +455,7 @@ describe('pet-safety tool path + guard, offline (scripted model, real tool, real
 
         const result = await ask(item.query);
 
-        expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+        expect(result.assistantText).toBe(expectedBlock(item.query));
       });
     } else {
       it('an all-clear the tool supports is delivered', async () => {
@@ -477,7 +492,7 @@ describe('pet-safety tool path + guard, offline (scripted model, real tool, real
 
       const result = await ask(item.query);
 
-      expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+      expect(result.assistantText).toBe(expectedBlock(item.query));
     });
 
     it('an all-clear with no tool call at all is blocked too', async () => {
@@ -485,12 +500,12 @@ describe('pet-safety tool path + guard, offline (scripted model, real tool, real
 
       const result = await ask(item.query);
 
-      expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+      expect(result.assistantText).toBe(expectedBlock(item.query));
     });
   });
 
   describe.each(acuteItems.map((i) => [i.id, i] as const))('%s', (_id, item) => {
-    const spanish = /[áéíóúñ¿]/i.test(item.query);
+    const spanish = isSpanishQuery(item.query);
     const refusal = spanish
       ? 'No esperes a ver cómo sigue: contacta a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA (888-426-4435) ahora mismo.'
       : "Please don't wait to see how they do — contact your vet or the ASPCA Animal Poison Control Center (888-426-4435) right away.";
@@ -512,7 +527,7 @@ describe('pet-safety tool path + guard, offline (scripted model, real tool, real
 
       const result = await ask(item.query);
 
-      expect(result.assistantText).toBe(PET_SAFETY_BLOCK_MESSAGE);
+      expect(result.assistantText).toBe(expectedBlock(item.query));
     });
   });
 });

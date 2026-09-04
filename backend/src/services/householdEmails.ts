@@ -80,11 +80,11 @@ import {
   composeMemberJoinedEmail,
   composeUpForGrabsEmail,
   daysUntilDue,
-  preferredEmailLocale,
   taskLabel,
   type ComposedEmail,
   type EmailLocale,
 } from './emailCopy.js';
+import { resolveEmailLocale } from './email/locale.js';
 
 export const QUEUE_SK_PREFIX = 'HHEMAIL#';
 
@@ -550,7 +550,21 @@ export async function flushUser(userId: string, now: Date = new Date()): Promise
 
   const summary: FlushSummary = { ...EMPTY_FLUSH };
   const prefs = await notificationPrefs.getPreferences(userId);
-  const locale = preferredEmailLocale(prefs);
+  // Language comes from the canonical resolver in `services/email/locale.ts`.
+  // This used to call a `preferredEmailLocale` helper that probed the record
+  // for a field named `locale`; the field is `emailLocale`, so the probe was
+  // never true and every household email went out in English — including to
+  // users who had explicitly chosen Spanish in Settings, for copy that has a
+  // complete Spanish translation sitting in emailCopy.ts.
+  //
+  // The pure overload, not `resolveEmailLocaleForUser`: `prefs` is already in
+  // hand, so the accessor's own read would be a second point read per user per
+  // hourly pass. The household step is passed `null` for the same reason — it
+  // is a member fan-out, and this runs for every member every hour. `digest.ts`
+  // resolves the household's language once per run, which is where that cost
+  // belongs. `source` is logged so an English send to somebody who has never
+  // chosen is a countable event rather than an invisible one.
+  const { locale, source: localeSource } = resolveEmailLocale(prefs.emailLocale, null);
   const inDnd = notificationPrefs.isInDndWindow(prefs, now);
 
   for (const row of pending) {
@@ -609,6 +623,17 @@ export async function flushUser(userId: string, now: Date = new Date()): Promise
       continue;
     }
     summary.sent += 1;
+    logger.info(
+      {
+        userId,
+        householdId: row.householdId,
+        kind: row.kind,
+        locale,
+        localeSource,
+        msg: 'household_email.sent',
+      },
+      'household_email.sent'
+    );
     try {
       await markSent(key, now);
     } catch (err) {

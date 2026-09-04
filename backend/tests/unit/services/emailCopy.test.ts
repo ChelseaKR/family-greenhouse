@@ -8,7 +8,6 @@ import {
   daysUntilDue,
   formatDate,
   normalizeEmailLocale,
-  preferredEmailLocale,
   taskLabel,
 } from '../../../src/services/emailCopy.js';
 
@@ -28,13 +27,12 @@ describe('emailCopy locale resolution', () => {
     expect(normalizeEmailLocale(42)).toBe('en');
   });
 
-  it('reads a stored locale preference when one exists, and defaults when it does not', () => {
-    // `NotificationPreferences` has no locale field on main yet; this is the
-    // forward-compatible read documented in preferredEmailLocale.
-    expect(preferredEmailLocale({ email: true })).toBe('en');
-    expect(preferredEmailLocale({ email: true, locale: 'es' })).toBe('es');
-    expect(preferredEmailLocale(null)).toBe('en');
-  });
+  // The `preferredEmailLocale` case that used to live here asserted against a
+  // hand-built literal (`{ email: true, locale: 'es' }`) that no caller ever
+  // constructs — the real field is `emailLocale`, so the function it tested
+  // could not fail for the failure that mattered. It has moved to
+  // householdEmails.test.ts, where it is driven through a real
+  // `NotificationPreferences` value and a real send. See #465.
 });
 
 describe('emailCopy formatting primitives', () => {
