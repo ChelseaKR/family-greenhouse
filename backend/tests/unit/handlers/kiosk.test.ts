@@ -110,21 +110,31 @@ describe('GET /kiosk/{token} (public)', () => {
     expect(Object.keys(body).sort()).toEqual(['pollIntervalSeconds', 'tasks']);
   });
 
-  it('asks for the kiosk horizon (today), not the sitter’s seven days', async () => {
+  it('supplies its own rolling cutoff, not a sitter link’s expiresAt', async () => {
     const { getActiveKioskLink, KIOSK_LOOKAHEAD_DAYS } =
       await import('../../../src/services/kioskService.js');
     const { getSitterTasks } = await import('../../../src/services/taskService.js');
     vi.mocked(getActiveKioskLink).mockResolvedValueOnce(activeLink() as never);
     vi.mocked(getSitterTasks).mockResolvedValueOnce([] as never);
 
+    const before = Date.now();
     const { getKioskView } = await import('../../../src/handlers/tasks/kiosk.js');
     await getKioskView(
       anonEvent({ path: `/kiosk/${TOKEN}`, pathParameters: { token: TOKEN } }),
       ctx,
       () => {}
     );
+    const after = Date.now();
 
-    expect(vi.mocked(getSitterTasks).mock.calls[0][2]).toBe(KIOSK_LOOKAHEAD_DAYS);
+    // The sitter view's cutoff is its link's own expiresAt (ADR 0015). A wall
+    // display has no expiry to honour, so it passes a rolling horizon of
+    // KIOSK_LOOKAHEAD_DAYS instead — "what needs doing today", not a trip.
+    const windowEndsAt = Date.parse(vi.mocked(getSitterTasks).mock.calls[0][1] as string);
+    const day = 24 * 60 * 60 * 1000;
+    expect(windowEndsAt).toBeGreaterThanOrEqual(before + KIOSK_LOOKAHEAD_DAYS * day);
+    expect(windowEndsAt).toBeLessThanOrEqual(after + KIOSK_LOOKAHEAD_DAYS * day);
+    // Deliberately far short of the sitter view's old seven-day horizon.
+    expect(windowEndsAt).toBeLessThan(before + 2 * day);
   });
 
   it('answers a generic 404 for an invalid or revoked token', async () => {
