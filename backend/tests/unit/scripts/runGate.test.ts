@@ -18,11 +18,27 @@
  * infrastructure/. The runner itself is loaded only as a child process, never
  * imported, so it stays out of this workspace's coverage accounting.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+// These cases are not unit tests in the usual cost sense: each one runs the
+// real runner, which spawns two or three real `npm run` processes. npm's own
+// startup is ~0.4s on an idle machine and several seconds on a busy one, and
+// the `--jobs 1` case pays it serially.
+//
+// The suite's 10s default is therefore too tight for this file specifically.
+// It has already failed a push on a laptop at load average 97 — "Test timed
+// out in 10000ms" on the `--jobs 1` case — which is the worst kind of gate
+// failure: unrelated to the change being pushed, and indistinguishable at a
+// glance from a real one.
+//
+// A minute is not a weaker assertion, only a more patient one. Nothing here
+// asserts a duration; every case still asserts an exit code and the runner's
+// output, so a runner that genuinely hung would still fail, just later.
+vi.setConfig({ testTimeout: 60_000 });
 
 const REAL_RUNNER = resolve(__dirname, '../../../../scripts/run-gate.mjs');
 
