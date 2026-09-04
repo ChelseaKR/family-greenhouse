@@ -67,6 +67,12 @@ frontend/ios/App/App/capacitor.config.json
 *.tfplan
 .terraform.lock.hcl
 crash.log
+# Lambda bundles built by `data "archive_file"` at plan time from the .mjs
+# sources beside them. Regenerated on every plan/apply, so committing one only
+# creates a binary that can silently drift from the source it was built from.
+# (modules/email/lambda/forwarder.zip predates this rule and stays tracked —
+# git ignores nothing it is already tracking.)
+infrastructure/modules/*/lambda/*.zip
 
 # AWS
 .aws-sam/

@@ -32,8 +32,24 @@ export interface NotificationPreferences {
   /** True once the current phone number was confirmed via SMS code. Read-only:
    *  only the confirm-verification endpoint can set it. */
   phoneVerified: boolean;
+  /**
+   * Whether the caller's own address is still on the outbound send list.
+   * `undeliverable` means it hard-bounced or a complaint was filed and every
+   * product email to it is being withheld — the `email` toggle above can read
+   * "on" while that is true, which is exactly the state this field exists to
+   * make visible. `unknown` means the server could not tell; render it as
+   * uncertainty, never as health. Absent on older servers — treat as `unknown`.
+   */
+  emailStatus?: EmailDeliverabilityStatus;
+  /** Why the address was suppressed. Null unless `emailStatus` is
+   *  `undeliverable`; shown only to the address's own owner. */
+  emailSuppressionReason?: EmailSuppressionReason | null;
   updatedAt: string;
 }
+
+export type EmailDeliverabilityStatus = 'ok' | 'undeliverable' | 'unknown';
+
+export type EmailSuppressionReason = 'hard_bounce' | 'complaint' | 'soft_bounce_limit';
 
 export interface StartVerificationResponse {
   sent: boolean;
@@ -101,6 +117,17 @@ export const notificationService = {
       '/notifications/phone/confirm-verification',
       { code }
     );
+    return response.data;
+  },
+
+  /**
+   * Put the caller's own address back on the send list after a bounce or a
+   * complaint suppressed it. The server takes the address from the session,
+   * never from the client, so this can only ever affect the caller's own
+   * mailbox. Returns the refreshed preferences.
+   */
+  async clearEmailSuppression(): Promise<NotificationPreferences> {
+    const response = await api.delete<NotificationPreferences>('/notifications/email-suppression');
     return response.data;
   },
 };

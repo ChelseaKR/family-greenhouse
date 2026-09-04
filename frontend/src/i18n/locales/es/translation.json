@@ -684,7 +684,9 @@
       "help": "Abre una planta para añadir su nota. Con una frase basta: es lo que la guía le mostrará a tu cuidador.",
       "allCovered": "Todas las plantas tienen nota de cuidado y de ubicación. Tu cuidador tiene lo que necesita.",
       "checkFailed": "No pudimos comprobar qué plantas no tienen notas en este momento, así que esta lista puede estar incompleta. Tu cuidador solo ve las notas que hayas escrito."
-    }
+    },
+    "memberEmailUndeliverable": "El correo no llega",
+    "memberEmailUndeliverableHint": "Los recordatorios y resúmenes enviados al correo de esta persona están rebotando, así que dejamos de enviarlos. Puede reanudar el correo desde Ajustes → Notificaciones cuando la dirección vuelva a funcionar."
   },
   "sitter": {
     "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",
@@ -925,7 +927,12 @@
     "browserEnabledBackground": "Los recordatorios del navegador están activados, incluso cuando la aplicación está en segundo plano.",
     "browserEnabledForegroundFailed": "Los recordatorios del navegador están activados mientras la aplicación está abierta. No se pudo configurar la entrega en segundo plano en este dispositivo.",
     "browserEnabledForegroundUnavailable": "Los recordatorios del navegador están activados mientras la aplicación está abierta. La entrega en segundo plano no está disponible en este dispositivo.",
-    "browserUnsupportedDevice": "Este dispositivo no admite los recordatorios del navegador. Las preferencias de correo y mensajes de texto siguen disponibles abajo."
+    "browserUnsupportedDevice": "Este dispositivo no admite los recordatorios del navegador. Las preferencias de correo y mensajes de texto siguen disponibles abajo.",
+    "emailSuppressedBounce": "El correo a tu dirección está rebotando, así que dejamos de enviarlo. Los recordatorios, el resumen semanal y el resumen anual están en pausa. Revisa la dirección de tu cuenta y reanúdalo abajo.",
+    "emailSuppressedComplaint": "Esta dirección se marcó como spam, así que dejamos de enviarle mensajes. No se entrega nada: ni recordatorios ni el resumen semanal. Reanúdalo abajo si fue un error o si has cambiado de opinión.",
+    "emailStatusUnknown": "No pudimos comprobar si tu correo se está entregando en este momento. Esto no significa ni que sí ni que no: inténtalo de nuevo en un instante.",
+    "emailResume": "Reanudar el correo a esta dirección",
+    "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío."
   },
   "statusPage": {
     "notActivelyChecked": "No se comprueba activamente",

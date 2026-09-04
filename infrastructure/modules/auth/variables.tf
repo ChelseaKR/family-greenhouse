@@ -31,3 +31,15 @@ variable "email_reply_to" {
   type        = string
   default     = ""
 }
+
+variable "custom_message_lambda_arn" {
+  description = "ARN of the CustomMessage trigger that renders the branded forgot-password / admin-invite bodies (modules/email). Empty leaves Cognito's own copy in place."
+  type        = string
+  default     = ""
+}
+
+variable "custom_message_function_name" {
+  description = "Function name matching custom_message_lambda_arn. Needed separately because aws_lambda_permission takes a name while the pool takes an ARN."
+  type        = string
+  default     = ""
+}

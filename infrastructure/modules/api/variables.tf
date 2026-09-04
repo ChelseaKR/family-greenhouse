@@ -167,6 +167,24 @@ variable "ses_from_email" {
   default     = ""
 }
 
+variable "ses_reply_to_email" {
+  description = "Reply-To header on the app's own SES sends. Should be an address that actually reaches a human (support@, forwarded by modules/email/inbound.tf). Empty sends no Reply-To, leaving replies to land on the From address."
+  type        = string
+  default     = ""
+}
+
+variable "ses_configuration_set" {
+  description = "SES configuration set name attached to every send. Empty means SES publishes no bounce/complaint events, so the suppression list never learns anything — set it whenever the email module is provisioned."
+  type        = string
+  default     = ""
+}
+
+variable "ses_event_topic_arn" {
+  description = "SNS topic carrying SES bounce/complaint/delivery events (modules/email). Empty leaves the emailEvents Lambda deployed but unsubscribed."
+  type        = string
+  default     = ""
+}
+
 variable "web_push_vapid_public_key" {
   description = "VAPID public key for web push. Generate with `npx web-push generate-vapid-keys`."
   type        = string

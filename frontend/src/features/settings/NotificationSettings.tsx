@@ -215,6 +215,26 @@ export function NotificationSettings() {
   });
 
   /**
+   * Resume email after a bounce or a complaint suppressed the address. Shares
+   * the preferences mutation scope so it cannot race a toggle write, and
+   * writes the refreshed prefs straight into the cache so the banner clears.
+   */
+  const resumeEmailMutation = useMutation({
+    scope: preferencesMutationScope,
+    mutationFn: () => notificationService.clearEmailSuppression(),
+    onMutate: () => {
+      setInfo(null);
+      setError(null);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(prefsKey, updated);
+      setInfo(t('notifications.emailResumed'));
+      setError(null);
+    },
+    onError: (err) => setError(getErrorMessage(err)),
+  });
+
+  /**
    * Helper that always sends the full prefs payload built from the last
    * PERSISTED preferences + an `overrides` patch. Lets each toggle/input
    * fire one mutation call without having to re-list every field. DND/tz
@@ -488,6 +508,12 @@ export function NotificationSettings() {
 
   const prefs = prefsQuery.data;
   const smsAvailable = prefs.smsAvailable ?? false;
+  // Three states, and a fourth: the field being ABSENT means this server
+  // predates the contract and never looked, which is different from it having
+  // looked and failed (`'unknown'`). Absent renders nothing; `'unknown'`
+  // renders "we could not check", because a failed check is not a clean bill
+  // of health and must not be shown as one.
+  const emailStatus = prefs.emailStatus;
   const browserSupported = isSupported();
   const canEnableBrowser = browserSupported && permission !== 'denied';
   // Verified status applies to the SAVED number; editing the field to a
@@ -568,6 +594,31 @@ export function NotificationSettings() {
             />
           </label>
         </div>
+
+        {/* Deliverability. The toggle above can say "on" while nothing is
+            arriving; this is the only place that difference is visible. */}
+        {emailStatus === 'undeliverable' && (
+          <div className="space-y-3 border-b border-primary-100/70 pb-4">
+            <Alert variant="warning">
+              {prefs.emailSuppressionReason === 'complaint'
+                ? t('notifications.emailSuppressedComplaint')
+                : t('notifications.emailSuppressedBounce')}
+            </Alert>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => resumeEmailMutation.mutate()}
+              isLoading={resumeEmailMutation.isPending}
+            >
+              {t('notifications.emailResume')}
+            </Button>
+          </div>
+        )}
+        {emailStatus === 'unknown' && (
+          <div className="border-b border-primary-100/70 pb-4">
+            <Alert variant="info">{t('notifications.emailStatusUnknown')}</Alert>
+          </div>
+        )}
 
         {/* Weekly digest */}
         <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">

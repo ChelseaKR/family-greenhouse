@@ -666,7 +666,9 @@
       "help": "Open a plant to add its note. A sentence each is enough — it is what the brief shows your sitter.",
       "allCovered": "Every plant has a care note and a placement note. Your sitter has what they need.",
       "checkFailed": "We couldn’t check which plants are missing notes just now, so this list may be incomplete. Your sitter only sees notes you have written."
-    }
+    },
+    "memberEmailUndeliverable": "Email not arriving",
+    "memberEmailUndeliverableHint": "Reminders and digests to this member's email are bouncing, so we've stopped sending them. They can resume email from Settings → Notifications once the address works again."
   },
   "sitter": {
     "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",
@@ -907,7 +909,12 @@
     "browserEnabledBackground": "Browser reminders enabled, including while the app is in the background.",
     "browserEnabledForegroundFailed": "Browser reminders are enabled while the app is open. Background delivery could not be set up on this device.",
     "browserEnabledForegroundUnavailable": "Browser reminders are enabled while the app is open. Background delivery is unavailable on this device.",
-    "browserUnsupportedDevice": "Browser reminders are not supported on this device. Email and text-message preferences are still available below."
+    "browserUnsupportedDevice": "Browser reminders are not supported on this device. Email and text-message preferences are still available below.",
+    "emailSuppressedBounce": "Email to your address is bouncing, so we've stopped sending it. Reminders, the weekly digest and the year recap are all paused. Check the address on your account, then resume below.",
+    "emailSuppressedComplaint": "This address was reported as spam, so we stopped sending to it. Nothing is being delivered — not reminders, not the weekly digest. Resume below if that was a mistake or you have changed your mind.",
+    "emailStatusUnknown": "We couldn't check whether your email is being delivered right now. This says nothing either way — try again in a moment.",
+    "emailResume": "Resume email to this address",
+    "emailResumed": "Email resumed. We'll try your address again on the next send."
   },
   "statusPage": {
     "notActivelyChecked": "Not actively checked",

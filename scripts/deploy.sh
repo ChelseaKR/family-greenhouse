@@ -93,9 +93,10 @@ aws cloudfront create-invalidation \
 # regardless of the zip's package.json.
 echo "Deploying Lambda functions..."
 # chat-stream is the Function-URL streaming handler (bundle chat-stream.js);
-# digests is the EventBridge weekly/yearly email job. Keep this list in sync
+# digests is the EventBridge weekly/yearly email job; emailEvents is the
+# SNS-invoked SES bounce/complaint consumer. Keep this list in sync
 # with infrastructure/modules/api locals + the CD workflow's deploy loop.
-HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests chat-stream)
+HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests emailEvents chat-stream)
 for handler in "${HANDLERS[@]}"; do
     FUNCTION_NAME="family-greenhouse-${handler}-${ENVIRONMENT}"
     SRC="backend/dist/${handler}.js"

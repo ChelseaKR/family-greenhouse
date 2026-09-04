@@ -15,6 +15,47 @@ resource "aws_cognito_user_pool" "main" {
   # exact prior state on rollback; changing it is an in-place pool update.
   admin_create_user_config {
     allow_admin_create_user_only = !var.public_registration_enabled
+
+    # Dormant in production (`public_registration_enabled = true`), and a
+    # template precisely so flipping that flag cannot quietly ship AWS's stock
+    # invitation copy from our own From: address. The CustomMessage trigger
+    # below renders the same body; this declarative template is what applies if
+    # the trigger is ever absent (e.g. an environment with no SES module).
+    # {username} and {####} are Cognito's substitutions and must appear verbatim.
+    invite_message_template {
+      email_subject = "You have been invited to Family Greenhouse"
+      email_message = <<-EOT
+        Hi there,
+
+        Someone has set up a Family Greenhouse account for you — the family
+        plant-care app that helps you grow together.
+
+        Your username is: {username}
+        Your temporary password is: {####}
+
+        Sign in and you'll be asked to choose your own password. The temporary
+        one stops working once you do.
+
+        Not expecting this? You can safely ignore this email — the account
+        stays locked until someone signs in with the password above.
+
+        — The Family Greenhouse team
+        https://familygreenhouse.net
+      EOT
+      sms_message   = "Your Family Greenhouse username is {username} and temporary password is {####}"
+    }
+  }
+
+  # Branded bodies for the message paths a declarative template cannot reach —
+  # forgot-password above all, which otherwise ships AWS's stock copy from the
+  # same sender as the hand-written sign-up email. Wired only when the email
+  # module is provisioned; environments without SES keep Cognito's defaults.
+  # See modules/email/cognito_messages.tf and ADR 0022.
+  dynamic "lambda_config" {
+    for_each = var.custom_message_lambda_arn == "" ? [] : [var.custom_message_lambda_arn]
+    content {
+      custom_message = lambda_config.value
+    }
   }
 
   # Cognito's "Advanced Security" (Threat Protection) — risk-based adaptive
@@ -171,4 +212,24 @@ resource "aws_cognito_user_pool_client" "main" {
   }
 
   prevent_user_existence_errors = "ENABLED"
+}
+
+# Invoke permission for the CustomMessage trigger. It lives HERE, not in the
+# email module that owns the function, because `source_arn` is the user pool —
+# scoping the grant to this pool instead of to the whole account. The module
+# order is email -> auth, so the function already exists by the time this runs.
+#
+# Terraform creates the pool (with lambda_config) before this permission, so
+# there is a seconds-long window during the FIRST apply in which Cognito is
+# configured to call a function it may not invoke yet. Cognito validates the
+# grant at invoke time, not at configuration time, so the only exposure is a
+# password-reset attempt landing inside that window during an apply.
+resource "aws_lambda_permission" "cognito_custom_message" {
+  count = var.custom_message_function_name == "" ? 0 : 1
+
+  statement_id  = "AllowCognitoCustomMessage"
+  action        = "lambda:InvokeFunction"
+  function_name = var.custom_message_function_name
+  principal     = "cognito-idp.amazonaws.com"
+  source_arn    = aws_cognito_user_pool.main.arn
 }

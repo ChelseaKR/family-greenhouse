@@ -131,6 +131,10 @@ module "auth" {
   email_identity_arn          = var.domain_name == "" ? "" : module.email[0].identity_arn
   email_from_address          = var.email_from_address
   email_reply_to              = var.email_reply_to
+  # Branded forgot-password / admin-invite bodies. Absent (empty) in an
+  # environment with no domain, where Cognito's own copy is the only option.
+  custom_message_lambda_arn    = var.domain_name == "" ? "" : module.email[0].cognito_custom_message_lambda_arn
+  custom_message_function_name = var.domain_name == "" ? "" : module.email[0].cognito_custom_message_function_name
 
   depends_on = [module.email]
 }
@@ -163,8 +167,16 @@ module "api" {
   allowed_origin       = module.frontend.site_url
   # Scopes the Lambda role's SES send grant to the verified domain identity
   # (instead of Resource "*") when the email module is provisioned.
-  ses_identity_arn           = var.domain_name == "" ? "" : module.email[0].identity_arn
-  ses_from_email             = var.email_from_address
+  ses_identity_arn = var.domain_name == "" ? "" : module.email[0].identity_arn
+  ses_from_email   = var.email_from_address
+  # Reply-To on the app's own sends. `hello@` is send-only in spirit; support@
+  # is the address inbound.tf forwards to a human, so a reply to a reminder or
+  # a digest reaches somebody.
+  ses_reply_to_email = var.email_reply_to
+  # Attaching the configuration set is what makes SES publish bounce/complaint
+  # events at all; the topic ARN is what the emailEvents Lambda subscribes to.
+  ses_configuration_set      = var.domain_name == "" ? "" : module.email[0].configuration_set_name
+  ses_event_topic_arn        = var.domain_name == "" ? "" : module.email[0].event_topic_arn
   web_push_vapid_public_key  = var.web_push_vapid_public_key
   web_push_vapid_private_key = var.web_push_vapid_private_key
   web_push_vapid_subject     = var.web_push_vapid_subject

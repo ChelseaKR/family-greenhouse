@@ -219,6 +219,17 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = var.ses_identity_arn == "" ? "arn:aws:ses:*:${data.aws_caller_identity.current.account_id}:identity/*" : var.ses_identity_arn
       },
       {
+        # Sending WITH a configuration set is authorized against the identity
+        # above on the v1 SendEmail API, but the configuration-set ARN is a
+        # separate resource type on the v2 API and in SES's own condition keys.
+        # Granting it explicitly means a later move to SendEmailV2 (which
+        # multipart HTML and List-Unsubscribe headers will need) doesn't fail
+        # with an opaque AccessDenied on the first send.
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+        Resource = "arn:aws:ses:*:${data.aws_caller_identity.current.account_id}:configuration-set/*"
+      },
+      {
         # Reminder SMS via SNS. Resource "*" is REQUIRED by AWS here:
         # publishing directly to a phone number has no ARN to scope to (only
         # topic publishes do), so this cannot be tightened further. Web push
@@ -310,6 +321,11 @@ locals {
     # ({"job": "weekly"} / {"job": "yearRecap"}) selects the routine inside
     # backend/src/handlers/digests/handler.ts.
     "digests" = "digests"
+    # Also not an HTTP group — SNS-invoked. The SES configuration set publishes
+    # bounce/complaint/delivery events to the topic this function subscribes to
+    # (see the subscription below), and the handler maintains the outbound
+    # suppression list. Same harmless unused API integration as reminders.
+    "emailEvents" = "emailEvents"
     # Bedrock-backed plant care chatbot. Memory + timeout are higher than the
     # default because a turn can run up to 5 tool calls, each one a Bedrock
     # InvokeModel that takes 2-6 seconds.
@@ -370,6 +386,13 @@ locals {
 
   email_environment = {
     SES_FROM_EMAIL = var.ses_from_email
+    # Reply-To on the app's own sends. `hello@` is the sender; `support@` is
+    # the address a human reads, so a reply to a reminder reaches somebody.
+    SES_REPLY_TO = var.ses_reply_to_email
+    # Attaching the configuration set is what turns bounce/complaint feedback
+    # on for a message. An unset value sends without one — mail still goes out,
+    # but nothing ever learns that it bounced.
+    SES_CONFIGURATION_SET = var.ses_configuration_set
   }
 
   notification_environment = merge(local.email_environment, {
@@ -451,9 +474,10 @@ locals {
     # simply omits the line — it never asserts "no rain expected".
     # Cost: the forecast is read at most once per household per reminder run,
     # cached for an hour per ~10km cell and shared with the climate endpoint.
-    reminders = merge(local.notification_environment, local.perenual_environment, local.weather_environment)
-    digests   = local.email_environment
-    chat      = local.chat_environment
+    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment)
+    digests     = local.email_environment
+    emailEvents = {}
+    chat        = local.chat_environment
   }
 
   handler_environments = {
@@ -921,11 +945,15 @@ locals {
     "GET /calendar/{token}/family-greenhouse.ics" = { group = "me", auth = "none" }
 
     # --- notifications ---
-    "GET /notifications/prefs"          = { group = "notifications", auth = "jwt" }
-    "PUT /notifications/prefs"          = { group = "notifications", auth = "jwt" }
-    "POST /notifications/subscribe"     = { group = "notifications", auth = "jwt" }
-    "POST /notifications/unsubscribe"   = { group = "notifications", auth = "jwt" }
-    "POST /notifications/run-reminders" = { group = "notifications", auth = "jwt" }
+    "GET /notifications/prefs" = { group = "notifications", auth = "jwt" }
+    "PUT /notifications/prefs" = { group = "notifications", auth = "jwt" }
+    # Self-service un-suppression: puts the CALLER'S OWN address back on the
+    # send list after a bounce or complaint. The address comes from the JWT,
+    # never the request body, so it can only ever affect the caller.
+    "DELETE /notifications/email-suppression" = { group = "notifications", auth = "jwt" }
+    "POST /notifications/subscribe"           = { group = "notifications", auth = "jwt" }
+    "POST /notifications/unsubscribe"         = { group = "notifications", auth = "jwt" }
+    "POST /notifications/run-reminders"       = { group = "notifications", auth = "jwt" }
     # Admin-only manual triggers for the EventBridge-scheduled digest/recap
     # jobs, plus the SMS phone-verification flow (code via SNS; SMS sends are
     # gated on a verified number).
@@ -1099,6 +1127,34 @@ resource "aws_lambda_permission" "year_recap_eventbridge" {
   function_name = aws_lambda_function.handlers["digests"].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.year_recap.arn
+}
+
+# --- SES delivery feedback ---------------------------------------------------
+# The configuration set (modules/email) publishes bounce/complaint/delivery
+# events to an SNS topic; this subscribes the emailEvents Lambda to it. The
+# topic is created in the email module (next to the identity it reports on) and
+# the subscription here (next to the function it delivers to) so the dependency
+# stays one-way — email -> api — instead of becoming a cycle.
+#
+# `count` rather than an unconditional resource: an environment with no domain
+# has no email module, hence no topic. The function is still deployed there;
+# it just never receives anything.
+resource "aws_sns_topic_subscription" "email_events" {
+  count = var.ses_event_topic_arn == "" ? 0 : 1
+
+  topic_arn = var.ses_event_topic_arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.handlers["emailEvents"].arn
+}
+
+resource "aws_lambda_permission" "email_events_sns" {
+  count = var.ses_event_topic_arn == "" ? 0 : 1
+
+  statement_id  = "AllowSNSInvokeEmailEvents"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.handlers["emailEvents"].function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = var.ses_event_topic_arn
 }
 
 # Dead-letter queue for failed ASYNCHRONOUS Lambda invocations. The only async

@@ -36,13 +36,34 @@ export interface HouseholdMember {
 }
 
 /**
+ * Whether the app can currently reach a member by email.
+ *
+ *   - `ok` — nothing has told us otherwise.
+ *   - `undeliverable` — the address is on the suppression list and no product
+ *     email is being sent to it. Deliberately does NOT say why: a bounce and a
+ *     spam complaint both stop the mail, but "this housemate reported us as
+ *     spam" is the recipient's business, not the roster's.
+ *   - `unknown` — the suppression store could not be read. Not a synonym for
+ *     `ok`; a failed lookup must never render as a clean bill of health
+ *     (ADR 0010).
+ */
+export type MemberEmailStatus = 'ok' | 'undeliverable' | 'unknown';
+
+/**
  * Household-roster shape for the household detail endpoint (GET
  * /households/:id). Omits email — the Privacy Policy states other members
  * "cannot see your email," with no admin carve-out. Callers that
  * legitimately need email (outbound reminders/digest/recap mail) use the
  * full HouseholdMember via getHouseholdMembers instead.
+ *
+ * `emailStatus` carries deliverability WITHOUT carrying the address: the
+ * household needs to know that a member is not getting reminders (otherwise
+ * the failure is invisible and looks like health), and knowing that reveals
+ * nothing the Privacy Policy protects.
  */
-export type PublicHouseholdMember = Omit<HouseholdMember, 'email'>;
+export type PublicHouseholdMember = Omit<HouseholdMember, 'email'> & {
+  emailStatus: MemberEmailStatus;
+};
 
 export interface HouseholdInvite {
   code: string;

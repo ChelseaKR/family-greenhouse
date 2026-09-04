@@ -19,6 +19,9 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   UpdateCommand: vi.fn(function (input) {
     return { input, kind: 'Update' };
   }),
+  BatchGetCommand: vi.fn(function (input) {
+    return { input, kind: 'BatchGet' };
+  }),
 }));
 
 vi.mock('../../../src/utils/dynamodb.js', () => ({
@@ -602,5 +605,75 @@ describe('householdService', () => {
       .mockResolvedValueOnce({ Items: all.slice(MEMBER_QUERY_LIMIT) } as never);
 
     await expect(getHouseholdMembers('hh')).resolves.toHaveLength(size);
+  });
+
+  describe('getHouseholdMembersPublic', () => {
+    /** Roster Query result, then whatever the suppression BatchGet returns. */
+    function mockRoster(batchResult: unknown) {
+      return async (cmd: unknown) => {
+        const { kind } = cmd as { kind: string };
+        if (kind === 'Query') {
+          return {
+            Items: [
+              {
+                householdId: 'hh',
+                userId: 'u1',
+                name: 'Alice',
+                email: 'Alice@Example.com',
+                role: 'admin',
+                joinedAt: '2026-01-01',
+              },
+              {
+                householdId: 'hh',
+                userId: 'u2',
+                name: 'Bob',
+                email: 'bob@example.com',
+                role: 'member',
+                joinedAt: '2026-01-02',
+              },
+            ],
+          };
+        }
+        if (batchResult instanceof Error) throw batchResult;
+        return batchResult;
+      };
+    }
+
+    it('never leaks member emails, and reports deliverability alongside', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { getHouseholdMembersPublic } =
+        await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockImplementation(
+        mockRoster({
+          Responses: {
+            'test-table': [
+              { email: 'alice@example.com', state: 'suppressed', reason: 'hard_bounce' },
+            ],
+          },
+        }) as never
+      );
+
+      const members = await getHouseholdMembersPublic('hh');
+      expect(members.map((m) => m.userId)).toEqual(['u1', 'u2']);
+      expect(members.every((m) => !('email' in m))).toBe(true);
+      // Case-insensitive match: the roster stores `Alice@Example.com`, SES
+      // reports whatever it saw, and the suppression row is normalized.
+      expect(members[0].emailStatus).toBe('undeliverable');
+      expect(members[1].emailStatus).toBe('ok');
+    });
+
+    it('reports `unknown` for every member when the suppression read fails', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { getHouseholdMembersPublic } =
+        await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockImplementation(
+        mockRoster(new Error('DynamoDB unavailable')) as never
+      );
+
+      const members = await getHouseholdMembersPublic('hh');
+      // A read we could not perform is not a clean bill of health. Reporting
+      // `ok` here would publish "everyone is reachable" out of a failure.
+      expect(members.map((m) => m.emailStatus)).toEqual(['unknown', 'unknown']);
+    });
   });
 });

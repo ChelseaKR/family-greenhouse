@@ -66,8 +66,16 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
  * A channel result is explicit about why no provider call happened. Reminder
  * delivery uses `delivered` vs every other state to finalize or release that
  * channel's daily lease without conflating it with a successful sibling.
+ *
+ * `suppressed` means quiet hours (and only quiet hours — it feeds
+ * `dndSuppressedOnly`). `undeliverable` is the different thing that looks the
+ * same from a distance: the recipient's address is on the email suppression
+ * list because it hard-bounced or the recipient complained, so no amount of
+ * waiting will make this channel work. Collapsing the two would let a
+ * permanently dead mailbox masquerade as a user who is asleep.
  */
-export type ChannelDeliveryStatus = 'delivered' | 'failed' | 'suppressed' | 'disabled' | 'skipped';
+export type ChannelDeliveryStatus =
+  'delivered' | 'failed' | 'suppressed' | 'undeliverable' | 'disabled' | 'skipped';
 
 export interface SendOptions {
   /**
@@ -238,13 +246,20 @@ export async function sendToUser(
       channels.email = 'failed';
       work.push(
         emailNotifier
-          .sendEmail({
+          .sendEmailAccepted({
             to: recipient.email,
             subject: payload.title,
             text: payload.url ? `${payload.body}\n\n${payload.url}` : payload.body,
           })
-          .then((sent) => {
-            channels.email = sent ? 'delivered' : 'failed';
+          .then((result) => {
+            // `accepted` is SES custody, not receipt — see emailNotifier. It
+            // is the strongest signal available synchronously, and the marker
+            // logic in reminders.ts is written against exactly that.
+            if (result.accepted) {
+              channels.email = 'delivered';
+              return;
+            }
+            channels.email = result.reason === 'suppressed' ? 'undeliverable' : 'failed';
           })
           .catch((err) => {
             logger.warn({ err, userId: recipient.userId, msg: 'email_failed' }, 'email_failed');

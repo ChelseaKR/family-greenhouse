@@ -420,6 +420,20 @@ export function HouseholdPage() {
                   {member.role === 'admin' ? 'Admin' : 'Member'}
                 </span>
 
+                {/* A member whose address bounced silently stops receiving
+                    every reminder and digest. Without this the household has
+                    no way to find out — the failure looks exactly like health.
+                    Says nothing about the address itself, or about which of a
+                    bounce and a complaint stopped the mail. */}
+                {member.emailStatus === 'undeliverable' && (
+                  <span
+                    className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 ring-1 ring-amber-300/60"
+                    title={t('household.memberEmailUndeliverableHint')}
+                  >
+                    {t('household.memberEmailUndeliverable')}
+                  </span>
+                )}
+
                 {isAdmin && member.userId !== user?.id && (
                   <>
                     <Button

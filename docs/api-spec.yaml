@@ -1332,6 +1332,21 @@ paths:
       tags: [Notifications]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /notifications/email-suppression:
+    delete:
+      summary: Resume email to the caller's own address after a bounce or complaint
+      description: >-
+        Removes the caller's address from the outbound suppression list. The address is taken from
+        the authenticated session, never from the request, so this can only ever un-suppress the
+        caller's own mailbox — including for a spam complaint, where the recipient's own action is
+        the only consent that counts. Rate limited to 5/hour: an address that bounces on every send
+        could otherwise be cleared and re-bounced in a loop. Returns the refreshed preferences,
+        whose `emailStatus` is `ok` / `undeliverable` / `unknown` (`unknown` means the suppression
+        store could not be read and is NOT a synonym for `ok`).
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '429': { description: Too many un-suppression requests }
   /notifications/subscribe:
     post:
       summary: Register a Web Push subscription for browser notifications

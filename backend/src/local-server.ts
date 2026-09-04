@@ -304,6 +304,14 @@ interface PhoneVerificationRecord {
   attempts: number;
 }
 
+/** Mirrors the `EMAIL#{address}/DELIVERY_STATE` row in its suppressed state
+ *  (services/emailSuppression.ts). The mock only models the terminal state —
+ *  the soft-bounce counter has no local trigger to increment it. */
+interface EmailSuppressionRecord {
+  reason: 'hard_bounce' | 'complaint' | 'soft_bounce_limit';
+  suppressedAt: string;
+}
+
 interface PlantPhoto {
   id: string;
   plantId: string;
@@ -401,6 +409,11 @@ export const db = {
   chatReports: new Map<string, ChatReportRecord>(),
   notificationPrefs: new Map<string, NotificationPrefsRecord>(),
   phoneVerifications: new Map<string, PhoneVerificationRecord>(), // userId -> pending code
+  // Suppressed outbound addresses, keyed by the lowercased email —
+  // mirrors EMAIL#<addr>/DELIVERY_STATE in production
+  // (services/emailSuppression.ts). Seeded empty; a dev/e2e run puts an
+  // entry here to exercise the undeliverable surfaces.
+  emailSuppressions: new Map<string, EmailSuppressionRecord>(),
   recapSent: new Set<string>(), // `${userId}|${householdId}|${year}` recipient markers
   reminderSent: new Set<string>(), // `${userId}|${householdId}|${localDate}|${channel}` markers
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
@@ -449,6 +462,7 @@ export function resetDb(): void {
   db.chatReports.clear();
   db.notificationPrefs.clear();
   db.phoneVerifications.clear();
+  db.emailSuppressions.clear();
   db.recapSent.clear();
   db.reminderSent.clear();
   db.pendingConfirmations.clear();
@@ -1376,7 +1390,15 @@ app.get('/households/:id', authMiddleware, requireHousehold, (req, res) => {
 
   res.json({
     ...household,
-    members: membersOf(req.params.id),
+    // `emailStatus` mirrors getHouseholdMembersPublic: deliverability without
+    // the address. The mock has no failing store, so it never reports the
+    // third state (`unknown`) that production returns on a failed lookup.
+    members: membersOf(req.params.id).map((member) => ({
+      ...member,
+      emailStatus: db.emailSuppressions.has(member.email.trim().toLowerCase())
+        ? 'undeliverable'
+        : 'ok',
+    })),
   });
 });
 
@@ -4588,10 +4610,42 @@ const unregisterDeviceSchema = z.object({
   token: z.string().min(16).max(4096),
 });
 
+/**
+ * Mirrors `withEmailDeliverability` in handlers/notifications/handler.ts. The
+ * mock has no failing store, so the third state (`unknown`) is unreachable
+ * here — production reaches it when the suppression row cannot be read.
+ */
+function withEmailDeliverability<T extends object>(
+  preferences: T,
+  email: string
+): T & { emailStatus: 'ok' | 'undeliverable'; emailSuppressionReason: string | null } {
+  const record = db.emailSuppressions.get(email.trim().toLowerCase());
+  return {
+    ...preferences,
+    emailStatus: record ? 'undeliverable' : 'ok',
+    emailSuppressionReason: record ? record.reason : null,
+  };
+}
+
 app.get('/notifications/prefs', authMiddleware, (req, res) => {
   const user = (req as any).user;
   res.json({
-    ...(db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId)),
+    ...withEmailDeliverability(
+      db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId),
+      user.email
+    ),
+    smsAvailable: true,
+  });
+});
+
+app.delete('/notifications/email-suppression', authMiddleware, (req, res) => {
+  const user = (req as any).user;
+  db.emailSuppressions.delete(String(user.email).trim().toLowerCase());
+  res.json({
+    ...withEmailDeliverability(
+      db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId),
+      user.email
+    ),
     smsAvailable: true,
   });
 });
@@ -4631,7 +4685,7 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     updatedAt: new Date().toISOString(),
   };
   db.notificationPrefs.set(user.userId, updated);
-  res.json({ ...updated, smsAvailable: true });
+  res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
 });
 
 app.post(
@@ -4684,7 +4738,7 @@ app.post(
       updatedAt: new Date().toISOString(),
     };
     db.notificationPrefs.set(user.userId, updated);
-    res.json({ ...updated, smsAvailable: true });
+    res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
   }
 );
 

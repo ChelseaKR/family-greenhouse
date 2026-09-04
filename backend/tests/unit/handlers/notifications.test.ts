@@ -39,6 +39,10 @@ vi.mock('../../../src/services/notificationPrefs.js', () => ({
     phoneVerified: true,
   })),
 }));
+vi.mock('../../../src/services/emailSuppression.js', () => ({
+  checkAddress: vi.fn(async () => ({ status: 'sendable' })),
+  clearSuppression: vi.fn(async () => undefined),
+}));
 vi.mock('../../../src/services/householdService.js', () => ({
   getMemberByUserId: vi.fn(async () => ({
     householdId: 'hh-1',
@@ -512,5 +516,102 @@ describe('notifications phone verification routes', () => {
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(400);
     expect(prefs.confirmPhoneVerification).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifications email deliverability', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    // clearAllMocks wipes the module factory's default; restore the healthy
+    // baseline so each test opts INTO the failure it is about.
+    const suppression = await import('../../../src/services/emailSuppression.js');
+    vi.mocked(suppression.checkAddress).mockResolvedValue({ status: 'sendable' });
+  });
+
+  async function readPrefs() {
+    const { getPrefs } = await import('../../../src/handlers/notifications/handler.js');
+    return (await getPrefs(
+      buildEvent({ httpMethod: 'GET', path: '/notifications/prefs' }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+  }
+
+  it("reports the caller's own suppression, with the reason, alongside their prefs", async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const suppression = await import('../../../src/services/emailSuppression.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValue({ userId: 'user-1', email: true } as never);
+    vi.mocked(suppression.checkAddress).mockResolvedValue({
+      status: 'suppressed',
+      state: { email: 'a@b.com', state: 'suppressed', reason: 'complaint' },
+    } as never);
+
+    const res = await readPrefs();
+    const body = JSON.parse(res.body);
+    // The `email` toggle still reads true — that is exactly the state these
+    // two fields exist to make visible.
+    expect(body.email).toBe(true);
+    expect(body.emailStatus).toBe('undeliverable');
+    expect(body.emailSuppressionReason).toBe('complaint');
+    expect(suppression.checkAddress).toHaveBeenCalledWith('a@b.com');
+  });
+
+  it('reports `unknown` — not `ok` — when the suppression store cannot be read', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const suppression = await import('../../../src/services/emailSuppression.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValue({ userId: 'user-1', email: true } as never);
+    vi.mocked(suppression.checkAddress).mockResolvedValue({
+      status: 'unknown',
+      reason: 'lookup_failed',
+    } as never);
+
+    const body = JSON.parse((await readPrefs()).body);
+    expect(body.emailStatus).toBe('unknown');
+    expect(body.emailSuppressionReason).toBeNull();
+  });
+
+  it("clears the suppression for the CALLER'S address, taken from the session", async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const suppression = await import('../../../src/services/emailSuppression.js');
+    const { clearEmailSuppression } =
+      await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValue({ userId: 'user-1', email: true } as never);
+
+    const res = (await clearEmailSuppression(
+      buildEvent({
+        httpMethod: 'DELETE',
+        path: '/notifications/email-suppression',
+        // A body naming somebody else's address must be irrelevant: the
+        // handler reads the address from the verified claims, never the body.
+        body: JSON.stringify({ email: 'victim@elsewhere.com' }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(suppression.clearSuppression).toHaveBeenCalledWith('a@b.com', 'user-1');
+    expect(JSON.parse(res.body).emailStatus).toBe('ok');
+  });
+
+  it('rate limits un-suppression at 5/hour so a bounce loop cannot be driven', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { clearEmailSuppression } =
+      await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValue({ userId: 'user-1', email: true } as never);
+
+    const call = () =>
+      clearEmailSuppression(
+        buildEvent({ httpMethod: 'DELETE', path: '/notifications/email-suppression' }),
+        ctx,
+        () => {}
+      ) as Promise<APIGatewayProxyResult>;
+
+    for (let i = 0; i < 5; i++) expect((await call()).statusCode).toBe(200);
+    expect((await call()).statusCode).toBe(429);
   });
 });
