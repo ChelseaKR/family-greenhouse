@@ -77,6 +77,7 @@ jobs:
         # workflow-triggering ref.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
 
@@ -140,6 +141,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Setup Node.js
@@ -228,6 +230,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
@@ -375,13 +378,20 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Sync to S3
+        # The bucket name reaches the script through env, never through a
+        # `${{ }}` interpolation inside `run:` (zizmor `template-injection`):
+        # interpolation splices the value into the script text before bash
+        # ever sees it. The step above already reads the same output as
+        # $FRONTEND_BUCKET; this makes the two consistent.
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
         run: |
           # Hashed, immutable assets. Every HTML document is excluded here and
           # uploaded below with a no-cache header: the prerendered marketing
           # pages (dist/<route>/index.html) are rebuilt on every deploy, so a
           # 1-year immutable cache would pin stale copy at the edge and in
           # browsers until the URL changed — which it never does.
-          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+          aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
             --delete \
             --cache-control "max-age=31536000,public" \
             --exclude "*.html" \
@@ -393,14 +403,14 @@ jobs:
           # (CloudFront's error response + the service worker's offline
           # navigation fallback). --delete is scoped by the same filters, so a
           # route removed from the sitemap stops being served.
-          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+          aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
             --delete \
             --exclude "*" \
             --include "*.html" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
-          aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
+          aws s3 cp dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
-          aws s3 cp dist/push-handler.js s3://${{ needs.terraform.outputs.frontend_bucket }}/push-handler.js \
+          aws s3 cp dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
       - name: Invalidate CloudFront
@@ -433,6 +443,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
@@ -599,6 +610,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Setup Node.js
@@ -701,6 +713,7 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
@@ -897,8 +910,13 @@ jobs:
 
       - name: Report successful rollback
         if: ${{ success() && steps.verify_rollback.outcome == 'success' }}
+        # Version reaches the script through env, not `${{ }}` interpolation
+        # inside `run:` (zizmor `template-injection`) — the same pattern the
+        # validate job's steps already use.
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          echo "::warning::Production deploy of ${{ needs.validate.outputs.version }} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
+          echo "::warning::Production deploy of ${VERSION} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
 
   notify:
     name: Notify

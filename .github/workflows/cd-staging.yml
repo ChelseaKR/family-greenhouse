@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -78,6 +80,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -138,6 +142,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -188,13 +194,20 @@ jobs:
           path: dist
 
       - name: Sync to S3
+        # The bucket name reaches the script through env, never through a
+        # `${{ }}` interpolation inside `run:` (zizmor `template-injection`):
+        # interpolation splices the value into the script text before bash
+        # ever sees it, so a value containing shell metacharacters would be
+        # executed rather than used as a bucket name.
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
         run: |
           # Hashed, immutable assets. Every HTML document is excluded here and
           # uploaded below with a no-cache header: the prerendered marketing
           # pages (dist/<route>/index.html) are rebuilt on every deploy, so a
           # 1-year immutable cache would pin stale copy at the edge and in
           # browsers until the URL changed — which it never does.
-          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+          aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
             --delete \
             --cache-control "max-age=31536000,public" \
             --exclude "*.html" \
@@ -206,14 +219,14 @@ jobs:
           # (CloudFront's error response + the service worker's offline
           # navigation fallback). --delete is scoped by the same filters, so a
           # route removed from the sitemap stops being served.
-          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+          aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
             --delete \
             --exclude "*" \
             --include "*.html" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
-          aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
+          aws s3 cp dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
-          aws s3 cp dist/push-handler.js s3://${{ needs.terraform.outputs.frontend_bucket }}/push-handler.js \
+          aws s3 cp dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
       - name: Invalidate CloudFront
@@ -239,6 +252,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -295,6 +310,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         # This job holds `id-token: write`; per CICD-24 it stays cache-free.
@@ -342,10 +359,17 @@ jobs:
     if: always()
     steps:
       - name: Deployment notification
+        # Job results reach the script through env rather than `${{ }}`
+        # interpolation inside `run:` (zizmor `template-injection`) — same
+        # rule cd-production.yml's notify job already follows.
+        env:
+          FRONTEND_RESULT: ${{ needs.deploy-frontend.result }}
+          BACKEND_RESULT: ${{ needs.deploy-backend.result }}
+          E2E_RESULT: ${{ needs.e2e-tests.result }}
         run: |
-          if [ "${{ needs.deploy-frontend.result }}" == "success" ] && [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.e2e-tests.result }}" == "success" ]; then
+          if [ "$FRONTEND_RESULT" == "success" ] && [ "$BACKEND_RESULT" == "success" ] && [ "$E2E_RESULT" == "success" ]; then
             echo "Staging deployment successful!"
           else
-            echo "Staging deployment failed! (frontend=${{ needs.deploy-frontend.result }} backend=${{ needs.deploy-backend.result }} e2e=${{ needs.e2e-tests.result }})"
+            echo "Staging deployment failed! (frontend=${FRONTEND_RESULT} backend=${BACKEND_RESULT} e2e=${E2E_RESULT})"
             exit 1
           fi
