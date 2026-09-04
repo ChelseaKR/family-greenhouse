@@ -579,7 +579,32 @@ test.describe('post-deploy smoke', () => {
     assertResponseStatus(householdResponse, 201, 'Household creation');
     activeFixture.householdId = householdIdFromCreateResponse(await householdResponse.json());
 
-    // Successful household creation routes to /dashboard or '/'.
+    // Household creation does NOT land on the dashboard. #394 put the first-run
+    // activation flow in between: a household with no plants yet always routes
+    // to /welcome (see decideFirstRun). This spec only ever runs post-deploy,
+    // so it is the last gate that sees this path before real users do — and a
+    // failure here auto-rolls back the release. Walk the flow rather than
+    // asserting the destination it had before #394.
+    await expect(page).toHaveURL(/\/welcome$/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /add your first plant/i })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Skip the guided one-field plant step deliberately: the whole point of
+    // this test is the FULL plant form below, which is the only path that
+    // exercises presign → S3 PUT → confirm → CDN render.
+    await page.getByRole('button', { name: /skip for now/i }).click();
+
+    // Whoever creates the household is its admin, so the invite step follows.
+    // Asserting it (rather than tolerating either shape) keeps this honest: if
+    // the creator ever stops being an admin, that is a real regression in who
+    // can invite, and this should fail rather than quietly skip ahead.
+    await expect(page.getByRole('heading', { name: /share the care/i })).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByRole('button', { name: /go to my dashboard/i }).click();
+
+    // Now the dashboard, at /dashboard or '/'.
     await expect(page).toHaveURL(/\/(dashboard)?$/, { timeout: 15_000 });
 
     // Dashboard heading is visible (uses the user's first name).
