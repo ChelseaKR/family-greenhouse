@@ -232,6 +232,17 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
   });
   await deleteItems(kioskItems);
 
+  // Plant tags (ADR 0016) use the same secret-token-partition shape as sitter
+  // links. The household PIN row sits in the base partition and is swept below.
+  const plantTagItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#PLANTTAG` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(plantTagItems);
+
   const activityItems = await queryAllItems({
     TableName: TABLE_NAME,
     KeyConditionExpression: 'PK = :pk',
@@ -356,6 +367,33 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
             new UpdateCommand({
               TableName: TABLE_NAME,
               Key: { PK: link.PK, SK: link.SK },
+              UpdateExpression: 'SET #createdBy = :deletedId',
+              ExpressionAttributeNames: { '#createdBy': 'createdBy' },
+              ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },
+              ConditionExpression: 'attribute_exists(PK)',
+            })
+          );
+        }
+      )
+  );
+
+  // Plant tags (ADR 0016): same shape as sitter links — the labels keep
+  // working for the household, but the departed issuer's id is scrubbed.
+  await forEachQueryPage(
+    {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#PLANTTAG` },
+    },
+    (tags) =>
+      mapBounded(
+        tags.filter((tag) => tag.createdBy === userId),
+        async (tag) => {
+          await dynamodb.send(
+            new UpdateCommand({
+              TableName: TABLE_NAME,
+              Key: { PK: tag.PK, SK: tag.SK },
               UpdateExpression: 'SET #createdBy = :deletedId',
               ExpressionAttributeNames: { '#createdBy': 'createdBy' },
               ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },

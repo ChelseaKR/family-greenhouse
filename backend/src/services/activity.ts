@@ -25,6 +25,9 @@ export interface TaskCompletedActivityPayload {
    *  Distinct from viaSitter: nobody is named, and the household needs to be
    *  able to tell a kiosk tap from a person so an unexpected one is visible. */
   viaKiosk?: boolean;
+  /** Completed from a printed plant tag (ADR 0016); `actorName` is the
+   *  display name the scanner typed, e.g. "Grandma". */
+  viaTag?: boolean;
 }
 
 export interface TaskSnoozedActivityPayload {

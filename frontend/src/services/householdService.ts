@@ -249,6 +249,9 @@ export interface TaskCompletedActivityPayload {
   taskType: string;
   notes?: string | null;
   viaSitter?: boolean;
+  /** Completed from a printed plant tag (ADR 0016); `actorName` is the
+   *  display name the scanner typed, e.g. "Grandma". */
+  viaTag?: boolean;
 }
 
 export interface TaskSnoozedActivityPayload {

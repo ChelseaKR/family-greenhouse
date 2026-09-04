@@ -98,6 +98,8 @@ const PetSafePage = lazyNamed(() => import('@/features/petsafe/PetSafePage'), 'P
 const SitPage = lazyNamed(() => import('@/features/sitter/SitPage'), 'SitPage');
 const SitBriefPage = lazyNamed(() => import('@/features/sitter/SitBriefPage'), 'SitBriefPage');
 const KioskPage = lazyNamed(() => import('@/features/kiosk/KioskPage'), 'KioskPage');
+const ScanTagPage = lazyNamed(() => import('@/features/tags/ScanTagPage'), 'ScanTagPage');
+const PlantTagsPage = lazyNamed(() => import('@/features/tags/PlantTagsPage'), 'PlantTagsPage');
 const ChangelogPage = lazyNamed(
   () => import('@/features/changelog/ChangelogPage'),
   'ChangelogPage'
@@ -207,6 +209,10 @@ function App() {
                   no navigation off this page by design — see
                   backend/src/services/kioskService.ts for the threat model. */}
               <Route path="/kiosk/:token" element={<KioskPage />} />
+              {/* Plant-tag scan page (ADR 0016): public by design — the
+                  256-bit token in the path is the only credential, and the
+                  person holding the phone has no account. */}
+              <Route path="/tag/:token" element={<ScanTagPage />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/legal/privacy" element={<PrivacyPage />} />
@@ -242,6 +248,7 @@ function App() {
                   <Route path="/plants/import" element={<ImportPlantsPage />} />
                   <Route path="/plants/:plantId" element={<PlantDetailPage />} />
                   <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/tags" element={<PlantTagsPage />} />
                   <Route path="/chat" element={<ChatPage />} />
                   <Route path="/household" element={<HouseholdPage />} />
                   <Route path="/away-recap" element={<AwayRecapPage />} />

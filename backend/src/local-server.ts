@@ -86,6 +86,11 @@ import {
 import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
+import {
+  registerPlantTagRoutes,
+  type LocalPlantTag,
+  type LocalPlantTagPin,
+} from './local-server-plant-tags.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
 import {
@@ -444,6 +449,8 @@ export const db = {
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
   sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
   calendarTokens: new Map<string, CalendarToken>(), // keyed by token (the secret)
+  plantTags: new Map<string, LocalPlantTag>(), // ADR 0016 — keyed by token (the secret)
+  plantTagPins: new Map<string, LocalPlantTagPin>(), // householdId -> PIN hash, never the PIN
   kioskLinks: new Map<string, KioskLink>(), // keyed by token (the secret)
   // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
   // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
@@ -493,6 +500,8 @@ export function resetDb(): void {
   db.pendingConfirmations.clear();
   db.sitterLinks.clear();
   db.calendarTokens.clear();
+  db.plantTags.clear();
+  db.plantTagPins.clear();
   db.kioskLinks.clear();
   db.upgradeRequests.clear();
   db.mockUploadGrants.clear();
@@ -999,6 +1008,10 @@ app.delete('/me', authMiddleware, (req, res) => {
       for (const [token, link] of db.kioskLinks.entries()) {
         if (link.householdId === m.householdId) db.kioskLinks.delete(token);
       }
+      for (const [token, tag] of db.plantTags.entries()) {
+        if (tag.householdId === m.householdId) db.plantTags.delete(token);
+      }
+      db.plantTagPins.delete(m.householdId);
       for (const [code, invite] of db.invites.entries()) {
         if (invite.householdId === m.householdId) db.invites.delete(code);
       }
@@ -1055,6 +1068,11 @@ app.delete('/me', authMiddleware, (req, res) => {
     for (const link of db.kioskLinks.values()) {
       if (link.householdId === m.householdId && link.createdBy === dbUser.id) {
         link.createdBy = 'deleted-user';
+      }
+    }
+    for (const tag of db.plantTags.values()) {
+      if (tag.householdId === m.householdId && tag.createdBy === dbUser.id) {
+        tag.createdBy = 'deleted-user';
       }
     }
     for (const report of db.chatReports.values()) {
@@ -2757,6 +2775,15 @@ app.delete('/plants/:id', authMiddleware, requireHousehold, (req, res) => {
   }
 
   db.plants.delete(req.params.id);
+
+  // A printed plant tag dies with its plant (mirrors the production handler's
+  // best-effort revoke, ADR 0016).
+  for (const tag of db.plantTags.values()) {
+    if (tag.plantId === req.params.id && tag.status === 'active') {
+      tag.status = 'revoked';
+      tag.revokedAt = new Date().toISOString();
+    }
+  }
 
   // Cascade tasks + photos, like plantService.deletePlant.
   for (const [taskId, task] of db.tasks.entries()) {
@@ -5506,6 +5533,18 @@ app.get(/^\/mock-images\/(.+)$/, (req, res) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.type(image.contentType);
   res.send(image.body);
+});
+
+// ============ PLANT TAGS (ADR 0016) ============
+// Mirrors handlers/plantTags/handler.ts — the routes live in
+// local-server-plant-tags.ts and register here in one call.
+registerPlantTagRoutes(app, {
+  db,
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody,
+  recordActivity,
 });
 
 // ============ FALLBACKS ============

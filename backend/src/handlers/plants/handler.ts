@@ -30,6 +30,7 @@ import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
+import * as plantTagService from '../../services/plantTagService.js';
 import { getPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
@@ -584,6 +585,15 @@ export const deletePlant = createHandler(
     const plant = await plantService.deletePlant(user.householdId!, plantId);
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
+    }
+
+    // A printed tag for a deleted plant must stop resolving (ADR 0016).
+    // Best-effort: the plant is already gone, so a scan would 404 anyway;
+    // this just keeps the row from counting against the household's cap.
+    try {
+      await plantTagService.revokeTagsForPlant(user.householdId!, plantId);
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, plantId }, 'planttag.revoke_on_delete_failed');
     }
 
     audit('plant.deleted', {

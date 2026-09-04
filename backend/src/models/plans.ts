@@ -24,6 +24,12 @@ export interface PlanLimits {
   sitterLinkMaxDays: number;
   /** How many sitter links may be live (active or scheduled) at once. */
   sitterLinksActive: number;
+  /**
+   * How many Plant Tags (ADR 0016) may be ACTIVE at once.
+   * `Number.POSITIVE_INFINITY` means unlimited. Read through
+   * `plantTagAllowance`, never compared against directly.
+   */
+  tags: number;
 }
 
 /**
@@ -43,6 +49,13 @@ export interface PlanFeatures {
    * shared household can produce, served at $0 marginal cost.
    */
   householdToolkit: boolean;
+  /**
+   * Plant Tags (ADR 0016): printable QR labels that let someone without an
+   * account see a plant's last care and complete its due task. `limits.tags`
+   * caps ACTIVE tags per household (Infinity = unlimited); this gates the
+   * surface. Read through `plantTagAllowance`.
+   */
+  plantTags: boolean;
 }
 
 export interface Plan {
@@ -107,8 +120,9 @@ export const PLANS: Record<PlanId, Plan> = {
     maxPlants: 10,
     maxMembers: 6,
     // One live sitter link, a week long: the task list for a weekend away.
-    limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1 },
-    features: { kiosk: false, householdToolkit: false },
+    // No Plant Tags: the printable QR labels start at Garden.
+    limits: { sitterLinkMaxDays: 7, sitterLinksActive: 1, tags: 0 },
+    features: { kiosk: false, householdToolkit: false, plantTags: false },
   },
   garden: {
     id: 'garden',
@@ -124,14 +138,14 @@ export const PLANS: Record<PlanId, Plan> = {
     maxPlants: 500,
     maxMembers: 6,
     // The Away Kit: windows to 90 days, several sitters at once.
-    limits: { sitterLinkMaxDays: 90, sitterLinksActive: 10 },
+    limits: { sitterLinkMaxDays: 90, sitterLinksActive: 10, tags: 50 },
     stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
     lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
     // Annual ($3.33/mo) and lifetime ($149 once) both earn less per month
     // than the tier's $3.48 AI-cost ceiling. Existing subscribers keep them.
     withdrawnIntervals: ['year', 'lifetime'],
-    features: { kiosk: false, householdToolkit: true },
+    features: { kiosk: false, householdToolkit: true, plantTags: true },
   },
   greenhouse: {
     id: 'greenhouse',
@@ -142,13 +156,13 @@ export const PLANS: Record<PlanId, Plan> = {
     annualPrice: 79.99,
     maxPlants: 5000,
     maxMembers: 50,
-    limits: { sitterLinkMaxDays: 90, sitterLinksActive: 25 },
+    limits: { sitterLinkMaxDays: 90, sitterLinksActive: 25, tags: Number.POSITIVE_INFINITY },
     stripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE',
     annualStripePriceEnv: 'STRIPE_PRICE_ID_GREENHOUSE_ANNUAL',
     // Annual ($6.67/mo) earns less per month than the tier's $7.58 AI-cost
     // ceiling. Existing subscribers keep it.
     withdrawnIntervals: ['year'],
-    features: { kiosk: true, householdToolkit: true },
+    features: { kiosk: true, householdToolkit: true, plantTags: true },
   },
 };
 
@@ -229,6 +243,18 @@ function priceAt(plan: Plan, interval: BillingInterval): number | undefined {
  */
 export function isIntervalOffered(plan: Plan, interval: BillingInterval): boolean {
   return priceAt(plan, interval) !== undefined && !isIntervalWithdrawn(plan, interval);
+}
+
+/**
+ * Plant Tags allowance for a plan (ADR 0016): whether the surface is on and
+ * how many ACTIVE tags the household may hold. `max: null` means unlimited —
+ * published that way because `Infinity` does not survive JSON.
+ */
+export function plantTagAllowance(plan: Plan): { enabled: boolean; max: number | null } {
+  return {
+    enabled: plan.features.plantTags,
+    max: Number.isFinite(plan.limits.tags) ? plan.limits.tags : null,
+  };
 }
 
 export interface PlanSummary {
