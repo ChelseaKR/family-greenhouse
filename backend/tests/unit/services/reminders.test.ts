@@ -19,6 +19,13 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
 }));
+// Mocked so the run-summary line can be asserted: it is the only place the
+// hourly scan's household/sent/failed counters exist outside the return value,
+// and it is what the CloudWatch metric filters in
+// infrastructure/modules/monitoring/main.tf read.
+vi.mock('../../../src/utils/logger.js', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 vi.mock('../../../src/services/householdService.js', () => ({
   getHouseholdMembers: vi.fn(),
   listAllHouseholdIds: vi.fn(),
@@ -895,6 +902,35 @@ describe('reminders service', () => {
     // …and the failure is counted, not folded into "processed".
     expect(result.failed).toBe(1);
     expect(notifier.sendToUser).toHaveBeenCalledOnce();
+  });
+
+  // #461. The per-household catch logs at WARN — below every metric filter —
+  // and the handler then returns normally, so an hour in which every household
+  // failed produced no Lambda error, nothing in the DLQ and no data point
+  // anywhere: byte-identical, from the outside, to an hour with nothing due.
+  // These counters have to leave the function as a structured line before any
+  // alarm can be built on them.
+  it('emits a run summary carrying households/sent/failed, so an all-fail hour is countable', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const { remindAllHouseholds } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+
+    vi.mocked(household.listAllHouseholdIds).mockResolvedValue(['hhA', 'hhB']);
+    vi.mocked(tasks.getTasksDueBy).mockRejectedValue(new Error('ddb down'));
+
+    const result = await remindAllHouseholds(NOW);
+    expect(result).toMatchObject({ households: 2, sent: 0, failed: 2 });
+
+    const summary = vi
+      .mocked(logger.info)
+      .mock.calls.map(([fields]) => fields as Record<string, unknown>)
+      .find((fields) => fields?.msg === 'reminders.run_complete');
+    expect(summary).toBeDefined();
+    expect(summary).toMatchObject({ households: 2, sent: 0, failed: 2 });
   });
 
   describe('pest alerts wiring', () => {
