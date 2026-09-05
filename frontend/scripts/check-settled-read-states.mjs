@@ -6,8 +6,8 @@
  *
  * ## What it looks for
  *
- * One syntactic shape, chosen because it is the shape that produced #350 and
- * #351 and half the fixes in #339 / #341 / #347 / #348:
+ * Two syntactic shapes. The first is the shape that produced #350 and #351 and
+ * half the fixes in #339 / #341 / #347 / #348 (`silent-guard`):
  *
  *   const { data } = useQuery(...);   // no isError / error / status bound
  *   ...
@@ -19,6 +19,20 @@
  * (a frost alert, a pet-toxicity banner, a live API key), its absence reads as
  * an all-clear that nobody computed.
  *
+ * The second (`default-literal`, added 2026-09-04 for #456):
+ *
+ *   const { data: spaces = [] } = useQuery(...);   // no outcome field bound
+ *
+ * Same collapse, and strictly harder to see: it happens ONCE, at the
+ * declaration, and is invisible at every one of the dozens of use sites
+ * downstream — there is no `if (!data)` to notice, because the default made
+ * one unnecessary. Seven components read the household's rooms this way, so a
+ * failed `GET /spaces` reached `spaceOverview` as an empty map and filed EVERY
+ * plant under "Unplaced": a household that had spent months organising its
+ * plants into rooms was told, with no error and no hint, that it had organised
+ * nothing. Only a LITERAL default counts — `data: x = fallbackFromProps` is a
+ * deliberate choice with a name attached.
+ *
  * ## What it deliberately does NOT look for
  *
  * This gate is narrow on purpose, because a noisy gate gets baselined into
@@ -28,10 +42,12 @@
  *     often `data === undefined ? unknown : value` AFTER the loading guard
  *     (AnalyticsPage, DashboardPage), which reads no error field at all and
  *     is correct. Demanding `isError` would flag already-correct code.
- *   - It does not catch the coalescing shape (`query.data?.length ?? 0`,
- *     `(plants ?? []).length`) that produced #348 and #349. Detecting that
- *     without false positives needs type information this scanner does not
- *     have. Those remain a review concern; ADR 0010 states the rule for them.
+ *   - It does not catch the coalescing shape at a USE site
+ *     (`query.data?.length ?? 0`, `(plants ?? []).length`) that produced #348
+ *     and #349. Detecting that without false positives needs type information
+ *     this scanner does not have. The declaration-site form of the same idea
+ *     (`data: x = []`) IS caught, because that one is purely syntactic. The
+ *     rest remain a review concern; ADR 0010 states the rule for them.
  *   - It does not judge consequence. Whether a vanished card is a safety
  *     signal or a decorative one is a human call — which is exactly what the
  *     baseline's per-entry reason records.
@@ -57,8 +73,32 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 
 const FRONTEND_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const SRC = path.join(FRONTEND_DIR, 'src');
-const BASELINE_PATH = path.join(FRONTEND_DIR, 'scripts', 'settled-read-states-baseline.json');
+
+/**
+ * `--src <dir>` scans a different tree and `--baseline <file>` diffs against a
+ * different baseline. Both exist so the gate's OWN tests
+ * (`tests/unit/scripts/checkSettledReadStates.test.ts`) can run the real
+ * script against fixtures — a gate with no failing test is a report with a
+ * green tick. Same flags as the backend half.
+ */
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--src') out.src = argv[++i];
+    else if (argv[i] === '--baseline') out.baseline = argv[++i];
+    else {
+      console.error(`Unknown argument: ${argv[i]}`);
+      process.exit(2);
+    }
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const SRC = args.src ? path.resolve(args.src) : path.join(FRONTEND_DIR, 'src');
+const BASELINE_PATH = args.baseline
+  ? path.resolve(args.baseline)
+  : path.join(FRONTEND_DIR, 'scripts', 'settled-read-states-baseline.json');
 
 /**
  * Destructured names that mean the component reads the query's outcome, not
@@ -125,6 +165,29 @@ function findSilentGuard(fn, local, sourceFile) {
   return hit;
 }
 
+/**
+ * `const { data: x = [] } = useQuery(...)` — a literal default bound at the
+ * destructure. ADR 0010 named `?? []` as out of scope; this form is the same
+ * idea and strictly harder to see, because the coalescing happens ONCE at the
+ * declaration and is invisible at every use site downstream.
+ *
+ * Only a literal counts. `data: x = fallbackFromProps` is a deliberate,
+ * reviewable choice with a name attached; `= []` is the reflex.
+ */
+function isLiteralDefault(init) {
+  if (!init) return false;
+  return (
+    ts.isArrayLiteralExpression(init) ||
+    ts.isObjectLiteralExpression(init) ||
+    ts.isNumericLiteral(init) ||
+    ts.isStringLiteral(init) ||
+    ts.isNoSubstitutionTemplateLiteral(init) ||
+    init.kind === ts.SyntaxKind.TrueKeyword ||
+    init.kind === ts.SyntaxKind.FalseKeyword ||
+    init.kind === ts.SyntaxKind.NullKeyword
+  );
+}
+
 /** rel path -> findings */
 const findings = new Map();
 let scanned = 0;
@@ -157,11 +220,31 @@ for (const file of sourceFiles(SRC)) {
       const dataElement = elements.find((el) => (el.propertyName ?? el.name).getText() === 'data');
       if (dataElement && !bound.some((name) => OUTCOME_KEYS.has(name))) {
         const local = dataElement.name.getText();
-        const fn = enclosingFunction(node);
-        const guard = fn && findSilentGuard(fn, local, sourceFile);
-        if (guard) {
-          const key = `${rel}::${local}`;
-          if (!findings.has(key)) findings.set(key, { ...guard, key });
+        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+        if (isLiteralDefault(dataElement.initializer)) {
+          const key = `${rel}::${local}::default-literal`;
+          if (!findings.has(key)) {
+            findings.set(key, {
+              key,
+              line,
+              rule: 'default-literal',
+              detail: `data: ${local} = ${dataElement.initializer.getText()}`,
+            });
+          }
+        } else {
+          const fn = enclosingFunction(node);
+          const guard = fn && findSilentGuard(fn, local, sourceFile);
+          if (guard) {
+            const key = `${rel}::${local}::silent-guard`;
+            if (!findings.has(key)) {
+              findings.set(key, {
+                ...guard,
+                key,
+                rule: 'silent-guard',
+                detail: `if (${guard.condition}) return null`,
+              });
+            }
+          }
         }
       }
     }
@@ -184,20 +267,39 @@ if (added.length === 0 && stale.length === 0) {
   process.exit(0);
 }
 
-if (added.length > 0) {
+const addedGuards = added.filter((f) => f.rule === 'silent-guard');
+const addedDefaults = added.filter((f) => f.rule === 'default-literal');
+
+if (addedGuards.length > 0) {
   console.error(
     'A query result is read as data only, and a falsy `data` renders nothing.\n' +
       'Still-in-flight, settled-empty, and failed then look identical to the reader,\n' +
       'and a card that carries a warning goes missing without saying so. See ADR 0010\n' +
       '(docs/adr/0010-settled-read-states.md).\n'
   );
-  for (const f of added) {
-    console.error(`  - ${f.key}  (line ${f.line}: if (${f.condition}) return null)`);
-  }
+  for (const f of addedGuards) console.error(`  - ${f.key}  (line ${f.line}: ${f.detail})`);
   console.error(
     '\nEither give the three states distinct renderings, or add the entry to\n' +
       'frontend/scripts/settled-read-states-baseline.json with the reason its\n' +
       'absence cannot be mistaken for an all-clear.\n'
+  );
+}
+
+if (addedDefaults.length > 0) {
+  console.error(
+    'A query result is defaulted to a literal at the destructure, with no outcome\n' +
+      'field bound. A failed read then reaches every use site as an empty list (or a\n' +
+      'zero, or a false) that a genuine empty result also produces — and the collapse\n' +
+      'is invisible at all of them, because it happened once at the declaration.\n' +
+      'This is the shape that told a household with seven rooms that every plant was\n' +
+      '"Unplaced" (#456). See ADR 0010.\n'
+  );
+  for (const f of addedDefaults) console.error(`  - ${f.key}  (line ${f.line}: ${f.detail})`);
+  console.error(
+    '\nBind the outcome — `isError` / `status` / `error` — and render the settled-failed\n' +
+      'state in words, or read through a hook that returns a discriminated result (see\n' +
+      '`src/hooks/useSpaces.ts`). If the emptiness genuinely asserts nothing, add the\n' +
+      'entry to frontend/scripts/settled-read-states-baseline.json with the reason.\n'
   );
 }
 

@@ -51,8 +51,8 @@ import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { formatRelativeDay } from '@/i18n/format';
 import { toast } from '@/store/toastStore';
 import { PlantImage } from '@/components/PlantImage';
-import { spaceService } from '@/services/spaceService';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { useSpaces } from '@/hooks/useSpaces';
+import { plantLocationLabel } from '@/utils/spaces';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { householdService } from '@/services/householdService';
 import { seasonalHomeSuggestion } from './seasonalHomes';
@@ -94,10 +94,7 @@ export function PlantDetailPage() {
     queryFn: () => plantService.getPlant(plantId!),
     enabled: !!plantId,
   });
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-  });
+  const { spaces, byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
   const { data: household, isFetched: householdLoaded } = useQuery({
     queryKey: ['household', householdId],
     queryFn: () => householdService.getHousehold(householdId!),
@@ -228,7 +225,6 @@ export function PlantDetailPage() {
 
   const seasonalSuggestion = seasonalHomeSuggestion(plant, spaces, household?.location?.lat);
   const hasSeasonalHomes = Boolean(plant.summerSpaceId || plant.winterSpaceId);
-  const spacesById = spaceMap(spaces);
 
   return (
     <div className="space-y-6">
@@ -364,7 +360,13 @@ export function PlantDetailPage() {
             {(plant.spaceId || plant.location) && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">Space</dt>
-                <dd className="text-sm text-gray-900">{plantLocationLabel(plant, spacesById)}</dd>
+                <dd className="text-sm text-gray-900">
+                  {plantLocationLabel(
+                    plant,
+                    spacesById,
+                    spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced')
+                  )}
+                </dd>
               </div>
             )}
             {plant.summerSpaceId && (

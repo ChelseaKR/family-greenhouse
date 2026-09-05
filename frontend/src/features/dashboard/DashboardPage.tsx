@@ -48,8 +48,8 @@ import { Alert } from '@/components/Alert';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { PlantImage } from '@/components/PlantImage';
-import { spaceService } from '@/services/spaceService';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { useSpaces } from '@/hooks/useSpaces';
+import { plantLocationLabel } from '@/utils/spaces';
 import { TaskLocation } from '@/components/TaskLocation';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
@@ -80,12 +80,10 @@ export function DashboardPage() {
     queryFn: taskService.getUpcomingTasks,
     enabled: Boolean(householdId),
   });
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-    enabled: Boolean(householdId),
-  });
-  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+  const { byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
+  // A failed rooms read must not render as "Unplaced" — that is a placement
+  // claim nobody computed. `locationUnknown` says which of the two it is.
+  const unplacedLabel = spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
 
   const {
     data: plants,
@@ -252,8 +250,8 @@ export function DashboardPage() {
                 task={task}
                 locationLabel={
                   plantsById.has(task.plantId)
-                    ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById)
-                    : t('spaces.unplaced')
+                    ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
+                    : unplacedLabel
                 }
                 onComplete={careRuleGate.request}
                 isCompleting={
@@ -319,7 +317,7 @@ export function DashboardPage() {
                 </div>
                 <p className="text-sm font-medium text-ink truncate">{plant.name}</p>
                 <p className="text-xs text-gray-600 truncate">
-                  {plantLocationLabel(plant, spacesById)}
+                  {plantLocationLabel(plant, spacesById, unplacedLabel)}
                 </p>
               </Link>
             ))}

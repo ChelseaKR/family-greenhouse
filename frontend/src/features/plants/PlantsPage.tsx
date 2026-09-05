@@ -24,16 +24,16 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useSpaces } from '@/hooks/useSpaces';
 import { BulkApplyTemplateDialog } from './BulkApplyTemplateDialog';
 import { PlantImage } from '@/components/PlantImage';
 import { PlantStatusBadge } from './PlantLineageCard';
-import { spaceService } from '@/services/spaceService';
 import { taskService } from '@/services/taskService';
 import { householdService } from '@/services/householdService';
 import { SpaceBrowseView } from './SpaceBrowseView';
 import { SpaceManagerPanel } from './SpaceManagerPanel';
 import { MovePlantsDialog } from './MovePlantsDialog';
-import { matchesSpaceFilter, plantLocationLabel, spaceMap, type SpaceFilter } from '@/utils/spaces';
+import { matchesSpaceFilter, plantLocationLabel, type SpaceFilter } from '@/utils/spaces';
 
 type ViewMode = 'grid' | 'list' | 'spaces';
 
@@ -65,11 +65,7 @@ export function PlantsPage() {
     enabled: Boolean(householdId),
   });
 
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-    enabled: Boolean(householdId),
-  });
+  const { spaces, byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
   const shouldLoadSpaceOverview = viewMode === 'spaces' && view === 'active';
   const {
     data: spaceTasks = [],
@@ -85,7 +81,6 @@ export function PlantsPage() {
     queryFn: () => householdService.getHousehold(householdId!),
     enabled: shouldLoadSpaceOverview && Boolean(householdId),
   });
-  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
 
   const filteredPlants = useMemo(() => {
     const q = searchQuery.toLowerCase();
@@ -389,7 +384,11 @@ export function PlantsPage() {
                   <p className="text-xs text-gray-600 truncate italic">{plant.species}</p>
                 )}
                 <p className="text-xs text-gray-600 truncate mt-1">
-                  {plantLocationLabel(plant, spacesById)}
+                  {plantLocationLabel(
+                    plant,
+                    spacesById,
+                    spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced')
+                  )}
                 </p>
               </div>
             </Link>
@@ -405,6 +404,7 @@ export function PlantsPage() {
           tasksLoading={spaceTasksLoading}
           tasksError={spaceTasksError}
           showCareOverview={view === 'active'}
+          spacesUnavailable={spacesUnavailable}
         />
       ) : (
         <Card variant="paper" padding="none">
@@ -436,7 +436,14 @@ export function PlantsPage() {
                       {view === 'past' && <PlantStatusBadge status={plant.status ?? 'active'} />}
                     </div>
                     <p className="text-sm text-gray-600">
-                      {[plant.species, plantLocationLabel(plant, spacesById)]
+                      {[
+                        plant.species,
+                        plantLocationLabel(
+                          plant,
+                          spacesById,
+                          spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced')
+                        ),
+                      ]
                         .filter(Boolean)
                         .join(' • ') || 'No details'}
                     </p>
