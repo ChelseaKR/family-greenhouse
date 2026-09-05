@@ -727,3 +727,63 @@ describe('gate-census: counting the gates on this machine (#596)', () => {
     expect(() => census([], { GATE_PEERS: 'many' })).toThrow();
   });
 });
+
+/**
+ * The third of #596's fix directions, and the smallest: a run whose failures
+ * are all deadlines, on a machine that is oversubscribed, can say so. It does
+ * not change the result — from inside the runner a starved gate and a broken
+ * change are indistinguishable, and guessing would be the "gate that cannot
+ * fail" defect this file exists to prevent. It changes what the reader is
+ * told, which is the difference between a gate that looks like it is lying
+ * about your change and one that says it was busy and how to check.
+ */
+describe('run-gate: it can tell a starved run from a broken one, without excusing either (#596)', () => {
+  /** A step that fails the way a starved jsdom test does. */
+  const TIMED_OUT =
+    'node -e "console.error(\'Error: Test timed out in 15000ms.\'); process.exit(1)"';
+  /** Narrowed by 64 gate runs from a ceiling of 64: oversubscribed anywhere. */
+  const CROWDED = { args: ['--jobs', '64'], env: { GATE_PEERS: '64' } };
+
+  it('names the contention when every failure is a deadline and the machine is shared', () => {
+    const { code, out } = runGate({
+      scripts: { t: TIMED_OUT },
+      wsScripts: { w: PASSES },
+      steps: [step('slow', 't', { weight: 2 }), wsStep('gamma', 'w')],
+      ...CROWDED,
+    });
+
+    expect(out).toContain('Every failure above is a timeout');
+    expect(out).toContain('64 quality gates on it');
+    // And it does not soften the result by one degree.
+    expect(code).toBe(1);
+    expect(out).toContain('gate FAILED');
+    expect(out).toContain('the push is still refused');
+  });
+
+  it('says nothing about contention for a failure that is not a deadline', () => {
+    const { code, out } = runGate({
+      scripts: { f: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [step('broken', 'f', { weight: 2 }), wsStep('gamma', 'w')],
+      ...CROWDED,
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('the thing is wrong');
+    expect(out).not.toContain('Every failure above is a timeout');
+  });
+
+  it('says nothing when only SOME of the failures are deadlines', () => {
+    // One real regression in the run is enough: the reader is owed a report
+    // about their change, not an explanation about the machine.
+    const { code, out } = runGate({
+      scripts: { t: TIMED_OUT, f: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [step('slow', 't', { weight: 2 }), step('broken', 'f'), wsStep('gamma', 'w')],
+      ...CROWDED,
+    });
+
+    expect(code).toBe(1);
+    expect(out).not.toContain('Every failure above is a timeout');
+  });
+});

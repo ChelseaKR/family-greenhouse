@@ -368,40 +368,42 @@ const STARVATION_SIGNATURES = [
  * difference between a gate that looks like it is lying about your change and
  * a gate that says it was busy and how to check.
  *
- * Returns null unless BOTH conditions hold, so a real regression on a quiet
- * machine never sees it.
+ * Both halves have to hold, so a real regression on a quiet machine never sees
+ * it: every failure is a timeout, AND the machine is oversubscribed. The
+ * second is true either because the load average is above the core count, or
+ * because the census already narrowed this gate's pool for other gate runs —
+ * two independent readings of the same thing, and a gate that was narrowed
+ * knows it without having to interpret a load average.
+ *
+ * @param {Array<{ output: string }>} failed
+ * @param {{ gates: number, narrowed: boolean }} machine
  */
-function starvationNote(failed) {
+function starvationNote(failed, machine) {
   if (failed.length === 0) return null;
   const load = loadavg()[0];
-  if (!(load > CORES)) return null;
+  if (!(load > CORES) && !machine.narrowed) return null;
   if (!failed.every((r) => STARVATION_SIGNATURES.some((re) => re.test(r.output)))) return null;
 
-  let gates = 1;
-  try {
-    gates = countPeers().peers;
-  } catch {
-    // The count is decoration here; its absence must not swallow the report.
-  }
-
-  const lines = [
+  return [
     '',
-    `Every failure above is a timeout, and this machine is at load average ${load.toFixed(
-      1
-    )} on ${plural(CORES, 'core')}${gates > 1 ? `, with ${plural(gates, 'gate run')} on it` : ''}.`,
-    'That is the shape of a starved gate (#596): under that much contention a jsdom',
-    'render-and-query test waits for a CPU slice, not for the code under test, and a',
-    'vitest worker can miss a 60s START deadline that no setting reaches.',
+    'Every failure above is a timeout, and this machine is oversubscribed:',
+    `${plural(CORES, 'core')}, a load average of ${load.toFixed(1)}, and ${plural(
+      machine.gates,
+      'quality gate'
+    )} on it.`,
+    'That is the shape of a starved gate (#596): under contention a jsdom',
+    'render-and-query test waits for a CPU slice rather than for the code under test,',
+    'and a vitest worker can miss a 60s START deadline that no setting reaches.',
     '',
-    'This is still a failure and the push is still refused. But before you look for',
-    'the bug in your change, run the named file on its own — if it passes alone, the',
-    'gate was busy rather than wrong:',
+    'This is still a failure and the push is still refused — from here, a starved',
+    'gate and a broken change look the same. But before you go looking for the bug',
+    'in your change, run the file the failure names on its own. If it passes alone,',
+    'the gate was busy rather than wrong:',
     '',
-    '    cd frontend && ./node_modules/.bin/vitest run <the file the failure names>',
+    '    cd frontend && ./node_modules/.bin/vitest run <that file>',
     '',
-    '`node scripts/gate-census.mjs` shows what else is running.',
-  ];
-  return lines.join('\n');
+    '`node scripts/gate-census.mjs` shows what else is on the machine.',
+  ].join('\n');
 }
 
 async function main() {
@@ -540,7 +542,7 @@ async function main() {
     )}: ${failed.map((r) => r.step.id).join(', ')}`
   );
 
-  const note = starvationNote(failed);
+  const note = starvationNote(failed, { gates: sharing, narrowed: limit < ceiling });
   if (note) console.error(c.dim(note));
 
   return 1;

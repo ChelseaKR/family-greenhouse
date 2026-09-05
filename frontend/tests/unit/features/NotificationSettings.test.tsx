@@ -586,7 +586,7 @@ describe('NotificationSettings', () => {
     vi.mocked(notificationService.updatePreferences).mockResolvedValue(prefs({ browser: false }));
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
       expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
@@ -630,7 +630,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
       expect(
         await screen.findByText('Browser notifications disabled on this device.')
       ).toBeInTheDocument();
@@ -673,7 +673,7 @@ describe('NotificationSettings', () => {
     vi.mocked(notificationService.unsubscribe).mockRejectedValue(new Error('offline'));
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
@@ -716,7 +716,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
@@ -745,7 +745,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       expect(
         await screen.findByText('Browser notifications disabled on this device.')
