@@ -129,6 +129,21 @@ export interface PlantSpace {
   updatedAt: string;
 }
 
+/**
+ * Where a plant's `species` string came from.
+ *
+ *  - `user`       — a person typed or kept it.
+ *  - `identified` — a photo-identification candidate the user accepted. It is
+ *                   a model's guess, and care advice derived from it (watering
+ *                   cadence, light, pet toxicity) inherits that uncertainty.
+ *  - `catalog`    — picked from the server-side species catalog.
+ *
+ * `null`/absent means unknown, which is the honest value for every row written
+ * before this field existed. It is deliberately not backfilled to `user`: that
+ * would assert a provenance nobody recorded.
+ */
+export type SpeciesSource = 'user' | 'identified' | 'catalog';
+
 export interface Plant {
   id: string;
   householdId: string;
@@ -166,6 +181,13 @@ export interface Plant {
    * from the trusted Perenual record referenced by `perenualSpeciesId`.
    */
   canonicalSpecies?: string | null;
+  /**
+   * Provenance of `species`. Server-derived on the same footing as
+   * `canonicalSpecies`: clients never send this enum, the backend decides it
+   * from which path supplied the name (see handlers/plants/handler.ts
+   * #deriveSpeciesSource). Null/absent on legacy rows = unknown, not `user`.
+   */
+  speciesSource?: SpeciesSource | null;
   /** Propagation lineage: the plant this one was cut from. Always within
    *  the same household; null/absent for plants that aren't cuttings. The
    *  parent may itself die or be given away — the link is history, not a

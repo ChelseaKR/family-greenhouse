@@ -449,6 +449,13 @@
         "sweet": "Dulce"
       }
     },
+    "identify": {
+      "lowConfidenceTitle": "No es una coincidencia fiable",
+      "lowConfidenceBody": "La mejor conjetura solo tiene un {{percent}}% de certeza, por debajo del {{floor}}% que consideramos una coincidencia. Todas las opciones siguen aquí y puedes usarlas — compruébalas antes con la planta. La especie que elijas determina los consejos de riego, luz y seguridad para mascotas de esta planta.",
+      "candidate": "{{scientificName}} • {{percent}}% de certeza",
+      "use": "Usar",
+      "fromPhoto": "Identificada a partir de una foto"
+    },
     "identifyFromPhoto": "Identificar desde foto",
     "status": {
       "active": "Activa",

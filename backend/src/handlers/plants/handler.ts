@@ -22,6 +22,7 @@ import {
   CreateSpaceInput,
   UpdateSpaceInput,
 } from '../../models/schemas.js';
+import type { SpeciesSource } from '../../models/types.js';
 import {
   IMAGE_CONTENT_TYPES,
   MAX_IMAGE_BYTES,
@@ -128,6 +129,82 @@ async function canonicalSpeciesForUpdate(
     return undefined;
   }
   return null;
+}
+
+/**
+ * Decide `speciesSource` from the shape of the request. Clients send names and
+ * ids; the enum is only ever written here.
+ *
+ * Precedence is deliberate: an accepted photo identification beats a catalog
+ * id, because accepting a suggestion in the UI ALSO resolves that name against
+ * the catalog. Preferring `catalog` would relabel exactly the case this field
+ * exists to expose — a model's guess — as a catalog fact.
+ *
+ * No species name means no provenance to record: `null`, not `'user'`.
+ */
+function deriveSpeciesSource(body: {
+  species?: string | null;
+  identifiedSpecies?: string;
+  perenualSpeciesId?: number | null;
+}): SpeciesSource | null {
+  const name = body.species?.trim();
+  if (!name) return null;
+  const claimed = body.identifiedSpecies?.trim();
+  if (claimed && claimed.toLowerCase() === name.toLowerCase()) return 'identified';
+  if (body.perenualSpeciesId) return 'catalog';
+  return 'user';
+}
+
+/**
+ * Provenance for a new plant.
+ *
+ * A cutting arrives with its parent's species prefilled, which nobody stated
+ * and nothing identified — it was inherited. Calling that `'user'` would
+ * invent a provenance, so a cutting that keeps its parent's species keeps the
+ * parent's provenance too (including `null`, which is honest for a parent
+ * whose own origin was never recorded). Anything the person actually chose on
+ * the form — a photo identification, a catalog pick, a different name typed in
+ * — is theirs and wins.
+ */
+function speciesSourceForCreate(
+  body: { species?: string | null; identifiedSpecies?: string; perenualSpeciesId?: number | null },
+  parentPlant: { species?: string | null; speciesSource?: SpeciesSource | null } | null
+): SpeciesSource | null {
+  const derived = deriveSpeciesSource(body);
+  if (derived !== 'user' || !parentPlant) return derived;
+  const inherited = (parentPlant.species ?? '').trim().toLowerCase();
+  const chosen = (body.species ?? '').trim().toLowerCase();
+  if (!inherited || inherited !== chosen) return derived;
+  return parentPlant.speciesSource ?? null;
+}
+
+/**
+ * What `speciesSource` an update should write, or `undefined` to leave it
+ * untouched.
+ *
+ * Provenance belongs to the NAME, so it is rewritten only when the name
+ * actually changes — or when this write carries an identification claim for
+ * it. The edit form re-sends `species` unchanged whenever any other field is
+ * edited; recomputing on every such write would quietly relabel a photo
+ * identification as something a person stated, which is the audit trail this
+ * field exists to keep.
+ */
+async function speciesSourceForUpdate(
+  householdId: string,
+  plantId: string,
+  body: { species?: string | null; identifiedSpecies?: string; perenualSpeciesId?: number | null }
+): Promise<SpeciesSource | null | undefined> {
+  if (body.species === undefined) return undefined;
+  const next = deriveSpeciesSource(body);
+  // An explicit identification claim is always about this write, so it always
+  // lands (re-identifying to the same name still re-dates the provenance).
+  if (body.identifiedSpecies !== undefined) return next;
+  const current = await plantService.getPlant(householdId, plantId);
+  if (!current) return next; // missing plant 404s downstream; nothing is written
+  const before = (current.species ?? '').trim().toLowerCase();
+  const after = (body.species ?? '').trim().toLowerCase();
+  if (before === after) return undefined;
+  return next;
 }
 
 // Hop cap on the ancestor-chain walk in updatePlant's cycle guard — see there.
@@ -327,6 +404,8 @@ export const createPlant = createHandler(
         {
           ...validatedBody,
           ...(canonicalSpecies !== undefined ? { canonicalSpecies } : {}),
+          // Server-derived, never taken from the body (see deriveSpeciesSource).
+          speciesSource: speciesSourceForCreate(validatedBody, parentPlant),
         },
         user.householdId!,
         user.userId,
@@ -555,10 +634,11 @@ export const updatePlant = createHandler(
         plantId,
         validatedBody
       );
+      const speciesSource = await speciesSourceForUpdate(user.householdId!, plantId, validatedBody);
       plant = await plantService.updatePlant(
         user.householdId!,
         plantId,
-        { ...validatedBody, canonicalSpecies },
+        { ...validatedBody, canonicalSpecies, speciesSource },
         limitOf(plan, 'plants')
       );
     } catch (err) {

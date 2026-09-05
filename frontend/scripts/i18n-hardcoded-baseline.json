@@ -26,7 +26,7 @@
     "features/household/SitterLinksCard.tsx": 5,
     "features/landing/LandingPage.tsx": 41,
     "features/petsafe/PetSafePage.tsx": 10,
-    "features/plants/AddPlantPage.tsx": 18,
+    "features/plants/AddPlantPage.tsx": 16,
     "features/plants/AddTaskModal.tsx": 11,
     "features/plants/BulkApplyTemplateDialog.tsx": 10,
     "features/plants/CareGuidanceCard.tsx": 4,

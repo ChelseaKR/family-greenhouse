@@ -181,7 +181,8 @@ describe('plants handler — propagation + shares', () => {
       const res = (await createPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(201);
       expect(plantService.createPlant).toHaveBeenCalledWith(
-        { name: 'Cutting', parentPlantId: PARENT_ID },
+        // No species on the cutting form → provenance is unknown, not 'user'.
+        { name: 'Cutting', parentPlantId: PARENT_ID, speciesSource: null },
         'hh-1',
         'user-1',
         200

@@ -75,6 +75,31 @@ describe('plants identify handler', () => {
     expect(JSON.parse(res.body).suggestions).toHaveLength(1);
   });
 
+  it('passes the confidence floor and the low-confidence verdict through to the client (#344)', async () => {
+    const plantIdentification = await import('../../../src/services/plantIdentification.js');
+    const { identify } = await import('../../../src/handlers/plants/identify.js');
+    vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+      configured: true,
+      suggestions: [
+        {
+          scientificName: 'Peperomia obtusifolia',
+          commonName: 'Baby rubber plant',
+          probability: 0.18,
+        },
+      ],
+      confidenceFloor: 0.3,
+      lowConfidence: true,
+    });
+    const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.lowConfidence).toBe(true);
+    expect(body.confidenceFloor).toBe(0.3);
+    // Demoted, never filtered: the weak candidate still reaches the client, so
+    // an empty list keeps meaning only "nothing came back".
+    expect(body.suggestions).toHaveLength(1);
+  });
+
   it('accepts a schema-in-spec image close to the 350,000-char cap (regression: bodySizeGuard used to reject these with a 413 before the schema ever ran)', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');

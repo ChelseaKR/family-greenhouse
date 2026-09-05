@@ -303,6 +303,9 @@ describe('plantService', () => {
         tags: [],
         perenualSpeciesId: null,
         canonicalSpecies: null,
+        // Unknown provenance, not an assumed 'user' — legacy rows genuinely
+        // never recorded where their species came from (#344).
+        speciesSource: null,
         status: 'active',
         statusChangedAt: null,
         parentPlantId: null,

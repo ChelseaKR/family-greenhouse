@@ -97,6 +97,7 @@ import {
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
 import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import { IDENTIFICATION_CONFIDENCE_FLOOR } from './services/plantIdentification.js';
 import { analyticsWindow } from './services/analyticsWindow.js';
 // Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
 import { computeCoverage } from './services/coverageMath.js';
@@ -3532,18 +3533,25 @@ app.post('/plants/identify', authMiddleware, validateBody(identifySchema), async
     });
     if (!r.ok) return res.status(502).json({ message: `plant.id ${r.status}` });
     const data: any = await r.json();
+    // Sort before slicing and flag a weak top candidate, exactly as
+    // services/plantIdentification.ts does — the dev server must not make the
+    // ordering assumption production stopped making.
     const suggestions = (data?.result?.classification?.suggestions ?? [])
-      .slice(0, 5)
       .map((s: any) => ({
         scientificName: s.name,
         commonName: s.details?.common_names?.[0] ?? null,
         probability: s.probability,
-      }));
+      }))
+      .sort((a: any, b: any) => b.probability - a.probability)
+      .slice(0, 5);
     const used = meter.used + 1;
     identifyUsage.set(meter.key, used);
     res.json({
       configured: true,
       suggestions,
+      confidenceFloor: IDENTIFICATION_CONFIDENCE_FLOOR,
+      lowConfidence:
+        suggestions.length > 0 && suggestions[0].probability < IDENTIFICATION_CONFIDENCE_FLOOR,
       usage: { used, allowance: meter.allowance, meteringEnabled: meter.meteringEnabled },
     });
   } catch (err: any) {
