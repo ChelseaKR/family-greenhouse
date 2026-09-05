@@ -746,6 +746,21 @@ describe('runChatTurn', () => {
     expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'rejects with 402 when the Garden subscription is %s — each turn spends Bedrock tokens',
+    async (status) => {
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      });
+      await expect(
+        runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+      ).rejects.toMatchObject({ statusCode: 402 });
+      expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
+      expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
+    }
+  );
+
   it.each(['garden', 'greenhouse'])(
     'allows the turn to proceed for a %s household',
     async (planId) => {

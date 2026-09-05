@@ -916,5 +916,147 @@ describe('billing handler', () => {
       );
       expect(billing.applyStripeEvent).toHaveBeenCalledWith(fakeEvent);
     });
+
+    /**
+     * THE FAILURE CONTRACT.
+     *
+     * When the entitlement write fails, the webhook must answer 5xx. A 200
+     * tells Stripe the event was handled: it stops retrying and deletes it
+     * from the delivery queue. The customer's card has already been charged.
+     * Nothing else in the system re-derives entitlement from Stripe, so that
+     * household is a paying customer with a free-tier row, permanently, and
+     * the only trace is a log line.
+     *
+     * The handler already behaves correctly — it simply lets the error
+     * propagate. Nothing pinned that, so any future `try { … } catch { return
+     * 200 }` "fix for noisy webhook errors" would look like an improvement and
+     * silently destroy the retry guarantee. That is what these tests exist to
+     * stop.
+     */
+    it('returns 500 (never 200) when applying the entitlement write fails', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { webhook } = await import('../../../src/handlers/billing/handler.js');
+
+      const fakeEvent = { id: 'evt_fail', type: 'checkout.session.completed' };
+      vi.mocked(billing.getStripe).mockReturnValueOnce({
+        webhooks: { constructEvent: vi.fn(() => fakeEvent) },
+      } as unknown as ReturnType<typeof billing.getStripe>);
+      vi.mocked(billing.applyStripeEvent).mockRejectedValueOnce(
+        new Error('DynamoDB ProvisionedThroughputExceededException')
+      );
+
+      const res = (await webhook(
+        buildEvent({
+          body: '{"id":"evt_fail","type":"checkout.session.completed"}',
+          headers: { 'stripe-signature': 't=1,v1=goodsig' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBeGreaterThanOrEqual(500);
+      // A 200 here would end Stripe's retries. Assert the acknowledgement
+      // body is absent too, so a handler that returns 200 with a different
+      // shape cannot slip through the status assertion alone.
+      expect(res.body).not.toContain('received');
+      expect(billing.applyStripeEvent).toHaveBeenCalledWith(fakeEvent);
+    });
+
+    it.each([
+      ['a DynamoDB conditional failure', 'ConditionalCheckFailedException'],
+      ['a plain runtime error', 'Cannot read properties of undefined'],
+      ['a Stripe SDK error', 'StripeConnectionError: connection aborted'],
+    ])('returns 5xx, not 200, for %s from applyStripeEvent', async (_label, message) => {
+      const billing = await import('../../../src/services/billing.js');
+      const { webhook } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.getStripe).mockReturnValueOnce({
+        webhooks: { constructEvent: vi.fn(() => ({ id: 'evt_x', type: 'x' })) },
+      } as unknown as ReturnType<typeof billing.getStripe>);
+      vi.mocked(billing.applyStripeEvent).mockRejectedValueOnce(new Error(message));
+
+      const res = (await webhook(
+        buildEvent({
+          body: '{"id":"evt_x"}',
+          headers: { 'stripe-signature': 't=1,v1=goodsig' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBeGreaterThanOrEqual(500);
+      expect(res.body).not.toContain('received');
+    });
+
+    it('does not leak the internal failure message to the Stripe response body', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { webhook } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.getStripe).mockReturnValueOnce({
+        webhooks: { constructEvent: vi.fn(() => ({ id: 'evt_leak', type: 'x' })) },
+      } as unknown as ReturnType<typeof billing.getStripe>);
+      vi.mocked(billing.applyStripeEvent).mockRejectedValueOnce(
+        new Error('table family-greenhouse-production-main is throttled')
+      );
+
+      const res = (await webhook(
+        buildEvent({
+          body: '{"id":"evt_leak"}',
+          headers: { 'stripe-signature': 't=1,v1=goodsig' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body ?? '').not.toContain('family-greenhouse-production-main');
+    });
+  });
+
+  describe('GET /billing/me — meters show the caps that are actually enforced', () => {
+    it.each(['past_due', 'unpaid', 'incomplete'])(
+      'reports Seedling caps for a %s household still sitting on a paid planId',
+      async (status) => {
+        const billing = await import('../../../src/services/billing.js');
+        const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+          planId: 'greenhouse',
+          status,
+        });
+        vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 42, memberCount: 3 });
+
+        const res = (await getCurrentSubscription(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+
+        const body = JSON.parse(res.body);
+        // planId stays truthful — it is the plan they are ON. The caps are
+        // what they may currently USE, and those must match POST /plants.
+        expect(body.planId).toBe('greenhouse');
+        expect(body.usageDetail.maxPlants).toBe(20);
+        expect(body.usageDetail.maxMembers).toBe(3);
+      }
+    );
+
+    it('keeps full paid caps while the subscription is active or trialing', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        status: 'trialing',
+      });
+      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 42, memberCount: 3 });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(JSON.parse(res.body).usageDetail.maxPlants).toBe(5000);
+    });
   });
 });

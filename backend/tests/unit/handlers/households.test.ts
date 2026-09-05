@@ -1315,6 +1315,107 @@ describe('households handler', () => {
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-9', 'member');
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'joinHousehold hands down the SEEDLING member cap when the Greenhouse subscription is %s',
+    async (status) => {
+      // Greenhouse members is UNLIMITED (`null`), Seedling's is 3 (ADR
+      // 0014). Before the fix the cap followed planId alone, so an unpaid
+      // Greenhouse household kept an uncapped roster for the whole of
+      // Stripe's dunning cycle.
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        status,
+      });
+      vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+        code: 'CODE',
+        householdId: 'hh-9',
+        createdBy: 'admin',
+        createdAt: '',
+        expiresAt: '2099-01-01',
+      });
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-9',
+        name: 'Home',
+        createdAt: '',
+        createdBy: 'admin',
+      });
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+      vi.mocked(householdService.addMember).mockResolvedValueOnce({
+        householdId: 'hh-9',
+        userId: 'user-2',
+        name: 'Bob',
+        email: 'b@b.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      await joinHousehold(event, fakeContext, () => {});
+      expect(householdService.addMember).toHaveBeenCalledWith(
+        'hh-9',
+        'user-2',
+        'Bob',
+        'b@b.com',
+        3
+      );
+    }
+  );
+
+  it('joinHousehold keeps the full Greenhouse member cap while the subscription is active', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const billing = await import('../../../src/services/billing.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'greenhouse',
+      status: 'active',
+    });
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'admin',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    });
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    vi.mocked(householdService.addMember).mockResolvedValueOnce({
+      householdId: 'hh-9',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+    const event = buildEvent(
+      { sub: 'user-2', email: 'b@b.com' },
+      { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+    );
+    await joinHousehold(event, fakeContext, () => {});
+    expect(householdService.addMember).toHaveBeenCalledWith(
+      'hh-9',
+      'user-2',
+      'Bob',
+      'b@b.com',
+      null
+    );
+  });
+
   it('joinHousehold repairs Cognito claims on retry after the member write committed', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');

@@ -4,6 +4,8 @@ import {
   PLAN_ORDER,
   UNLIMITED,
   atCap,
+  entitlementIsCurrent,
+  getEntitledPlan,
   getPlan,
   hasFeature,
   isPlanId,
@@ -436,5 +438,94 @@ describe('household toolkit gate', () => {
   it('fails closed on an unknown plan id (resolves to the free tier)', () => {
     expect(hasHouseholdToolkit(getPlan('not-a-plan'))).toBe(false);
     expect(hasHouseholdToolkit(getPlan(undefined))).toBe(false);
+  });
+});
+
+describe('getEntitledPlan — caps follow payment status, not just planId', () => {
+  it('grants the paid plan while Stripe reports the subscription active', () => {
+    expect(getEntitledPlan({ planId: 'greenhouse', status: 'active' })).toBe(PLANS.greenhouse);
+    expect(getEntitledPlan({ planId: 'garden', status: 'active' })).toBe(PLANS.garden);
+  });
+
+  it('grants the paid plan during the free trial — the trial IS the offer', () => {
+    expect(getEntitledPlan({ planId: 'garden', status: 'trialing' })).toBe(PLANS.garden);
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete', 'incomplete_expired', 'paused', 'canceled'])(
+    'falls back to Seedling caps when the subscription is %s',
+    (status) => {
+      // The defect this pins: a household that has stopped paying kept full
+      // paid caps for the whole of Stripe's dunning cycle, because caps were
+      // resolved from planId alone. There is no published grace period, so
+      // entitlement ends when good standing does.
+      const plan = getEntitledPlan({ planId: 'greenhouse', status });
+      expect(plan).toBe(PLANS.seedling);
+
+      // The consequence, stated through the accessor the handlers actually
+      // gate on. A household sitting exactly at the free ceiling may still
+      // add on the plan row it is nominally on, and may not on the plan it is
+      // entitled to. Every number is read from the catalog rather than
+      // restated — the caps themselves are pinned once, above, and
+      // Greenhouse's member cap is UNLIMITED (null), which is why this goes
+      // through atCap instead of comparing.
+      const freePlants = limitOf(PLANS.seedling, 'plants') as number;
+      const freeMembers = limitOf(PLANS.seedling, 'members') as number;
+      expect(atCap(freePlants, limitOf(PLANS.greenhouse, 'plants'))).toBe(false);
+      expect(atCap(freeMembers, limitOf(PLANS.greenhouse, 'members'))).toBe(false);
+      expect(atCap(freePlants, limitOf(plan, 'plants'))).toBe(true);
+      expect(atCap(freeMembers, limitOf(plan, 'members'))).toBe(true);
+    }
+  );
+
+  it('treats an unrecognized status as NOT entitled', () => {
+    expect(getEntitledPlan({ planId: 'garden', status: 'something_new_from_stripe' })).toBe(
+      PLANS.seedling
+    );
+  });
+
+  it('keeps the plan when no subscription status was ever recorded', () => {
+    // The lifetime grant and the free tier both live here. Revoking on absence
+    // would take access from a household that paid.
+    expect(getEntitledPlan({ planId: 'garden' })).toBe(PLANS.garden);
+    expect(getEntitledPlan({ planId: 'garden', status: undefined })).toBe(PLANS.garden);
+    expect(getEntitledPlan({ planId: 'garden', status: null })).toBe(PLANS.garden);
+    expect(getEntitledPlan({ planId: 'garden', status: '' })).toBe(PLANS.garden);
+  });
+
+  it('never falls below a lifetime purchase, whatever the subscription status says', () => {
+    // Regression: customer.subscription.deleted writes status 'canceled' and
+    // applyStripeEvent restores planId to the lifetime tier without rewriting
+    // the status, so resolving on status alone would revoke a $149 permanent
+    // purchase the moment an unrelated subscription taken on top of it was
+    // cancelled. A lifetime purchase is a FLOOR.
+    expect(
+      getEntitledPlan({ planId: 'garden', status: 'canceled', lifetimePlanId: 'garden' })
+    ).toBe(PLANS.garden);
+    expect(
+      getEntitledPlan({ planId: 'seedling', status: 'unpaid', lifetimePlanId: 'garden' })
+    ).toBe(PLANS.garden);
+    // The floor lifts, it never caps: a live higher subscription still wins.
+    expect(
+      getEntitledPlan({ planId: 'greenhouse', status: 'active', lifetimePlanId: 'garden' })
+    ).toBe(PLANS.greenhouse);
+    // ...and an unpaid higher subscription drops to the floor, not past it.
+    expect(
+      getEntitledPlan({ planId: 'greenhouse', status: 'past_due', lifetimePlanId: 'garden' })
+    ).toBe(PLANS.garden);
+  });
+
+  it('never resolves an unknown planId above the free tier', () => {
+    expect(getEntitledPlan({ planId: 'enterprise', status: 'active' })).toBe(PLANS.seedling);
+    expect(getEntitledPlan({ planId: 'toString', status: 'active' })).toBe(PLANS.seedling);
+  });
+});
+
+describe('entitlementIsCurrent', () => {
+  it('admits exactly active and trialing', () => {
+    expect(entitlementIsCurrent('active')).toBe(true);
+    expect(entitlementIsCurrent('trialing')).toBe(true);
+    expect(entitlementIsCurrent('past_due')).toBe(false);
+    expect(entitlementIsCurrent('unpaid')).toBe(false);
+    expect(entitlementIsCurrent('incomplete')).toBe(false);
   });
 });

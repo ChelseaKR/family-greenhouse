@@ -195,6 +195,33 @@ describe('apiKeyMiddleware', () => {
     expect((second as Partial<AuthenticatedEvent>).user?.householdId).toBe('hh-1');
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'throws 403 when the Greenhouse subscription is %s — an unpaid plan is not an entitled one',
+    async (status) => {
+      // The re-check on every use exists so a downgrade revokes an issued key
+      // immediately. It read planId alone, so a household that stopped paying
+      // kept full programmatic read access to household data for the whole of
+      // Stripe's dunning cycle.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+        planId: 'greenhouse',
+        status,
+      });
+      const event = buildEvent({ authorization: 'Bearer fg_secret123' });
+      await expect(runBefore(event)).rejects.toMatchObject({ statusCode: 403 });
+      expect((event as Partial<AuthenticatedEvent>).user).toBeUndefined();
+    }
+  );
+
+  it('still admits a trialing Greenhouse household', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'greenhouse',
+      status: 'trialing',
+    });
+    const event = buildEvent({ authorization: 'Bearer fg_secret123' });
+    await runBefore(event);
+    expect((event as AuthenticatedEvent).user.householdId).toBe('hh-1');
+  });
+
   it('passes through and attaches the principal when the household is still on greenhouse', async () => {
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
     const event = buildEvent({ authorization: 'Bearer fg_secret123' });

@@ -21,6 +21,10 @@ vi.mock('@/services/billingService', async () => {
   );
   return {
     ...actual, // keep evaluatePlanLimits (the real limit calc) and types
+    // Exactly the surface `billingService` exports today. `startCheckout` and
+    // `openPortal` were removed with the purchase UI; mocking names the module
+    // no longer has proved nothing and quietly implied a purchase path still
+    // existed here.
     billingService: {
       listPlans: vi.fn(),
       getCurrentSubscription: vi.fn(),

@@ -5,20 +5,74 @@ import type Stripe from 'stripe';
 // createCheckoutSession can be exercised without a network/key. `sessionsCreate`
 // is hoisted (vi.mock factories run before module init) and shared so tests can
 // assert what was sent to Stripe.
-const { sessionsCreate, portalSessionsCreate, subscriptionsCancel } = vi.hoisted(() => ({
-  sessionsCreate: vi.fn(),
-  portalSessionsCreate: vi.fn(),
-  subscriptionsCancel: vi.fn(),
-}));
+const { sessionsCreate, portalSessionsCreate, subscriptionsCancel, pricesRetrieve } = vi.hoisted(
+  () => ({
+    sessionsCreate: vi.fn(),
+    portalSessionsCreate: vi.fn(),
+    subscriptionsCancel: vi.fn(),
+    pricesRetrieve: vi.fn(),
+  })
+);
 vi.mock('stripe', () => ({
   default: vi.fn(function () {
     return {
       checkout: { sessions: { create: sessionsCreate } },
       billingPortal: { sessions: { create: portalSessionsCreate } },
       subscriptions: { cancel: subscriptionsCancel },
+      prices: { retrieve: pricesRetrieve },
     };
   }),
 }));
+
+/**
+ * Stripe Price objects that MATCH models/plans.ts, keyed by the fake price ids
+ * the checkout tests configure. createCheckoutSession reconciles the price it
+ * is about to charge before creating a Session (see services/stripePrices.ts),
+ * so every test that reaches Stripe needs the catalog to agree — which is the
+ * point: a test that stops agreeing is a test that just caught a mispriced
+ * checkout.
+ */
+const CATALOG_PRICES: Record<string, Record<string, unknown>> = {
+  price_garden_monthly: {
+    unit_amount: 499,
+    currency: 'usd',
+    active: true,
+    recurring: { interval: 'month', interval_count: 1 },
+  },
+  price_garden_annual: {
+    unit_amount: 3999,
+    currency: 'usd',
+    active: true,
+    recurring: { interval: 'year', interval_count: 1 },
+  },
+  price_garden_lifetime: {
+    unit_amount: 14900,
+    currency: 'usd',
+    active: true,
+    recurring: null,
+  },
+  price_greenhouse_monthly: {
+    unit_amount: 999,
+    currency: 'usd',
+    active: true,
+    recurring: { interval: 'month', interval_count: 1 },
+  },
+  price_greenhouse_annual: {
+    unit_amount: 7999,
+    currency: 'usd',
+    active: true,
+    recurring: { interval: 'year', interval_count: 1 },
+  },
+};
+
+/** Default: every configured price reports exactly what the catalog publishes. */
+function seedCatalogPrices() {
+  pricesRetrieve.mockImplementation((id: string) => {
+    const price = CATALOG_PRICES[id];
+    if (!price) return Promise.reject(new Error(`No such price: ${id}`));
+    return Promise.resolve({ id, ...price });
+  });
+}
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
@@ -94,6 +148,7 @@ describe('deltaForStripeEvent', () => {
       type: 'checkout.session.completed',
       data: {
         object: {
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'garden' },
           customer: 'cus_123',
           subscription: 'sub_456',
@@ -107,8 +162,11 @@ describe('deltaForStripeEvent', () => {
         planId: 'garden',
         stripeCustomerId: 'cus_123',
         stripeSubscriptionId: 'sub_456',
-        // No `status`: this event references the subscription by id and does
-        // not carry its state. customer.subscription.created/.updated own it.
+        // `status` is IMPLIED by payment_status, not guessed: a settled
+        // subscription session is `active`. Where Stripe expands the
+        // subscription onto the Session, its own status wins instead, and
+        // customer.subscription.created/.updated own the field afterwards.
+        status: 'active',
       },
     });
   });
@@ -192,19 +250,22 @@ describe('deltaForStripeEvent', () => {
     expect(delta?.fields.cancelAtPeriodEnd).toBe(false);
   });
 
-  it('lets the subscription events own status, rather than guessing active at checkout', async () => {
+  it('records a trial checkout as trialing, never as active', async () => {
     // checkout.session.completed references the subscription by id and does
     // not carry its status, so the old hardcoded 'active' was a guess — and
-    // wrong for every checkout that starts a trial, which is all of them.
-    // Whichever of the two events landed last won, so a trialing household
-    // could be recorded as active and never be told it was on a trial or when
-    // its first charge would land.
+    // wrong for every checkout that starts a trial. Whichever of the two
+    // events landed last won, so a trialing household could be recorded as
+    // active and never be told it was on a trial or when its first charge
+    // would land. The status is now IMPLIED by payment_status rather than
+    // guessed: a subscription-mode session that required no payment is a
+    // trial, and Stripe always sends payment_status on a Session.
     const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
     const delta = deltaForStripeEvent({
       type: 'checkout.session.completed',
       data: {
         object: {
           mode: 'subscription',
+          payment_status: 'no_payment_required',
           metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
           customer: 'cus_1',
           subscription: 'sub_1',
@@ -213,16 +274,20 @@ describe('deltaForStripeEvent', () => {
     } as unknown as Stripe.Event);
 
     expect(delta?.fields.stripeSubscriptionId).toBe('sub_1');
-    expect(delta?.fields).not.toHaveProperty('status');
+    expect(delta?.fields.status).toBe('trialing');
   });
 
   it('uses the subscription status when Stripe expanded it for us', async () => {
+    // Stripe's own expanded status beats the one implied by payment_status:
+    // `paid` would imply `active`, but the expanded subscription says the
+    // trial is still running, and Stripe is the authority on its own object.
     const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
     const delta = deltaForStripeEvent({
       type: 'checkout.session.completed',
       data: {
         object: {
           mode: 'subscription',
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
           customer: 'cus_1',
           subscription: { id: 'sub_1', status: 'trialing' },
@@ -259,6 +324,7 @@ describe('deltaForStripeEvent', () => {
       data: {
         object: {
           mode: 'subscription',
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'greenhouse', interval: 'month' },
           customer: 'cus_123',
           subscription: 'sub_1',
@@ -311,6 +377,7 @@ describe('deltaForStripeEvent', () => {
       data: {
         object: {
           mode: 'subscription',
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'garden' },
           customer: 'cus_123',
           subscription: 'sub_456',
@@ -323,8 +390,11 @@ describe('deltaForStripeEvent', () => {
         planId: 'garden',
         stripeCustomerId: 'cus_123',
         stripeSubscriptionId: 'sub_456',
-        // No `status`: this event references the subscription by id and does
-        // not carry its state. customer.subscription.created/.updated own it.
+        // `status` is IMPLIED by payment_status, not guessed: a settled
+        // subscription session is `active`. Where Stripe expands the
+        // subscription onto the Session, its own status wins instead, and
+        // customer.subscription.created/.updated own the field afterwards.
+        status: 'active',
       },
     });
   });
@@ -469,7 +539,13 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       id: 'evt_new',
       created: 1_700_000_000,
       type: 'checkout.session.completed',
-      data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' }, customer: 'cus_1' } },
+      data: {
+        object: {
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+          customer: 'cus_1',
+        },
+      },
     } as unknown as Stripe.Event);
     const calls = vi
       .mocked(dynamodb.send)
@@ -489,7 +565,13 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       id: 'evt_retry',
       created: 1_700_000_000,
       type: 'checkout.session.completed',
-      data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' }, customer: 'cus_1' } },
+      data: {
+        object: {
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+          customer: 'cus_1',
+        },
+      },
     } as unknown as Stripe.Event;
 
     // First delivery: the household Update throws (transient DDB failure) and
@@ -521,7 +603,13 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
       id: 'evt_dup',
       created: 1_700_000_000,
       type: 'checkout.session.completed',
-      data: { object: { metadata: { householdId: 'hh-1', planId: 'garden' }, customer: 'cus_1' } },
+      data: {
+        object: {
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+          customer: 'cus_1',
+        },
+      },
     } as unknown as Stripe.Event);
     expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
   });
@@ -1108,6 +1196,7 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
       type: 'checkout.session.completed',
       data: {
         object: {
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'garden', interval: 'year' },
           customer: 'cus_1',
           subscription: 'sub_1',
@@ -1234,6 +1323,7 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
       type: 'checkout.session.completed',
       data: {
         object: {
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'garden', interval: 'year' },
           customer: 'cus_1',
           subscription: 'sub_1',
@@ -1253,6 +1343,7 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
       type: 'checkout.session.completed',
       data: {
         object: {
+          payment_status: 'paid',
           metadata: { householdId: 'hh-1', planId: 'greenhouse' },
           customer: 'cus_1',
           subscription: 'sub_1',
@@ -1279,6 +1370,7 @@ describe('applyStripeEvent — confirmed-conversion analytics', () => {
         type: 'checkout.session.completed',
         data: {
           object: {
+            payment_status: 'paid',
             metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
             customer: 'cus_1',
             subscription: 'sub_1',
@@ -1658,6 +1750,7 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    seedCatalogPrices();
   });
 
   async function runCheckout(interval?: 'month' | 'year' | 'lifetime') {
@@ -1909,6 +2002,7 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    seedCatalogPrices();
   });
 
   async function runWithExistingSub(status: string, interval?: 'month' | 'lifetime') {
@@ -2096,5 +2190,360 @@ describe('getHouseholdSubscription', () => {
     const result = await getHouseholdSubscription('hh-1');
     expect(result.planId).toBe('garden');
     expect(result.stripeSubscriptionId).toBe('sub');
+  });
+});
+
+describe('the free trial is once per household, not once per checkout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.PAYMENTS_ENABLED = '1';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
+    process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
+    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    seedCatalogPrices();
+  });
+
+  async function checkoutWithRow(Item: Record<string, unknown> | undefined) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    await createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      interval: 'month',
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+    return sessionsCreate.mock.calls[0][0] as {
+      subscription_data?: { trial_period_days?: number };
+    };
+  }
+
+  it('offers the 14-day trial to a household that has never had one', async () => {
+    const params = await checkoutWithRow(undefined);
+    expect(params.subscription_data?.trial_period_days).toBe(14);
+  });
+
+  it('does NOT offer a second trial once one has been consumed', async () => {
+    // The defect: trial_period_days was unconditional, so cancel → re-checkout
+    // minted a fresh 14 free days, indefinitely.
+    const params = await checkoutWithRow({
+      planId: 'seedling',
+      subscriptionStatus: 'canceled',
+      stripeCustomerId: 'cus_1',
+      trialConsumedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(params.subscription_data?.trial_period_days).toBeUndefined();
+    expect(params.subscription_data).toBeDefined();
+  });
+
+  it('still lets a canceled household re-subscribe — only the trial is once', async () => {
+    // Re-subscribing after cancellation is deliberate (see the
+    // ALREADY_SUBSCRIBED guard); the fix must not turn it into a refusal.
+    const params = await checkoutWithRow({
+      planId: 'seedling',
+      subscriptionStatus: 'canceled',
+      stripeCustomerId: 'cus_1',
+      trialConsumedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+    expect(params.subscription_data).toBeDefined();
+  });
+
+  it('never exposes trialConsumedAt through the public subscription read', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { planId: 'garden', trialConsumedAt: '2026-01-01T00:00:00.000Z' },
+    });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    expect(await getHouseholdSubscription('hh-1')).not.toHaveProperty('trialConsumedAt');
+  });
+});
+
+describe('eventConsumesTrial / markTrialConsumed', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('recognizes a trialing subscription', async () => {
+    const { eventConsumesTrial } = await import('../../../src/services/billing.js');
+    expect(
+      eventConsumesTrial({
+        type: 'customer.subscription.created',
+        data: { object: { status: 'trialing' } },
+      } as unknown as Stripe.Event)
+    ).toBe(true);
+  });
+
+  it('recognizes a subscription that has already converted OUT of its trial', async () => {
+    // Stripe leaves trial_start/trial_end populated after conversion, so the
+    // consumed trial stays visible even once the status is 'active'.
+    const { eventConsumesTrial } = await import('../../../src/services/billing.js');
+    expect(
+      eventConsumesTrial({
+        type: 'customer.subscription.updated',
+        data: {
+          object: { status: 'active', trial_start: 1_700_000_000, trial_end: 1_701_000_000 },
+        },
+      } as unknown as Stripe.Event)
+    ).toBe(true);
+  });
+
+  it('recognizes a subscription checkout that required no payment', async () => {
+    const { eventConsumesTrial } = await import('../../../src/services/billing.js');
+    expect(
+      eventConsumesTrial({
+        type: 'checkout.session.completed',
+        data: { object: { mode: 'subscription', payment_status: 'no_payment_required' } },
+      } as unknown as Stripe.Event)
+    ).toBe(true);
+  });
+
+  it('does not treat a paid subscription or a lifetime purchase as a trial', async () => {
+    const { eventConsumesTrial } = await import('../../../src/services/billing.js');
+    expect(
+      eventConsumesTrial({
+        type: 'customer.subscription.created',
+        data: { object: { status: 'active' } },
+      } as unknown as Stripe.Event)
+    ).toBe(false);
+    expect(
+      eventConsumesTrial({
+        type: 'checkout.session.completed',
+        data: { object: { mode: 'payment', payment_status: 'paid' } },
+      } as unknown as Stripe.Event)
+    ).toBe(false);
+    expect(
+      eventConsumesTrial({
+        type: 'customer.subscription.deleted',
+        data: { object: { status: 'canceled' } },
+      } as unknown as Stripe.Event)
+    ).toBe(false);
+  });
+
+  it('writes the marker only when absent, so the first timestamp survives', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    const { markTrialConsumed } = await import('../../../src/services/billing.js');
+    await markTrialConsumed('hh-1');
+    const arg = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: { ConditionExpression: string; Key: Record<string, string> };
+    };
+    expect(arg.kind).toBe('Update');
+    expect(arg.input.ConditionExpression).toBe('attribute_not_exists(#trialConsumedAt)');
+    expect(arg.input.Key.PK).toBe('HOUSEHOLD#hh-1');
+  });
+
+  it('swallows the write-once conflict — a household keeps its FIRST trial date', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { markTrialConsumed } = await import('../../../src/services/billing.js');
+    // mockReset (not just clear) so no queued or persistent implementation
+    // from an earlier test can decide this one's outcome.
+    vi.mocked(dynamodb.send).mockReset();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('exists'), { name: 'ConditionalCheckFailedException' })
+    );
+    await expect(markTrialConsumed('hh-1')).resolves.toBeUndefined();
+  });
+
+  it('re-throws a real write failure, so Stripe redelivers instead of losing the marker', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { markTrialConsumed } = await import('../../../src/services/billing.js');
+    vi.mocked(dynamodb.send).mockReset();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('DDB throttled'));
+    await expect(markTrialConsumed('hh-1')).rejects.toThrow('DDB throttled');
+  });
+
+  it('records consumption from the webhook, before anything the delta gates', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_trial',
+      created: 1_700_000_000,
+      type: 'customer.subscription.created',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'trialing',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    const first = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { ConditionExpression?: string };
+    };
+    expect(first.input.ConditionExpression).toBe('attribute_not_exists(#trialConsumedAt)');
+  });
+
+  it('records consumption even for a checkout that grants nothing', async () => {
+    // An `incomplete` trial checkout still burned the trial. If the marker
+    // only rode along with a successful grant, the household could retry into
+    // a fresh 14 days.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_trial_unsettled',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          payment_status: 'no_payment_required',
+          metadata: { householdId: 'hh-9', planId: 'garden' },
+          customer: 'cus_9',
+          subscription: 'sub_9',
+        },
+      },
+    } as unknown as Stripe.Event);
+    const kinds = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) => (c[0] as unknown as { input: { ConditionExpression?: string } }).input
+      );
+    expect(kinds[0].ConditionExpression).toBe('attribute_not_exists(#trialConsumedAt)');
+  });
+});
+
+describe('createCheckoutSession — refuses to charge an unreconciled price', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.PAYMENTS_ENABLED = '1';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    seedCatalogPrices();
+  });
+
+  async function run() {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    return createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      interval: 'month',
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+  }
+
+  it('reconciles the price it is about to charge before creating the Session', async () => {
+    await run();
+    expect(pricesRetrieve).toHaveBeenCalledWith('price_garden_monthly');
+    expect(pricesRetrieve.mock.invocationCallOrder[0]).toBeLessThan(
+      sessionsCreate.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('refuses when Stripe would charge an amount the catalog never published', async () => {
+    // A transposed price id in tfvars: the UI says $4.99/mo, Stripe says
+    // $79.99/yr. Nothing else in the stack compares the two.
+    pricesRetrieve.mockResolvedValueOnce({
+      id: 'price_garden_monthly',
+      unit_amount: 7999,
+      currency: 'usd',
+      active: true,
+      recurring: { interval: 'year', interval_count: 1 },
+    });
+    await expect(run()).rejects.toMatchObject({ code: 'PRICE_RECONCILIATION_FAILED' });
+    expect(sessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED when the price cannot be retrieved at all', async () => {
+    pricesRetrieve.mockRejectedValueOnce(new Error('Stripe unreachable'));
+    await expect(run()).rejects.toMatchObject({ code: 'PRICE_RECONCILIATION_FAILED' });
+    expect(sessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a foreign-currency price even when the digits match', async () => {
+    pricesRetrieve.mockResolvedValueOnce({
+      id: 'price_garden_monthly',
+      unit_amount: 499,
+      currency: 'gbp',
+      active: true,
+      recurring: { interval: 'month', interval_count: 1 },
+    });
+    await expect(run()).rejects.toMatchObject({ code: 'PRICE_RECONCILIATION_FAILED' });
+    expect(sessionsCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('deltaForStripeEvent — a completed Session is not proof of payment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function session(over: Record<string, unknown>) {
+    return {
+      id: 'evt_sub',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+          customer: 'cus_1',
+          subscription: 'sub_1',
+          ...over,
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  it('grants an ACTIVE subscription when the first payment settled', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    expect(deltaForStripeEvent(session({ payment_status: 'paid' }))?.fields).toMatchObject({
+      planId: 'garden',
+      status: 'active',
+      stripeSubscriptionId: 'sub_1',
+    });
+  });
+
+  it('grants TRIALING, not active, when no payment was required', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    expect(
+      deltaForStripeEvent(session({ payment_status: 'no_payment_required' }))?.fields
+    ).toMatchObject({ planId: 'garden', status: 'trialing' });
+  });
+
+  it.each(['unpaid', 'no_payment_needed_typo', ''])(
+    'grants NOTHING when payment_status is %s (the subscription is incomplete)',
+    async (payment_status) => {
+      // The defect: this stamped status 'active' unconditionally, so a
+      // household whose card was declined got full paid caps immediately and
+      // kept them until Stripe's dunning eventually canceled the subscription.
+      const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+      expect(deltaForStripeEvent(session({ payment_status }))).toBeNull();
+    }
+  );
+
+  it('grants nothing when the session reports no payment_status at all', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    expect(deltaForStripeEvent(session({}))).toBeNull();
+  });
+
+  it('leaves the authoritative status to the subscription events', async () => {
+    // Nothing is lost by refusing above: subscription_data carries the same
+    // metadata, so customer.subscription.created arrives with the householdId
+    // and Stripe's real status.
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const delta = deltaForStripeEvent({
+      id: 'evt_created',
+      type: 'customer.subscription.created',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'incomplete',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(delta?.fields.status).toBe('incomplete');
   });
 });

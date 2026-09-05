@@ -376,6 +376,71 @@ describe('plants handler', () => {
     );
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'createPlant hands down SEEDLING caps when the Garden subscription is %s',
+    async (status) => {
+      // The defect: caps resolved off planId alone, so a household that had
+      // stopped paying kept the full Garden plant cap for the whole of
+      // Stripe's dunning cycle — weeks of paid capacity for an unpaid
+      // subscription.
+      const plantService = await import('../../../src/services/plantService.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      });
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce({
+        id: 'p3',
+        householdId: 'hh-1',
+        name: 'Fern',
+        species: null,
+        location: null,
+        imageUrl: null,
+        notes: null,
+        createdAt: '',
+        createdBy: '',
+        updatedAt: '',
+      });
+      const event = buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Fern' }),
+        headers: { 'content-type': 'application/json' },
+      });
+      await createPlant(event, fakeContext, () => {});
+      expect(plantService.createPlant).toHaveBeenCalledWith({ name: 'Fern' }, 'hh-1', 'user-1', 20);
+    }
+  );
+
+  it('createPlant keeps the full Garden cap while the subscription is trialing', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const billing = await import('../../../src/services/billing.js');
+    const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'garden',
+      status: 'trialing',
+    });
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce({
+      id: 'p4',
+      householdId: 'hh-1',
+      name: 'Fern',
+      species: null,
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '',
+      createdBy: '',
+      updatedAt: '',
+    });
+    const event = buildEvent({
+      httpMethod: 'POST',
+      body: JSON.stringify({ name: 'Fern' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    await createPlant(event, fakeContext, () => {});
+    expect(plantService.createPlant).toHaveBeenCalledWith({ name: 'Fern' }, 'hh-1', 'user-1', 200);
+  });
+
   it('createPlant rethrows non-cap service failures as 500', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const { createPlant } = await import('../../../src/handlers/plants/handler.js');

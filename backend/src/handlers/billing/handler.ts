@@ -21,7 +21,7 @@ import {
   createIdentifyTopUpCheckoutSession,
   TOP_UP_NOT_CONFIGURED,
 } from '../../services/identifyTopUp.js';
-import { getPlan, isIntervalOffered, limitOf } from '../../models/plans.js';
+import { getEntitledPlan, getPlan, isIntervalOffered, limitOf } from '../../models/plans.js';
 import { identifyTopUpSummary, isIdentifyTopUpConfigured } from '../../models/identifyTopUp.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
@@ -117,7 +117,12 @@ export const getCurrentSubscription = createHandler(
       // unknown; a real 0 is `{ remaining: 0, expiresAt: null }`.
       getCreditBalance(user.householdId!),
     ]);
-    const plan = getPlan(sub.planId);
+    // The meters must show the caps that are actually ENFORCED. Resolving
+    // them off planId alone would advertise Garden's plant cap to a past_due
+    // household whose next POST /plants is refused at Seedling's. `planId`
+    // itself stays truthful: it is the plan they are on, which is not the
+    // same as the caps they may currently use.
+    const plan = getEntitledPlan(sub);
     const usageDetail = {
       plantCount: counters.plantCount,
       maxPlants: limitOf(plan, 'plants'),

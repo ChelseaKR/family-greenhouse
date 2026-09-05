@@ -373,6 +373,67 @@ export function planHasMoveDay(plan: Plan): boolean {
   return plan.features.moveDay;
 }
 
+/**
+ * Stripe subscription statuses under which a household is entitled to its paid
+ * plan's caps.
+ *
+ * NOT the same set as `LIVE_SUBSCRIPTION_STATUSES` in services/billing.ts,
+ * which answers a different question ("would a new checkout create a second,
+ * concurrent subscription?"). A `past_due` subscription is live enough that
+ * checking out again would double-bill, and simultaneously not paid, so it
+ * entitles nothing.
+ *
+ * Grace period: NONE. No document in this repository publishes one — not
+ * docs/billing.md, not COMMERCIAL-STATUS.md, not the ADRs — so choosing any
+ * number of days would be inventing a policy. Entitlement therefore ends the
+ * moment Stripe stops reporting the subscription as in good standing, and the
+ * household falls back to Seedling's free caps. That is the documented
+ * downgrade contract, not a punishment: docs/billing.md's "Plan caps and
+ * downgrades" says existing data stays readable and editable and only NEW
+ * creations pause.
+ */
+const ENTITLED_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing']);
+
+/**
+ * Whether a recorded subscription status entitles the household to its plan.
+ *
+ * An ABSENT status is entitled on purpose. It means "no subscription state was
+ * ever recorded", which covers the free tier (whose caps are Seedling's
+ * anyway) and any grant that is not a subscription at all. Denying those would
+ * revoke access from a household that paid — the same failure as granting
+ * access to one that did not, pointed the other way.
+ */
+export function entitlementIsCurrent(status: string | null | undefined): boolean {
+  if (status === null || status === undefined || status === '') return true;
+  return ENTITLED_SUBSCRIPTION_STATUSES.has(status);
+}
+
+/**
+ * The plan whose caps a household may actually use right now.
+ *
+ * Call sites used to resolve caps with `getPlan(sub.planId)`, which reads the
+ * plan a household is ON and ignores whether it is PAYING for it. A `past_due`
+ * / `unpaid` / `incomplete` household kept full paid caps for as long as
+ * Stripe's dunning ran — weeks — before `customer.subscription.deleted`
+ * finally reset planId.
+ */
+export function getEntitledPlan(sub: {
+  planId?: string | null;
+  status?: string | null;
+  lifetimePlanId?: string | null;
+}): Plan {
+  const subscribed = entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling;
+  // A lifetime purchase is an entitlement FLOOR and no subscription status can
+  // fall below it. This is not decoration: `customer.subscription.deleted`
+  // writes `status: 'canceled'` and applyStripeEvent then restores `planId` to
+  // the lifetime tier WITHOUT rewriting the status, so a household that had
+  // bought a tier outright and later cancelled a subscription taken on top of
+  // it would otherwise resolve to Seedling here — silently destroying a
+  // one-time purchase that has no refund path.
+  const owned = sub.lifetimePlanId ? getPlan(sub.lifetimePlanId) : PLANS.seedling;
+  return planRank(subscribed.id) >= planRank(owned.id) ? subscribed : owned;
+}
+
 /** True iff `id` names a real plan in the catalog. */
 export function isPlanId(id: unknown): id is PlanId {
   return typeof id === 'string' && Object.hasOwn(PLANS, id);

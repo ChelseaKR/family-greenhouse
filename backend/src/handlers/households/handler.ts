@@ -33,7 +33,13 @@ import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as escalation from '../../services/escalation.js';
 import * as coverage from '../../services/coverage.js';
-import { getPlan, hasHouseholdToolkit, limitOf, type Plan } from '../../models/plans.js';
+import {
+  getEntitledPlan,
+  getPlan,
+  hasHouseholdToolkit,
+  limitOf,
+  type Plan,
+} from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
@@ -429,7 +435,8 @@ export const joinHousehold = createHandler(
     }
 
     const sub = await billing.getHouseholdSubscription(invite.householdId);
-    const plan = getPlan(sub.planId);
+    // Member cap follows ENTITLEMENT, not the plan row — see getEntitledPlan.
+    const plan = getEntitledPlan(sub);
 
     const userName = await cognitoUsers.getUserName(user.userId, user.email);
 

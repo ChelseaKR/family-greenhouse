@@ -255,6 +255,45 @@ describe('POST /plants/import', () => {
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'hands the SEEDLING cap to the service when the Garden subscription is %s',
+    async (status) => {
+      // Import shares POST /plants' cap. Resolving it off planId alone let a
+      // household that had stopped paying import its way to Garden's 200
+      // plants while single-plant creation refused it at Seedling's 20.
+      const plantService = await import('../../../src/services/plantService.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { importPlants } = await import('../../../src/handlers/plants/import.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      });
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'One'));
+      const event = buildEvent({ plants: [{ name: 'One' }] });
+      await importPlants(event, fakeContext, () => {});
+      expect(plantService.createPlant).toHaveBeenCalledWith(
+        expect.anything(),
+        'hh-1',
+        'user-1',
+        20
+      );
+    }
+  );
+
+  it('hands the full Garden cap to the service while the subscription is active', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const billing = await import('../../../src/services/billing.js');
+    const { importPlants } = await import('../../../src/handlers/plants/import.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'garden',
+      status: 'active',
+    });
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'One'));
+    const event = buildEvent({ plants: [{ name: 'One' }] });
+    await importPlants(event, fakeContext, () => {});
+    expect(plantService.createPlant).toHaveBeenCalledWith(expect.anything(), 'hh-1', 'user-1', 200);
+  });
+
   it('a non-cap row failure skips only that row and continues', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const { importPlants } = await import('../../../src/handlers/plants/import.js');

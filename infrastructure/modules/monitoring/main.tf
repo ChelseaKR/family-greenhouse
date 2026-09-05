@@ -1074,6 +1074,93 @@ resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
 }
 
 # ---------------------------------------------------------------------------
+# Stripe webhook: the paths that acknowledge an event and grant NOTHING
+#
+# `applyStripeEvent` (backend/src/services/billing.ts) has branches that log a
+# reason, return, and let the handler answer 200. Each one is correct in
+# isolation — acknowledging is right when the event is stale, mismatched, or
+# not ours — but until now none of them was visible anywhere except a log line
+# nobody reads. A metadata contract break, or a run of mismatched
+# subscriptions, could drop entitlement grants indefinitely while the delivery
+# log in Stripe showed a clean wall of 200s.
+#
+# TWO metrics rather than one, on purpose. The first three messages should be
+# flat zero in normal operation, so any occurrence is worth waking up for. The
+# fourth (a first payment that did not settle) is an ordinary business event —
+# declined cards happen — and folding it into the same metric would bury the
+# contract breaks under routine noise.
+#
+# Drill down with CloudWatch Logs Insights on the billing log group:
+#   fields @timestamp, msg, stripeEventId, householdId, type
+#   | filter msg like /stripe_/ | sort @timestamp desc
+# ---------------------------------------------------------------------------
+resource "aws_cloudwatch_log_metric_filter" "stripe_webhook_no_grant" {
+  name           = "${var.project_name}-stripe-webhook-no-grant-${var.environment}"
+  log_group_name = var.billing_lambda_log_group_name
+  pattern        = "{ $.msg = \"stripe_event_missing_or_unknown_plan_id\" || $.msg = \"stripe_event_subscription_mismatch_skipped\" || $.msg = \"stripe_event_out_of_order_skipped\" }"
+
+  metric_transformation {
+    name          = "StripeWebhookNoGrant"
+    namespace     = "FamilyGreenhouse/Billing/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "stripe_webhook_no_grant" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-stripe-webhook-no-grant-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.stripe_webhook_no_grant.metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Billing/${var.environment}"
+  period              = 900
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "A Stripe webhook was acknowledged without granting entitlement (unknown plan metadata, subscription mismatch, or an out-of-order event). Expected to be zero: a paying household may be missing its plan. Query the billing Lambda log group for msg=stripe_event_*."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-stripe-webhook-no-grant-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "stripe_checkout_unsettled" {
+  name           = "${var.project_name}-stripe-checkout-unsettled-${var.environment}"
+  log_group_name = var.billing_lambda_log_group_name
+  pattern        = "{ $.msg = \"stripe_checkout_session_unsettled_no_grant\" }"
+
+  metric_transformation {
+    name          = "StripeCheckoutUnsettled"
+    namespace     = "FamilyGreenhouse/Billing/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "stripe_checkout_unsettled_spike" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-stripe-checkout-unsettled-spike-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.stripe_checkout_unsettled.metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Billing/${var.environment}"
+  period              = 900
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "More than 10 subscription checkouts in 15 min completed without settling payment. A few declined cards are normal; a spike means a broken price, a payment-method outage, or fraud screening rejecting everyone."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-stripe-checkout-unsettled-alarm-${var.environment}"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # State moves for the alarm gate
 #
 # Adding `count` to a resource that never had one moves its state address from
