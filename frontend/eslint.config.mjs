@@ -82,6 +82,52 @@ export default tseslint.config(
     },
   },
   {
+    // ---- End-to-end tree (#440) ----
+    //
+    // `frontend/tests/e2e/**` is the only code in this repo that can revert a
+    // production release — a non-success from the post-deploy smoke job fires
+    // `rollback` in cd-production.yml — and it was covered by no static check
+    // at all: `tsconfig.json` includes only `src`, this config's `files` glob
+    // was `src/**`, and `playwright.config.ts`'s `testIgnore` keeps
+    // post-deploy-smoke.spec.ts and store-screenshots.spec.ts out of the PR
+    // e2e run. Compiled by nothing, linted by nothing, executed only by
+    // production.
+    //
+    // Type-aware rules are ON, pointed at tsconfig.e2e.json. That is the whole
+    // reason this block is worth having over a plain parse: no-floating-promises
+    // is the rule that catches an un-awaited Playwright call, which is a
+    // silently-passing assertion — the same defect class as everything else
+    // here.
+    //
+    // `playwright.config.ts` and the two per-suite configs are in scope
+    // deliberately: they decide which specs run at all.
+    files: ['tests/e2e/**/*.ts', 'playwright.config.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: {
+        // Specs are Node programs that also evaluate code inside the page.
+        ...globals.node,
+        ...globals.browser,
+      },
+      parserOptions: {
+        project: ['./tsconfig.e2e.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      // Same pin as the `src` block: ESLint 10 removed context.getFilename(),
+      // which eslint-plugin-react's 'detect' codepath still calls.
+      react: { version: '19.2' },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Specs log deliberately when they tear down real cloud fixtures.
+      'no-console': 'off',
+    },
+  },
+
+  {
     // i18n enforcement is opt-in per-folder while we migrate. Areas in
     // this allowlist MUST use `t()` for user-visible strings; English
     // literals in JSX trigger a build-blocking error. The legal pages are

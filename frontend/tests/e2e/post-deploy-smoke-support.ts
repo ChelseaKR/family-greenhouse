@@ -407,7 +407,9 @@ async function listExactSmokeS3Versions(
   let keyMarker: string | undefined;
   let versionIdMarker: string | undefined;
 
-  do {
+  // `for (;;)` rather than `do ... while (true)`: identical control flow, and
+  // `no-constant-condition` allows the former. Every exit is explicit below.
+  for (;;) {
     const page = await store.listVersions({
       bucket: target.bucket,
       prefix: target.key,
@@ -436,7 +438,7 @@ async function listExactSmokeS3Versions(
     seenMarkers.add(markerFingerprint);
     keyMarker = page.nextKeyMarker;
     versionIdMarker = page.nextVersionIdMarker;
-  } while (true);
+  }
 
   return [...found.values()];
 }

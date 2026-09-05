@@ -7,7 +7,10 @@ export default defineConfig({
   workers: 1,
   timeout: 60_000,
   reporter: 'line',
-  use: { baseURL: 'http://localhost:4174', reducedMotion: 'reduce' },
+  // `reducedMotion` under `use` is not a PlaywrightTestOptions member in 1.62
+  // and was silently ignored; `contextOptions` is where the runner reads it.
+  // See playwright.config.ts and #440.
+  use: { baseURL: 'http://localhost:4174', contextOptions: { reducedMotion: 'reduce' } },
   projects: [
     {
       name: 'app-store-iphone',

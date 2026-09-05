@@ -210,6 +210,26 @@ from their own workflows: `post-deploy-smoke.spec.ts` (production CD, described
 below) and `store-screenshots.spec.ts` (mobile store assets, via
 `npm run mobile:release`).
 
+> **The e2e tree is statically checked, and that is not the same as being run.**
+> `frontend/tests/e2e/**` and `playwright.config.ts` used to sit outside every
+> static gate: `tsconfig.json` includes only `src`, the lint script was scoped to
+> `src`, and `testIgnore` keeps the two specs above out of PR CI. So the spec
+> that can revert a production release was compiled by nothing, linted by
+> nothing, and executed only by production (#440). They are now in
+> `frontend/tsconfig.e2e.json` and the frontend lint globs, and `npm run
+smoke:parse` loads the smoke spec through Playwright's runner (`--list`) in
+> both `npm run verify` and CI's `Type Check` job. Switching the checks on found
+> two live defects: a helper typed `APIResponse` that all six callers invoked
+> with a page `Response`, and a `use.reducedMotion` key that Playwright 1.62
+> silently ignores — measured, the browser reported
+> `prefers-reduced-motion: reduce` as **false** until it moved to
+> `contextOptions`.
+>
+> What none of this can catch is a **stale assertion**: `toHaveURL(/\/dashboard$/)`
+> parses and lints perfectly after the destination has moved, which is precisely
+> what happened in #394 / PR #439. Deciding whether a stale smoke assertion
+> should still auto-roll-back a good release is tracked separately in #440.
+
 Playwright still isn't where behaviour is specified — RTL and the vitest suites
 cover that. Playwright covers cross-browser rendering, accessibility, and "did
 we break the boot path?".

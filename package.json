@@ -59,6 +59,7 @@
     "api:check": "node scripts/check-api-spec.mjs",
     "sitemap:check": "npm run sitemap:check --workspace frontend",
     "brand:check": "npm run brand:check --workspace frontend",
+    "smoke:parse": "npm run smoke:parse --workspace frontend",
     "figures:check": "node scripts/check-doc-figures.mjs",
     "mobile:release": "frontend/scripts/build-mobile-release.sh",
     "verify": "node scripts/run-gate.mjs"
