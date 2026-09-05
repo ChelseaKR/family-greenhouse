@@ -208,7 +208,6 @@ function parseArgs(argv) {
 // ---------------------------------------------------------------------------
 
 const str = (item, name) => item?.[name]?.S;
-const bool = (item, name) => item?.[name]?.BOOL === true;
 
 async function scanAll(ddb, input) {
   const items = [];

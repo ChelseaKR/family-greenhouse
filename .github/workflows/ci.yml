@@ -61,6 +61,35 @@ jobs:
         # only code that can revert a production release (#440).
         run: npm run lint
 
+      - name: ESLint the .mjs tooling and the infrastructure Lambdas (#443)
+        # `npm run lint` is the two workspaces' `eslint src`. Twenty-six .mjs
+        # files sat outside it, outside tsc (which never sees a .mjs) and
+        # outside .pre-commit-config.yaml's `^(backend|frontend)/src/` filter.
+        # Thirteen of them ARE the gates: the only code path in a gate script
+        # that throws is its FAILURE branch, which a green build never executes,
+        # so a ReferenceError there would leave the gate passing while being
+        # incapable of failing. Two more are Lambdas that run in production, one
+        # of which forwards security@ mail.
+        #
+        # Separate from `Run ESLint` because it needs its own globs: ESLint 10
+        # resolves the nearest eslint.config.mjs to each file, so the block is
+        # mirrored into all three configs.
+        run: npm run lint:scripts
+
+      - name: shellcheck every tracked shell script (#443)
+        # Nothing checked them. One of the five deletes S3 object versions on
+        # the production release path. Switching this on found a shellcheck
+        # directive written with ESLint's `-- reason` suffix, which shellcheck
+        # cannot parse and which stops it reporting anything else in that file.
+        #
+        # The file list is derived from `git ls-files "*.sh"`, so a new script is
+        # covered without anyone remembering, and an empty list fails rather than
+        # passing vacuously. shellcheck ships on ubuntu-latest runners.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check (CICD-27).
+        run: npm run shell:check
+
       - name: No bare TODO/FIXME/HACK markers
         # Shared with `npm run verify` (scripts/check-no-bare-markers.mjs) so
         # local pre-push and CI run the identical check — see CICD-27.

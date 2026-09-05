@@ -13,7 +13,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 set -a
-# shellcheck disable=SC1090 -- the caller intentionally selects this local env file.
+# The caller intentionally selects this local env file.
+# shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
 
