@@ -173,6 +173,20 @@ describe('invokeChatModelStream', () => {
     await expect(drain(invokeChatModelStream(args))).rejects.toThrow(/stream timed out after/);
   });
 
+  // The streaming path takes the turn deadline for the same reason the sync
+  // path does: it is one of the six calls that together have to fit inside the
+  // Lambda, and it is the one that can sit open the longest.
+  it('refuses to open a stream the turn has no time left for', async () => {
+    // Primed with a working stream for the same reason as the sync twin.
+    bedrockSend.mockResolvedValueOnce({
+      body: iterate([chunk({ type: 'message_stop' })]),
+    });
+    await expect(
+      drain(invokeChatModelStream({ ...args, deadlineAt: Date.now() - 1 }))
+    ).rejects.toThrow('Chat turn deadline passed before this Bedrock call');
+    expect(bedrockSend).not.toHaveBeenCalled();
+  });
+
   it('skips unknown event types instead of crashing', async () => {
     bedrockSend.mockResolvedValueOnce({
       body: iterate([

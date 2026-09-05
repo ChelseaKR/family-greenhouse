@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **A slow AI chat turn could bill a household for an answer it never got.**
+  Each call to the model is bounded, but a turn makes up to six of them, and six
+  bounded calls can still run past the point where the function is killed. A
+  killed function skips the cleanup that reconciles the tokens reserved at the
+  start of the turn — so the household was charged roughly eight thousand tokens
+  of its monthly allowance for a turn that produced nothing, and the
+  conversation stayed locked until the claim expired. A turn now has an overall
+  time limit as well as a per-call one, and ends in time to give the tokens
+  back.
+
 ## [0.28.0] - 2026-09-05
 
 ### Fixed

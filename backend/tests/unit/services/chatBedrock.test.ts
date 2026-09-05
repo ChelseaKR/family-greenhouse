@@ -233,6 +233,49 @@ describe('invokeChatModel (Bedrock wrapper)', () => {
     expect(bedrockSend.mock.calls[0][1]).toHaveProperty('abortSignal');
   });
 
+  // #460, the other half. The per-call bound above is 25s and the loop makes up
+  // to six calls, so bounding a call does not bound a turn: 6 x 25s outlasts
+  // the 90-second chat Lambda, and a killed function never runs the `finally`
+  // that reconciles the 8,000-token budget reservation or resolves the turn
+  // claim. The household would be billed for a turn that produced nothing.
+  it('refuses to start a call the turn has no time left for', async () => {
+    // Primed with a WORKING response: if the deadline is not honoured this
+    // fails on "did not throw", which is the finding, rather than on a
+    // TypeError from an unprimed mock.
+    bedrockSend.mockResolvedValueOnce(modelResponse());
+    const invokeChatModel = await subject();
+
+    await expect(
+      invokeChatModel({ system: 's', messages: [], tools: [], deadlineAt: Date.now() - 1 })
+    ).rejects.toThrow('Chat turn deadline passed before this Bedrock call');
+    // Refused before the request, not after it: the point is not to spend the
+    // time, so a call that cannot finish is never made.
+    expect(bedrockSend).not.toHaveBeenCalled();
+  });
+
+  it('clips the per-call timeout to what is left of the turn deadline', async () => {
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    bedrockSend.mockRejectedValueOnce(abortErr);
+    const invokeChatModel = await subject();
+
+    // 5s left of the turn, against a 25s per-call bound: the call gets the 5s.
+    await expect(
+      invokeChatModel({ system: 's', messages: [], tools: [], deadlineAt: Date.now() + 5_000 })
+    ).rejects.toThrow(/timed out after (4\d{3}|5000)ms/);
+  });
+
+  it('leaves a call with no deadline on the per-call bound alone', async () => {
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    bedrockSend.mockRejectedValueOnce(abortErr);
+    const invokeChatModel = await subject();
+
+    await expect(invokeChatModel({ system: 's', messages: [], tools: [] })).rejects.toThrow(
+      /timed out after 25000ms/
+    );
+  });
+
   it('honors maxOutputTokens and the BEDROCK_CHAT_MODEL_ID override', async () => {
     process.env.BEDROCK_CHAT_MODEL_ID = 'eu.anthropic.claude-haiku-4-5-20251001-v1:0';
     bedrockSend.mockResolvedValueOnce(modelResponse());

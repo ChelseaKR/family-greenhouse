@@ -72,6 +72,32 @@ import {
   petSafetyBlockMessage,
 } from './blockCopy.js';
 
+/**
+ * Wall-clock ceiling for all of one turn's Bedrock calls together.
+ *
+ * `bedrock.ts` bounds each CALL (BEDROCK_CHAT_TIMEOUT_MS, 25s) and says in as
+ * many words that six of those can still exceed the chat Lambda's 90 seconds
+ * (`infrastructure/modules/api/main.tf:538`). This is the other half.
+ *
+ * What a Lambda kill costs, and why it is worth ending a turn early to avoid:
+ * the budget reservation below (RESERVE_INPUT_TOKENS = 8000) is reconciled to
+ * real usage in a `finally`, and the turn claim is resolved there too. A killed
+ * function runs neither. The household is then billed 8,000 input tokens
+ * against a 250k monthly allowance for a turn that produced no answer, and the
+ * claim sits until its lease expires — a reservation nobody reconciled, read
+ * downstream as consumption. Ending at 80s instead lets that `finally` run.
+ *
+ * The cost of the bound is honest and small: a turn whose last call would have
+ * finished between 80s and 90s now fails where it might have succeeded. Turns
+ * past 90s were already failing, just expensively and silently.
+ *
+ * NOT the graceful version — the turn errors, it does not wind up early with a
+ * best-effort answer. Telling the model to stop calling tools and answer with
+ * what it has changes what a user is shown, which is a product decision; this
+ * only changes whether the cleanup runs.
+ */
+const TURN_DEADLINE_MS = Number(process.env.CHAT_TURN_DEADLINE_MS || '80000');
+
 const MAX_TOOL_CALLS_PER_TURN = 5;
 const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
 const MAX_HISTORY_MESSAGES = 24;
@@ -758,12 +784,17 @@ async function* turnEvents(
     messagesForModel = toBedrockMessages(history);
     retrievedSpans.push(...collectHistoryRagSpans(history));
 
+    // One deadline for the whole loop, fixed before the first call. Each call
+    // clips its own timeout to what is left of it.
+    const deadlineAt = Date.now() + TURN_DEADLINE_MS;
+
     for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
       const modelArgs = {
         system: SYSTEM_PROMPT,
         messages: messagesForModel,
         tools: TOOL_REGISTRY,
         maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
+        deadlineAt,
       };
 
       let response: BedrockChatResponse;
