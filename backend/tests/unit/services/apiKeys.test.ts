@@ -220,3 +220,74 @@ describe('apiKeys service', () => {
     expect(cmd.input.ExpressionAttributeValues[':sk']).toBe('APIKEY#');
   });
 });
+
+/**
+ * A credential that authenticates but cannot be listed cannot be revoked:
+ * revocation is by key id, and this listing is the only place an id is ever
+ * shown. The old `Limit: 50` with no paging made the fifty-first key
+ * permanently live and permanently invisible, while Settings rendered the
+ * page size as a total. See #455.
+ */
+describe('apiKeys — every key a household owns is a key it can revoke (#455)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function row(id: string) {
+    return {
+      id,
+      householdId: 'hh-1',
+      label: `key ${id}`,
+      last4: id.slice(-4),
+      scopes: ['read:plants'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      createdBy: 'u1',
+      lastUsedAt: null,
+    };
+  }
+
+  it('follows LastEvaluatedKey so the 51st key is listed, not stranded', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listApiKeys } = await import('../../../src/services/apiKeys.js');
+    const firstPage = Array.from({ length: 50 }, (_, i) => row(`key-${i}`));
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: firstPage,
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: 'APIKEY#key-49' },
+      })
+      .mockResolvedValueOnce({ Items: [row('key-50')] });
+
+    const keys = await listApiKeys('hh-1');
+    expect(keys).toHaveLength(51);
+    expect(keys.map((k) => k.id)).toContain('key-50');
+  });
+
+  it('resumes the second page from where the first ended', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listApiKeys } = await import('../../../src/services/apiKeys.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [row('key-a')],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: 'APIKEY#key-a' },
+      })
+      .mockResolvedValueOnce({ Items: [row('key-b')] });
+
+    await listApiKeys('hh-1');
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({
+      PK: 'HOUSEHOLD#hh-1',
+      SK: 'APIKEY#key-a',
+    });
+  });
+
+  it('stops after one round trip when there is no next page', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listApiKeys } = await import('../../../src/services/apiKeys.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [row('only')] });
+    await expect(listApiKeys('hh-1')).resolves.toHaveLength(1);
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+});

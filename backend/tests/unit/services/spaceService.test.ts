@@ -329,3 +329,59 @@ describe('spaceService — care rotation (ADR 0018)', () => {
     expect(turns.get('rota')).toEqual({ turnUserId: null, turnName: null });
   });
 });
+
+/**
+ * `getSpaces` used to send one `Limit: MAX_SPACES` query and hand the page
+ * back as the household's complete set of rooms. A truncated read is not a
+ * failed read — nothing throws, nothing is caught — so it published a partial
+ * answer as a total, which is ADR 0010's defect in its quietest form.
+ */
+describe('spaceService — the room list is the whole room list (#455)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('follows LastEvaluatedKey, so a room on the second page is still a room', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getSpaces } = await import('../../../src/services/spaceService.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [{ id: 'a', householdId: 'hh', name: 'Attic', environment: 'inside' }],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh', SK: 'SPACE#a' },
+      })
+      .mockResolvedValueOnce({
+        Items: [{ id: 'z', householdId: 'hh', name: 'Zen corner', environment: 'inside' }],
+      });
+
+    const spaces = await getSpaces('hh');
+    expect(spaces.map((s) => s.id)).toEqual(['a', 'z']);
+
+    // The second round trip has to resume where the first stopped, or paging
+    // is just the same first page fetched twice.
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'HOUSEHOLD#hh', SK: 'SPACE#a' });
+  });
+
+  it('sees a duplicate name that lives past the first page', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { createSpace } = await import('../../../src/services/spaceService.js');
+    // Page 1 holds an unrelated room; the clash is on page 2. Truncating here
+    // made duplicate room names creatable, which is how "Kitchen" and
+    // "kitchen" end up as two different places to water.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [{ id: 'a', householdId: 'hh', name: 'Attic', environment: 'inside' }],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh', SK: 'SPACE#a' },
+      })
+      .mockResolvedValueOnce({
+        Items: [{ id: 'k', householdId: 'hh', name: 'Kitchen', environment: 'inside' }],
+      })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      createSpace({ name: 'kitchen', environment: 'inside' }, 'hh', 'u')
+    ).rejects.toMatchObject({ name: 'DuplicateSpaceNameError' });
+    const kinds = vi.mocked(dynamodb.send).mock.calls.map((c) => (c[0] as { kind: string }).kind);
+    expect(kinds).not.toContain('Put');
+  });
+});
