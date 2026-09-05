@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-05
+
 ### Fixed
 
 - **A slow AI chat turn could bill a household for an answer it never got.**
@@ -27,10 +29,6 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   conversation stayed locked until the claim expired. A turn now has an overall
   time limit as well as a per-call one, and ends in time to give the tokens
   back.
-
-## [0.28.0] - 2026-09-05
-
-### Fixed
 
 - **Marking a task done never cleared it from the dashboard.** Reported by a
   household: mark a task done, refresh, and it is still sitting there as
@@ -103,6 +101,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   previous release's files immediately, so anyone mid-signup with a
   confirmation link open got "We couldn't load this page" on their next tap.
   Superseded files now stay for seven days.
+
+- **The help page said our emails had no unsubscribe link. They have had one
+  since August.** Someone asking "how do I stop the emails?" was told, in the
+  one place they went to find out, that there was no way to — while the weekly
+  digest and the annual recap both carried an unsubscribe footer link and the
+  one-click button mail clients show. The answer now leads with the two ways
+  out that need no sign-in, keeps the settings toggles as the finer control,
+  and names the one message that genuinely has no unsubscribe: a task reminder,
+  which answers a task the recipient created for themselves.
 
 - **A sitter's plant photos outlived the sitter's access.** A brief handed out
   permanent, unauthenticated image links, so revoking the brief left every
