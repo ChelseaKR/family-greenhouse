@@ -152,8 +152,13 @@ describe('emailSuppression.getDeliveryStates', () => {
 
   // A roster over 100 is the case ADR 0014 made reachable: membership is
   // UNLIMITED on Garden and Greenhouse, and householdService.MEMBER_QUERY_LIMIT
-  // is that query's page size, not a cap. These four cases fail on the code
-  // this replaced, which refused any roster over 100 keys outright.
+  // is that query's page size, not a cap.
+  //
+  // Three of the cases below fail on the code this replaced, which refused any
+  // roster over 100 keys outright: the two that assert an `ok` result past 100,
+  // and the 101-key boundary. The `exactly 100` case is their paired positive
+  // control — it passed before and must keep passing, so the fix cannot be
+  // "chunk everything" any more than the bug was "refuse everything".
   const roster = (n: number) => Array.from({ length: n }, (_, i) => `m${i}@b.com`);
 
   it('chunks a roster over 100 into whole BatchGet requests covering every key', async () => {
