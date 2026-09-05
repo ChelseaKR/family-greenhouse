@@ -121,6 +121,58 @@ describe('invokeChatModelStream', () => {
     ]);
   });
 
+  // #460. Same accounting contract as the sync wrapper: cached tokens are
+  // metered as consumption (the per-household cap counts them) and priced as
+  // the discount they are.
+  it('carries the cache accounting off message_start', async () => {
+    bedrockSend.mockResolvedValueOnce({
+      body: iterate([
+        chunk({
+          type: 'message_start',
+          message: {
+            usage: {
+              input_tokens: 100_000,
+              cache_read_input_tokens: 800_000,
+              cache_creation_input_tokens: 100_000,
+            },
+          },
+        }),
+        chunk({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: {} }),
+        chunk({ type: 'message_stop' }),
+      ]),
+    });
+
+    const { response } = await drain(invokeChatModelStream(args));
+
+    expect(response.inputTokens).toBe(1_000_000);
+    expect(response.cacheReadTokens).toBe(800_000);
+    expect(response.cacheWriteTokens).toBe(100_000);
+    expect(response.costUsd).toBeCloseTo(0.1 + 0.125 + 0.08, 10);
+  });
+
+  it('sends a cache breakpoint on the last message, and an abort signal', async () => {
+    bedrockSend.mockResolvedValueOnce({
+      body: iterate([chunk({ type: 'message_stop' })]),
+    });
+    await drain(invokeChatModelStream(args));
+
+    const command = bedrockSend.mock.calls[0][0] as { input: { body: string } };
+    const body = JSON.parse(command.input.body) as {
+      messages: Array<{ content: Array<Record<string, unknown>> }>;
+    };
+    expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
+    // A hung stream must not hold the 90-second Lambda either.
+    expect(bedrockSend.mock.calls[0][1]).toHaveProperty('abortSignal');
+  });
+
+  it('surfaces a hung stream as a timeout rather than holding the Lambda', async () => {
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    bedrockSend.mockRejectedValueOnce(abortErr);
+
+    await expect(drain(invokeChatModelStream(args))).rejects.toThrow(/stream timed out after/);
+  });
+
   it('skips unknown event types instead of crashing', async () => {
     bedrockSend.mockResolvedValueOnce({
       body: iterate([
