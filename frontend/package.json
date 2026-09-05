@@ -93,7 +93,7 @@
     "react-i18next": "^17.0.4",
     "react-router": "8.3.1",
     "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1095.0",
