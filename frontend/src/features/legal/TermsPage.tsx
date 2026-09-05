@@ -14,6 +14,16 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  *
  * Every sentence lives in the `legal.terms.*` catalog keys; this file is
  * structure only. Wording changes go in both locales (docs/i18n.md).
+ *
+ * The commercial sections — trial, renewal, cancellation, price changes and
+ * one-time purchases — describe what the billing code actually does, not a
+ * policy written ahead of it. Each claim is traceable: the 14-day trial is
+ * `trial_period_days: 14` in services/billing.ts, cancellation runs through
+ * the Stripe portal (`createPortalSession`, admin-only) and holds the plan
+ * until `customer.subscription.deleted` drops it to seedling, the withdrawn
+ * cadences are `withdrawnIntervals` in models/plans.ts, and the caps that
+ * bite after a downgrade are enforced on create/import/invite only, never on
+ * read or edit. Change the behaviour and this text has to change with it.
  */
 export function TermsPage() {
   const { t } = useTranslation();
@@ -23,7 +33,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-02">
+    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-03">
       <p className="lead">
         <Trans
           i18nKey="legal.terms.lead"
@@ -91,6 +101,46 @@ export function TermsPage() {
       <p>
         <Trans i18nKey="legal.terms.planStatus.body" components={{ em: <em /> }} />
       </p>
+
+      <h2>{t('legal.terms.trial.heading')}</h2>
+      <p>{t('legal.terms.trial.intro')}</p>
+      <p>
+        <Trans i18nKey="legal.terms.trial.ending" components={{ em: <em /> }} />
+      </p>
+
+      <h2>{t('legal.terms.renewal.heading')}</h2>
+      <p>{t('legal.terms.renewal.cadence')}</p>
+      <p>{t('legal.terms.renewal.price')}</p>
+
+      <h2>{t('legal.terms.cancellation.heading')}</h2>
+      <p>
+        <Trans i18nKey="legal.terms.cancellation.how" components={{ em: <em /> }} />
+      </p>
+      <p>{t('legal.terms.cancellation.when')}</p>
+      <p>{t('legal.terms.cancellation.whatRemains')}</p>
+
+      <h2>{t('legal.terms.priceChanges.heading')}</h2>
+      <p>{t('legal.terms.priceChanges.body')}</p>
+
+      <h2>{t('legal.terms.oneTimePurchases.heading')}</h2>
+      <p>{t('legal.terms.oneTimePurchases.body')}</p>
+      <p>{t('legal.terms.oneTimePurchases.packs')}</p>
+
+      {/*
+        TODO(owner) (#426): a "Refunds" section belongs here and is deliberately
+        absent. There is no refund policy to state — nothing in this repo ever
+        calls Stripe's refund API, `cancelAbandonedHouseholdSubscription`
+        explicitly requests no proration or refund, and the help centre already
+        says we do not publish one. Choosing between "no refunds", a stated
+        window, and "case by case, ask us" is a commercial decision only the
+        owner can make, and it has to cover subscriptions, the Garden lifetime
+        purchase, and unused identification credits (which survive a
+        cancellation but are destroyed with the household on account deletion).
+        Issue #426 holds the options. Until one is chosen, publishing any refund
+        term here would commit the business to something it has not agreed to,
+        so this renders nothing. `legal.terms.planStatus.body` already tells a
+        reader to email us about a billing event, in both locales.
+      */}
 
       <h2>{t('legal.terms.limitations.heading')}</h2>
       <p>{t('legal.terms.limitations.asIs')}</p>

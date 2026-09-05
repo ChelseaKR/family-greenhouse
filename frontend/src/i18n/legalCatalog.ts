@@ -2,8 +2,9 @@
  * Deferred loader for the `legal.*` catalog.
  *
  * WHY THIS EXISTS
- * The privacy, terms, support and account-deletion prose is 101 keys per
- * locale — 36.8 kB raw, ~10.4 kB brotli across en + es. Imported from
+ * The privacy, terms, support and account-deletion prose is 116 keys per
+ * locale (101 when it was split out here; the commercial terms added 15) —
+ * 36.8 kB raw, ~10.4 kB brotli across en + es as measured at 101. Imported from
  * `src/i18n/index.ts` it rode the startup catalog, so every visitor downloaded
  * and parsed all of it on every visit, in both locales, even though the four
  * routes that read it are lazy, rarely visited, and Spanish is still gated off
