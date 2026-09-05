@@ -116,6 +116,20 @@ describe('SitPage', () => {
     await waitFor(() => expect(screen.queryByText(/Water the Monstera/i)).not.toBeInTheDocument());
     expect(completeTask).toHaveBeenCalledWith('a'.repeat(64), 't1', waterTask.dueDate);
     expect(await screen.findByText(/all caught up/i)).toBeInTheDocument();
+    expect(screen.getByText(/Everything on the list has been looked after/)).toBeInTheDocument();
+  });
+
+  it('does not thank a sitter who arrived to an empty list', async () => {
+    // `remaining.length === 0` is true before anything is done, so a window
+    // with nothing scheduled used to greet a sitter with "All caught up —
+    // you're a star / Every plant has been looked after", crediting them with
+    // work nobody did on a page they cannot check against (#604).
+    getView.mockResolvedValue({ ...view, tasks: [] });
+    renderPage();
+
+    expect(await screen.findByText('Nothing to do right now')).toBeInTheDocument();
+    expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/has been looked after/)).not.toBeInTheDocument();
   });
 
   it('shows a friendly message for an expired / revoked link', async () => {

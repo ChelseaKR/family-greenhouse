@@ -789,6 +789,10 @@
   "sitter": {
     "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",
     "openBrief": "Open the full plant-care brief (printable)",
+    "allDoneTitle": "All caught up — you’re a star 🌿",
+    "allDoneBody": "Everything on the list has been looked after. Thank you so much for helping out!",
+    "nothingDueTitle": "Nothing to do right now",
+    "nothingDueBody": "There’s nothing on the household’s schedule at the moment. Thanks for checking!",
     "photo": {
       "heading": "Send a photo home",
       "body": "If you took a picture, they’d love to see it. Photos go straight onto that plant’s timeline — no account needed.",
@@ -1531,7 +1535,9 @@
       "done": "Done",
       "doneAria": "Mark “{{task}}” as done",
       "allDoneTitle": "All caught up — thank you",
-      "allDoneBody": "Every plant has been looked after. The household will see your name on each one.",
+      "allDoneBody": "Everything on the schedule has been looked after. The household will see your name on each one.",
+      "nothingDueTitle": "Nothing due right now",
+      "nothingDueBody": "There’s nothing on the schedule for this visit, so nothing has your name on it yet. If you did something anyway, leave a note below so the household has a record of it.",
       "addPhoto": "Add a photo",
       "addPhotoAria": "Add a photo of the {{plant}}",
       "photoUploading": "Sending the photo…",
@@ -1543,7 +1549,7 @@
       "noteSave": "Save note",
       "noteSaved": "Note saved",
       "noteFailed": "That note didn’t save. Nothing was written — you can try again.",
-      "visitNotRecorded": "That saved, but it couldn’t be added to the visit record. Tell the household so they can check the report.",
+      "visitNotRecorded": "That saved, but we couldn’t confirm it reached the visit record. Tell the household so they can check the report.",
       "footer": "Looking after plants often? Family Greenhouse keeps a whole household’s plant care in one shared place."
     },
     "report": {

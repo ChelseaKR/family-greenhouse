@@ -126,6 +126,10 @@ export function SitPage() {
   const now = Date.now();
   const remaining = tasks.filter((t) => !done.has(t.taskId));
   const allDone = status === 'ready' && remaining.length === 0;
+  // Same distinction the caretaker page draws (#604): an empty list on arrival
+  // is not a sitter who looked after every plant, and telling them it is takes
+  // credit for work nobody did on a page they cannot check against.
+  const finishedSomething = done.size > 0;
 
   return (
     <PublicShell width="article" plainHeader>
@@ -185,9 +189,15 @@ export function SitPage() {
               finishing the last task is a single change to this region. */}
           <div className="mt-10 space-y-3" aria-live="polite">
             {allDone ? (
-              <Alert variant="success" title="All caught up — you’re a star 🌿" live="off">
-                Every plant has been looked after. Thank you so much for helping out!
-              </Alert>
+              finishedSomething ? (
+                <Alert variant="success" title={t('sitter.allDoneTitle')} live="off">
+                  {t('sitter.allDoneBody')}
+                </Alert>
+              ) : (
+                <Alert variant="info" title={t('sitter.nothingDueTitle')} live="off">
+                  {t('sitter.nothingDueBody')}
+                </Alert>
+              )
             ) : (
               <ul className="space-y-3">
                 {remaining.map((task) => {
