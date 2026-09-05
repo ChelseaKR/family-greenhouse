@@ -4,9 +4,11 @@
  * ./sitterPhotoPolicy.ts; the handler that orders the checks is
  * handlers/tasks/sitterPhotos.ts.
  *
- * Quota model: `photoCount` lives ON the sitter link row (`SITTER#{token}`,
+ * Quota model: `photoCount` lives ON the sitter link row (`SITTER#{keyToken}`,
  * SK METADATA), reserved with a single conditional `ADD` before any bytes
- * are stored. That makes the 60-photo cap atomic across concurrent uploads
+ * are stored. `keyToken` is `SitterLink.keyToken` — the row's partition-key
+ * suffix, which is the token's hash for links minted since #450 and the
+ * plaintext for older ones. Callers pass that, never the secret. That makes the 60-photo cap atomic across concurrent uploads
  * and across Lambda containers — there is no read-then-write window in
  * which two uploads both see 59. A failed upload releases its slot
  * (best-effort; a leaked slot only makes the cap stricter, never looser).
@@ -32,8 +34,8 @@ import {
 
 export type SlotReservation = { ok: true; used: number } | { ok: false; reason: 'cap_reached' };
 
-function linkKey(token: string) {
-  return { PK: `SITTER#${token}`, SK: 'METADATA' };
+function linkKey(keyToken: string) {
+  return { PK: `SITTER#${keyToken}`, SK: 'METADATA' };
 }
 
 /**
@@ -43,14 +45,14 @@ function linkKey(token: string) {
  * "no slot" is the safe reading).
  */
 export async function reserveSitterPhotoSlot(
-  token: string,
+  keyToken: string,
   max = SITTER_PHOTO_MAX_PER_LINK
 ): Promise<SlotReservation> {
   try {
     const result = await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: linkKey(token),
+        Key: linkKey(keyToken),
         UpdateExpression: 'ADD photoCount :one',
         ConditionExpression:
           'attribute_exists(PK) AND (attribute_not_exists(photoCount) OR photoCount < :max)',
@@ -73,12 +75,12 @@ export async function reserveSitterPhotoSlot(
  * here is logged, not thrown — the user-visible outcome is one fewer photo
  * allowed on this link, which is the safe direction for a quota.
  */
-export async function releaseSitterPhotoSlot(token: string): Promise<void> {
+export async function releaseSitterPhotoSlot(keyToken: string): Promise<void> {
   try {
     await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: linkKey(token),
+        Key: linkKey(keyToken),
         UpdateExpression: 'ADD photoCount :minusOne',
         ConditionExpression: 'attribute_exists(PK) AND photoCount > :zero',
         ExpressionAttributeValues: { ':minusOne': -1, ':zero': 0 },
@@ -91,11 +93,11 @@ export async function releaseSitterPhotoSlot(token: string): Promise<void> {
 
 /** Photos already stored through this link (0 when none yet). Null when the
  *  row can't be read — callers must not render that as "0 used". */
-export async function getSitterPhotoCount(token: string): Promise<number | null> {
+export async function getSitterPhotoCount(keyToken: string): Promise<number | null> {
   const result = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
-      Key: linkKey(token),
+      Key: linkKey(keyToken),
       ProjectionExpression: 'photoCount',
     })
   );

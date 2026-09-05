@@ -98,7 +98,7 @@ export const getSitterPhotoStatus = createHandler(
         remaining: null,
       });
     }
-    const used = await getSitterPhotoCount(link.token);
+    const used = await getSitterPhotoCount(link.keyToken);
     return successResponse({
       enabled: true,
       max: SITTER_PHOTO_MAX_PER_LINK,
@@ -121,8 +121,12 @@ export const uploadSitterPhoto = createHandler(
       throw createHttpError(404, INACTIVE_LINK_MESSAGE);
     }
 
-    // 3. Per-token brake (2, the IP brake, is middleware).
-    if (!takeSitterPhotoToken(link.token)) {
+    // 3. Per-token brake (2, the IP brake, is middleware). Keyed on
+    //    `keyToken` — the link row's partition-key suffix — rather than the
+    //    plaintext, which the row no longer stores (#450). Same one-key-per-
+    //    link identity, and it addresses the same DynamoDB row for links
+    //    minted either side of that change.
+    if (!takeSitterPhotoToken(link.keyToken)) {
       audit('rate_limit.tripped', { metadata: { key: `sitter-photo|${link.id}` } });
       throw createHttpError(429, 'Too many photos at once. Please wait a minute and try again.');
     }
@@ -149,7 +153,7 @@ export const uploadSitterPhoto = createHandler(
     }
 
     // 7. Quota — atomic reservation under the per-link cap.
-    const slot = await reserveSitterPhotoSlot(link.token);
+    const slot = await reserveSitterPhotoSlot(link.keyToken);
     if (!slot.ok) {
       throw createHttpError(
         409,
@@ -212,7 +216,7 @@ export const uploadSitterPhoto = createHandler(
     } catch (err) {
       logger.warn({ err: (err as Error).message, linkId: link.id }, 'sitter_photo.store_failed');
       if (stored) await discardSitterPhoto(stored.key);
-      await releaseSitterPhotoSlot(link.token);
+      await releaseSitterPhotoSlot(link.keyToken);
       throw err;
     }
   },
