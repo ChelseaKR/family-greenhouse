@@ -30,6 +30,28 @@ npm ci
 echo "Setting up Git hooks..."
 npm run prepare
 
+# Install gitleaks.
+#
+# `npm run verify` HARD-FAILS without it (scripts/check-secrets.mjs), on
+# purpose: the pre-commit hook soft-skips the secret scan when the binary is
+# absent, and until #442 there was no signal anywhere that the scan was off —
+# a contributor could work for months believing they were covered. A gate that
+# silently turns itself off is the defect this repo keeps finding in its own
+# tooling, so the binary is a real dependency now rather than an optional one.
+GITLEAKS_VERSION=8.30.1
+if command -v gitleaks >/dev/null 2>&1; then
+    echo "gitleaks: $(gitleaks version) (CI pins ${GITLEAKS_VERSION})"
+elif command -v brew >/dev/null 2>&1; then
+    echo "Installing gitleaks..."
+    brew install gitleaks
+else
+    echo "Error: gitleaks is not installed and Homebrew is not available."
+    echo "The secret scan in 'npm run verify' cannot run without it, and it"
+    echo "refuses to skip itself. Install it, then re-run this script:"
+    echo "  https://github.com/gitleaks/gitleaks#installing  (pin v${GITLEAKS_VERSION})"
+    exit 1
+fi
+
 # Create environment files if they don't exist
 if [ ! -f "frontend/.env" ]; then
     echo "Creating frontend/.env..."

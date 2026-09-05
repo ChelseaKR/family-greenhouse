@@ -145,6 +145,12 @@ export const STEPS = [
     why: 'high/critical advisories in production dependencies',
   },
   {
+    id: 'secrets:check',
+    script: 'secrets:check',
+    weight: 1,
+    why: 'secrets, in the commit history AND in the files on disk — the two gitleaks modes have different blind spots (#442)',
+  },
+  {
     id: 'markers:check',
     script: 'markers:check',
     weight: 0,

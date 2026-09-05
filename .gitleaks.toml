@@ -11,3 +11,17 @@ description = "Dev/test mock bearer tokens (local-server.ts auth shim) — not r
 regexes = [
   '''mock-token-[0-9a-fA-F-]+''',
 ]
+# Generated trees. Needed once the scan also runs in FILE mode (`--no-git`,
+# see scripts/check-secrets.mjs and #442): git mode never saw these because
+# they are gitignored and therefore never in a commit, but a file walk reads
+# whatever is on disk — which after `npm ci` is tens of thousands of
+# dependency files, including their own test fixtures. None of it is this
+# repo's content and none of it can be committed, so scanning it would buy
+# noise, not coverage. Measured: with these exclusions a file-mode scan of a
+# full working tree reads 12.34 MB in 6.7s, the same as a clean checkout.
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)(dist|dist-ssr|build|out)/''',
+  '''(^|/)(coverage|test-results|playwright-report|blob-report|\.nyc_output|\.lighthouseci)/''',
+  '''(^|/)\.terraform/''',
+]
