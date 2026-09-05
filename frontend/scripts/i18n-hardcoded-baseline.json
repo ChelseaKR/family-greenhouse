@@ -65,7 +65,7 @@
     "features/household/HouseholdOnboarding.tsx": 2,
     "features/household/HouseholdPage.tsx": 6,
     "features/household/SitterLinksCard.tsx": 4,
-    "features/landing/LandingPage.tsx": 11,
+    "features/landing/LandingPage.tsx": 10,
     "features/petsafe/PetSafePage.tsx": 6,
     "features/plants/AddPlantPage.tsx": 7,
     "features/plants/AddTaskModal.tsx": 4,
