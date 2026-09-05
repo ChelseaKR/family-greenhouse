@@ -189,7 +189,14 @@ describe('NotificationSettings', () => {
 
   it('shows the verified badge straight away for an already-verified number', async () => {
     await renderSettings(prefs({ phone: '+15551234567', phoneVerified: true, sms: true }));
-    expect(screen.getByTestId('phone-verified-badge')).toBeInTheDocument();
+    // findBy, not getBy: the badge needs `phoneDraft === prefs.phone`
+    // (NotificationSettings.tsx:544), and phoneDraft is seeded from the query
+    // data in an effect (:273-278) — so the badge lands one commit AFTER the
+    // element renderSettings waits on. A synchronous get races that effect and
+    // fails under CPU contention; it flaked in the pre-push gate while passing
+    // standalone. "Straight away" means no verification round-trip, which this
+    // still asserts: nothing is clicked before the badge is expected.
+    expect(await screen.findByTestId('phone-verified-badge')).toBeInTheDocument();
     const smsToggle = screen.getByRole('checkbox', { name: 'SMS notifications' });
     expect(smsToggle).toBeChecked();
     expect(smsToggle).toBeEnabled(); // can always turn OFF

@@ -17,7 +17,7 @@
     "brand:render": "./scripts/render-brand-assets.sh",
     "brand:check": "node scripts/check-brand-assets.mjs",
     "preview": "vite preview",
-    "lint": "eslint src tests/e2e playwright.config.ts --report-unused-disable-directives --max-warnings 0",
+    "lint": "node ../scripts/cached-lint.mjs eslint -- src tests/e2e playwright.config.ts --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint src tests/e2e playwright.config.ts --fix",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.e2e.json",
     "test": "vitest run",
