@@ -1122,6 +1122,7 @@
     "availabilityCheckFailed": "No se pudo comprobar la disponibilidad del chat. Inténtalo de nuevo en unos instantes.",
     "seedlingUnavailableTitle": "El chat de cuidado no está disponible en Seedling",
     "seedlingUnavailableDescription": "Tus plantas, tareas, recordatorios, análisis y guías de cuidado siguen disponibles.",
+    "disclosureLabel": "Sobre esta respuesta",
     "report": {
       "success": "Respuesta denunciada. Gracias.",
       "open": "Denunciar respuesta",

@@ -199,7 +199,20 @@ describe('chat turn budget tiering', () => {
     process.env.CHAT_BUDGET_INPUT_TOKENS_GARDEN = '62500';
     process.env.CHAT_BUDGET_OUTPUT_TOKENS_GARDEN = '12500';
     vi.mocked(isSproutIntegrationEnabled).mockReturnValue(true);
-    vi.mocked(askSprout).mockResolvedValueOnce({ text: 'Water it weekly.', citations: [] });
+    vi.mocked(askSprout).mockResolvedValueOnce({
+      text: 'Water it weekly.',
+      citations: [],
+      // The full five-field contract. `observations`, `disclosure` and
+      // `coverage` are required of askSprout, so a fixture that omits them is
+      // testing a shape the service cannot return (#570, #579).
+      observations: [],
+      disclosure: 'General information, not veterinary advice.',
+      coverage: {
+        plants: { total: 1, included: 1, unmatched: 0, truncated: 0, cap: 100, complete: true },
+        tasks: { total: 1, included: 1, unmatched: 0, truncated: 0, cap: 100, complete: true },
+        partial: false,
+      },
+    });
 
     const result = await runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' });
 

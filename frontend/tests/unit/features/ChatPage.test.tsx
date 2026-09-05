@@ -143,4 +143,42 @@ describe('ChatPage plan availability', () => {
     expect(await screen.findByLabelText('Chat message')).toBeInTheDocument();
     expect(chatService.getBudget).toHaveBeenCalledOnce();
   });
+
+  /**
+   * #579: Sprout's `disclosure` is a required field of the answer contract and
+   * was dropped in `runChatTurn`, so it reached no one. It is persisted with
+   * the answer now; this is the assertion that it actually reaches the DOM,
+   * rather than merely existing in a type.
+   */
+  it('shows the Sprout disclosure that came back with a replayed answer', async () => {
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({ planId: 'garden' });
+    sessionStorage.setItem('chat:conversationId:hh-1', 'conv-1');
+    vi.mocked(chatService.getConversation).mockResolvedValue([
+      {
+        timestamp: '2026-07-12T00:00:00Z',
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Pothos is toxic to cats.' },
+          { type: 'disclosure', text: 'General information, not veterinary advice.' },
+          {
+            type: 'coverage',
+            plants: { total: 112, included: 40, unmatched: 62, truncated: 10, cap: 100 },
+            tasks: { total: 9, included: 9, unmatched: 0, truncated: 0, cap: 100 },
+            partial: true,
+          },
+        ],
+      },
+    ]);
+    renderPage();
+
+    expect(
+      await screen.findByText('General information, not veterinary advice.')
+    ).toBeInTheDocument();
+    // The answer and its disclosure stay separate elements: the disclosure is
+    // Sprout's statement ABOUT the answer, not part of what it said.
+    expect(screen.getByText('Pothos is toxic to cats.')).not.toContainElement(
+      screen.getByText('General information, not veterinary advice.')
+    );
+    sessionStorage.removeItem('chat:conversationId:hh-1');
+  });
 });

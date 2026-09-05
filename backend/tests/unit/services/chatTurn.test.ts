@@ -176,6 +176,13 @@ describe('runChatTurn', () => {
       ],
       observations: [],
       disclosure: 'AI-generated',
+      // Required of askSprout since #570; a fixture without it tests a shape
+      // the service cannot return.
+      coverage: {
+        plants: { total: 1, included: 1, unmatched: 0, truncated: 0, cap: 100, complete: true },
+        tasks: { total: 0, included: 0, unmatched: 0, truncated: 0, cap: 100, complete: true },
+        partial: false,
+      },
     });
 
     const result = await runChatTurn({
@@ -217,6 +224,233 @@ describe('runChatTurn', () => {
     expect(result.provider).toBe('bedrock');
     expect(invokeChatModel).toHaveBeenCalledOnce();
     expect(appendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * #579: `runChatTurn` read two of `askSprout`'s five fields. `disclosure`,
+   * `observations` and the top-level `coverage` #570 added were constructed,
+   * typed, documented — and dropped on the floor, so #549's protection was
+   * wired to nothing and would have stayed that way if the flag were turned
+   * on. These tests are written the way #579 asked for: flip `coverage`, and
+   * assert the difference reaches the persisted record and the log line.
+   */
+  describe('a Sprout answer keeps its disclosure and coverage (#579)', () => {
+    function setCoverage(total: number, included: number, unmatched: number, truncated: number) {
+      return { total, included, unmatched, truncated, cap: 100, complete: included === total };
+    }
+
+    /** A full five-field SproutChatResult, partial by default. */
+    function sproutAnswer(over: Record<string, unknown> = {}) {
+      return {
+        text: 'Grounded care.',
+        citations: [],
+        observations: [
+          {
+            kind: 'collection' as const,
+            value: { toxic_to_cats: 1 },
+            provenance: 'household' as const,
+            coverage: setCoverage(112, 40, 62, 10),
+          },
+        ],
+        disclosure: 'General information, not veterinary advice.',
+        coverage: {
+          plants: setCoverage(112, 40, 62, 10),
+          tasks: setCoverage(9, 9, 0, 0),
+          partial: true,
+        },
+        ...over,
+      };
+    }
+
+    function persistedAssistantRecord() {
+      return vi.mocked(appendMessagePair).mock.calls.at(-1)?.[2];
+    }
+
+    async function askOnce(message = 'Anything toxic to my cat?') {
+      vi.mocked(isSproutIntegrationEnabled).mockReturnValueOnce(true);
+      return runChatTurn({ userId: 'u1', householdId: 'hh-1', message });
+    }
+
+    it('persists the disclosure and the coverage with the answer', async () => {
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer());
+
+      const result = await askOnce();
+
+      const record = persistedAssistantRecord();
+      expect(record?.content).toContainEqual({
+        type: 'disclosure',
+        text: 'General information, not veterinary advice.',
+      });
+      expect(record?.content).toContainEqual({
+        type: 'coverage',
+        plants: setCoverage(112, 40, 62, 10),
+        tasks: setCoverage(9, 9, 0, 0),
+        partial: true,
+      });
+      // And on the turn result, so the live render does not have to wait for
+      // a reload to see what the stored transcript will show.
+      expect(result.disclosure).toBe('General information, not veterinary advice.');
+      expect(result.coverage?.partial).toBe(true);
+      expect(result.coverage?.plants.included).toBe(40);
+    });
+
+    it('carries the coverage it was actually given, not a constant', async () => {
+      // The same turn, the ONLY difference being that the household was fully
+      // represented this time. If the persisted block does not move with it,
+      // the field is decorative.
+      vi.mocked(askSprout).mockResolvedValueOnce(
+        sproutAnswer({
+          observations: [],
+          coverage: {
+            plants: setCoverage(112, 112, 0, 0),
+            tasks: setCoverage(9, 9, 0, 0),
+            partial: false,
+          },
+        })
+      );
+
+      const result = await askOnce();
+
+      const coverage = persistedAssistantRecord()?.content.find(
+        (block) => block.type === 'coverage'
+      );
+      expect(coverage).toMatchObject({ partial: false });
+      expect(coverage).toMatchObject({ plants: { included: 112, total: 112, complete: true } });
+      expect(result.coverage?.partial).toBe(false);
+    });
+
+    it('never lets a plant name or a typed species ride along in the coverage', async () => {
+      // The boundary contract at buildSproutContext: coverage says HOW MANY
+      // plants did not cross, never anything about them. Persisting it and
+      // returning it to the browser must not be the place that changes.
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer());
+
+      await askOnce();
+
+      const coverage = persistedAssistantRecord()?.content.find(
+        (block) => block.type === 'coverage'
+      );
+      expect(coverage).toBeDefined();
+      const leaves = Object.entries(coverage as unknown as Record<string, unknown>).flatMap(
+        ([key, value]) =>
+          value !== null && typeof value === 'object'
+            ? Object.values(value as Record<string, unknown>)
+            : [key === 'type' ? 0 : value]
+      );
+      for (const leaf of leaves) {
+        expect(['number', 'boolean']).toContain(typeof leaf);
+      }
+    });
+
+    it('asks Sprout in the language the question was asked in', async () => {
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer());
+      await askOnce('¿Mis plantas son tóxicas para mi gato?');
+      expect(askSprout).toHaveBeenLastCalledWith(
+        expect.objectContaining({ language: 'es', householdId: 'hh-1' })
+      );
+
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer());
+      await askOnce('Is my pothos toxic to cats?');
+      expect(askSprout).toHaveBeenLastCalledWith(expect.objectContaining({ language: 'en' }));
+    });
+
+    it('says so rather than persisting an empty disclosure as if it were one', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn');
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer({ disclosure: '   ' }));
+
+      const result = await askOnce();
+
+      expect(persistedAssistantRecord()?.content.some((block) => block.type === 'disclosure')).toBe(
+        false
+      );
+      expect(result.disclosure).toBeUndefined();
+      expect(warnSpy.mock.calls.map((call) => call[1])).toContain(
+        'sprout_answer_without_disclosure'
+      );
+      // The coverage block is unconditional: the prose came from the same
+      // reduced set whether or not a disclosure arrived with it.
+      expect(persistedAssistantRecord()?.content.some((block) => block.type === 'coverage')).toBe(
+        true
+      );
+    });
+
+    it('makes "did this answer come from a subset?" answerable from the log', async () => {
+      const infoSpy = vi.spyOn(logger, 'info');
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer());
+
+      await askOnce();
+
+      const sent = infoSpy.mock.calls.find((call) => call[1] === 'chat.message_sent');
+      expect(sent?.[0]).toMatchObject({
+        metadata: {
+          provider: 'sprout',
+          observationCount: 1,
+          disclosed: true,
+          coveragePartial: true,
+          plantsIncluded: 40,
+          plantsTotal: 112,
+          plantsUnmatched: 62,
+          plantsTruncated: 10,
+        },
+      });
+      // Aggregate integers and booleans only — the audit sink gets no more
+      // about the household than the payload itself carried.
+      const metadata = (sent?.[0] as { metadata: Record<string, unknown> }).metadata;
+      for (const [key, value] of Object.entries(metadata)) {
+        if (key === 'conversationId' || key === 'provider') continue;
+        expect(['number', 'boolean']).toContain(typeof value);
+      }
+    });
+
+    it('does not replay display-only blocks into a later Bedrock turn', async () => {
+      // A Sprout turn now persists three kinds of display metadata. All three
+      // are Family Greenhouse's, not Anthropic content blocks; a Bedrock
+      // fallback later in the same conversation must not send them onward.
+      vi.mocked(getConversation).mockResolvedValueOnce([
+        {
+          conversationId: 'conv-1',
+          timestamp: '2026-07-01T00:00:00.000Z',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Grounded care.' },
+            {
+              type: 'citation',
+              title: 'Pothos care',
+              url: 'https://example.test/pothos',
+              source: 'pothos.md',
+              fetch_date: '2026-05-01',
+            },
+            { type: 'disclosure', text: 'General information, not veterinary advice.' },
+            {
+              type: 'coverage',
+              plants: setCoverage(112, 40, 62, 10),
+              tasks: setCoverage(9, 9, 0, 0),
+              partial: true,
+            },
+          ],
+        },
+      ]);
+      vi.mocked(invokeChatModel).mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'Follow-up.' }],
+        stopReason: 'end_turn',
+        inputTokens: 10,
+        outputTokens: 5,
+        costUsd: 0.0001,
+      });
+
+      await runChatTurn({
+        userId: 'u1',
+        householdId: 'hh-1',
+        conversationId: 'conv-1',
+        message: 'and now?',
+      });
+
+      const replayed = vi.mocked(invokeChatModel).mock.calls[0][0].messages[0];
+      expect(replayed.content).toEqual([{ type: 'text', text: 'Grounded care.' }]);
+      expect(JSON.stringify(vi.mocked(invokeChatModel).mock.calls[0][0].messages)).not.toContain(
+        'veterinary advice'
+      );
+    });
   });
 
   it('returns the assistant text and persists exactly the right turns on a no-tool answer', async () => {

@@ -1094,6 +1094,7 @@
     "availabilityCheckFailed": "Chat availability could not be checked. Try this page again in a moment.",
     "seedlingUnavailableTitle": "Plant care chat isn’t available on Seedling",
     "seedlingUnavailableDescription": "Your plants, tasks, reminders, analytics, and care guides remain available.",
+    "disclosureLabel": "About this answer",
     "report": {
       "success": "Response reported. Thank you.",
       "open": "Report response",

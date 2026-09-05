@@ -115,6 +115,7 @@ export function ChatPage() {
         text: displayText,
         proposals: data.proposals?.length ? data.proposals : undefined,
         citations: data.citations?.length ? data.citations : undefined,
+        disclosure: data.disclosure?.trim() ? data.disclosure.trim() : undefined,
       },
     ]);
   }
@@ -303,6 +304,21 @@ export function ChatPage() {
                   <ProposalCard key={p.proposalId ?? `${m.id}#${idx}`} proposal={p} />
                 ))}
               </div>
+            )}
+            {m.role === 'assistant' && m.disclosure && (
+              // Sprout's own disclosure, verbatim. It is a required field of
+              // the answer contract and was being dropped before it reached
+              // anyone (#579); this app writes none of its words, so there is
+              // no wording decision here — only whether the sentence Sprout
+              // already wrote is shown at all. The label is ours and is
+              // translated; the disclosure itself arrives in the language the
+              // question was asked in.
+              <p
+                className="mt-2 max-w-xl text-xs text-gray-600 italic"
+                aria-label={t('chat.disclosureLabel')}
+              >
+                {m.disclosure}
+              </p>
             )}
             {m.role === 'assistant' && m.citations && m.citations.length > 0 && (
               <ul className="mt-2 max-w-xl space-y-1 text-xs text-gray-600" aria-label="Sources">

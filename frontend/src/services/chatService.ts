@@ -17,6 +17,16 @@ export interface ChatContentBlock {
   url?: string;
   source?: string;
   fetch_date?: string;
+  /**
+   * `coverage` blocks persisted by the Sprout integration: how much of the
+   * household the answer was computed over (#549). Aggregate integers only,
+   * never a plant name or a typed species. Round-tripped here so a reload
+   * carries it; what a user is SHOWN when `partial` is true is still an open
+   * product decision, so nothing renders it yet.
+   */
+  plants?: { total: number; included: number; complete: boolean };
+  tasks?: { total: number; included: number; complete: boolean };
+  partial?: boolean;
 }
 
 export interface ChatMessage {
@@ -59,6 +69,11 @@ export interface SendMessageResponse {
     source: string;
     fetch_date: string;
   }>;
+  /**
+   * Sprout's own required per-answer disclosure, verbatim and already in the
+   * language the question was asked in. Absent when Sprout sent an empty one.
+   */
+  disclosure?: string;
 }
 
 export interface BudgetSnapshot {
