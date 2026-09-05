@@ -113,8 +113,141 @@ describe('householdService', () => {
       // Same stable-shape rule for the auto-handoff rule (ADR 0018): absent
       // reads as null (off), never as an enabled threshold.
       escalateAfterDays: null,
+      // And for the household zone (#342, ADR 0025): absent reads as `''`
+      // ("never set"), never as 'UTC' — which is a household's real choice.
+      timezone: '',
       createdAt: '2026',
       createdBy: 'user-1',
+    });
+  });
+
+  describe('household timezone (#342, ADR 0025)', () => {
+    it('getHousehold returns a stored zone verbatim', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { getHousehold } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Item: {
+          id: 'hh',
+          name: 'Home',
+          timezone: 'America/New_York',
+          createdAt: '2026',
+          createdBy: 'user-1',
+        },
+      });
+      expect(await getHousehold('hh')).toMatchObject({ timezone: 'America/New_York' });
+    });
+
+    it('getHousehold degrades an unresolvable stored zone to unset, not to UTC', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { getHousehold } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Item: {
+          id: 'hh',
+          name: 'Home',
+          timezone: 'America/Nowhere',
+          createdAt: '2026',
+          createdBy: 'user-1',
+        },
+      });
+      const household = await getHousehold('hh');
+      expect(household?.timezone).toBe('');
+      expect(household?.timezone).not.toBe('UTC');
+    });
+
+    it('getHousehold keeps an explicit UTC choice', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { getHousehold } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Item: {
+          id: 'hh',
+          name: 'Home',
+          timezone: 'UTC',
+          createdAt: '2026',
+          createdBy: 'user-1',
+        },
+      });
+      expect((await getHousehold('hh'))?.timezone).toBe('UTC');
+    });
+
+    it('setHouseholdTimeZone SETs a valid zone, guarded on the row existing', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { setHouseholdTimeZone } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'hh',
+          name: 'Home',
+          timezone: 'Europe/London',
+          createdAt: '2026',
+          createdBy: 'user-1',
+        },
+      });
+      const result = await setHouseholdTimeZone('hh', 'Europe/London');
+      expect(result).toMatchObject({ timezone: 'Europe/London' });
+      const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+        kind: string;
+        input: Record<string, unknown>;
+      };
+      expect(cmd.kind).toBe('Update');
+      expect(cmd.input.UpdateExpression).toBe('SET #timezone = :timezone');
+      expect(cmd.input.ExpressionAttributeValues).toEqual({ ':timezone': 'Europe/London' });
+      expect(cmd.input.ConditionExpression).toBe('attribute_exists(PK)');
+    });
+
+    it('setHouseholdTimeZone REMOVEs on empty, so "never set" survives at the storage layer', async () => {
+      // Writing `''` would make the attribute present-and-empty, which reads
+      // back the same as absent through `normalizeHouseholdTimeZone` but is
+      // NOT the same in DynamoDB. ADR 0025's cutover needs the row itself to
+      // still be able to say "nobody ever chose".
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { setHouseholdTimeZone } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: { id: 'hh', name: 'Home', createdAt: '2026', createdBy: 'user-1' },
+      });
+      const result = await setHouseholdTimeZone('hh', '');
+      expect(result).toMatchObject({ timezone: '' });
+      const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+        input: Record<string, unknown>;
+      };
+      expect(cmd.input.UpdateExpression).toBe('REMOVE #timezone');
+      expect(cmd.input.ExpressionAttributeValues).toBeUndefined();
+    });
+
+    it('setHouseholdTimeZone returns null when the household is gone', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { setHouseholdTimeZone } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Attributes: undefined });
+      expect(await setHouseholdTimeZone('hh', 'UTC')).toBeNull();
+    });
+
+    it('setHouseholdLocation now answers with the whole household, not a subset', async () => {
+      // Its hand-written projection used to drop `escalateAfterDays`, so the
+      // location response reported an auto-handoff rule that was actually
+      // stored as absent. Both write paths share `toHousehold` now, which is
+      // what stops the zone falling into the same hole.
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { setHouseholdLocation } = await import('../../../src/services/householdService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'hh',
+          name: 'Home',
+          location: { city: 'Austin', lat: 30.27, lon: -97.74 },
+          escalateAfterDays: 7,
+          timezone: 'America/Chicago',
+          createdAt: '2026',
+          createdBy: 'user-1',
+        },
+      });
+      expect(await setHouseholdLocation('hh', { city: 'Austin', lat: 30.27, lon: -97.74 })).toEqual(
+        {
+          id: 'hh',
+          name: 'Home',
+          location: { city: 'Austin', lat: 30.27, lon: -97.74 },
+          escalateAfterDays: 7,
+          timezone: 'America/Chicago',
+          createdAt: '2026',
+          createdBy: 'user-1',
+        }
+      );
     });
   });
 

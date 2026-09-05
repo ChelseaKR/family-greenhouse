@@ -1541,6 +1541,54 @@ paths:
         '402': { description: The household's plan does not include the household toolkit }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /households/{id}/timezone:
+    put:
+      summary: Set (or clear with `""`) the household's IANA timezone
+      description: |
+        The household's IANA timezone (issue #342, ADR 0025). Admin-only; not
+        plan-gated.
+
+        **Stored and readable; nothing consults it yet.** Due dates are still
+        ISO instants compared in the server's zone on every surface — the
+        upcoming window, the reminder scan, the ICS feed, the digest's
+        days-overdue count. Interpreting a due date as a calendar day in this
+        zone reclassifies tasks that already exist, which is the migration ADR
+        0025 plans rather than performs.
+
+        An empty string clears the zone back to "never set", which is a
+        distinct state from a household that chose `UTC`: the attribute is
+        removed from the row rather than defaulted, so the two remain
+        distinguishable (ADR 0010).
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone:
+                  type: string
+                  maxLength: 100
+                  description: >-
+                    An IANA name the server's tz database resolves (e.g.
+                    `America/New_York`), or `""` to clear. Validated against
+                    `Intl`, not a pattern.
+                  example: America/New_York
+      responses:
+        '200':
+          description: The stored zone (`""` when unset)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timezone: { type: string, example: America/New_York }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /households/{householdId}/members/{userId}:
     delete:
       summary: Remove a member from a household (admin only)

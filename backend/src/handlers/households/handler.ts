@@ -19,6 +19,8 @@ import {
   CreateSitterLinkInput,
   setEscalationRuleSchema,
   SetEscalationRuleInput,
+  setHouseholdTimeZoneSchema,
+  SetHouseholdTimeZoneInput,
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
 import * as welcomeEmail from '../../services/welcomeEmail.js';
@@ -1125,6 +1127,58 @@ export const setEscalationRule = createHandler(
   .use(requireAdmin())
   .use(validateBody(setEscalationRuleSchema));
 
+// PUT /households/{id}/timezone
+//
+// The household's IANA timezone (#342, ADR 0025). `{ timezone: "" }` clears it
+// back to "never set", which is NOT the same as choosing `"UTC"`.
+//
+// Stored and readable, and read by nothing. Due dates are still ISO instants
+// compared in the Lambda's zone on every surface — `taskService.completeTask`,
+// the 7-day upcoming window, the reminder scan's rolling 24h cutoff, the ICS
+// all-day date, the digest's days-overdue. Making any of those consult this
+// field reinterprets `nextDue` for every task already in production, and ADR
+// 0025 is the plan for that decision rather than this route.
+//
+// Admin-only, like the location card next to which it will live: a zone is
+// shared by the whole household, not a per-member preference (members already
+// have their own for quiet hours). Deliberately NOT plan-gated — this is
+// correctness, not a feature, and `PUT /households/{id}/escalation`'s 402 is
+// there because auto-handoff starts a new class of email.
+export const setHouseholdTimeZone = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<SetHouseholdTimeZoneInput>;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    // `requireAdmin()` only proves the caller is an admin of their OWN
+    // household; without this equality check they could set any other
+    // household's zone (the same guard `setLocation` documents).
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const household = await householdService.setHouseholdTimeZone(
+      householdId,
+      validatedBody.timezone
+    );
+    if (!household) {
+      throw createHttpError(404, 'Household not found');
+    }
+    audit('household.settings_changed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { setting: 'timezone', value: household.timezone },
+    });
+    return successResponse({ timezone: household.timezone });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(setHouseholdTimeZoneSchema));
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'POST /households': createHousehold,
@@ -1149,6 +1203,7 @@ export const handler = createRouter({
   'POST /households/{id}/upgrade-requests': createUpgradeRequest,
   'GET /households/{id}/away-recap': getAwayRecap,
   'PUT /households/{id}/escalation': setEscalationRule,
+  'PUT /households/{id}/timezone': setHouseholdTimeZone,
   // Caretaker seats (handlers/caretakers/management.ts) — same posture as
   // sitter links: create/list/revoke are admin-gated, the report is not.
   'POST /households/{id}/caretakers': caretakers.createCaretaker,

@@ -29,6 +29,16 @@ export interface Household {
    * never turn the feature into hourly nagging.
    */
   escalateAfterDays?: number | null;
+  /**
+   * The household's IANA timezone, or `''` for "never set" — a distinct state
+   * from a household that chose `'UTC'` (services/householdTimeZone.ts, and
+   * ADR 0010 for why absence is not rounded to a value).
+   *
+   * Stored and readable; NOTHING consults it yet. Due dates are still ISO
+   * instants compared in the Lambda's zone, and reinterpreting them for tasks
+   * already in production is the owner decision ADR 0025 sets out.
+   */
+  timezone?: string;
   createdAt: string;
   createdBy: string;
 }

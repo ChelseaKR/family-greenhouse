@@ -2059,3 +2059,137 @@ describe('sitter links — member access and revocation model', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('households handler — PUT /households/{id}/timezone (#342, ADR 0025)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
+  });
+
+  function tzEvent(claims: Record<string, unknown>, body: unknown, id = 'hh-1') {
+    return buildEvent(claims, {
+      httpMethod: 'PUT',
+      pathParameters: { id },
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  const storedHousehold = (timezone: string) =>
+    ({
+      id: 'hh-1',
+      name: 'Home',
+      location: null,
+      escalateAfterDays: null,
+      timezone,
+      createdAt: '2026',
+      createdBy: 'user-1',
+    }) as never;
+
+  it('stores a valid zone for an admin', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(
+      storedHousehold('America/New_York')
+    );
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/New_York' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ timezone: 'America/New_York' });
+    expect(householdService.setHouseholdTimeZone).toHaveBeenCalledWith('hh-1', 'America/New_York');
+  });
+
+  it('clears the zone with an empty string', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(storedHousehold(''));
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: '' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ timezone: '' });
+    expect(householdService.setHouseholdTimeZone).toHaveBeenCalledWith('hh-1', '');
+  });
+
+  it('rejects an unresolvable zone at the edge (400) before touching the service', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/Nowhere' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(householdService.setHouseholdTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('is admin-only (403 for a member), and stores nothing', async () => {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(memberClaims, { timezone: 'America/New_York' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(householdService.setHouseholdTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('404s when the household row is gone', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(null);
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'UTC' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("an admin cannot set ANOTHER household's zone (403), and nothing is stored", async () => {
+    // `requireAdmin()` only proves the caller administers their OWN household.
+    // Without the path/claim equality check in the handler, an admin of hh-1
+    // could rewrite hh-2's zone — which, once ADR 0025's migration lands,
+    // would silently reclassify a stranger's whole task list.
+    const householdService = await import('../../../src/services/householdService.js');
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/New_York' }, 'hh-2'),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(householdService.setHouseholdTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('is NOT plan-gated — a zone is correctness, not a paid feature', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+    } as never);
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(
+      storedHousehold('America/New_York')
+    );
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/New_York' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+  });
+});

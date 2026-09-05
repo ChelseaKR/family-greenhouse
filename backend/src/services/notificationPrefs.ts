@@ -3,6 +3,7 @@ import { DeleteCommand, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/l
 import createHttpError from 'http-errors';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
+import { isValidTimeZone } from '../utils/timeZone.js';
 import * as smsNotifier from './smsNotifier.js';
 
 /**
@@ -186,24 +187,15 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
 }
 
 /**
- * Validate an IANA timezone. Primary check is the runtime's canonical list
- * (`Intl.supportedValuesOf`); we fall back to letting Intl resolve the name
- * because `supportedValuesOf` omits some accepted aliases (e.g. links like
- * "Etc/GMT" variants).
+ * Validate an IANA timezone.
+ *
+ * The implementation moved to `utils/timeZone.ts` so a module with no AWS
+ * imports can use it (`services/householdTimeZone.ts`). Re-exported here
+ * because `notificationPrefs.isValidTimeZone` is the name the notifications
+ * handler and `billingEmails.ts` already call it by, and renaming a validator
+ * at two call sites buys nothing.
  */
-let supportedTimeZones: Set<string> | null = null;
-export function isValidTimeZone(tz: string): boolean {
-  try {
-    if (!supportedTimeZones) {
-      supportedTimeZones = new Set(Intl.supportedValuesOf('timeZone'));
-    }
-    if (supportedTimeZones.has(tz)) return true;
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { isValidTimeZone };
 
 /**
  * True iff "now" falls inside the user's DND window. Caller passes the user's

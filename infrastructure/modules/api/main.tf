@@ -984,6 +984,7 @@ locals {
 
     # Auto-handoff rule (ADR 0018): admin-only, plan-gated in the handler.
     "PUT /households/{id}/escalation" = { group = "households", auth = "jwt" }
+    "PUT /households/{id}/timezone"   = { group = "households", auth = "jwt" }
 
     # Plant Tags (ADR 0016). Management is any-member (a tag grants strictly
     # less than a member already holds); the PIN is admin-only. The two /tag
