@@ -810,13 +810,22 @@ export const HELP_SECTIONS: HelpSection[] = [
         id: 'free-trial',
         q: 'Is there a free trial?',
         a: (
-          <p>
-            Yes — every new subscription starts with a <strong>14-day free trial</strong>. Checkout
-            collects a card up front, and billing begins when the trial ends unless you cancel
-            before then. Cancelling during the trial leaves you on the free Seedling plan.
-          </p>
+          <>
+            <p>
+              Yes — a household&rsquo;s <strong>first</strong> paid subscription starts with a{' '}
+              <strong>14-day free trial</strong>. Checkout collects a card up front, and billing
+              begins when the trial ends unless you cancel before then. Cancelling during the trial
+              leaves you on the free Seedling plan.
+            </p>
+            <p>
+              The trial is <strong>once per household</strong>, not once per subscription. If your
+              household has had one before &mdash; you cancelled and came back, or a subscription
+              ended when a payment stopped going through &mdash; a new subscription is charged from
+              the start instead of after 14 free days.
+            </p>
+          </>
         ),
-        text: 'Yes. Every new subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan.',
+        text: "Yes. A household's first paid subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
       },
       {
         id: 'cancel',

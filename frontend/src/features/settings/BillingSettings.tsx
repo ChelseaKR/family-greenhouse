@@ -9,6 +9,7 @@ import {
   readOutcome,
   resolveCurrentPlan,
   resolvePlanUsage,
+  resolveTrialOffer,
   type BillingInterval,
   type Plan,
   type PlanId,
@@ -190,6 +191,19 @@ export function BillingSettings() {
   const hasLiveSubscription =
     !!subQuery.data?.stripeSubscriptionId &&
     (!subQuery.data.status || LIVE_SUBSCRIPTION_STATUSES.has(subQuery.data.status));
+  // The free trial is once per HOUSEHOLD, not once per checkout, so the
+  // sentence above the purchase buttons cannot be unconditional (#602): a
+  // household that cancelled — or was dunned to the end of its subscription —
+  // is offered this grid again and is charged the moment it checks out.
+  // Three states, and `unknown` gets a sentence of its own rather than
+  // borrowing either of the definite ones; see `resolveTrialOffer`.
+  const trialOffer = resolveTrialOffer(subQuery.data);
+  const changePlanDescriptionKey =
+    trialOffer === 'available'
+      ? 'settings.billing.changePlanDescriptionTrial'
+      : trialOffer === 'used'
+        ? 'settings.billing.changePlanDescriptionTrialUsed'
+        : 'settings.billing.changePlanDescription';
   // The identification top-up pack (ADR 0019). Shown when it is for sale
   // here, or when the household already holds credits it should be able to
   // see. Older backends publish neither; then nothing renders.
@@ -344,7 +358,7 @@ export function BillingSettings() {
         <Card>
           <CardHeader
             title={t('settings.billing.changePlanTitle')}
-            description={t('settings.billing.changePlanDescription')}
+            description={t(changePlanDescriptionKey)}
           />
           {/* Fail closed, for the same reason `hasLiveSubscription` does: with
               the subscription read unsettled we do not know what the household

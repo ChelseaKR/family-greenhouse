@@ -9,6 +9,7 @@ import {
   readOutcome,
   resolveCurrentPlan,
   resolvePlanUsage,
+  resolveTrialOffer,
   type IdentifyTopUpOffer,
   type Plan,
   type PlanCatalog,
@@ -623,6 +624,81 @@ describe('purchase controls once payment activity is available', () => {
     await renderBilling({ planId: 'garden' }, { paid: true });
     expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
     expect(screen.getByText('This is your current plan.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The 14-day trial is once per HOUSEHOLD (`trialConsumedAt`, never cleared by
+ * cancellation), but every trial sentence in the product was unconditional —
+ * including this one, which sits directly above the purchase buttons (#602).
+ *
+ * A household that cancelled, or whose card failed until Stripe's dunning ran
+ * out, is dropped to `seedling` with a dead status. `hasLiveSubscription` is
+ * false, so this card renders the purchase grid again — and told them they had
+ * 14 free days when the next click charges them at once.
+ *
+ * `trialAvailable` is the boolean that makes the sentence answerable. Three
+ * states, and `unknown` is not folded into either: a missing field is an older
+ * backend or a cached response, not evidence that the trial is gone.
+ */
+describe('BillingSettings — the free trial is once per household (#602)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  it('warns a returning household that its trial is spent and it will be charged', async () => {
+    await renderBilling(
+      { planId: 'seedling', stripeCustomerId: 'cus_1', status: 'canceled', trialAvailable: false },
+      { paid: true }
+    );
+
+    // The purchase path really is open — this is the household that gets the
+    // grid back, which is what made the old sentence dangerous rather than
+    // merely imprecise.
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/already used its 14-day free trial/, { selector: 'p' })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/charged straight away/, { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('tells a household that still has its trial that a new subscription starts with it', async () => {
+    await renderBilling({ planId: 'seedling', trialAvailable: true }, { paid: true });
+
+    const description = screen.getByText(/has not used its 14-day free trial yet/, {
+      selector: 'p',
+    });
+    expect(description).toBeInTheDocument();
+    expect(description).toHaveTextContent(/nothing is charged until it ends/);
+  });
+
+  it('states the rule, true either way, when the backend did not send the field', async () => {
+    // Rolling deploy or a cached PWA response. Reading the absence as "used"
+    // would frighten a first-time buyer; reading it as "available" would
+    // repeat the original lie. So it says what is always true instead.
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+
+    const description = screen.getByText(
+      /first paid subscription starts with a 14-day free trial/,
+      {
+        selector: 'p',
+      }
+    );
+    expect(description).toBeInTheDocument();
+    expect(description).toHaveTextContent(/once per household/);
+    // And it does not claim to know which case this household is in.
+    expect(description).not.toHaveTextContent(/This household/);
+  });
+});
+
+describe('resolveTrialOffer (three states, never two)', () => {
+  it('keeps an absent field apart from a real false', () => {
+    expect(resolveTrialOffer({ planId: 'seedling', trialAvailable: true })).toBe('available');
+    expect(resolveTrialOffer({ planId: 'seedling', trialAvailable: false })).toBe('used');
+    for (const subscription of [undefined, null, { planId: 'seedling' as const }]) {
+      expect(resolveTrialOffer(subscription)).toBe('unknown');
+    }
   });
 });
 

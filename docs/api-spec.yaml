@@ -2831,6 +2831,14 @@ components:
           $ref: '#/components/schemas/BillingUsageDetail'
         lifetimePlanId: { type: string, enum: [garden, greenhouse] }
         cancelAtPeriodEnd: { type: boolean }
+        trialAvailable:
+          type: boolean
+          description: >-
+            Whether a new subscription checkout for this household would include the 14-day free
+            trial. The trial is once per household, not once per checkout, so this is false for a
+            household that has had one before and resubscribes. Derived from an internal timestamp
+            that is never published. Absent from older backends, where it means UNKNOWN — a client
+            must not read a missing field as false.
         identifyCredits:
           description: >-
             Identification top-up credits (ADR 0019). `null` means the balance could not be read and is

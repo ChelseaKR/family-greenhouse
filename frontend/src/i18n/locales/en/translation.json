@@ -349,7 +349,7 @@
     "reactivationQuestion": "Can billing be reactivated automatically?",
     "reactivationAnswer": "No. Reactivation requires a dated status decision, reviewed source and infrastructure changes, non-production verification, and a separately approved deployment.",
     "trialQuestion": "How does the trial work?",
-    "trialAnswer": "Every paid subscription begins with a 14-day trial. You are not charged until it ends, and cancelling before then costs nothing.",
+    "trialAnswer": "A household’s first paid subscription begins with a 14-day trial. You are not charged until it ends, and cancelling before then costs nothing. The trial is once per household, so a household that has had one before is charged when it subscribes again.",
     "changeQuestion": "Can I change or cancel later?",
     "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Billing, which opens our payment provider's portal. Cancelling returns your household to the free Seedling tier at the end of the paid period.",
     "whereQuestion": "Where do I buy?",
@@ -360,7 +360,7 @@
     "householdQuestion": "Does everyone in my household need their own plan?",
     "householdAnswer": "No. One plan covers the whole household. A household admin holds the subscription, and every member shares the same plants, tasks, and care history under it. A free home holds up to three people; Garden and Greenhouse homes have no member limit.",
     "cardQuestion": "Do I need a credit card?",
-    "cardAnswer": "Not for a free account — the Seedling tier needs no card at all. Starting a paid plan goes through our payment provider's checkout, which collects a card before the trial begins; nothing is charged until the 14-day trial ends."
+    "cardAnswer": "Not for a free account — the Seedling tier needs no card at all. Starting a paid plan goes through our payment provider's checkout, which collects a card before the trial begins; where a trial applies, nothing is charged until its 14 days end. The trial is once per household, so a household that has had one before is charged when it subscribes again."
   },
   "petSafeSignup": {
     "title": "Keeping a pet-safe home is easier when everyone’s on the same page",
@@ -978,7 +978,9 @@
       "adminOnlyBilling": "Only a household admin can manage billing.",
       "adminOnlyPlan": "Only a household admin can change the plan.",
       "changePlanTitle": "Change plan",
-      "changePlanDescription": "Upgrades take effect immediately. Paid plans start with a 14-day free trial.",
+      "changePlanDescription": "Upgrades take effect immediately. A household’s first paid subscription starts with a 14-day free trial; the trial is once per household, so a later one is charged straight away.",
+      "changePlanDescriptionTrial": "Upgrades take effect immediately. This household has not used its 14-day free trial yet, so a new subscription starts with it and nothing is charged until it ends.",
+      "changePlanDescriptionTrialUsed": "Upgrades take effect immediately. This household has already used its 14-day free trial — it is once per household — so a new subscription is charged straight away rather than after 14 free days.",
       "currentPlanNote": "This is your current plan.",
       "cancelToReturn": "Cancel in the billing portal to return to Seedling.",
       "usePortalToSwitch": "Use “Manage subscription” above to switch to {{plan}}.",
@@ -1226,7 +1228,7 @@
     "featureApiAccess": "API access for automation",
     "featureImportExport": "Import, export and calendar feed (CSV, JSON, .ics)",
     "featurePrioritySupport": "Priority support",
-    "trialNote": "Paid plans begin with a 14-day trial. Checkout collects a card up front, you are not charged until the 14 days are up, and cancelling before then costs nothing.",
+    "trialNote": "A household’s first paid subscription begins with a 14-day trial. Checkout collects a card up front, you are not charged until the 14 days are up, and cancelling before then costs nothing. The trial is once per household: a household that has had one before is charged when it subscribes again.",
     "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
     "whyHeading": "Why a paid plan",
     "whyHouseholdTitle": "One bill for the house",

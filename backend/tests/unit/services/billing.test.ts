@@ -2155,7 +2155,12 @@ describe('getHouseholdSubscription', () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
-    expect(await getHouseholdSubscription('hh-1')).toEqual({ planId: 'seedling' });
+    // `trialAvailable` is part of the published shape (#602). A household with
+    // no metadata row has consumed nothing, so the answer is a real `true`.
+    expect(await getHouseholdSubscription('hh-1')).toEqual({
+      planId: 'seedling',
+      trialAvailable: true,
+    });
   });
 
   it('never exposes the internal cancellation retry marker', async () => {
@@ -2173,6 +2178,7 @@ describe('getHouseholdSubscription', () => {
       stripeSubscriptionId: undefined,
       status: undefined,
       currentPeriodEnd: undefined,
+      trialAvailable: true,
     });
   });
 
@@ -2260,6 +2266,75 @@ describe('the free trial is once per household, not once per checkout', () => {
     });
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
     expect(await getHouseholdSubscription('hh-1')).not.toHaveProperty('trialConsumedAt');
+  });
+
+  // The trial guard was correct and invisible: nothing on the wire said the
+  // trial was once per household, so the UI promised it unconditionally right
+  // above the purchase button (#602). `trialAvailable` is the derived answer —
+  // the date stays behind, the boolean goes out.
+  it('publishes trialAvailable=false for a household that has consumed its trial', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { planId: 'seedling', trialConsumedAt: '2026-01-01T00:00:00.000Z' },
+    });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    const sub = await getHouseholdSubscription('hh-1');
+    expect(sub.trialAvailable).toBe(false);
+    // Still no timestamp: the client learns the answer, never the date.
+    expect(sub).not.toHaveProperty('trialConsumedAt');
+  });
+
+  it('publishes trialAvailable=true for a household that has never had one', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { planId: 'seedling' } });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    expect((await getHouseholdSubscription('hh-1')).trialAvailable).toBe(true);
+  });
+
+  it('publishes trialAvailable=true for a household with no metadata row at all', async () => {
+    // The `if (!item) return { planId: 'seedling' }` path. A brand-new
+    // household has consumed nothing, and answering `undefined` here would
+    // make the client show the "already used it" wording to a first-time buyer.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    expect((await getHouseholdSubscription('hh-1')).trialAvailable).toBe(true);
+  });
+
+  /** The row a returning household has: cancelled, and its trial spent. */
+  const RESUBSCRIBING_ROW = {
+    planId: 'seedling' as const,
+    subscriptionStatus: 'canceled',
+    stripeCustomerId: 'cus_1',
+    trialConsumedAt: '2026-01-01T00:00:00.000Z',
+  };
+  /** The same household before it ever had a trial. */
+  const FIRST_TIME_ROW = {
+    planId: 'seedling' as const,
+    subscriptionStatus: 'canceled',
+    stripeCustomerId: 'cus_1',
+  };
+
+  async function trialAvailableFor(Item: Record<string, unknown>) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    return (await getHouseholdSubscription('hh-1')).trialAvailable;
+  }
+
+  // The published boolean and the checkout guard must never drift: the
+  // sentence above the purchase button is only honest while it describes the
+  // condition `createCheckoutSession` actually applies to the same row.
+  it('agrees with the checkout guard when the trial is still available', async () => {
+    const params = await checkoutWithRow(FIRST_TIME_ROW);
+    expect(params.subscription_data?.trial_period_days).toBe(14);
+    expect(await trialAvailableFor(FIRST_TIME_ROW)).toBe(true);
+  });
+
+  it('agrees with the checkout guard when the trial has been spent', async () => {
+    const params = await checkoutWithRow(RESUBSCRIBING_ROW);
+    expect(params.subscription_data?.trial_period_days).toBeUndefined();
+    expect(await trialAvailableFor(RESUBSCRIBING_ROW)).toBe(false);
   });
 });
 

@@ -74,6 +74,29 @@ export interface HouseholdSubscription {
    * reasonably concludes the cancellation failed.
    */
   cancelAtPeriodEnd?: boolean;
+  /**
+   * Whether a NEW subscription checkout for this household would include the
+   * free trial. Derived from the internal `trialConsumedAt` below, and the
+   * only thing about it that ever reaches a client.
+   *
+   * It exists because the trial is once per HOUSEHOLD, not once per checkout
+   * (see `markTrialConsumed` and the `subscription_data` guard in
+   * `createCheckoutSession`), and until #602 nothing on the wire said so —
+   * so `Settings → Billing` promised "paid plans start with a 14-day free
+   * trial" directly above the purchase button of a household that had used
+   * its trial and would be charged at once. The UI could not qualify that
+   * sentence because there was no field to branch on.
+   *
+   * The TIMESTAMP stays internal. A client has no use for the date, and the
+   * answer to "would this purchase be free for 14 days?" is a boolean.
+   *
+   * Optional on the type so a caller that describes a subscription it has not
+   * read this from is not forced to invent an answer — `undefined` means
+   * UNKNOWN, never "no trial", and the client renders a sentence that is true
+   * either way when it is missing (an older backend, a cached PWA response).
+   * `getHouseholdSubscription` always sets it.
+   */
+  trialAvailable?: boolean;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -122,10 +145,24 @@ export async function getHouseholdSubscription(
     currentPeriodEnd: state.currentPeriodEnd,
     lifetimePlanId: state.lifetimePlanId,
     cancelAtPeriodEnd: state.cancelAtPeriodEnd,
+    // Derived here, at the one boundary where the internal row becomes the
+    // published shape, so there is a single place that decides what a client
+    // learns about the trial: the answer, never the date. This is exactly the
+    // condition `createCheckoutSession` applies below, read off the same row.
+    trialAvailable: !state.trialConsumedAt,
   };
 }
 
-type SubscriptionWriteField = keyof HouseholdSubscription | 'pendingStripeCancellationId';
+/**
+ * Fields `updateHouseholdSubscription` can write onto the metadata row.
+ *
+ * `trialAvailable` is excluded because it is DERIVED at read time from
+ * `trialConsumedAt` and has no attribute of its own. Leaving it in would let a
+ * caller persist a second, staler copy of the same fact — and the row already
+ * has one authority for it, written write-once by `markTrialConsumed`.
+ */
+type SubscriptionWriteField =
+  Exclude<keyof HouseholdSubscription, 'trialAvailable'> | 'pendingStripeCancellationId';
 
 /**
  * Write subscription fields onto the household metadata row.
