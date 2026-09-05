@@ -2,8 +2,14 @@
 #
 # Public marketing routes are crawlable. Anything behind auth (dashboard,
 # plant detail, settings, etc.) gets disallowed because crawling them is
-# wasted effort — they 401-redirect to /login. The /api/* prefix is off-
-# limits since it's machine-readable JSON, not user-facing pages.
+# wasted effort — they 401-redirect to /login.
+#
+# /login and /register are deliberately NOT disallowed. They answer from
+# app-shell.html, which carries `noindex, follow`, and /register is linked
+# from the homepage. Blocking a linked URL stops Google fetching it, and a
+# page it cannot fetch is a page whose noindex it never reads — which is how
+# a blocked-but-linked URL ends up indexed url-only. Letting the crawl
+# through so the noindex is seen is the stronger exclusion.
 
 User-agent: *
 Allow: /
@@ -13,8 +19,6 @@ Allow: /changelog
 Allow: /legal
 Allow: /status
 
-Disallow: /api/
-Disallow: /auth/
 Disallow: /dashboard
 Disallow: /plants
 Disallow: /tasks
@@ -37,6 +41,7 @@ Disallow: /join/
 #   /sit/<token>    256-bit sitter link       (sitterService), plus /sit/<t>/brief
 #   /tag/<token>    256-bit plant tag         (plantTagService)
 #   /shared/<code>  128-bit plant share card  (plantService.createPlantShare)
+#   /caretaker/<t> 256-bit caretaker seat     (caretakerVisitService)
 #
 # Disallowing these keeps a well-behaved crawler from ever FETCHING the token.
 # Keeping them out of a search index is a separate control and does not depend
@@ -53,6 +58,7 @@ Disallow: /kiosk/
 Disallow: /sit/
 Disallow: /tag/
 Disallow: /shared/
+Disallow: /caretaker/
 Disallow: /coming-soon
 
 Sitemap: https://familygreenhouse.net/sitemap.xml
