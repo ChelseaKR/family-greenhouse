@@ -27,7 +27,10 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
   immediately — see [`compliance.md`](compliance.md).
 - The browser reports sanitized error summaries plus LCP, CLS, and INP to `/telemetry/frontend`.
   Payloads contain an anonymous session UUID and normalized route, never a user id, query string,
-  stack trace, email, phone, token, plant name, or household name.
+  stack trace, email, phone, token, plant name, or household name. It also reports **how many
+  reports it could not deliver** — a count and an age, never the lost payloads — which is what
+  makes "no browser errors" distinguishable from "no browser could tell us"; see "Whether the
+  error rail can report at all" below.
 - Authenticated product events go to `/telemetry/product`. Actor and household identity are read from
   the verified JWT; the body accepts only typed event names and bounded discriminator properties.
   Those events land in the API Lambda log group. Trusted `signup_completed` events land in the auth
@@ -36,13 +39,15 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
 
 ## External availability checks
 
-Every alarm in `infrastructure/modules/monitoring` except two uses
-`treat_missing_data = "notBreaching"`. That is right for each of them
-individually — no throttle events means not throttling — and collectively it
-means **"the stack served nobody" produces no data points and therefore no
-alarm**. Nothing that reads a metric this stack publishes can see a total
-outage. The checks that can are all external, and there are two of them,
-deliberately different from each other.
+Almost every alarm in `infrastructure/modules/monitoring` uses
+`treat_missing_data = "notBreaching"`; the exceptions are the handful watching
+for absence itself, and each of them says so in a comment at its own
+definition. `notBreaching` is right for each ordinary alarm individually — no
+throttle events means not throttling — and collectively it means **"the stack
+served nobody" produces no data points and therefore no alarm**. Nothing that
+reads a metric this stack publishes can see a total outage. The checks that can
+are all external, and there are two of them, deliberately different from each
+other.
 
 ### 1. Route 53 health checks (30 seconds, into the alerts SNS topic)
 
@@ -67,9 +72,9 @@ Four properties of these matter more than the fact that they exist:
   check looks for `"status":"ok"`, which `GET /health` does **not** emit when
   its DynamoDB probe fails (it reports `degraded`). A healthy CDN serving
   someone else's 200, or a reachable-but-broken API, fails both.
-- **Missing data is breaching.** `site_unreachable` and `api_unreachable` are
-  the only two alarms in the module that set
-  `treat_missing_data = "breaching"`. Every other alarm is looking for a bad
+- **Missing data is breaching.** `site_unreachable` and `api_unreachable` set
+  `treat_missing_data = "breaching"` (as does the frontend-rail heartbeat
+  alarm described below, for the same reason). Every other alarm is looking for a bad
   value among good ones, where absent data honestly means nothing bad
   happened. These two are looking for absence itself, so if Route 53 stops
   publishing `HealthCheckStatus` — the health check was deleted, the metric is
@@ -90,14 +95,19 @@ cannot deliver.
 
 ### 2. GitHub Actions (`.github/workflows/uptime.yml`, 15 minutes)
 
-| Job                | What it fetches                                           | What it proves                                                                                                                    |
-| ------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `health`           | `vars.HEALTHCHECK_URL` (the API's `GET /health`)          | The API and its database dependency answer.                                                                                       |
-| `pages`            | `/`, `/register`, `/login`, `/pricing` on `vars.SITE_URL` | Each route returns HTML that is **this app** — app root, module script, `og:site_name`, non-empty `<title>` — not merely a 200.   |
-| `pages` (2nd step) | `/robots.txt` with `--expect-failure`                     | The page check can still fail. If the assertions ever soften to "any 200 passes", this step goes red while production is healthy. |
+| Job                             | What it fetches                                                                       | What it proves                                                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `health`                        | `vars.HEALTHCHECK_URL` (the API's `GET /health`)                                      | The API and its database dependency answer.                                                                                                                                                                                   |
+| `pages`                         | `/`, `/register`, `/login`, `/pricing` on `vars.SITE_URL`                             | Each route returns HTML that is **this app** — app root, module script, `og:site_name`, non-empty `<title>` — not merely a 200.                                                                                               |
+| `pages` (2nd step)              | `/robots.txt` with `--expect-failure`                                                 | The page check can still fail. If the assertions ever soften to "any 200 passes", this step goes red while production is healthy.                                                                                             |
+| `telemetry-delivery`            | A CORS preflight and a real `POST` to `/telemetry/frontend`, with the site's `Origin` | A browser could still **report** an error: the preflight answers with the exact origin (not `*`, which `allow_credentials = true` makes invalid), `POST` returns 204, and the response carries `access-control-allow-origin`. |
+| `telemetry-delivery` (2nd step) | The same check against the site origin, with `--expect-failure`                       | The delivery check can still fail.                                                                                                                                                                                            |
 
 `scripts/synthetic-page-check.mjs` is the page check. It has no dependencies
 (global `fetch`) so the job is a checkout plus one `node` invocation.
+`scripts/telemetry-delivery-check.mjs` is the delivery check, on the same
+terms; see "Whether the error rail can report at all" below for what its
+payload does after it arrives.
 
 This is the **deeper** of the two layers and is not superseded by the health
 checks: it parses the HTML and asserts four structural properties across four
@@ -117,17 +127,6 @@ and nothing in the check ever loaded a page.
 
 Still open, and deliberately not claimed as solved here:
 
-- **The frontend error rail cannot report the failures worth alarming on.**
-  `reportFrontendError` posts to `/telemetry/frontend` fire-and-forget
-  (`frontend/src/services/frontendTelemetry.ts`), so an unreachable API, a
-  CORS misconfiguration, or a crash before `initFrontendTelemetry()` runs all
-  destroy the delivery path for the very report that would raise the alarm.
-  The alarm that reads it is a metric filter on the **api** Lambda log group
-  with `treat_missing_data = "notBreaching"`, so a total frontend outage
-  produces zero data points and it sits green. Fixing this needs an
-  out-of-band collector (which is what Sentry would be, with a DSN); that is a
-  product decision about a third-party dependency and the privacy surface
-  documented below, not a bug to quietly patch. Tracked in issue #464.
 - **Deleting the health check deletes its alarm.** Setting
   `enable_site_health_check = false` removes the probe and the alarm together,
   so there is no runtime signal left to go missing. `check
@@ -138,6 +137,83 @@ Still open, and deliberately not claimed as solved here:
 - **A partial outage below the probe.** One broken route, one broken API
   endpoint, or a failure that only reproduces for signed-in users is invisible
   to both layers; they check four public routes and one health endpoint.
+
+## Whether the error rail can report at all
+
+The two checks above watch the site and the API. This watches the **reporting
+path**, which is a different thing and was the other half of issue #464,
+closed by #576.
+
+`reportFrontendError` posts every browser error to `POST /telemetry/frontend`
+— the API it also exists to report failures of. The old sender was
+`void fetch(...).catch(() => {})`: it discarded the rejection and never read
+the resolved response, so an unreachable API, a CORS block, a renamed route, a
+drifted schema and a rate-limited 429 were all indistinguishable from a
+delivered report. `FrontendErrors == 0` therefore had two meanings — "no
+browser errors" and "no browser could tell us" — and nothing anywhere could
+tell them apart.
+
+Three signals now separate them.
+
+| Metric (`FamilyGreenhouse/Frontend/{env}`) | Source                                                                 | Alarm                  | `treat_missing_data` |
+| ------------------------------------------ | ---------------------------------------------------------------------- | ---------------------- | -------------------- |
+| `FrontendErrors`                           | Browser error reports that arrived                                     | > 2 in 5 min           | `notBreaching`       |
+| `FrontendReportsUndelivered`               | One point per browser **session** that reports it lost earlier reports | > 2 in 5 min           | `notBreaching`       |
+| `FrontendTelemetryProbe`                   | The synthetic delivery check, every 15 min                             | **< 1 over two hours** | **`breaching`**      |
+
+**The browser keeps the count.** A failed send increments a counter in
+`localStorage` (a count and a first-failure timestamp — never a payload, never
+anything a report would have carried), and the next successful delivery hands
+it over as a `kind: "delivery"` report. `localStorage` rather than
+`sessionStorage` because an app broken enough to lose its telemetry is one the
+visitor closed. Nothing is stored under Do Not Track. This is a **late**
+signal by construction — a browser cannot deliver news of an outage during the
+outage — but it is the difference between an outage that leaves a trace and
+one that leaves nothing.
+
+**Errors are hooked before the app boots.** `initFrontendTelemetry()` used to
+be called at `main.tsx:26`, after every import's body had already run: ES
+modules evaluate dependencies before the importing module, so React, the whole
+`./App` route tree, `./i18n` and both Zustand stores were all evaluated with no
+handler installed, and a top-level throw in any of them was reported by
+nothing. `frontend/src/telemetryBoot.ts` is now the **first** import in
+`main.tsx` and `npm run observability:check` asserts that it stays first. What
+this still does not cover is an entry chunk that never loads at all; that is
+the site health check's job.
+
+**Only the synthetic probe can be alarmed on for silence.**
+`treat_missing_data = "breaching"` is honest only for a metric with a floor.
+`FrontendErrors` has no floor and never will — this product can genuinely go an
+hour with no visitors — so an alarm that paged on a quiet window would be
+trained away within a month, which is why this could not be fixed by editing
+one attribute. The delivery probe's cadence does not depend on anyone visiting,
+so **its** absence means something: the API is unreachable, CORS on
+`/telemetry/frontend` is broken, the route moved, the schema drifted, the metric
+filter changed shape, or the uptime workflow stopped running. All of those mean
+the same operational thing — the error rail is not trustworthy right now — and
+a failure is reported twice: a red workflow immediately, and the alerts SNS
+topic within about two hours.
+
+Not covered, stated because an overstating observability doc is what produced
+#464 in the first place:
+
+- **No real-time signal from a browser that cannot reach us.** The count
+  arrives when delivery works again, which may be after the visitor has gone.
+  A collector on a different origin (Sentry with a DSN is the obvious one)
+  would report during the outage; adopting one is a decision about a third-party
+  dependency and about the sanitized-payload posture below, not a monitoring
+  change, and is deliberately not made here.
+- **The heartbeat depends on GitHub Actions.** Two hours of missed runs pages
+  even if production is fine. The 3600-second period with two evaluation
+  periods tolerates roughly seven consecutive missed 15-minute runs; an
+  EventBridge canary inside AWS would remove the dependency at the cost of
+  another Lambda.
+- **The endpoint is public and rate-limited, so these fields are hints, not
+  attestations.** A forged body can add a point to either delivery metric;
+  `undelivered` is capped at 9999 and `ageMinutes` at 14 days so the skew is
+  bounded. This is the same trust model `error` and `vital` have always had.
+- **`MAX_ERRORS_PER_SESSION` still caps reports at 10 per session.** That is a
+  deliberate suppression, not a delivery failure, and it is not counted as one.
 
 ## Where alarms are created
 

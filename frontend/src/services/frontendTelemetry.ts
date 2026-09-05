@@ -1,7 +1,13 @@
 /**
  * Small, first-party browser telemetry rail. It reports only sanitized error
- * summaries and the three Core Web Vitals to our own API/CloudWatch account:
- * no stack traces, user ids, URLs with query strings, or user-entered data.
+ * summaries, the three Core Web Vitals, and a count of reports it could not
+ * deliver, to our own API/CloudWatch account: no stack traces, user ids, URLs
+ * with query strings, or user-entered data.
+ *
+ * The delivery path is the API this rail also reports failures of, which means
+ * it cannot report an outage of that API while the outage is happening. What
+ * it can do is refuse to pretend nothing was lost — see the delivery
+ * bookkeeping below and issue #576.
  */
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const RELEASE = import.meta.env.VITE_GIT_SHA || undefined;
@@ -111,14 +117,158 @@ function fingerprint(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-function send(payload: Record<string, unknown>): void {
+/**
+ * Delivery bookkeeping (issue #576).
+ *
+ * The old `send()` was `void fetch(...).catch(() => {})`: the rejection was
+ * discarded and the resolved case was never inspected, so an unreachable API,
+ * a CORS block, a renamed route and a 429 were all indistinguishable from a
+ * clean delivery — and from each other. `FrontendErrors == 0` therefore meant
+ * either "no browser errors" or "no browser could tell us", with nothing
+ * anywhere able to say which. That is this repo's dominant defect class
+ * (absence rendered as a value) sitting on the observability layer.
+ *
+ * A browser cannot fix its own unreachable API. What it can do is refuse to
+ * destroy the evidence: count the reports that did not land, remember the
+ * count across reloads, and hand it over the moment delivery works again. The
+ * outage then leaves a trace — late, but real — instead of leaving nothing.
+ *
+ * `localStorage`, not `sessionStorage`: an app that broke badly enough to lose
+ * its telemetry is an app the visitor probably closed. The counter has to
+ * outlive the tab to be worth keeping at all. Both are wrapped in try/catch —
+ * Safari private mode throws on write, and a lost counter must never break the
+ * page it is reporting about.
+ *
+ * Nothing is stored under Do Not Track: every path here is reached only
+ * through `send()`, which returns early when `telemetryAllowed()` is false.
+ */
+const UNDELIVERED_KEY = 'fg-telemetry-undelivered';
+const MAX_UNDELIVERED = 9999;
+/** 14 days, matching the schema bound in backend/src/models/telemetry.ts. */
+const MAX_UNDELIVERED_AGE_MINUTES = 20_160;
+
+interface UndeliveredRecord {
+  /** Reports that failed to reach the API. Never a payload — only a count. */
+  count: number;
+  /** Epoch ms of the FIRST loss in this streak, so age is reportable. */
+  since: number;
+}
+
+let deliveryReportInFlight = false;
+
+function readUndelivered(): UndeliveredRecord | null {
+  try {
+    const raw = localStorage.getItem(UNDELIVERED_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const { count, since } = parsed as Partial<UndeliveredRecord>;
+    if (typeof count !== 'number' || !Number.isFinite(count) || count < 1) return null;
+    if (typeof since !== 'number' || !Number.isFinite(since) || since <= 0) return null;
+    return { count: Math.min(Math.trunc(count), MAX_UNDELIVERED), since };
+  } catch {
+    // Unavailable storage or a hand-edited value. Treat as "nothing pending"
+    // rather than throwing inside an error handler.
+    return null;
+  }
+}
+
+function writeUndelivered(record: UndeliveredRecord | null): void {
+  try {
+    if (record === null) localStorage.removeItem(UNDELIVERED_KEY);
+    else localStorage.setItem(UNDELIVERED_KEY, JSON.stringify(record));
+  } catch {
+    // Quota, private mode, or storage disabled. Best-effort by design.
+  }
+}
+
+function recordUndelivered(): void {
+  const existing = readUndelivered();
+  writeUndelivered({
+    count: Math.min((existing?.count ?? 0) + 1, MAX_UNDELIVERED),
+    since: existing?.since ?? Date.now(),
+  });
+}
+
+/** Subtract what we just successfully reported, keeping anything newer. */
+function clearReportedLosses(reported: number): void {
+  const current = readUndelivered();
+  if (!current) return;
+  const remaining = current.count - reported;
+  writeUndelivered(remaining > 0 ? { count: remaining, since: Date.now() } : null);
+}
+
+/**
+ * Tell the API that reports were lost, if any were. Sent on init and again
+ * after any successful report, because those are the two moments we have
+ * evidence that delivery works right now.
+ *
+ * A failed delivery report does NOT increment the counter. It is a report
+ * ABOUT losses, not a new loss, and counting it would let the number grow by
+ * one per page load for as long as an outage lasts — turning a measure of how
+ * much was lost into a measure of how often we retried.
+ */
+function flushUndelivered(): void {
+  // The same guards `send()` applies, checked here too: `send()` returning
+  // early would otherwise leave the in-flight latch stuck true forever, and a
+  // latch that can only be set is a rail that reports once and then stops.
+  if (deliveryReportInFlight || !telemetryAllowed() || typeof fetch === 'undefined') return;
+  const record = readUndelivered();
+  if (!record) return;
+  deliveryReportInFlight = true;
+  const ageMinutes = Math.min(
+    Math.max(Math.round((Date.now() - record.since) / 60_000), 0),
+    MAX_UNDELIVERED_AGE_MINUTES
+  );
+  send(
+    {
+      kind: 'delivery',
+      source: 'browser',
+      sessionId: telemetrySessionId(),
+      route: normalizeTelemetryRoute(globalThis.location?.pathname ?? '/'),
+      undelivered: record.count,
+      ageMinutes,
+      ...(RELEASE ? { release: RELEASE } : {}),
+    },
+    'delivery'
+  );
+}
+
+type SendKind = 'report' | 'delivery';
+
+function send(payload: Record<string, unknown>, kind: SendKind = 'report'): void {
   if (!telemetryAllowed() || typeof fetch === 'undefined') return;
-  void fetch(`${API_URL}/telemetry/frontend`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    keepalive: true,
-  }).catch(() => {});
+  void deliver(payload, kind);
+}
+
+async function deliver(payload: Record<string, unknown>, kind: SendKind): Promise<void> {
+  let delivered: boolean;
+  try {
+    const response = await fetch(`${API_URL}/telemetry/frontend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+    // A resolved fetch is not a delivered report: a 404 from a renamed route,
+    // a 400 from a schema change and a 429 from the rate limiter all resolve.
+    delivered = response?.ok === true;
+  } catch {
+    // Network unreachable, DNS/TLS failure, or the opaque TypeError a CORS
+    // block produces. The browser is never told which; the count is the only
+    // thing we can honestly record.
+    delivered = false;
+  }
+
+  if (kind === 'delivery') {
+    deliveryReportInFlight = false;
+    const reported = typeof payload.undelivered === 'number' ? payload.undelivered : 0;
+    if (delivered) clearReportedLosses(reported);
+    return;
+  }
+
+  if (delivered) flushUndelivered();
+  else recordUndelivered();
 }
 
 export function reportFrontendError(error: unknown): void {
@@ -221,4 +371,7 @@ export function initFrontendTelemetry(): void {
   });
   window.addEventListener('pagehide', sendVitals, { once: true });
   observeVitals();
+  // Hand over anything a previous session could not deliver. If the API is
+  // still unreachable this fails quietly and the count survives for next time.
+  flushUndelivered();
 }

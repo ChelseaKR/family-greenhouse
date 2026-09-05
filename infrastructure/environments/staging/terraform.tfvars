@@ -27,6 +27,15 @@ enable_monitoring_dashboard = false
 enable_site_health_check = false
 enable_api_health_check  = false
 
+# The frontend-rail heartbeat alarm (issue #576) is off here for a stronger
+# reason than cost. It sets treat_missing_data = "breaching" on a metric fed by
+# .github/workflows/uptime.yml, and that workflow probes PRODUCTION only
+# (vars.HEALTHCHECK_URL). Enabled here it would find no heartbeat, correctly
+# conclude that nothing can deliver a telemetry report to staging, and page
+# about it every two hours forever. Turning it on means also giving the uptime
+# workflow a staging endpoint to probe.
+enable_telemetry_delivery_alarm = false
+
 # --- AI inference cost caps (per household per UTC month) ---
 # Identify metering is tracking-only here (and in the code default): usage is
 # counted and returned, never blocked. Only production sets "1". Made explicit

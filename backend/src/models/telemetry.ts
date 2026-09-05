@@ -73,6 +73,36 @@ export const frontendTelemetrySchema = z.discriminatedUnion('kind', [
       release: releaseId,
     })
     .strict(),
+  // Delivery reports (issue #576). Neither an error nor a measurement: a
+  // statement about the reporting rail itself.
+  //
+  //   source: 'browser'   — this browser failed to deliver `undelivered`
+  //                         reports, starting `ageMinutes` ago, and is saying
+  //                         so now that delivery works again. It is the only
+  //                         way "no errors were reported" and "no report could
+  //                         be delivered" are distinguishable at all.
+  //   source: 'synthetic' — scripts/telemetry-delivery-check.mjs, run every
+  //                         15 minutes by .github/workflows/uptime.yml. A
+  //                         heartbeat with a cadence that does not depend on
+  //                         anyone visiting the site, which is what makes
+  //                         `treat_missing_data = "breaching"` honest for the
+  //                         alarm that reads it.
+  //
+  // This route is public and IP-rate-limited, exactly as it was for `error`
+  // and `vital`: the fields below are operational hints from an untrusted
+  // client, not attestations. `undelivered` is capped at 9999 and `ageMinutes`
+  // at 14 days so a forged body cannot skew a metric by an unbounded amount.
+  z
+    .object({
+      kind: z.literal('delivery'),
+      source: z.enum(['browser', 'synthetic']),
+      sessionId: z.string().uuid(),
+      route: telemetryRoute,
+      undelivered: z.number().int().nonnegative().max(9999),
+      ageMinutes: z.number().int().nonnegative().max(20_160),
+      release: releaseId,
+    })
+    .strict(),
 ]);
 
 export type FrontendTelemetryInput = z.infer<typeof frontendTelemetrySchema>;

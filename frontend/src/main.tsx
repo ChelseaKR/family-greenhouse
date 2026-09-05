@@ -1,3 +1,7 @@
+// FIRST, and it must stay first: this hooks window.onerror before any other
+// module body runs, so a top-level throw in the imports below is reportable.
+// See frontend/src/telemetryBoot.ts and issue #576.
+import './telemetryBoot';
 import '@/lib/zodConfig';
 import React from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
@@ -5,7 +9,6 @@ import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { initSentry } from './sentry';
-import { initFrontendTelemetry } from './services/frontendTelemetry';
 import { initPwaRegistration } from './services/pwaRegistration';
 import './i18n';
 import { isRTL } from './i18n';
@@ -23,7 +26,6 @@ import './index.css';
 // Fire-and-forget: Sentry (when a DSN is configured) loads as a lazy chunk
 // after mount; errors before it loads are caught by the route error boundary.
 void initSentry();
-initFrontendTelemetry();
 initPwaRegistration();
 
 // Apply persisted preferences before React mounts so we don't get the wrong
