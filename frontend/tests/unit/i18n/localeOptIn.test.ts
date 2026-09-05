@@ -82,4 +82,39 @@ describe('non-English locale opt-in', () => {
     expect(instance.hasResourceBundle('es', 'translation')).toBe(true);
     expect(instance.getResource('es', 'translation', 'common.save')).toBe('Guardar');
   });
+
+  it('boots a Spanish-speaking visitor into Spanish, catalog and all', async () => {
+    // The whole point of the split: the catalog is no longer in the bundle, so
+    // a visitor the detector lands on `es` for depends on the boot path in
+    // index.ts loading it. If that regressed nothing would look broken — the
+    // app would render English, which is what it renders for everyone else.
+    //
+    // Driven through `navigator`, not the stored `i18nextLng`: the localStorage
+    // half of i18next-browser-languagedetector does not resolve under this
+    // jsdom setup (verified — `detect()` returns the navigator codes only,
+    // even with the key present), so a localStorage-driven version of this test
+    // would assert nothing.
+    window.localStorage.setItem(LS_KEY, 'true');
+    vi.stubGlobal('navigator', {
+      ...window.navigator,
+      languages: ['es-ES', 'es'],
+      language: 'es-ES',
+    });
+
+    const { default: instance } = await importI18n('');
+
+    // Wait on the positive end state, then assert what it produced.
+    await vi.waitFor(() => expect(instance.hasResourceBundle('es', 'translation')).toBe(true), {
+      // The boot load is fire-and-forget; under vitest the first transform of
+      // the 104 kB catalog module is what takes the time, not the app.
+      timeout: 10_000,
+    });
+
+    expect(instance.language).toBe('es');
+    expect(instance.t('common.save')).toBe('Guardar');
+    // `resolvedLanguage` is fixed when the language is set, before the catalog
+    // exists; it must be re-settled, or the app reports English while
+    // rendering Spanish.
+    expect(instance.resolvedLanguage).toBe('es');
+  });
 });
