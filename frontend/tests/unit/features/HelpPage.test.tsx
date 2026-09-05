@@ -191,11 +191,33 @@ describe('HelpTopicPage', () => {
     const script = document.querySelector('script[type="application/ld+json"]');
     expect(script).not.toBeNull();
     const payload = JSON.parse(script!.textContent!);
-    expect(payload['@type']).toBe('FAQPage');
+    // The payload is a @graph now that the page also emits a BreadcrumbList,
+    // so the FAQPage is a node inside it rather than the root.
+    const graph = payload['@graph'] as { '@type': string; mainEntity?: unknown[] }[];
+    const faq = graph.find((node) => node['@type'] === 'FAQPage')!;
+    expect(faq).toBeDefined();
     const billing = HELP_SECTIONS.find((s) => s.id === 'billing')!;
-    expect(payload.mainEntity).toHaveLength(billing.articles.length);
-    const cancel = payload.mainEntity.find((q: { name: string }) => q.name === 'How do I cancel?');
+    expect(faq.mainEntity).toHaveLength(billing.articles.length);
+    const cancel = (faq.mainEntity as { name: string; acceptedAnswer: { text: string } }[]).find(
+      (q) => q.name === 'How do I cancel?'
+    )!;
     expect(cancel.acceptedAnswer.text).toContain('Manage subscription');
+  });
+
+  it('publishes a breadcrumb trail for the topic page', () => {
+    renderAt('/help/billing');
+    const payload = JSON.parse(
+      document.querySelector('script[type="application/ld+json"]')!.textContent!
+    );
+    const crumbs = (payload['@graph'] as { '@type': string; itemListElement?: unknown[] }[]).find(
+      (node) => node['@type'] === 'BreadcrumbList'
+    )!;
+    expect(crumbs).toBeDefined();
+    const names = (crumbs.itemListElement as { name: string; position: number }[]).map(
+      (c) => c.name
+    );
+    const billing = HELP_SECTIONS.find((s) => s.id === 'billing')!;
+    expect(names).toEqual(['Home', 'Help', billing.title]);
   });
 
   it('sends an unknown topic to a signposted dead end rather than a blank page', () => {

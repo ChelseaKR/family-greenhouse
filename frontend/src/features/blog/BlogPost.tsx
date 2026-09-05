@@ -5,6 +5,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { findPost, POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
+import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
@@ -29,21 +30,43 @@ export function BlogPost() {
           canonical: `${SITE_URL}/blog/${post.slug}`,
           ogType: 'article',
           // Article schema makes the post eligible for Google's article
-          // rich-results treatment. We don't have author photos or a
-          // publisher logo URL set up yet — those are nice-to-haves that
-          // strengthen eligibility but aren't required.
+          // rich-results treatment. Publisher logo and `image` are both set
+          // below; a per-post hero image and a named Person author are the
+          // remaining strengtheners.
           jsonLd: {
             '@context': 'https://schema.org',
             '@graph': [
               {
                 '@type': 'Article',
                 headline: post.title,
-                description: post.description,
+                // The SERP-length copy, matching what the meta description
+                // says, rather than the longer index-card preview.
+                description: post.metaDescription ?? post.description,
+                // Google lists `image` as required for the Article rich
+                // result, and every post was omitting it — so all 14 were
+                // ineligible for the mobile SERP / Discover thumbnail despite
+                // otherwise-correct schema. No post ships a hero image yet, so
+                // this falls back to the shared 1200x630 social card, which is
+                // a valid ImageObject and unblocks eligibility today. Swap for
+                // a per-post image when one exists.
+                image: {
+                  '@type': 'ImageObject',
+                  url: DEFAULT_OG_IMAGE,
+                  width: 1200,
+                  height: 630,
+                },
                 datePublished: post.date,
                 dateModified: post.date,
                 author: { '@type': 'Organization', name: 'Family Greenhouse' },
                 publisher: {
                   '@type': 'Organization',
+                  // Same @id the homepage graph defines for this entity, so
+                  // the publisher on 14 posts, 24 guides and the homepage is
+                  // one Organization rather than three unlinked duplicates.
+                  // The name and logo stay: Google's Article spec wants them
+                  // present, and a bare @id reference into another document
+                  // is not guaranteed to resolve.
+                  '@id': `${SITE_URL}/#organization`,
                   name: 'Family Greenhouse',
                   logo: {
                     '@type': 'ImageObject',
