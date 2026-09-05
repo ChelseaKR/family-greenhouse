@@ -6,6 +6,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { HelpPage } from '@/features/help/HelpPage';
 import { HelpTopicPage } from '@/features/help/HelpTopicPage';
 import { HELP_SECTIONS, POPULAR, visibleSections } from '@/features/help/helpContent';
+import {
+  SITTER_LINK_MAX_DAYS_CEILING,
+  sitterLinkLimitsFor,
+} from '@/features/household/sitterPlanLimits';
+
+/** The published plain-text answer for one article, by section and id. */
+function articleText(sectionId: string, articleId: string): string {
+  const article = HELP_SECTIONS.find((s) => s.id === sectionId)?.articles.find(
+    (a) => a.id === articleId
+  );
+  if (!article) throw new Error(`no help article ${sectionId}#${articleId}`);
+  return article.text;
+}
 
 vi.mock('@/lib/platform', () => ({
   isNativeApp: vi.fn(() => false),
@@ -58,6 +71,53 @@ describe('help content', () => {
   it('hides the billing topic in native builds, which cannot sell a plan', () => {
     expect(visibleSections(false).some((s) => s.id === 'billing')).toBe(true);
     expect(visibleSections(true).some((s) => s.id === 'billing')).toBe(false);
+  });
+
+  // The plan facts in these answers are also published as FAQPage JSON-LD, so
+  // a stale number here is a wrong answer served to search engines as well as
+  // to the person who came looking for it. Both articles below had drifted
+  // from the catalog: `household-full` named caps of 6/6/50 and sent the
+  // reader to Greenhouse, and the sitter articles named a 60-day ceiling that
+  // has never existed in `sitterPlanLimits`.
+
+  it('answers "the household is full" with the caps the catalog actually enforces', () => {
+    const article = articleText('households', 'household-full');
+
+    // backend/src/models/plans.ts: seedling members 3, garden and greenhouse
+    // UNLIMITED. The retired numbers must not come back.
+    expect(article).toMatch(/three people/i);
+    expect(article).not.toMatch(/\b6 on (Seedling|Garden)\b/i);
+    expect(article).not.toMatch(/\b50 on Greenhouse\b/i);
+    expect(article).toMatch(/no member limit/i);
+
+    // Garden is where the member cap is lifted, and it is the cheaper tier.
+    // Naming Greenhouse instead bills the reader twice over for nothing.
+    expect(article).toMatch(/move to Garden/i);
+    expect(article).not.toMatch(/move to Greenhouse/i);
+
+    // The free cap here must agree with the one the billing topic states.
+    expect(articleText('billing', 'whats-free')).toMatch(/up to 3 members/i);
+  });
+
+  it('names only sitter-link windows that a plan actually allows', () => {
+    // Derived from the client's own mirror of the catalog rather than
+    // restated, so a future change to the caps fails here instead of leaving
+    // the help pages quietly wrong again.
+    const planDays = (['seedling', 'garden', 'greenhouse'] as const).map(
+      (id) => sitterLinkLimitsFor(id)!.maxDays
+    );
+    expect(planDays).toContain(SITTER_LINK_MAX_DAYS_CEILING);
+    // 14 is the create form's suggested default (SitterLinksCard.tsx).
+    const allowed = new Set([...planDays, 14]);
+
+    const sitters = HELP_SECTIONS.find((s) => s.id === 'sitters')!;
+    for (const article of sitters.articles) {
+      for (const [, n] of article.text.matchAll(/\b(\d+)\s+days?\b/g)) {
+        expect(allowed, `${article.id} names a ${n}-day window no plan grants`).toContain(
+          Number(n)
+        );
+      }
+    }
   });
 });
 
