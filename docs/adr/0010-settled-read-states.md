@@ -143,11 +143,47 @@ a recognised condition such as `ConditionalCheckFailedException`), a named
 state (`{ status: 'unavailable' }`; `available: false` against a success path
 that writes `available: true`; `plantCount: null` where success never writes a
 literal `null`), a defaulted variable the function then throws on, or a
-write. Like the frontend gate, it does not judge consequence: a display name
+write.
+
+It also looks for a **fifth shape that is not a failure at all**: a
+`QueryCommand` or `ScanCommand` carrying a `Limit` inside a function that
+never mentions `LastEvaluatedKey` (`unpaginated-limit`, added 2026-09-04).
+Nothing throws, nothing is caught, and there is no error state to bind, so the
+four shapes above cannot see it — but the consequence is the same defect in
+different clothes: a partial answer published as a total. Every revocation path
+in `apiKeys`, `sitterService`, `kioskService`, `plantTagService` and
+`caretakerService` reads through a listing that had this shape, so a
+household's oldest credentials were unrevocable while their tokens kept
+resolving; `spaceService.assertUniqueName` stopped seeing the row it would
+clash with. The rule anchors on the command rather than on the word `Limit`,
+which is what keeps it quiet — `taskService`, `plantService` and `coverage`
+pass `{ …, Limit }` into a local `queryAllPages` helper that does page, and
+those call sites are never examined. It does **not** cover S3's
+`MaxKeys`/`ContinuationToken`, or an in-memory `.slice(0, n)` on a list an LLM
+then answers over (`sprout.ts`); `.slice` has no syntactic tell separating a
+deliberate top ten from a silent cap, so it stays a review concern. Like the frontend gate, it does not judge consequence: a display name
 and a spend cap are the same shape to it, and the baseline entry is where the
 difference gets written down. Its own tests
 (`backend/tests/unit/scripts/checkSettledReadStates.test.ts`) run the script
 against fixtures for every shape above, in both directions.
+
+**Every backend baseline entry pins its caller set.** The key is
+`file::function::rule` and the reason beside it is prose that nothing
+re-validates, so a later PR could add a caller that falsifies the reason
+without changing the key. That happened: `enrichment.readCacheEntry` was
+baselined with "every caller then passes through `upstreamCallPermitted` and a
+discriminated provider result, so nothing is published from this value", and
+one day after this gate shipped, Seasonal Move Day added a cache-only caller
+that published exactly that value into a frost warning (#454, fixed in #504).
+The key never moved and the gate never blinked. Entries are therefore
+`{ "reason": …, "callers": [ … ] }`, and the gate fails when the computed set
+differs, so every legitimate new caller costs a baseline edit — which is the
+point: the edit is where somebody re-reads the reason. Resolution is syntactic
+(a call in the declaring file, a call in a file importing the symbol, or one
+through a namespace import) and deliberately does not follow a function passed
+as a value or a re-export; that under-counts rather than over-counts, so the
+failure mode is a missing caller somebody notices, not a silent pass.
+`--print-callers` prints the current set.
 
 A gate that caught everything would be a gate nobody could keep green. These
 catch the recurrences with the worst consequences and state plainly what they
@@ -169,11 +205,15 @@ leave to people.
   rooms are unavailable the plants still render — they loaded fine — under
   "Room unknown" with a banner saying what could not be read, rather than
   under "Unplaced".
-- **The backend pins nine occurrences, all of them acceptances.** They are
-  attribution fallbacks (`'Someone'`, an email local-part for an account with
-  no name attribute) and cache reads whose miss and failure both correctly
-  mean "ask the provider", where the provider result carries its own settled
-  states. Same rule as the frontend's four: judgements, not exemptions. The
+- **The backend baseline holds acceptances only, and the live count is in
+  the file rather than in this sentence.** They are attribution fallbacks
+  (`'Someone'`, an email local-part for an account with no name attribute),
+  cache reads whose miss and failure both correctly mean "ask the provider"
+  where the provider result carries its own settled states, and — since the
+  truncation rule landed — reads where the cap genuinely _is_ the answer: a
+  point read on a hash-keyed index, a feed page the caller asked for by size,
+  a query already bounded by its key range. Same rule as the frontend's four:
+  judgements, not exemptions. The
   baseline briefly carried a tenth entry that was NOT an acceptance —
   `leafHealthBudget.getUsage` returned `0` from a failed read, the number a
   household that has spent nothing this month also gets, and `isOverCap` read
