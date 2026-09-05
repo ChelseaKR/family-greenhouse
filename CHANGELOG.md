@@ -16,6 +16,84 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-05
+
+### Added
+
+- **Caretaker seats.** A dog walker, a cleaner, a neighbour who waters on
+  Thursdays — someone who tends the plants without joining the household. Each
+  gets their own token-scoped link, their work is attributed to them by name in
+  the activity feed, and a photo can stand as proof of visit.
+
+- **Coverage — who could actually keep this house alive.** Not a leaderboard.
+  It shows which plants depend on exactly one person, so a household can see
+  its own bus factor before someone goes away. A household that could not be
+  checked says so rather than reporting confident zeros.
+
+### Fixed
+
+- **Five ways the paid path could take money without delivering.** Cancelling
+  and resubscribing granted another free trial, every time, forever. A
+  household that stopped paying kept full paid limits for the whole of Stripe's
+  dunning cycle. A declined first invoice still bought paid limits. Prices are
+  now reconciled against the catalogue before a checkout is created, so a
+  transposed price id cannot silently charge an amount nobody was shown. A
+  lifetime purchase is treated as a floor that a cancellation cannot fall
+  below.
+
+- **Marking a task done looked like it had failed.** Completing a task on the
+  dashboard removed the row, then the next refresh put it straight back —
+  because a task due again within the week genuinely is still upcoming. It had
+  always saved. The row now moves to its new date instead of vanishing.
+
+- **A new member was skipped past the guided first run**, because the app could
+  not tell "this household has already started" from "this person is new to
+  it". And a household whose first plant was a Monstera, ZZ plant, Calathea or
+  Hoya finished onboarding with no schedule at all.
+
+- **A departed member kept working credentials.** Removing someone from a
+  household left their API key, plant tags, sitter links and kiosk links live.
+
+- **The frost warning quietly dropped plants it could not check**, and removed
+  its own "we couldn't check everything" caveat in the same breath.
+
+- **Leaf health returned a canned demo answer at HTTP 200** when the AI service
+  refused the request, instead of saying it could not check.
+
+- **Inbound mail was relayed on an unproven scan verdict**, and personal data
+  was reaching the logs.
+
+- **Sign-in and every other page painted late**, because the font that decides
+  the largest paint was not discovered until the stylesheet referencing it had
+  been fetched and parsed.
+
+- **Accessibility, across eight surfaces.** Destructive dialogs never spoke
+  their consequences and opened with focus on the destructive button. A fake
+  tab strip promised arrow-key navigation it did not implement. Alerts
+  interrupted screen readers for content that had merely finished loading, and
+  four pages nested a live region inside another one. Filtered lists changed
+  silently.
+
+- **Emails ignored the language you chose**, because the setting was read from
+  a field that never existed, and the chat safety notices were English-only for
+  everyone.
+
+### Changed
+
+- **Monitoring can now see failures it previously could not.** An entire
+  scheduled run failing looked identical to a quiet week: the alarm needed more
+  errors than the retry policy could ever produce. Bounce and complaint rates
+  are now watched too, sustained across hours so one bad address cannot page
+  anyone.
+
+- **An outage is detected by something that loads a page.** The uptime check
+  asked the API whether it was healthy and never looked at the site — so a
+  frontend serving errors on every route read as green.
+
+- **Continuous integration is roughly a quarter of the time it was**, without
+  removing a single check, and the local gate no longer cancels the run that
+  tests what actually landed on the main branch.
+
 ### Fixed
 
 - **Removing someone from a household now revokes what they issued, not just
