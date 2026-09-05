@@ -150,6 +150,12 @@ export const STEPS = [
     why: 'docs/testing.md drifting from the suite and the coverage floors',
   },
   {
+    id: 'adr:check',
+    script: 'adr:check',
+    weight: 0,
+    why: 'docs/adr/README.md drifting from the ADR files it indexes',
+  },
+  {
     id: 'figures:check',
     script: 'figures:check',
     weight: 0,

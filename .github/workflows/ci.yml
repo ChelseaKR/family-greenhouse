@@ -83,6 +83,15 @@ jobs:
         # enforced" while three gates were enforcing it.
         run: node scripts/check-docs-testing.mjs
 
+      - name: Verify docs/adr/README.md matches the ADR files
+        # Shared with `npm run verify` (scripts/check-adr-index.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27). The index used to be
+        # hand-maintained and was a merge conflict on every parallel PR that
+        # carried a decision (#475); it is derived from the files now, and this
+        # step is what stops a hand-maintained one coming back.
+        run: npm run adr:check
+
       - name: Verify observability and SLO contract
         run: npm run observability:check
 

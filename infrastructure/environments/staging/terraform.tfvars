@@ -18,6 +18,15 @@ alert_email                 = ""
 enable_monitoring_alarms    = false
 enable_monitoring_dashboard = false
 
+# External availability probes are off here for the same reason: staging has no
+# alerts destination and nobody is on call for it, so a Route 53 health check
+# would bill ~$2.60/month to publish a metric no alarm reads. Production sets
+# both from the root defaults (site check on, API check off). Turning the site
+# check on here means paying for it — see modules/monitoring/variables.tf for
+# the cost breakdown.
+enable_site_health_check = false
+enable_api_health_check  = false
+
 # --- AI inference cost caps (per household per UTC month) ---
 # Identify metering is tracking-only here (and in the code default): usage is
 # counted and returned, never blocked. Only production sets "1". Made explicit

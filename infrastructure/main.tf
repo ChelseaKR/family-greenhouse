@@ -359,6 +359,22 @@ module "monitoring" {
   # Same conditional wiring as the forwarder DLQ: the SES reputation alarms
   # exist only when the email module does.
   ses_configuration_set_name = var.domain_name == "" ? "" : module.email[0].configuration_set_name
+
+  # External availability (issue #464). Every alarm in modules/monitoring reads
+  # a metric this stack publishes and treats missing data as not-breaching, so
+  # none of them can see "the stack served nobody". These two health checks are
+  # the only monitoring here that observes production from OUTSIDE it.
+  #
+  # The hostnames come from the modules that own them rather than from tfvars,
+  # so changing the domain cannot leave a health check probing the old name
+  # while still reporting healthy. `site_url` is the custom domain when one is
+  # set and the CloudFront hostname otherwise; `api_url` carries the stage, so
+  # the host is its first path segment and the stage goes into the path.
+  enable_site_health_check = var.enable_site_health_check
+  enable_api_health_check  = var.enable_api_health_check
+  site_health_check_host   = replace(module.frontend.site_url, "https://", "")
+  api_health_check_host    = split("/", replace(module.api.api_url, "https://", ""))[0]
+  api_health_check_path    = "/${var.environment}/health"
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its

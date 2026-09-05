@@ -115,3 +115,71 @@ variable "email_forwarder_log_group_name" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------------------
+# External availability (Route 53 health checks)
+#
+# Every other alarm in this module reads a metric this stack publishes, and
+# every one of them sets treat_missing_data = "notBreaching". Individually
+# that is right; collectively it means "serving nobody" produces no data
+# points and therefore no alarm. These variables create the only monitoring
+# in the repo that observes production from OUTSIDE it. See issue #464.
+# ---------------------------------------------------------------------------
+
+variable "enable_site_health_check" {
+  description = "Create the Route 53 health check that fetches a real site page every 30 seconds, plus the CloudWatch alarm that pages when it fails. ~$2.60/month: $0.50 health check + $1.00 HTTPS + $1.00 string matching + $0.10 alarm. The site is served from CloudFront, so the probe traffic itself is cached static HTML and costs nothing measurable. This is the check that closes issue #464."
+  type        = bool
+  default     = false
+}
+
+variable "enable_api_health_check" {
+  description = "Create the Route 53 health check that fetches GET /health every 30 seconds, plus its alarm. ~$2.60/month in Route 53 fees on the same breakdown as the site check, PLUS the traffic it generates: Route 53 probes from ~15 checker locations, so a 30-second interval is ~1.3M extra API Gateway requests, Lambda invocations, DynamoDB reads and log lines per month — call it another $2-4/month. Off by default for that reason: .github/workflows/uptime.yml already checks GET /health every 15 minutes for free. Turn this on to move API-outage detection from 15 minutes and a workflow-failure email to ~3 minutes and the alerts SNS topic."
+  type        = bool
+  default     = false
+}
+
+variable "site_health_check_host" {
+  description = "Hostname (no scheme, no path) Route 53 fetches to prove the site is serving this app. Empty disables the site health check even when enable_site_health_check is true."
+  type        = string
+  default     = ""
+}
+
+variable "site_health_check_path" {
+  description = "Path on site_health_check_host to fetch. Deliberately NOT \"/\": during the 2026-09-04 outage this check exists to catch, `/` was the one route still answering 200 while every other route 403'd for forty minutes (issue #464). A non-prerendered route also exercises CloudFront's 403/404 -> /app-shell.html rewrite, which is the machinery that failed."
+  type        = string
+  default     = "/login"
+
+  validation {
+    condition     = var.site_health_check_path != "/"
+    error_message = "site_health_check_path must not be \"/\". Issue #464: during the forty-minute frontend outage this check exists to detect, `/` kept answering 200 while every other route returned 403 — a health check on `/` would have reported that outage as healthy."
+  }
+
+  validation {
+    condition     = startswith(var.site_health_check_path, "/")
+    error_message = "site_health_check_path must start with \"/\"."
+  }
+}
+
+variable "site_health_check_search_string" {
+  description = "Literal string Route 53 must find in the first 5120 bytes of the site response, or the endpoint counts as unhealthy. Defaults to the og:site_name tag `headToTags()` emits on the SPA shell and on every prerendered page (frontend/src/config/seo.ts), so a 200 that is not this app fails. scripts/check-observability.mjs asserts this exact string still appears in frontend/index.html, so a markup change breaks the gate at pre-push rather than false-paging in production."
+  type        = string
+  default     = "<meta property=\"og:site_name\" content=\"Family Greenhouse\" />"
+}
+
+variable "api_health_check_host" {
+  description = "Hostname (no scheme, no path) of the API to probe. Empty disables the API health check even when enable_api_health_check is true."
+  type        = string
+  default     = ""
+}
+
+variable "api_health_check_path" {
+  description = "Path to GET /health on api_health_check_host, including the API Gateway stage (e.g. \"/production/health\")."
+  type        = string
+  default     = ""
+}
+
+variable "api_health_check_search_string" {
+  description = "Literal string Route 53 must find in the API health response. `GET /health` reports status \"degraded\" when its DynamoDB probe fails, so matching on \"ok\" means a reachable-but-broken API is unhealthy here rather than passing on its 200. scripts/check-observability.mjs asserts the handler still serialises this shape."
+  type        = string
+  default     = "\"status\":\"ok\""
+}

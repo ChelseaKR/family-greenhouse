@@ -15,6 +15,54 @@ const main = read('frontend/src/main.tsx');
 const boundary = read('frontend/src/components/RouteErrorBoundary.tsx');
 const production = read('.github/workflows/cd-production.yml');
 const rootInfrastructure = read('infrastructure/main.tf');
+const monitoringVars = read('infrastructure/modules/monitoring/variables.tf');
+const uptimeWorkflow = read('.github/workflows/uptime.yml');
+const observabilityDoc = read('docs/observability.md');
+const indexHtml = read('frontend/index.html');
+const responseUtil = read('backend/src/utils/response.ts');
+const syntheticPageCheck = read('scripts/synthetic-page-check.mjs');
+
+/**
+ * The body of one `resource "TYPE" "NAME" { ... }` block, or '' if absent.
+ *
+ * Terraform resource bodies in this repo are one nesting level deep at most
+ * for the attributes these checks read, so a brace counter is enough and
+ * avoids a HCL parser dependency in a gate that must stay a few milliseconds.
+ */
+function tfResource(source, type, name) {
+  const header = `resource "${type}" "${name}" {`;
+  const start = source.indexOf(header);
+  if (start === -1) return '';
+  let depth = 0;
+  for (let i = start + header.length - 1; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    else if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  return '';
+}
+
+const siteHealthCheck = tfResource(monitoring, 'aws_route53_health_check', 'site');
+const apiHealthCheck = tfResource(monitoring, 'aws_route53_health_check', 'api');
+const siteAlarm = tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'site_unreachable');
+const apiAlarm = tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'api_unreachable');
+
+/**
+ * The default value of a Terraform `variable` block, unescaped from HCL's
+ * quoted-string form. Returns null when the variable or its default is absent.
+ */
+function tfVariableDefault(source, name) {
+  const header = `variable "${name}" {`;
+  const start = source.indexOf(header);
+  if (start === -1) return null;
+  const match = /^\s*default\s*=\s*"((?:[^"\\]|\\.)*)"/mu.exec(source.slice(start));
+  return match ? match[1].replaceAll('\\"', '"').replaceAll('\\\\', '\\') : null;
+}
+
+const siteSearchString = tfVariableDefault(monitoringVars, 'site_health_check_search_string');
+const apiSearchString = tfVariableDefault(monitoringVars, 'api_health_check_search_string');
 const productionDeployBackend = production.slice(
   production.indexOf('  deploy-backend:'),
   production.indexOf('\n  smoke-tests:')
@@ -144,6 +192,117 @@ const checks = [
       /Reputation\.BounceRate/u.test(monitoring) &&
       /Reputation\.ComplaintRate/u.test(monitoring) &&
       /ConfigurationSetName = var\.ses_configuration_set_name/u.test(monitoring),
+  ],
+  // ---------------------------------------------------------------------
+  // External availability (#464). Every alarm above reads a metric this stack
+  // publishes and treats missing data as not-breaching, so none of them can
+  // see "the stack served nobody". On 2026-09-04 the production frontend 403'd
+  // every route but `/` for forty minutes, no alarm fired, and a human found
+  // it. These checks are what stop that state coming back.
+  // ---------------------------------------------------------------------
+  [
+    'a Route53 health check watches the site from outside AWS',
+    /type\s*=\s*"HTTPS_STR_MATCH"/u.test(siteHealthCheck) &&
+      /request_interval\s*=\s*30/u.test(siteHealthCheck) &&
+      /enable_sni\s*=\s*true/u.test(siteHealthCheck),
+  ],
+  // A plain HTTPS check passes on any 200. The outage served a 403 from a
+  // healthy CDN, and the next one may serve a 200 of something that is not
+  // this app; the string match is what tells those apart.
+  [
+    'the site health check requires the app identity string, not merely a 200',
+    siteSearchString !== null && siteSearchString.includes('og:site_name'),
+  ],
+  // The coupling that keeps the string honest. Route 53 can only match a
+  // literal, so if the tag's markup changes the health check starts failing
+  // against a healthy site. Failing HERE means that lands as a red pre-push
+  // rather than as a false page at 3am.
+  [
+    'the site health check string is markup this app actually emits',
+    siteSearchString !== null && indexHtml.includes(siteSearchString),
+  ],
+  // `/` was the ONE route still answering 200 during the outage. A health
+  // check on it would have called that outage healthy.
+  [
+    'the site health check refuses to be pointed at /',
+    /variable "site_health_check_path"/u.test(monitoringVars) &&
+      /condition\s*=\s*var\.site_health_check_path\s*!=\s*"\/"/u.test(monitoringVars),
+  ],
+  // THE line. Every other alarm in the module says notBreaching, which is
+  // right for a bad-value-among-good-ones alarm and catastrophic for one
+  // whose whole job is to notice absence. "Could not check" must never be
+  // reported as "checked and fine" — this repo's dominant defect class.
+  [
+    'the total-outage alarms treat missing data as breaching, not as health',
+    /treat_missing_data\s*=\s*"breaching"/u.test(siteAlarm) &&
+      /treat_missing_data\s*=\s*"breaching"/u.test(apiAlarm) &&
+      !/treat_missing_data\s*=\s*"notBreaching"/u.test(siteAlarm) &&
+      !/treat_missing_data\s*=\s*"notBreaching"/u.test(apiAlarm),
+  ],
+  [
+    'the total-outage alarms read the health check and page the alerts topic',
+    /HealthCheckId\s*=\s*aws_route53_health_check\.site\[0\]\.id/u.test(siteAlarm) &&
+      /HealthCheckId\s*=\s*aws_route53_health_check\.api\[0\]\.id/u.test(apiAlarm) &&
+      /alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(siteAlarm) &&
+      /alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(apiAlarm),
+  ],
+  // Route53 publishes HealthCheckStatus in us-east-1 only, and a CloudWatch
+  // alarm cannot notify an SNS topic in another region. Without this the
+  // alarm is creatable and mute.
+  [
+    'the total-outage alarms refuse to be created where they cannot deliver',
+    /precondition/u.test(siteAlarm) &&
+      /precondition/u.test(apiAlarm) &&
+      /alarms_can_read_route53\s*=\s*data\.aws_region\.current\.name == "us-east-1"/u.test(
+        monitoring
+      ),
+  ],
+  // GET /health answers "degraded" when its DynamoDB probe fails, so matching
+  // on "ok" is what makes a reachable-but-broken API unhealthy here. Keep the
+  // string tied to the serialization that produces it.
+  [
+    'the API health check string matches what GET /health serializes',
+    apiSearchString === '"status":"ok"' &&
+      /body:\s*JSON\.stringify\(data\)/u.test(responseUtil) &&
+      /const overall = database === 'ok' \? 'ok' : 'degraded'/u.test(apiHandler) &&
+      /status: overall,/u.test(apiHandler),
+  ],
+  [
+    'a plan warns when an environment has alarms but nothing that can see an outage',
+    /check "something_can_see_a_total_outage"/u.test(monitoring),
+  ],
+  // The 15-minute layer. Slower and less reliably scheduled than Route53, but
+  // structurally deeper — and the negative control is what keeps it a check
+  // rather than a green tick.
+  [
+    'the uptime workflow still loads real pages and proves it can fail',
+    /scripts\/synthetic-page-check\.mjs/u.test(uptimeWorkflow) &&
+      /--expect-failure/u.test(uptimeWorkflow) &&
+      /'\/register'/u.test(syntheticPageCheck) &&
+      /'\/login'/u.test(syntheticPageCheck),
+  ],
+  // Retired claims. docs/observability.md described a Route53 health check
+  // that did not exist and a 30-second probe that did not exist (#464), then
+  // described their absence — and BOTH directions misinform a reader asking
+  // "are we covered for a total outage?". Neither sentence may come back.
+  [
+    'docs/observability.md does not deny the health check it now documents',
+    !/There is no Route53 health check/iu.test(observabilityDoc) &&
+      !/no `aws_route53_health_check` in/iu.test(observabilityDoc),
+  ],
+  [
+    'docs/observability.md documents the breaching posture rather than just the resource',
+    /aws_route53_health_check/u.test(observabilityDoc) &&
+      /treat_missing_data = "breaching"/u.test(observabilityDoc),
+  ],
+  // A hand-maintained live count in prose is this repo's other recurring
+  // defect (see check-docs-testing.mjs's `Files` column and check-doc-
+  // figures.mjs's route count). "28 alarms" was already in this doc and this
+  // change would have made it wrong.
+  [
+    'docs/observability.md states no hand-maintained live alarm count',
+    !/\b\d+ alarms and its dashboard\b/u.test(observabilityDoc) &&
+      !/\bkeeps all \d+ alarms\b/u.test(observabilityDoc),
   ],
   [
     'production smoke uses component health',
