@@ -44,6 +44,9 @@ export interface PlantSpace {
 /** House rule length cap; mirrors CARE_RULE_MAX_LENGTH in backend/src/models/schemas.ts. */
 export const CARE_RULE_MAX_LENGTH = 140;
 
+/** Mirrors SpeciesSource in backend/src/models/types.ts. */
+export type SpeciesSource = 'user' | 'identified' | 'catalog';
+
 export interface Plant {
   id: string;
   householdId: string;
@@ -64,6 +67,14 @@ export interface Plant {
   statusChangedAt?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
+  /**
+   * Where `species` came from. Server-derived (a client cannot set it):
+   * `identified` means a photo-identification guess the user accepted, so the
+   * care advice keyed off this species — watering, light, pet toxicity —
+   * inherits the model's uncertainty. Null/absent = unknown, which is what
+   * every plant added before this field carried.
+   */
+  speciesSource?: SpeciesSource | null;
   /** Propagation lineage: the same-household plant this was cut from. */
   parentPlantId?: string | null;
   createdAt: string;
@@ -83,6 +94,13 @@ export interface CreatePlantData {
   careRule?: string;
   tags?: string[];
   perenualSpeciesId?: number;
+  /**
+   * The scientific name this write says came from a photo identification the
+   * user accepted. The server derives `speciesSource` from it and only
+   * believes it when it names the species actually being written — the enum
+   * itself is not settable from here.
+   */
+  identifiedSpecies?: string;
   /** Set when adding a cutting via "Propagate" — links it to its parent. */
   parentPlantId?: string;
 }
@@ -100,6 +118,13 @@ export interface UpdatePlantData {
   careRule?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
+  /**
+   * The scientific name this write says came from a photo identification the
+   * user accepted. The server derives `speciesSource` from it and only
+   * believes it when it names the species actually being written — the enum
+   * itself is not settable from here.
+   */
+  identifiedSpecies?: string;
   status?: PlantStatus;
 }
 
@@ -435,7 +460,17 @@ export interface IdentifyUsage {
 
 export interface IdentifyResponse {
   configured: boolean;
+  /** Best-first: the server sorts by probability before truncating to five. */
   suggestions?: IdentificationSuggestion[];
+  /** Probability the top candidate is judged against (server-set). */
+  confidenceFloor?: number;
+  /**
+   * The top candidate scored below `confidenceFloor`. The list is still
+   * returned in full and every candidate stays usable — the floor demotes, it
+   * never filters, so an empty list keeps meaning exactly one thing ("nothing
+   * came back") instead of also meaning "not confident enough to say".
+   */
+  lowConfidence?: boolean;
   usage?: IdentifyUsage;
 }
 

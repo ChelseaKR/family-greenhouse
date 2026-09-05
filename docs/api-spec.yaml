@@ -2394,9 +2394,13 @@ paths:
       responses:
         '200':
           description: >-
-            Suggestions plus `usage` ({ used, allowance, meteringEnabled }). On the enforced path the
-            object also carries `source` (`allowance` | `credit`) and, after a credit spend, `credits`
-            (IdentifyCreditBalance). Both are omitted when credits were not consulted.
+            Up to five `suggestions`, sorted by `probability` descending, plus `confidenceFloor` (the
+            probability the top candidate is judged against) and `lowConfidence` (true when the top
+            candidate scores below it — the floor demotes, it never filters, so the candidates are
+            still returned and still usable; `false` when there are no suggestions at all, which is
+            a different answer). Also `usage` ({ used, allowance, meteringEnabled }). On the enforced
+            path the object also carries `source` (`allowance` | `credit`) and, after a credit spend,
+            `credits` (IdentifyCreditBalance). Both are omitted when credits were not consulted.
         '402':
           description: >-
             Monthly allowance exhausted and no top-up credit left. `details` carries

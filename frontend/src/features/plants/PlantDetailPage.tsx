@@ -281,6 +281,12 @@ export function PlantDetailPage() {
               </div>
               <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
               {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
+              {/* Provenance, only when the server actually recorded one. A
+                  plant with no `speciesSource` (every row predating the field)
+                  says nothing rather than claiming a person typed it. */}
+              {plant.species && plant.speciesSource === 'identified' && (
+                <p className="text-xs text-gray-500">{t('plants.identify.fromPhoto')}</p>
+              )}
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
               {(plant.status ?? 'active') === 'active' && (

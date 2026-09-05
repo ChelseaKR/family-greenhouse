@@ -20,7 +20,7 @@ import { S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { atCap, type Limit } from '../models/plans.js';
-import { Plant, PlantStatus, DynamoDBItem } from '../models/types.js';
+import { Plant, PlantStatus, SpeciesSource, DynamoDBItem } from '../models/types.js';
 import { CreatePlantInput, MovePlantsInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -51,7 +51,10 @@ function transactCancellationReasons(err: unknown): Array<{ Code?: string }> {
 }
 
 export async function createPlant(
-  input: CreatePlantInput & { canonicalSpecies?: string | null },
+  input: CreatePlantInput & {
+    canonicalSpecies?: string | null;
+    speciesSource?: SpeciesSource | null;
+  },
   householdId: string,
   userId: string,
   maxPlants: Limit
@@ -83,6 +86,9 @@ export async function createPlant(
     tags,
     perenualSpeciesId: input.perenualSpeciesId ?? null,
     canonicalSpecies: input.canonicalSpecies ?? null,
+    // Provenance of `species`. Derived by the handler, never read off the
+    // request body — see handlers/plants/handler.ts#deriveSpeciesSource.
+    speciesSource: input.speciesSource ?? null,
     // Propagation lineage — caller (handler) has already validated that the
     // parent exists in the same household.
     parentPlantId: input.parentPlantId ?? null,
@@ -202,6 +208,7 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
     tags: (result.Item.tags as string[] | undefined) ?? [],
     perenualSpeciesId: (result.Item.perenualSpeciesId as number | undefined) ?? null,
     canonicalSpecies: (result.Item.canonicalSpecies as string | null | undefined) ?? null,
+    speciesSource: (result.Item.speciesSource as SpeciesSource | null | undefined) ?? null,
     parentPlantId: (result.Item.parentPlantId as string | null | undefined) ?? null,
     createdAt: result.Item.createdAt as string,
     createdBy: result.Item.createdBy as string,
@@ -277,6 +284,7 @@ export async function getPlants(
       tags: (item.tags as string[] | undefined) ?? [],
       perenualSpeciesId: (item.perenualSpeciesId as number | undefined) ?? null,
       canonicalSpecies: (item.canonicalSpecies as string | null | undefined) ?? null,
+      speciesSource: (item.speciesSource as SpeciesSource | null | undefined) ?? null,
       parentPlantId: (item.parentPlantId as string | null | undefined) ?? null,
       createdAt: item.createdAt as string,
       createdBy: item.createdBy as string,
@@ -292,7 +300,10 @@ export async function getPlants(
 export async function updatePlant(
   householdId: string,
   plantId: string,
-  input: UpdatePlantInput & { canonicalSpecies?: string | null },
+  input: UpdatePlantInput & {
+    canonicalSpecies?: string | null;
+    speciesSource?: SpeciesSource | null;
+  },
   maxPlants: Limit
 ): Promise<Plant | null> {
   const updateExpressions: string[] = [];
@@ -377,6 +388,14 @@ export async function updatePlant(
     expressionAttributeValues[':canonicalSpecies'] = input.canonicalSpecies;
   }
 
+  // `undefined` means "leave provenance alone" (the name did not change), and
+  // is NOT the same as null. See handler#speciesSourceForUpdate.
+  if (input.speciesSource !== undefined) {
+    updateExpressions.push('#speciesSource = :speciesSource');
+    expressionAttributeNames['#speciesSource'] = 'speciesSource';
+    expressionAttributeValues[':speciesSource'] = input.speciesSource;
+  }
+
   if (input.parentPlantId !== undefined) {
     // Lineage link: a uuid sets/replaces the parent, an explicit null
     // detaches. Validation (same household, not self) lives in the handler.
@@ -452,6 +471,7 @@ export async function updatePlant(
       tags: (result.Attributes.tags as string[] | undefined) ?? [],
       perenualSpeciesId: (result.Attributes.perenualSpeciesId as number | undefined) ?? null,
       canonicalSpecies: (result.Attributes.canonicalSpecies as string | null | undefined) ?? null,
+      speciesSource: (result.Attributes.speciesSource as SpeciesSource | null | undefined) ?? null,
       parentPlantId: (result.Attributes.parentPlantId as string | null | undefined) ?? null,
       createdAt: result.Attributes.createdAt as string,
       createdBy: result.Attributes.createdBy as string,
@@ -686,6 +706,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
         tags: (item.tags as string[] | undefined) ?? [],
         perenualSpeciesId: (item.perenualSpeciesId as number | null | undefined) ?? null,
         canonicalSpecies: (item.canonicalSpecies as string | null | undefined) ?? null,
+        speciesSource: (item.speciesSource as SpeciesSource | null | undefined) ?? null,
         parentPlantId: (item.parentPlantId as string | null | undefined) ?? null,
         createdAt: item.createdAt as string,
         createdBy: item.createdBy as string,

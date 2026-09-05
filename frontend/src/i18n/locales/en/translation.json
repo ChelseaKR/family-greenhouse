@@ -438,6 +438,13 @@
         "sweet": "Sweet"
       }
     },
+    "identify": {
+      "lowConfidenceTitle": "Not a confident match",
+      "lowConfidenceBody": "The strongest guess is only {{percent}}% sure, below the {{floor}}% we treat as a match. Every option is still here and still usable — check them against the plant first. The species you pick sets the watering, light, and pet-safety advice for this plant.",
+      "candidate": "{{scientificName}} • {{percent}}% confidence",
+      "use": "Use",
+      "fromPhoto": "Identified from a photo"
+    },
     "identifyFromPhoto": "Identify from photo",
     "status": {
       "active": "Active",

@@ -52,6 +52,61 @@ describe('PlantDetailPage', () => {
     expect(await screen.findByText('No tasks')).toBeInTheDocument();
   });
 
+  // --- Species provenance (#344) -------------------------------------------
+  it('says a species came from a photo when the server recorded that provenance', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json({
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Hall plant',
+          species: 'Dieffenbachia seguine',
+          speciesSource: 'identified',
+          location: null,
+          imageUrl: null,
+          notes: null,
+          createdAt: '2026-04-25T00:00:00.000Z',
+          createdBy: 'u1',
+          updatedAt: '2026-04-25T00:00:00.000Z',
+          upcomingTasks: [],
+          recentCompletions: [],
+        })
+      )
+    );
+    renderDetail('p1');
+    expect(await screen.findByRole('heading', { name: 'Hall plant' })).toBeInTheDocument();
+    expect(screen.getByText('Identified from a photo')).toBeInTheDocument();
+  });
+
+  it('claims nothing about provenance for a plant that predates the field', async () => {
+    // A legacy row carries no `speciesSource`. Unknown must render as silence,
+    // not as an implied "someone typed this".
+    useAuthStore.setState({ accessToken: 'access-1' });
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json({
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Old plant',
+          species: 'Dieffenbachia seguine',
+          location: null,
+          imageUrl: null,
+          notes: null,
+          createdAt: '2026-04-25T00:00:00.000Z',
+          createdBy: 'u1',
+          updatedAt: '2026-04-25T00:00:00.000Z',
+          upcomingTasks: [],
+          recentCompletions: [],
+        })
+      )
+    );
+    renderDetail('p1');
+    // Positive end state first: the species itself is on screen.
+    expect(await screen.findByText('Dieffenbachia seguine')).toBeInTheDocument();
+    expect(screen.queryByText('Identified from a photo')).not.toBeInTheDocument();
+  });
+
   it('renders an upcoming task', async () => {
     useAuthStore.setState({ accessToken: 'access-1' });
     server.use(

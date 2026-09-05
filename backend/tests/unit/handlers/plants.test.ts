@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/plantService.js');
@@ -289,7 +289,8 @@ describe('plants handler', () => {
     // the handler's job is to resolve the plan and hand the cap down.
     // Default billing mock = garden plan → plant cap 200.
     expect(plantService.createPlant).toHaveBeenCalledWith(
-      { name: 'Pothos' },
+      // No species text → no provenance to record (null, never 'user').
+      { name: 'Pothos', speciesSource: null },
       'hh-1',
       'user-1',
       200
@@ -343,6 +344,8 @@ describe('plants handler', () => {
         species: 'Chelsea, 123 Private Street',
         perenualSpeciesId: 7,
         canonicalSpecies: 'Monstera deliciosa',
+        // A catalog id and no identification claim → 'catalog'.
+        speciesSource: 'catalog',
       },
       'hh-1',
       'user-1',
@@ -369,7 +372,7 @@ describe('plants handler', () => {
     expect(res.statusCode).toBe(402);
     expect(res.body).toMatch(/Seedling plan is limited to 20 plants/);
     expect(plantService.createPlant).toHaveBeenCalledWith(
-      { name: 'eleventh' },
+      { name: 'eleventh', speciesSource: null },
       'hh-1',
       'user-1',
       20
@@ -408,7 +411,12 @@ describe('plants handler', () => {
         headers: { 'content-type': 'application/json' },
       });
       await createPlant(event, fakeContext, () => {});
-      expect(plantService.createPlant).toHaveBeenCalledWith({ name: 'Fern' }, 'hh-1', 'user-1', 20);
+      expect(plantService.createPlant).toHaveBeenCalledWith(
+        { name: 'Fern', speciesSource: null },
+        'hh-1',
+        'user-1',
+        20
+      );
     }
   );
 
@@ -438,7 +446,12 @@ describe('plants handler', () => {
       headers: { 'content-type': 'application/json' },
     });
     await createPlant(event, fakeContext, () => {});
-    expect(plantService.createPlant).toHaveBeenCalledWith({ name: 'Fern' }, 'hh-1', 'user-1', 200);
+    expect(plantService.createPlant).toHaveBeenCalledWith(
+      { name: 'Fern', speciesSource: null },
+      'hh-1',
+      'user-1',
+      200
+    );
   });
 
   it('createPlant rethrows non-cap service failures as 500', async () => {
@@ -581,6 +594,202 @@ describe('plants handler', () => {
 
       expect(res.statusCode).toBe(200);
       expect(vi.mocked(plantService.updatePlant).mock.calls[0][2].canonicalSpecies).toBeNull();
+      expect(plantService.getPlant).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- speciesSource provenance (#344) -------------------------------------
+  //
+  // A species drives watering cadence, light, and pet toxicity. Once an
+  // accepted photo guess is written into `species` it used to be
+  // indistinguishable from a species a person stated, so nothing downstream
+  // could tell "the model thinks this is a Dieffenbachia" from "we know it is
+  // one". The enum is derived here and never read off the request body.
+  describe('speciesSource', () => {
+    // The outer beforeEach uses clearAllMocks, which clears recorded calls but
+    // NOT queued mockResolvedValueOnce values. Two tests below queue a
+    // getPlant answer that the handler consumes only on the species-changed
+    // path, so drop any leftover here rather than let it surface in an
+    // unrelated later test.
+    afterEach(async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      vi.mocked(plantService.getPlant).mockReset();
+    });
+
+    const postPlant = (body: Record<string, unknown>) =>
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    it("records 'identified' when the accepted photo guess names the species being saved", async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const enrichment = await import('../../../src/services/enrichment.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      // The UI resolves an accepted suggestion against the catalog too, so a
+      // real request carries BOTH. Provenance must still say "identified" —
+      // preferring 'catalog' would hide exactly the case this field exists for.
+      vi.mocked(enrichment.lookupSpeciesCached).mockResolvedValueOnce({
+        status: 'found',
+        result: {
+          id: 7,
+          scientificName: 'Dieffenbachia seguine',
+          commonName: 'Dumb cane',
+          cycle: null,
+          watering: null,
+          sunlight: [],
+          indoor: true,
+          edible: false,
+          poisonousToPets: true,
+          defaultImageUrl: null,
+        },
+      });
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p9' } as never);
+
+      const res = (await createPlant(
+        postPlant({
+          name: 'Hall plant',
+          species: 'Dieffenbachia seguine',
+          identifiedSpecies: 'Dieffenbachia seguine',
+          perenualSpeciesId: 7,
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+      expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBe('identified');
+    });
+
+    it('accepts the claim case-insensitively but ignores one that names a DIFFERENT species', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.createPlant).mockResolvedValue({ id: 'p9' } as never);
+
+      await createPlant(
+        postPlant({
+          name: 'A',
+          species: 'Monstera deliciosa',
+          identifiedSpecies: '  monstera DELICIOSA ',
+        }),
+        fakeContext,
+        () => {}
+      );
+      expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBe('identified');
+
+      // A claim for something else is not evidence about what is being saved.
+      await createPlant(
+        postPlant({
+          name: 'B',
+          species: 'Ficus lyrata',
+          identifiedSpecies: 'Monstera deliciosa',
+        }),
+        fakeContext,
+        () => {}
+      );
+      expect(vi.mocked(plantService.createPlant).mock.calls[1][0].speciesSource).toBe('user');
+    });
+
+    it('never lets a client write the enum directly', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p9' } as never);
+
+      // A client asserting `speciesSource: 'user'` over a photo guess must not
+      // be able to launder it into a stated fact. The field is absent from the
+      // input schema, so zod strips it before the handler ever sees it.
+      await createPlant(
+        postPlant({
+          name: 'C',
+          species: 'Dieffenbachia seguine',
+          identifiedSpecies: 'Dieffenbachia seguine',
+          speciesSource: 'user',
+        }),
+        fakeContext,
+        () => {}
+      );
+      expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBe('identified');
+    });
+
+    it('records null (unknown), not user, when no species was given at all', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p9' } as never);
+      await createPlant(postPlant({ name: 'Unnamed' }), fakeContext, () => {});
+      expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBeNull();
+    });
+
+    const putPlant = (body: Record<string, unknown>) =>
+      buildEvent({
+        httpMethod: 'PUT',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    it('leaves provenance untouched when an edit re-sends the SAME species', async () => {
+      // The edit form re-sends every field. Recomputing on each save would
+      // relabel a photo guess as something a person stated, one unrelated
+      // edit later — the audit trail would erase itself.
+      const plantService = await import('../../../src/services/plantService.js');
+      const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+        id: 'p1',
+        householdId: 'hh-1',
+        species: 'Dieffenbachia seguine',
+        speciesSource: 'identified',
+      } as never);
+      vi.mocked(plantService.updatePlant).mockResolvedValueOnce({ id: 'p1' } as never);
+
+      const res = (await updatePlant(
+        putPlant({ species: 'Dieffenbachia seguine', notes: 'moved to the hall' }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(plantService.updatePlant).mock.calls[0][2].speciesSource).toBeUndefined();
+    });
+
+    it('rewrites provenance to user when someone corrects the species by hand', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+        id: 'p1',
+        householdId: 'hh-1',
+        species: 'Dieffenbachia seguine',
+        speciesSource: 'identified',
+      } as never);
+      vi.mocked(plantService.updatePlant).mockResolvedValueOnce({ id: 'p1' } as never);
+
+      const res = (await updatePlant(
+        putPlant({ species: 'Aglaonema commutatum' }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(plantService.updatePlant).mock.calls[0][2].speciesSource).toBe('user');
+    });
+
+    it('records a re-identification on update', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { updatePlant } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.updatePlant).mockResolvedValueOnce({ id: 'p1' } as never);
+
+      const res = (await updatePlant(
+        putPlant({
+          species: 'Epipremnum aureum',
+          identifiedSpecies: 'Epipremnum aureum',
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(plantService.updatePlant).mock.calls[0][2].speciesSource).toBe('identified');
+      // A claim is about this write, so no read-before-write is needed.
       expect(plantService.getPlant).not.toHaveBeenCalled();
     });
   });

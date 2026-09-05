@@ -130,6 +130,22 @@ export const createPlantSchema = z.object({
   // whitespace-only value becomes "no rule" (null) in the service.
   careRule: z.string().trim().max(CARE_RULE_MAX_LENGTH).optional(),
   perenualSpeciesId: z.number().int().positive().optional(),
+  /**
+   * Provenance CLAIM for `species`: the scientific name this write says came
+   * from a photo identification the user accepted. It is not the stored
+   * provenance — `speciesSource` is absent from this schema on purpose, so a
+   * client can never write that enum directly (same rule as
+   * `canonicalSpecies`). The server accepts the claim only when it names the
+   * very species being written, and derives the enum itself.
+   *
+   * Limit of the guarantee, stated plainly: a client could send this for a
+   * name it typed. That is a self-report about the sender's own plant with
+   * nothing to gain from lying, and the field that leaves the app —
+   * `canonicalSpecies` — stays server-resolved either way. Making it
+   * unforgeable would need a signed identification receipt, which needs a
+   * signing secret this service does not have yet (issue #344).
+   */
+  identifiedSpecies: z.string().max(100).optional(),
   // Propagation: the same-household plant this cutting was taken from.
   // Existence (same household, not self) is validated in the handler.
   parentPlantId: z.string().uuid().optional(),
@@ -149,6 +165,8 @@ export const updatePlantSchema = z.object({
   careRule: z.string().trim().max(CARE_RULE_MAX_LENGTH).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),
+  /** Same provenance claim as on create; see createPlantSchema. */
+  identifiedSpecies: z.string().max(100).optional(),
   // Lifecycle transition. Setting 'died'/'gave_away' records an outcome;
   // 'archived' neutrally removes a plant from active care without data loss
   // (drops the plant out of active views/cap/reminders, keeps history);

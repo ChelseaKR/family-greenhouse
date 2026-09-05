@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/outline';
@@ -97,6 +98,24 @@ export function AddPlantPage() {
   const [pickedPreview, setPickedPreview] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [suggestions, setSuggestions] = useState<IdentificationSuggestion[] | null>(null);
+  /**
+   * How much the server thinks the current suggestion list is worth. Null when
+   * there is no list. `floor` is the server's threshold, quoted in the copy so
+   * the page never states a number the backend did not apply; `low` is the
+   * server's verdict on the TOP candidate.
+   *
+   * A server that sends neither leaves this null and the list renders as it
+   * always did — the same behaviour as before this existed, rather than a
+   * guess dressed up as a verdict.
+   */
+  const [confidence, setConfidence] = useState<{ floor: number; low: boolean } | null>(null);
+  /**
+   * The scientific name the user accepted from the identification list, kept
+   * so `createPlant` can tell the server this species is a model's guess and
+   * not something a person stated. Sent only when it still matches the species
+   * being saved, so editing the field by hand drops the claim by itself.
+   */
+  const [identifiedSpecies, setIdentifiedSpecies] = useState<string | null>(null);
   const [identifyNotice, setIdentifyNotice] = useState<string | null>(null);
   // The 402 "allowance and credits spent" refusal, kept apart from `error`
   // so the page can offer the top-up pack (ADR 0019) at the moment of need
@@ -138,6 +157,7 @@ export function AddPlantPage() {
   const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
     setSuggestions(null);
+    setConfidence(null);
     const file = e.target.files?.[0];
     if (!file) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -164,6 +184,7 @@ export function AddPlantPage() {
     // "No suggestions came back" above a still-clickable "Monstera deliciosa
     // — 90% confidence" from the last run: a guess presented as current.
     setSuggestions(null);
+    setConfidence(null);
     try {
       // Downscale BEFORE encoding — a raw iPhone photo (multi-MB HEIC/JPEG)
       // blows past the endpoint's body cap and the server rejects it outright.
@@ -186,6 +207,11 @@ export function AddPlantPage() {
         setIdentifyNotice('No suggestions came back — fill in the species manually.');
       } else {
         setSuggestions(result.suggestions);
+        setConfidence(
+          typeof result.confidenceFloor === 'number'
+            ? { floor: result.confidenceFloor, low: result.lowConfidence === true }
+            : null
+        );
       }
     } catch (err) {
       const exhausted = identifyBudgetExhaustedFromError(err);
@@ -209,7 +235,9 @@ export function AddPlantPage() {
     if (s.commonName && !nameValue) {
       setValue('name', s.commonName, { shouldValidate: true });
     }
+    setIdentifiedSpecies(s.scientificName);
     setSuggestions(null);
+    setConfidence(null);
     // Best-effort: resolve the AI-identified scientific name to a Perenual
     // species id so the suggested-care card and auto-watering task kick in.
     // No Perenual match is fine — the plant just saves without enrichment.
@@ -268,6 +296,11 @@ export function AddPlantPage() {
         notes: data.notes || undefined,
         tags: tags.length > 0 ? tags : undefined,
         perenualSpeciesId: perenualSpeciesId ?? undefined,
+        // Provenance: only claim "identified from a photo" while the field
+        // still holds the accepted suggestion. A hand-edit since then makes
+        // this stop matching, and the claim drops.
+        identifiedSpecies:
+          identifiedSpecies && identifiedSpecies === data.species ? identifiedSpecies : undefined,
         // Propagation mode: link the cutting to its parent.
         parentPlantId: parentPlantId || undefined,
       });
@@ -475,31 +508,60 @@ export function AddPlantPage() {
               </div>
             </div>
             {suggestions && suggestions.length > 0 && (
-              <ul className="rounded-md border border-primary-100/70 divide-y divide-primary-100/60">
-                {suggestions.map((s) => (
-                  <li
-                    key={s.scientificName}
-                    className="flex items-center justify-between gap-3 px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {s.commonName ?? s.scientificName}
-                      </p>
-                      <p className="text-xs italic text-gray-600">
-                        {s.scientificName} • {(s.probability * 100).toFixed(0)}% confidence
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => acceptSuggestion(s)}
+              <div className="space-y-2">
+                {/* A weak list is DEMOTED, never withheld. Every candidate is
+                    still listed and every "Use" still works — filtering them
+                    out would make an empty list mean both "the model wasn't
+                    confident" and "identification failed". */}
+                {confidence?.low && (
+                  <Alert variant="warning" title={t('plants.identify.lowConfidenceTitle')}>
+                    {t('plants.identify.lowConfidenceBody', {
+                      percent: Math.round(suggestions[0].probability * 100),
+                      floor: Math.round(confidence.floor * 100),
+                    })}
+                  </Alert>
+                )}
+                <ul
+                  className={clsx(
+                    'rounded-md divide-y divide-primary-100/60',
+                    confidence?.low
+                      ? 'border border-dashed border-gray-300 bg-gray-50/70'
+                      : 'border border-primary-100/70'
+                  )}
+                >
+                  {suggestions.map((s) => (
+                    <li
+                      key={s.scientificName}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
                     >
-                      Use
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                      <div>
+                        <p
+                          className={clsx(
+                            'text-sm',
+                            confidence?.low ? 'text-gray-600' : 'font-medium text-gray-900'
+                          )}
+                        >
+                          {s.commonName ?? s.scientificName}
+                        </p>
+                        <p className="text-xs italic text-gray-600">
+                          {t('plants.identify.candidate', {
+                            scientificName: s.scientificName,
+                            percent: Math.round(s.probability * 100),
+                          })}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => acceptSuggestion(s)}
+                      >
+                        {t('plants.identify.use')}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
 
