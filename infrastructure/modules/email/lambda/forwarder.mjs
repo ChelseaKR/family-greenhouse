@@ -8,6 +8,10 @@
  * and From becomes the forwarder address; Return-Path/Sender/DKIM-Signature
  * are stripped so the new send doesn't carry a broken signature.
  *
+ * The original From is attacker-controlled and reaches two header lines of the
+ * outbound message, so every CR and LF is collapsed out of it before it is
+ * interpolated. Tests: backend/tests/unit/config/sesForwarder.test.ts.
+ *
  * FORWARD_TO comes from SSM Parameter Store via Terraform (data source -> env
  * var) so the personal destination address never lives in the repo.
  */
@@ -62,21 +66,42 @@ export function rewrite(rawBytes, originalRecipient) {
   const kept = headers.filter((h) => {
     if (STRIP.test(h)) return false;
     if (/^from:/i.test(h)) {
-      from = h.replace(/^from:\s*/i, '').replace(new RegExp(eol, 'g'), ' ');
+      // Collapse EVERY CR and LF here, not just this message's own line
+      // ending. `headerBlock.split(eol)` only breaks on the complete sequence,
+      // so on a CRLF message a BARE LF inside the From header survives into
+      // this value — and it is interpolated verbatim into `Reply-To:` below.
+      // Sanitising only the display name (`safeName`) left that open: a From
+      // of `"Ev\nBcc: victim@example.com" <ev@bad.test>` produced a real
+      // injected Bcc line on a message sent from our DKIM-aligned domain.
+      from = h
+        .replace(/^from:\s*/i, '')
+        .replace(/[\r\n]+/g, ' ')
+        .trim();
       return false;
     }
     if (/^reply-to:/i.test(h)) return false; // replaced below
     return true;
   });
 
+  // Same treatment, same reason: this reaches two header lines below. SES
+  // fills it from the receipt's recipient list so it is not attacker-supplied
+  // today, which makes this the belt rather than the braces.
+  const mailbox = String(originalRecipient ?? '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+
   // Display the original sender in the visible name; envelope sender is ours.
+  // The quote swap is for the DISPLAY NAME only — `Reply-To` keeps the
+  // original quoting, because a legitimately quoted name (`"Doe, John"`) is
+  // not safely re-quoted with apostrophes and the address is what a reply
+  // needs to reach. Line breaks are the injection vector; quotes are not.
   const safeName = from
     .replace(/"/g, "'")
     .replace(/[\r\n]/g, ' ')
     .trim();
-  kept.push(`From: "${safeName || 'Unknown sender'} (via ${originalRecipient})" <${FROM_ADDRESS}>`);
+  kept.push(`From: "${safeName || 'Unknown sender'} (via ${mailbox})" <${FROM_ADDRESS}>`);
   if (from) kept.push(`Reply-To: ${from}`);
-  kept.push(`X-Forwarded-For-Mailbox: ${originalRecipient}`);
+  kept.push(`X-Forwarded-For-Mailbox: ${mailbox}`);
 
   return Buffer.concat([Buffer.from(kept.join(eol) + sep, 'latin1'), bodyBytes]);
 }
