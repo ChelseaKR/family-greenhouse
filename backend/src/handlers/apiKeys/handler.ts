@@ -20,6 +20,7 @@ import {
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import * as apiKeysService from '../../services/apiKeys.js';
 import * as billing from '../../services/billing.js';
+import { getEntitledPlan } from '../../models/plans.js';
 import { audit } from '../../utils/auditLog.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 
@@ -33,7 +34,12 @@ type CreateInput = z.infer<typeof createSchema>;
 
 async function requireGreenhousePlan(householdId: string) {
   const sub = await billing.getHouseholdSubscription(householdId);
-  if (sub.planId !== 'greenhouse') {
+  // ENTITLEMENT, not the plan row (#476). middleware/apiKey.ts already gates
+  // USING a key on getEntitledPlan, so minting one on `planId` alone was the
+  // inconsistent half: a past_due household could issue a key that its own
+  // next request would then be refused with. Issuing is a new grant, and a
+  // household mid-dunning is not entitled to new grants.
+  if (getEntitledPlan(sub).id !== 'greenhouse') {
     throw createHttpError(
       402,
       'API access is included with the Greenhouse plan. Upgrade to issue API keys.'

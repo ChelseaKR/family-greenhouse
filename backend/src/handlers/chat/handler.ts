@@ -24,7 +24,7 @@ import { getBudget } from '../../services/chat/persistence.js';
 import { resolveBudgetConfig } from '../../services/chat/budget.js';
 import type { BudgetConfig } from '../../services/chat/types.js';
 import * as billing from '../../services/billing.js';
-import { getPlan } from '../../models/plans.js';
+import { getEntitledPlan } from '../../models/plans.js';
 import { logger } from '../../utils/logger.js';
 import { saveChatReport } from '../../services/chatReports.js';
 import { audit } from '../../utils/auditLog.js';
@@ -149,10 +149,17 @@ export const getChatBudget = createHandler(
     // count is unchanged. A cap we could not determine is not one to report
     // as if we had — fail closed, the same 503 shape as the leaf-health
     // handler's cap resolution.
+    //
+    // ENTITLEMENT, not the plan row (#476). The turn itself is enforced
+    // against getEntitledPlan (services/chat/index.ts), so reading the plan
+    // row here reported a past_due household the cap of a tier it is no
+    // longer being granted — a confident "used X of Y" whose Y is not the Y
+    // anything enforces. The read side has to resolve the cap the same way
+    // the write side does or the meter is simply wrong.
     let config: BudgetConfig;
     try {
       config = await resolveBudgetConfig(
-        async () => getPlan((await billing.getHouseholdSubscription(householdId)).planId).id
+        async () => getEntitledPlan(await billing.getHouseholdSubscription(householdId)).id
       );
     } catch (err) {
       logger.error(

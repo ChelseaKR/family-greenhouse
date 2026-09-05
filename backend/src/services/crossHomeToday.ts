@@ -18,7 +18,7 @@
 import * as billing from './billing.js';
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
-import { getPlan, planIncludesCrossHomeToday } from '../models/plans.js';
+import { getEntitledPlan, planIncludesCrossHomeToday } from '../models/plans.js';
 import {
   isDueBy,
   type CrossHomeToday,
@@ -65,7 +65,12 @@ export async function resolveEntitlement(memberships: Membership[]): Promise<Ent
       );
       continue;
     }
-    if (planIncludesCrossHomeToday(getPlan(read.value.planId))) return 'entitled';
+    // ENTITLEMENT, not the plan row (#476): a per-request cross-household
+    // read with no physical artefact and no third party mid-task, so a
+    // household whose card has failed is treated exactly as a downgrade
+    // treats it. `unverifiable` above stays the answer for a FAILED read —
+    // "we could not check" is still not "you do not have it".
+    if (planIncludesCrossHomeToday(getEntitledPlan(read.value))) return 'entitled';
   }
   return unreadable ? 'unverifiable' : 'locked';
 }

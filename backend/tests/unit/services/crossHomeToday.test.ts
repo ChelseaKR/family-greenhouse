@@ -22,6 +22,8 @@ import type { Household, Task } from '../../../src/models/types.js';
 
 type Subscription = Awaited<ReturnType<typeof billing.getHouseholdSubscription>>;
 const sub = (planId: string) => ({ planId }) as unknown as Subscription;
+const subWithStatus = (planId: string, status: string) =>
+  ({ planId, status }) as unknown as Subscription;
 
 const CUTOFF = '2026-09-03T23:59:59.999Z';
 const NOW = new Date('2026-09-03T15:30:00.000Z');
@@ -94,6 +96,52 @@ describe('resolveEntitlement (per user, across every membership)', () => {
   it('falls back to the free tier for an unknown plan id (getPlan semantics)', async () => {
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(sub('enterprise'));
     expect(await resolveEntitlement([HOME])).toBe('locked');
+  });
+
+  // #476: entitlement consults payment status, not `planId` alone. Stripe does
+  // not cancel on a failed charge — it retries for weeks, and `planId` stays on
+  // the paid tier the whole time.
+  it('is locked, not entitled, for a household whose card has failed', async () => {
+    for (const status of ['past_due', 'unpaid', 'incomplete', 'canceled'] as const) {
+      vi.mocked(billing.getHouseholdSubscription).mockReset();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(
+        subWithStatus('greenhouse', status)
+      );
+      expect(await resolveEntitlement([HOME])).toBe('locked');
+    }
+  });
+
+  it('stays entitled through the statuses that still grant the plan', async () => {
+    for (const status of ['active', 'trialing'] as const) {
+      vi.mocked(billing.getHouseholdSubscription).mockReset();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(
+        subWithStatus('greenhouse', status)
+      );
+      expect(await resolveEntitlement([HOME])).toBe('entitled');
+    }
+    // An ABSENT status is entitled on purpose (entitlementIsCurrent): it means
+    // no subscription state was ever recorded, not that payment failed.
+    vi.mocked(billing.getHouseholdSubscription).mockReset();
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(sub('greenhouse'));
+    expect(await resolveEntitlement([HOME])).toBe('entitled');
+  });
+
+  it('keeps a lifetime owner entitled whatever a later subscription status says', async () => {
+    // A one-time purchase is an entitlement FLOOR with no refund path; a
+    // cancelled subscription taken on top of it must not destroy it.
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'greenhouse',
+    } as unknown as Subscription);
+    expect(await resolveEntitlement([HOME])).toBe('entitled');
+  });
+
+  it('still says unverifiable — not locked — when the read itself fails', async () => {
+    // The #476 conversion must not turn "we could not check" into "you do not
+    // have it": that is the defect it is meant to avoid, pointed the other way.
+    vi.mocked(billing.getHouseholdSubscription).mockRejectedValueOnce(new Error('ddb down'));
+    expect(await resolveEntitlement([HOME])).toBe('unverifiable');
   });
 });
 

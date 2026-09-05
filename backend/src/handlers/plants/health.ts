@@ -12,7 +12,7 @@ import * as leafHealthBudget from '../../services/leafHealthBudget.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as billing from '../../services/billing.js';
-import { getPlan } from '../../models/plans.js';
+import { getEntitledPlan } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -59,10 +59,17 @@ export const checkPlantHealth = createHandler(
     // actually configured: with the flat default every tier shares one number
     // and this is the pre-tiering path, read for read. A cap we could not
     // resolve is not one we spend against — same 503 as a failed reservation.
+    //
+    // ENTITLEMENT, not the plan row (#476). Every scan is a real Bedrock
+    // invocation, and Stripe does not cancel on a failed charge — it retries
+    // for weeks. Resolving the cap from `planId` alone let a past_due
+    // household keep spending against a paid allowance for the whole dunning
+    // window; `getEntitledPlan` drops it to the free tier's allowance, which
+    // is the same treatment a downgrade already gets (identify.ts does this).
     let cap: number;
     try {
       cap = await leafHealthBudget.resolveMonthlyCap(
-        async () => getPlan((await billing.getHouseholdSubscription(user.householdId!)).planId).id
+        async () => getEntitledPlan(await billing.getHouseholdSubscription(user.householdId!)).id
       );
     } catch (err) {
       logger.error(

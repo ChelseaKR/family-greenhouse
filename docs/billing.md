@@ -45,7 +45,7 @@ Caps are enforced in:
 
 A household's `planId` says which plan it is **on**. It does not say whether it
 is **paying** for it. `getEntitledPlan` (`backend/src/models/plans.ts`) resolves
-the second question, and every paid-feature gate uses it rather than
+the second question, and the gates listed below use it rather than
 `getPlan(sub.planId)`:
 
 | Stripe `subscription.status`                                                   | Caps resolve to  |
@@ -65,10 +65,25 @@ This is deliberately the same shape as a downgrade, not a lockout: see
 "Plan caps and downgrades" below. Existing plants and members stay readable and
 editable; only new creations pause. The gates it covers are plant create, plant
 reactivate, shared-plant accept, bulk import, household join, the public read
-API (`middleware/apiKey.ts`), the Plant.id allowance, and the care assistant.
+API (`middleware/apiKey.ts`), API key **minting** (`handlers/apiKeys`), the
+Plant.id allowance, the care assistant, the leaf-health monthly allowance, the
+cap `GET /chat/budget` reports, and cross-home Today.
 `GET /billing/me` reports the same entitled caps in its meters, so the numbers
 the UI shows are the numbers the API enforces; `planId` in that response stays
 the plan the household is on.
+
+**The sweep is not finished, and this section does not claim otherwise.** Around
+a dozen gates written after `getEntitledPlan` landed still resolve off `planId`
+alone — so a `past_due` household loses paid _limits_ while keeping some paid
+_features_. The remainder are tracked in issue #476 and are held deliberately:
+each carries a product question this file cannot answer, of the form "should an
+already-issued grant be revoked mid-use?" — a sitter link while the household is
+away, a Move Day claimed mid-season, a plant tag already printed and sitting in
+a pot, a kiosk already mounted on a wall. Converting those without deciding the
+question would be worse than leaving them, because the codebase does not yet
+distinguish _starting_ something new from _continuing_ something already
+granted. When that decision is made it belongs here first, and in the call
+sites second.
 
 The 402 response body carries a friendly explanation referencing the plan name; the frontend shows it as an error toast and links to `/settings/billing`.
 
