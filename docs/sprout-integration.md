@@ -17,6 +17,60 @@ payload fields and labels corpus answers and household observations separately.
 As with any free-text field, users should not put sensitive personal
 information in a chat question.
 
+## The payload is a subset, and says so
+
+What crosses is reduced twice: only plants with a **server-resolved canonical
+species** are eligible (the user-editable species field never crosses, so a
+plant that has never been matched is dropped outright), and what survives that
+is then capped at `SPROUT_CONTEXT_CAP` (100) plants and 100 tasks.
+
+Both reductions used to be invisible. The payload carried `plants` and `tasks`
+and nothing else, so a household whose plants had never been species-matched
+sent `plants: []` — indistinguishable, to the thing writing the answer, from a
+household with no plants. Sprout's reply carries
+`household_observations`: numeric claims about the user's own collection,
+stamped `provenance: 'household'`. A subset was being reported as a total.
+
+Every request now also carries `coverage`:
+
+```jsonc
+"coverage": {
+  "plants": {
+    "total": 150,      // everything the household has
+    "included": 100,   // what actually crossed
+    "unmatched": 30,   // dropped by the canonical-species filter
+    "truncated": 20,   // dropped by the cap, after the filter
+    "cap": 100,
+    "complete": false  // included === total; the only honest bare count
+  },
+  "tasks": { /* same shape */ },
+  "partial": true      // either set is a strict subset
+}
+```
+
+These are **aggregate integers only**. No strings, so the privacy boundary
+above is unchanged: `coverage` says how many plants did not cross, never
+anything about them. `unmatched` and `truncated` stay separate because one is a
+privacy control and the other is a size limit.
+
+On the response side, Family Greenhouse attaches the coverage of the set an
+observation was computed over to that observation, from **its own** count of
+the household rather than from anything in the reply — so a reply cannot
+overstate its own coverage. `provenance: 'household'` says where a number came
+from; `coverage.complete` says how much of the household it covers.
+
+Two things this does **not** settle, both owner decisions:
+
+- **What Sprout asserts.** Whether an answer hedges, states its denominator, or
+  declines a count when `partial` is true is a policy in the Sprout service.
+  Family Greenhouse supplies the facts; it does not choose the wording.
+- **Whether the cap stays.** It is a real cap, not a page size — nothing
+  fetches the remainder. It remains for now because the payload crosses a
+  service boundary; raising or removing it is a separate call.
+
+Sprout rejects unknown payload fields, so `coverage` must be accepted there
+before `sprout_integration_enabled` is set in any environment.
+
 ## Enablement
 
 Store the same high-entropy HMAC secret in each deployment. For Family
