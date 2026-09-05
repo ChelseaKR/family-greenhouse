@@ -239,6 +239,10 @@ describe('invokeChatModel (Bedrock wrapper)', () => {
   // that reconciles the 8,000-token budget reservation or resolves the turn
   // claim. The household would be billed for a turn that produced nothing.
   it('refuses to start a call the turn has no time left for', async () => {
+    // Primed with a WORKING response: if the deadline is not honoured this
+    // fails on "did not throw", which is the finding, rather than on a
+    // TypeError from an unprimed mock.
+    bedrockSend.mockResolvedValueOnce(modelResponse());
     const invokeChatModel = await subject();
 
     await expect(
