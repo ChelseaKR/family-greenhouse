@@ -55,6 +55,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: node_modules matches package-lock.json (#581)
+        # A preflight in `npm run verify` (scripts/run-gate.mjs), where it earns
+        # its keep: a stale local install makes lint, typecheck and both suites
+        # fail on module resolution, and the gate then reports whichever noticed
+        # first. On 2026-09-05 that was `test:backend`, for fifteen suites that
+        # could not import a devDependency added 139 commits earlier.
+        #
+        # Here it is expected ALWAYS to pass, since `npm ci` above has just
+        # written the tree — and that is exactly why it runs here. The failure
+        # branch of a gate script is the branch a green build never executes,
+        # so what CI can uniquely prove is that the checker still agrees with a
+        # canonical fresh install rather than having drifted into a false alarm
+        # nobody sees until it blocks a push.
+        run: npm run deps:check
+
       - name: Run ESLint
         # frontend's `lint` covers `src`, `tests/e2e` and `playwright.config.ts`.
         # The e2e tree was previously outside every lint glob despite being the

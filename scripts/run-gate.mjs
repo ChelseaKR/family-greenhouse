@@ -31,6 +31,14 @@
  *     covered new workspaces automatically; an explicit list needs this).
  *   - Top-level rejections and uncaught exceptions exit non-zero.
  *
+ * Before any of that, a preflight compares `node_modules` against
+ * `package-lock.json` (scripts/check-dependency-freshness.mjs). Every step
+ * below reads as a statement about the SOURCE tree when it fails, and that
+ * reading is wrong if the installed tree is stale — see `preflight()` and #581.
+ * It is the one thing the gate stops on, because continuing produces up to
+ * twenty-eight failures that all describe the same missing package and none of
+ * which says so.
+ *
  * Output: each step's stdout/stderr is buffered and only printed if that step
  * fails, so fifteen concurrent commands do not interleave into noise. Every
  * step gets a one-line PASS/FAIL as it finishes, and failures are reprinted in
@@ -52,6 +60,8 @@ import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { checkDependencyFreshness, formatFreshnessFailure } from './check-dependency-freshness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -223,6 +233,58 @@ function runStep(step) {
 
 // --- the pool --------------------------------------------------------------
 
+/**
+ * Runs before anything is scheduled. Returns true to continue.
+ *
+ * Every step below is a check of the source tree, and every one of them reads
+ * as a statement ABOUT the source tree when it fails. That reading is wrong if
+ * `node_modules` is not the tree `package-lock.json` describes: then lint,
+ * typecheck and both suites fail on module resolution, and the gate's report
+ * points at whichever of them happened to notice first. On 2026-09-05 that cost
+ * a blocked release — `gate FAILED — 1 of 28 steps failed in 83.3s: test:backend`
+ * for fifteen suites that could not import a devDependency added 139 commits
+ * earlier and never installed (#581).
+ *
+ * So this runs first and, on failure, stops. Not as a step: a step would run
+ * concurrently with the twenty-eight failures it explains, and the reader would
+ * still have to find it among them. It costs ~0.2s against the gate's ~90s.
+ */
+async function preflight() {
+  const started = Date.now();
+  let report;
+  try {
+    report = await checkDependencyFreshness(ROOT);
+  } catch (err) {
+    // The comparison could not be made. A check that cannot check must not be
+    // reported as one that passed.
+    console.error(
+      c.red(`\ngate BLOCKED — the dependency freshness check could not run: ${err.message}`)
+    );
+    return false;
+  }
+
+  if (!report.ok) {
+    console.error(`${c.red('─'.repeat(72))}`);
+    console.error(c.red(c.bold('gate BLOCKED — dependencies, not code')));
+    console.error(c.red('─'.repeat(72)));
+    console.error(formatFreshnessFailure(report));
+    console.error(
+      c.dim(
+        'No gate step ran. Whatever they reported from this tree would have described\n' +
+          'the installed dependencies, not your change.'
+      )
+    );
+    return false;
+  }
+
+  console.log(
+    c.dim(
+      `preflight  ${secs(Date.now() - started).padStart(6)}  node_modules matches package-lock.json (${report.checked} packages)`
+    )
+  );
+  return true;
+}
+
 async function main() {
   const steps = await loadPlan();
 
@@ -230,6 +292,8 @@ async function main() {
     throw new Error(`--jobs/GATE_JOBS must be a positive number, got "${JOBS}".`);
   }
   const limit = Math.floor(JOBS);
+
+  if (!(await preflight())) return 1;
 
   const scheduled = steps.filter((s) => s.weight > 0).length;
   console.log(

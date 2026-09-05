@@ -57,6 +57,7 @@
     "mobile:validate": "node scripts/validate-store-release.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "audit:check": "node scripts/check-audit.mjs",
+    "deps:check": "node scripts/check-dependency-freshness.mjs",
     "secrets:check": "node scripts/check-secrets.mjs",
     "markers:check": "node scripts/check-no-bare-markers.mjs",
     "gates:check": "node scripts/check-no-silenced-gates.mjs",
