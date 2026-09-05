@@ -21,6 +21,7 @@ import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { atCap, type Limit } from '../models/plans.js';
 import { invalidateMembership } from '../utils/membershipCache.js';
+import { HOUSEHOLD_TIMEZONE_UNSET, normalizeHouseholdTimeZone } from './householdTimeZone.js';
 import {
   Household,
   HouseholdMember,
@@ -232,6 +233,33 @@ export async function setMemberRole(
   };
 }
 
+/**
+ * One household row -> one `Household`, so every write path hands back the
+ * same shape the read path does.
+ *
+ * It used to be two hand-written literals. `setHouseholdLocation`'s copy was
+ * already missing `escalateAfterDays`, so `PUT /households/{id}/location`
+ * answered with a household whose auto-handoff rule looked absent — the
+ * "absence rendered as a value" shape this repo keeps unwinding, and exactly
+ * the trap a second household-level setting would fall into next.
+ */
+function toHousehold(item: Record<string, unknown>): Household {
+  return {
+    id: item.id as string,
+    name: item.name as string,
+    location: (item.location as Household['location']) ?? null,
+    // Read-side normalisation lives in escalation.ts so a legacy/corrupt
+    // value can never surface as an enabled rule.
+    escalateAfterDays: normalizeEscalateAfterDays(item.escalateAfterDays),
+    // Same posture, different reason: an unrecognised zone reads as unset
+    // rather than as UTC, so "we were never told" stays distinguishable from
+    // "they chose UTC" (services/householdTimeZone.ts, ADR 0010, ADR 0025).
+    timezone: normalizeHouseholdTimeZone(item.timezone),
+    createdAt: item.createdAt as string,
+    createdBy: item.createdBy as string,
+  };
+}
+
 export async function getHousehold(householdId: string): Promise<Household | null> {
   const result = await dynamodb.send(
     new GetCommand({
@@ -247,16 +275,7 @@ export async function getHousehold(householdId: string): Promise<Household | nul
     return null;
   }
 
-  return {
-    id: result.Item.id as string,
-    name: result.Item.name as string,
-    location: (result.Item.location as Household['location']) ?? null,
-    // Read-side normalisation lives in escalation.ts so a legacy/corrupt
-    // value can never surface as an enabled rule.
-    escalateAfterDays: normalizeEscalateAfterDays(result.Item.escalateAfterDays),
-    createdAt: result.Item.createdAt as string,
-    createdBy: result.Item.createdBy as string,
-  };
+  return toHousehold(result.Item);
 }
 
 export async function setHouseholdLocation(
@@ -275,13 +294,44 @@ export async function setHouseholdLocation(
     })
   );
   if (!result.Attributes) return null;
-  return {
-    id: result.Attributes.id as string,
-    name: result.Attributes.name as string,
-    location: (result.Attributes.location as Household['location']) ?? null,
-    createdAt: result.Attributes.createdAt as string,
-    createdBy: result.Attributes.createdBy as string,
-  };
+  return toHousehold(result.Attributes);
+}
+
+/**
+ * Store (or clear) the household's IANA timezone.
+ *
+ * Write-side validation is the caller's job — the handler runs the same
+ * `isValidTimeZone` the notification prefs do — but `toHousehold` normalises
+ * again on the way out, so a row written before this existed, or by a future
+ * runtime whose tz database has retired the name, still reads as unset rather
+ * than as a zone the due-date math could act on.
+ *
+ * Clearing REMOVEs the attribute rather than writing `''`. DynamoDB can then
+ * tell "never set" from "set to something" at the storage layer, which is the
+ * signal ADR 0025's cutover needs and the one thing a defaulted column cannot
+ * give back once it is gone.
+ *
+ * NOTHING reads this value for due-date, reminder, ICS or digest math. See
+ * ADR 0025 for why that is a separate, owner-approved step.
+ */
+export async function setHouseholdTimeZone(
+  householdId: string,
+  timezone: string
+): Promise<Household | null> {
+  const clearing = normalizeHouseholdTimeZone(timezone) === HOUSEHOLD_TIMEZONE_UNSET;
+  const result = await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+      UpdateExpression: clearing ? 'REMOVE #timezone' : 'SET #timezone = :timezone',
+      ExpressionAttributeNames: { '#timezone': 'timezone' },
+      ...(clearing ? {} : { ExpressionAttributeValues: { ':timezone': timezone } }),
+      ReturnValues: 'ALL_NEW',
+      ConditionExpression: 'attribute_exists(PK)',
+    })
+  );
+  if (!result.Attributes) return null;
+  return toHousehold(result.Attributes);
 }
 
 /**

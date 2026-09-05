@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidTimeZone } from '../utils/timeZone.js';
 
 // Auth schemas
 export const cognitoPasswordSchema = z
@@ -339,6 +340,24 @@ export const setEscalationRuleSchema = z.object({
     .nullable(),
 });
 
+/**
+ * Household IANA timezone (#342, ADR 0025). `''` clears it back to "never
+ * set", which is a distinct state from choosing `'UTC'`.
+ *
+ * The name is checked against the runtime's tz database rather than a regex:
+ * `Area/Location` matches plenty of strings Intl will not resolve, and a
+ * stored name Intl rejects is what made a bad prefs row abort a whole
+ * household's reminder run before `notificationPrefs.setPreferences` started
+ * validating. The length cap is a bound on the input, not the rule —
+ * `isValidTimeZone` is.
+ */
+export const setHouseholdTimeZoneSchema = z.object({
+  timezone: z
+    .string()
+    .max(100)
+    .refine((tz) => tz === '' || isValidTimeZone(tz), 'Unknown timezone'),
+});
+
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1).max(80),
 });
@@ -422,5 +441,6 @@ export type AskForHelpInput = z.infer<typeof askForHelpSchema>;
 export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
 export type SetVacationInput = z.infer<typeof setVacationSchema>;
 export type SetEscalationRuleInput = z.infer<typeof setEscalationRuleSchema>;
+export type SetHouseholdTimeZoneInput = z.infer<typeof setHouseholdTimeZoneSchema>;
 export type CreateSitterLinkInput = z.infer<typeof createSitterLinkSchema>;
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;

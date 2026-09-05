@@ -45,10 +45,12 @@ import {
   applyTemplateBulkSchema,
   createSitterLinkSchema,
   setEscalationRuleSchema,
+  setHouseholdTimeZoneSchema,
 } from './models/schemas.js';
 import type { SpaceRotation } from './models/types.js';
 import { resolveInheritedAssignee, isExplicitAssignment } from './services/assignmentResolver.js';
 import { ASK_HELP_WINDOW_MS, normalizeHelpNote } from './services/askFamilyRule.js';
+import { normalizeHouseholdTimeZone } from './services/householdTimeZone.js';
 import { TEMPLATES } from './models/taskTemplates.js';
 import {
   PLANS,
@@ -200,6 +202,8 @@ interface Household {
   location?: { city: string; lat: number; lon: number } | null;
   /** Auto-handoff rule (ADR 0018); null/absent = off. */
   escalateAfterDays?: number | null;
+  /** IANA zone, `''`/absent = never set (#342, ADR 0025). Read by nothing. */
+  timezone?: string;
   createdAt: string;
   createdBy: string;
   planId?: 'seedling' | 'garden' | 'greenhouse';
@@ -1654,6 +1658,10 @@ app.get('/households/:id', authMiddleware, requireHousehold, (req, res) => {
 
   res.json({
     ...household,
+    // Production's `getHousehold` normalises on read and so always answers
+    // with the field; a bare spread would omit it while unset and let the
+    // client see `undefined` here but `''` in prod.
+    timezone: normalizeHouseholdTimeZone(household.timezone),
     // `emailStatus` mirrors getHouseholdMembersPublic: deliverability without
     // the address. The mock has no failing store, so it never reports the
     // third state (`unknown`) that production returns on a failed lookup.
@@ -1860,6 +1868,33 @@ app.put(
     };
     household.escalateAfterDays = escalateAfterDays;
     res.json({ escalateAfterDays });
+  }
+);
+
+// Household IANA zone (#342, ADR 0025). Admin-only, not plan-gated, and — as
+// in production — consulted by nothing: every due-date, window and reminder
+// path in this file still does instant math.
+app.put(
+  '/households/:id/timezone',
+  authMiddleware,
+  requireHousehold,
+  validateBody(setHouseholdTimeZoneSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (user.householdRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin role required' });
+    }
+    const household = db.households.get(req.params.id);
+    if (!household) return res.status(404).json({ message: 'Household not found' });
+    const { timezone } = (req as any).validatedBody as { timezone: string };
+    // `''` clears rather than stores, mirroring the REMOVE in householdService.
+    const normalized = normalizeHouseholdTimeZone(timezone);
+    if (normalized === '') delete household.timezone;
+    else household.timezone = normalized;
+    res.json({ timezone: normalized });
   }
 );
 

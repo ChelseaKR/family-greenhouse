@@ -16,6 +16,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **A household can now record its timezone.** Nothing uses it yet, and that
+  is deliberate. Due dates in this app are stored as exact moments and
+  compared in the server's own zone, which is why a plant added in the evening
+  could already be overdue and why the weekly digest and the app could
+  disagree about how late a task was. Teaching the app that watering happens
+  on a _day_, in _your_ day, changes how every task already in the app is
+  counted — so this release stores the setting and plans the change
+  (`docs/adr/0025-household-timezone-and-the-due-date-migration.md`) rather
+  than making it. A household that has not set a zone keeps exactly the
+  behaviour it has today.
+
 ## [0.28.0] - 2026-09-05
 
 ### Fixed
