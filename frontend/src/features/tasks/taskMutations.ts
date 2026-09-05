@@ -56,17 +56,31 @@ export function replaceCompletedTaskInCache(value: unknown, updatedTask: Task): 
   return value;
 }
 
-/** Dashboard's upcoming list represents the current care queue: a completed
- * row leaves it immediately. Full task lists keep the recurring task and show
- * its newly scheduled due date. */
+/**
+ * A completed row does NOT leave the dashboard's upcoming list — it moves to
+ * its next due date, exactly as every other task list shows it.
+ *
+ * This used to filter the row out, on the reasoning that the upcoming list is
+ * "the current care queue". The server disagrees: `getUpcomingTasks` returns
+ * everything due within SEVEN DAYS (`services/taskService.ts`), and completing
+ * a task advances `nextDue` by its frequency. So any task recurring every
+ * seven days or fewer — which is most watering — lands straight back inside
+ * the window and the refetch returns it.
+ *
+ * The row therefore vanished on tap and reappeared a moment later, which reads
+ * as "it didn't save". Observed in production: a household tapped done seven
+ * times in fifty seconds against a 3-day and a 7-day watering task. Every tap
+ * had persisted — there were seven completion rows to prove it.
+ *
+ * Removing a row the server is about to send back is the optimistic-update
+ * equivalent of rendering a guess as the answer. Showing the new due date is
+ * both true and self-explanatory: the task moves rather than flickering.
+ */
 export function replaceCompletedTaskInTaskQuery(
-  queryKey: readonly unknown[],
+  _queryKey: readonly unknown[],
   value: unknown,
   updatedTask: Task
 ): unknown {
-  if (Array.isArray(value) && queryKey[2] === 'upcoming') {
-    return (value as TaskWithCoverage[]).filter((task) => task.id !== updatedTask.id);
-  }
   return replaceCompletedTaskInCache(value, updatedTask);
 }
 

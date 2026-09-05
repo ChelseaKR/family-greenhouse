@@ -46,9 +46,35 @@ describe('replaceCompletedTaskInCache', () => {
     });
   });
 
-  it('removes a completed row from the dashboard care queue', () => {
+  it('moves a completed row to its next due date instead of dropping it', () => {
+    // The server's upcoming window is seven days and completion advances
+    // nextDue by the task's frequency, so a task recurring every <= 7 days is
+    // immediately upcoming again. Filtering it out here made it vanish and
+    // then reappear on the refetch, which reads as "it didn't save".
     expect(
       replaceCompletedTaskInTaskQuery(['tasks', 'household-1', 'upcoming'], [task], completed)
-    ).toEqual([]);
+    ).toEqual([completed]);
+  });
+
+  it('keeps the row for a task whose next occurrence falls outside the window', () => {
+    // Not a special case in the client: the row is replaced either way, and
+    // the authoritative refetch is what removes it if the server no longer
+    // considers it upcoming. Pinning this stops a future "optimise" from
+    // reintroducing client-side guessing about the server's window.
+    const farFuture = { ...completed, nextDue: '2026-12-25T09:00:00.000Z' };
+    expect(
+      replaceCompletedTaskInTaskQuery(['tasks', 'household-1', 'upcoming'], [task], farFuture)
+    ).toEqual([farFuture]);
+  });
+
+  it('leaves rows for other tasks untouched', () => {
+    const other = { ...task, id: 'task-other' };
+    expect(
+      replaceCompletedTaskInTaskQuery(
+        ['tasks', 'household-1', 'upcoming'],
+        [task, other],
+        completed
+      )
+    ).toEqual([completed, other]);
   });
 });
