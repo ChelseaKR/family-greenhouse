@@ -1,14 +1,28 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 
-// Pin the zone the suite runs in to what the deployed Lambdas use (no TZ
-// override exists in infrastructure/, so they run UTC). The recurrence math
-// in taskService (`setDate(getDate() + frequency)`) is local-zone arithmetic,
-// so without this the snooze/next-due date assertions were only green on
-// laptops whose zone happened to have no DST transition inside the fixture
-// window. Set here, in the main process, for the same reason as the frontend
-// config: worker threads inherit it, but assigning TZ inside one is inert.
-// An explicitly exported TZ (e.g. to reproduce a zone-specific failure) wins.
+// Pin the zone the suite runs in to what the deployed Lambdas use: `TZ = "UTC"`
+// on `local.lambda_environment` in infrastructure/modules/api/main.tf.
+//
+// That pin did not used to exist. The Lambdas inherited UTC from the AWS
+// platform default and this line mirrored an assumption nothing in the
+// repository stated, so both halves were right by coincidence (#590). They now
+// agree by reference, and tests/unit/config/lambdaTimeZone.test.ts fails if
+// either side moves.
+//
+// The recurrence math in taskService (`setDate(getDate() + frequency)`) is
+// local-zone arithmetic, so without this the snooze/next-due date assertions
+// were only green on laptops whose zone happened to have no DST transition
+// inside the fixture window. Set here, in the main process, for the same
+// reason as the frontend config: worker threads inherit it, but assigning TZ
+// inside one is inert.
+//
+// `??=`, not `=`, deliberately. This pins the TEST PROCESS, which is a
+// different fact from the deployed Lambdas' zone — no unit test can observe
+// the latter by running, only by reading the deployment config, which is what
+// tests/unit/config/lambdaTimeZone.test.ts does. Overwriting would delete the
+// escape hatch (an explicitly exported TZ, e.g. to reproduce a zone-specific
+// failure, wins) without making anything more observable.
 process.env.TZ ??= 'UTC';
 
 export default defineConfig({

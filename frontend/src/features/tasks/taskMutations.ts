@@ -89,8 +89,9 @@ export function replaceCompletedTaskInTaskQuery(
  *
  * `backend/src/services/taskService.ts` (`completeTask`) computes
  * `nextDue.setDate(nextDue.getDate() + frequency)` in the process zone, and
- * the deployed Lambdas run in UTC (no `TZ` is set anywhere in
- * `infrastructure/`; `backend/vitest.config.ts` pins the same). `setDate` /
+ * the deployed Lambdas run in UTC (`infrastructure/modules/api/main.tf` sets
+ * `TZ = "UTC"` on the Lambda environment — #590; `backend/vitest.config.ts`
+ * pins the same zone for the suite). `setDate` /
  * `getDate` here run in the BROWSER's zone, so across a DST transition the
  * two disagree by an hour — enough to move the rendered calendar date a
  * whole day. The optimistic row then showed one date and visibly jumped to
