@@ -489,6 +489,51 @@ resource "aws_cloudwatch_log_metric_filter" "digests_run_truncated" {
   }
 }
 
+# Household engagement (#478).
+#
+# `services/householdLapse.ts` classifies each household the weekly digest run
+# touches and logs `retention.household_engagement`. These two filters are what
+# make that answer COUNTABLE rather than a line somebody greps for once.
+#
+# They are deliberately a pair. A lapsing count on its own is unreadable: a
+# week where DynamoDB throttled produces fewer lapsing households and more
+# unreadable ones, and without the second series that looks like retention
+# improving. The classifier already refuses to fold a failed read into a
+# lapse — this is the same refusal at the metric layer.
+#
+# No alarm is attached to either. Households drifting away is not a page at
+# 3am, and nobody yet knows what a normal value looks like; that is exactly the
+# question these series exist to answer before any outreach is designed.
+resource "aws_cloudwatch_log_metric_filter" "retention_households_lapsing" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-retention-households-lapsing-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ $.msg = \"retention.household_engagement\" && $.engagement = \"lapsing\" }"
+
+  metric_transformation {
+    name          = "RetentionHouseholdsLapsing"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "retention_engagement_unavailable" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-retention-engagement-unavailable-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ $.msg = \"retention.household_engagement\" && $.engagement = \"unavailable\" }"
+
+  metric_transformation {
+    name          = "RetentionEngagementUnavailable"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
 # CloudWatch Alarms
 #
 # Alarm strategy (cost-driven consolidation): standard alarms are ~$0.10/mo

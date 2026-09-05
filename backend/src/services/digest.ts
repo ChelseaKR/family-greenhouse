@@ -35,6 +35,7 @@ import * as plantService from './plantService.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
 import * as digestReport from './digestReport.js';
+import * as householdLapse from './householdLapse.js';
 import * as scheduledFanOut from './scheduledFanOut.js';
 import { mintUnsubscribeToken, type EmailCategory } from './email/capability.js';
 import { t, tn, formatYear, type EmailLocale } from './email/catalog.js';
@@ -281,6 +282,42 @@ async function finalizeWeeklyDigestSlot(
  * building — and it only ever REMOVES recipients, so evaluating it late can
  * never cause an unwanted send.
  */
+/**
+ * Classify this household's engagement and log the answer. Best-effort.
+ *
+ * Wrapped so retention observation can never cost a household its digest:
+ * a throw here is a warning line, not a missed email. The one thing it must
+ * never do is guess — `householdLapse` returns `unavailable` with a reason for
+ * every read it could not complete, and that reason is logged as itself rather
+ * than folded into a count of lapsing households.
+ */
+async function observeEngagement(
+  householdId: string,
+  atRisk: digestReport.AtRiskResult,
+  now: Date
+): Promise<void> {
+  try {
+    const engagement = await householdLapse.readHouseholdEngagement(
+      householdId,
+      householdLapse.overdueFromAtRisk(atRisk),
+      now
+    );
+    logger.info(
+      {
+        householdId,
+        ...householdLapse.engagementLogFields(engagement),
+        msg: 'retention.household_engagement',
+      },
+      'retention.household_engagement'
+    );
+  } catch (err) {
+    logger.warn(
+      { householdId, err: (err as Error).message, msg: 'retention.engagement_observe_failed' },
+      'retention.engagement_observe_failed'
+    );
+  }
+}
+
 export async function digestHousehold(
   householdId: string,
   now: Date = new Date()
@@ -297,6 +334,19 @@ export async function digestHousehold(
     );
     return 0;
   }
+
+  // Retention observation (#478). Reaching this line means the household has
+  // work waiting — the exact population where "have they gone quiet?" is worth
+  // asking, and the reason the classification is taken HERE rather than before
+  // gate 1: a quiet household with nothing overdue is rejected above for two
+  // reads, and this must not turn that into three. The trade is that `idle`
+  // (stopped completing, owes nothing) is a state the classifier can express
+  // and this call site will almost never produce.
+  //
+  // It observes and nothing else: one log line, no email, no write, no change
+  // to who receives the digest. Whether a household that has gone quiet should
+  // be contacted at all is a product decision and is not made in this file.
+  await observeEngagement(householdId, atRisk, now);
 
   // Gate 2: is there anyone to say it to? One member query plus a point read
   // per member — reads that all happened anyway, just after the report.

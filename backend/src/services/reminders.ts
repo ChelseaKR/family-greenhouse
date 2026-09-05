@@ -10,6 +10,12 @@
  * `notifier.sendToUser`, which respects per-user channel prefs + the DND window
  * and degrades to a structured log line when a channel isn't configured.
  *
+ * Volume: the daily cap below bounds how OFTEN a household hears from us;
+ * `REMINDER_OVERDUE_DECAY_DAYS` bounds how long. Without it the due window has
+ * only a near edge, so a household that stops keeping up is reminded every
+ * morning forever about a list that only grows — see that constant for why
+ * that is a bug and not a feature.
+ *
  * Spam control: the scan is hourly and the due window is 24h, so the same due
  * task is eligible on every run. A per-user, per-household, per-day dedupe
  * marker per delivery channel caps each channel at one reminder for each
@@ -68,6 +74,36 @@ import { resolveEmailLocale } from './email/locale.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When a task stops being part of the DAILY reminder (#478).
+ *
+ * `DUE_WINDOW_MS` above splits "ask before it's late" from "nag after it is",
+ * and it has no far edge: `taskService.getTasksDueBy` queries `GSI1SK <=
+ * cutoff` with no lower bound, so every overdue task is in the window forever,
+ * at any age. The consequence is the opposite of what the rest of this
+ * codebase's anti-nag reasoning intends — a household that has fallen behind
+ * receives a reminder EVERY morning (a household that is on top of things gets
+ * one only when something is actually due), each row carrying a `daysOverdue`
+ * that grows without bound. The app nags hardest exactly where someone has
+ * already checked out.
+ *
+ * So the window gets a far edge. A task this many whole days overdue drops out
+ * of the daily reminder and is carried by the weekly digest instead
+ * (`digestReport.gatherAtRisk` has no age ceiling and is not given one).
+ * Nothing is hidden: the reminder states how many it is not listing, the
+ * digest still ranks them, and the app still shows them. What ends is the
+ * daily re-reading of the same list.
+ *
+ * Deliberately NOT applied to:
+ *   - a task whose `nextDue` did not parse (`DueState.unknown`). We do not
+ *     know how overdue it is, so we cannot decide it is old. It stays, which
+ *     is also the case most in need of a human.
+ *   - the escalation pass below, which is handed the unfiltered `due` list —
+ *     auto-handoff has its own floor and its own at-most-once write, and this
+ *     constant must not quietly change who a task hands off to.
+ */
+export const REMINDER_OVERDUE_DECAY_DAYS = 14;
 
 /**
  * The language a reminder is composed in when its recipient has never chosen
@@ -349,6 +385,18 @@ function dueStateFor(nextDue: string | null | undefined, now: Date): DueState {
   return days <= 0 ? { kind: 'today' } : { kind: 'overdue', days };
 }
 
+/**
+ * Has this task been overdue long enough to drop out of the daily reminder?
+ *
+ * Derived from `dueStateFor`, not from a second date calculation, so "resting"
+ * and "N days overdue" can never disagree. `unknown` is false by construction:
+ * an unreadable due date is not an old one.
+ */
+export function isRestingOverdue(nextDue: string | null | undefined, now: Date): boolean {
+  const state = dueStateFor(nextDue, now);
+  return state.kind === 'overdue' && state.days >= REMINDER_OVERDUE_DECAY_DAYS;
+}
+
 /** Most urgent first: longest-overdue, then today, then upcoming, then the
  *  rows whose due date we could not read (last, but never dropped). */
 const DUE_RANK: Record<DueState['kind'], number> = {
@@ -435,8 +483,33 @@ export async function remindHousehold(
     due = dueWindowTasks.filter((t) => activePlantNames.has(t.plantId));
   }
 
+  // Split the due window at its new far edge. `due` stays whole — the
+  // escalation pass at the bottom of this function reads it — and only the
+  // reminder composition works from `fresh`.
+  const fresh: Task[] = [];
+  const resting: Task[] = [];
+  for (const task of due) {
+    (isRestingOverdue(task.nextDue, now) ? resting : fresh).push(task);
+  }
+  if (resting.length > 0) {
+    logger.info(
+      {
+        householdId,
+        resting: resting.length,
+        fresh: fresh.length,
+        afterDays: REMINDER_OVERDUE_DECAY_DAYS,
+        msg: 'reminders.overdue_resting',
+      },
+      'reminders.overdue_resting'
+    );
+  }
+
   let sent = 0;
-  if (due.length > 0) {
+  // Gate on `fresh`, not `due`: a household whose entire backlog has aged past
+  // the far edge sends nobody a reminder today, and does not pay for the member
+  // or vacation reads to establish that. That silence IS the fix — the weekly
+  // digest still names every one of those tasks.
+  if (fresh.length > 0) {
     const members = await householdService.getHouseholdMembers(householdId);
     const memberIds = new Set(members.map((m) => m.userId));
 
@@ -464,7 +537,11 @@ export async function remindHousehold(
     // Unassigned tasks — and tasks whose effective assignee can't be
     // reached (left the household, or away with no valid cover) — roll up
     // into every member's reminder so they don't silently fall on the floor.
-    const unassigned = due.filter((t) => !deliverable(effectiveAssignee(t)));
+    const unassigned = fresh.filter((t) => !deliverable(effectiveAssignee(t)));
+
+    /** Same two buckets over the aged-out rows. Counted per member, never
+     *  listed, and disjoint by the same rule the two above are. */
+    const restingUnassigned = resting.filter((t) => !deliverable(effectiveAssignee(t)));
 
     /** One rendered row. Plant names come from the active-plant read, which
      *  every task in `due` already matched; an empty stored name resolves to
@@ -495,9 +572,16 @@ export async function remindHousehold(
       // vacation mode. Their tasks are in someone else's `mine` below.
       if (vacations.has(member.userId)) continue;
 
-      const mine = due.filter((t) => effectiveAssignee(t) === member.userId);
+      const mine = fresh.filter((t) => effectiveAssignee(t) === member.userId);
       const tasksForMember = [...mine, ...unassigned];
       if (tasksForMember.length === 0) continue;
+
+      // Stated as one number in the body, never listed and never in the
+      // subject. Same partition as `mine` / `unassigned`, so a task cannot be
+      // counted in both halves.
+      const restingForMember =
+        resting.filter((t) => effectiveAssignee(t) === member.userId).length +
+        restingUnassigned.length;
 
       // Keep aggregate markers written by earlier releases authoritative until
       // they age out, then reserve only the still-pending eligible channels.
@@ -583,6 +667,8 @@ export async function remindHousehold(
         climate: await householdClimate(),
         locale: memberLocale,
         timeZone,
+        restingCount: restingForMember,
+        restingAfterDays: REMINDER_OVERDUE_DECAY_DAYS,
       });
 
       let result: notifier.SendResult;

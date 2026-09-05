@@ -61,6 +61,22 @@ vi.mock('../../../src/services/digestReport.js', () => ({
 vi.mock('../../../src/services/email/capability.js', () => ({
   mintUnsubscribeToken: vi.fn(async () => ({ status: 'ok', token: 'tok' })),
 }));
+// Retention observation (#478). The adapter and the log flattener stay real —
+// they are pure and the point of the assertions below is that the digest hands
+// them its OWN at-risk read — only the I/O half is stubbed.
+vi.mock('../../../src/services/householdLapse.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/services/householdLapse.js')>(
+    '../../../src/services/householdLapse.js'
+  );
+  return {
+    ...actual,
+    readHouseholdEngagement: vi.fn(async () => ({
+      status: 'active' as const,
+      daysSinceLastCompletion: 1,
+      atRiskPlants: 1,
+    })),
+  };
+});
 
 const NOW = new Date('2026-06-11T12:00:00.000Z'); // Thursday, ISO week 2026-W24
 
@@ -806,5 +822,108 @@ describe('year recap delivery', () => {
     const result = await runYearRecaps(undefined, NOW);
     expect(result.year).toBe(defaultRecapYear(NOW));
     expect(vi.mocked(tasks.getYearInReview).mock.calls[0][1]).toBe(2025);
+  });
+});
+
+/**
+ * Retention observation (#478). The digest is the only caller, and the whole
+ * contract is that it OBSERVES: no extra email, no changed recipient, and no
+ * ability to cost a household its digest by failing.
+ */
+describe('weekly digest: retention observation', () => {
+  it('classifies the household from the at-risk read it already has', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const lapse = await import('../../../src/services/householdLapse.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(report.gatherAtRisk).mockResolvedValue({
+      status: 'ok',
+      rows: [{ daysOverdue: 40 }, { daysOverdue: null }],
+      onTrack: 0,
+      orphanTasks: 0,
+    } as never);
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+    expect(lapse.readHouseholdEngagement).toHaveBeenCalledOnce();
+    // Second argument is derived from the digest's own at-risk rows — no
+    // second query for a number already in hand.
+    expect(vi.mocked(lapse.readHouseholdEngagement).mock.calls[0]).toEqual([
+      'hh',
+      { status: 'ok', atRiskPlants: 2, oldestOverdueDays: 40 },
+      NOW,
+    ]);
+  });
+
+  it('tells the classifier the overdue side is unreadable rather than guessing zero', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const lapse = await import('../../../src/services/householdLapse.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(report.gatherAtRisk).mockResolvedValue({ status: 'unavailable' } as never);
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    await digestHousehold('hh', NOW);
+    expect(vi.mocked(lapse.readHouseholdEngagement).mock.calls[0][1]).toEqual({
+      status: 'unavailable',
+    });
+  });
+
+  it('never observes a household the digest rejected for having nothing to say', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const lapse = await import('../../../src/services/householdLapse.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(report.atRiskIsWorthSending).mockReturnValue(false);
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    // Gate 1 exists to make a quiet household cost two reads. Observation must
+    // not turn that into three.
+    expect(lapse.readHouseholdEngagement).not.toHaveBeenCalled();
+  });
+
+  it('a failing observation never costs the household its digest', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const email = await import('../../../src/services/emailNotifier.js');
+    const lapse = await import('../../../src/services/householdLapse.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(lapse.readHouseholdEngagement).mockRejectedValueOnce(new Error('ddb hiccup'));
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+    expect(email.sendEmailAccepted).toHaveBeenCalledOnce();
+  });
+
+  it('sends no extra email of its own, in any engagement state', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const email = await import('../../../src/services/emailNotifier.js');
+    const lapse = await import('../../../src/services/householdLapse.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(lapse.readHouseholdEngagement).mockResolvedValue({
+      status: 'lapsing',
+      daysSinceLastCompletion: 60,
+      atRiskPlants: 9,
+      oldestOverdueDays: 80,
+    } as never);
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    // Exactly the digest that would have gone out anyway. What to send a
+    // lapsing household is a product decision, and this module makes none.
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+    expect(email.sendEmailAccepted).toHaveBeenCalledOnce();
+    expect(vi.mocked(email.sendEmailAccepted).mock.calls[0][0].subject).toBe(
+      'Weekly digest: 1 plant could use some care'
+    );
   });
 });

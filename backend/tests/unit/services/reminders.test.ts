@@ -1242,3 +1242,207 @@ describe('reminders service', () => {
     });
   });
 });
+
+/**
+ * The daily reminder's far edge (#478).
+ *
+ * `getTasksDueBy` queries `GSI1SK <= cutoff` with no lower bound, so before
+ * this the window included everything overdue at any age — which is why a
+ * household that fell behind was reminded every single morning about a list
+ * that only grew, while a household keeping up heard from us only when
+ * something was actually due.
+ */
+describe('reminders — overdue decay', () => {
+  /**
+   * The pest-alert cases above install `sendToUser` with `mockResolvedValue`,
+   * which survives `clearAllMocks` — so this block restores the module
+   * factory's per-channel behaviour instead of inheriting whichever result ran
+   * last. Without it these tests pass or fail on file order, not on the code.
+   */
+  async function mockDeliveredSends() {
+    const notifier = await import('../../../src/services/notifier.js');
+    vi.mocked(notifier.sendToUser).mockImplementation((async (
+      _recipient: unknown,
+      _payload: unknown,
+      options?: { channels?: Array<'browser' | 'email' | 'sms'> }
+    ) => {
+      const selected = options?.channels ?? ['email'];
+      return {
+        delivered: selected.length > 0,
+        dndSuppressedOnly: false,
+        channels: {
+          browser: selected.includes('browser') ? 'delivered' : 'skipped',
+          email: selected.includes('email') ? 'delivered' : 'skipped',
+          sms: selected.includes('sms') ? 'delivered' : 'skipped',
+        },
+      };
+    }) as never);
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await mockDeliveredSends();
+  });
+
+  const daysAgo = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
+
+  it('sends no reminder at all when the whole backlog has aged out, and does not read members', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold, REMINDER_OVERDUE_DECAY_DAYS } =
+      await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      {
+        id: 't1',
+        nextDue: daysAgo(REMINDER_OVERDUE_DECAY_DAYS + 1),
+        plantId: 'p1',
+        assignedTo: 'u1',
+      },
+      { id: 't2', nextDue: daysAgo(90), plantId: 'p1', assignedTo: 'u1' },
+    ] as never);
+
+    expect(await remindHousehold('hh', NOW)).toBe(0);
+    expect(notifier.sendToUser).not.toHaveBeenCalled();
+    // The reminder's own vacation read is not paid for either. (The pest-alert
+    // pass at the end of `remindHousehold` has its own member read and is
+    // unaffected by the decay, so `getHouseholdMembers` is not asserted here.)
+    expect(tasks.getActiveVacationMap).not.toHaveBeenCalled();
+  });
+
+  it('still hands the escalation pass the UNFILTERED due list', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const escalation = await import('../../../src/services/escalation.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { id: 'ancient', nextDue: daysAgo(60), plantId: 'p1', assignedTo: 'u1' },
+      { id: 'recent', nextDue: past, plantId: 'p1', assignedTo: 'u1' },
+    ] as never);
+
+    await remindHousehold('hh', NOW);
+    // Auto-handoff has its own floor and its own at-most-once write; the
+    // reminder's display rule must not silently change who a task hands to.
+    const [, due] = vi.mocked(escalation.runEscalations).mock.calls[0];
+    expect((due as Array<{ id: string }>).map((t) => t.id).sort()).toEqual(['ancient', 'recent']);
+  });
+
+  it('counts aged-out rows in the body without listing them, and keeps them out of the subject', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1', 'p2', 'p3']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { id: 'fresh', nextDue: past, plantId: 'p1', assignedTo: 'u1', type: 'water' },
+      { id: 'old1', nextDue: daysAgo(40), plantId: 'p2', assignedTo: 'u1', type: 'water' },
+      { id: 'old2', nextDue: daysAgo(21), plantId: 'p3', assignedTo: null, type: 'water' },
+    ] as never);
+
+    expect(await remindHousehold('hh', NOW)).toBe(1);
+    const payload = vi.mocked(notifier.sendToUser).mock.calls[0][1] as {
+      title: string;
+      body: string;
+    };
+    expect(payload.body).toContain('Plant p1 — water');
+    // Neither aged-out plant is named, and neither day count is printed.
+    expect(payload.body).not.toContain('Plant p2');
+    expect(payload.body).not.toContain('Plant p3');
+    expect(payload.body).not.toContain('40 days overdue');
+    expect(payload.body).toContain('2 more tasks have been waiting 14 days or longer.');
+    expect(payload.title).toBe('Plant care reminder: 1 due today');
+  });
+
+  it('keeps a task one day short of the edge in the daily list', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold, REMINDER_OVERDUE_DECAY_DAYS } =
+      await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      {
+        id: 'edge',
+        nextDue: daysAgo(REMINDER_OVERDUE_DECAY_DAYS - 1),
+        plantId: 'p1',
+        assignedTo: 'u1',
+        type: 'water',
+      },
+    ] as never);
+
+    expect(await remindHousehold('hh', NOW)).toBe(1);
+    const payload = vi.mocked(notifier.sendToUser).mock.calls[0][1] as { body: string };
+    expect(payload.body).toContain(
+      `Plant p1 — water, ${REMINDER_OVERDUE_DECAY_DAYS - 1} days overdue`
+    );
+    expect(payload.body).not.toContain('waiting');
+  });
+
+  it('never ages out a task whose due date could not be read', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold, isRestingOverdue } =
+      await import('../../../src/services/reminders.js');
+    // An unreadable date is not an old one — we do not know how overdue it is.
+    expect(isRestingOverdue('not-a-date', NOW)).toBe(false);
+    expect(isRestingOverdue(null, NOW)).toBe(false);
+    expect(isRestingOverdue(undefined, NOW)).toBe(false);
+
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { id: 'broken', nextDue: 'not-a-date', plantId: 'p1', assignedTo: 'u1', type: 'water' },
+    ] as never);
+
+    expect(await remindHousehold('hh', NOW)).toBe(1);
+    const payload = vi.mocked(notifier.sendToUser).mock.calls[0][1] as { body: string };
+    expect(payload.body).toContain('due date could not be read');
+  });
+
+  it('splits the count per member: unassigned aged-out rows land on everyone, assigned ones do not', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const notifier = await import('../../../src/services/notifier.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1', 'p2', 'p3']);
+    await mockNoPestOptIns();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA, memberB] as never);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { id: 'fresh', nextDue: past, plantId: 'p1', assignedTo: null, type: 'water' },
+      { id: 'oldA', nextDue: daysAgo(30), plantId: 'p2', assignedTo: 'u1', type: 'water' },
+      { id: 'oldFree', nextDue: daysAgo(30), plantId: 'p3', assignedTo: null, type: 'water' },
+    ] as never);
+
+    expect(await remindHousehold('hh', NOW)).toBe(2);
+    const bodies = vi
+      .mocked(notifier.sendToUser)
+      .mock.calls.map(([recipient, payload]) => [
+        (recipient as { userId: string }).userId,
+        (payload as { body: string }).body,
+      ]);
+    const forA = bodies.find(([id]) => id === 'u1')![1];
+    const forB = bodies.find(([id]) => id === 'u2')![1];
+    // u1 owns one aged-out task and shares the unclaimed one: 2.
+    expect(forA).toContain('2 more tasks have been waiting 14 days or longer.');
+    // u2 owns none, and sees only the unclaimed one: 1, in the singular.
+    expect(forB).toContain('1 more task has been waiting 14 days or longer.');
+  });
+});

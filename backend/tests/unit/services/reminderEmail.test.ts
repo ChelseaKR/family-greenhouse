@@ -34,6 +34,8 @@ function input(over: Partial<ReminderEmailInput> = {}): ReminderEmailInput {
     climate: { status: 'unavailable' },
     locale: 'en',
     timeZone: 'UTC',
+    restingCount: 0,
+    restingAfterDays: 14,
     ...over,
   };
 }
@@ -415,5 +417,73 @@ describe('reminderEmail — short channels', () => {
     expect(composeReminderEmail(input({ rows: [], locale: 'es' })).shortBody).toBe(
       'Recordatorio de cuidado de plantas'
     );
+  });
+});
+
+describe('reminderEmail — aged-out rows (#478)', () => {
+  it('states how many rows age took out of today’s list, and where they still are', () => {
+    const { body } = composeReminderEmail(input({ restingCount: 9, restingAfterDays: 14 }));
+    expect(body).toContain('9 more tasks have been waiting 14 days or longer.');
+    expect(body).toContain('your weekly summary still carries them');
+  });
+
+  it('uses the singular form for one aged-out row', () => {
+    const { body } = composeReminderEmail(input({ restingCount: 1 }));
+    expect(body).toContain('1 more task has been waiting 14 days or longer.');
+    expect(body).not.toContain('1 more tasks');
+  });
+
+  it('takes the day count from restingAfterDays, so copy cannot drift from the constant', () => {
+    const { body } = composeReminderEmail(input({ restingCount: 2, restingAfterDays: 30 }));
+    expect(body).toContain('waiting 30 days or longer');
+    expect(body).not.toContain('14 days');
+  });
+
+  it('says nothing at all when nothing has aged out', () => {
+    const { body } = composeReminderEmail(input({ restingCount: 0 }));
+    expect(body).not.toContain('waiting');
+    expect(body).not.toContain('weekly summary');
+  });
+
+  it('keeps aged-out rows out of the subject and the SMS line', () => {
+    const { subject, shortBody } = composeReminderEmail(
+      input({ rows: [row({ due: { kind: 'today' } })], restingCount: 40 })
+    );
+    // The subject describes what today's email is asking for. 40 is stated in
+    // the body; a subject that grows without bound is the loop being cut.
+    expect(subject).toBe('Plant care reminder: 1 due today');
+    expect(subject).not.toContain('40');
+    expect(shortBody).toBe('1 due today');
+    expect(shortBody).not.toContain('40');
+  });
+
+  it('counts aged-out rows separately from the listed ones', () => {
+    const { subject, body } = composeReminderEmail(
+      input({
+        rows: [row({ plantName: 'Monstera', due: { kind: 'overdue', days: 3 } })],
+        restingCount: 5,
+      })
+    );
+    expect(subject).toBe('Plant care reminder: 1 overdue');
+    expect(body).toContain('1. Monstera — water, 3 days overdue');
+    expect(body).toContain('5 more tasks have been waiting 14 days or longer.');
+  });
+
+  it('renders the aged-out line in Spanish', () => {
+    const { body } = composeReminderEmail(
+      input({ locale: 'es', restingCount: 3, restingAfterDays: 14 })
+    );
+    expect(body).toContain('Hay 3 tareas más que llevan esperando 14 días o más.');
+    expect(body).toContain('tu resumen semanal las sigue incluyendo');
+    expect(body).not.toMatch(/waiting|weekly summary/);
+  });
+
+  it('renders a body with the note and the footer when every row aged out', () => {
+    // reminders.ts does not send in this case; the composer must still be
+    // coherent rather than emitting a dangling heading.
+    const { subject, body } = composeReminderEmail(input({ rows: [], restingCount: 6 }));
+    expect(subject).toBe('Plant care reminder');
+    expect(body).toContain('6 more tasks have been waiting 14 days or longer.');
+    expect(body).not.toContain('Yours, most urgent first:');
   });
 });
