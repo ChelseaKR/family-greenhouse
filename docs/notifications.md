@@ -95,6 +95,37 @@ catch-up care, 0 coming up soon`; empty buckets are simply omitted.
   `'en'` from a single constant (`REMINDER_LOCALE_ADOPTION`) that becomes a
   read of that field when it lands.
 
+### The far edge of the due window
+
+`DUE_WINDOW_MS` gives the reminder a near edge — ask before it's late, nag
+after. It had no far edge: `taskService.getTasksDueBy` queries `GSI1SK <=
+cutoff` with no lower bound, so every overdue task stayed in the window at any
+age. The result inverted the product's own anti-nag reasoning. A household
+keeping up hears from us only when something is genuinely due; a household that
+has fallen behind was reminded **every morning, indefinitely**, about a list
+that only grew, each row carrying a `daysOverdue` with no ceiling.
+
+`REMINDER_OVERDUE_DECAY_DAYS` (14) is the far edge. A task that many whole days
+overdue drops out of the daily reminder and is carried by the weekly digest
+instead — `digestReport.gatherAtRisk` has no age ceiling and is deliberately not
+given one. Three consequences:
+
+- Nothing is hidden. The reminder states the count it is not listing
+  (`restingCount` on `ReminderEmailInput`), the digest still ranks every one of
+  them, and the app shows them all. What ends is the daily re-reading.
+- A household whose entire backlog has aged past the edge gets **no reminder at
+  all**, and the member/vacation reads are not paid for either. That silence is
+  the fix, not a regression.
+- The count stays out of the subject and out of `shortBody`. A subject line
+  that grows without bound as a household falls behind is the loop the constant
+  exists to cut, and a 140-byte SMS has no room to caveat a number.
+
+Two things it deliberately does not touch: a task whose `nextDue` did not parse
+(we don't know how overdue it is, so we can't decide it is old — and that row
+is the one most in need of a human), and the auto-handoff pass, which is still
+handed the unfiltered due list so a display rule cannot change who a task hands
+off to.
+
 ### Weather
 
 The reminder reads the household's cached forecast and adds a rain or frost
@@ -443,6 +474,44 @@ cheerful nothing. A week whose at-risk read FAILED still sends, carrying the
 line above, because silence would otherwise read as an all-clear. Members with
 an active vacation window receive nothing; their plants are named on the
 covering member's copy.
+
+#### Is this household drifting away?
+
+`services/householdLapse.ts` answers that and **nothing else**: no email, no
+row, no change to who receives a digest. It is called once per household per
+weekly digest run, immediately after gate 1, and its answer is one structured
+log line, `retention.household_engagement`.
+
+The reason it is a module rather than a boolean is the repo's named defect class
+(ADR 0010) at its sharpest: a failed completions query is indistinguishable
+from a household that has completed nothing, so the careless version marks
+every household lapsing the day DynamoDB throttles. Five states, not two:
+
+| State          | Means                                                 | Never confused with          |
+| -------------- | ----------------------------------------------------- | ---------------------------- |
+| `active`       | somebody completed a task inside `LAPSE_SILENCE_DAYS` | —                            |
+| `lapsing`      | 21+ days of silence **and** work waiting              | any of the three below       |
+| `idle`         | silence, but the household owes its plants nothing    | `lapsing`                    |
+| `never_active` | nobody has ever completed a task here                 | `lapsing` — new ≠ drifted    |
+| `unavailable`  | a read failed, with the reason attached               | `never_active` and `lapsing` |
+
+Four separately-named unavailable reasons, because each is a different
+question we could not answer: `completions_read_failed` (the query threw),
+`completion_scan_incomplete` (the page budget ran out before the partition
+did — "we didn't look everywhere" is not "there is nothing there"),
+`completion_timestamp_unreadable` (a completion we can see and cannot date —
+not "0 days ago", which reads as engaged), and `overdue_unreadable` (the
+at-risk half of the definition was not available).
+
+Cost: one page-capped GSI1 query on `HOUSEHOLD#{id}#ACTIVITY`, plus one
+GetItem for the household's creation date **only** on the `never_active`
+branch. The at-risk count is handed in from the digest's existing read rather
+than re-queried, and the call sits after gate 1 so a household with nothing
+overdue is still rejected for two reads. The trade-off is that `idle` is a
+state the classifier can express and this call site will almost never produce.
+
+Deciding what — if anything — to send a lapsing household is a product
+decision and is not made here.
 
 #### One-click unsubscribe (RFC 8058)
 

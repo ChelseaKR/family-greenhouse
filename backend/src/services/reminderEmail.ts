@@ -111,6 +111,20 @@ export interface ReminderEmailInput {
   locale: ReminderLocale;
   /** IANA zone the recipient's dates are rendered in. */
   timeZone: string;
+  /**
+   * How many of this member's tasks are old enough that the DAILY reminder no
+   * longer lists them (see `REMINDER_OVERDUE_DECAY_DAYS` in `reminders.ts`).
+   *
+   * They are not in `rows` — that is the point — but they are stated, as one
+   * count, because rule 2 above does not stop applying when the subset is
+   * chosen by age. What is cut is the guilt loop: a task 90 days overdue was
+   * being renamed every morning with a number that grew forever, and nobody
+   * needs to be told that ninety times.
+   */
+  restingCount: number;
+  /** The age at which a task starts resting, so the copy and the constant
+   *  cannot drift apart. */
+  restingAfterDays: number;
 }
 
 export interface ReminderComposition {
@@ -159,6 +173,8 @@ interface Copy {
   assignedHeading: string;
   unclaimedHeading: string;
   showingSubset: (listed: number, total: number) => string;
+  /** States the rows age took out of today's list, and where they still are. */
+  restingNote: (count: string, one: boolean, days: string) => string;
   overdueDays: (days: number) => string;
   dueToday: string;
   dueUpcoming: string;
@@ -193,6 +209,10 @@ const COPY: Record<ReminderLocale, Copy> = {
     unclaimedHeading: 'Up for grabs — nobody has claimed these, so anyone can:',
     showingSubset: (listed, total) =>
       `Showing ${listed} of ${total}. The full list is linked at the end of this email.`,
+    restingNote: (count, one, days) =>
+      one
+        ? `1 more task has been waiting ${days} days or longer. It is not listed above — your weekly summary still carries it, and it is in the app whenever you want it.`
+        : `${count} more tasks have been waiting ${days} days or longer. They are not listed above — your weekly summary still carries them, and they are in the app whenever you want them.`,
     overdueDays: (days) => (days === 1 ? '1 day overdue' : `${days} days overdue`),
     dueToday: 'due today',
     dueUpcoming: 'due in the next 24 hours',
@@ -227,6 +247,10 @@ const COPY: Record<ReminderLocale, Copy> = {
     unclaimedHeading: 'Sin asignar: nadie las ha tomado todavía, así que cualquiera puede hacerlo:',
     showingSubset: (listed, total) =>
       `Mostrando ${listed} de ${total}. La lista completa está enlazada al final de este correo.`,
+    restingNote: (count, one, days) =>
+      one
+        ? `Hay 1 tarea más que lleva esperando ${days} días o más. No aparece arriba: tu resumen semanal la sigue incluyendo y está en la aplicación cuando quieras verla.`
+        : `Hay ${count} tareas más que llevan esperando ${days} días o más. No aparecen arriba: tu resumen semanal las sigue incluyendo y están en la aplicación cuando quieras verlas.`,
     overdueDays: (days) => (days === 1 ? '1 día de retraso' : `${days} días de retraso`),
     dueToday: 'para hoy',
     dueUpcoming: 'en las próximas 24 horas',
@@ -410,9 +434,16 @@ function climateLines(climate: ReminderClimate, locale: ReminderLocale): string[
 /**
  * Build the reminder's subject, body and one-line short form.
  *
- * `input.rows` is the member's complete list. The body lists at most
+ * `input.rows` is the member's complete list FOR TODAY. The body lists at most
  * `MAX_LISTED_ASSIGNED` / `MAX_LISTED_UNCLAIMED` rows per section and states
  * each section's real total whenever it is showing a subset.
+ *
+ * `restingCount` is deliberately outside the counts, and therefore outside the
+ * subject and the `shortBody`. The subject describes what this email is asking
+ * for today; a subject that grows without bound as a household falls behind is
+ * the exact loop `REMINDER_OVERDUE_DECAY_DAYS` exists to cut, and a 140-byte
+ * SMS has no room to caveat a number. The body states the count in full, so
+ * nothing is hidden — it just is not shouted every morning.
  */
 export function composeReminderEmail(input: ReminderEmailInput): ReminderComposition {
   const { locale, timeZone } = input;
@@ -452,6 +483,16 @@ export function composeReminderEmail(input: ReminderEmailInput): ReminderComposi
       section.push('', copy.showingSubset(listed.length, unclaimed.length));
     }
     blocks.push(section.join('\n'));
+  }
+
+  if (input.restingCount > 0) {
+    blocks.push(
+      copy.restingNote(
+        new Intl.NumberFormat(locale).format(input.restingCount),
+        input.restingCount === 1,
+        new Intl.NumberFormat(locale).format(input.restingAfterDays)
+      )
+    );
   }
 
   const covering = coveringLines(input.covering, locale, timeZone);
