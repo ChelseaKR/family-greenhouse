@@ -33,13 +33,7 @@ import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as escalation from '../../services/escalation.js';
 import * as coverage from '../../services/coverage.js';
-import {
-  getEntitledPlan,
-  getPlan,
-  hasHouseholdToolkit,
-  limitOf,
-  type Plan,
-} from '../../models/plans.js';
+import { getEntitledPlan, hasHouseholdToolkit, limitOf, type Plan } from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
@@ -586,8 +580,15 @@ type PlanRead = { status: 'ok'; plan: Plan } | { status: 'unavailable' };
 
 async function readHouseholdPlan(householdId: string): Promise<PlanRead> {
   try {
-    const { planId } = await billing.getHouseholdSubscription(householdId);
-    return { status: 'ok', plan: getPlan(planId) };
+    // ENTITLEMENT, not the plan row (#476). The analytics history window is a
+    // plan LIMIT, and a downgrade already narrows it (ADR 0014); a household
+    // mid-dunning is treated the same way rather than keeping the paid
+    // window for the weeks Stripe spends retrying. The rows are never
+    // trimmed, so nothing is lost — only the window a request may ask for.
+    return {
+      status: 'ok',
+      plan: getEntitledPlan(await billing.getHouseholdSubscription(householdId)),
+    };
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
     return { status: 'unavailable' };
@@ -657,7 +658,10 @@ export const getCoverage = createHandler(
     if (user.householdId !== householdId) {
       throw createHttpError(403, 'Access denied');
     }
-    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    // ENTITLEMENT, not the plan row (#476). A per-request report for a
+    // signed-in member of the buying household — nothing issued, nothing in a
+    // third party's hands — so it follows the downgrade contract.
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
     if (!hasHouseholdToolkit(plan)) {
       throw createHttpError(
         402,
@@ -687,7 +691,10 @@ export const getYearInReview = createHandler(
     if (!Number.isFinite(year) || year < 2020 || year > 2100) {
       throw createHttpError(400, 'year must be between 2020 and 2100');
     }
-    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    // ENTITLEMENT, not the plan row (#476) — the same window limit as the
+    // daily analytics above, resolved the same way. Completion rows are never
+    // trimmed; only the window this request may ask for narrows.
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
     const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
     if (historyLimitDays === null) {
       const review = await taskService.getYearInReview(householdId, year);
@@ -912,8 +919,15 @@ export const createSitterLink = createHandler(
     // free/paid line. Seedling keeps one live link of up to seven days;
     // Garden/Greenhouse get 90-day windows and several links. Enforced here,
     // where the plan is known — the schema's 90-day cap is only the ceiling.
+    //
+    // ENTITLEMENT, not the plan row (#476). This is the ISSUING half of the
+    // sitter-link decision and the piece that makes the other half safe: a
+    // household mid-dunning cannot mint a new link or a longer window, while
+    // a link it already handed out keeps working to its expiry (see
+    // handlers/tasks/handler.ts and handlers/tasks/sitterPhotos.ts). Starting
+    // is gated on the card; continuing is not.
     const startsAt = validatedBody.startsAt ?? new Date().toISOString();
-    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
     const gate = checkSitterLinkPlanGate(plan, {
       windowDays: sitterWindowDays(startsAt, validatedBody.expiresAt),
       liveLinks: countLiveSitterLinks(await sitterService.listSitterLinks(householdId)),
@@ -1070,7 +1084,12 @@ export const setEscalationRule = createHandler(
     if (user.householdId !== householdId) {
       throw createHttpError(403, 'Access denied');
     }
-    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    // ENTITLEMENT, not the plan row (#476). Turning auto-handoff ON is a new
+    // grant — it starts a new class of email for the whole household — so a
+    // household mid-dunning may not. A rule already stored keeps its row and
+    // is separately gated at scan time in services/escalation.ts, so nothing
+    // has to be cleaned up and nothing is lost when the card is fixed.
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
     if (!hasHouseholdToolkit(plan)) {
       throw createHttpError(
         402,

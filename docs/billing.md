@@ -63,27 +63,74 @@ belongs here first and in `ENTITLED_SUBSCRIPTION_STATUSES` second.
 
 This is deliberately the same shape as a downgrade, not a lockout: see
 "Plan caps and downgrades" below. Existing plants and members stay readable and
-editable; only new creations pause. The gates it covers are plant create, plant
-reactivate, shared-plant accept, bulk import, household join, the public read
-API (`middleware/apiKey.ts`), API key **minting** (`handlers/apiKeys`), the
-Plant.id allowance, the care assistant, the leaf-health monthly allowance, the
-cap `GET /chat/budget` reports, and cross-home Today.
+editable; only new creations pause.
 `GET /billing/me` reports the same entitled caps in its meters, so the numbers
 the UI shows are the numbers the API enforces; `planId` in that response stays
 the plan the household is on.
 
-**The sweep is not finished, and this section does not claim otherwise.** Around
-a dozen gates written after `getEntitledPlan` landed still resolve off `planId`
-alone — so a `past_due` household loses paid _limits_ while keeping some paid
-_features_. The remainder are tracked in issue #476 and are held deliberately:
-each carries a product question this file cannot answer, of the form "should an
-already-issued grant be revoked mid-use?" — a sitter link while the household is
-away, a Move Day claimed mid-season, a plant tag already printed and sitting in
-a pot, a kiosk already mounted on a wall. Converting those without deciding the
-question would be worse than leaving them, because the codebase does not yet
-distinguish _starting_ something new from _continuing_ something already
-granted. When that decision is made it belongs here first, and in the call
-sites second.
+### Starting something new vs. continuing something already issued
+
+The rule above answers "may this household **start** something?". A second
+question turned out to be hiding underneath it: **what happens to a thing
+already issued and in somebody else's hands?**
+
+A `past_due` household should not be able to mint a new sitter link. But a
+sitter standing in that household's kitchen, holding a link that worked when it
+was shared, is not the buyer and cannot enter a payment method — and the plants
+are what pay for the mistake. A printed plant tag is a sticker on a pot. A
+kiosk is a screen on a wall.
+
+So `models/plans.ts` exposes **two entry points over one concept**:
+
+| Function                             | Question                                               |
+| ------------------------------------ | ------------------------------------------------------ |
+| `getEntitledPlan(sub)`               | may this household **start** something new?            |
+| `getEntitledPlanForIssuedGrant(sub)` | what does an already-issued, unexpired grant **keep**? |
+
+Both apply the lifetime floor. The lenient one is bounded three ways: every
+grant it serves carries an expiry that is checked before it is reached, the
+plan row itself falls to Seedling when `customer.subscription.deleted` finally
+fires, and each use of it is pinned in a reviewed baseline (below).
+
+**Decisions, per surface** (#476):
+
+| Surface                         | Starting                                     | Continuing                                                                 |
+| ------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
+| Sitter links                    | issuing follows entitlement (402)            | an issued, unexpired link keeps its brief and photo-back to `expiresAt`    |
+| Move Day                        | firing a new season follows entitlement      | a season claimed inside the 14-day card window stays visible               |
+| Plant tags                      | issuing a label follows entitlement (402)    | scanning is **never** entitlement-checked; revocation is the control       |
+| Kiosk                           | issuing a link follows entitlement (402)     | the mounted display is **never** entitlement-checked; revoke stays ungated |
+| Caretaker seats                 | creating a seat follows entitlement (402)    | list / revoke / report stay open on every tier                             |
+| Auto-handoff (escalation)       | turning the rule ON follows entitlement      | the stored rule survives; the hourly scan simply stops acting on it        |
+| Analytics, coverage, away recap | follow entitlement — the reader is the buyer | n/a                                                                        |
+
+Refusing to fire Move Day leaves the season **unclaimed** rather than burning
+it, so the next dashboard load after the card is fixed produces the list.
+
+The gates `getEntitledPlan` covers are plant create, plant reactivate,
+shared-plant accept, bulk import, household join, the public read API
+(`middleware/apiKey.ts`), API key **minting** (`handlers/apiKeys`), the Plant.id
+allowance, the care assistant, the leaf-health monthly allowance, the cap
+`GET /chat/budget` reports, cross-home Today, sitter-link **issue**, plant-tag
+**issue** and the print sheet's allowance, kiosk-link **issue**, caretaker-seat
+**create**, auto-handoff **enable** and its hourly scan, Move Day **fire**, the
+analytics history window, year in review, coverage, the away recap, and the
+double-care detector.
+
+### The ratchet
+
+`backend/scripts/check-entitlement-gates.mjs` (`npm run entitlements:check`,
+in `npm run verify` and CI's required Lint job) fails on any new call to
+`getPlan` / `planLimits` / `planHasFeature` — or to
+`getEntitledPlanForIssuedGrant` — that is not in
+`backend/scripts/entitlement-gates-baseline.json` with a reason and the pinned
+argument it is called with. It fails equally on a stale entry and on an entry
+whose argument has drifted, so the baseline can only shrink.
+
+It exists because this section used to claim "every paid-feature gate uses it"
+and that was not true: the rule stopped applying to code written after #364,
+and a new violating gate landed _while_ #476 was open. A hand-maintained list
+of gates is a snapshot, not a control.
 
 The 402 response body carries a friendly explanation referencing the plan name; the frontend shows it as an error toast and links to `/settings/billing`.
 

@@ -253,6 +253,43 @@ describe('evaluateMoveDay', () => {
     expect(taskService.createTask).not.toHaveBeenCalled();
   });
 
+  // -- #476: `mayFire: false` — continue a claim, never start one ---------
+
+  it('with mayFire false, is quiet on a frosty night and CLAIMS NOTHING', async () => {
+    // A household mid-dunning must not burn the season. Claiming it would
+    // consume it for MOVE_DAY_REFIRE_GAP_DAYS (180 days), so a list fired for
+    // a household that cannot be shown it would lose the claim for a whole
+    // season. Nothing is written and no task is created, so the very next
+    // dashboard load after the card is fixed fires normally.
+    const { evaluateMoveDay, climate, taskService } = await setup({});
+    await expect(evaluateMoveDay(household, 'u-a', NOW, { mayFire: false })).resolves.toEqual({
+      status: 'quiet',
+    });
+    expect(sent().filter((c) => c.kind === 'Put')).toHaveLength(0);
+    expect(taskService.createTask).not.toHaveBeenCalled();
+    // The snapshot is never even read: the decision is made before any work.
+    expect(climate.peekWeatherCached).not.toHaveBeenCalled();
+  });
+
+  it('with mayFire false, STILL serves a list claimed inside the card window', async () => {
+    // The other half of the same decision: a claim already made is already in
+    // the household's task list, and half the plants may already be inside.
+    const fired = record({ season: 'winter', firedAt: daysAgo(3), items: [] });
+    const { evaluateMoveDay, taskService } = await setup({ records: [fired] });
+    const result = await evaluateMoveDay(household, 'u-a', NOW, { mayFire: false });
+    expect(result.status).toBe('ready');
+    expect(result.status === 'ready' && result.list.firedAt).toBe(fired.firedAt);
+    expect(taskService.createTask).not.toHaveBeenCalled();
+  });
+
+  it('fires normally when mayFire is omitted, so only a caller that read the subscription withholds it', async () => {
+    // Paired positive control on the default.
+    const { evaluateMoveDay, taskService } = await setup({});
+    const result = await evaluateMoveDay(household, 'u-a', NOW);
+    expect(result.status).toBe('ready');
+    expect(taskService.createTask).toHaveBeenCalled();
+  });
+
   it('does nothing and says nothing (unavailable) without a saved location', async () => {
     const { evaluateMoveDay, climate } = await setup({});
     await expect(evaluateMoveDay({ ...household, location: null }, 'u-a', NOW)).resolves.toEqual({

@@ -155,6 +155,50 @@ describe('POST /plants/{plantId}/tag (issue / re-issue)', () => {
     expect((await svc()).issueTag).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+    '402s while the card has failed (%s) — printing a NEW label is a new grant (#476)',
+    async (status) => {
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const plantService = await import('../../../src/services/plantService.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(activePlant() as never);
+
+      const { issuePlantTag } = await import('../../../src/handlers/plantTags/handler.js');
+      const res = (await issuePlantTag(
+        authedEvent({ httpMethod: 'POST', pathParameters: { plantId: 'p1' } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect((await svc()).issueTag).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still issues for a lifetime Garden owner after a later cancellation (#476)', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(plantService.getPlant).mockResolvedValueOnce(activePlant() as never);
+    const s = await svc();
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([]);
+    vi.mocked(s.issueTag).mockResolvedValueOnce(tag() as never);
+
+    const { issuePlantTag } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await issuePlantTag(
+      authedEvent({ httpMethod: 'POST', pathParameters: { plantId: 'p1' } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(201);
+  });
+
   it('issues a tag on Garden and returns the token + scan URL once', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     vi.mocked(plantService.getPlant).mockResolvedValueOnce(activePlant() as never);
@@ -314,6 +358,58 @@ describe('GET /households/{id}/plant-tags', () => {
     expect(body.allowance).toEqual({ enabled: true, max: 50, used: 2 });
     expect(body.planId).toBe('garden');
     expect(plantService.getPlants).toHaveBeenCalledWith('hh-1', 'all');
+  });
+
+  it('reports the ENTITLED allowance, not the plan row, once a card has failed (#476)', async () => {
+    // The read side has to report the cap the WRITE side enforces: the print
+    // sheet must not offer an allowance `issuePlantTag` would refuse — the
+    // same mint-vs-use disagreement #540 fixed for API keys. Tags already
+    // issued are STILL listed with their tokens, so existing labels can be
+    // reprinted; only the allowance to issue more narrows.
+    const s = await svc();
+    const billing = await import('../../../src/services/billing.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'garden',
+      status: 'past_due',
+    } as never);
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([tag()] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
+    vi.mocked(s.getTagSettings).mockResolvedValueOnce({ pinEnabled: false });
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await listPlantTags(
+      authedEvent({ pathParameters: { id: 'hh-1' } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    const body = JSON.parse(res.body);
+    expect(body.allowance.enabled).toBe(false);
+    expect(body.planId).toBe('seedling');
+    // The already-printed label is still here, token and all.
+    expect(body.tags).toHaveLength(1);
+    expect(body.tags[0].token).toBe(TOKEN);
+  });
+
+  it('still reports the paid allowance while the subscription is in good standing (#476)', async () => {
+    const s = await svc();
+    const billing = await import('../../../src/services/billing.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'garden',
+      status: 'trialing',
+    } as never);
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([tag()] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
+    vi.mocked(s.getTagSettings).mockResolvedValueOnce({ pinEnabled: false });
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await listPlantTags(
+      authedEvent({ pathParameters: { id: 'hh-1' } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(JSON.parse(res.body).allowance).toEqual({ enabled: true, max: 50, used: 1 });
   });
 
   // #451: this route hands back every active tag's RAW, never-expiring token
@@ -480,6 +576,30 @@ describe('GET /tag/{token} (public)', () => {
     ] as never);
     return { s, plantService, taskService };
   }
+
+  it('is NOT entitlement-gated, deliberately: a printed label keeps scanning while the card has failed (#476)', async () => {
+    // A label in a pot is a physical object with no expiry, and the person
+    // scanning it is not the buyer. #476 asked whether scan-time entitlement
+    // was missing by accident; this test makes the answer deliberate. The
+    // billing service is not even consulted on this path — revocation, not a
+    // paywall, is how a tag stops working.
+    await arrange();
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'seedling',
+      status: 'past_due',
+    } as never);
+
+    const { getTagView } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await getTagView(
+      anonEvent({ path: `/tag/${TOKEN}`, pathParameters: { token: TOKEN } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+  });
 
   it('serves the scan view anonymously: plant, notes, due tasks, and last care by FIRST name', async () => {
     await arrange();

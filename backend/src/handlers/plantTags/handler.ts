@@ -9,6 +9,11 @@
  *
  *   PUBLIC (auth=none): `GET /tag/{token}` and `POST /tag/{token}/tasks/
  *   {taskId}/complete`. The 256-bit token in the path is the only credential.
+ *   NOT plan-gated, and deliberately so (#476): a label already in a pot is a
+ *   physical object with no expiry (`services/plantTagService.ts`), and the
+ *   person holding it is not the buyer and cannot fix a card. Entitlement is
+ *   asked once, when the tag is ISSUED. Revocation, not a paywall, is how a
+ *   tag stops working.
  *   Security posture mirrors the public sitter routes, narrowed to one plant:
  *     - No authMiddleware: anonymous by design ("Grandma won't install it").
  *     - IP rate limit as a probe brake; the per-tag PIN lockout (persisted in
@@ -42,7 +47,7 @@ import * as plantService from '../../services/plantService.js';
 import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import { recordActivity } from '../../services/activity.js';
-import { getPlan, plantTagAllowance } from '../../models/plans.js';
+import { getEntitledPlan, plantTagAllowance } from '../../models/plans.js';
 import type { Plant, TaskCompletion } from '../../models/types.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
@@ -117,8 +122,15 @@ export const issuePlantTag = createHandler(
       throw createHttpError(409, 'Only a plant you are currently caring for can have a tag.');
     }
 
+    // ENTITLEMENT, not the plan row (#476). Printing a NEW label is a new
+    // grant and follows the card. The counterpart is the public scan route at
+    // the bottom of this file, which is entitlement-checked NOWHERE and stays
+    // that way deliberately: a label already stuck in a pot is a physical
+    // object, the person scanning it is usually not the buyer, and bricking
+    // it over a failed charge would be a hostile outcome with no remedy the
+    // scanner can reach. Revoke is likewise ungated — that is the control.
     const sub = await billing.getHouseholdSubscription(householdId);
-    const plan = getPlan(sub.planId);
+    const plan = getEntitledPlan(sub);
     const allowance = plantTagAllowance(plan);
     if (!allowance.enabled) {
       throw createHttpError(
@@ -201,7 +213,14 @@ export const listPlantTags = createHandler(
       plantTagService.getTagSettings(householdId),
       billing.getHouseholdSubscription(householdId),
     ]);
-    const plan = getPlan(sub.planId);
+    // ENTITLEMENT, not the plan row (#476): the read side has to report the
+    // allowance the WRITE side will actually enforce, or the print sheet
+    // offers a household mid-dunning a cap that `issuePlantTag` above will
+    // then refuse — the same mint-vs-use disagreement #540 fixed for API
+    // keys. `tags` is unaffected and still lists every ACTIVE tag with its
+    // token, so labels already issued can still be reprinted; only the
+    // allowance to issue MORE narrows.
+    const plan = getEntitledPlan(sub);
     const allowance = plantTagAllowance(plan);
     const plantsById = new Map(plants.map((plant) => [plant.id, plant]));
     const printable = tags.filter((tag) => plantsById.has(tag.plantId));

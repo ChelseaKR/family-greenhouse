@@ -25,7 +25,7 @@ import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import type { Task } from '../models/types.js';
-import { getPlan, hasHouseholdToolkit, type PlanId } from '../models/plans.js';
+import { getEntitledPlan, getPlan, hasHouseholdToolkit, type PlanId } from '../models/plans.js';
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
 import * as notificationPrefs from './notificationPrefs.js';
@@ -60,22 +60,40 @@ export class EscalationRuleRangeError extends Error {
 
 export interface EscalationRule {
   escalateAfterDays: number | null;
+  /**
+   * The ENTITLED plan, not the plan row (#476). Resolved here rather than at
+   * the gate below so there is one answer per read and no way to consult the
+   * row by accident.
+   */
   planId: PlanId;
 }
 
-/** One GetItem returns both the rule and the plan that gates it. */
+/** One GetItem returns both the rule and the entitlement that gates it. */
 export async function getEscalationRule(householdId: string): Promise<EscalationRule> {
   const result = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
       Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
-      ProjectionExpression: 'escalateAfterDays, planId',
+      // subscriptionStatus and lifetimePlanId are projected for entitlement
+      // (#476). They live on this same METADATA row — the attribute names are
+      // services/billing.ts's own (see its field map) — so consulting payment
+      // status here costs nothing: still one GetItem, no extra read.
+      ProjectionExpression: 'escalateAfterDays, planId, subscriptionStatus, lifetimePlanId',
     })
   );
   const item = result.Item ?? {};
   return {
     escalateAfterDays: normalizeEscalateAfterDays(item.escalateAfterDays),
-    planId: getPlan(item.planId as string | undefined).id,
+    // ENTITLEMENT, not the plan row (#476). PUT /households/{id}/escalation
+    // now refuses to TURN THE RULE ON for a household mid-dunning; without
+    // this, the hourly scan would keep ACTING on a rule already stored — the
+    // two halves of one feature disagreeing, exactly the mint-vs-use split
+    // #540 closed for API keys. Every escalation sends real email.
+    planId: getEntitledPlan({
+      planId: item.planId as string | undefined,
+      status: item.subscriptionStatus as string | undefined,
+      lifetimePlanId: item.lifetimePlanId as string | undefined,
+    }).id,
   };
 }
 
@@ -200,8 +218,11 @@ export async function runEscalations(
   const rule = await getEscalationRule(householdId);
   if (rule.escalateAfterDays === null) return summary;
   if (!hasHouseholdToolkit(getPlan(rule.planId))) {
-    // A downgraded household keeps its stored rule but the scan stops acting
-    // on it — no data cleanup required to honour the gate.
+    // `rule.planId` is already the ENTITLED plan (see getEscalationRule), so
+    // this getPlan is a catalog lookup on a resolved id, not a plan-row read.
+    // A downgraded — or mid-dunning — household keeps its stored rule but the
+    // scan stops acting on it: no data cleanup required to honour the gate,
+    // and the rule resumes by itself when the card is fixed.
     logger.info({ householdId, planId: rule.planId }, 'escalation.skipped_plan_gate');
     return summary;
   }

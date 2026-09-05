@@ -18,6 +18,11 @@
  * rather than from the reminders cron, because the cron would find a cold
  * cache and would have to spend a weather call to do its job.
  *
+ * A fired list is a GRANT with an expiry, so entitlement is asked twice
+ * (#476): the caller passes `mayFire: false` when the household may still be
+ * shown a season it already claimed but may not claim a new one. Refusing to
+ * fire leaves the season unclaimed rather than burning it.
+ *
  * Once per season: the record row `HOUSEHOLD#{id} / MOVEDAY#{season}` is
  * written with a conditional put, so two dashboards loading at the same
  * moment produce one list, and the same season cannot fire again for
@@ -285,8 +290,14 @@ async function materializeTasks(
 export async function evaluateMoveDay(
   household: Household,
   actorUserId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: { mayFire?: boolean } = {}
 ): Promise<MoveDayResult> {
+  // Whether the household may claim a NEW season right now (#476). Serving an
+  // already-claimed one is a different question and is decided by the caller;
+  // see handlers/climate/moveDay.ts. Defaults to true so the only path that
+  // withholds it is the one that has read the subscription.
+  const mayFire = options.mayFire ?? true;
   const [plants, spaces] = await Promise.all([
     plantService.getPlants(household.id),
     spaceService.getSpaces(household.id),
@@ -298,6 +309,12 @@ export async function evaluateMoveDay(
     .filter((r) => withinDays(r.firedAt, now, MOVE_DAY_CARD_DAYS))
     .sort((a, b) => b.firedAt.localeCompare(a.firedAt))[0];
   if (recent) return { status: 'ready', list: recent };
+
+  // Everything past this point can CLAIM the season, which consumes it for
+  // MOVE_DAY_REFIRE_GAP_DAYS. A household that is not entitled to start a new
+  // Move Day must not reach it — 'quiet', not 'locked', because the season is
+  // untouched and the next load after the card is fixed will fire it.
+  if (!mayFire) return { status: 'quiet' };
 
   if (!household.location) return { status: 'unavailable' };
   const snapshot = await climate.peekWeatherCached(household.location.lat, household.location.lon);

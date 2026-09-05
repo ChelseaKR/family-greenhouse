@@ -344,13 +344,26 @@ export function planRank(id: PlanId): number {
   return PLAN_ORDER.indexOf(id);
 }
 
-/** Whether a tier switches on one feature. The single accessor every gate
- *  uses, so adding a tier can never silently miss a check. */
+/**
+ * Whether a resolved plan switches on one feature. The single accessor every
+ * gate uses, so adding a tier can never silently miss a check.
+ *
+ * Takes a `Plan`, not a plan id, precisely so a gate has to say WHICH plan it
+ * means — `getEntitledPlan(sub)` (may this household start something?) or
+ * `getEntitledPlanForIssuedGrant(sub)` (does something already issued keep
+ * working?). The id-taking form below reads the plan row and answers neither
+ * question; see #476.
+ */
+export function featureOf(plan: Plan, feature: keyof PlanFeatures): boolean {
+  return plan.features[feature];
+}
+
+/** Whether a tier switches on one feature, by plan id. */
 export function planHasFeature(
   id: string | undefined | null,
   feature: keyof PlanFeatures
 ): boolean {
-  return getPlan(id).features[feature];
+  return featureOf(getPlan(id), feature);
 }
 
 /**
@@ -409,29 +422,86 @@ export function entitlementIsCurrent(status: string | null | undefined): boolean
 }
 
 /**
- * The plan whose caps a household may actually use right now.
+ * A subscription as far as entitlement is concerned. Three fields, because
+ * entitlement is three questions: which tier is on file, whether it is being
+ * paid for, and what was bought outright and can never be taken back.
+ */
+export interface EntitlementSubscription {
+  planId?: string | null;
+  status?: string | null;
+  lifetimePlanId?: string | null;
+}
+
+/**
+ * A lifetime purchase is an entitlement FLOOR and no subscription status can
+ * fall below it. This is not decoration: `customer.subscription.deleted`
+ * writes `status: 'canceled'` and applyStripeEvent then restores `planId` to
+ * the lifetime tier WITHOUT rewriting the status, so a household that had
+ * bought a tier outright and later cancelled a subscription taken on top of
+ * it would otherwise resolve to Seedling — silently destroying a one-time
+ * purchase that has no refund path.
+ *
+ * Both entry points below go through here, so the floor holds whichever
+ * question is being asked.
+ */
+function withLifetimeFloor(resolved: Plan, lifetimePlanId?: string | null): Plan {
+  const owned = lifetimePlanId ? getPlan(lifetimePlanId) : PLANS.seedling;
+  return planRank(resolved.id) >= planRank(owned.id) ? resolved : owned;
+}
+
+/**
+ * The plan a household may START something new on.
  *
  * Call sites used to resolve caps with `getPlan(sub.planId)`, which reads the
  * plan a household is ON and ignores whether it is PAYING for it. A `past_due`
  * / `unpaid` / `incomplete` household kept full paid caps for as long as
  * Stripe's dunning ran — weeks — before `customer.subscription.deleted`
  * finally reset planId.
+ *
+ * This is the DEFAULT question and the one nearly every gate is asking. Use
+ * `getEntitledPlanForIssuedGrant` only where the pair of functions below says
+ * to.
  */
-export function getEntitledPlan(sub: {
-  planId?: string | null;
-  status?: string | null;
-  lifetimePlanId?: string | null;
-}): Plan {
+export function getEntitledPlan(sub: EntitlementSubscription): Plan {
   const subscribed = entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling;
-  // A lifetime purchase is an entitlement FLOOR and no subscription status can
-  // fall below it. This is not decoration: `customer.subscription.deleted`
-  // writes `status: 'canceled'` and applyStripeEvent then restores `planId` to
-  // the lifetime tier WITHOUT rewriting the status, so a household that had
-  // bought a tier outright and later cancelled a subscription taken on top of
-  // it would otherwise resolve to Seedling here — silently destroying a
-  // one-time purchase that has no refund path.
-  const owned = sub.lifetimePlanId ? getPlan(sub.lifetimePlanId) : PLANS.seedling;
-  return planRank(subscribed.id) >= planRank(owned.id) ? subscribed : owned;
+  return withLifetimeFloor(subscribed, sub.lifetimePlanId);
+}
+
+/**
+ * The plan an ALREADY-ISSUED, still-unexpired grant keeps until it expires
+ * (#476).
+ *
+ * The distinction this pair draws is *starting* something new versus
+ * *continuing* something already handed out. `getEntitledPlan` above answers
+ * the first: a household mid-dunning may not mint a sitter link, print a
+ * plant tag, mount a kiosk, add a caretaker seat, or fire a new Move Day. This
+ * one answers the second, and deliberately does NOT consult the subscription
+ * status.
+ *
+ * Why the asymmetry is not a loophole:
+ *
+ *   - The person holding the grant is usually not the buyer and cannot fix
+ *     the card. A sitter standing in a stranger's kitchen with a link that
+ *     died overnight cannot enter a payment method; the plants are what pay
+ *     for it. That is the whole argument, and it is why the two questions
+ *     needed different names rather than a judgement repeated per site.
+ *   - Every such grant is bounded. Sitter links carry an `expiresAt`; a Move
+ *     Day card lasts MOVE_DAY_CARD_DAYS. Nothing here grants indefinitely.
+ *   - It is bounded a second time by Stripe. When dunning finally gives up,
+ *     `customer.subscription.deleted` rewrites `planId` to 'seedling', so
+ *     this function falls to the free tier on its own — with the lifetime
+ *     floor still underneath it.
+ *
+ * The two exceptions to "bounded" are the two surfaces that are physical
+ * objects rather than trips — a printed plant tag in a pot, a kiosk screen on
+ * a wall. Neither expires, and neither is entitlement-checked at scan/display
+ * time AT ALL; see `services/plantTagService.ts` and `handlers/tasks/kiosk.ts`
+ * for why that is deliberate rather than an omission. Issuing them is gated
+ * by `getEntitledPlan`; revoking them is gated by nothing, which is the
+ * control.
+ */
+export function getEntitledPlanForIssuedGrant(sub: EntitlementSubscription): Plan {
+  return withLifetimeFloor(getPlan(sub.planId), sub.lifetimePlanId);
 }
 
 /** True iff `id` names a real plan in the catalog. */

@@ -115,6 +115,43 @@ describe('GET /households/:id/analytics/coverage', () => {
     expect(coverage.getCoverageReport).toHaveBeenCalledWith('hh-1');
   });
 
+  it.each(['past_due', 'unpaid', 'paused'])(
+    'returns 402 while the card has failed (%s), without touching the data (#476)',
+    async (status) => {
+      // A per-request report for a signed-in member of the buying household:
+      // nothing issued, nothing in a third party's hands, and the person
+      // hitting it is the person who can fix the card. Same treatment as a
+      // downgrade.
+      const billing = await import('../../../src/services/billing.js');
+      const coverage = await import('../../../src/services/coverage.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const { getCoverage } = await import('../../../src/handlers/households/handler.js');
+      const event = buildEvent(memberClaims, { pathParameters: { id: 'hh-1' } });
+      const res = (await getCoverage(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(coverage.getCoverageReport).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still serves a lifetime Garden owner whose later subscription was cancelled (#476)', async () => {
+    // Paired positive control + the entitlement floor.
+    const billing = await import('../../../src/services/billing.js');
+    const coverage = await import('../../../src/services/coverage.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    vi.mocked(coverage.getCoverageReport).mockResolvedValueOnce(REPORT as never);
+    const { getCoverage } = await import('../../../src/handlers/households/handler.js');
+    const event = buildEvent(memberClaims, { pathParameters: { id: 'hh-1' } });
+    const res = (await getCoverage(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+  });
+
   it('surfaces a failed read as an error, never as a report with zero plants at risk', async () => {
     const coverage = await import('../../../src/services/coverage.js');
     vi.mocked(coverage.getCoverageReport).mockRejectedValueOnce(new Error('history read failed'));

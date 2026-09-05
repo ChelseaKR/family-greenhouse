@@ -1,0 +1,73 @@
+{
+  "$comment": "Accepted calls to the plan-ROW readers (getPlan / planLimits / planHasFeature) and to the deliberate leniency getEntitledPlanForIssuedGrant. See scripts/check-entitlement-gates.mjs, docs/billing.md and #476. Each entry states why this call is NOT a paid-feature gate resolved from the wrong question — or, for getEntitledPlanForIssuedGrant, which already-issued grant it continues, who holds it, and what bounds it. `arg` pins the first argument's source text: the reason is an argument about WHAT is passed, so the gate fails when that changes and the reason has to be re-argued. `node scripts/check-entitlement-gates.mjs --print` prints a skeleton for every current finding. The list may only SHRINK: adding an entry admits new debt and needs the reason to hold up in review; a stale entry fails the gate so a fix must delete its line. `getEntitledPlan(sub)` is never a finding — it is the rule.",
+  "accepted": {
+    "handlers/billing/handler.ts::checkoutSchema::getPlan": {
+      "reason": "Not entitlement. `v.planId` is the tier the request is asking to BUY, read out of the checkout body, and the refine only asks whether that tier still offers the requested billing interval (withdrawn cadences). There is no household subscription in scope at schema-validation time, and nothing here grants anything.",
+      "arg": "v.planId"
+    },
+    "handlers/climate/moveDay.ts::evaluateMoveDay::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING. The grant is a claimed Move Day season: the list is already materialised as claimable tasks in the household's own task list and the card holds for MOVE_DAY_CARD_DAYS (14). Bounded by that window, and by Stripe resetting planId when dunning ends. Firing a NEW season three lines below uses getEntitledPlan, because claiming consumes the season for MOVE_DAY_REFIRE_GAP_DAYS (180) — a half-finished frost move is worse than either whole outcome.",
+      "arg": "sub"
+    },
+    "handlers/plants/identify.ts::identify::getPlan": {
+      "reason": "Not entitlement. A literal: the free tier's own row, used as the floor when the household has no entitlement. The entitled plan on this path is resolved by getEntitledPlan in the same expression (converted in #364).",
+      "arg": "'seedling'"
+    },
+    "handlers/tasks/handler.ts::getSitterBrief::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING. The grant is a sitter link: issued while the household was entitled, carrying an `expiresAt`, and held by a sitter who is not the buyer and cannot fix a failed card. `sitterService.getActiveLink` has already enforced active + inside [startsAt, expiresAt] before this line, so an expired or revoked link never reaches it. Issuing a new link is gated on getEntitledPlan in handlers/households/handler.ts::createSitterLink.",
+      "arg": "await billing.getHouseholdSubscription(link.householdId)"
+    },
+    "handlers/tasks/handler.ts::getSitterView::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING, same grant and same bounds as getSitterBrief above — this is the `briefAvailable` flag on the task view, and it must agree with the brief endpoint or the sitter page offers a control that then 404s. Same already-validated link.",
+      "arg": "subscription"
+    },
+    "handlers/tasks/sitterPhotos.ts::awayKitEnabledFor::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING, same grant and same bounds as the two sitter routes above. Both callers (getSitterPhotoStatus, uploadSitterPhoto) are the anonymous token routes, reached only after sitterService has validated an active, unexpired link. The photo-back cap is per-link and enforced separately.",
+      "arg": "sub"
+    },
+    "local-server.ts::<anonymous>::planHasFeature": {
+      "reason": "The in-memory dev server, not production. It mirrors the production defect here and at ~20 further sites that index the catalog directly (`PLANS[h?.planId ?? 'seedling']`) — a shape this gate cannot see, recorded as a known blind spot in its header. Converting local-server is tracked in #476 and is a separate change; deployed behaviour is what the handlers above define.",
+      "arg": "h?.planId ?? 'seedling'"
+    },
+    "models/upgradeFeatures.ts::resolveTargetPlan::getPlan": {
+      "reason": "Not a gate — the opposite. Resolves which tier to UPSELL a household to given the tier it is on, and returns null when that tier already includes the feature. Reading the plan row is correct here: a household that already holds the tier must not be sold it again, whatever its payment status, which is the same rule services/billing.ts's double-pay guard enforces.",
+      "arg": "currentPlanId"
+    },
+    "models/upgradeFeatures.ts::composeUpgradeRequestEmail::getPlan": {
+      "reason": "Not entitlement. Names the TARGET tier in the email a member sends their admin (`input.targetPlanId`, already resolved by resolveTargetPlan). Copy, not a grant.",
+      "arg": "input.targetPlanId"
+    },
+    "models/upgradeFeatures.ts::composeUpgradeRequestPush::getPlan": {
+      "reason": "Not entitlement. Same target tier as the email above, for the push notification's copy.",
+      "arg": "input.targetPlanId"
+    },
+    "services/billing.ts::createCheckoutSession::getPlan": {
+      "reason": "Not entitlement. `args.planId` is the tier being PURCHASED, used to look up its Stripe price and cadence. Nothing is granted here; the grant arrives on the webhook.",
+      "arg": "args.planId"
+    },
+    "services/billing.ts::createCheckoutSession::getPlan#2": {
+      "reason": "Not entitlement. Names the lifetime tier a household ALREADY owns in the LIFETIME_ALREADY_OWNED refusal message. This is the double-pay guard refusing a second sale, so reading the owned row is exactly right — a lifetime purchase is a floor no status may fall below.",
+      "arg": "sub.lifetimePlanId"
+    },
+    "services/billingEmailCopy.ts::itemLabel::getPlan": {
+      "reason": "Not entitlement. A tier NAME for one line item on an invoice email. The item is a record of what was billed, not a decision about what may be used.",
+      "arg": "item.planId"
+    },
+    "services/billingEmailCopy.ts::itemLabel::getPlan#2": {
+      "reason": "Not entitlement. The other branch of the same invoice line-item label.",
+      "arg": "item.planId"
+    },
+    "services/billingEmailCopy.ts::cancellationScheduled::getPlan": {
+      "reason": "Not entitlement. A literal: the free tier's NAME, so the cancellation email can say which tier the household will land on.",
+      "arg": "'seedling'"
+    },
+    "services/billingEmails.ts::readHouseholdPlan::getPlan": {
+      "reason": "Not entitlement. Resolves the tier NAME for billing email copy. A FAILED read never reaches this line (the send throws); a missing attribute correctly renders the free tier's name. Nothing is granted from it.",
+      "arg": "result.Item?.planId as string | undefined"
+    },
+    "services/escalation.ts::runEscalations::getPlan": {
+      "reason": "Not a plan-row read. `rule.planId` is ALREADY the entitled plan id: getEscalationRule resolves it through getEntitledPlan from the same projected GetItem (planId + subscriptionStatus + lifetimePlanId), so this is a catalog lookup on a resolved id. Delete this line if that resolution ever moves back to the row.",
+      "arg": "rule.planId"
+    }
+  }
+}

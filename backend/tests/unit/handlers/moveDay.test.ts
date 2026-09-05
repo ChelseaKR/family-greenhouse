@@ -38,7 +38,11 @@ function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayPr
 
 const ctx = {} as Context;
 
-async function setup(planId: 'seedling' | 'garden' | 'greenhouse', householdExists = true) {
+async function setup(
+  planId: 'seedling' | 'garden' | 'greenhouse',
+  householdExists = true,
+  sub: { status?: string; lifetimePlanId?: string } = {}
+) {
   const householdService = await import('../../../src/services/householdService.js');
   const billing = await import('../../../src/services/billing.js');
   const moveDay = await import('../../../src/services/moveDay.js');
@@ -64,7 +68,7 @@ async function setup(planId: 'seedling' | 'garden' | 'greenhouse', householdExis
         }
       : null
   );
-  vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId } as never);
+  vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId, ...sub } as never);
   vi.mocked(moveDay.evaluateMoveDay).mockResolvedValue({
     status: 'ready',
     list: {
@@ -100,10 +104,64 @@ describe('POST /households/:id/move-day', () => {
       expect(JSON.parse(res.body)).toMatchObject({ status: 'ready', list: { season: 'winter' } });
       expect(moveDay.evaluateMoveDay).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'hh-1' }),
-        'user-1'
+        'user-1',
+        expect.any(Date),
+        // A household in good standing may CLAIM a new season (#476).
+        { mayFire: true }
       );
     }
   );
+
+  // -- #476: starting a Move Day vs continuing one already claimed ---------
+
+  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+    'still evaluates while the card has failed (%s) but refuses to CLAIM a new season (#476)',
+    async (status) => {
+      // The 14-day card survives: the tasks are already in the household's
+      // list and half the plants may already be inside. What stops is firing
+      // a NEW season, because claiming it consumes the season for 180 days.
+      const { evaluateMoveDay, moveDay } = await setup('garden', true, { status });
+      const res = await evaluateMoveDay(buildEvent(), ctx);
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toMatchObject({ status: 'ready' });
+      expect(moveDay.evaluateMoveDay).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'hh-1' }),
+        'user-1',
+        expect.any(Date),
+        { mayFire: false }
+      );
+    }
+  );
+
+  it('still locks a free household outright, whatever its status says (#476)', async () => {
+    // The paired positive control on the leniency above: `mayFire: false` is
+    // not "everyone gets in". A tier that never included Move Day is still
+    // locked before any evaluation happens.
+    const { evaluateMoveDay, moveDay } = await setup('seedling', true, { status: 'past_due' });
+    const res = await evaluateMoveDay(buildEvent(), ctx);
+    expect(JSON.parse(res.body)).toEqual({ status: 'locked' });
+    expect(moveDay.evaluateMoveDay).not.toHaveBeenCalled();
+  });
+
+  it('lets a lifetime owner claim a new season after a later subscription is cancelled (#476)', async () => {
+    // The entitlement FLOOR. `getPlan(sub.planId)` alone resolved this
+    // household to Seedling and locked Move Day for a tier it owns outright,
+    // with no refund path.
+    const { evaluateMoveDay, moveDay } = await setup('seedling', true, {
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    });
+    const res = await evaluateMoveDay(buildEvent(), ctx);
+
+    expect(JSON.parse(res.body)).toMatchObject({ status: 'ready' });
+    expect(moveDay.evaluateMoveDay).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'hh-1' }),
+      'user-1',
+      expect.any(Date),
+      { mayFire: true }
+    );
+  });
 
   it('refuses another household’s id even for an entitled caller', async () => {
     const { evaluateMoveDay, moveDay } = await setup('garden');

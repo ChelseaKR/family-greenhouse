@@ -6,6 +6,7 @@ import {
   atCap,
   entitlementIsCurrent,
   getEntitledPlan,
+  getEntitledPlanForIssuedGrant,
   getPlan,
   hasFeature,
   isPlanId,
@@ -517,6 +518,51 @@ describe('getEntitledPlan — caps follow payment status, not just planId', () =
   it('never resolves an unknown planId above the free tier', () => {
     expect(getEntitledPlan({ planId: 'enterprise', status: 'active' })).toBe(PLANS.seedling);
     expect(getEntitledPlan({ planId: 'toString', status: 'active' })).toBe(PLANS.seedling);
+  });
+});
+
+describe('getEntitledPlanForIssuedGrant — starting vs continuing (#476)', () => {
+  it('keeps the paid tier for a household mid-dunning, unlike getEntitledPlan', () => {
+    // The whole point of the pair: the same subscription answers the two
+    // questions differently. A sitter link already in someone's hands keeps
+    // the Away Kit; minting a new one does not.
+    for (const status of ['past_due', 'unpaid', 'incomplete', 'paused']) {
+      expect(getEntitledPlanForIssuedGrant({ planId: 'garden', status })).toBe(PLANS.garden);
+      expect(getEntitledPlan({ planId: 'garden', status })).toBe(PLANS.seedling);
+    }
+  });
+
+  it('agrees with getEntitledPlan whenever the subscription is in good standing', () => {
+    for (const status of ['active', 'trialing', undefined, null, '']) {
+      const sub = { planId: 'greenhouse', status };
+      expect(getEntitledPlanForIssuedGrant(sub)).toBe(getEntitledPlan(sub));
+      expect(getEntitledPlanForIssuedGrant(sub)).toBe(PLANS.greenhouse);
+    }
+  });
+
+  it('falls to the free tier once Stripe actually cancels, because planId is reset then', () => {
+    // This is the bound on the leniency, and it is not a policy choice — it
+    // is what applyStripeEvent writes on customer.subscription.deleted
+    // (`fields: { planId: 'seedling', status: 'canceled' }`). Dunning is
+    // weeks, not forever.
+    expect(getEntitledPlanForIssuedGrant({ planId: 'seedling', status: 'canceled' })).toBe(
+      PLANS.seedling
+    );
+  });
+
+  it('still honours the lifetime floor', () => {
+    expect(
+      getEntitledPlanForIssuedGrant({
+        planId: 'seedling',
+        status: 'canceled',
+        lifetimePlanId: 'garden',
+      })
+    ).toBe(PLANS.garden);
+  });
+
+  it('never resolves an unknown planId above the free tier', () => {
+    expect(getEntitledPlanForIssuedGrant({ planId: 'enterprise' })).toBe(PLANS.seedling);
+    expect(getEntitledPlanForIssuedGrant({ planId: 'toString' })).toBe(PLANS.seedling);
   });
 });
 
