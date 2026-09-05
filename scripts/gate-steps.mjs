@@ -64,6 +64,13 @@ export const STEPS = [
     why: 'backend unit/integration/eval tests and the backend coverage floors',
   },
   {
+    id: 'test:edge',
+    script: 'test:edge',
+    workspace: 'frontend',
+    weight: 1,
+    why: 'the CloudFront viewer-request function that maps the prerendered routes onto their index.html objects — the one that 403d every route but / for ~40 minutes (#472)',
+  },
+  {
     id: 'typecheck:frontend',
     script: 'typecheck',
     workspace: 'frontend',
@@ -148,6 +155,12 @@ export const STEPS = [
     script: 'gates:check',
     weight: 0,
     why: 'silenced test/security/lint gates in the workflows',
+  },
+  {
+    id: 'tests:wired:check',
+    script: 'tests:wired:check',
+    weight: 0,
+    why: 'a test suite that exists, passes, and is run by nothing — the shape test:edge had (#472)',
   },
   {
     id: 'docs:testing:check',
