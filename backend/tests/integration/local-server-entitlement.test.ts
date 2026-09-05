@@ -670,12 +670,25 @@ describe('continuing: what an already-issued grant keeps (#476)', () => {
     expect(photos.body.enabled).toBe(true);
   });
 
-  it('still refuses a sitter link that is expired or revoked, whatever the plan says', async () => {
+  it('still refuses an EXPIRED link, whatever the plan says', async () => {
     const owner = await loginAsSeed();
     const link = await issueLink(owner);
     // The leniency is bounded by the link's own window, which is validated
     // BEFORE entitlement is consulted — that is what stops it being a loophole.
     db.sitterLinks.get(link.token)!.expiresAt = inPast(1);
+
+    onPlan('garden', 'active');
+    expect((await request(app).get(`/sitter/${link.token}/brief`)).status).toBe(404);
+    expect((await request(app).get(`/sitter/${link.token}/photos`)).status).toBe(404);
+  });
+
+  it('still refuses a REVOKED link, whatever the plan says', async () => {
+    const owner = await loginAsSeed();
+    const link = await issueLink(owner);
+    const revoked = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${link.id}`)
+      .set(auth(owner));
+    expect(revoked.status).toBe(204);
 
     onPlan('garden', 'active');
     expect((await request(app).get(`/sitter/${link.token}/brief`)).status).toBe(404);
