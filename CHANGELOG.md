@@ -16,7 +16,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-05
+
 ### Fixed
+
+- **Marking a task done never cleared it from the dashboard.** Reported by a
+  household: mark a task done, refresh, and it is still sitting there as
+  upcoming. It was saving correctly the whole time. The dashboard card listed
+  everything due in the next seven days, and completing a task moves it forward
+  by its own interval — so a weekly task, the most common watering interval
+  there is, landed straight back inside the window and could never leave. The
+  `0.27.0` note below said this was fixed; it stopped the row flickering and
+  left the reported behaviour untouched. The card now lists only what can be
+  done now — overdue and due today — under the heading "To do now". Tasks due
+  later in the week are still shown, as a count rather than as work you are
+  being asked to do.
 
 - **The public API rejected every request, from the day it shipped.** API-key
   authentication resolved a presented key by querying a `GSI3` index that the
@@ -48,6 +62,76 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   failed, the check vanished along with the whole card, which is exactly what a
   household sees when the spot is fine. The card now says the placement has not
   been checked instead of disappearing.
+
+- **Removing someone's access could leave some of it behind.** Every listing of
+  revocable credentials — sitter links, caretaker seats, plant tags, kiosk
+  sessions — read only the first page and stopped. Revoking searched that short
+  list, so a household with enough history could remove a departed member and
+  have their oldest link quietly stay live, with the confirmation reporting a
+  count that was too low to notice. Every listing now reads to the end.
+
+- **A paying subscriber could be told they were on the free plan.** If the
+  billing read failed, the account page stated "Your household is on the
+  Seedling plan" as fact, offered to switch them to a plan they already had, and
+  named the wrong tier in the cancellation notice. It now says what it could not
+  load.
+
+- **Paid limits no longer outlive the payment.** Four gates decided what a
+  household could do by reading the plan on file rather than what it is
+  currently entitled to. A household mid-way through a failed-card retry could
+  still mint API keys its own next request would refuse, was shown an allowance
+  nothing enforced, and kept spending a paid image-analysis budget for the whole
+  retry window. The same change fixes the opposite error: a lifetime purchase is
+  now a floor, so a later cancellation cannot erase it.
+
+- **The nightly household job could stop partway through and report success.**
+  It is now bounded, time-boxed, and resumes where it left off.
+
+- **A release could break tabs that were already open.** Deploying deleted the
+  previous release's files immediately, so anyone mid-signup with a
+  confirmation link open got "We couldn't load this page" on their next tap.
+  Superseded files now stay for seven days.
+
+- **A sitter's plant photos outlived the sitter's access.** A brief handed out
+  permanent, unauthenticated image links, so revoking the brief left every
+  photo in it reachable by anyone who still had a URL. Photos are now signed
+  per request and expire with the link they came from.
+
+- **Sitter and kiosk tokens were stored in plaintext.** Anyone who could read
+  the table could use them. They are now hashed at rest, the way API-key and
+  calendar tokens already were. Links already in circulation keep working.
+
+### Changed
+
+- **The weekly digest decides who wants it before building it.** It used to
+  assemble the full per-household report and only then check whether anyone
+  had asked for one.
+
+- **Spanish is no longer downloaded by every visitor.** The catalog was
+  shipped on the critical path to everyone, in a language the app gives no way
+  to select. It now loads on demand: **20,039 fewer bytes** on every first
+  visit. Whether Spanish becomes reachable at all remains an open decision.
+
+- **AI chat re-sent its static prompt prefix on every model call**, up to six
+  times per turn. The prefix is now cached, and cached tokens are still counted
+  against a household's monthly allowance — the discount belongs on the bill,
+  not on the meter.
+
+- **The stack can now see a total outage.** A health check probes a real
+  application route every 30 seconds and requires the app's own markup in the
+  response, so a 403 served by a healthy CDN is caught in about three minutes
+  instead of by a person. When the check itself stops reporting, that alarms
+  too. Adds roughly $2.60/month.
+
+- **A fresh worktree can no longer push without running the quality gate.**
+  The hooks lived in a directory `npm install` generates and git silently
+  skipped them where it was missing — the push succeeded, ungated, with no
+  output. Hooks are now tracked in the repository.
+
+- Store-release checks that need no signing material now run on every pull
+  request, the secret scanner reads files on disk rather than only commit
+  patches, the end-to-end tests are typechecked and linted, and the tooling
+  scripts are linted at all. Several of these gates could not previously fail.
 
 ## [0.27.0] - 2026-09-05
 
