@@ -11,6 +11,33 @@ export function calendarDaysBetween(from: Date, to: Date): number {
   return Math.round((b - a) / (24 * 60 * 60 * 1000));
 }
 
+/**
+ * The instant a task created *right now* first falls due: the END of the
+ * creator's local calendar day, never the creation instant.
+ *
+ * `createTask` on the backend defaults `nextDue` to `now` when the caller
+ * sends none, and its overdue predicate is a plain instant comparison
+ * (`t.nextDue < now`). Those two together meant every task created in the app
+ * was overdue one second after it was created: the sitter view showed a red
+ * "overdue" badge on a plant added a minute ago, `GET /tasks?overdue=true`
+ * counted it, and the weekly digest mailed it as a plant at risk — while this
+ * file's own `isToday`/`formatDueDate` said "Today", because they compare
+ * calendar days, not instants (#346).
+ *
+ * "First occurrence is today" is the product intent, so the honest encoding of
+ * it is the last instant of today rather than this one. The browser is the
+ * only party that knows the creator's zone — the household has no stored zone
+ * yet (#342) — so the client sends the value and the server stores it.
+ *
+ * DST-safe: `setHours` is wall-clock, so a 23- or 25-hour day still ends at
+ * local 23:59:59.999.
+ */
+export function firstDueIso(now: Date = new Date()): string {
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+  return endOfDay.toISOString();
+}
+
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return 'Never';
 
