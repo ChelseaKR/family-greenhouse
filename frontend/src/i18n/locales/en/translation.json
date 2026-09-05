@@ -942,6 +942,11 @@
     },
     "billing": {
       "usageTitle": "Usage",
+      "currentPlan": "Your household is on the {{plan}} plan.",
+      "currentPlanTrial": "Your household is on the {{plan}} plan (free trial).",
+      "planUnknownTitle": "We couldn't check which plan you're on",
+      "planUnknownBody": "Your plan didn't load, so we can't say which plan your household is on, or how it stands against its limits. This is a problem reading your plan, not a change to it — your plan and any subscription are exactly as they were, and nothing has been charged or cancelled. Reload the page to try again.",
+      "changePlanUnavailable": "Plan changes are paused here until we can check which plan your household is already on — offering one now could mean buying a plan you already have. Reload the page to try again.",
       "plantsUsage": "{{n}} of {{max}} plants",
       "plantsUsageUnavailable": "— of {{max}} plants — usage unavailable",
       "membersUsage": "{{n}} of {{max}} members",

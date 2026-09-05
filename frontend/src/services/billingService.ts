@@ -198,6 +198,84 @@ export function evaluatePlanLimits(usage?: PlanUsageDetail | null): PlanLimitEva
   return { plants, members, overall };
 }
 
+/**
+ * A read, in the three settled states ADR 0010 requires — the same vocabulary
+ * as `useSpaces` (#534) and `CoverageCard` (#417). `unavailable` means the
+ * read SETTLED without data: not "there is none", and never a default.
+ */
+export type ReadOutcome = 'loading' | 'ready' | 'unavailable';
+
+/**
+ * Map a react-query result onto those three states.
+ *
+ * `pending` is deliberately NOT synonymous with `loading`. A disabled query
+ * (`enabled: false`, so `fetchStatus === 'idle'`) stays pending forever and
+ * nothing further is coming: it has settled without data, which is
+ * `unavailable`. Calling that `loading` is how "we never looked" gets rendered
+ * as an answer — the exact collapse that told a paying household it was on the
+ * free tier when its active household id had not resolved.
+ */
+export function readOutcome(query: {
+  status: 'pending' | 'error' | 'success';
+  fetchStatus: 'fetching' | 'paused' | 'idle';
+}): ReadOutcome {
+  if (query.status === 'error') return 'unavailable';
+  if (query.status === 'success') return 'ready';
+  return query.fetchStatus === 'idle' ? 'unavailable' : 'loading';
+}
+
+/**
+ * Which plan the household is on — a settled three-state read, because
+ * "we could not check" is an answer and "Seedling" is a claim.
+ *
+ * Two independent reads back the sentence "Your household is on the X plan":
+ * the SUBSCRIPTION supplies the tier and the CATALOG supplies that tier's
+ * name. Both are required before the claim may be made. Every earlier
+ * fallback here defaulted to the free tier
+ * (`?? 'seedling'`, `?? 'Seedling'`, `?? []`), so a failed read told a
+ * household paying $9.99/mo that it was on the free plan — stated as fact, on
+ * the one screen it would visit to check exactly that.
+ */
+export interface CurrentPlanRead {
+  status: ReadOutcome;
+  /** The tier the SUBSCRIPTION actually returned. Never a default. */
+  planId: PlanId | null;
+  /**
+   * That tier's name as the CATALOG published it. Non-null only when
+   * `status === 'ready'`: a name is never invented, capitalised from an id, or
+   * borrowed from another tier.
+   */
+  planName: string | null;
+  /** The read settled without an answer. Never true while it is in flight. */
+  unavailable: boolean;
+}
+
+export function resolveCurrentPlan(input: {
+  subscription: ReadOutcome;
+  subscriptionData?: SubscriptionState;
+  catalog: ReadOutcome;
+  plans?: Plan[];
+}): CurrentPlanRead {
+  const { subscription, catalog, subscriptionData, plans } = input;
+  if (subscription === 'loading' || catalog === 'loading') {
+    return { status: 'loading', planId: null, planName: null, unavailable: false };
+  }
+  // Only a settled-successful subscription read may supply the tier. An
+  // errored one supplies nothing — not the free tier.
+  const planId = subscription === 'ready' ? (subscriptionData?.planId ?? null) : null;
+  const planName =
+    planId !== null && catalog === 'ready'
+      ? (plans?.find((p) => p.id === planId)?.name ?? null)
+      : null;
+  if (planId === null || planName === null) {
+    // `planId` is kept when we have it: a caller may honestly name a tier the
+    // subscription really returned, even when the catalog could not name it.
+    // It is never enough on its own to assert which plan the household is on.
+    return { status: 'unavailable', planId, planName: null, unavailable: true };
+  }
+  return { status: 'ready', planId, planName, unavailable: false };
+}
+
 export const billingService = {
   async listPlans(): Promise<PlanCatalog> {
     const response = await api.get<PlanCatalog | Plan[]>('/billing/plans');
