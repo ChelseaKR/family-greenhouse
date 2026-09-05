@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
 import { applyDensity, Density, LangCode, usePrefsStore } from '@/store/prefsStore';
-import { isRTL, SUPPORTED_LANGS } from '@/i18n';
+import { ensureLanguageCatalog, isRTL, SUPPORTED_LANGS } from '@/i18n';
 import clsx from 'clsx';
 
 const DENSITY_OPTIONS: Density[] = ['cozy', 'compact'];
@@ -24,6 +24,20 @@ export function PreferencesSettings() {
 
   // Mirror prefs to the DOM whenever they change in this tab.
   useEffect(() => applyDensity(density), [density]);
+
+  // Warm the catalogs the picker can select. Non-English copy is fetched as a
+  // static asset rather than bundled (src/i18n/nonEnglishCatalog.ts), so
+  // without this the first switch would render the English fallback for the
+  // length of one request. Rendering this picker at all means the build lets
+  // the user choose those languages, which makes fetching them the expected
+  // cost rather than speculative work. Memoized, so mounting twice is one
+  // request; a failure is not actionable here — setLanguage reports it and
+  // i18next stays on English — so it is deliberately not surfaced in the UI.
+  useEffect(() => {
+    for (const { code } of LANGUAGES) {
+      void ensureLanguageCatalog(code).catch(() => undefined);
+    }
+  }, []);
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = isRTL(language) ? 'rtl' : 'ltr';
