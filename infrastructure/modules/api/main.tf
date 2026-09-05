@@ -532,9 +532,30 @@ resource "aws_lambda_function" "handlers" {
   # binaries (no sharp/bcrypt in the dependency tree), so the bundle is
   # architecture-independent.
   architectures = ["arm64"]
-  # `chat` runs Bedrock InvokeModel up to 5 times per turn (Sonnet 4.6 latency
-  # ~2-6s per call), and the tool-use loop can occasionally push past 30s.
-  # 90s leaves margin without unbounded; memory bump shortens cold starts.
+  # `chat` runs Bedrock InvokeModel up to `MAX_TOOL_CALLS_PER_TURN + 1` = 6
+  # times per turn (backend/src/services/chat/index.ts), and each call is
+  # bounded at 25s by BEDROCK_CHAT_TIMEOUT_MS (services/chat/bedrock.ts). The
+  # worst case is therefore far past 90s, so this ceiling is NOT what keeps a
+  # turn in bounds and must not be read as a latency budget.
+  #
+  # What keeps a turn in bounds is TURN_DEADLINE_MS = 80s in
+  # services/chat/index.ts — a whole-turn wall clock deliberately set BELOW
+  # this timeout so the handler's `finally` still runs. That `finally`
+  # reconciles the RESERVE_INPUT_TOKENS = 8000 budget reservation to real usage
+  # and resolves the turn claim; a killed Lambda runs neither, so the household
+  # is billed 8,000 input tokens for a turn that produced no answer and the
+  # claim sits until its lease expires.
+  #
+  # So 90 is "the 80s turn deadline plus margin for that cleanup and for cold
+  # start", not a per-call figure. Do not lower it to or below 80 without
+  # lowering CHAT_TURN_DEADLINE_MS first: that inverts the ordering the
+  # deadline depends on and silently restores the unreconciled-reservation bug.
+  #
+  # This says nothing about which model on purpose. The model is
+  # var.bedrock_chat_model_id (variables.tf), whose "" default lets the Lambda
+  # fall back to Haiku 4.5 (services/chat/bedrock.ts) — the ordering above
+  # holds whatever that variable is pointed at, which a per-model latency
+  # figure would not. The memory bump below shortens cold starts.
   timeout     = each.key == "chat" ? 90 : 30
   memory_size = each.key == "chat" ? 512 : 256
 

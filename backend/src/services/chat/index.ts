@@ -77,7 +77,9 @@ import {
  *
  * `bedrock.ts` bounds each CALL (BEDROCK_CHAT_TIMEOUT_MS, 25s) and says in as
  * many words that six of those can still exceed the chat Lambda's 90 seconds
- * (`infrastructure/modules/api/main.tf:538`). This is the other half.
+ * (the `timeout` on the `chat` branch in `infrastructure/modules/api/main.tf`;
+ * unpinned from a line number because editing that comment moves it). This is
+ * the other half.
  *
  * What a Lambda kill costs, and why it is worth ending a turn early to avoid:
  * the budget reservation below (RESERVE_INPUT_TOKENS = 8000) is reconciled to
