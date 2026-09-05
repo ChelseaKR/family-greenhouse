@@ -39,6 +39,16 @@
  * twenty-eight failures that all describe the same missing package and none of
  * which says so.
  *
+ * The runner also sizes itself for the machine it is ACTUALLY on rather than
+ * the machine it would have alone. `availableParallelism()` reports cores, not
+ * free cores, so three concurrent `npm run verify` runs used to size three
+ * pools as if each were the only one — three times the demand against one
+ * machine's supply, and jsdom tests missing deadlines at random in whichever
+ * run was scheduled worst (#596). scripts/gate-census.mjs counts the gate runs
+ * on the machine; the pool width is the ceiling divided by that count, re-asked
+ * on every scheduling pass so a gate that started alone narrows when company
+ * arrives. A gate that IS alone divides by one and is unchanged.
+ *
  * Output: each step's stdout/stderr is buffered and only printed if that step
  * fails, so fifteen concurrent commands do not interleave into noise. Every
  * step gets a one-line PASS/FAIL as it finishes, and failures are reprinted in
@@ -54,14 +64,17 @@
  * Usage:
  *   node scripts/run-gate.mjs [--jobs N] [--verbose] [--plan <path>]
  *   GATE_JOBS=4 node scripts/run-gate.mjs
+ *   GATE_PEERS=1 node scripts/run-gate.mjs   # ignore the other gates; take
+ *                                            # the whole machine (pre-#596)
  */
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, loadavg } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { checkDependencyFreshness, formatFreshnessFailure } from './check-dependency-freshness.mjs';
+import { jobBudget, peers as countPeers } from './gate-census.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -77,7 +90,19 @@ function option(name) {
 const VERBOSE = flag('--verbose');
 const PLAN_PATH = option('--plan');
 // `availableParallelism()` respects cgroup/affinity limits, unlike cpus().
+// This is a CEILING, not the width: the census divides it by the number of
+// gate runs sharing the machine (scripts/gate-census.mjs, #596). Alone, the
+// division is by one and this is exactly what the pool ends up being.
 const JOBS = Number(option('--jobs') ?? process.env.GATE_JOBS ?? availableParallelism());
+const CORES = availableParallelism();
+/**
+ * How often to re-count the gates on the machine while steps are running.
+ * The loop re-counts whenever a step finishes anyway; this covers the case
+ * the census would otherwise miss — a gate that was alone when it started and
+ * has company by the time it reaches the suites. `ps` costs tens of
+ * milliseconds, so ten seconds of staleness is the tradeoff, not a limit.
+ */
+const RECENSUS_MS = 10_000;
 
 // --- colour (only when a human is watching) --------------------------------
 
@@ -178,8 +203,17 @@ function commandFor(step) {
   return args;
 }
 
-/** Never rejects: a spawn failure is a failed step, not a crashed runner. */
-function runStep(step) {
+/**
+ * Never rejects: a spawn failure is a failed step, not a crashed runner.
+ *
+ * `sharing` is the current gate count, passed down as `GATE_PEERS` so a step
+ * that runs its own worker pool can divide it the same way (see
+ * `frontend/vitest.config.ts`). Without it a step would size four vitest
+ * workers per gate on a ten-core machine three gates are sharing, which is the
+ * oversubscription #596 is about — narrowing the gate's own pool alone would
+ * not touch it.
+ */
+function runStep(step, sharing) {
   return new Promise((settle) => {
     const started = Date.now();
     const args = commandFor(step);
@@ -188,7 +222,11 @@ function runStep(step) {
       child = spawn('npm', args, {
         cwd: ROOT,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, FORCE_COLOR: tty ? '1' : '0' },
+        env: {
+          ...process.env,
+          FORCE_COLOR: tty ? '1' : '0',
+          GATE_PEERS: String(sharing),
+        },
       });
     } catch (err) {
       settle({ step, ok: false, ms: Date.now() - started, output: String(err?.stack ?? err) });
@@ -285,22 +323,120 @@ async function preflight() {
   return true;
 }
 
+/**
+ * A timer that can be raced against the running steps and then cancelled, so
+ * the scheduling loop wakes up to re-count the gates on the machine even while
+ * every step it started is still running.
+ */
+function tick(ms) {
+  let timer;
+  const promise = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return { promise, cancel: () => clearTimeout(timer) };
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * The failure signatures that mean "this did not get a CPU slice in time",
+ * as opposed to "this is wrong". All four are shapes #596 measured on a
+ * ten-core laptop carrying three concurrent gates.
+ *
+ * The last two do not respond to any vitest setting at all: in vitest 4.1.11
+ * the pool runner's start and stop deadlines are module-level constants
+ * (`START_TIMEOUT`/`STOP_TIMEOUT`, 60s, passed straight to `withTimeout`), so
+ * `testTimeout` cannot reach them. A worker that takes longer than a minute to
+ * START kills the run and takes unrelated files down with it. Nothing but
+ * reducing contention can prevent that, which is why the census exists.
+ */
+const STARVATION_SIGNATURES = [
+  /Test timed out in \d+\s*ms/,
+  /Hook timed out in \d+\s*ms/,
+  /Timeout waiting for worker to respond/,
+  /Timeout starting .*runner/,
+];
+
+/**
+ * A note to print after a failure whose every failing step is a timeout, on a
+ * machine whose load average is above its core count.
+ *
+ * This does NOT change the result. The gate still failed and the push is still
+ * refused — a starving gate and a broken change are not distinguishable from
+ * here, and guessing would be the "gate that cannot fail" defect this runner
+ * is otherwise careful about. What it changes is what the reader is told: the
+ * difference between a gate that looks like it is lying about your change and
+ * a gate that says it was busy and how to check.
+ *
+ * Both halves have to hold, so a real regression on a quiet machine never sees
+ * it: every failure is a timeout, AND the machine is oversubscribed. The
+ * second is true either because the load average is above the core count, or
+ * because the census already narrowed this gate's pool for other gate runs —
+ * two independent readings of the same thing, and a gate that was narrowed
+ * knows it without having to interpret a load average.
+ *
+ * @param {Array<{ output: string }>} failed
+ * @param {{ gates: number, narrowed: boolean }} machine
+ */
+function starvationNote(failed, machine) {
+  if (failed.length === 0) return null;
+  const load = loadavg()[0];
+  if (!(load > CORES) && !machine.narrowed) return null;
+  if (!failed.every((r) => STARVATION_SIGNATURES.some((re) => re.test(r.output)))) return null;
+
+  return [
+    '',
+    'Every failure above is a timeout, and this machine is oversubscribed:',
+    `${plural(CORES, 'core')}, a load average of ${load.toFixed(1)}, and ${plural(
+      machine.gates,
+      'quality gate'
+    )} on it.`,
+    'That is the shape of a starved gate (#596): under contention a jsdom',
+    'render-and-query test waits for a CPU slice rather than for the code under test,',
+    'and a vitest worker can miss a 60s START deadline that no setting reaches.',
+    '',
+    'This is still a failure and the push is still refused — from here, a starved',
+    'gate and a broken change look the same. But before you go looking for the bug',
+    'in your change, run the file the failure names on its own. If it passes alone,',
+    'the gate was busy rather than wrong:',
+    '',
+    '    cd frontend && ./node_modules/.bin/vitest run <that file>',
+    '',
+    '`node scripts/gate-census.mjs` shows what else is on the machine.',
+  ].join('\n');
+}
+
 async function main() {
   const steps = await loadPlan();
 
   if (!Number.isFinite(JOBS) || JOBS < 1) {
     throw new Error(`--jobs/GATE_JOBS must be a positive number, got "${JOBS}".`);
   }
-  const limit = Math.floor(JOBS);
+  const ceiling = Math.floor(JOBS);
 
   if (!(await preflight())) return 1;
+
+  // Divide the machine by the gates on it, and keep dividing: a gate that
+  // starts alone and acquires company mid-run narrows on the next pass (#596).
+  const census = () => {
+    const { peers: gates, source } = countPeers();
+    return { gates, source, slots: jobBudget({ cores: CORES, peers: gates, ceiling }) };
+  };
+  let { gates: sharing, slots: limit, source } = census();
 
   const scheduled = steps.filter((s) => s.weight > 0).length;
   console.log(
     c.bold(`gate: ${steps.length} steps`) +
       c.dim(
-        ` · ${scheduled} scheduled across ${limit} job slots, ${steps.length - scheduled} unscheduled · --jobs N to change\n`
-      )
+        ` · ${scheduled} scheduled across ${plural(limit, 'job slot')}, ${steps.length - scheduled} unscheduled · --jobs N to change\n`
+      ) +
+      (sharing > 1
+        ? c.dim(
+            `sharing ${plural(CORES, 'core')} with ${plural(sharing - 1, 'other gate run')}` +
+              `${source === 'env' ? ' (GATE_PEERS)' : ''}` +
+              `${limit < ceiling ? `, narrowed from ${ceiling}` : ''} (#596)\n`
+          )
+        : '')
   );
 
   const started = Date.now();
@@ -321,6 +457,19 @@ async function main() {
   };
 
   while (pending.length > 0 || active.length > 0) {
+    const now = census();
+    if (now.slots !== limit) {
+      console.log(
+        c.dim(
+          `census: ${plural(now.gates, 'gate run')} on ${plural(CORES, 'core')} — ${
+            now.slots > limit ? 'widening' : 'narrowing'
+          } to ${plural(now.slots, 'job slot')}`
+        )
+      );
+    }
+    limit = now.slots;
+    sharing = now.gates;
+
     for (let i = 0; i < pending.length;) {
       const step = pending[i];
       // Clamp so a step heavier than the whole pool still runs (alone).
@@ -331,7 +480,7 @@ async function main() {
         pending.splice(i, 1);
         used += need;
         const entry = { done: false };
-        entry.promise = runStep(step).then((r) => {
+        entry.promise = runStep(step, sharing).then((r) => {
           used -= need;
           entry.done = true;
           results.push(r);
@@ -344,7 +493,13 @@ async function main() {
       i += 1;
     }
     if (active.length > 0) {
-      await Promise.race(active.map((e) => e.promise));
+      // Wake for whichever comes first: a step finishing, or the next census.
+      // Without the timer a gate that started alone would keep its wide pool
+      // for as long as its longest step runs, which is exactly the window the
+      // frontend suite occupies.
+      const wake = tick(RECENSUS_MS);
+      await Promise.race([...active.map((e) => e.promise), wake.promise]);
+      wake.cancel();
       for (let i = active.length - 1; i >= 0; i -= 1) {
         if (active[i].done) active.splice(i, 1);
       }
@@ -386,6 +541,10 @@ async function main() {
       elapsed
     )}: ${failed.map((r) => r.step.id).join(', ')}`
   );
+
+  const note = starvationNote(failed, { gates: sharing, narrowed: limit < ceiling });
+  if (note) console.error(c.dim(note));
+
   return 1;
 }
 

@@ -189,7 +189,12 @@ describe('NotificationSettings', () => {
 
   it('shows the verified badge straight away for an already-verified number', async () => {
     await renderSettings(prefs({ phone: '+15551234567', phoneVerified: true, sms: true }));
-    expect(screen.getByTestId('phone-verified-badge')).toBeInTheDocument();
+    // `findBy`, not `getBy`: the badge needs `phoneDraft === prefs.phone`, and
+    // `phoneDraft` is filled by an effect that runs AFTER the render which
+    // first shows the digest checkbox `renderSettings` waits for. On a quiet
+    // machine that effect has always flushed by now; under contention it has
+    // not, and this asserted the badge's absence a beat too early (#596).
+    expect(await screen.findByTestId('phone-verified-badge')).toBeInTheDocument();
     const smsToggle = screen.getByRole('checkbox', { name: 'SMS notifications' });
     expect(smsToggle).toBeChecked();
     expect(smsToggle).toBeEnabled(); // can always turn OFF
@@ -586,7 +591,7 @@ describe('NotificationSettings', () => {
     vi.mocked(notificationService.updatePreferences).mockResolvedValue(prefs({ browser: false }));
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
       expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
@@ -630,7 +635,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
       expect(
         await screen.findByText('Browser notifications disabled on this device.')
       ).toBeInTheDocument();
@@ -673,7 +678,7 @@ describe('NotificationSettings', () => {
     vi.mocked(notificationService.unsubscribe).mockRejectedValue(new Error('offline'));
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
@@ -716,7 +721,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
@@ -745,7 +750,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       expect(
         await screen.findByText('Browser notifications disabled on this device.')

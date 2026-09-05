@@ -15,8 +15,11 @@
 # The cheap checks are unscheduled and report in the first few seconds, so a
 # bare marker or a stale doc no longer waits behind the test suites.
 #
-# If the machine is already busy, `GATE_JOBS=2 git push` narrows the pool;
-# `npm run verify -- --jobs 1` reproduces close to the old serial behaviour.
+# The pool divides itself by the number of gate runs already on this machine
+# (scripts/gate-census.mjs, #596), so concurrent pushes interleave rather than
+# each sizing themselves as though the laptop were theirs alone. To narrow it
+# further, `GATE_JOBS=2 git push`; `npm run verify -- --jobs 1` reproduces close
+# to the old serial behaviour. `node scripts/gate-census.mjs` says what it sees.
 #
 # To skip in an emergency: `git push --no-verify`. Don't make this a habit.
 #

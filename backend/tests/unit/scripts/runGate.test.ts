@@ -19,9 +19,9 @@
  * imported, so it stays out of this workspace's coverage accounting.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync, spawn } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 // These cases are not unit tests in the usual cost sense: each one runs the
@@ -42,6 +42,7 @@ vi.setConfig({ testTimeout: 60_000 });
 
 const REAL_RUNNER = resolve(__dirname, '../../../../scripts/run-gate.mjs');
 const REAL_FRESHNESS = resolve(__dirname, '../../../../scripts/check-dependency-freshness.mjs');
+const REAL_CENSUS = resolve(__dirname, '../../../../scripts/gate-census.mjs');
 
 /**
  * A package the fixture's lockfile requires, and (unless a test says
@@ -91,12 +92,15 @@ function runGate(opts: {
   noLockfile?: boolean;
   /** Add a platform-specific optional package that is (correctly) absent. */
   optionalAbsent?: boolean;
+  /** Extra environment for the runner; overrides the defaults below. */
+  env?: Record<string, string>;
 }): RunResult {
   const root = mkdtempSync(join(tmpdir(), 'gate-runner-'));
   mkdirSync(join(root, 'scripts'), { recursive: true });
   mkdirSync(join(root, 'ws'), { recursive: true });
   copyFileSync(REAL_RUNNER, join(root, 'scripts', 'run-gate.mjs'));
   copyFileSync(REAL_FRESHNESS, join(root, 'scripts', 'check-dependency-freshness.mjs'));
+  copyFileSync(REAL_CENSUS, join(root, 'scripts', 'gate-census.mjs'));
 
   const packages = opts.packages ?? [];
   const nameOf = (path: string) => path.slice(path.lastIndexOf('node_modules/') + 13);
@@ -166,13 +170,26 @@ function runGate(opts: {
       `export const STEPS = ${JSON.stringify(opts.steps)};\n`
   );
 
+  // The gate that runs this suite passes its own `GATE_JOBS` and `GATE_PEERS`
+  // down to every step (that is what #596 added), and `...process.env` would
+  // hand them to the fixture — so a case that asserts the DEFAULT pool width
+  // would instead measure whatever the developer's push was using. `GATE_JOBS`
+  // is dropped rather than blanked, because an empty string is a value the
+  // runner correctly refuses. `GATE_PEERS` is pinned to the single-gate case
+  // for the same reason: the census reads the real machine, and the fixture's
+  // scheduling assertions must not depend on what else is running on it. The
+  // census is tested separately, against a machine it is allowed to see.
+  const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', GATE_PEERS: '1' };
+  delete env.GATE_JOBS;
+  Object.assign(env, opts.env ?? {});
+
   const argv = [join(root, 'scripts', 'run-gate.mjs'), ...(opts.args ?? [])];
   try {
     const stdout = execFileSync(process.execPath, argv, {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
+      env,
     });
     return { code: 0, out: stdout };
   } catch (err) {
@@ -486,5 +503,294 @@ describe('run-gate: it refuses a plan that would check less than it claims', () 
       },
       /must be a positive number/
     );
+  });
+});
+
+/**
+ * Reads the pool width the runner announced in its header, which is the
+ * number every scheduling assertion below is really about.
+ */
+function slotsIn(out: string): number {
+  const m = /scheduled across (\d+) job slots?/.exec(out);
+  if (!m) throw new Error(`no job-slot count in the gate's header:\n${out}`);
+  return Number(m[1]);
+}
+
+/** A step that records when it starts and stops, so overlap is observable. */
+const TRACED = (ms: number) =>
+  "node -e \"const fs=require('fs'),f=process.env.GATE_TRACE;" +
+  `fs.appendFileSync(f,'+');setTimeout(()=>fs.appendFileSync(f,'-'),${ms})"`;
+
+/** The most steps that were ever running at once, from a TRACED trace. */
+function maxOverlap(trace: string): number {
+  let depth = 0;
+  let peak = 0;
+  for (const ch of trace) {
+    if (ch === '+') peak = Math.max(peak, (depth += 1));
+    else if (ch === '-') depth -= 1;
+  }
+  return peak;
+}
+
+describe('run-gate: it sizes itself for the machine it is on, not the machine it would have alone (#596)', () => {
+  const CORES = availableParallelism();
+  const trivial = {
+    scripts: { a: PASSES },
+    wsScripts: { w: PASSES },
+    steps: [step('alpha', 'a'), wsStep('gamma', 'w')],
+  };
+
+  it('takes the whole machine when nothing else is gating on it', () => {
+    const { code, out } = runGate({ ...trivial, env: { GATE_PEERS: '1' } });
+
+    expect(code).toBe(0);
+    expect(slotsIn(out)).toBe(CORES);
+    // Nothing to share with, so nothing to say about sharing.
+    expect(out).not.toContain('sharing');
+  });
+
+  it('divides the machine by the gate runs on it, and says that it did', () => {
+    const { code, out } = runGate({ ...trivial, env: { GATE_PEERS: '3' } });
+
+    expect(code).toBe(0);
+    expect(slotsIn(out)).toBe(Math.max(1, Math.floor(CORES / 3)));
+    expect(out).toContain('2 other gate runs');
+  });
+
+  it('never widens past --jobs, however empty the machine looks', () => {
+    const { code, out } = runGate({ ...trivial, args: ['--jobs', '2'], env: { GATE_PEERS: '1' } });
+
+    expect(code).toBe(0);
+    expect(slotsIn(out)).toBe(2);
+  });
+
+  it('keeps a slot on a crowded machine, so a gate always makes progress', () => {
+    const { code, out } = runGate({ ...trivial, env: { GATE_PEERS: '64' } });
+
+    expect(code).toBe(0);
+    expect(slotsIn(out)).toBe(1);
+  });
+
+  it('holds heavy steps to the narrowed width, not to --jobs', () => {
+    const trace = join(mkdtempSync(join(tmpdir(), 'gate-trace-')), 'trace');
+    writeFileSync(trace, '');
+
+    const { code, out } = runGate({
+      scripts: { h: TRACED(400) },
+      wsScripts: { w: TRACED(400) },
+      steps: [
+        step('heavy-1', 'h', { weight: 2 }),
+        step('heavy-2', 'h', { weight: 2 }),
+        wsStep('heavy-3', 'w', { weight: 2 }),
+      ],
+      args: ['--jobs', '6'],
+      env: { GATE_PEERS: '3', GATE_TRACE: trace },
+    });
+
+    expect(code).toBe(0);
+    const slots = slotsIn(out);
+    // Weight-2 steps, so the pool fits floor(slots / 2) of them — and at
+    // least one, because a step heavier than the whole pool still runs alone.
+    expect(maxOverlap(readFileSync(trace, 'utf8'))).toBeLessThanOrEqual(
+      Math.max(1, Math.floor(slots / 2))
+    );
+  });
+
+  it('tells each step how many gates share the machine, so its own pool can divide too', () => {
+    const { code, out } = runGate({
+      scripts: { a: 'node -e "console.log(\'peers=\' + process.env.GATE_PEERS)"' },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('gamma', 'w')],
+      args: ['--verbose'],
+      env: { GATE_PEERS: '3' },
+    });
+
+    expect(code).toBe(0);
+    // frontend/vitest.config.ts reads exactly this to size its worker pool.
+    expect(out).toContain('peers=3');
+  });
+
+  it('refuses a GATE_PEERS that is not a count, instead of quietly meaning something else', () => {
+    const { code, out } = runGate({ ...trivial, env: { GATE_PEERS: 'lots' } });
+
+    expect(code).not.toBe(0);
+    expect(out).toContain('GATE_PEERS');
+    expect(out).not.toContain('gate PASSED');
+  });
+});
+
+/**
+ * The census is the half of #596 that has to be right about the real machine,
+ * so these run it against the real process table rather than a fixture.
+ *
+ * The property that matters is the one that made a process-table count
+ * preferable to a lock file: a gate that dies stops being counted the instant
+ * it dies, with nothing left behind to reclaim and no push left waiting on it.
+ */
+describe('gate-census: counting the gates on this machine (#596)', () => {
+  interface Census {
+    cores: number;
+    peers: number;
+    source: string;
+    slots: number;
+    pids: number[];
+  }
+
+  function census(args: string[] = [], env: Record<string, string> = {}, input = ''): Census {
+    const out = execFileSync(process.execPath, [REAL_CENSUS, '--json', ...args], {
+      encoding: 'utf8',
+      input,
+      // The suite itself runs under a gate, which sets GATE_PEERS; blank it so
+      // these read the machine unless a case says otherwise.
+      env: { ...process.env, GATE_PEERS: '', ...env },
+    });
+    return JSON.parse(out) as Census;
+  }
+
+  it('counts gate runners, and nothing that merely mentions one', () => {
+    const { peers, pids } = census(
+      ['--from-stdin'],
+      {},
+      [
+        '  101 node /repo/scripts/run-gate.mjs',
+        '  102 npm run verify',
+        '  103 node scripts/run-gate.mjs --jobs 4',
+        '  104 grep run-gate.mjs',
+        '  105 /bin/zsh -c cd /w && node scripts/run-gate.mjs',
+        '  106 node /other/scripts/gate-census.mjs',
+        '  103 node scripts/run-gate.mjs --jobs 4',
+        'not a process line at all',
+      ].join('\n')
+    );
+
+    // 101 and 103 are gates. 102 has not reached the runner yet; 104 is
+    // looking for one; 105 is the shell that will exec the 103-shaped process
+    // and would double-count it; 106 is this module. 103 appears twice.
+    expect(pids).toContain(101);
+    expect(pids).toContain(103);
+    expect(pids).not.toContain(104);
+    expect(pids).not.toContain(105);
+    // Plus the counting process itself, which is always its own peer.
+    expect(peers).toBe(3);
+  });
+
+  it('sees a gate that is actually running, and stops seeing it the moment it dies', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gate-census-'));
+    const fakeRunner = join(dir, 'run-gate.mjs');
+    // Named like the runner, because that is what the census matches on.
+    writeFileSync(fakeRunner, 'setTimeout(() => {}, 60_000);\n');
+
+    const kids = [
+      spawn(process.execPath, [fakeRunner], { stdio: 'ignore' }),
+      spawn(process.execPath, [fakeRunner], { stdio: 'ignore' }),
+    ];
+    const kidPids = kids.map((k) => k.pid as number);
+
+    try {
+      // `ps` sees a process a moment after spawn returns, so poll rather than
+      // assume. Nothing here depends on what else is on the machine: the
+      // assertions are about these two pids, not about the total.
+      const deadline = Date.now() + 20_000;
+      let seen = census().pids;
+      while (Date.now() < deadline && !kidPids.every((pid) => seen.includes(pid))) {
+        seen = census().pids;
+      }
+      expect(seen).toEqual(expect.arrayContaining(kidPids));
+    } finally {
+      for (const kid of kids) kid.kill('SIGKILL');
+    }
+
+    // No lock to release, no heartbeat to expire, no stale entry to reap: the
+    // process table forgets them, so the census does too.
+    const deadline = Date.now() + 20_000;
+    let after = census().pids;
+    while (Date.now() < deadline && kidPids.some((pid) => after.includes(pid))) {
+      after = census().pids;
+    }
+    for (const pid of kidPids) expect(after).not.toContain(pid);
+  });
+
+  it('divides the cores it found by the gates it found', () => {
+    const { cores, peers, slots } = census(
+      ['--from-stdin'],
+      {},
+      ['  201 node scripts/run-gate.mjs', '  202 node scripts/run-gate.mjs'].join('\n')
+    );
+
+    expect(peers).toBe(3);
+    expect(slots).toBe(Math.max(1, Math.floor(cores / 3)));
+  });
+
+  it('lets an override replace the count, and says the number came from there', () => {
+    const { peers, source, slots, cores } = census([], { GATE_PEERS: '4' });
+
+    expect(peers).toBe(4);
+    expect(source).toBe('env');
+    expect(slots).toBe(Math.max(1, Math.floor(cores / 4)));
+  });
+
+  it('rejects an override that is not a count rather than guessing one', () => {
+    expect(() => census([], { GATE_PEERS: '0' })).toThrow();
+    expect(() => census([], { GATE_PEERS: 'many' })).toThrow();
+  });
+});
+
+/**
+ * The third of #596's fix directions, and the smallest: a run whose failures
+ * are all deadlines, on a machine that is oversubscribed, can say so. It does
+ * not change the result — from inside the runner a starved gate and a broken
+ * change are indistinguishable, and guessing would be the "gate that cannot
+ * fail" defect this file exists to prevent. It changes what the reader is
+ * told, which is the difference between a gate that looks like it is lying
+ * about your change and one that says it was busy and how to check.
+ */
+describe('run-gate: it can tell a starved run from a broken one, without excusing either (#596)', () => {
+  /** A step that fails the way a starved jsdom test does. */
+  const TIMED_OUT =
+    'node -e "console.error(\'Error: Test timed out in 15000ms.\'); process.exit(1)"';
+  /** Narrowed by 64 gate runs from a ceiling of 64: oversubscribed anywhere. */
+  const CROWDED = { args: ['--jobs', '64'], env: { GATE_PEERS: '64' } };
+
+  it('names the contention when every failure is a deadline and the machine is shared', () => {
+    const { code, out } = runGate({
+      scripts: { t: TIMED_OUT },
+      wsScripts: { w: PASSES },
+      steps: [step('slow', 't', { weight: 2 }), wsStep('gamma', 'w')],
+      ...CROWDED,
+    });
+
+    expect(out).toContain('Every failure above is a timeout');
+    expect(out).toContain('64 quality gates on it');
+    // And it does not soften the result by one degree.
+    expect(code).toBe(1);
+    expect(out).toContain('gate FAILED');
+    expect(out).toContain('the push is still refused');
+  });
+
+  it('says nothing about contention for a failure that is not a deadline', () => {
+    const { code, out } = runGate({
+      scripts: { f: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [step('broken', 'f', { weight: 2 }), wsStep('gamma', 'w')],
+      ...CROWDED,
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('the thing is wrong');
+    expect(out).not.toContain('Every failure above is a timeout');
+  });
+
+  it('says nothing when only SOME of the failures are deadlines', () => {
+    // One real regression in the run is enough: the reader is owed a report
+    // about their change, not an explanation about the machine.
+    const { code, out } = runGate({
+      scripts: { t: TIMED_OUT, f: FAILS },
+      wsScripts: { w: PASSES },
+      steps: [step('slow', 't', { weight: 2 }), step('broken', 'f'), wsStep('gamma', 'w')],
+      ...CROWDED,
+    });
+
+    expect(code).toBe(1);
+    expect(out).not.toContain('Every failure above is a timeout');
   });
 });
