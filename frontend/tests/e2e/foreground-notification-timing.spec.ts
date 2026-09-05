@@ -30,15 +30,25 @@ async function updateTaskDue(
 }
 
 /**
- * A due date that is genuinely in a previous calendar day.
+ * A due date genuinely inside a previous calendar day.
  *
  * 26 hours rather than 24: a 24-hour offset lands on the same wall-clock time
  * yesterday, which on the day a DST transition removes an hour can still
- * resolve to today. The predicate under test is a calendar-day comparison, so
- * the fixture has to clear a calendar day, not a duration.
+ * resolve to today. The predicate under test compares calendar days, so the
+ * fixture has to clear a calendar day, not a duration.
  */
 function yesterdayIso(): string {
   return new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * A due date later today: due, but not yet overdue under #591's calendar-day
+ * rule. Used where the fixture must NOT be overdue.
+ */
+function endOfTodayIso(): string {
+  const d = new Date();
+  d.setHours(23, 59, 0, 0);
+  return d.toISOString();
 }
 
 test('an open tab alerts at the due time, respects permission, and dedupes the occurrence', async ({
@@ -101,13 +111,18 @@ test('an open tab alerts at the due time, respects permission, and dedupes the o
   }, CALLS_KEY);
 
   expect(await page.evaluate(() => Notification.permission)).not.toBe('granted');
-  // Yesterday, not "a second from now". Since #591 the alert fires when a task
-  // turns OVERDUE — at local midnight after its due day — not at the instant it
-  // falls due. A task due later today is not overdue, so a due-soon fixture here
-  // would make this assertion pass whether or not the permission check works:
-  // nothing would alert either way. An already-overdue task is the only fixture
-  // that isolates the thing under test.
-  await updateTaskDue(request, account, yesterdayIso());
+  // Due TODAY here, overdue only in the second phase. That ordering is
+  // load-bearing, not incidental.
+  //
+  // `useOverdueAlerts` seeds its announced-set silently on the first run that
+  // has data — a task already overdue when the tab opens is recorded as seen
+  // and never alerts, so a tab opened mid-week does not fire a backlog. Make
+  // this phase's task already overdue and it lands in that seed, after which
+  // the second phase finds it announced and delivers nothing.
+  //
+  // A task due later today is not overdue under #591's calendar-day rule, so
+  // the seed stays empty and the second phase's task is genuinely new to it.
+  await updateTaskDue(request, account, endOfTodayIso());
   await page.reload();
   await page.waitForTimeout(1_500);
   expect(await page.evaluate((callsKey) => sessionStorage.getItem(callsKey), CALLS_KEY)).toBeNull();
