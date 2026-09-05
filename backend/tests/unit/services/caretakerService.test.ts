@@ -365,3 +365,49 @@ describe('listVisits', () => {
     expect(visits.map((v) => v.id)).toEqual(['v1', 'v2']);
   });
 });
+
+/**
+ * `revokeCaretaker` locates its target by id inside `listCaretakers`, so a
+ * truncated listing answered 404 — "no such seat" — for a seat whose token
+ * still resolved. (#455 / #457 gap 2)
+ */
+describe('caretakerService — the seat list is the whole seat list', () => {
+  // mockReset, not clearAllMocks: a queued mockResolvedValueOnce that a
+  // previous test never consumed would otherwise answer the first query here.
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('follows LastEvaluatedKey and resumes where the first page stopped', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'seat-new' }).Item],
+        LastEvaluatedKey: { PK: 'CARETAKER#new' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [activeRow({ id: 'seat-old' }).Item] } as never);
+
+    const seats = await svc.listCaretakers(HH);
+    expect(seats.map((c) => c.id)).toEqual(['seat-new', 'seat-old']);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'CARETAKER#new' });
+  });
+
+  it('revokes a seat that lives past the first page instead of answering 404', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'seat-new', token: 'n'.repeat(64) }).Item],
+        LastEvaluatedKey: { PK: 'CARETAKER#new' },
+      } as never)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'seat-old', token: 'o'.repeat(64) }).Item],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeCaretaker(HH, 'seat-old')).toBe(true);
+  });
+});

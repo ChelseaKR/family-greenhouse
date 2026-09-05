@@ -232,3 +232,56 @@ describe('sitterService.revokeSitterLinksCreatedBy', () => {
     await expect(svc.revokeSitterLinksCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
   });
 });
+
+/**
+ * A single-page `Limit` is not a failed read — nothing throws, nothing is
+ * caught — so it slipped past both halves of the settled-read gate while
+ * publishing a partial list as the household's whole list. Every revocation
+ * path reads through `listSitterLinks`. (#455 / #457 gap 2)
+ */
+describe('sitterService — the link list is the whole link list', () => {
+  // mockReset, not clearAllMocks: a queued mockResolvedValueOnce that a
+  // previous test never consumed would otherwise answer the first query here.
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('follows LastEvaluatedKey and resumes where the first page stopped', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'link-new' }).Item],
+        LastEvaluatedKey: { PK: 'SITTER#new' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [activeRow({ id: 'link-old' }).Item] } as never);
+
+    const links = await svc.listSitterLinks(HH);
+    expect(links.map((l) => l.id)).toEqual(['link-new', 'link-old']);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'SITTER#new' });
+  });
+
+  it('revokes a link that lives past the first page instead of answering 404', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'link-new', token: 'n'.repeat(64) }).Item],
+        LastEvaluatedKey: { PK: 'SITTER#new' },
+      } as never)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'link-old', token: 'o'.repeat(64) }).Item],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeSitterLink(HH, 'link-old')).toBe(true);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`SITTER#${'o'.repeat(64)}`);
+  });
+});

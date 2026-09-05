@@ -138,21 +138,42 @@ export function toSummary(link: KioskLink): KioskLinkSummary {
   };
 }
 
+/**
+ * Page size for the kiosk-link listing. A transport detail, NOT a cap:
+ * `listKioskLinks` follows `LastEvaluatedKey` to exhaustion.
+ *
+ * `revokeKioskLinks` ("revoke everything live") and `revokeKioskLinksCreatedBy`
+ * both read through this function, so a bare `Limit: 100` on a
+ * `ScanIndexForward: false` query made revoke-all quietly not revoke all, and
+ * returned a count that understated it. Both docstrings already promise a
+ * failed read propagates rather than being reported as "there was nothing to
+ * revoke"; a truncated read had been slipping past that promise, because it is
+ * not a failure at all.
+ */
+const KIOSK_PAGE_SIZE = 100;
+
 /** Every kiosk link row for a household (active + revoked), newest first.
  *  Tokens are included so the service layer can act on them; the HANDLER
  *  strips them via toSummary before responding. */
 export async function listKioskLinks(householdId: string): Promise<KioskLink[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk',
-      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#KIOSK` },
-      ScanIndexForward: false,
-      Limit: 100,
-    })
-  );
-  return (result.Items ?? []).map(itemToLink);
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#KIOSK` },
+        ScanIndexForward: false,
+        Limit: KIOSK_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map(itemToLink);
 }
 
 /**

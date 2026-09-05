@@ -164,21 +164,43 @@ export async function getActiveLink(
   return link;
 }
 
+/**
+ * Page size for the sitter-link listing. A transport detail, NOT a cap:
+ * `listSitterLinks` follows `LastEvaluatedKey` to exhaustion.
+ *
+ * It used to be a bare `Limit: 100` on a `ScanIndexForward: false` query, so
+ * the household's OLDEST links fell off the end silently. Every revocation
+ * path reads through this function — `revokeSitterLink` finds its target in
+ * this list (a truncated one answers 404 for a link that is still live), and
+ * `revokeSitterLinksCreatedBy` filters it, so a departed member's oldest link
+ * survived their removal and the audited count understated what was left
+ * behind. A short read is not a failed read: nothing throws, and the caller
+ * cannot tell a complete answer from a partial one.
+ */
+const SITTER_PAGE_SIZE = 100;
+
 /** All links for a household (active + revoked + not-yet-expired), newest
  *  first, for the management UI. Tokens are included so the service layer can
  *  return them; the HANDLER strips them via toSummary before responding. */
 export async function listSitterLinks(householdId: string): Promise<SitterLink[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk',
-      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#SITTER` },
-      ScanIndexForward: false,
-      Limit: 100,
-    })
-  );
-  return (result.Items ?? []).map(itemToLink);
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#SITTER` },
+        ScanIndexForward: false,
+        Limit: SITTER_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map(itemToLink);
 }
 
 /**

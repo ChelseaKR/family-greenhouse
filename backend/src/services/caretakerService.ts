@@ -279,21 +279,38 @@ export async function getActiveCaretaker(
   return caretaker;
 }
 
+/**
+ * Page size for the caretaker-seat listing. A transport detail, NOT a cap:
+ * `listCaretakers` follows `LastEvaluatedKey` to exhaustion.
+ *
+ * `revokeCaretaker` locates its target by id in this list, so a bare
+ * `Limit: 100` on a newest-first query answered 404 — "no such seat" — for a
+ * seat whose token still resolved.
+ */
+const CARETAKER_PAGE_SIZE = 100;
+
 /** All seats for a household (active + revoked, not yet TTL-swept), newest
  *  first. Tokens are included so the service layer can return them; the
  *  HANDLER strips them via toSummary before responding. */
 export async function listCaretakers(householdId: string): Promise<Caretaker[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk',
-      ExpressionAttributeValues: { ':pk': caretakerGsiPk(householdId) },
-      ScanIndexForward: false,
-      Limit: 100,
-    })
-  );
-  return (result.Items ?? []).map(itemToCaretaker);
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        ExpressionAttributeValues: { ':pk': caretakerGsiPk(householdId) },
+        ScanIndexForward: false,
+        Limit: CARETAKER_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map(itemToCaretaker);
 }
 
 /**
