@@ -15,7 +15,7 @@ import {
   DeleteCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
+import type { BatchWriteCommandOutput, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
@@ -627,13 +627,92 @@ export async function movePlants(householdId: string, input: MovePlantsInput): P
   return moved.filter((plant): plant is Plant => plant !== null);
 }
 
+/** `BatchWriteItem`'s per-request item limit. */
+const BATCH_WRITE_MAX_ITEMS = 25;
+/**
+ * How many times one chunk is submitted before the cascade is called failed.
+ *
+ * Enough for the throttle this is actually for — a burst against an on-demand
+ * table, which adaptive capacity absorbs in well under a second — without
+ * turning a genuinely unavailable table into a Lambda that runs out its
+ * timeout instead of reporting.
+ */
+const BATCH_WRITE_MAX_ATTEMPTS = 4;
+/** First backoff step. Doubles per attempt, with full jitter. */
+const BATCH_WRITE_RETRY_BASE_MS = 50;
+
+/** Type of a `RequestItems` list, and of what comes back unprocessed. */
+type PendingWrites = NonNullable<BatchWriteCommandOutput['UnprocessedItems']>[string];
+
+function batchWriteRetryDelayMs(step: number): number {
+  const ceiling = BATCH_WRITE_RETRY_BASE_MS * 2 ** (step - 1);
+  // Full jitter: two erasures throttling at the same moment back off onto
+  // different milliseconds instead of re-colliding in lockstep.
+  return 1 + Math.floor(Math.random() * ceiling);
+}
+
+/**
+ * Delete every key, resubmitting whatever DynamoDB declines.
+ *
+ * `BatchWriteItem` answers HTTP 200 with an `UnprocessedItems` map when it
+ * throttles part of a batch — those deletes did not happen, and the SDK does
+ * not resubmit them on the caller's behalf. This loop does, and then THROWS if
+ * anything is still unprocessed.
+ *
+ * Throwing is the point. The caller must let it reach the client before the
+ * plant row is deleted: a surviving `TaskCompletion` or `PlantPhoto` row under
+ * `HOUSEHOLD#{id}#PLANT#{plantId}` becomes unreachable once the plant row is
+ * gone — `accountCleanup.deleteAbandonedHouseholdData` never enumerates that
+ * partition, and neither row type carries a `ttl`, so nothing else will ever
+ * find it. On `DELETE /me` those rows are retained personal data (`uploadedBy`,
+ * `caption`, the image URL) belonging to an erased account, and a 500 the
+ * caller can retry is the only honest answer. Mirrors the S3 half of this same
+ * cascade, which already fails on `DeleteObjects`' `Errors`.
+ */
+async function batchDeleteKeys(
+  keys: Array<{ PK: string; SK: string }>,
+  context: { householdId: string; plantId: string }
+): Promise<void> {
+  for (let i = 0; i < keys.length; i += BATCH_WRITE_MAX_ITEMS) {
+    let pending: PendingWrites = keys
+      .slice(i, i + BATCH_WRITE_MAX_ITEMS)
+      .map((Key) => ({ DeleteRequest: { Key } }));
+    for (let attempt = 1; attempt <= BATCH_WRITE_MAX_ATTEMPTS && pending.length > 0; attempt += 1) {
+      if (attempt > 1) {
+        await new Promise((resolve) => setTimeout(resolve, batchWriteRetryDelayMs(attempt - 1)));
+      }
+      const result = await dynamodb.send(
+        new BatchWriteCommand({ RequestItems: { [TABLE_NAME]: pending } })
+      );
+      const unprocessed = result.UnprocessedItems?.[TABLE_NAME] ?? [];
+      if (unprocessed.length > 0) {
+        logger.warn(
+          { ...context, unprocessed: unprocessed.length, attempt },
+          'plant.cascade_batch_unprocessed'
+        );
+      }
+      pending = unprocessed;
+    }
+    if (pending.length > 0) {
+      logger.error({ ...context, unprocessed: pending.length }, 'plant.cascade_incomplete');
+      throw new Error(
+        `Plant cascade left ${pending.length} row(s) unprocessed after ` +
+          `${BATCH_WRITE_MAX_ATTEMPTS} attempts; the plant row was not deleted`
+      );
+    }
+  }
+}
+
 export async function deletePlant(householdId: string, plantId: string): Promise<Plant | null> {
   // Cascade: collect all task rows for this plant and all completion rows under
   // the plant's completion partition; batch-delete in chunks of 25 (the
-  // BatchWriteItem service limit). The plant row itself is deleted last with
-  // ConditionExpression + ALL_OLD so we get a single atomic "did it exist?"
-  // check + the deleted attributes back — saves the handler a GetItem
-  // roundtrip and lets us return the plant data for audit logging.
+  // BatchWriteItem service limit), resubmitting anything DynamoDB declines and
+  // failing loudly if it stays declined (see batchDeleteKeys). The plant row
+  // itself is deleted last with ConditionExpression + ALL_OLD so we get a
+  // single atomic "did it exist?" check + the deleted attributes back — saves
+  // the handler a GetItem roundtrip and lets us return the plant data for
+  // audit logging. Last is also what makes a failed cascade recoverable: the
+  // plant row is what a retry finds its orphans through.
   const taskRows = await queryAllPages({
     TableName: TABLE_NAME,
     KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
@@ -665,16 +744,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
   }));
 
   const cascadeKeys = [...taskKeysForPlant, ...plantPartitionKeys];
-  for (let i = 0; i < cascadeKeys.length; i += 25) {
-    const chunk = cascadeKeys.slice(i, i + 25);
-    await dynamodb.send(
-      new BatchWriteCommand({
-        RequestItems: {
-          [TABLE_NAME]: chunk.map((Key) => ({ DeleteRequest: { Key } })),
-        },
-      })
-    );
-  }
+  await batchDeleteKeys(cascadeKeys, { householdId, plantId });
 
   let deleted: Plant | null = null;
   try {
