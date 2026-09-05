@@ -338,6 +338,15 @@ jobs:
         working-directory: frontend
         run: npm run test:edge
 
+      - name: Run the availability-check predicates (#615)
+        # `scripts/synthetic-page-check.mjs` only ever runs against a live
+        # origin — the fifteen-minute uptime cron and the post-deploy smoke —
+        # so until now no pre-merge gate executed a line of it. `test:checks`
+        # runs its pure predicates, including the one that decides whether a
+        # `/assets/` response is a served JavaScript bundle or the SPA shell
+        # standing in for a chunk that is not there.
+        run: npm run test:checks
+
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:

@@ -218,6 +218,19 @@ export const STEPS = [
     why: 'the committed sitemap drifting from the route table',
   },
   {
+    id: 'test:checks',
+    script: 'test:checks',
+    weight: 1,
+    why: 'the pure predicates in scripts/synthetic-page-check.mjs — the only part of the production availability check that any pre-merge gate can execute (#615)',
+  },
+  {
+    id: 'spa-router:check',
+    script: 'spa-router:check',
+    workspace: 'frontend',
+    weight: 0,
+    why: 'the CloudFront router’s generated route map drifting from the route table — a prerendered page served as the empty shell (#615)',
+  },
+  {
     id: 'brand:check',
     script: 'brand:check',
     workspace: 'frontend',

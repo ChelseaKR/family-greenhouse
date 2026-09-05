@@ -23,6 +23,9 @@ const observabilityDoc = read('docs/observability.md');
 const indexHtml = read('frontend/index.html');
 const responseUtil = read('backend/src/utils/response.ts');
 const syntheticPageCheck = read('scripts/synthetic-page-check.mjs');
+const frontendTf = read('infrastructure/modules/frontend/main.tf');
+const spaRouter = read('infrastructure/modules/frontend/functions/spa-router.js');
+const syntheticPageCheckTest = read('scripts/synthetic-page-check.test.mjs');
 
 /**
  * The body of one `resource "TYPE" "NAME" { ... }` block, or '' if absent.
@@ -84,6 +87,15 @@ const probeAlarm = tfResource(
  */
 function stripComments(source) {
   return source.replaceAll(/\/\*[\s\S]*?\*\//gu, '').replaceAll(/^\s*\/\/.*$/gmu, '');
+}
+
+/**
+ * The same, for HCL, whose comments start with `#`. modules/frontend/main.tf
+ * explains the removed `404 -> 200` rescue by naming it, and a whole-file
+ * search would otherwise read the explanation as the rescue.
+ */
+function stripHclComments(source) {
+  return source.replaceAll(/^\s*#.*$/gmu, '');
 }
 
 /**
@@ -360,6 +372,52 @@ const checks = [
       /--expect-failure/u.test(uptimeWorkflow) &&
       /'\/register'/u.test(syntheticPageCheck) &&
       /'\/login'/u.test(syntheticPageCheck),
+  ],
+  // ---------------------------------------------------------------------
+  // The blind spot in the two checks above (#615). Both of them, and the
+  // Route 53 probe, assert strings that live in the SPA SHELL. Until this
+  // release the shell was also what a missing `/assets/` object returned —
+  // `200 text/html`, carrying `og:site_name` — so a deploy that dropped the JS
+  // bundle would have satisfied every one of them while no browser could boot
+  // the app. Route 53's HTTPS_STR_MATCH cannot close that on its own: it does
+  // not run JavaScript, does not follow a <script src>, and reads only the
+  // first 5120 bytes, so any literal it can match is one the shell already
+  // carries. These three assertions are what closes it instead.
+  // ---------------------------------------------------------------------
+  //
+  // 1. The deeper check now follows the bundle the page advertises, which is
+  //    the first assertion in it that a shell alone cannot satisfy.
+  [
+    'the synthetic page check fetches the bundle, not just the tag that names it',
+    /export function bundleFailures\(/u.test(syntheticPageCheck) &&
+      /JS_CONTENT_TYPES\.has\(type\)/u.test(syntheticPageCheck) &&
+      /moduleScriptSrc\(page\.body\)/u.test(syntheticPageCheck) &&
+      // …and the result is actually pushed into the route's failures, not
+      // computed and dropped. Renaming the export alone used to satisfy this.
+      /failures\.push\(\.\.\.bundleFailures\(/u.test(syntheticPageCheck) &&
+      // and the predicate is executed by a gate, not only against production
+      /SPA shell standing in for a missing chunk/u.test(syntheticPageCheckTest),
+  ],
+  // 2. The release path proves the distribution still distinguishes a missing
+  //    object from a page — the property the fix established.
+  [
+    'the release smoke requires a fabricated /assets/ path to 404',
+    /--missing-asset-404/u.test(production) &&
+      /export function missingAssetFailures\(/u.test(syntheticPageCheck) &&
+      /missingAssetFailures\(response\)/u.test(syntheticPageCheck) &&
+      /status !== 404/u.test(syntheticPageCheck),
+  ],
+  // 3. And the CDN config that makes it true. A `404 -> 200` rescue anywhere in
+  //    this distribution puts the shell back under /assets/, and dropping the
+  //    ListBucket grant turns every miss back into a 403 the surviving 403 rule
+  //    rescues. Either one silently reopens the blind spot, so both are asserted
+  //    here rather than only in a comment.
+  [
+    'the CDN answers a missing object with a miss, not with the app shell',
+    /"s3:ListBucket"/u.test(frontendTf) &&
+      !/error_code\s*=\s*404/u.test(stripHclComments(frontendTf)) &&
+      /'\/assets\/'/u.test(spaRouter) &&
+      /request\.uri = '\/app-shell\.html'/u.test(spaRouter),
   ],
   // Retired claims. docs/observability.md described a Route53 health check
   // that did not exist and a 30-second probe that did not exist (#464), then

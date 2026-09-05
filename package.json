@@ -65,6 +65,8 @@
     "adr:check": "node scripts/check-adr-index.mjs",
     "api:check": "node scripts/check-api-spec.mjs",
     "sitemap:check": "npm run sitemap:check --workspace frontend",
+    "spa-router:check": "npm run spa-router:check --workspace frontend",
+    "test:checks": "node --test scripts/*.test.mjs",
     "brand:check": "npm run brand:check --workspace frontend",
     "smoke:parse": "npm run smoke:parse --workspace frontend",
     "figures:check": "node scripts/check-doc-figures.mjs",
