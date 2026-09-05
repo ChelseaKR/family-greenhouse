@@ -74,7 +74,16 @@ export function BlogPost() {
   }
 
   const Body = post.Component;
-  const otherPosts = POSTS.filter((p) => p.slug !== post.slug).slice(0, 2);
+  // Same rotation as CareGuidePage, same reason: `.slice(0, 2)` linked every
+  // post to the first two in the manifest, so how-to-remember-to-water-plants
+  // and sharing-plant-care-without-becoming-the-nag took 13 inbound links each
+  // while five posts had none at all and were reachable only from /blog.
+  const relatedCount = Math.min(2, POSTS.length - 1);
+  const postIndex = POSTS.findIndex((p) => p.slug === post.slug);
+  const otherPosts = Array.from(
+    { length: relatedCount },
+    (_, i) => POSTS[(postIndex + 1 + i) % POSTS.length]
+  ).filter((p) => p !== undefined);
 
   return (
     <PublicShell width="article">
