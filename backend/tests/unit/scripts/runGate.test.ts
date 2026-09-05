@@ -170,19 +170,26 @@ function runGate(opts: {
       `export const STEPS = ${JSON.stringify(opts.steps)};\n`
   );
 
+  // The gate that runs this suite passes its own `GATE_JOBS` and `GATE_PEERS`
+  // down to every step (that is what #596 added), and `...process.env` would
+  // hand them to the fixture — so a case that asserts the DEFAULT pool width
+  // would instead measure whatever the developer's push was using. `GATE_JOBS`
+  // is dropped rather than blanked, because an empty string is a value the
+  // runner correctly refuses. `GATE_PEERS` is pinned to the single-gate case
+  // for the same reason: the census reads the real machine, and the fixture's
+  // scheduling assertions must not depend on what else is running on it. The
+  // census is tested separately, against a machine it is allowed to see.
+  const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', GATE_PEERS: '1' };
+  delete env.GATE_JOBS;
+  Object.assign(env, opts.env ?? {});
+
   const argv = [join(root, 'scripts', 'run-gate.mjs'), ...(opts.args ?? [])];
   try {
     const stdout = execFileSync(process.execPath, argv, {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      // `GATE_PEERS: '1'` pins the fixture to the single-gate case (#596).
-      // Without it the runner counts the gates on the REAL machine, so a
-      // laptop with three `npm run verify` runs on it would narrow this
-      // fixture's pool and every assertion about scheduling below would
-      // depend on what else the developer happened to be doing. The census
-      // itself is tested separately, against a machine it is allowed to see.
-      env: { ...process.env, NO_COLOR: '1', GATE_PEERS: '1', ...(opts.env ?? {}) },
+      env,
     });
     return { code: 0, out: stdout };
   } catch (err) {
