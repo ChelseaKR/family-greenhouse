@@ -712,6 +712,57 @@ describe('plants handler', () => {
       expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBe('identified');
     });
 
+    it("gives a cutting its parent's provenance instead of inventing one", async () => {
+      // "Propagate cutting" prefills the parent's species. Nobody stated it
+      // and nothing identified it here — it was inherited, so calling it
+      // 'user' would manufacture a provenance the app never had.
+      const plantService = await import('../../../src/services/plantService.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      const parentId = '11111111-1111-4111-8111-111111111111';
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+        id: parentId,
+        householdId: 'hh-1',
+        species: 'Dieffenbachia seguine',
+        speciesSource: 'identified',
+      } as never);
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p9' } as never);
+
+      await createPlant(
+        postPlant({
+          name: 'Cutting',
+          species: 'Dieffenbachia seguine',
+          parentPlantId: parentId,
+        }),
+        fakeContext,
+        () => {}
+      );
+      expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBe('identified');
+    });
+
+    it('treats a cutting given a DIFFERENT species as the stated fact it is', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+      const parentId = '11111111-1111-4111-8111-111111111111';
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce({
+        id: parentId,
+        householdId: 'hh-1',
+        species: 'Dieffenbachia seguine',
+        speciesSource: 'identified',
+      } as never);
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce({ id: 'p9' } as never);
+
+      await createPlant(
+        postPlant({
+          name: 'Cutting',
+          species: 'Aglaonema commutatum',
+          parentPlantId: parentId,
+        }),
+        fakeContext,
+        () => {}
+      );
+      expect(vi.mocked(plantService.createPlant).mock.calls[0][0].speciesSource).toBe('user');
+    });
+
     it('records null (unknown), not user, when no species was given at all', async () => {
       const plantService = await import('../../../src/services/plantService.js');
       const { createPlant } = await import('../../../src/handlers/plants/handler.js');

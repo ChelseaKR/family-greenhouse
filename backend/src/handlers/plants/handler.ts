@@ -156,6 +156,29 @@ function deriveSpeciesSource(body: {
 }
 
 /**
+ * Provenance for a new plant.
+ *
+ * A cutting arrives with its parent's species prefilled, which nobody stated
+ * and nothing identified — it was inherited. Calling that `'user'` would
+ * invent a provenance, so a cutting that keeps its parent's species keeps the
+ * parent's provenance too (including `null`, which is honest for a parent
+ * whose own origin was never recorded). Anything the person actually chose on
+ * the form — a photo identification, a catalog pick, a different name typed in
+ * — is theirs and wins.
+ */
+function speciesSourceForCreate(
+  body: { species?: string | null; identifiedSpecies?: string; perenualSpeciesId?: number | null },
+  parentPlant: { species?: string | null; speciesSource?: SpeciesSource | null } | null
+): SpeciesSource | null {
+  const derived = deriveSpeciesSource(body);
+  if (derived !== 'user' || !parentPlant) return derived;
+  const inherited = (parentPlant.species ?? '').trim().toLowerCase();
+  const chosen = (body.species ?? '').trim().toLowerCase();
+  if (!inherited || inherited !== chosen) return derived;
+  return parentPlant.speciesSource ?? null;
+}
+
+/**
  * What `speciesSource` an update should write, or `undefined` to leave it
  * untouched.
  *
@@ -382,7 +405,7 @@ export const createPlant = createHandler(
           ...validatedBody,
           ...(canonicalSpecies !== undefined ? { canonicalSpecies } : {}),
           // Server-derived, never taken from the body (see deriveSpeciesSource).
-          speciesSource: deriveSpeciesSource(validatedBody),
+          speciesSource: speciesSourceForCreate(validatedBody, parentPlant),
         },
         user.householdId!,
         user.userId,
