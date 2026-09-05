@@ -353,6 +353,31 @@ forty minutes. `scripts/check-test-scripts-run.mjs` now fails the build if any
 `test*` script is run by neither the gate nor a workflow without a registered
 reason (#472).
 
+The same file now also covers the routing decision itself. Since #615 the
+function resolves every non-prerendered route to `/app-shell.html` **by name**
+rather than rewriting it to a key that does not exist and letting CloudFront's
+`custom_error_response` rescue the 403 — which is what frees a missing
+`/assets/` object to answer 404 instead of the app shell. That makes a bug in
+this function an outage rather than a degradation, so the suite enumerates
+every kind of path the distribution serves, asserts the generated route map
+still matches `frontend/scripts/public-routes.mjs`, and asserts the source
+stays inside CloudFront's 10 KB function limit — the map grows by one line per
+blog post, and failing a gate is cheaper than failing a `terraform apply`.
+
+### The production availability predicates
+
+`scripts/synthetic-page-check.test.mjs` (`npm run test:checks`, `node --test`)
+covers the pure predicates in `scripts/synthetic-page-check.mjs`. That script
+only ever runs against a live origin — the fifteen-minute `uptime.yml` cron and
+the post-deploy smoke — so until #615 no pre-merge gate executed a line of it.
+Its `--expect-failure` negative control proves the check as a whole can still
+fail, which is real but coarse: any single assertion failing satisfies it, so
+an assertion that quietly stopped meaning anything would be invisible behind
+the others. These tests pin the two that decide whether a `/assets/` response
+is a served JavaScript bundle or the SPA shell standing in for a chunk that is
+not there, in both directions. Runs in CI's `Test Frontend` job and in
+`npm run verify`.
+
 Those floors are enforced in three places, all running the same command:
 
 - **CI** — the required `Test Backend` and `Test Frontend` jobs run `npm run test:coverage`, so a PR that drops below a floor cannot merge.

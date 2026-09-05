@@ -14,6 +14,8 @@
     "smoke:parse": "node scripts/check-smoke-spec-parses.mjs",
     "sitemap": "node scripts/build-sitemap.mjs",
     "sitemap:check": "node scripts/build-sitemap.mjs --check",
+    "spa-router": "node scripts/build-spa-router.mjs",
+    "spa-router:check": "node scripts/build-spa-router.mjs --check",
     "brand:render": "./scripts/render-brand-assets.sh",
     "brand:check": "node scripts/check-brand-assets.mjs",
     "preview": "vite preview",

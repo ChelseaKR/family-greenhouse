@@ -64,8 +64,9 @@ Four properties of these matter more than the fact that they exist:
   block that refuses `/` outright. During the outage these exist to catch,
   `/` was the one route still answering 200 — a check on `/` would have
   reported a total outage as healthy. `/login` is also not prerendered, so
-  fetching it exercises CloudFront's 403/404 → `/app-shell.html` rewrite,
-  which is the machinery that actually failed.
+  fetching it exercises the routing machinery that actually failed: since #615
+  the viewer-request function resolves it to `/app-shell.html` by name (it used
+  to reach the same document through CloudFront's 403 → 200 rescue).
 - **A 200 is not enough.** `HTTPS_STR_MATCH` requires a literal string in the
   first 5120 bytes. The site check looks for the `og:site_name` meta tag
   `headToTags()` emits on the SPA shell and every prerendered page; the API
@@ -95,13 +96,13 @@ cannot deliver.
 
 ### 2. GitHub Actions (`.github/workflows/uptime.yml`, 15 minutes)
 
-| Job                             | What it fetches                                                                       | What it proves                                                                                                                                                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `health`                        | `vars.HEALTHCHECK_URL` (the API's `GET /health`)                                      | The API and its database dependency answer.                                                                                                                                                                                   |
-| `pages`                         | `/`, `/register`, `/login`, `/pricing` on `vars.SITE_URL`                             | Each route returns HTML that is **this app** — app root, module script, `og:site_name`, non-empty `<title>` — not merely a 200.                                                                                               |
-| `pages` (2nd step)              | `/robots.txt` with `--expect-failure`                                                 | The page check can still fail. If the assertions ever soften to "any 200 passes", this step goes red while production is healthy.                                                                                             |
-| `telemetry-delivery`            | A CORS preflight and a real `POST` to `/telemetry/frontend`, with the site's `Origin` | A browser could still **report** an error: the preflight answers with the exact origin (not `*`, which `allow_credentials = true` makes invalid), `POST` returns 204, and the response carries `access-control-allow-origin`. |
-| `telemetry-delivery` (2nd step) | The same check against the site origin, with `--expect-failure`                       | The delivery check can still fail.                                                                                                                                                                                            |
+| Job                             | What it fetches                                                                              | What it proves                                                                                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `health`                        | `vars.HEALTHCHECK_URL` (the API's `GET /health`)                                             | The API and its database dependency answer.                                                                                                                                                                                   |
+| `pages`                         | `/`, `/register`, `/login`, `/pricing` on `vars.SITE_URL`, then the JS bundle each one names | Each route returns HTML that is **this app** — app root, module script, `og:site_name`, non-empty `<title>` — not merely a 200; **and** the `<script type="module">` it advertises actually fetches, as JavaScript (#615).    |
+| `pages` (2nd step)              | `/robots.txt` with `--expect-failure`                                                        | The page check can still fail. If the assertions ever soften to "any 200 passes", this step goes red while production is healthy.                                                                                             |
+| `telemetry-delivery`            | A CORS preflight and a real `POST` to `/telemetry/frontend`, with the site's `Origin`        | A browser could still **report** an error: the preflight answers with the exact origin (not `*`, which `allow_credentials = true` makes invalid), `POST` returns 204, and the response carries `access-control-allow-origin`. |
+| `telemetry-delivery` (2nd step) | The same check against the site origin, with `--expect-failure`                              | The delivery check can still fail.                                                                                                                                                                                            |
 
 `scripts/synthetic-page-check.mjs` is the page check. It has no dependencies
 (global `fetch`) so the job is a checkout plus one `node` invocation.
@@ -110,13 +111,52 @@ terms; see "Whether the error rail can report at all" below for what its
 payload does after it arrives.
 
 This is the **deeper** of the two layers and is not superseded by the health
-checks: it parses the HTML and asserts four structural properties across four
-routes, where Route 53 can only match one literal string. What it cannot do is
+checks: it parses the HTML, asserts four structural properties across four
+routes, and then follows the bundle each page names, where Route 53 can only
+match one literal string. What it cannot do is
 run often or report reliably — a 15-minute cron on GitHub's best-effort
 scheduler, which GitHub disables outright on repositories with no recent
 activity, reporting by workflow-failure email rather than to the alerts topic.
 The health checks are the opposite trade. Both exist because neither subsumes
 the other.
+
+### 3. The release path: a missing asset must be a miss (#615)
+
+`cd-production.yml`'s post-deploy smoke runs
+`synthetic-page-check.mjs --missing-asset-404`, which requests a fabricated
+`/assets/` path and requires **404**, and requires that response **not** to
+contain the site health check's search string.
+
+That pairing is the point, and it is worth stating plainly because it is a
+limit of layer 1 rather than a bug in it. `HTTPS_STR_MATCH` does not run
+JavaScript, does not follow a `<script src>`, and reads only the first 5120
+bytes of one response. Every literal it can match therefore lives in the SPA
+**shell** — which, until #615, was also exactly what a missing `/assets/`
+object returned: `200 text/html`, `og:site_name` and all. A deploy that
+dropped the JS bundle would have answered 200 on every route, satisfied the
+search string, and left the site unbootable in every browser, with the monitor
+built to catch a frontend outage reporting healthy.
+
+Two changes close that, and both are asserted by `npm run observability:check`:
+
+- **The CDN stopped rescuing misses under `/assets/`.** The viewer-request
+  function resolves every route to an object that exists, so the
+  distribution's one remaining `custom_error_response` (403 → 200
+  `/app-shell.html`) no longer has to cover them; the frontend bucket's
+  `s3:ListBucket` grant makes a missing object a 404; and the `404 → 200` rule
+  is gone. `error_code = 404` reappearing in `modules/frontend/main.tf`, or the
+  ListBucket grant disappearing, fails the observability gate.
+- **The deeper check stopped trusting the tag.** `bundleFailures` in
+  `synthetic-page-check.mjs` fetches the module script and requires a
+  JavaScript content type — the first assertion in that script a served shell
+  cannot satisfy on its own.
+
+The 404 assertion runs on the release path rather than the fifteen-minute cron
+because it is a property of the **distribution**: it becomes true when
+`terraform apply` runs, and on a cron it would report the ordinary gap between
+a merge and the next release as an outage. Its predicates are unit-tested in
+CI (`npm run test:checks`, `scripts/synthetic-page-check.test.mjs`), in both
+directions, so it cannot quietly stop meaning anything between releases.
 
 ### Why both, and what is still not covered
 
@@ -126,6 +166,14 @@ passed fourteen minutes into a total frontend outage on 2026-09-04
 and nothing in the check ever loaded a page.
 
 Still open, and deliberately not claimed as solved here:
+
+- **A missing plant photo still answers 200 with the app shell.** `/plants/*`
+  is both a React route (`/plants/{plantId}`) and the image prefix
+  (`/plants/{householdId}/{plantId}/...`), so that cache behavior has to keep
+  the 403 → 200 rescue for the route to work at all — which means a missing
+  photo gets it too. Same defect as #615, one prefix narrower; fixing it means
+  separating the image prefix from the route prefix, which is a URL change with
+  stored data behind it.
 
 - **Deleting the health check deletes its alarm.** Setting
   `enable_site_health_check = false` removes the probe and the alarm together,
