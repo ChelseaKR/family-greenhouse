@@ -78,7 +78,7 @@ beforeEach(async () => {
 describe('dashboard status metrics', () => {
   it('renders a genuine empty household as zero', async () => {
     const { container } = renderDashboard({ failing: false });
-    await screen.findByText('No upcoming tasks');
+    await screen.findByText('No tasks yet');
 
     const metrics = within(container.querySelector('dl') as HTMLElement);
     expect(metrics.getAllByText('0')).toHaveLength(3);

@@ -166,6 +166,28 @@ export function DashboardPage() {
       (task) => !isOverdue(task.nextDue) && formatDueDate(task.nextDue) !== 'Today'
     ) || [];
 
+  /**
+   * What this card lists: work that can be done now. Not a forecast.
+   *
+   * `GET /tasks/upcoming` returns everything due within SEVEN DAYS, and
+   * completing a task advances `nextDue` by its frequency. So a weekly task —
+   * the most common watering interval there is — lands exactly back inside the
+   * window the moment it is completed and **can never be cleared from this
+   * list**. Observed in production: mark done, refresh, still there, with the
+   * completion correctly recorded and `nextDue` correctly a week out. Nothing
+   * was broken; the card was answering a different question than the one a
+   * person asks when they look at it.
+   *
+   * A card that cannot respond to the action it offers teaches people the
+   * button does not work. Overdue and today are the things a household can
+   * act on; everything else is a schedule, and `/tasks` is where a schedule
+   * belongs.
+   *
+   * `laterTasks` is still computed — the count below tells people the rest of
+   * the week exists, so narrowing this list does not hide anything from them.
+   */
+  const actionableTasks = [...overdueTasks, ...todayTasks];
+
   // `undefined` data covers loading AND a failed fetch. Keying on the loading
   // flag alone published a failed plants/tasks read as the number 0 — "you
   // have no plants", "nothing is overdue" — which is the same
@@ -212,8 +234,16 @@ export function DashboardPage() {
       <Card variant="paper" padding="none">
         <div className="px-6 py-5 border-b border-primary-100/70">
           <CardHeader
-            title="Upcoming tasks"
-            description="Due in the next 7 days"
+            title="To do now"
+            description={
+              // The rest-of-week count belongs here only when there is a list
+              // above it to contrast with. With nothing to do, the empty state
+              // below already says it, and saying it twice on one card reads
+              // as a bug rather than emphasis.
+              laterTasks.length > 0 && actionableTasks.length > 0
+                ? `Overdue and due today — ${laterTasks.length} more later this week`
+                : 'Overdue and due today'
+            }
             action={
               <Link to="/tasks">
                 <Button variant="secondary" size="sm">
@@ -232,19 +262,32 @@ export function DashboardPage() {
           <div className="p-6">
             <Alert variant="error">{getErrorMessage(tasksError)}</Alert>
           </div>
-        ) : !upcomingTasks || upcomingTasks.length === 0 ? (
+        ) : !upcomingTasks || actionableTasks.length === 0 ? (
+          /* Two different empty states, because they mean different things and
+             one of them used to lie. With work still scheduled this week,
+             "All caught up! Add tasks to your plants" is wrong twice over —
+             they have tasks, and more are coming — so it says what is actually
+             true and points at where the rest lives. */
           <EmptyState
-            title="No upcoming tasks"
-            description="All caught up! Add tasks to your plants to see them here."
+            title={laterTasks.length > 0 ? 'Nothing to do right now' : 'No tasks yet'}
+            description={
+              laterTasks.length > 0
+                ? `Nothing is overdue or due today. ${laterTasks.length} ${
+                    laterTasks.length === 1 ? 'task is' : 'tasks are'
+                  } coming up later this week.`
+                : 'Add tasks to your plants to see them here.'
+            }
             action={
-              <Link to="/plants">
-                <Button>View plants</Button>
+              <Link to={laterTasks.length > 0 ? '/tasks' : '/plants'}>
+                <Button>{laterTasks.length > 0 ? 'View all tasks' : 'View plants'}</Button>
               </Link>
             }
           />
         ) : (
           <ul className="divide-y divide-primary-100/60">
-            {[...overdueTasks, ...todayTasks, ...laterTasks].slice(0, 10).map((task) => (
+            {/* Overdue and today only — `laterTasks` is deliberately not here.
+                See the queue note above `actionableTasks`. */}
+            {actionableTasks.slice(0, 10).map((task) => (
               <TaskItem
                 key={task.id}
                 task={task}

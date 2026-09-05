@@ -177,18 +177,37 @@ describe('Dashboard integration', () => {
       { timeout: 5000 }
     );
 
-    // The row stays, because the server still considers the task upcoming.
-    // It must NOT be replaced by the empty state: "All caught up!" while a
-    // task is due in seven days would be a cheerful lie, and a row that
-    // disappears and returns is what made completing feel like it failed.
-    await waitFor(
-      () => {
-        expect(screen.getByRole('button', { name: /done/i })).toBeInTheDocument();
-      },
-      { timeout: 5000 }
-    );
+    // The row LEAVES this card, because the card lists what can be done now
+    // and the task is no longer due today.
+    //
+    // This assertion was the exact opposite a commit ago, and the reason is
+    // worth keeping. The first fix stopped the row vanishing-then-reappearing
+    // by making it move to its new date — mechanically right, and it left the
+    // real problem untouched: the server's upcoming window is seven days, so a
+    // WEEKLY task lands straight back inside it and could never be cleared
+    // from the dashboard at all. Marking done, refreshing, and still seeing
+    // the task is what a household actually reported.
+    // Wait for a POSITIVE end-state, never for the absence of something.
+    //
+    // `waitFor(() => expect(X).not.toBeInTheDocument())` passes on the first
+    // tick where X happens to be missing — a transient re-render will do — so
+    // it holds whatever the code does. Written that way, this assertion passed
+    // even with the card deliberately reverted to rendering `laterTasks`,
+    // which is the regression it exists to catch. A test that cannot fail is
+    // worse than no test, and this file already carries one such lesson.
+    //
+    // The empty state's own copy is the settled signal: it can only render
+    // once the refetch has landed and left nothing actionable.
+    await waitFor(() => expect(screen.getByText(/nothing to do right now/i)).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+
+    // Now the negatives mean something, because the card has finished.
+    expect(screen.queryByRole('button', { name: /done/i })).not.toBeInTheDocument();
+    // The week is not clear — the task still exists, due in seven days.
+    // "All caught up" here would be the same class of lie as the vanishing row.
     expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/monstera/i)).toBeInTheDocument();
+    expect(screen.getByText(/coming up later this week/i)).toBeInTheDocument();
     // Three 5s `waitFor` budgets cannot fit inside vitest's 5s default test
     // timeout, so this test could only ever pass by finishing well under its
     // own stated allowances — it reported "Test timed out" rather than a
