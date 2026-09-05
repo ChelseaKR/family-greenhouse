@@ -332,7 +332,22 @@ describe('NotificationSettings', () => {
       stubBrowserTimeZone('America/Chicago');
       const { notificationService } = await renderSettings(prefs({ timezone: 'Europe/Berlin' }));
 
-      expect(screen.getByLabelText('Timezone')).toHaveValue('Europe/Berlin');
+      // Wait for the field to settle before asserting anything, exactly as the
+      // sibling test above does. Without this the assertion races the initial
+      // render: it can read the browser zone the mount is about to replace, and
+      // it fails as `America/Chicago` — reporting the opposite of the defect it
+      // guards, on a machine that is merely busy.
+      //
+      // It only ever fired under `vitest --coverage`, which is slow enough to
+      // lose the race and is NOT what `npm run verify` runs — so it was
+      // invisible there and blocked people at the pre-push hook instead.
+      await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('Europe/Berlin'));
+
+      // Deliberately NOT inside the waitFor. A negative assertion wrapped in
+      // one passes on its first tick — before the write it is meant to forbid
+      // could even have happened — so it would hold whatever the code did.
+      // Placed after the settle, it means what it says: the field reached the
+      // stored value and nothing was written on the way.
       expect(notificationService.updatePreferences).not.toHaveBeenCalled();
     });
 
