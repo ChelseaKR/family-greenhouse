@@ -16,6 +16,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **A plant added five minutes ago was already overdue.** Every task created in
+  the app was due at the instant it was created, so a second later the sitter
+  view showed a red "overdue" badge, `?overdue=true` counted it, and the weekly
+  digest mailed it as a plant at risk — while the task list next to it said
+  "Today". A household's first reminder could scold them for neglecting a plant
+  they had just finished setting up. New tasks are now due at the end of the day
+  they were created, in the creator's own timezone, so all four surfaces agree.
+
 ## [0.27.0] - 2026-09-05
 
 ### Added
