@@ -9,7 +9,16 @@
  * the kind of bug nobody notices from a diff. It also can't be exercised by the
  * app's own test suite, because it runs at the edge, so it gets its own.
  *
- * Run: `npm run test:edge` (also part of the frontend test gate).
+ * Run: `npm run test:edge`.
+ *
+ * This line used to read "(also part of the frontend test gate)". It was not:
+ * `frontend`'s `test` is `vitest run`, and vitest.config.ts includes only
+ * `tests|src/**\/*.{test,spec}.{ts,tsx}`, which a `.mjs` file under
+ * `frontend/scripts/` matches neither. A repo-wide grep for `test:edge` found
+ * exactly two hits — its package.json line and this comment claiming it was
+ * covered. It now runs in CI's `Test Frontend` job and as a step in
+ * `npm run verify`, and scripts/check-test-scripts-run.mjs fails the build if
+ * it ever falls out of both again.
  */
 
 import assert from 'node:assert/strict';

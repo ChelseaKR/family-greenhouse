@@ -69,6 +69,21 @@ jobs:
         # label). See scripts/check-no-silenced-gates.mjs.
         run: node scripts/check-no-silenced-gates.mjs
 
+      - name: Every test suite is run by something (#472)
+        # `frontend`'s `test:edge` existed, passed, and ran in NO gate — a
+        # repo-wide grep found two hits: its package.json line and its own
+        # header comment claiming it was "part of the frontend test gate". What
+        # went uncovered was the CloudFront viewer-request function, and on
+        # 2026-09-04 that cost ~40 minutes of 403s on every route but `/`.
+        #
+        # This asserts the class, not the instance: a `test*` script must be a
+        # step in scripts/gate-steps.mjs, or be invoked by a workflow, or be
+        # registered with a reason. A suite nothing runs still reads as coverage.
+        #
+        # Also a step in `npm run verify` so local pre-push and CI run the
+        # identical check (CICD-27).
+        run: npm run tests:wired:check
+
       - name: Check formatting
         run: npm run format:check
 

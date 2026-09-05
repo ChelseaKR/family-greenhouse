@@ -316,6 +316,23 @@ below any of them exits non-zero:
 <!-- END:COVERAGE-THRESHOLDS -->
 <!-- prettier-ignore-end -->
 
+### The CloudFront edge function
+
+`frontend/scripts/spa-router.test.mjs` (`npm run test:edge`, `node --test`) covers
+`infrastructure/modules/frontend/functions/spa-router.js` — the viewer-request
+function that maps `/pricing` and the other prerendered routes onto their
+`index.html` objects. It is not a vitest suite, so it is a separate step rather
+than part of `test:coverage`: it runs in CI's `Test Frontend` job and as a step
+in `npm run verify`.
+
+It used to run in neither. The suite existed and passed, its own header comment
+said it was "part of the frontend test gate", and a repo-wide grep for
+`test:edge` returned only that comment and its `package.json` line. On
+2026-09-04 the untested function returned 403 for every route but `/` for about
+forty minutes. `scripts/check-test-scripts-run.mjs` now fails the build if any
+`test*` script is run by neither the gate nor a workflow without a registered
+reason (#472).
+
 Those floors are enforced in three places, all running the same command:
 
 - **CI** — the required `Test Backend` and `Test Frontend` jobs run `npm run test:coverage`, so a PR that drops below a floor cannot merge.

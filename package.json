@@ -45,6 +45,8 @@
     "test:coverage": "npm run test:coverage --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "eval": "npm run eval --workspace backend",
+    "test:edge": "npm run test:edge --workspace frontend",
+    "tests:wired:check": "node scripts/check-test-scripts-run.mjs",
     "i18n:check": "npm run i18n:check --workspace frontend",
     "reads:check": "npm run reads:check --workspaces --if-present",
     "mobile:validate": "node scripts/validate-store-release.mjs",
