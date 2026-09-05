@@ -815,6 +815,10 @@
   "sitter": {
     "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",
     "openBrief": "Abre la guía de cuidados completa (imprimible)",
+    "allDoneTitle": "Todo al día: ¡eres un cielo! 🌿",
+    "allDoneBody": "Ya se atendió todo lo de la lista. ¡Muchísimas gracias por echar una mano!",
+    "nothingDueTitle": "Ahora mismo no hay nada que hacer",
+    "nothingDueBody": "El hogar no tiene nada programado en este momento. ¡Gracias por pasarte a mirar!",
     "photo": {
       "heading": "Envía una foto a casa",
       "body": "Si has hecho una foto, les encantará verla. Las fotos van directas al historial de esa planta, sin necesidad de crear una cuenta.",
@@ -1571,7 +1575,9 @@
       "done": "Hecho",
       "doneAria": "Marcar «{{task}}» como hecho",
       "allDoneTitle": "Todo al día: gracias",
-      "allDoneBody": "Todas las plantas están atendidas. El hogar verá tu nombre en cada una.",
+      "allDoneBody": "Ya se atendió todo lo programado. El hogar verá tu nombre en cada tarea.",
+      "nothingDueTitle": "No hay nada pendiente ahora mismo",
+      "nothingDueBody": "No hay nada programado para esta visita, así que todavía no hay nada con tu nombre. Si hiciste algo de todos modos, deja una nota abajo para que el hogar tenga constancia.",
       "addPhoto": "Añadir una foto",
       "addPhotoAria": "Añadir una foto de la {{plant}}",
       "photoUploading": "Enviando la foto…",
@@ -1583,7 +1589,7 @@
       "noteSave": "Guardar nota",
       "noteSaved": "Nota guardada",
       "noteFailed": "Esa nota no se guardó. No se escribió nada; puedes intentarlo otra vez.",
-      "visitNotRecorded": "Se guardó, pero no se pudo añadir al registro de la visita. Avisa al hogar para que revise el informe.",
+      "visitNotRecorded": "Se guardó, pero no pudimos confirmar que llegara al registro de la visita. Avisa al hogar para que revise el informe.",
       "footer": "¿Cuidas plantas a menudo? Family Greenhouse reúne el cuidado de las plantas de todo un hogar en un solo lugar."
     },
     "report": {

@@ -177,6 +177,11 @@ export function CaretakerPage() {
   };
 
   const remaining = tasks.filter((task) => !done.has(task.taskId));
+  // "You finished the list" and "the list was empty when you arrived" both
+  // make `remaining` empty, and they are not the same claim. Only the first
+  // has a caretaker's name on anything, so only the first gets the thank-you
+  // and the promise that the household will see it (#604).
+  const finishedSomething = done.size > 0;
 
   return (
     <PublicShell width="article" plainHeader>
@@ -232,9 +237,15 @@ export function CaretakerPage() {
               region inside this polite region and announce twice. */}
           <div className="mt-10 space-y-3" aria-live="polite">
             {remaining.length === 0 ? (
-              <Alert variant="success" title={t('caretaker.page.allDoneTitle')} live="off">
-                {t('caretaker.page.allDoneBody')}
-              </Alert>
+              finishedSomething ? (
+                <Alert variant="success" title={t('caretaker.page.allDoneTitle')} live="off">
+                  {t('caretaker.page.allDoneBody')}
+                </Alert>
+              ) : (
+                <Alert variant="info" title={t('caretaker.page.nothingDueTitle')} live="off">
+                  {t('caretaker.page.nothingDueBody')}
+                </Alert>
+              )
             ) : (
               <ul className="space-y-3">
                 {remaining.map((task) => {

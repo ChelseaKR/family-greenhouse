@@ -86,15 +86,28 @@ export const completeCaretakerTask = createHandler(
       validatedBody?.expectedNextDue !== undefined &&
       existing.nextDue !== validatedBody.expectedNextDue
     ) {
-      // This occurrence was already completed (a retried request). Acknowledge
-      // without a second completion, activity row, or visit line.
+      // This occurrence was already completed — a retried request whose first
+      // response was lost, or somebody else finishing it in between.
+      // Acknowledge without a second completion, activity row, or visit line.
+      //
+      // And say so: `visitRecorded` reports whether THIS request wrote a line
+      // on the visit record, and this branch writes none. It also cannot know
+      // whether the earlier attempt did — `recordVisitAction` swallows a failed
+      // write, so "already completed" is silent about the record. This used to
+      // answer `true`, which suppressed the one warning built to surface
+      // exactly that gap (CaretakerPage: `if (!result.visitRecorded)`), on the
+      // one path guaranteed not to have earned it. The sequence `expectedNextDue`
+      // exists for — visit write fails, response is lost, helper taps again —
+      // ended with a paid helper told their work was on the household's record
+      // and a hole in the report nobody was told about. Reporting an unknown as
+      // `true` is the one answer that cannot be right (#604).
       return successResponse({
         taskId: existing.id,
         plantName: existing.plantName,
         taskType: existing.customType || existing.type,
         dueDate: existing.nextDue,
         overdue: false,
-        visitRecorded: true,
+        visitRecorded: false,
       });
     }
 

@@ -130,9 +130,11 @@ describe('no live region is nested inside another live region', () => {
     });
   });
 
-  it('CaretakerPage: the all-done Alert inside the completions region', async () => {
-    // remaining.length === 0 is the branch that swaps the task list for the
-    // success Alert, inside the wrapper that announces completions.
+  it('CaretakerPage: the empty-list Alert inside the completions region', async () => {
+    // remaining.length === 0 is the branch that swaps the task list for an
+    // Alert, inside the wrapper that announces completions. An empty list on
+    // arrival renders the nothing-due Alert rather than the thank-you one
+    // (#604); both sit in the same wrapper, so either exercises the nesting.
     vi.mocked(caretakerVisitService.getView).mockResolvedValue({
       caretakerName: 'Dana',
       startsAt: new Date(Date.now() - 86_400_000).toISOString(),
@@ -142,11 +144,11 @@ describe('no live region is nested inside another live region', () => {
     } as CaretakerView);
 
     const { container } = renderAt(`/caretaker/${TOKEN}`, '/caretaker/:token', <CaretakerPage />);
-    await screen.findByText('All caught up — thank you');
+    await screen.findByText('Nothing due right now');
     expectNoNestedLiveRegions(container);
   });
 
-  it('SitPage: the all-caught-up Alert inside the completions region', async () => {
+  it('SitPage: the empty-list Alert inside the completions region', async () => {
     vi.mocked(sitterService.getView).mockResolvedValue({
       label: 'The Smiths’ plants',
       expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
@@ -154,7 +156,7 @@ describe('no live region is nested inside another live region', () => {
     } as SitterView);
 
     const { container } = renderAt(`/sit/${TOKEN}`, '/sit/:token', <SitPage />);
-    await screen.findByText(/All caught up/);
+    await screen.findByText('Nothing to do right now');
     expectNoNestedLiveRegions(container);
   });
 

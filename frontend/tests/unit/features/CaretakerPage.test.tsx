@@ -110,6 +110,32 @@ describe('CaretakerPage', () => {
       expect(completeTask).toHaveBeenCalledWith('a'.repeat(64), 't1', expect.any(String))
     );
     expect(await screen.findByText('All caught up — thank you')).toBeInTheDocument();
+    // Earned: this caretaker completed the list, so their name IS on it. The
+    // claim is scoped to the schedule rather than to "every plant", because
+    // the page only ever knew about the tasks in the window.
+    expect(
+      screen.getByText(
+        'Everything on the schedule has been looked after. The household will see your name on each one.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('does not congratulate a caretaker who arrived to an empty list', async () => {
+    // A window with nothing scheduled makes `remaining` empty on first paint,
+    // which used to render "All caught up — thank you / Every plant has been
+    // looked after. The household will see your name on each one." to a paid
+    // helper who had not touched anything. The second sentence was flatly
+    // false — no completion, so no name on anything — and the helper is the
+    // one person who cannot open the household's report to find that out.
+    getView.mockResolvedValue({ ...view, tasks: [] });
+    renderPage();
+
+    // Positive end-state first, then the claims that must not be on the page.
+    expect(await screen.findByText('Nothing due right now')).toBeInTheDocument();
+    expect(screen.getByText(/nothing has your name on it yet/)).toBeInTheDocument();
+    expect(screen.queryByText('All caught up — thank you')).not.toBeInTheDocument();
+    expect(screen.queryByText(/has been looked after/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/will see your name on each one/)).not.toBeInTheDocument();
   });
 
   it('warns when the action saved but its visit line did not', async () => {
@@ -126,8 +152,13 @@ describe('CaretakerPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /Mark .* as done/ }));
     // The household's report is built from visit records, so a gap in one is
-    // said out loud rather than rendered as an ordinary success.
-    expect(await screen.findByText(/couldn’t be added to the visit record/)).toBeInTheDocument();
+    // said out loud rather than rendered as an ordinary success. The wording
+    // is "couldn't confirm" rather than "couldn't be added" because the retry
+    // branch now reports `false` too, and there the line may well have been
+    // written by the attempt whose response was lost (#604).
+    expect(
+      await screen.findByText(/couldn’t confirm it reached the visit record/)
+    ).toBeInTheDocument();
   });
 
   it('saves a note and confirms it', async () => {
