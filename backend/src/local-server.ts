@@ -53,7 +53,9 @@ import { TEMPLATES } from './models/taskTemplates.js';
 import {
   PLANS,
   planSummary,
-  planHasFeature,
+  featureOf,
+  getEntitledPlan,
+  getEntitledPlanForIssuedGrant,
   hasHouseholdToolkit,
   planIncludesAwayKit,
   planIncludesCrossHomeToday,
@@ -62,6 +64,7 @@ import {
   limitOf,
   strongestPlan,
 } from './models/plans.js';
+import type { EntitlementSubscription, Plan } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
 // would take this whole dev server down before it could serve a request.
@@ -206,6 +209,15 @@ interface Household {
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   subscriptionStatus?: string;
+  /**
+   * A tier bought outright. Mirrors the `lifetimePlanId` attribute on the
+   * production METADATA row (services/billing.ts): an entitlement FLOOR that
+   * no subscription status may fall below, because there is no refund path.
+   * Nothing in the mock writes it — /billing/checkout answers 503 like
+   * production's commercial hold — so a test seeds it directly, exactly as it
+   * seeds `planId` and `subscriptionStatus`.
+   */
+  lifetimePlanId?: 'seedling' | 'garden' | 'greenhouse';
 }
 
 interface Invite {
@@ -575,6 +587,16 @@ export const seedUserId = '550e8400-e29b-41d4-a716-446655440000';
 export let seedPlantId = '';
 export let seedTaskId = '';
 
+/**
+ * Two Maps that live outside `db` because they mirror rows production keeps
+ * elsewhere: the `MOVEDAY#{season}` record (services/moveDay.ts) and the
+ * monthly identification meter (services/identifyBudget.ts). Declared here
+ * rather than beside the routes that use them only so `resetDb` — which runs
+ * at module load to seed — can clear them without a temporal-dead-zone error.
+ */
+const moveDayRecords = new Map<string, MoveDayList>(); // `${householdId}#${season}`
+const identifyUsage = new Map<string, number>(); // `${yyyy-mm}#${bucketId}`
+
 export function resetDb(): void {
   db.users.clear();
   db.households.clear();
@@ -611,6 +633,13 @@ export function resetDb(): void {
   db.helpAsks.clear();
   db.mockUploadGrants.clear();
   db.mockImages.clear();
+  // Not reset before this change, so a Move Day fired in one test stayed
+  // "claimed" for every later test in the same worker — the seed household id
+  // is a constant. A reset that leaves state behind is the same class of
+  // problem as the rest of this change: a test can pass against a condition
+  // it never set up.
+  moveDayRecords.clear();
+  identifyUsage.clear();
 
   const now = new Date().toISOString();
 
@@ -907,9 +936,53 @@ function recordActivity(input: RecordActivityInput): void {
   });
 }
 
-/** Mirrors handlers/tasks resolvePlanBestEffort + hasHouseholdToolkit. */
+/**
+ * The subscription row entitlement is resolved against. Mirrors
+ * `services/billing.getHouseholdSubscription` — three fields, because
+ * entitlement is three questions: which tier is on file, whether it is being
+ * paid for, and what was bought outright and can never be taken back.
+ *
+ * Before this pass every gate below read `PLANS[h?.planId ?? 'seedling']`,
+ * which is `getPlan(h?.planId)` with the fallback written out by hand: it
+ * could see the first field and neither of the other two. So the mock granted
+ * a `past_due` household everything for the whole dunning window, and dropped
+ * a household that had bought a tier outright to Seedling the moment an
+ * unrelated subscription was cancelled — the same two defects #364 and #476
+ * fixed in the handlers. That divergence matters here for one reason: the
+ * integration suite tests the MOCK, so a test could pass against behaviour
+ * production does not have.
+ */
+function subscriptionOf(householdId: string | null | undefined): EntitlementSubscription {
+  const h = householdId ? db.households.get(householdId) : undefined;
+  return {
+    planId: h?.planId,
+    status: h?.subscriptionStatus,
+    lifetimePlanId: h?.lifetimePlanId,
+  };
+}
+
+/**
+ * What this household MAY START. The default question and the one nearly
+ * every gate below is asking; see models/plans.ts.
+ */
+function entitledPlan(householdId: string | null | undefined): Plan {
+  return getEntitledPlan(subscriptionOf(householdId));
+}
+
+/*
+ * There is deliberately NO `issuedGrantPlan` beside it.
+ * `getEntitledPlanForIssuedGrant` is the exception, not the rule, and
+ * scripts/check-entitlement-gates.mjs flags every call to it so each use has
+ * to carry a written reason in the baseline. A helper would funnel them into
+ * one finding and make the next one free — which is exactly the accounting
+ * the gate exists to prevent. The four uses below each name it.
+ */
+
+/** Mirrors handlers/tasks resolvePlanBestEffort + hasHouseholdToolkit: the
+ *  double-care detector and the drift endpoints, every one of them read by a
+ *  member of the household on their own account — the STARTING question. */
 function householdHasToolkit(householdId: string): boolean {
-  return hasHouseholdToolkit(PLANS[db.households.get(householdId)?.planId ?? 'seedling']);
+  return hasHouseholdToolkit(entitledPlan(householdId));
 }
 
 // Health check
@@ -1319,9 +1392,7 @@ app.get('/me/today', authMiddleware, (req, res) => {
     throw err;
   }
 
-  const entitled = memberships.some((m) =>
-    planIncludesCrossHomeToday(PLANS[db.households.get(m.householdId)?.planId ?? 'seedling'])
-  );
+  const entitled = memberships.some((m) => planIncludesCrossHomeToday(entitledPlan(m.householdId)));
   if (!entitled) {
     return res.status(402).json({ message: CROSS_HOME_TODAY_LOCKED_MESSAGE });
   }
@@ -1736,7 +1807,6 @@ app.put(
 // available and the production answer is `unavailable`. Pass
 // `?season=winter|summer` to simulate the frost/heat line being crossed; the
 // `signal` numbers are then the simulation's, not a measurement.
-const moveDayRecords = new Map<string, MoveDayList>(); // `${householdId}#${season}`
 const MOVE_DAY_CARD_MS = 14 * 24 * 60 * 60 * 1000;
 const MOVE_DAY_REFIRE_GAP_MS = 180 * 24 * 60 * 60 * 1000;
 
@@ -1747,9 +1817,23 @@ app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res
   }
   const household = db.households.get(req.params.id);
   if (!household) return res.status(404).json({ message: 'Household not found' });
-  if (!planHasMoveDay(PLANS[household.planId ?? 'seedling'])) {
+  // Two entitlement questions, not one (#476) — mirrors
+  // handlers/climate/moveDay.ts and the `mayFire` option on
+  // services/moveDay.evaluateMoveDay.
+  //
+  //   CONTINUING — a season already claimed stays visible for its 14 days
+  //   even if the card fails on day 3. The tasks are already in the
+  //   household's list and half the plants are already inside; a
+  //   half-finished frost move is worse than either whole outcome.
+  //
+  //   STARTING — firing a NEW season claims it for 180 days, so a household
+  //   that may not start one goes 'quiet' rather than 'ready': the season is
+  //   left unclaimed and the next load after the card is fixed fires it.
+  const moveDaySub = subscriptionOf(household.id);
+  if (!planHasMoveDay(getEntitledPlanForIssuedGrant(moveDaySub))) {
     return res.json({ status: 'locked' });
   }
+  const mayFire = planHasMoveDay(getEntitledPlan(moveDaySub));
 
   const plants = [...db.plants.values()].filter(
     (p) => p.householdId === household.id && p.status === 'active'
@@ -1763,6 +1847,10 @@ app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res
     .filter((r): r is MoveDayList => !!r && now - Date.parse(r.firedAt) < MOVE_DAY_CARD_MS)
     .sort((a, b) => b.firedAt.localeCompare(a.firedAt))[0];
   if (recent) return res.json({ status: 'ready', list: recent });
+
+  // Everything past this point CLAIMS the season — see the note above the
+  // gate. 'quiet', not 'locked': the season is untouched.
+  if (!mayFire) return res.json({ status: 'quiet' });
 
   const requested = req.query.season;
   const season = requested === 'winter' || requested === 'summer' ? requested : null;
@@ -1849,8 +1937,17 @@ app.put(
     }
     const household = db.households.get(req.params.id);
     if (!household) return res.status(404).json({ message: 'Household not found' });
-    const plan = PLANS[household.planId ?? 'seedling'];
-    if (!plan.householdToolkit) {
+    // ENTITLEMENT, not the plan row (#476): turning auto-handoff ON starts a
+    // new class of email for the whole household. A rule already stored keeps
+    // its row, so nothing is lost when the card is fixed.
+    //
+    // `hasHouseholdToolkit(plan)`, not `plan.householdToolkit`: the flag lives
+    // at `plan.features.householdToolkit`, and `householdToolkit` is a field of
+    // PlanSummary, not of Plan. This file is `@ts-nocheck`, so the misreach
+    // read `undefined` and this route answered 402 on EVERY tier — a mock-only
+    // divergence from the production handler that nothing typed could catch.
+    const plan = entitledPlan(household.id);
+    if (!hasHouseholdToolkit(plan)) {
       return res.status(402).json({
         message: `Auto-handoff is part of the household toolkit, which the ${plan.name} plan does not include. Upgrade to turn it on.`,
       });
@@ -2026,7 +2123,12 @@ app.post(
     const body = (req as any).validatedBody;
     const now = new Date();
     // Plan gate — mirrors the handler: window length + live-link count.
-    const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'] ?? PLANS.seedling;
+    // ENTITLEMENT (#476): this is the ISSUING half of the sitter-link
+    // decision and the piece that makes the other half safe. A household
+    // mid-dunning cannot mint a new link or a longer window, while a link it
+    // already handed out keeps working to its expiry (see GET /sitter/:token
+    // and the photo routes below).
+    const plan = entitledPlan(req.params.id);
     const startsAt: string = body.startsAt ?? now.toISOString();
     const gate = checkSitterLinkPlanGate(plan, {
       windowDays: sitterWindowDays(startsAt, body.expiresAt),
@@ -2175,8 +2277,10 @@ app.post(
     if (user.householdId !== req.params.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
-    const household = db.households.get(req.params.id);
-    if (!PLANS[household?.planId ?? 'seedling'].features.caretakerSeats) {
+    // ENTITLEMENT (#476): a seat is a live credential handed to a paid
+    // helper. List, revoke and the visit report stay open on every tier, so
+    // no already-issued seat is trapped by this gate.
+    if (!featureOf(entitledPlan(req.params.id), 'caretakerSeats')) {
       return res.status(402).json({
         message:
           'Caretaker seats are included with the Greenhouse plan. Upgrade to add a caretaker.',
@@ -2380,8 +2484,10 @@ app.post(
     if (user.householdId !== req.params.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
-    const h = db.households.get(user.householdId);
-    if (!planHasFeature(h?.planId ?? 'seedling', 'kiosk')) {
+    // ENTITLEMENT (#476): issuing is gated, the mounted display below is not
+    // — a screen on a wall is a physical object and the person in front of it
+    // cannot fix the card. Revoke is ungated too; that is the control.
+    if (!featureOf(entitledPlan(user.householdId), 'kiosk')) {
       return res.status(402).json({
         message:
           'The kiosk display is included with the Greenhouse plan. Upgrade to set up a wall display.',
@@ -2640,7 +2746,10 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
   const refusedHome = homesRefusal(dbUser, invite.householdId);
   if (refusedHome) return res.status(402).json({ message: refusedHome });
 
-  const plan = PLANS[household.planId ?? 'seedling'];
+  // ENTITLEMENT, not the plan row (#476) — mirrors handlers/households
+  // joinHousehold. Caps limit NEW growth only: a household already above the
+  // cap keeps every member.
+  const plan = entitledPlan(invite.householdId);
   const existingMembers = membersOf(invite.householdId);
   if (atCap(existingMembers.length, limitOf(plan, 'members'))) {
     return res.status(402).json({
@@ -3057,8 +3166,8 @@ app.post(
       parentPlantId,
     } = (req as any).validatedBody;
 
-    const h = db.households.get(user.householdId);
-    const plan = PLANS[h?.planId ?? 'seedling'];
+    // ENTITLEMENT, not the plan row (#476). Caps limit NEW growth only.
+    const plan = entitledPlan(user.householdId);
     const existing = [...db.plants.values()].filter(
       (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
     );
@@ -3183,8 +3292,10 @@ app.post(
     const user = (req as any).user;
     const { plants } = (req as any).validatedBody;
 
-    const h = db.households.get(user.householdId);
-    const plan = PLANS[h?.planId ?? 'seedling'];
+    // ENTITLEMENT, not the plan row (#476): a bulk import must refuse at the
+    // same cap single-plant creation does, or it walks a household past a
+    // limit the next POST /plants would enforce.
+    const plan = entitledPlan(user.householdId);
     const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive existing plants before importing more.`;
 
     const results: Array<{
@@ -3464,20 +3575,20 @@ const identifySchema = z.object({
 // keyed `${yyyy-mm}#${householdId | user:userId}`. Enforcement only when
 // IDENTIFY_METERING_ENABLED=1, matching production (default off for beta).
 const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 1, garden: 30, greenhouse: 100 };
-const identifyUsage = new Map<string, number>();
 
 function identifyMeterFor(user: { userId: string; householdId: string | null }) {
   const ym = new Date().toISOString().slice(0, 7);
   const bucketId = user.householdId ?? `user:${user.userId}`;
   const key = `${ym}#${bucketId}`;
-  const planId = user.householdId
-    ? (db.households.get(user.householdId)?.planId ?? 'seedling')
-    : 'seedling';
-  const plan = PLANS[planId] ?? PLANS.seedling;
+  // ENTITLEMENT, not the plan row (#476) — mirrors handlers/plants/identify.ts.
+  // Plant.id calls cost real money, so an unpaid subscription must not buy a
+  // larger monthly allowance. The route has no requireHousehold, so a
+  // householdless caller gets the free tier's, exactly as production does.
+  const plan = user.householdId ? entitledPlan(user.householdId) : PLANS.seedling;
   return {
     key,
     planName: plan.name,
-    allowance: IDENTIFY_ALLOWANCES[planId] ?? IDENTIFY_ALLOWANCES.seedling,
+    allowance: IDENTIFY_ALLOWANCES[plan.id] ?? IDENTIFY_ALLOWANCES.seedling,
     used: identifyUsage.get(key) ?? 0,
     meteringEnabled: process.env.IDENTIFY_METERING_ENABLED === '1',
   };
@@ -3867,7 +3978,12 @@ app.get('/sitter/:token', (req, res) => {
   if (!link) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
-  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
+  // CONTINUING (#476). The link was issued while the household was entitled,
+  // carries an `expiresAt` that getActiveSitterLink has already enforced, and
+  // is held by a sitter who is not the buyer and cannot fix the card. This
+  // flag must agree with the brief route below or the page offers a control
+  // that then 404s.
+  const plan = getEntitledPlanForIssuedGrant(subscriptionOf(link.householdId));
   res.json({
     label: link.label,
     expiresAt: link.expiresAt,
@@ -3945,7 +4061,9 @@ app.get('/sitter/:token/brief', (req, res) => {
   }
   // Paid half of the Away Kit. A plan without it answers the SAME generic 404
   // as a bad token — an anonymous sitter is never told the household's tier.
-  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
+  // CONTINUING (#476) — same already-validated link, same bounds, as the
+  // sitter view above. Issuing a NEW link is gated on entitlement.
+  const plan = getEntitledPlanForIssuedGrant(subscriptionOf(link.householdId));
   if (!sitterBriefIncluded(plan)) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
@@ -4414,8 +4532,9 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
     return res.status(404).json({ message: 'This share link is invalid or has expired' });
   }
 
-  const h = db.households.get(user.householdId);
-  const plan = PLANS[h?.planId ?? 'seedling'];
+  // ENTITLEMENT, not the plan row (#476) — the same cap the normal create
+  // path enforces, reached through the share-accept copy.
+  const plan = entitledPlan(user.householdId);
   const existing = [...db.plants.values()].filter(
     (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
   );
@@ -5223,7 +5342,10 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     Math.min(180, typeof daysRaw === 'string' ? parseInt(daysRaw, 10) || 30 : 30)
   );
   // Analytics window — mirrors handlers/households/handler.ts (ADR 0014).
-  const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'];
+  // ENTITLEMENT, not the plan row (#476): the window is a plan LIMIT and a
+  // downgrade already narrows it. Completion rows are never trimmed — only
+  // the window a request may ask for.
+  const plan = entitledPlan(req.params.id);
   const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
   const days =
     historyLimitDays === null ? requestedDays : Math.min(requestedDays, historyLimitDays);
@@ -5275,7 +5397,10 @@ app.get('/households/:id/analytics/coverage', authMiddleware, requireHousehold, 
   if (user.householdId !== householdId) {
     return res.status(403).json({ message: 'Access denied' });
   }
-  const plan = PLANS[db.households.get(householdId)?.planId ?? 'seedling'];
+  // ENTITLEMENT, not the plan row (#476): a per-request report for a
+  // signed-in member of the buying household — nothing issued, nothing in a
+  // third party's hands.
+  const plan = entitledPlan(householdId);
   if (!hasHouseholdToolkit(plan)) {
     return res.status(402).json({
       message: 'Coverage is part of the household toolkit, included with the Garden plan and up.',
@@ -5311,7 +5436,9 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
   }
   // Analytics window — mirrors handlers/households/handler.ts (ADR 0014):
   // the free tier gets the year intersected with its trailing window.
-  const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'];
+  // ENTITLEMENT, not the plan row (#476) — the same window limit as the daily
+  // analytics above, resolved the same way.
+  const plan = entitledPlan(req.params.id);
   const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
   const window =
     historyLimitDays === null
@@ -5468,8 +5595,13 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
   const h = db.households.get(user.householdId);
   // Usage mirrors the production METADATA counters: active plants + members.
+  // `planId` below stays the tier the household is ON — that is what
+  // production publishes from the subscription row, and it is truthful. The
+  // CAPS have to be the ones actually ENFORCED (#476): resolving them off
+  // planId alone would advertise Garden's plant cap to a past_due household
+  // whose next POST /plants is refused at Seedling's.
   const planId = h?.planId ?? 'seedling';
-  const plan = PLANS[planId] ?? PLANS.seedling;
+  const plan = entitledPlan(user.householdId);
   const plantCount = [...db.plants.values()].filter(
     (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
   ).length;
@@ -6377,8 +6509,11 @@ app.post(
   validateBody(createApiKeySchema),
   (req, res) => {
     const user = (req as any).user;
-    const h = db.households.get(user.householdId);
-    if ((h?.planId ?? 'seedling') !== 'greenhouse') {
+    // ENTITLEMENT, not the plan row (#476/#540). Using a key is gated on
+    // entitlement in production's middleware/apiKey.ts, so minting one off
+    // `planId` alone was the inconsistent half: a past_due household could
+    // issue a key its own next request would then be refused with.
+    if (entitledPlan(user.householdId).id !== 'greenhouse') {
       return res.status(402).json({
         message: 'API access is included with the Greenhouse plan. Upgrade to issue API keys.',
       });
@@ -6609,9 +6744,18 @@ app.post(
 // drift on what is refused or what a recap contains; only storage differs
 // (the in-memory mock image store instead of S3/DynamoDB).
 
+/**
+ * CONTINUING (#476) — mirrors handlers/tasks/sitterPhotos.awayKitEnabledFor.
+ * Both callers are the anonymous sitter-token routes, reached only after
+ * getActiveSitterLink has validated an active, unexpired link held by someone
+ * who is not the buyer. The per-link photo cap is enforced separately.
+ *
+ * The away RECAP is NOT this question and does not call this: it is read by a
+ * signed-in member of the buying household, for a window that has already
+ * ended. See the route below.
+ */
 function awayKitEnabledFor(householdId: string): boolean {
-  const h = db.households.get(householdId);
-  return planIncludesAwayKit(PLANS[h?.planId ?? 'seedling']);
+  return planIncludesAwayKit(getEntitledPlanForIssuedGrant(subscriptionOf(householdId)));
 }
 
 // GET /sitter/:token/photos
@@ -6726,7 +6870,14 @@ app.get('/households/:id/away-recap', authMiddleware, requireHousehold, (req, re
   if (user.householdId !== req.params.id) {
     return res.status(403).json({ message: 'Access denied' });
   }
-  if (!awayKitEnabledFor(req.params.id)) {
+  // ENTITLEMENT, not the already-issued-grant rule (#476), and not
+  // awayKitEnabledFor above. Unlike the sitter's own routes this one is read
+  // by a MEMBER of the household, signed in, on their own account — the
+  // person who can fix the card — and nothing is mid-flight, because the
+  // recap is only served for a window that has already ended. So it follows
+  // the documented downgrade contract, exactly as handlers/households/
+  // awayRecap.ts does.
+  if (!planIncludesAwayKit(entitledPlan(req.params.id))) {
     return res
       .status(402)
       .json({ message: 'The Away Kit is included with Garden and Greenhouse.' });

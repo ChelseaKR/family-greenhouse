@@ -15,7 +15,7 @@ import type express from 'express';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-import { PLANS, plantTagAllowance } from './models/plans.js';
+import { getEntitledPlan, plantTagAllowance } from './models/plans.js';
 import type { RecordActivityInput } from './services/activity.js';
 // From models/, NOT services/plantTagService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
@@ -72,7 +72,14 @@ export interface PlantTagDeps {
   db: {
     plantTags: Map<string, LocalPlantTag>;
     plantTagPins: Map<string, LocalPlantTagPin>;
-    households: Map<string, { planId?: 'seedling' | 'garden' | 'greenhouse' }>;
+    households: Map<
+      string,
+      {
+        planId?: 'seedling' | 'garden' | 'greenhouse';
+        subscriptionStatus?: string;
+        lifetimePlanId?: 'seedling' | 'garden' | 'greenhouse';
+      }
+    >;
     plants: Map<
       string,
       {
@@ -147,6 +154,28 @@ function cleanDisplayName(raw: string): string {
 
 export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps): void {
   const { db, authMiddleware, requireHousehold, requireAdmin, validateBody, recordActivity } = deps;
+
+  /**
+   * What this household MAY START, resolved the way every production gate
+   * resolves it (#476). `PLANS[h?.planId ?? 'seedling']` — what both routes
+   * below used to do — is `getPlan(h?.planId)` with the fallback inlined: it
+   * reads the tier on file and can see neither whether it is being paid for
+   * nor a tier bought outright. local-server.ts holds the same helper over
+   * its own copy of the row.
+   */
+  const entitledPlanFor = (householdId: string) => {
+    const h = db.households.get(householdId);
+    // Mapped field by field, never spread: the mock's row spells the status
+    // `subscriptionStatus`, and `EntitlementSubscription` spells it `status`.
+    // Handing the row over whole type-checks — every field is optional — and
+    // silently drops the payment status, which is the same absence-read-as-a-
+    // value this change is removing.
+    return getEntitledPlan({
+      planId: h?.planId,
+      status: h?.subscriptionStatus,
+      lifetimePlanId: h?.lifetimePlanId,
+    });
+  };
 
   const activeTagsFor = (householdId: string) =>
     [...db.plantTags.values()].filter(
@@ -261,7 +290,14 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
         .json({ message: 'Only a plant you are currently caring for can have a tag.' });
       return;
     }
-    const plan = PLANS[db.households.get(user.householdId)?.planId ?? 'seedling'];
+    // ENTITLEMENT, not the plan row (#476). Printing a NEW label is a new
+    // grant and follows the card. Its counterpart is the public scan route
+    // below, which is entitlement-checked NOWHERE and stays that way: a label
+    // already stuck in a pot is a physical object, the person scanning it is
+    // usually not the buyer, and bricking it over a failed charge would have
+    // no remedy the scanner can reach. Revoke is ungated too — that is the
+    // control.
+    const plan = entitledPlanFor(user.householdId);
     const allowance = plantTagAllowance(plan);
     if (!allowance.enabled) {
       res.status(402).json({
@@ -312,7 +348,13 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
       res.status(403).json({ message: 'Access denied' });
       return;
     }
-    const plan = PLANS[db.households.get(user.householdId)?.planId ?? 'seedling'];
+    // ENTITLEMENT, not the plan row (#476): the read side has to report the
+    // allowance the WRITE side will actually enforce, or the print sheet
+    // offers a household mid-dunning a cap that the issue route above would
+    // then refuse. `tags` is unaffected and still lists every ACTIVE tag with
+    // its token, so labels already issued can still be reprinted; only the
+    // allowance to issue MORE narrows.
+    const plan = entitledPlanFor(user.householdId);
     const tags = activeTagsFor(user.householdId)
       .filter((t) => db.plants.has(t.plantId))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
