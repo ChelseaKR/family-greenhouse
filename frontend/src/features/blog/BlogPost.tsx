@@ -19,8 +19,13 @@ export function BlogPost() {
   useMetaTags(
     post
       ? {
-          title: `${post.title} — Family Greenhouse`,
-          description: post.description,
+          // No ` — Family Greenhouse` suffix. The raw titles are 41-53
+          // chars and the 20-char suffix pushed every one of the 14 past
+          // the ~60 truncation point, spending the cut on the brand rather
+          // than the headline. Google renders the site name separately
+          // anyway, and the H1 and breadcrumb already establish it.
+          title: post.title,
+          description: post.metaDescription ?? post.description,
           canonical: `${SITE_URL}/blog/${post.slug}`,
           ogType: 'article',
           // Article schema makes the post eligible for Google's article
