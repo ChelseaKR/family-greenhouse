@@ -50,6 +50,51 @@
  *      `undefined`, `{}`, a no-op block) chained onto a read; `.catch(() =>
  *      null)` only when the chain itself also yields `null` on success.
  *
+ * ## Truncation: the fifth shape, which is not a failure at all
+ *
+ *   5. `unpaginated-limit` — `new QueryCommand({ … Limit … })` (or
+ *      `ScanCommand`) inside a function that never mentions
+ *      `LastEvaluatedKey`. One page is handed back as the whole result.
+ *
+ * Nothing fails here. Nothing throws, nothing is caught, no error state
+ * exists to bind — which is why the four shapes above cannot see it and why
+ * ADR 0010 did not originally claim to cover it. The consequence is the same
+ * defect wearing different clothes: a partial answer published as a total. A
+ * credential that cannot be LISTED cannot be revoked (`listApiKeys`,
+ * `listSitterLinks`, `listKioskLinks`, `listTags`, `listCaretakers` were all
+ * this shape, and every revoke path in those services reads through the
+ * listing); a uniqueness check stops seeing the row it would clash with
+ * (`spaceService.assertUniqueName`); a count is reported short.
+ *
+ * The rule anchors on the COMMAND, not on the word `Limit`, and that is what
+ * keeps it quiet: `taskService`, `plantService` and `coverage` all pass
+ * `{ …, Limit }` into a local `queryAllPages` helper, and the command is
+ * constructed inside that helper, which does page. Those call sites are
+ * correct and are never examined.
+ *
+ * ## Every entry pins its callers
+ *
+ * A baseline key is `file::function::rule`. The reason recorded beside it is
+ * prose, and nothing re-validates prose — so a later PR can add a NEW CALLER
+ * that falsifies the reason without changing the key.
+ *
+ * That is not hypothetical. `services/enrichment.ts::readCacheEntry` was
+ * baselined with "every caller then passes through `upstreamCallPermitted`
+ * and a discriminated provider result, so nothing is published from this
+ * value". One day after this gate shipped, Seasonal Move Day added a
+ * cache-only caller that published exactly that value into a frost warning
+ * (#454, fixed in #504). The key never moved and the gate never blinked.
+ *
+ * So each entry is `{ "reason": …, "callers": [ "file.ts::fn", … ] }` and the
+ * gate fails when the computed set differs. Resolution is syntactic: a bare
+ * call in the declaring file, a call in a file that imports the symbol by
+ * name (aliases followed), or `ns.fn(…)` through a namespace import. It does
+ * NOT follow a function passed as a value, a re-export, or dynamic dispatch —
+ * those show up as a MISSING caller, never as a false one, so the failure
+ * mode is an under-count somebody notices while editing rather than a silent
+ * pass. Every legitimate new caller costs a baseline edit, which is the
+ * point: the edit is where the reason gets re-read.
+ *
  * ## What it deliberately does NOT look for
  *
  *   - `result.Item?.used ?? 0` INSIDE a try. A missing row is a real zero;
@@ -62,6 +107,12 @@
  *     the success path never writes `null`. The author has distinguished the
  *     outcome; whether the caller honours it is a review question.
  *   - Writes. A failed `PutCommand` reported as `false` is a different rule.
+ *   - Non-DynamoDB truncation. An S3 `ListObjectsV2Command` paginated by
+ *     `MaxKeys`/`ContinuationToken`, or an in-memory `.slice(0, n)` on a list
+ *     an LLM then answers over (`sprout.ts`), are the same defect and are not
+ *     covered here. `.slice` in particular has no syntactic tell that
+ *     separates "a deliberate top ten" from "a silent cap", so it stays a
+ *     review concern.
  *   - Consequence. Whether the collapsed value is a display name or a safety
  *     count is a human call — which is what the baseline's per-entry reason
  *     records, exactly as the frontend gate does.
@@ -78,8 +129,10 @@
  * Failing in BOTH directions is the point: a baseline that only ever grows is
  * a guardrail that cannot fail.
  *
- * Flags (for the gate's own tests): `--src <dir>` scans a different tree,
- * `--baseline <file>` diffs against a different baseline.
+ * Flags: `--src <dir>` scans a different tree and `--baseline <file>` diffs
+ * against a different baseline (both for the gate's own tests);
+ * `--print-callers` prints the computed caller set for every finding as JSON,
+ * which is how a baseline entry's `callers` list gets written.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -96,6 +149,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--src') out.src = argv[++i];
     else if (argv[i] === '--baseline') out.baseline = argv[++i];
+    else if (argv[i] === '--print-callers') out.printCallers = true;
     else {
       console.error(`Unknown argument: ${argv[i]}`);
       process.exit(2);
@@ -574,6 +628,8 @@ function tryHasReturnAndFallsThrough(tryBlock) {
 
 /** key -> finding */
 const findings = new Map();
+/** Every file this run parsed, reused by the caller-set scan. */
+const parsed = [];
 let scanned = 0;
 
 function addFinding(rel, fn, rule, line, why) {
@@ -587,18 +643,59 @@ function lineOf(sourceFile, node) {
   return sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
 }
 
-function scanFile(file) {
-  const text = readFileSync(file, 'utf8');
-  if (!/\bcatch\b/.test(text)) return;
+/**
+ * DynamoDB commands that page. `Limit` on either is a PAGE size, never a
+ * total: DynamoDB applies it per page and before any filter, and the 1 MB
+ * response ceiling can end a page early, so a single send is a partial answer
+ * whenever `LastEvaluatedKey` comes back set.
+ */
+const PAGED_COMMANDS = new Set(['QueryCommand', 'ScanCommand']);
+
+/**
+ * `new QueryCommand({ … Limit … })` whose enclosing function never mentions
+ * `LastEvaluatedKey`. The page is handed back as the whole result.
+ *
+ * Anchoring on the COMMAND rather than on the word `Limit` is what keeps this
+ * quiet: `taskService`, `plantService` and `coverage` all pass `{ …, Limit }`
+ * into a local `queryAllPages` helper, and the command is constructed inside
+ * that helper, which does follow `LastEvaluatedKey`. Those call sites are
+ * correct and are never examined.
+ */
+function scanTruncation(sourceFile, rel) {
+  walkDeep(sourceFile, (node) => {
+    if (!ts.isNewExpression(node)) return true;
+    if (!ts.isIdentifier(node.expression) || !PAGED_COMMANDS.has(node.expression.text)) return true;
+    const arg = node.arguments && node.arguments[0] ? unwrap(node.arguments[0]) : null;
+    if (!arg || !ts.isObjectLiteralExpression(arg)) return true;
+    const limit = arg.properties.find(
+      (p) =>
+        (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) &&
+        p.name &&
+        p.name.getText() === 'Limit'
+    );
+    if (!limit) return true;
+    const fn = enclosingFunction(node);
+    const scope = fn && fn.body ? fn.body : sourceFile;
+    if (/\bLastEvaluatedKey\b/.test(scope.getText())) return true;
+    addFinding(
+      rel,
+      fn,
+      'unpaginated-limit',
+      lineOf(sourceFile, node),
+      `\`${limit.getText().replace(/\s+/g, ' ')}\` with no LastEvaluatedKey follow — one page is returned as the whole result`
+    );
+    return true;
+  });
+}
+
+function scanFile({ rel, sourceFile, text }) {
+  const hasCatch = /\bcatch\b/.test(text);
+  const hasLimit = /\bLimit\s*:/.test(text);
+  if (!hasCatch && !hasLimit) return;
   scanned += 1;
-  const rel = path.relative(SRC, file).split(path.sep).join('/');
-  const sourceFile = ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    /* setParentNodes */ true,
-    ts.ScriptKind.TS
-  );
+
+  if (hasLimit) scanTruncation(sourceFile, rel);
+  if (!hasCatch) return;
 
   walkDeep(sourceFile, (node) => {
     if (ts.isTryStatement(node) && node.catchClause) {
@@ -676,7 +773,111 @@ function scanFile(file) {
   });
 }
 
-for (const file of sourceFiles(SRC)) scanFile(file);
+/**
+ * Parse every source file once. The findings scan only needs the files that
+ * contain `catch` or `Limit:`, but the caller-set check (below) has to look
+ * for calls anywhere, so the whole tree is parsed and kept.
+ */
+for (const file of sourceFiles(SRC)) {
+  const text = readFileSync(file, 'utf8');
+  const rel = path.relative(SRC, file).split(path.sep).join('/');
+  const sourceFile = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    ts.ScriptKind.TS
+  );
+  parsed.push({ rel, sourceFile, text });
+}
+
+for (const entry of parsed) scanFile(entry);
+
+// ---------------------------------------------------------------------------
+// Caller sets (the second half of the ratchet)
+// ---------------------------------------------------------------------------
+
+/**
+ * A baseline key is `file::function::rule`. The justification beside it is
+ * prose, and nothing re-validates prose — so a later PR can add a NEW CALLER
+ * that falsifies the reason without changing the key, and the gate stays
+ * green.
+ *
+ * That is not hypothetical. `services/enrichment.ts::readCacheEntry` was
+ * baselined with "every caller then passes through `upstreamCallPermitted`
+ * and a discriminated provider result, so nothing is published from this
+ * value". One day after the backend gate shipped, Move Day added a
+ * cache-only caller that published exactly that value into a frost warning
+ * (#454, fixed in #504). The key never moved. The gate never blinked.
+ *
+ * So each entry pins its caller set too, and the gate fails when the set
+ * changes. Every legitimate new caller costs a baseline edit — which is the
+ * point: the edit is where someone re-reads the reason and decides whether it
+ * still holds.
+ *
+ * Resolution is syntactic and deliberately narrow:
+ *   - a bare `fn(...)` in the file that declares it;
+ *   - `fn(...)` in a file that imports `fn` from it (aliases followed);
+ *   - `ns.fn(...)` where `ns` is a namespace import of that file.
+ * It does NOT follow a function passed as a value, a re-export, or dynamic
+ * dispatch. Those show up as a MISSING caller, never as a false one, so the
+ * failure mode is an under-count that a human notices while editing rather
+ * than a silent pass.
+ */
+function resolveSpecifier(fromRel, spec) {
+  if (!spec.startsWith('.')) return null;
+  const joined = path.posix.normalize(path.posix.join(path.posix.dirname(fromRel), spec));
+  return joined.replace(/\.js$/, '.ts');
+}
+
+/** Names in `file` that refer to `targetFn` exported by `targetRel`. */
+function localAliases(entry, targetRel, targetFn) {
+  const direct = new Set();
+  const namespaces = new Set();
+  if (entry.rel === targetRel) direct.add(targetFn);
+  for (const stmt of entry.sourceFile.statements) {
+    if (!ts.isImportDeclaration(stmt) || !stmt.importClause) continue;
+    if (!ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    if (resolveSpecifier(entry.rel, stmt.moduleSpecifier.text) !== targetRel) continue;
+    const bindings = stmt.importClause.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    else {
+      for (const el of bindings.elements) {
+        if ((el.propertyName ?? el.name).text === targetFn) direct.add(el.name.text);
+      }
+    }
+  }
+  return { direct, namespaces };
+}
+
+function collectCallers(targetRel, targetFn) {
+  const callers = new Set();
+  for (const entry of parsed) {
+    if (!entry.text.includes(targetFn)) continue; // cheap reject
+    const { direct, namespaces } = localAliases(entry, targetRel, targetFn);
+    if (direct.size === 0 && namespaces.size === 0) continue;
+    walkDeep(entry.sourceFile, (n) => {
+      if (!ts.isCallExpression(n)) return true;
+      const callee = unwrap(n.expression);
+      const hit =
+        (ts.isIdentifier(callee) && direct.has(callee.text)) ||
+        (ts.isPropertyAccessExpression(callee) &&
+          callee.name.text === targetFn &&
+          ts.isIdentifier(callee.expression) &&
+          namespaces.has(callee.expression.text));
+      if (hit) callers.add(`${entry.rel}::${functionName(enclosingFunction(n))}`);
+      return true;
+    });
+  }
+  return [...callers].sort();
+}
+
+/** `file.ts::fnName::rule` (or `…::rule#2`) -> { rel, fn }. */
+function splitKey(key) {
+  const parts = key.replace(/#\d+$/, '').split('::');
+  return { rel: parts[0], fn: parts[1] };
+}
 
 // ---------------------------------------------------------------------------
 // The ratchet
@@ -685,30 +886,86 @@ for (const file of sourceFiles(SRC)) scanFile(file);
 const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
 const accepted = baseline.accepted ?? {};
 
+if (args.printCallers) {
+  const out = {};
+  for (const f of findings.values()) {
+    const { rel, fn } = splitKey(f.key);
+    out[f.key] = collectCallers(rel, fn);
+  }
+  console.log(JSON.stringify(out, null, 2));
+  process.exit(0);
+}
+
 const added = [...findings.values()].filter((f) => !(f.key in accepted));
 const stale = Object.keys(accepted).filter((key) => !findings.has(key));
 
-if (added.length === 0 && stale.length === 0) {
+/**
+ * Entries whose recorded caller set no longer matches the code, and entries
+ * that record no caller set at all. Both mean the same thing: the reason
+ * beside the key has not been re-argued against the callers it is about.
+ */
+const drifted = [];
+const malformed = [];
+for (const key of Object.keys(accepted)) {
+  if (!findings.has(key)) continue; // already reported as stale
+  const entry = accepted[key];
+  if (typeof entry === 'string' || !Array.isArray(entry.callers)) {
+    malformed.push(key);
+    continue;
+  }
+  const { rel, fn } = splitKey(key);
+  const actual = collectCallers(rel, fn);
+  const recorded = [...entry.callers].sort();
+  if (actual.join('\n') !== recorded.join('\n')) {
+    drifted.push({
+      key,
+      gained: actual.filter((c) => !recorded.includes(c)),
+      lost: recorded.filter((c) => !actual.includes(c)),
+    });
+  }
+}
+
+if (added.length === 0 && stale.length === 0 && drifted.length === 0 && malformed.length === 0) {
   console.log(
     `Settled-read-state gate (backend) passed: ${scanned} files scanned, ` +
-      `${findings.size} accepted occurrences (baseline ${Object.keys(accepted).length}, ratchet-only).`
+      `${findings.size} accepted occurrences (baseline ${Object.keys(accepted).length}, ratchet-only), ` +
+      'caller sets unchanged.'
   );
   process.exit(0);
 }
 
-if (added.length > 0) {
+const addedCollapse = added.filter((f) => !f.key.endsWith('::unpaginated-limit'));
+const addedTruncation = added.filter((f) => f.key.endsWith('::unpaginated-limit'));
+
+if (addedCollapse.length > 0) {
   console.error(
     'A read that can fail hands back the same value a genuine empty result produces.\n' +
       'Downstream code then proceeds on a number, list, or default nobody actually read —\n' +
       'a DynamoDB blip becomes "0 used this month", "no keys", "not configured". See\n' +
       'ADR 0010 (docs/adr/0010-settled-read-states.md).\n'
   );
-  for (const f of added) console.error(`  - ${f.key}  (line ${f.line}: ${f.why})`);
+  for (const f of addedCollapse) console.error(`  - ${f.key}  (line ${f.line}: ${f.why})`);
   console.error(
     '\nEither return a distinct settled-failed value (`number | null`, a discriminated\n' +
       'result) and make the fail-open / fail-closed decision explicit and logged at the\n' +
       'call site, or add the entry to backend/scripts/settled-read-states-baseline.json\n' +
       'with the reason its collapse cannot be mistaken for an all-clear.\n'
+  );
+}
+
+if (addedTruncation.length > 0) {
+  console.error(
+    'A paged read returns one page as though it were the whole answer. Nothing fails\n' +
+      'here — no throw, no catch, no error state — so a partial list is published as a\n' +
+      'total: a credential that cannot be listed cannot be revoked, a uniqueness check\n' +
+      'stops seeing the row it would clash with, a count is reported short.\n'
+  );
+  for (const f of addedTruncation) console.error(`  - ${f.key}  (line ${f.line}: ${f.why})`);
+  console.error(
+    '\nEither follow `LastEvaluatedKey` to exhaustion (see `getHouseholdMembers` or\n' +
+      "`taskService.queryAllPages`), or — when the cap IS the answer, a feed's page or a\n" +
+      'genuine top-N — add the entry to backend/scripts/settled-read-states-baseline.json\n' +
+      'with the reason a short read cannot be mistaken for a complete one.\n'
   );
 }
 
@@ -718,6 +975,34 @@ if (stale.length > 0) {
       'the baseline may only shrink, and a stale entry silently re-admits the defect:\n'
   );
   for (const key of stale) console.error(`  - ${key}`);
+  console.error('');
+}
+
+if (malformed.length > 0) {
+  console.error(
+    'Baseline entries with no recorded caller set. Each entry must be\n' +
+      '{ "reason": "…", "callers": ["file.ts::fn", …] } — the reason is about the\n' +
+      'callers, so the callers have to be pinned or the reason is unfalsifiable:\n'
+  );
+  for (const key of malformed) console.error(`  - ${key}`);
+  console.error('');
+}
+
+if (drifted.length > 0) {
+  console.error(
+    'The set of callers of a baselined read has changed. Its recorded reason is an\n' +
+      'argument about those callers, and nothing else re-checks it — this is exactly\n' +
+      'how enrichment.readCacheEntry stayed green while a new cache-only caller\n' +
+      'published its collapsed value into a frost warning (#454).\n\n' +
+      'Re-read the reason. If it still holds, update the `callers` list in the same\n' +
+      'PR. If it does not, fix the read.\n'
+  );
+  for (const d of drifted) {
+    console.error(`  - ${d.key}`);
+    for (const c of d.gained) console.error(`      + ${c}   (new caller)`);
+    for (const c of d.lost) console.error(`      - ${c}   (gone)`);
+  }
+  console.error('\n`--print-callers` prints the current set for every finding.\n');
 }
 
 process.exit(1);

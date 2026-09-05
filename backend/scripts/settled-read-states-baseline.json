@@ -1,13 +1,94 @@
 {
-  "$comment": "Accepted occurrences of the backend settled-read-state shapes (see scripts/check-settled-read-states.mjs and docs/adr/0010-settled-read-states.md). Each entry states why this read's collapse of 'failed' into 'empty' cannot be mistaken for an all-clear — or, where it can, says so and names the fix, so the count is pinned honestly rather than hidden. The list may only SHRINK: adding an entry admits new debt and needs the reason to hold up in review; a stale entry fails the gate so a fix must delete its line. Do not add a read whose value is published as a count, a cap, a warning, or a safety fact.",
+  "$comment": "Accepted occurrences of the backend settled-read-state shapes (see scripts/check-settled-read-states.mjs and docs/adr/0010-settled-read-states.md). Each entry states why this read's collapse of 'failed' into 'empty' — or of 'one page' into 'all of it' — cannot be mistaken for an all-clear, and pins the set of functions that CALL it. The reason is an argument about those callers, so the gate fails when the set changes and the reason has to be re-argued; `node scripts/check-settled-read-states.mjs --print-callers` prints the current set. The list may only SHRINK: adding an entry admits new debt and needs the reason to hold up in review; a stale entry fails the gate so a fix must delete its line. Do not add a read whose value is published as a count, a cap, a warning, or a safety fact.",
   "accepted": {
-    "handlers/plants/handler.ts::resolveActorName::catch-returns-empty": "Activity-feed attribution. 'Someone' is an explicit unknown, not a claim: a member row with no name renders the same word, and the feed row it labels is advisory — the mutation it describes has already succeeded regardless. Logged as actor_name_lookup_failed.",
-    "handlers/plants/import.ts::resolveActorName::catch-returns-empty": "Same helper as handlers/plants/handler.ts, same reasoning: 'Someone' names the unknown rather than asserting anything, and the import rows it labels are advisory. Logged as actor_name_lookup_failed.",
-    "handlers/plants/health.ts::checkPlantHealth::catch-swallows-into-default": "Inline form of resolveActorName for the plant.health_checked activity row. 'Someone' is an explicit unknown; the health assessment itself was already returned to the caller before this lookup runs. Logged as actor_name_lookup_failed.",
-    "handlers/tasks/handler.ts::resolveCompleterName::catch-swallows-then-shared-return": "Attribution for a completion record. The email local-part is the documented rendering for an account with no name attribute, and a failed member read renders the same guess. It is persisted as completedByName, so the guess outlives the outage — a cosmetic consequence, not a care-state one; nothing downstream decides anything on it. Logged as completer_name_lookup_failed. A fix would render an explicit unknown on failure; delete this line when it lands.",
-    "services/cognitoUsers.ts::getUserName::catch-swallows-then-shared-return": "Display-name lookup. The email local-part is the documented fallback for an account with no name attribute, and a failed Cognito read renders the same fallback. It addresses a person in an email or feed row; nothing acts on it.",
-    "services/climate.ts::readCache::catch-returns-empty": "A cache. Miss and read failure both correctly mean 'ask the provider': the weather read that follows is the source of truth and carries its own settled states (WeatherLookupResult), and the budget counter it consults fails closed on its own. Nothing is published from this value. Logged as weather.cache_read_failed.",
-    "services/identifyBudget.ts::incrementUsage::catch-returns-empty": "Both null branches mean 'no new total came back'. A successful ADD always returns the attribute, so the `: null` on the success path is a malformed-response guard rather than an empty result, and the documented contract — null means the write may not have counted, callers treat it as soft — holds on either path. Never rendered as 0.",
-    "services/leafHealthBudget.ts::incrementUsage::catch-returns-empty": "Same contract as identifyBudget.incrementUsage: null on either path means 'no new total', a successful ADD always returns one, and callers treat null as soft. Never rendered as 0."
+    "handlers/plants/handler.ts::resolveActorName::catch-returns-empty": {
+      "reason": "Activity-feed attribution. 'Someone' is an explicit unknown, not a claim: a member row with no name renders the same word, and the feed row it labels is advisory — the mutation it describes has already succeeded regardless. Logged as actor_name_lookup_failed.",
+      "callers": [
+        "handlers/plants/handler.ts::acceptSharedPlant",
+        "handlers/plants/handler.ts::confirmImageUpload",
+        "handlers/plants/handler.ts::createPlant",
+        "handlers/plants/handler.ts::updatePlant"
+      ]
+    },
+    "handlers/plants/import.ts::resolveActorName::catch-returns-empty": {
+      "reason": "Same helper as handlers/plants/handler.ts, same reasoning: 'Someone' names the unknown rather than asserting anything, and the import rows it labels are advisory. Logged as actor_name_lookup_failed.",
+      "callers": ["handlers/plants/import.ts::importPlants"]
+    },
+    "handlers/plants/health.ts::checkPlantHealth::catch-swallows-into-default": {
+      "reason": "Inline form of resolveActorName for the plant.health_checked activity row. 'Someone' is an explicit unknown; the health assessment itself was already returned to the caller before this lookup runs. Logged as actor_name_lookup_failed. No in-repo caller: it is a route handler, reached through the handler table rather than called.",
+      "callers": []
+    },
+    "handlers/tasks/handler.ts::resolveCompleterName::catch-swallows-then-shared-return": {
+      "reason": "Attribution for a completion record. The email local-part is the documented rendering for an account with no name attribute, and a failed member read renders the same guess. It is persisted as completedByName, so the guess outlives the outage — a cosmetic consequence, not a care-state one; nothing downstream decides anything on it. Logged as completer_name_lookup_failed. A fix would render an explicit unknown on failure; delete this line when it lands.",
+      "callers": [
+        "handlers/tasks/handler.ts::completeTask",
+        "handlers/tasks/handler.ts::matchTaskSchedule",
+        "handlers/tasks/handler.ts::snoozeTask"
+      ]
+    },
+    "services/cognitoUsers.ts::getUserName::catch-swallows-then-shared-return": {
+      "reason": "Display-name lookup. The email local-part is the documented fallback for an account with no name attribute, and a failed Cognito read renders the same fallback. It addresses a person in an email or feed row; nothing acts on it.",
+      "callers": [
+        "handlers/auth/handler.ts::getMe",
+        "handlers/households/handler.ts::createHousehold",
+        "handlers/households/handler.ts::createSitterLink",
+        "handlers/households/handler.ts::joinHousehold",
+        "handlers/households/handler.ts::revokeSitterLink",
+        "handlers/me/handler.ts::exportMe"
+      ]
+    },
+    "services/climate.ts::readCache::catch-returns-empty": {
+      "reason": "A cache. For geocodeCached and getWeatherCached, miss and read failure both correctly mean 'ask the provider': the weather read that follows is the source of truth and carries its own settled states (WeatherLookupResult), and the budget counter it consults fails closed on its own. peekWeatherCached has no provider call after it, but its one caller (moveDay.evaluateMoveDay) maps a null to status 'unavailable' — the same named non-answer a genuine miss produces — so nothing is published from this value on any path. Logged as weather.cache_read_failed. Note the deliberate contrast one screen away: climate.peekCachedWeather does NOT reuse this helper, precisely so the digest can tell 'miss' from 'unavailable'.",
+      "callers": [
+        "services/climate.ts::geocodeCached",
+        "services/climate.ts::getWeatherCached",
+        "services/climate.ts::peekWeatherCached"
+      ]
+    },
+    "services/identifyBudget.ts::incrementUsage::catch-returns-empty": {
+      "reason": "Both null branches mean 'no new total came back'. A successful ADD always returns the attribute, so the `: null` on the success path is a malformed-response guard rather than an empty result, and the documented contract — null means the write may not have counted, callers treat it as soft — holds on either path. Never rendered as 0.",
+      "callers": ["handlers/plants/identify.ts::identify"]
+    },
+    "services/leafHealthBudget.ts::incrementUsage::catch-returns-empty": {
+      "reason": "Same contract as identifyBudget.incrementUsage: null on either path means 'no new total', a successful ADD always returns one, and callers treat null as soft. Never rendered as 0.",
+      "callers": ["handlers/plants/health.ts::checkPlantHealth"]
+    },
+    "services/apiKeys.ts::lookupApiKey::unpaginated-limit": {
+      "reason": "Not a listing. GSI3 is keyed by the scrypt hash of the presented key, so at most one row can match and `Limit: 1` IS the answer; a second row would be a hash collision, and honouring the first is the right response to that too. The household's key LIST is listApiKeys, which pages.",
+      "callers": ["middleware/apiKey.ts::before"]
+    },
+    "services/calendarTokens.ts::resolveCalendarToken::unpaginated-limit": {
+      "reason": "Same shape as apiKeys.lookupApiKey: GSI1 keyed by the token hash, one row is the whole answer, and the lastUsedAt bump re-checks that the base row still carries this token's hash before the feed is served.",
+      "callers": ["handlers/me/handler.ts::calendarFeed"]
+    },
+    "services/activity.ts::listActivity::unpaginated-limit": {
+      "reason": "A feed page, and the page IS the request: the caller passes `limit` (handler default 50, hard ceiling 200) and the response renders as 'recent activity', newest first. No count, no total and no completeness claim is derived from it — the UI asks for more by asking for a bigger limit.",
+      "callers": ["handlers/households/handler.ts::getActivity"]
+    },
+    "services/plantService.ts::getPlantPhotos::unpaginated-limit": {
+      "reason": "A photo timeline page, requested as one: `limit` defaults to 30 and is capped at 100 by the caller. Newest-first, decorative, and nothing counts it — PhotoTimeline already documents hiding at one photo or fewer.",
+      "callers": ["handlers/plants/handler.ts::listPhotos"]
+    },
+    "services/taskService.ts::getTaskCompletions::unpaginated-limit": {
+      "reason": "Recent-history page for one plant, newest first, `limit` defaulting to 20. Every caller wants the top of the list, not all of it: digestReport.gatherLastCare asks for exactly 1 ('when was this last cared for'), and the plant and tag history views render a bounded 'recent care' list. Year in Review, which DOES need every row, deliberately uses the uncapped path (taskService.getHouseholdActivity) after this cap produced a wrong total.",
+      "callers": [
+        "handlers/plantTags/handler.ts::readHistory",
+        "handlers/plants/handler.ts::getPlant",
+        "handlers/plants/handler.ts::getPlantHistory",
+        "services/digestReport.ts::gatherLastCare"
+      ]
+    },
+    "services/doubleCare.ts::findRecentDuplicate::unpaginated-limit": {
+      "reason": "The completeness bound here is the KEY RANGE, not the page: `SK BETWEEN COMPLETION#<window start> AND COMPLETION#~` already restricts the read to one plant's completions inside one care window (hours to a few days), and 200 completions of a single plant inside one window is not a state this app can reach. A read failure is separately handled — the catch returns the named status 'unavailable', not 'clear'. If the window ever widens, this entry stops being true.",
+      "callers": ["handlers/tasks/handler.ts::detectDoubleCare"]
+    },
+    "services/doubleCare.ts::readPlantCompletions::unpaginated-limit": {
+      "reason": "Schedule drift over one plant's 200 most recent completions, newest first — the function's own contract is 'one page' and its caller (getScheduleDriftForPlant) is computing a recent-behaviour statistic, not a lifetime total. Older completions would not change the answer, and a failed read is a separate named state (history_unavailable) rather than 0% drift.",
+      "callers": ["services/doubleCare.ts::getScheduleDriftForPlant"]
+    },
+    "services/deviceTokens.ts::getUserDeviceTokens::unpaginated-limit": {
+      "reason": "A documented UI-oriented 20-device cap with, as the empty caller set records, no production caller at all today. The one path that MUST be exhaustive — deleteUserDeviceTokens, on account deletion — deliberately queries keys directly rather than through here and follows LastEvaluatedKey, and says so in its docstring. If this ever gains a caller that sends to the devices it returns, the caller set changes, this entry fails, and the cap has to be re-argued.",
+      "callers": []
+    }
   }
 }
