@@ -37,7 +37,7 @@ describe('formatDate', () => {
     // build's `supportedLngs` is `['en']` — Spanish is a staged asset, fetched
     // on demand (src/i18n/nonEnglishCatalog.ts), not bundled. This test used to
     // pass only because the Spanish catalog was statically imported into
-    // `resources` for every visitor, which is the 86.6 kB #467 was about.
+    // `resources` for every visitor, which is the 104 kB #467 was about.
     i18n.addResourceBundle('es', 'translation', { common: { yes: 'Sí' } }, true, true);
     await i18n.changeLanguage('es');
 

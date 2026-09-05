@@ -7,9 +7,10 @@
  * any deployed environment (`SUPPORTED_LANGS` in ./index.ts collapses to
  * `['en']` unless the opt-in is active), so every visitor downloaded and parsed
  * the whole Spanish catalog on the startup path to reach a language they could
- * not choose — 86.6 kB of JSON, pinned by vite.manualChunks.ts into the `i18n`
- * chunk that dist/index.html modulepreloads. #467 measured it; this module and
- * the narrowed chunk rule are the fix.
+ * not choose — 104,586 bytes of JSON (#467 says 86,560; the catalog has grown
+ * since), pinned by vite.manualChunks.ts into the `i18n` chunk that
+ * dist/index.html modulepreloads. This module and the narrowed chunk rule are
+ * the fix.
  *
  * WHY `import()` AND NOT `?url` + fetch
  * Fetching the catalog as an emitted `.json` asset is the standard i18next

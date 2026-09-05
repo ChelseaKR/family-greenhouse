@@ -16,8 +16,8 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 // `locales/<lng>/translation.json` for every NON-English locale is deliberately
 // not imported here either. English is the fallback catalog every visitor needs
 // on first paint; Spanish is not selectable at all unless the opt-in below is
-// active, so importing it put 86.6 kB of JSON into the modulepreloaded `i18n`
-// chunk for a language nobody could choose (#467). ./nonEnglishCatalog.ts
+// active, so importing it put 104,586 bytes of JSON into the modulepreloaded
+// `i18n` chunk for a language nobody could choose (#467). ./nonEnglishCatalog.ts
 // fetches it as a static asset, on demand, for the visitors who opted in.
 import en from './locales/en/translation.json';
 

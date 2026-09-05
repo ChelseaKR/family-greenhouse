@@ -16,8 +16,8 @@ import esTranslation from '@/i18n/locales/es/translation.json';
 import { manualChunks } from '../../../vite.manualChunks.ts';
 
 /**
- * The Spanish catalog is 86.6 kB of JSON that no deployed build lets a user
- * select. It used to be a static import in src/i18n/index.ts, registered in
+ * The Spanish catalog is 104,586 bytes of JSON that no deployed build lets a
+ * user select. It used to be a static import in src/i18n/index.ts, registered in
  * `resources`, and pinned by vite.manualChunks.ts into the modulepreloaded
  * `i18n` chunk — so every visitor downloaded and parsed all of it, on the
  * startup path, for a language the UI would not offer them (#467 §2).
