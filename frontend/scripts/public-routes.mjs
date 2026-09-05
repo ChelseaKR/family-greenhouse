@@ -62,6 +62,14 @@ export const STATIC_ROUTES = [
   { path: '/status', priority: 0.3, changefreq: 'daily' },
   { path: '/legal/privacy', priority: 0.3, changefreq: 'yearly' },
   { path: '/legal/terms', priority: 0.3, changefreq: 'yearly' },
+  // Store-listing destinations: /support is the App Store & Play support
+  // URL, /account-deletion is Play's mandated deletion web-link. Both are
+  // public routes footer-linked from every page, so omitting them here
+  // left them unprerendered — served by app-shell.html, which resolves
+  // `noindex, follow`, permanently deindexing two branded-navigational
+  // landing pages and sinking link equity from all 57 indexable URLs.
+  { path: '/support', priority: 0.4, changefreq: 'yearly' },
+  { path: '/account-deletion', priority: 0.4, changefreq: 'yearly' },
 ];
 
 /** Blog slugs → ISO publish date, read from the post manifest. */
