@@ -13,7 +13,7 @@ import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
 import * as billing from '../billing.js';
 import { askSprout, isSproutIntegrationEnabled, type SproutCitation } from '../sprout.js';
-import { getEntitledPlan } from '../../models/plans.js';
+import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -534,8 +534,18 @@ async function* turnEvents(
   // Entitlement, not the plan row: each turn spends Bedrock tokens, so a
   // past_due/unpaid household resolves to Seedling and hits the 402 above the
   // same as a household that never paid. See getEntitledPlan.
+  // The FLAG, not the id (#592). This asked `plan.id === 'seedling'` — naming
+  // the one tier that must not have chat rather than asking whether this tier
+  // includes it. With three tiers the two agree for every input that exists.
+  // They stop agreeing the day a fourth tier is added between Seedling and
+  // Garden: its `features.chat` would be authored deliberately in plans.ts
+  // beside the other nine flags, and a deny-list naming one id would hand it
+  // the assistant regardless. Nothing would report that — a tier receiving a
+  // feature it was not granted produces no error and no log line, just a
+  // working chat, one Bedrock turn at a time. The choke-point property above
+  // is what would have made the leak uniform rather than partial.
   const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
-  if (plan.id === 'seedling') {
+  if (!featureOf(plan, 'chat')) {
     throw createHttpError(
       402,
       'The care assistant is included with the Garden plan and up. Upgrade to start chatting.'

@@ -6548,7 +6548,8 @@ app.post(
     // entitlement in production's middleware/apiKey.ts, so minting one off
     // `planId` alone was the inconsistent half: a past_due household could
     // issue a key its own next request would then be refused with.
-    if (entitledPlan(user.householdId).id !== 'greenhouse') {
+    // And the FLAG, not the id (#592), mirroring the production handler.
+    if (!featureOf(entitledPlan(user.householdId), 'apiKeys')) {
       return res.status(402).json({
         message: 'API access is included with the Greenhouse plan. Upgrade to issue API keys.',
       });

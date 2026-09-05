@@ -23,6 +23,7 @@ vi.mock('../../../src/services/billing.js', () => ({
 
 import * as apiKeysService from '../../../src/services/apiKeys.js';
 import * as billing from '../../../src/services/billing.js';
+import { PLANS } from '../../../src/models/plans.js';
 
 type Subscription = Awaited<ReturnType<typeof billing.getHouseholdSubscription>>;
 const subscription = (over: Record<string, unknown>) => over as unknown as Subscription;
@@ -122,4 +123,31 @@ describe('POST /api-keys plan gate', () => {
     expect(res.statusCode).toBe(402);
     expect(apiKeysService.createApiKey).not.toHaveBeenCalled();
   });
+
+  /**
+   * #592: #476 fixed WHICH plan this gate resolves; it still decided by naming
+   * a tier (`getEntitledPlan(sub).id !== 'greenhouse'`). Every case above names
+   * a tier too, so all of them stay green whether the gate reads the id or the
+   * flag — with three tiers the two answers are identical for every input that
+   * exists. These cases are generated from `features.apiKeys` instead, so the
+   * expectation comes from the same row the gate consults, and a tier added
+   * later is covered without an edit here.
+   */
+  it.each(Object.values(PLANS).map((plan) => [plan.id, plan.features.apiKeys] as const))(
+    'decides minting by features.apiKeys, not by the plan id: %s (apiKeys=%s)',
+    async (planId, tierIncludesApiKeys) => {
+      const createKey = await subject();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(
+        subscription({ planId, status: 'active' })
+      );
+      const res = (await createKey(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(tierIncludesApiKeys ? 201 : 402);
+      if (tierIncludesApiKeys) {
+        expect(apiKeysService.createApiKey).toHaveBeenCalled();
+      } else {
+        expect(apiKeysService.createApiKey).not.toHaveBeenCalled();
+      }
+    }
+  );
 });

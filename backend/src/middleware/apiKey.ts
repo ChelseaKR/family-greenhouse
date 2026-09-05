@@ -19,7 +19,7 @@ import * as apiKeys from '../services/apiKeys.js';
 import type { ApiScope } from '../services/apiKeys.js';
 import * as billing from '../services/billing.js';
 import * as householdService from '../services/householdService.js';
-import { getEntitledPlan } from '../models/plans.js';
+import { featureOf, getEntitledPlan } from '../models/plans.js';
 import { getCachedMembership, setCachedMembership } from '../utils/membershipCache.js';
 import type { AuthenticatedEvent } from './auth.js';
 
@@ -68,7 +68,10 @@ export const apiKeyMiddleware = (): middy.MiddlewareObj<
     // Entitlement, not the plan row: a Greenhouse household that stopped
     // paying resolves to Seedling here, so an unpaid subscription revokes API
     // access on the same terms a downgrade does. See getEntitledPlan.
-    if (getEntitledPlan(sub).id !== 'greenhouse') {
+    // And the flag, not the id (#592) — the same conversion as the minting
+    // gate in handlers/apiKeys, so the two halves of this feature keep asking
+    // the identical question.
+    if (!featureOf(getEntitledPlan(sub), 'apiKeys')) {
       throw createHttpError(
         403,
         'API access requires the Greenhouse plan. This household has downgraded — upgrade to keep using this key.'
