@@ -92,6 +92,18 @@ model call, nothing generated. Two absences are rendered as absences:
 - a plant our curated, ASPCA-grounded table does not know shows **no verdict at
   all** (ADR 0011). Silence is honest; an unearned "pet-safe" badge is not.
 
+The photo is the one field that needed work to stay inside the link's
+boundary. `plant.imageUrl` is a CloudFront URL on a behavior with no viewer
+authorization, cached at the edge for a year, so handing it to a sitter used to
+outlive the link entirely: a saved page, a copied URL, or a browser cache kept
+fetching photographs of the inside of the house long after the link expired or
+was revoked, and so did anyone the sitter forwarded them to. The brief now
+signs each photo URL with a TTL clamped to what is left of the link (ceiling one
+hour, re-signed on every fetch), so the photograph dies with the page. A stored
+URL that cannot be resolved to a key inside the household's own
+`plants/{householdId}/` prefix yields **no photo** rather than the permanent
+public URL — fail closed (#453).
+
 On a plan without the brief the endpoint answers the **same generic 404** as an
 invalid token: an anonymous sitter is not the buyer and is never told which
 tier a household is on. The task view carries a `briefAvailable` flag so the
