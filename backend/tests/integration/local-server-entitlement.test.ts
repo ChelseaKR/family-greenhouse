@@ -308,7 +308,7 @@ describe('starting: what a household may begin (#476)', () => {
       const revoked = await request(app)
         .delete(`/households/${seedHouseholdId}/caretakers/${seat.body.id}`)
         .set(auth(token));
-      expect(revoked.status).toBeLessThan(300);
+      expect(revoked.status).toBe(204);
     });
   });
 
