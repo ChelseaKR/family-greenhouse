@@ -42,7 +42,6 @@
     "features/plants/SuggestedCareCard.tsx": 3,
     "features/settings/AccountSettings.tsx": 11,
     "features/settings/ApiKeysSettings.tsx": 11,
-    "features/settings/BillingSettings.tsx": 2,
     "features/settings/NotificationSettings.tsx": 15,
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 10,

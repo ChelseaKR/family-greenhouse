@@ -6,9 +6,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillingSettings } from '@/features/settings/BillingSettings';
 import {
   evaluatePlanLimits,
+  readOutcome,
+  resolveCurrentPlan,
   resolvePlanUsage,
   type IdentifyTopUpOffer,
   type Plan,
+  type PlanCatalog,
   type PlanUsage,
   type PlanUsageDetail,
   type SubscriptionState,
@@ -782,5 +785,243 @@ describe('usage meters against an unlimited cap (ADR 0014)', () => {
     expect(screen.getByText('300 of 200 plants')).toBeInTheDocument();
     expect(screen.getByTestId('usage-meter-plants')).toHaveAttribute('data-state', 'over');
     expect(screen.getByTestId('usage-meter-members')).toHaveAttribute('data-state', 'within');
+  });
+});
+
+describe('resolveCurrentPlan / readOutcome (never a plan we did not read)', () => {
+  it('calls a disabled query settled-unavailable, not loading', () => {
+    // `enabled: false` (no active household yet) leaves react-query pending
+    // FOREVER with fetchStatus 'idle'. Nothing more is coming, so it has
+    // settled without data. Reading that as "still loading" is how a
+    // never-attempted read fell through to the free tier.
+    expect(readOutcome({ status: 'pending', fetchStatus: 'idle' })).toBe('unavailable');
+    expect(readOutcome({ status: 'pending', fetchStatus: 'fetching' })).toBe('loading');
+    expect(readOutcome({ status: 'error', fetchStatus: 'idle' })).toBe('unavailable');
+    expect(readOutcome({ status: 'success', fetchStatus: 'idle' })).toBe('ready');
+  });
+
+  it('never answers with a plan when the subscription read failed', () => {
+    const read = resolveCurrentPlan({
+      subscription: 'unavailable',
+      subscriptionData: undefined,
+      catalog: 'ready',
+      plans: PLANS,
+    });
+    expect(read.status).toBe('unavailable');
+    expect(read.unavailable).toBe(true);
+    expect(read.planId).toBeNull();
+    // The defect this replaces: `subQuery.data?.planId ?? 'seedling'`.
+    expect(read.planId).not.toBe('seedling');
+    expect(read.planName).toBeNull();
+    expect(read.planName).not.toBe('Seedling');
+  });
+
+  it('never answers with a plan when the catalog read failed', () => {
+    const read = resolveCurrentPlan({
+      subscription: 'ready',
+      subscriptionData: { planId: 'greenhouse' },
+      catalog: 'unavailable',
+      plans: undefined,
+    });
+    expect(read.status).toBe('unavailable');
+    // The tier itself WAS read, so it is kept — but it is not enough on its
+    // own to claim which plan the household is on.
+    expect(read.planId).toBe('greenhouse');
+    expect(read.planName).toBeNull();
+  });
+
+  it('does not fall back to the free tier when the catalog cannot name the tier', () => {
+    // A catalog that settled fine but does not carry the household's tier —
+    // a partial projection, or a tier newer than this client. The old code
+    // answered `?.name ?? 'Seedling'` here.
+    const read = resolveCurrentPlan({
+      subscription: 'ready',
+      subscriptionData: { planId: 'greenhouse' },
+      catalog: 'ready',
+      plans: PLANS.filter((p) => p.id !== 'greenhouse'),
+    });
+    expect(read.status).toBe('unavailable');
+    expect(read.planName).not.toBe('Seedling');
+    expect(read.planName).toBeNull();
+  });
+
+  it('is loading — not unavailable — while either read is still in flight', () => {
+    for (const input of [
+      { subscription: 'loading', catalog: 'ready' },
+      { subscription: 'ready', catalog: 'loading' },
+    ] as const) {
+      const read = resolveCurrentPlan({
+        ...input,
+        subscriptionData: { planId: 'garden' },
+        plans: PLANS,
+      });
+      expect(read.status).toBe('loading');
+      // "We have not looked yet" and "we could not look" are different
+      // answers, and only one of them is worth telling somebody about.
+      expect(read.unavailable).toBe(false);
+    }
+  });
+
+  it('answers with the real plan when both reads settled', () => {
+    const read = resolveCurrentPlan({
+      subscription: 'ready',
+      subscriptionData: { planId: 'greenhouse' },
+      catalog: 'ready',
+      plans: PLANS,
+    });
+    expect(read).toEqual({
+      status: 'ready',
+      planId: 'greenhouse',
+      planName: 'Greenhouse',
+      unavailable: false,
+    });
+  });
+});
+
+/**
+ * The highest-stakes instance of the repo's dominant defect class: a household
+ * paying $9.99/mo, on the one screen it would open to check exactly that,
+ * being told as a flat statement of fact that it is on the free plan.
+ */
+describe('BillingSettings — a failed read is never rendered as the free plan', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function renderWithReads({
+    plans,
+    subscription,
+    paid = true,
+  }: {
+    plans: () => Promise<PlanCatalog>;
+    subscription: () => Promise<SubscriptionState>;
+    paid?: boolean;
+  }) {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.listPlans).mockImplementation(plans);
+    vi.mocked(billingService.getCurrentSubscription).mockImplementation(subscription);
+    useAuthStore.setState({
+      user: {
+        id: 'u-1',
+        email: 'a@b.com',
+        name: 'A',
+        householdId: 'hh-1',
+        householdRole: 'admin',
+      },
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/settings/billing']}>
+          <BillingSettings />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    // Present in every settled state, so waiting on it does not presuppose
+    // which one we are asserting.
+    await screen.findByText('Plan status');
+    void paid;
+  }
+
+  const catalog = (over: Partial<PlanCatalog> = {}): PlanCatalog => ({
+    paymentsAvailable: true,
+    commercialHold: { active: false, effectiveDate: '2026-07-14' },
+    plans: PRICED_PLANS,
+    ...over,
+  });
+
+  it('says it could not check, instead of "Seedling", when the subscription read fails', async () => {
+    await renderWithReads({
+      plans: () => Promise.resolve(catalog()),
+      subscription: () => Promise.reject(new Error('502 Bad Gateway')),
+    });
+
+    // The claim that must never be made from a failed read. Asserted against
+    // full textContent on purpose: the old markup put the plan name in its own
+    // <span>, so a node-local text matcher would sail straight past the very
+    // sentence under test.
+    expect(document.body.textContent).not.toMatch(/on the Seedling plan/i);
+    expect(document.body.textContent).not.toMatch(/Seedling/);
+    expect(screen.queryByTestId('current-plan')).not.toBeInTheDocument();
+    expect(screen.getByText(/We couldn't check which plan you're on/)).toBeInTheDocument();
+    expect(screen.getByTestId('plan-unavailable')).toBeInTheDocument();
+  });
+
+  it('does not offer a purchase while the household’s current plan is unknown', async () => {
+    // Fail closed, exactly as the live-subscription guard does: we do not
+    // know what this household already has, so every CTA would be a guess —
+    // including inviting it to buy a plan it is already paying for.
+    await renderWithReads({
+      plans: () => Promise.resolve(catalog()),
+      subscription: () => Promise.reject(new Error('502 Bad Gateway')),
+    });
+
+    expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Switch to Greenhouse' })).not.toBeInTheDocument();
+    // And it says WHY, rather than leaving a blank card that reads as "no
+    // plans are for sale".
+    expect(screen.getByTestId('change-plan-unavailable')).toBeInTheDocument();
+  });
+
+  it('does not name the free tier when the catalog cannot name the household’s tier', async () => {
+    await renderWithReads({
+      plans: () =>
+        Promise.resolve(catalog({ plans: PRICED_PLANS.filter((p) => p.id !== 'greenhouse') })),
+      subscription: () =>
+        Promise.resolve({
+          planId: 'greenhouse',
+          stripeCustomerId: 'cus_1',
+          stripeSubscriptionId: 'sub_1',
+          status: 'active',
+        } as SubscriptionState),
+    });
+
+    expect(document.body.textContent).not.toMatch(/on the Seedling plan/i);
+    expect(screen.getByTestId('plan-unavailable')).toBeInTheDocument();
+  });
+
+  it('still states the real plan for a household whose reads both settled', async () => {
+    // The negative control on the fix itself: "we could not check" must not
+    // become the new blanket answer.
+    await renderWithReads({
+      plans: () => Promise.resolve(catalog()),
+      subscription: () =>
+        Promise.resolve({
+          planId: 'greenhouse',
+          stripeCustomerId: 'cus_1',
+          stripeSubscriptionId: 'sub_1',
+          status: 'active',
+        } as SubscriptionState),
+    });
+
+    expect(screen.getByTestId('current-plan')).toHaveTextContent(
+      'Your household is on the Greenhouse plan.'
+    );
+    expect(screen.queryByTestId('plan-unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('change-plan-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('names a cancelled household’s tier from what it read, never from a default', async () => {
+    // The catalog settled without this tier, so there is no display name. The
+    // notice still names the tier the SUBSCRIPTION returned — read, not
+    // invented — rather than rendering an empty gap or "Seedling".
+    await renderWithReads({
+      plans: () =>
+        Promise.resolve(catalog({ plans: PRICED_PLANS.filter((p) => p.id !== 'greenhouse') })),
+      subscription: () =>
+        Promise.resolve({
+          planId: 'greenhouse',
+          stripeCustomerId: 'cus_1',
+          stripeSubscriptionId: 'sub_1',
+          status: 'active',
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: '2026-09-16T05:19:51.000Z',
+        } as SubscriptionState),
+    });
+
+    expect(screen.getByText(/your greenhouse plan ends on/i)).toBeInTheDocument();
+    expect(screen.queryByText(/your Seedling plan ends/i)).not.toBeInTheDocument();
   });
 });

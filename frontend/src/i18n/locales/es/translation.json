@@ -969,6 +969,11 @@
     },
     "billing": {
       "usageTitle": "Uso",
+      "currentPlan": "Tu hogar tiene el plan {{plan}}.",
+      "currentPlanTrial": "Tu hogar tiene el plan {{plan}} (prueba gratuita).",
+      "planUnknownTitle": "No pudimos comprobar en qué plan estás",
+      "planUnknownBody": "Tu plan no se cargó, así que no podemos decir en qué plan está tu hogar ni cómo se compara con sus límites. Es un problema al leer tu plan, no un cambio en él: tu plan y tu suscripción siguen exactamente igual, y no se ha cobrado ni cancelado nada. Vuelve a cargar la página para intentarlo de nuevo.",
+      "changePlanUnavailable": "Los cambios de plan están en pausa aquí hasta que podamos comprobar en qué plan está ya tu hogar; ofrecerte uno ahora podría significar comprar un plan que ya tienes. Vuelve a cargar la página para intentarlo de nuevo.",
       "plantsUsage": "{{n}} de {{max}} plantas",
       "plantsUsageUnavailable": "— de {{max}} plantas — uso no disponible",
       "membersUsage": "{{n}} de {{max}} miembros",

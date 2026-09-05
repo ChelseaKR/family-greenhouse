@@ -6,6 +6,8 @@ import { SparklesIcon } from '@heroicons/react/24/outline';
 import {
   billingService,
   evaluatePlanLimits,
+  readOutcome,
+  resolveCurrentPlan,
   resolvePlanUsage,
   type BillingInterval,
   type Plan,
@@ -149,10 +151,26 @@ export function BillingSettings() {
     );
   }
 
-  const plans = plansQuery.data?.plans ?? [];
+  // Nothing downstream may read this emptiness as an answer: `planRead`
+  // below carries whether the catalog was actually read, and every claim on
+  // this card goes through it.
+  const plans = plansQuery.data?.plans ?? EMPTY_PLANS;
   // Fail closed if an old or malformed API response omits the status field.
   const paymentsAvailable = plansQuery.data?.paymentsAvailable === true;
-  const currentPlanId = subQuery.data?.planId ?? 'seedling';
+  // Which plan the household is on, as a settled three-state read (ADR 0010),
+  // the same shape as useSpaces (#534) and CoverageCard (#417).
+  //
+  // This used to be three independent fallbacks that all collapsed to the free
+  // tier — `plans ?? []`, `planId ?? 'seedling'`, and `?.name ?? 'Seedling'` —
+  // so ANY failed read told a household paying for Greenhouse that it was on
+  // Seedling, as a flat statement of fact, on the one screen it would open to
+  // check exactly that. A plan name is now rendered only when the app read it.
+  const planRead = resolveCurrentPlan({
+    subscription: readOutcome(subQuery),
+    subscriptionData: subQuery.data,
+    catalog: readOutcome(plansQuery),
+    plans: plansQuery.data?.plans,
+  });
   // `memberCount` inside is nullable on purpose: the split line below only
   // renders from a real count, never from a placeholder.
   const usage = resolvePlanUsage(subQuery.data);
@@ -221,19 +239,27 @@ export function BillingSettings() {
             <p>{t('settings.billing.overLimitBody')}</p>
           </Alert>
         )}
-        {limits.overall === 'unknown' && (
+        {/* Suppressed while the plan itself is unknown: the notice below
+            already says the counts could not be checked, and two alerts making
+            the same point is noise, not honesty. */}
+        {limits.overall === 'unknown' && !planRead.unavailable && (
           <Alert variant="info" title={t('settings.billing.limitUnknownTitle')} className="mb-4">
             <p>{t('settings.billing.limitUnknownBody')}</p>
           </Alert>
         )}
-        <p className="text-sm text-gray-600">
-          Your household is on the{' '}
-          <span className="font-medium">
-            {plans.find((p) => p.id === currentPlanId)?.name ?? 'Seedling'}
-          </span>{' '}
-          plan
-          {subQuery.data?.status === 'trialing' && ' (free trial)'}.
-        </p>
+        {planRead.unavailable ? (
+          <div data-testid="plan-unavailable">
+            <Alert variant="warning" title={t('settings.billing.planUnknownTitle')}>
+              <p>{t('settings.billing.planUnknownBody')}</p>
+            </Alert>
+          </div>
+        ) : planRead.status === 'ready' ? (
+          <p className="text-sm text-gray-600" data-testid="current-plan">
+            {subQuery.data?.status === 'trialing'
+              ? t('settings.billing.currentPlanTrial', { plan: planRead.planName })
+              : t('settings.billing.currentPlan', { plan: planRead.planName })}
+          </p>
+        ) : null}
         {/* A trial that does not say when it ends is a surprise charge with
             extra steps. Only shown when the household has NOT already
             cancelled — the cancellation notice below is the more useful
@@ -254,13 +280,16 @@ export function BillingSettings() {
         {subQuery.data?.cancelAtPeriodEnd && (
           <Alert variant="warning" className="mt-4">
             <p>
+              {/* Reached only from a settled subscription read, so `planId`
+                  is real. The catalog name is preferred; the raw tier id is
+                  the fallback because it was READ, not defaulted. */}
               {subQuery.data.currentPeriodEnd
                 ? t('settings.billing.cancelPending', {
-                    plan: plans.find((p) => p.id === currentPlanId)?.name ?? currentPlanId,
+                    plan: planRead.planName ?? subQuery.data.planId,
                     date: formatDate(subQuery.data.currentPeriodEnd),
                   })
                 : t('settings.billing.cancelPendingNoDate', {
-                    plan: plans.find((p) => p.id === currentPlanId)?.name ?? currentPlanId,
+                    plan: planRead.planName ?? subQuery.data.planId,
                   })}
             </p>
           </Alert>
@@ -317,48 +346,63 @@ export function BillingSettings() {
             title={t('settings.billing.changePlanTitle')}
             description={t('settings.billing.changePlanDescription')}
           />
-          <PaidPlanGrid
-            plans={plans}
-            currentPlanId={currentPlanId}
-            renderCta={(plan, interval, price) => (
-              <>
-                {/* "$X ÷ N members = $Y each" from the live price and the
+          {/* Fail closed, for the same reason `hasLiveSubscription` does: with
+              the subscription read unsettled we do not know what the household
+              already has, so every CTA here would be a guess — "this is your
+              current plan" on a tier it is not on, or a purchase button for one
+              it already pays for. */}
+          {planRead.unavailable ? (
+            <p className="mt-4 text-sm text-gray-600" data-testid="change-plan-unavailable">
+              {t('settings.billing.changePlanUnavailable')}
+            </p>
+          ) : planRead.status !== 'ready' ? null : (
+            <PaidPlanGrid
+              plans={plans}
+              currentPlanId={planRead.planId ?? undefined}
+              renderCta={(plan, interval, price) => (
+                <>
+                  {/* "$X ÷ N members = $Y each" from the live price and the
                     real member count (brief §4.12). Hides itself for a
                     household of one or an unknown count. */}
-                {plan.id !== 'seedling' && price !== null && price > 0 && (
-                  <SplitTheBill
-                    amount={price}
-                    interval={interval}
-                    planName={plan.name}
-                    memberCount={usage?.memberCount ?? null}
-                    householdName={householdName}
-                  />
-                )}
-                {renderPlanCta({
-                  plan,
-                  interval,
-                  price,
-                  currentPlanId,
-                  lifetimePlanId: subQuery.data?.lifetimePlanId,
-                  isAdmin,
-                  hasLiveSubscription,
-                  t,
-                  isPending: checkoutMutation.isPending,
-                  pendingPlanId: checkoutMutation.variables?.planId,
-                  onSelect: () =>
-                    checkoutMutation.mutate({
-                      planId: plan.id as 'garden' | 'greenhouse',
-                      interval,
-                    }),
-                })}
-              </>
-            )}
-          />
+                  {plan.id !== 'seedling' && price !== null && price > 0 && (
+                    <SplitTheBill
+                      amount={price}
+                      interval={interval}
+                      planName={plan.name}
+                      memberCount={usage?.memberCount ?? null}
+                      householdName={householdName}
+                    />
+                  )}
+                  {renderPlanCta({
+                    plan,
+                    interval,
+                    price,
+                    currentPlanId: planRead.planId,
+                    lifetimePlanId: subQuery.data?.lifetimePlanId,
+                    isAdmin,
+                    hasLiveSubscription,
+                    t,
+                    isPending: checkoutMutation.isPending,
+                    pendingPlanId: checkoutMutation.variables?.planId,
+                    onSelect: () =>
+                      checkoutMutation.mutate({
+                        planId: plan.id as 'garden' | 'greenhouse',
+                        interval,
+                      }),
+                  })}
+                </>
+              )}
+            />
+          )}
         </Card>
       )}
     </div>
   );
 }
+
+/** Stable identity for a catalog that was not read. Never an answer — see
+ *  `planRead` above, which carries whether the read settled at all. */
+const EMPTY_PLANS: Plan[] = [];
 
 /**
  * The call to action for one tier, which has more "no button" cases than
@@ -381,7 +425,9 @@ function renderPlanCta({
   plan: Plan;
   interval: BillingInterval;
   price: number | null;
-  currentPlanId: string;
+  /** `null` when the subscription read did not settle with a tier. Callers
+   *  must not substitute one — see `planRead` in BillingSettings. */
+  currentPlanId: PlanId | null;
   lifetimePlanId?: PlanId;
   isAdmin: boolean;
   hasLiveSubscription: boolean;
