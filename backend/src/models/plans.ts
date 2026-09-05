@@ -311,12 +311,29 @@ export function hasHouseholdToolkit(plan: Plan): boolean {
  * True when the tier includes the Away Kit — the handoff brief (ADR 0015),
  * the sitter photo-back, and the return recap. One boundary, not three: the
  * free tier keeps the plain task list, and everything the Away Kit adds on
- * top starts at Garden. Expressed against PLAN_ORDER rather than a per-tier
- * flag so a future tier above Garden inherits it automatically, and so this
- * stays the single place the line is drawn — `sitterPlanGate` reads it too.
+ * top starts at Garden. This accessor stays the single place the line is
+ * drawn — `sitterPlanGate`, `awayRecap` and `sitterPhotos` all read it rather
+ * than restating it.
+ *
+ * WHAT it reads changed in #605. It used to be `planRank(plan.id) >=
+ * planRank('garden')`, chosen so a future tier above Garden would inherit the
+ * Away Kit automatically. But `features.awayKit` is authored per tier AND
+ * published to every client by `planSummary`, and the frontend gates on it —
+ * `AwayRecapPage` will not even issue the recap query when the flag is false
+ * (#575). So the client was asking "does this tier INCLUDE the Away Kit?" of
+ * the flag while the server answered "does this tier OUTRANK Garden?" of a
+ * different value. The two agree for the three tiers that exist, and would
+ * disagree silently the day a fourth is added: nothing logs it, because the
+ * request the server would have refused is never sent.
+ *
+ * The flag is now the authority, so there is one value and one answer. The
+ * trade is deliberate: a new tier no longer inherits the Away Kit from its
+ * rank and must author `awayKit` in its `features` row — beside the other
+ * eight flags it has to author anyway. Inheriting implicitly is what let the
+ * two authorities drift apart in the first place.
  */
 export function planIncludesAwayKit(plan: Plan): boolean {
-  return planRank(plan.id) >= planRank('garden');
+  return plan.features.awayKit;
 }
 
 export function getPlan(id: string | undefined | null): Plan {

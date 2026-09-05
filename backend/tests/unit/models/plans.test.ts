@@ -14,6 +14,8 @@ import {
   isIntervalWithdrawn,
   isUnlimited,
   limitOf,
+  planIncludesAwayKit,
+  planRank,
   planSummary,
   hasHouseholdToolkit,
   strongestPlan,
@@ -439,6 +441,60 @@ describe('household toolkit gate', () => {
   it('fails closed on an unknown plan id (resolves to the free tier)', () => {
     expect(hasHouseholdToolkit(getPlan('not-a-plan'))).toBe(false);
     expect(hasHouseholdToolkit(getPlan(undefined))).toBe(false);
+  });
+});
+
+describe('Away Kit gate — the flag is the authority, not the rank (#605)', () => {
+  // `features.awayKit` is published to every client by `planSummary`, and the
+  // frontend gates on it: `AwayRecapPage` will not issue the recap query when
+  // the flag is false. The server used to answer a DIFFERENT question of a
+  // DIFFERENT value — `planRank(plan.id) >= planRank('garden')` — which agrees
+  // with the flag on all three tiers that exist and would disagree, silently,
+  // on a fourth. These cases are what "agree" means, stated so it can fail.
+
+  it('answers exactly what the rank rule answered for every tier that exists — no behaviour change today', () => {
+    for (const plan of Object.values(PLANS)) {
+      expect(planIncludesAwayKit(plan)).toBe(planRank(plan.id) >= planRank('garden'));
+    }
+  });
+
+  it('refuses a tier ranked ABOVE Garden whose flag is false — the grant-too-much direction', () => {
+    // The tier a rank rule would hand the Away Kit to without being asked: a
+    // high-plant-count tier with no sitter features, say.
+    const highRankNoFlag: Plan = {
+      ...PLANS.greenhouse,
+      features: { ...PLANS.greenhouse.features, awayKit: false },
+    };
+    expect(planRank(highRankNoFlag.id)).toBeGreaterThan(planRank('garden'));
+    expect(planIncludesAwayKit(highRankNoFlag)).toBe(false);
+    // …and the client is told the same thing, which is the whole point.
+    expect(planSummary(highRankNoFlag).features.awayKit).toBe(false);
+  });
+
+  it('grants a tier ranked BELOW Garden whose flag is true — the deny-too-much direction', () => {
+    // The paired positive control. A gate that simply denied everyone would
+    // pass the case above; nothing but reading the flag passes this one.
+    const lowRankWithFlag: Plan = {
+      ...PLANS.seedling,
+      features: { ...PLANS.seedling.features, awayKit: true },
+    };
+    expect(planRank(lowRankWithFlag.id)).toBeLessThan(planRank('garden'));
+    expect(planIncludesAwayKit(lowRankWithFlag)).toBe(true);
+    expect(planSummary(lowRankWithFlag).features.awayKit).toBe(true);
+  });
+
+  it('the gate and the published flag never disagree, on any tier real or hypothetical', () => {
+    for (const plan of Object.values(PLANS)) {
+      for (const awayKit of [true, false]) {
+        const candidate: Plan = { ...plan, features: { ...plan.features, awayKit } };
+        expect(planIncludesAwayKit(candidate)).toBe(planSummary(candidate).features.awayKit);
+      }
+    }
+  });
+
+  it('fails closed on an unknown plan id (resolves to the free tier)', () => {
+    expect(planIncludesAwayKit(getPlan('not-a-plan'))).toBe(false);
+    expect(planIncludesAwayKit(getPlan(undefined))).toBe(false);
   });
 });
 

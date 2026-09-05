@@ -69,6 +69,36 @@
  * The ids come from `PLAN_ORDER` in `models/plans.ts`, never from a list in
  * this file: see readPlanIds().
  *
+ * …and every `PlanFeatures` FLAG THAT NO GATE READS (#605). Not a ratchet
+ * entry — a hard zero, checked separately below:
+ *
+ * The three shapes above all catch a gate that decides the RIGHT thing the
+ * WRONG way. This one catches the opposite: a capability the catalog declares,
+ * `planSummary` publishes to every client, and no line of server code ever
+ * consults. `PlanFeatures`' own docstring already forbids it — "a public
+ * surface must not advertise a flag it cannot point at working code for" — and
+ * the codebase had three violations at once. `chat` (#592) was gated on a tier
+ * name; `apiKeys` (#605) had zero readers in either half while three sites
+ * spelled `id !== 'greenhouse'`; `awayKit` (#605) had zero readers while the
+ * FRONTEND read the flag and gated the whole recap query on it, so client and
+ * server were answering two different questions about the same feature.
+ *
+ * A `PlanId===` finding and an unread flag are the same defect seen from its
+ * two ends, which is why they live in one gate: the tier comparison is what a
+ * gate reaches for when the flag beside it is not being read, and the unread
+ * flag is what is left over afterwards. Catching only the first leaves the
+ * second — `apiKeys` sat unread for as long as the comparisons did.
+ *
+ * A read is `<expr>.features.<flag>` or a by-name accessor with the flag as a
+ * string literal. It is NOT the declaration, NOT the authored value, and NOT
+ * `plan.features[key]` — see scanFlagReads(). Reads inside `planSummary` do
+ * not count either: publishing a flag is the thing being complained about.
+ *
+ * Unlike the finding classes, this one scans `models/plans.ts` too, because
+ * that is where the small accessors live (`hasHouseholdToolkit`,
+ * `plantTagAllowance`, `planIncludesAwayKit`) and an accessor read by gates
+ * elsewhere is enforcement.
+ *
  * `getEntitledPlan(…)` is NOT a finding. It is the answer.
  *
  * Only the SUBSCRIPT form `PLANS[expr]` is a finding. `PLANS.garden` and
@@ -139,7 +169,7 @@
  * prints every finding as a baseline skeleton, which is how a new entry gets
  * written.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -376,6 +406,108 @@ function readPlanIds() {
 
 const PLAN_IDS = readPlanIds();
 
+/**
+ * The `PlanFeatures` flag names, read out of the interface declaration in
+ * `models/plans.ts` — never a list in this file, for the same reason
+ * `readPlanIds` is not one. A tenth flag added tomorrow is exactly the case
+ * this check exists for, and a checker carrying today's nine would report
+ * green through it.
+ *
+ * Always read from the real backend tree, like `readPlanIds`: the catalog is
+ * this repository's, not the scanned fixture's.
+ */
+function readFeatureFlags() {
+  const abs = path.join(BACKEND_DIR, 'src', 'models', 'plans.ts');
+  const text = readFileSync(abs, 'utf8');
+  const sourceFile = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true);
+  const flags = new Set();
+  walkDeep(sourceFile, (n) => {
+    if (ts.isInterfaceDeclaration(n) && n.name.text === 'PlanFeatures') {
+      for (const member of n.members) {
+        if (ts.isPropertySignature(member) && ts.isIdentifier(member.name)) {
+          flags.add(member.name.text);
+        }
+      }
+    }
+    return true;
+  });
+  if (flags.size === 0) {
+    // Same refusal as readPlanIds, for the same reason: a check that looks for
+    // nothing finds nothing and renders it as "nothing to find".
+    console.error(
+      'Could not read any flag from `interface PlanFeatures` in models/plans.ts.\n' +
+        'The unenforced-flag check would then have nothing to look for and would\n' +
+        'report green over every published flag, so this gate refuses to run\n' +
+        'rather than pass vacuously. If PlanFeatures moved or changed shape,\n' +
+        'update readFeatureFlags() in this file.'
+    );
+    process.exit(2);
+  }
+  return flags;
+}
+
+const FEATURE_FLAGS = readFeatureFlags();
+
+/** The accessors that take a flag NAME as their second argument. */
+const FLAG_BY_NAME_READERS = new Set(['featureOf', 'planHasFeature', 'hasFeature']);
+
+/**
+ * Functions whose job is to PUBLISH the flag map rather than act on it. A read
+ * inside one of these enforces nothing: `planSummary` serialising
+ * `plan.features.householdToolkit` to the client is the very shape #605 names
+ * ("published to every client and enforced by neither"), so counting it as a
+ * reader would let the check pass on exactly the defect it looks for.
+ */
+const FLAG_PUBLISHERS = new Set(['planSummary']);
+
+/**
+ * Where each flag is READ by something that could act on it.
+ *
+ * A read is `<expr>.features.<flag>`, or `featureOf` / `planHasFeature` /
+ * `hasFeature` with the flag as a string literal. Deliberately NOT the
+ * DECLARATION (`awayKit: boolean;`) nor the AUTHORED VALUE (`awayKit: true,`):
+ * those are what every unenforced flag already has, so counting them would
+ * make the check vacuous. And deliberately not `plan.features[key]` — the
+ * generic subscript in `featureOf`'s own body names no flag, and must not
+ * count as a reader of all of them.
+ */
+function scanFlagReads(flags) {
+  const reads = new Map([...flags].map((f) => [f, []]));
+  for (const abs of sourceFiles(SRC)) {
+    const rel = path.relative(SRC, abs);
+    const text = readFileSync(abs, 'utf8');
+    const sourceFile = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true);
+    const note = (node, flag) => {
+      const fn = functionName(enclosingFunction(node));
+      if (FLAG_PUBLISHERS.has(fn)) return;
+      const line = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+      reads.get(flag).push(`${rel}:${line} (${fn})`);
+    };
+    walkDeep(sourceFile, (n) => {
+      if (ts.isPropertyAccessExpression(n)) {
+        const owner = unwrap(n.expression);
+        if (
+          ts.isPropertyAccessExpression(owner) &&
+          owner.name.text === 'features' &&
+          flags.has(n.name.text)
+        ) {
+          note(n, n.name.text);
+        }
+        return true;
+      }
+      if (ts.isCallExpression(n)) {
+        const name = calleeName(n.expression);
+        if (name && FLAG_BY_NAME_READERS.has(name)) {
+          const arg = unwrap(n.arguments[1]);
+          if (arg && ts.isStringLiteral(arg) && flags.has(arg.text)) note(n, arg.text);
+        }
+      }
+      return true;
+    });
+  }
+  return reads;
+}
+
 // ---------------------------------------------------------------------------
 // Scan
 // ---------------------------------------------------------------------------
@@ -459,6 +591,18 @@ if (args.print) {
 const added = [...findings.values()].filter((f) => !(f.key in accepted));
 const stale = Object.keys(accepted).filter((key) => !findings.has(key));
 
+/**
+ * The unenforced-flag check needs the WHOLE product tree to answer honestly:
+ * "no gate reads this flag" is only true if every gate is in front of us. A
+ * `--src` fixture is a slice, so the check is SKIPPED there and says so out
+ * loud rather than reporting a green it did not earn. The catalog's presence
+ * is the test for "this is the product tree".
+ */
+const scanIsWholeTree = existsSync(path.join(SRC, 'models', 'plans.ts'));
+const unenforcedFlags = scanIsWholeTree
+  ? [...scanFlagReads(FEATURE_FLAGS)].filter(([, sites]) => sites.length === 0).map(([f]) => f)
+  : [];
+
 const malformed = [];
 const drifted = [];
 for (const key of Object.keys(accepted)) {
@@ -472,11 +616,23 @@ for (const key of Object.keys(accepted)) {
   if (actual !== entry.arg) drifted.push({ key, recorded: entry.arg, actual });
 }
 
-if (added.length === 0 && stale.length === 0 && drifted.length === 0 && malformed.length === 0) {
+if (
+  added.length === 0 &&
+  stale.length === 0 &&
+  drifted.length === 0 &&
+  malformed.length === 0 &&
+  unenforcedFlags.length === 0
+) {
   console.log(
     `Entitlement-gate ratchet passed: ${scanned} files scanned, ` +
       `${findings.size} accepted occurrences (baseline ${Object.keys(accepted).length}, ` +
       'ratchet-only), arguments unchanged.'
+  );
+  console.log(
+    scanIsWholeTree
+      ? `Published-flag check passed: all ${FEATURE_FLAGS.size} PlanFeatures flags are read by a gate.`
+      : 'Published-flag check SKIPPED: --src is a fixture, not the product tree, ' +
+          'so "no gate reads this flag" could not be answered.'
   );
   process.exit(0);
 }
@@ -563,6 +719,30 @@ if (addedComparison.length > 0) {
       'If it is not entitlement at all — a price rule, an upsell target, a lifecycle\n' +
       'event, an ordering test — add the entry to\n' +
       'backend/scripts/entitlement-gates-baseline.json with that reason.\n'
+  );
+}
+
+if (unenforcedFlags.length > 0) {
+  console.error(
+    'A PlanFeatures flag is published to every client and read by no gate.\n' +
+      '`planSummary` serialises the whole `features` map on GET /billing/plans, and\n' +
+      "the interface's own docstring says a public surface must not advertise a flag\n" +
+      'it cannot point at working code for. A flag nothing reads is not a capability;\n' +
+      'it is a claim. Whatever enforces the feature is deciding by some OTHER value —\n' +
+      'a tier name, a rank comparison — which agrees with the flag only for the tiers\n' +
+      'that exist today, and drifts silently on the next one (#592, #605).\n'
+  );
+  for (const flag of unenforcedFlags) console.error(`  - features.${flag}`);
+  console.error(
+    '\nTwo ways out, and both are fine:\n' +
+      "  - Gate on it: `featureOf(getEntitledPlan(sub), 'awayKit')`, or a named\n" +
+      '    accessor in models/plans.ts that reads `plan.features.<flag>` and is\n' +
+      '    called by the gates — that counts, and keeps one choke point.\n' +
+      '  - Stop publishing it: remove the flag from PlanFeatures, so no client can\n' +
+      '    read a value the server ignores.\n' +
+      'What is NOT a way out is leaving the flag authored on every tier while the\n' +
+      'enforcement asks a different question. That is the defect, not the workaround.\n' +
+      '(A read inside `planSummary` does not count: publishing it is the complaint.)\n'
   );
 }
 
