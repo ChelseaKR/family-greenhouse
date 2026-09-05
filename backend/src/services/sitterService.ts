@@ -6,8 +6,12 @@
  * Security model (mirrors householdService invites, hardened further):
  *   - The token is 256 bits of CSPRNG entropy (crypto.randomBytes(32), hex).
  *     That's double the 128-bit invite code and far beyond brute-force even
- *     from a leaked log line or DDB dump. The token is the ONLY secret — it
- *     grants exactly one household's due-task view + completion, nothing else.
+ *     from a leaked log line. The token is the ONLY secret — it grants exactly
+ *     one household's due-task view + completion, nothing else.
+ *   - At rest the token is HASHED, never stored (#450). A table export, a
+ *     point-in-time restore, or anyone with `dynamodb:Scan` used to walk away
+ *     with live, working sitter links; now they get a scrypt digest, the same
+ *     as `apiKeys.ts` and `calendarTokens.ts` already gave them.
  *   - Rows carry a DynamoDB `ttl` so expired links are swept automatically;
  *     `getActiveLink` ALSO re-checks `expiresAt` and `status` on every read so
  *     a not-yet-swept row can never be honoured past its window (defence in
@@ -18,12 +22,21 @@
  *     null and the handler answers a single 404/410, so the public endpoint
  *     can't be used as a token-existence oracle.
  *
- * Row shape: PK = `SITTER#{token}`, SK = 'METADATA'. The token is the
- * partition key directly (same as INVITE#{code}) — a sitter request is a
- * single GetItem, no scan, no enumeration surface.
+ * Row shape: PK = `SITTER#{scrypt(token)}`, SK = 'METADATA'. Hashing keeps the
+ * property that made the plaintext key attractive in the first place — the
+ * digest is still the partition key, so a sitter request is still a single
+ * GetItem with no scan and no enumeration surface — while removing the one it
+ * did not have.
+ *
+ * Rows written before #450 are keyed by the PLAINTEXT token and carry it as a
+ * `token` attribute. They are still resolved (`getActiveLink` falls back to a
+ * second point read) so that no link already sitting in somebody's messages
+ * breaks, and they are never rewritten: every sitter row carries a DynamoDB
+ * `ttl` of `expiresAt` + 3 days, so the last legacy row deletes itself within
+ * one link window (90 days at the longest) with nothing to run.
  */
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -33,8 +46,22 @@ export type SitterLinkStatus = 'active' | 'revoked';
 export interface SitterLink {
   /** Opaque id used in the management API (list/revoke). NOT the secret. */
   id: string;
-  /** The 256-bit secret token. Returned to the creator exactly once. */
-  token: string;
+  /**
+   * The 256-bit secret token, present ONLY on the object `createSitterLink`
+   * returns — that is the one moment it exists in this system. It is not
+   * stored, so a link read back out of DynamoDB carries `null` here unless it
+   * is a pre-#450 row that still holds its plaintext.
+   */
+  token: string | null;
+  /**
+   * The row's own partition-key suffix: the token's scrypt digest on rows
+   * written since #450, the plaintext token on rows written before it. It
+   * exists so revocation can address the base row of either generation
+   * without the household ever holding a token. NEVER put it in a response —
+   * for a legacy row it IS the secret; `toSummary` is the only thing that
+   * should be handed to a caller.
+   */
+  keyToken: string;
   householdId: string;
   createdBy: string;
   createdAt: string;
@@ -65,10 +92,32 @@ export interface SitterLinkSummary {
 // re-check expiresAt, so the buffer is invisible. Mirrors the vacation TTL.
 const TTL_BUFFER_MS = 3 * 24 * 60 * 60 * 1000;
 
+/**
+ * Deterministic, memory-hard hash of a sitter token — the row's partition key.
+ * Same construction and same reasoning as `apiKeys.hashKey` and
+ * `calendarTokens.hashToken`: a per-row random salt (bcrypt/argon2) would make
+ * the point read impossible, and a fixed salt costs nothing here because the
+ * input is a 256-bit CSPRNG value rather than a human-chosen password, so
+ * there is no precomputation to defend against. scrypt rather than SHA-256
+ * because the repo's `js/insufficient-password-hash` policy rejects an
+ * unsalted digest.
+ *
+ * The salt is DIFFERENT from every other credential's, so a token minted for
+ * one surface can never resolve on another even if it is pasted there.
+ */
+function hashToken(token: string): string {
+  return scryptSync(token, 'family-greenhouse-sitter-v1', 32).toString('hex');
+}
+
 function itemToLink(item: Record<string, unknown>): SitterLink {
+  // `tokenHash` on rows written since #450; the plaintext `token` on rows
+  // written before it. Either way this is exactly the row's PK suffix, which
+  // is all revocation needs.
+  const keyToken = (item.tokenHash as string | undefined) ?? (item.token as string);
   return {
     id: item.id as string,
-    token: item.token as string,
+    token: (item.token as string | undefined) ?? null,
+    keyToken,
     householdId: item.householdId as string,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
@@ -93,22 +142,54 @@ export function toSummary(link: SitterLink): SitterLinkSummary {
   };
 }
 
+/** A link as it comes back from `createSitterLink` — the one place the
+ *  plaintext token exists, and the only place it is non-null. */
+export type MintedSitterLink = SitterLink & { token: string };
+
 export async function createSitterLink(input: {
   householdId: string;
   createdBy: string;
   startsAt: string;
   expiresAt: string;
   label: string | null;
-}): Promise<SitterLink> {
+}): Promise<MintedSitterLink> {
   // 256-bit CSPRNG token — 64 hex chars. randomBytes draws from the OS CSPRNG;
   // do NOT swap this for uuid()/Math.random (predictable / lower entropy).
   const token = randomBytes(32).toString('hex');
+  const tokenHash = hashToken(token);
   const id = uuid();
   const now = new Date().toISOString();
 
-  const link: SitterLink = {
+  // The item is written field by field rather than spread from the record,
+  // because the record carries the plaintext and the row must NOT (#450).
+  const item: DynamoDBItem = {
+    PK: `SITTER#${tokenHash}`,
+    SK: 'METADATA',
+    // Mirror onto GSI1 so the household can list its own links in one query
+    // (GSI1PK = HOUSEHOLD#{id}#SITTER, newest-first by createdAt).
+    GSI1PK: `HOUSEHOLD#${input.householdId}#SITTER`,
+    GSI1SK: now,
+    entityType: 'SitterLink',
+    // Both the PK suffix and the attribute every revoke path reads through.
+    // The plaintext appears nowhere on the row.
+    tokenHash,
+    id,
+    householdId: input.householdId,
+    createdBy: input.createdBy,
+    createdAt: now,
+    startsAt: input.startsAt,
+    expiresAt: input.expiresAt,
+    status: 'active',
+    label: input.label,
+    ttl: Math.floor((Date.parse(input.expiresAt) + TTL_BUFFER_MS) / 1000),
+  };
+
+  await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+
+  return {
     id,
     token,
+    keyToken: tokenHash,
     householdId: input.householdId,
     createdBy: input.createdBy,
     createdAt: now,
@@ -117,21 +198,13 @@ export async function createSitterLink(input: {
     status: 'active',
     label: input.label,
   };
+}
 
-  const item: DynamoDBItem = {
-    PK: `SITTER#${token}`,
-    SK: 'METADATA',
-    // Mirror onto GSI1 so the household can list its own links in one query
-    // (GSI1PK = HOUSEHOLD#{id}#SITTER, newest-first by createdAt).
-    GSI1PK: `HOUSEHOLD#${input.householdId}#SITTER`,
-    GSI1SK: now,
-    entityType: 'SitterLink',
-    ...link,
-    ttl: Math.floor((Date.parse(input.expiresAt) + TTL_BUFFER_MS) / 1000),
-  };
-
-  await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-  return link;
+async function readLinkRow(pk: string): Promise<Record<string, unknown> | null> {
+  const result = await dynamodb.send(
+    new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: 'METADATA' } })
+  );
+  return (result?.Item as Record<string, unknown> | undefined) ?? null;
 }
 
 /**
@@ -148,15 +221,17 @@ export async function getActiveLink(
   // hits DynamoDB. 64 lowercase hex chars only.
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
 
-  const result = await dynamodb.send(
-    new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `SITTER#${token}`, SK: 'METADATA' },
-    })
-  );
-  if (!result.Item) return null;
+  // Hashed row first — that is every link minted since #450. A miss falls back
+  // to the pre-#450 plaintext-keyed row so a link already in somebody's
+  // messages keeps working. BOTH are GetItem on the partition key, so the
+  // fallback costs one extra point read and adds no enumeration surface; and
+  // nothing here writes a plaintext row back, so the legacy generation only
+  // ever shrinks (every sitter row carries a TTL).
+  const item =
+    (await readLinkRow(`SITTER#${hashToken(token)}`)) ?? (await readLinkRow(`SITTER#${token}`));
+  if (!item) return null;
 
-  const link = itemToLink(result.Item);
+  const link = itemToLink(item);
   if (link.status !== 'active') return null;
   const nowIso = now.toISOString();
   if (nowIso < link.startsAt) return null; // window not started yet
@@ -180,8 +255,9 @@ export async function getActiveLink(
 const SITTER_PAGE_SIZE = 100;
 
 /** All links for a household (active + revoked + not-yet-expired), newest
- *  first, for the management UI. Tokens are included so the service layer can
- *  return them; the HANDLER strips them via toSummary before responding. */
+ *  first, for the management UI. Rows carry `keyToken` (the row's own PK
+ *  suffix) so the service layer can revoke them; since #450 they carry no
+ *  plaintext token at all, and the HANDLER strips both via toSummary. */
 export async function listSitterLinks(householdId: string): Promise<SitterLink[]> {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
@@ -246,7 +322,7 @@ export async function revokeSitterLinksCreatedBy(
     await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: { PK: `SITTER#${link.token}`, SK: 'METADATA' },
+        Key: { PK: `SITTER#${link.keyToken}`, SK: 'METADATA' },
         UpdateExpression: 'SET #status = :revoked',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: { ':revoked': 'revoked' },
@@ -266,7 +342,7 @@ export async function revokeSitterLink(householdId: string, id: string): Promise
   await dynamodb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `SITTER#${target.token}`, SK: 'METADATA' },
+      Key: { PK: `SITTER#${target.keyToken}`, SK: 'METADATA' },
       UpdateExpression: 'SET #status = :revoked',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':revoked': 'revoked' },

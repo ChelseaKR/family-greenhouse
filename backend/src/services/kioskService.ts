@@ -53,6 +53,11 @@
  *   - What it is not: an authentication boundary for anything else. The token
  *     cannot be exchanged for a session and shares no secret with one.
  *   - Mitigations: 256 bits of CSPRNG entropy so the token is not guessable;
+ *     the token HASHED at rest (#450), so a table export, a point-in-time
+ *     restore or `dynamodb:Scan` yields a scrypt digest rather than a working
+ *     wall-display URL — this one matters more than for the sitter link,
+ *     because a kiosk row deliberately has no TTL and so would otherwise sit
+ *     in every backup, in plaintext, for as long as the display lives;
  *     a hard IP rate limit so it cannot be enumerated or scraped in volume;
  *     one-click revoke + re-issue in settings; a generic 404 on every failure
  *     mode so the endpoint is not a token-existence oracle; the completion is
@@ -65,14 +70,23 @@
  *     stated on the settings card, and it is why the scope above is so
  *     narrow.
  *
- * Row shape: PK = `KIOSK#{token}`, SK = 'METADATA', mirrored onto GSI1 at
- * `HOUSEHOLD#{id}#KIOSK` so a household can find (and revoke) its own link
- * without knowing the secret. Deliberately NO DynamoDB `ttl`: a wall display
- * that stops working after N days is a broken wall display. Longevity is the
- * feature; revocation, not expiry, is the control.
+ * Row shape: PK = `KIOSK#{scrypt(token)}`, SK = 'METADATA', mirrored onto GSI1
+ * at `HOUSEHOLD#{id}#KIOSK` so a household can find (and revoke) its own link
+ * without knowing the secret. Hashing the token keeps the point-read property
+ * the plaintext key was chosen for — the digest is still the partition key, so
+ * a kiosk poll is still one GetItem with no enumeration surface.
+ * Deliberately NO DynamoDB `ttl`: a wall display that stops working after N
+ * days is a broken wall display. Longevity is the feature; revocation, not
+ * expiry, is the control.
+ *
+ * Rows written before #450 are keyed by the PLAINTEXT token and carry it as a
+ * `token` attribute; `getActiveKioskLink` still resolves them, so no wall
+ * display goes dark on deploy. Because kiosk rows never expire, a legacy row
+ * keeps its plaintext until the household re-issues — one click, and re-issue
+ * already revokes the old link in the same call.
  */
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -94,8 +108,21 @@ export type KioskLinkStatus = 'active' | 'revoked';
 export interface KioskLink {
   /** Opaque id used in the management API. NOT the secret. */
   id: string;
-  /** The 256-bit secret token. Returned to the creator exactly once. */
-  token: string;
+  /**
+   * The 256-bit secret token, present ONLY on the object `issueKioskLink`
+   * returns — the one moment it exists in this system. It is not stored, so a
+   * link read back out of DynamoDB carries `null` here unless it is a pre-#450
+   * row that still holds its plaintext.
+   */
+  token: string | null;
+  /**
+   * The row's own partition-key suffix: the token's scrypt digest on rows
+   * written since #450, the plaintext token on rows written before it. It
+   * exists so revocation can address the base row of either generation without
+   * an admin ever holding a token. NEVER put it in a response — for a legacy
+   * row it IS the secret; `toSummary` is what callers get.
+   */
+  keyToken: string;
   householdId: string;
   createdBy: string;
   createdAt: string;
@@ -114,10 +141,30 @@ export interface KioskLinkSummary {
   pollIntervalSeconds: number;
 }
 
+/**
+ * Deterministic, memory-hard hash of a kiosk token — the row's partition key.
+ * Same construction and reasoning as `apiKeys.hashKey`, `calendarTokens.
+ * hashToken` and `sitterService.hashToken`: a per-row random salt would make
+ * the point read impossible; a fixed salt costs nothing because the input is a
+ * 256-bit CSPRNG value, not a password; scrypt rather than SHA-256 because an
+ * unsalted digest fails the repo's `js/insufficient-password-hash` policy.
+ *
+ * The salt is DIFFERENT from every other credential's, so a kiosk token can
+ * never resolve as a sitter link (or vice versa) if one is pasted at the
+ * other's URL.
+ */
+function hashToken(token: string): string {
+  return scryptSync(token, 'family-greenhouse-kiosk-v1', 32).toString('hex');
+}
+
 function itemToLink(item: Record<string, unknown>): KioskLink {
+  // `tokenHash` on rows written since #450; the plaintext `token` on rows
+  // written before it. Either way this is exactly the row's PK suffix.
+  const keyToken = (item.tokenHash as string | undefined) ?? (item.token as string);
   return {
     id: item.id as string,
-    token: item.token as string,
+    token: (item.token as string | undefined) ?? null,
+    keyToken,
     householdId: item.householdId as string,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
@@ -153,8 +200,9 @@ export function toSummary(link: KioskLink): KioskLinkSummary {
 const KIOSK_PAGE_SIZE = 100;
 
 /** Every kiosk link row for a household (active + revoked), newest first.
- *  Tokens are included so the service layer can act on them; the HANDLER
- *  strips them via toSummary before responding. */
+ *  Rows carry `keyToken` (the row's own PK suffix) so the service layer can
+ *  revoke them; since #450 they carry no plaintext token at all, and the
+ *  HANDLER strips both via toSummary. */
 export async function listKioskLinks(householdId: string): Promise<KioskLink[]> {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
@@ -192,7 +240,7 @@ export async function revokeKioskLinks(householdId: string): Promise<number> {
     await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: { PK: `KIOSK#${link.token}`, SK: 'METADATA' },
+        Key: { PK: `KIOSK#${link.keyToken}`, SK: 'METADATA' },
         UpdateExpression: 'SET #status = :revoked',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: { ':revoked': 'revoked' },
@@ -228,7 +276,7 @@ export async function revokeKioskLinksCreatedBy(
     await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: { PK: `KIOSK#${link.token}`, SK: 'METADATA' },
+        Key: { PK: `KIOSK#${link.keyToken}`, SK: 'METADATA' },
         UpdateExpression: 'SET #status = :revoked',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: { ':revoked': 'revoked' },
@@ -248,43 +296,66 @@ export async function revokeKioskLinksCreatedBy(
  * new row is written: if the write then fails, the household is left with no
  * kiosk access rather than two live tokens. Fail closed.
  */
+/** A link as it comes back from `issueKioskLink` — the one place the plaintext
+ *  token exists, and the only place it is non-null. */
+export type MintedKioskLink = KioskLink & { token: string };
+
 export async function issueKioskLink(input: {
   householdId: string;
   createdBy: string;
   pollIntervalSeconds?: number;
-}): Promise<KioskLink> {
+}): Promise<MintedKioskLink> {
   await revokeKioskLinks(input.householdId);
 
   // 256-bit CSPRNG token — 64 hex chars, same as the sitter link. randomBytes
   // draws from the OS CSPRNG; do NOT swap this for uuid()/Math.random.
   const token = randomBytes(32).toString('hex');
+  const tokenHash = hashToken(token);
+  const id = uuid();
   const now = new Date().toISOString();
+  const pollIntervalSeconds = clampPollInterval(input.pollIntervalSeconds);
 
-  const link: KioskLink = {
-    id: uuid(),
-    token,
-    householdId: input.householdId,
-    createdBy: input.createdBy,
-    createdAt: now,
-    status: 'active',
-    pollIntervalSeconds: clampPollInterval(input.pollIntervalSeconds),
-  };
-
+  // Written field by field rather than spread from the record: the record
+  // carries the plaintext and the row must NOT (#450).
   const item: DynamoDBItem = {
-    PK: `KIOSK#${token}`,
+    PK: `KIOSK#${tokenHash}`,
     SK: 'METADATA',
     // Mirrored onto GSI1 so the household can find its own link (and account
     // deletion can sweep it) without ever holding the secret.
     GSI1PK: `HOUSEHOLD#${input.householdId}#KIOSK`,
     GSI1SK: now,
     entityType: 'KioskLink',
-    ...link,
+    // Both the PK suffix and the attribute revocation reads through. The
+    // plaintext appears nowhere on the row.
+    tokenHash,
+    id,
+    householdId: input.householdId,
+    createdBy: input.createdBy,
+    createdAt: now,
+    status: 'active',
+    pollIntervalSeconds,
     // No `ttl` on purpose — see the header note. A wall display must not stop
     // working on a timer; revocation is the control.
   };
 
   await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-  return link;
+  return {
+    id,
+    token,
+    keyToken: tokenHash,
+    householdId: input.householdId,
+    createdBy: input.createdBy,
+    createdAt: now,
+    status: 'active',
+    pollIntervalSeconds,
+  };
+}
+
+async function readLinkRow(pk: string): Promise<Record<string, unknown> | null> {
+  const result = await dynamodb.send(
+    new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: 'METADATA' } })
+  );
+  return (result?.Item as Record<string, unknown> | undefined) ?? null;
 }
 
 /**
@@ -298,15 +369,15 @@ export async function getActiveKioskLink(token: string): Promise<KioskLink | nul
   // hits DynamoDB. 64 lowercase hex chars only.
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
 
-  const result = await dynamodb.send(
-    new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `KIOSK#${token}`, SK: 'METADATA' },
-    })
-  );
-  if (!result.Item) return null;
+  // Hashed row first — every link issued since #450. A miss falls back to the
+  // pre-#450 plaintext-keyed row, so a wall display that has been up for a
+  // year does not go dark on deploy. Both are GetItem on the partition key:
+  // the fallback costs one extra point read and adds no enumeration surface.
+  const item =
+    (await readLinkRow(`KIOSK#${hashToken(token)}`)) ?? (await readLinkRow(`KIOSK#${token}`));
+  if (!item) return null;
 
-  const link = itemToLink(result.Item);
+  const link = itemToLink(item);
   if (link.status !== 'active') return null;
   return link;
 }
