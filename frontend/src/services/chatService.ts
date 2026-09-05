@@ -24,9 +24,25 @@ export interface ChatContentBlock {
    * carries it; what a user is SHOWN when `partial` is true is still an open
    * product decision, so nothing renders it yet.
    */
-  plants?: { total: number; included: number; complete: boolean };
-  tasks?: { total: number; included: number; complete: boolean };
+  plants?: ChatCoverageSet;
+  tasks?: ChatCoverageSet;
   partial?: boolean;
+}
+
+/**
+ * Mirrors the backend's `SproutSetCoverage` exactly — every field, so a
+ * declaration that quietly narrows it cannot make a real payload look
+ * malformed. `unmatched` (dropped by the canonical-species privacy filter) and
+ * `truncated` (dropped by the cap, after it) stay separate because one is a
+ * privacy control and the other is a size limit.
+ */
+export interface ChatCoverageSet {
+  total: number;
+  included: number;
+  unmatched: number;
+  truncated: number;
+  cap: number;
+  complete: boolean;
 }
 
 export interface ChatMessage {

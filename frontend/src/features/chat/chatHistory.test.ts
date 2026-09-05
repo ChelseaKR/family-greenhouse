@@ -54,8 +54,15 @@ describe('chat history', () => {
           { type: 'disclosure', text: 'General information, not veterinary advice.' },
           {
             type: 'coverage',
-            plants: { total: 112, included: 40, unmatched: 62, truncated: 10, cap: 100 },
-            tasks: { total: 9, included: 9, unmatched: 0, truncated: 0, cap: 100 },
+            plants: {
+              total: 112,
+              included: 40,
+              unmatched: 62,
+              truncated: 10,
+              cap: 100,
+              complete: false,
+            },
+            tasks: { total: 9, included: 9, unmatched: 0, truncated: 0, cap: 100, complete: true },
             partial: true,
           },
         ],

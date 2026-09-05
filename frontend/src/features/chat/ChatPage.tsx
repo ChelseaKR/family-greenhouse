@@ -313,7 +313,13 @@ export function ChatPage() {
               // already wrote is shown at all. The label is ours and is
               // translated; the disclosure itself arrives in the language the
               // question was asked in.
+              //
+              // role="note" rather than a bare <p>: <p> maps to role
+              // `paragraph`, which does not support an accessible name, so an
+              // aria-label on it is ignored and the label never reaches a
+              // screen reader. `note` supports naming, and is what this is.
               <p
+                role="note"
                 className="mt-2 max-w-xl text-xs text-gray-600 italic"
                 aria-label={t('chat.disclosureLabel')}
               >
