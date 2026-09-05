@@ -41,6 +41,20 @@ import { join, resolve } from 'node:path';
 vi.setConfig({ testTimeout: 60_000 });
 
 const REAL_RUNNER = resolve(__dirname, '../../../../scripts/run-gate.mjs');
+const REAL_FRESHNESS = resolve(__dirname, '../../../../scripts/check-dependency-freshness.mjs');
+
+/**
+ * A package the fixture's lockfile requires, and (unless a test says
+ * otherwise) installs into the fixture's node_modules.
+ */
+interface FixturePackage {
+  /** Where the lockfile places it, e.g. `node_modules/left-pad`. */
+  path: string;
+  /** The version the lockfile pins. */
+  version: string;
+  /** The version actually written to disk; omit to leave it uninstalled. */
+  installedVersion?: string;
+}
 
 interface Step {
   id: string;
@@ -69,11 +83,26 @@ function runGate(opts: {
   wsScripts?: Record<string, string>;
   workspacesInPlan?: string[];
   args?: string[];
+  /** Dependencies of the fixture ROOT, as the lockfile and disk see them. */
+  packages?: FixturePackage[];
+  /** Drop `node_modules/.package-lock.json`, i.e. "never installed". */
+  uninstalled?: boolean;
+  /** Remove `package-lock.json` entirely. */
+  noLockfile?: boolean;
+  /** Add a platform-specific optional package that is (correctly) absent. */
+  optionalAbsent?: boolean;
 }): RunResult {
   const root = mkdtempSync(join(tmpdir(), 'gate-runner-'));
   mkdirSync(join(root, 'scripts'), { recursive: true });
   mkdirSync(join(root, 'ws'), { recursive: true });
   copyFileSync(REAL_RUNNER, join(root, 'scripts', 'run-gate.mjs'));
+  copyFileSync(REAL_FRESHNESS, join(root, 'scripts', 'check-dependency-freshness.mjs'));
+
+  const packages = opts.packages ?? [];
+  const nameOf = (path: string) => path.slice(path.lastIndexOf('node_modules/') + 13);
+  // An optional dependency for a platform this process is definitely not on.
+  const OPTIONAL = '@fixture/binary-for-another-platform';
+  const optionalDependencies = opts.optionalAbsent ? { [OPTIONAL]: '^1.0.0' } : undefined;
 
   writeFileSync(
     join(root, 'package.json'),
@@ -81,6 +110,8 @@ function runGate(opts: {
       name: 'gate-fixture',
       private: true,
       workspaces: ['ws'],
+      dependencies: Object.fromEntries(packages.map((p) => [nameOf(p.path), `^${p.version}`])),
+      ...(optionalDependencies ? { optionalDependencies } : {}),
       scripts: opts.scripts ?? {},
     })
   );
@@ -88,6 +119,47 @@ function runGate(opts: {
     join(root, 'ws', 'package.json'),
     JSON.stringify({ name: 'ws', version: '0.0.0', scripts: opts.wsScripts ?? {} })
   );
+
+  // The runner's preflight compares node_modules against package-lock.json
+  // before it schedules anything (#581), so the fixture is a repo that has
+  // actually been installed unless a test asks for otherwise.
+  if (!opts.noLockfile) {
+    writeFileSync(
+      join(root, 'package-lock.json'),
+      JSON.stringify({
+        name: 'gate-fixture',
+        lockfileVersion: 3,
+        packages: {
+          '': { name: 'gate-fixture', workspaces: ['ws'] },
+          ws: { name: 'ws', version: '0.0.0' },
+          'node_modules/ws': { resolved: 'ws', link: true },
+          ...Object.fromEntries(packages.map((p) => [p.path, { version: p.version }])),
+          ...(optionalDependencies
+            ? {
+                [`node_modules/${OPTIONAL}`]: {
+                  version: '1.0.0',
+                  optional: true,
+                  os: ['aix'],
+                  cpu: ['ppc64'],
+                },
+              }
+            : {}),
+        },
+      })
+    );
+  }
+  mkdirSync(join(root, 'node_modules'), { recursive: true });
+  if (!opts.uninstalled) {
+    writeFileSync(join(root, 'node_modules', '.package-lock.json'), '{"packages":{}}');
+  }
+  for (const p of packages) {
+    if (p.installedVersion === undefined) continue;
+    mkdirSync(join(root, p.path), { recursive: true });
+    writeFileSync(
+      join(root, p.path, 'package.json'),
+      JSON.stringify({ name: nameOf(p.path), version: p.installedVersion })
+    );
+  }
   writeFileSync(
     join(root, 'scripts', 'gate-steps.mjs'),
     `export const WORKSPACES = ${JSON.stringify(opts.workspacesInPlan ?? ['ws'])};\n` +
@@ -220,6 +292,121 @@ describe('run-gate: a failing step fails the gate', () => {
     // A step weighing more than the whole pool must still run, not deadlock.
     expect(out).toMatch(/PASS\s+[\d.]+s\s+heavy-ok/);
     expect(out).toMatch(/PASS\s+[\d.]+s\s+ws-step/);
+  });
+});
+
+/**
+ * The preflight exists because `gate FAILED — 1 of 28 steps failed in 83.3s:
+ * test:backend` was, on 2026-09-05, a true statement that sent its reader to
+ * the wrong place: fifteen backend suites could not import a devDependency
+ * added 139 commits earlier and never installed (#581).
+ *
+ * What these assert is not just "it fails" but "it fails INSTEAD" — no step
+ * runs, so there is no 83 seconds of misleading output to read past.
+ */
+describe('run-gate: stale dependencies block the gate before any step runs', () => {
+  const PKG = 'node_modules/express-rate-limit';
+
+  it('blocks on a package the lockfile requires and node_modules lacks', () => {
+    const { code, out } = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+      // Pinned by the lockfile, absent from disk — the #581 shape exactly.
+      packages: [{ path: PKG, version: '8.7.0' }],
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('gate BLOCKED');
+    expect(out).toContain('NOT INSTALLED');
+    expect(out).toContain('express-rate-limit@8.7.0');
+    // The remedy, unambiguously, and not a step name.
+    expect(out).toContain('npm ci');
+    // The point of the preflight: nothing else ran, so nothing else can be
+    // mistaken for the cause.
+    expect(out).not.toContain('gate PASSED');
+    expect(out).not.toContain('gate FAILED');
+    expect(out).not.toMatch(/PASS\s+[\d.]+s\s+alpha/);
+    expect(out).not.toMatch(/PASS\s+[\d.]+s\s+ws-step/);
+  });
+
+  it('distinguishes a wrong version from an absent package', () => {
+    const { code, out } = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+      packages: [{ path: 'node_modules/zod', version: '4.4.3', installedVersion: '3.0.0' }],
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('gate BLOCKED');
+    // Both numbers, because "which one do I have" is the reader's next question.
+    expect(out).toContain('have 3.0.0, lockfile pins 4.4.3');
+    expect(out).not.toContain('NOT INSTALLED');
+    expect(out).not.toMatch(/PASS\s+[\d.]+s\s+alpha/);
+  });
+
+  it('blocks when nothing has been installed at all', () => {
+    const { code, out } = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+      uninstalled: true,
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('gate BLOCKED');
+    expect(out).toContain('dependencies are not installed');
+    expect(out).not.toMatch(/PASS\s+[\d.]+s\s+alpha/);
+  });
+
+  it('refuses to report a pass when it cannot make the comparison at all', () => {
+    // No lockfile: the check has nothing to compare against. The failure mode
+    // to avoid is treating "could not check" as "checked, fine".
+    const { code, out } = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+      noLockfile: true,
+    });
+
+    expect(code).toBe(1);
+    expect(out).toContain('could not run');
+    expect(out).not.toContain('gate PASSED');
+  });
+
+  it('says nothing in the way when the tree is correctly installed', () => {
+    const { code, out } = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+      packages: [{ path: PKG, version: '8.7.0', installedVersion: '8.7.0' }],
+    });
+
+    // The false-alarm case. A preflight that fires on a healthy tree gets
+    // routed around, and then it is worse than not having one.
+    expect(code).toBe(0);
+    expect(out).toContain('gate PASSED');
+    expect(out).not.toContain('BLOCKED');
+    expect(out).toContain('node_modules matches package-lock.json');
+  });
+
+  it('does not require optional packages this machine would skip', () => {
+    // Platform-specific optional packages are absent on a correctly installed
+    // tree by design — npm installs only the entries whose os/cpu match. A
+    // naive "every lockfile entry must exist" rule reports 100 of them as
+    // failures against this repo's own lockfile, on a tree `npm ci` has just
+    // written. That check would be routed around within a week.
+    const { code, out } = runGate({
+      scripts: { a: PASSES },
+      wsScripts: { w: PASSES },
+      steps: [step('alpha', 'a'), wsStep('ws-step', 'w')],
+      packages: [{ path: PKG, version: '8.7.0', installedVersion: '8.7.0' }],
+      optionalAbsent: true,
+    });
+
+    expect(code).toBe(0);
+    expect(out).toContain('gate PASSED');
   });
 });
 
