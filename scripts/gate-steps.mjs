@@ -99,10 +99,22 @@ export const STEPS = [
     why: 'ESLint errors and warnings in backend/src',
   },
   {
+    id: 'lint:scripts',
+    script: 'lint:scripts',
+    weight: 1,
+    why: 'ESLint over the .mjs gate scripts and the infrastructure Lambdas — the failure branch a green build never runs (#443)',
+  },
+  {
     id: 'format:check',
     script: 'format:check',
     weight: 1,
     why: 'Prettier formatting across the repo',
+  },
+  {
+    id: 'shell:check',
+    script: 'shell:check',
+    weight: 0,
+    why: 'shellcheck over every tracked .sh, including the one that deletes S3 objects on the release path (#443)',
   },
 
   // --- Cheap checks: unscheduled, so they report in seconds.

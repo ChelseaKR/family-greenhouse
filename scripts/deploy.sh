@@ -112,13 +112,22 @@ for handler in "${HANDLERS[@]}"; do
     ZIP="$(pwd)/.deploy-${handler}.zip"
     (cd "$WORK" && zip -q -r "$ZIP" .)
 
-    PUBLISHED_VER=$(aws lambda update-function-code \
+    # `if` rather than `A && B || C` (SC2015): in the `&&`/`||` form the failure
+    # branch also runs when the UPDATE succeeded and the `echo` failed, which
+    # would print "not found or update failed" for a Lambda that had just been
+    # published and `continue` past the artifact archive below — leaving CD's
+    # auto-rollback with no zip for a version that exists.
+    if PUBLISHED_VER=$(aws lambda update-function-code \
         --function-name "$FUNCTION_NAME" \
         --region us-east-1 \
         --zip-file "fileb://${ZIP}" \
-        --publish --query 'Version' --output text 2>/dev/null) \
-        && echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})" \
-        || { echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"; rm -rf "$WORK" "$ZIP"; continue; }
+        --publish --query 'Version' --output text 2>/dev/null); then
+        echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})"
+    else
+        echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"
+        rm -rf "$WORK" "$ZIP"
+        continue
+    fi
 
     # Archive this version's zip so CD auto-rollback can restore it later.
     aws s3 cp "$ZIP" \

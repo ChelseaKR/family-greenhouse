@@ -21,6 +21,45 @@ export default tseslint.config(
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
   jsxA11y.flatConfigs.strict,
+  // ---- Plain-ESM tooling: scripts/**/*.mjs (#443) ----
+  //
+  // Mirrors the root eslint.config.mjs block of the same name; see there for
+  // the rationale. Mirrored rather than inherited because ESLint 10 resolves
+  // the NEAREST eslint.config.mjs to the file being linted, so the root config
+  // never governs anything inside a workspace.
+  //
+  // These files are in no tsconfig program and want no type information. The
+  // project service is switched off explicitly: `tseslint.config()` installs
+  // the TypeScript parser for every file in the config, and its service then
+  // looks for a tsconfig to own each one and aborts when it cannot decide.
+  {
+    files: ['scripts/**/*.mjs'],
+    // `disableTypeChecked` because this workspace's config turns on
+    // recommendedTypeChecked for every file it governs, and a type-aware rule
+    // on a file with no type information is a crash, not a lint.
+    extends: [js.configs.recommended, tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node },
+      parserOptions: {
+        projectService: false,
+        project: null,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      // Same pin as the `src` block below: eslint-plugin-react is applied at the
+      // top of this config, so it also sees these files and warns without it.
+      react: { version: '19.2' },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // These are CLI tools; console IS the interface.
+      'no-console': 'off',
+    },
+  },
+
   {
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: {

@@ -52,6 +52,28 @@ else
     exit 1
 fi
 
+# Install shellcheck.
+#
+# `npm run verify` HARD-FAILS without it (scripts/check-shell.mjs). The scripts
+# it covers include one that deletes S3 object versions on the production
+# release path, and a checker that skips itself when its tool is absent is a
+# gate that cannot fail (#443).
+if command -v shellcheck >/dev/null 2>&1; then
+    echo "shellcheck: $(shellcheck --version | awk '/^version:/ {print $2}')"
+elif command -v brew >/dev/null 2>&1; then
+    echo "Installing shellcheck..."
+    brew install shellcheck
+elif command -v apt-get >/dev/null 2>&1; then
+    echo "Installing shellcheck..."
+    sudo apt-get install -y shellcheck
+else
+    echo "Error: shellcheck is not installed and no supported package manager was found."
+    echo "The shell lint in 'npm run verify' cannot run without it, and it refuses"
+    echo "to skip itself. Install it, then re-run this script:"
+    echo "  https://github.com/koalaman/shellcheck#installing"
+    exit 1
+fi
+
 # Create environment files if they don't exist
 if [ ! -f "frontend/.env" ]; then
     echo "Creating frontend/.env..."

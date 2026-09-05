@@ -40,6 +40,8 @@
     "hooks:check": "node scripts/check-git-hooks.mjs",
     "lint": "npm run lint --workspaces --if-present",
     "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "lint:scripts": "eslint scripts/**/*.mjs frontend/scripts/**/*.mjs backend/scripts/**/*.mjs infrastructure/**/lambda/*.mjs --report-unused-disable-directives --max-warnings 0",
+    "shell:check": "node scripts/check-shell.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces --if-present",

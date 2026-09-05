@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 // Flat config (ESLint 10). Mirrors the previous .eslintrc.cjs:
@@ -12,6 +13,40 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  // ---- Plain-ESM tooling: scripts/**/*.mjs (#443) ----
+  //
+  // Mirrors the root eslint.config.mjs block of the same name; see there for
+  // the rationale. Mirrored rather than inherited because ESLint 10 resolves
+  // the NEAREST eslint.config.mjs to the file being linted, so the root config
+  // never governs anything inside a workspace.
+  //
+  // These files are in no tsconfig program and want no type information. The
+  // project service is switched off explicitly: `tseslint.config()` installs
+  // the TypeScript parser for every file in the config, and its service then
+  // looks for a tsconfig to own each one and aborts when it cannot decide.
+  {
+    files: ['scripts/**/*.mjs'],
+    // `disableTypeChecked` because this workspace's config turns on
+    // recommendedTypeChecked for every file it governs, and a type-aware rule
+    // on a file with no type information is a crash, not a lint.
+    extends: [js.configs.recommended, tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node },
+      parserOptions: {
+        projectService: false,
+        project: null,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // These are CLI tools; console IS the interface.
+      'no-console': 'off',
+    },
+  },
+
   {
     files: ['src/**/*.ts'],
     languageOptions: {
