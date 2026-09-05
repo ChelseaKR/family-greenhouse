@@ -20,8 +20,9 @@ import { PLANS, planIncludesAwayKit, type Plan } from '../models/plans.js';
  * the household's own care words, pet-safety and photos, is the Away Kit and
  * starts at Garden. The brief, the sitter photo-back and the return recap are
  * one entitlement, so the line is drawn once in the plan catalog
- * (`planIncludesAwayKit`, expressed against PLAN_ORDER so a future tier above
- * Garden inherits it) and read here rather than restated.
+ * (`planIncludesAwayKit`, which reads the tier's own `features.awayKit` — the
+ * same value `planSummary` publishes and the frontend gates on, per #605) and
+ * read here rather than restated.
  */
 export function sitterBriefIncluded(plan: Plan): boolean {
   return planIncludesAwayKit(plan);
