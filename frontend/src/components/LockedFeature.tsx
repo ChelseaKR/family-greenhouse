@@ -67,8 +67,16 @@ function useUpgradeAsk(feature: UpgradeFeature) {
       .filter(Boolean) ?? null;
 
   const plans = plansQuery.data?.plans;
-  const currentPlanId = subQuery.data?.planId ?? 'seedling';
-  const targetPlanId = resolveTargetPlan(feature, currentPlanId, plans);
+  // The tier is never guessed either — same rule as the admin names above, and
+  // `resolveTargetPlan`'s own contract ("a tier name should never be guessed").
+  // Defaulting a pending or FAILED subscription read to 'seedling' made the
+  // card assert a tier off a read that never landed: for a cap feature it
+  // resolves the first tier above the *guess*, so a Greenhouse household could
+  // be shown "Included with Garden — $4.99 a month" — a downgrade, presented
+  // as the fix, with a price on it. Null until the read settles; no line
+  // rather than a wrong one.
+  const currentPlanId = subQuery.data?.planId ?? null;
+  const targetPlanId = currentPlanId ? resolveTargetPlan(feature, currentPlanId, plans) : null;
   const targetPlan = targetPlanId ? plans?.find((p) => p.id === targetPlanId) : undefined;
   // Fail closed on an unknown catalog: the ask is only offered once the API
   // has said payments are open. A stale or missing catalog means no button.

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -85,11 +85,17 @@ function renderLocked(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>{ui}</MemoryRouter>
-    </QueryClientProvider>
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>{ui}</MemoryRouter>
+      </QueryClientProvider>
+    ),
+    // Exposed so a test can wait on the SUBSCRIPTION read having settled
+    // rather than on the absence of something, which is true on the first
+    // tick whether or not the code under test is right.
+    queryClient,
+  };
 }
 
 describe('formatNameList', () => {
@@ -249,6 +255,49 @@ describe('LockedFeature', () => {
 
     expect(await screen.findByText(/Paid plan changes are paused right now/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /upgrade/ })).not.toBeInTheDocument();
+  });
+
+  it('never guesses a TIER: a failed subscription read names no plan on a cap feature', async () => {
+    // `plant_cap` is one of the two features (with `member_cap`) whose target
+    // tier is resolved from the household's CURRENT caps rather than from a
+    // fixed minimum, so the current plan is load-bearing input. With the read
+    // defaulted to 'seedling', this rendered "Included with Garden — $4.99 a
+    // month" — which for a household actually on Greenhouse is a downgrade
+    // offered as the fix, with a price on it. The catalog read succeeds here,
+    // so the only thing missing is the tier: absence of the line is therefore
+    // attributable to the subscription read alone.
+    signIn('member');
+    stubReads();
+    server.use(
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ message: 'boom' }, { status: 500 }))
+    );
+    const { queryClient } = renderLocked(<LockedFeature feature="plant_cap" />);
+
+    // Positive end-state: the subscription query has actually run and failed,
+    // and the card has finished rendering around it.
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['subscription', 'hh-1'])?.status).toBe('error')
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Room for more plants' })
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Ask Maria to upgrade' })).toBeEnabled();
+
+    // Only now is the absence meaningful.
+    expect(screen.queryByTestId('locked-included')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Included with/)).not.toBeInTheDocument();
+  });
+
+  it('names the tier once the subscription read settles', async () => {
+    // The control for the test above: same feature, same catalog, a settled
+    // read — the line must still appear, so the fix is "wait", not "delete".
+    signIn('member');
+    stubReads({ planId: 'seedling' });
+    renderLocked(<LockedFeature feature="plant_cap" />);
+
+    expect(await screen.findByTestId('locked-included')).toHaveTextContent(
+      'Included with Garden — $4.99 a month for the whole household'
+    );
   });
 
   it('never guesses a name: a failed roster read asks "your household admin"', async () => {
