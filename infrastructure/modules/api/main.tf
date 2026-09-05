@@ -341,6 +341,32 @@ locals {
 # VAPID, Plant.id, or other unrelated credentials.
 locals {
   lambda_environment = {
+    # The process zone every backend Lambda runs in. AWS already defaults the
+    # execution environment to UTC, so this changes no behaviour — it changes
+    # where the property is DECIDED (#590).
+    #
+    # Several date calculations are local-zone arithmetic and are correct only
+    # under UTC. `getDailyCompletionCounts` (services/taskService.ts) is the
+    # sharpest: it builds day buckets from a LOCAL midnight, stringifies them
+    # through a UTC formatter, and matches completions keyed by UTC date. Those
+    # calendars name the same day only while this process runs UTC. When they
+    # disagree nothing raises — the unmatched day keeps its zero-fill and is
+    # published as a real count of zero in the analytics chart and the weekly
+    # digest. `completeTask`'s next-due math and `doubleCareRules` read the
+    # process zone too.
+    #
+    # Inherited, that correctness rested on an AWS platform default that a
+    # runtime bump, a base-image change, or a future default could move with
+    # nothing in this repository noticing. Stated here it is a setting, and
+    # backend/tests/unit/config/lambdaTimeZone.test.ts fails if it is removed.
+    # ADR 0025 phase 5 removes the dependency itself; this does not wait on it.
+    #
+    # `TZ` is an UNRESERVED Lambda environment variable — it is Lambda's own
+    # documented default (`:UTC`) and appears in the "can be extended in your
+    # function configuration" list, not the reserved one — so `terraform apply`
+    # accepts it rather than rejecting the whole environment block.
+    TZ = "UTC"
+
     NODE_ENV             = var.environment
     TABLE_NAME           = var.dynamodb_table_name
     COGNITO_USER_POOL_ID = var.cognito_user_pool_id

@@ -20,10 +20,15 @@ modelled a due date as `DATEONLY` and was right. The current rewrite models it
 as a full ISO instant — `nextDue: z.string().datetime()` in
 `models/schemas.ts`, which rejects `YYYY-MM-DD` — and every question the
 product asks about that date is an instant comparison evaluated in the
-process's zone, which is UTC on Lambda. No `TZ` is set anywhere in
-`infrastructure/`; the whole system rests on the AWS default, and the only
-place that assumption is written down is a docstring in
-`services/doubleCareRules.ts`.
+process's zone, which is UTC on Lambda. When this ADR was written no `TZ` was
+set anywhere in `infrastructure/`: the whole system rested on the AWS platform
+default, and the only place that assumption was written down was a docstring in
+`services/doubleCareRules.ts`. #590 has since pinned it —
+`infrastructure/modules/api/main.tf` sets `TZ = "UTC"` on the Lambda
+environment, and `backend/tests/unit/config/lambdaTimeZone.test.ts` fails if
+that is removed — so the zone is now a stated setting rather than an inherited
+default. That makes the dependency safe to rest on; it does not remove it,
+which is still phase 5's job below.
 
 That single modelling choice is upstream of a family of defects this repo has
 been fixing one at a time: #346 (a plant added at 6pm was already overdue),
