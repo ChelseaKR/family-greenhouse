@@ -437,9 +437,18 @@ export async function readHouseholdName(householdId: string): Promise<HouseholdN
  */
 export async function gatherDigestReport(
   householdId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  /**
+   * The at-risk result, when the caller already has one.
+   *
+   * `digestHousehold` reads it first and on its own (#459): it is two queries
+   * and it decides whether the household has anything worth mailing at all,
+   * so paying for it once instead of twice is the whole point of gating on it
+   * early. Omitted, this reads it here exactly as before.
+   */
+  precomputedAtRisk?: AtRiskResult
 ): Promise<DigestReport> {
-  const atRisk = await gatherAtRisk(householdId, now);
+  const atRisk = precomputedAtRisk ?? (await gatherAtRisk(householdId, now));
   const listed = atRisk.status === 'ok' ? atRisk.rows.slice(0, TOP_PLANTS) : [];
 
   const name = await readHouseholdName(householdId);
@@ -496,9 +505,24 @@ export async function gatherDigestReport(
  * a cheerful nothing is worse than no email.
  */
 export function digestIsWorthSending(report: DigestReport): boolean {
-  if (report.atRisk.status !== 'ok') return true;
-  if (report.atRisk.rows.length > 0) return true;
+  if (atRiskIsWorthSending(report.atRisk)) return true;
   return report.pets.status === 'unavailable';
+}
+
+/**
+ * The half of `digestIsWorthSending` that can be answered from the at-risk
+ * read alone — two DynamoDB queries, against the ~13 a whole report costs.
+ *
+ * `digestHousehold` gates on this BEFORE gathering anything else (#459), which
+ * is what makes a household with nothing at risk cost two reads a run instead
+ * of thirteen. The `pets` clause left behind in `digestIsWorthSending` cannot
+ * change the answer for a household this rejects: `gatherPetWarnings` returns
+ * `{ status: 'ok' }` without reading anything when there are no listed rows,
+ * and there are no listed rows exactly when this returns false.
+ */
+export function atRiskIsWorthSending(atRisk: AtRiskResult): boolean {
+  if (atRisk.status !== 'ok') return true;
+  return atRisk.rows.length > 0;
 }
 
 // ---------------------------------------------------------------------------
