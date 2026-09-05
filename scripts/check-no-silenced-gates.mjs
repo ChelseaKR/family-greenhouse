@@ -114,6 +114,92 @@ function findCiSelfSkips(file) {
   return offenders;
 }
 
+/**
+ * Third rule: a gate that runs in a job GitHub does not REQUIRE is silenced
+ * just as effectively as one wrapped in `|| true`. It runs, it goes red, and
+ * the pull request merges anyway.
+ *
+ * Not hypothetical. `ci.yml` already carried the lesson in a comment — "Lives
+ * in the required `Lint` job rather than the unrequired `i18n Gates` job, so
+ * it can actually block a merge" — while the i18n catalog and hardcoded-string
+ * steps sat in that same unrequired job, leaving key parity, placeholder
+ * parity, plural categories and the untranslatable-string ratchet advisory
+ * (CICD-467). Nothing detected it, because an unrequired job is green in
+ * exactly the same shade as a required one.
+ *
+ * So required-ness is asserted against the committed ruleset rather than left
+ * to whoever next moves a step between jobs.
+ */
+const RULESET = '.github/rulesets/main.json';
+const CI_WORKFLOW = join(WORKFLOWS_DIR, 'ci.yml');
+
+/** Checks that must run in a job GitHub requires. */
+const MUST_BLOCK_MERGE = [
+  { pattern: /check-i18n-catalogs\.mjs/, label: 'i18n catalog parity (§4 G1/G3/G5/G6)' },
+  {
+    pattern: /check-hardcoded-strings\.mjs/,
+    label: 'the hardcoded-string + aria-label ratchet (§4 G2)',
+  },
+  { pattern: /reads:check/, label: 'the ADR 0010 settled-read ratchet' },
+  { pattern: /mobile:validate/, label: 'store-release readiness' },
+];
+
+function requiredContexts() {
+  const text = readFileSync(RULESET, 'utf8');
+  return [...text.matchAll(/"context"\s*:\s*"([^"]+)"/g)].map((entry) => entry[1]);
+}
+
+/** Top-level `jobs:` entries of a workflow, as { key, name, body }. */
+function jobsOf(file) {
+  const text = readFileSync(file, 'utf8');
+  const headings = [...text.matchAll(/^ {2}([A-Za-z0-9_-]+):[ \t]*$/gm)];
+  return headings.map((heading, index) => {
+    const body = text.slice(
+      heading.index,
+      index + 1 < headings.length ? headings[index + 1].index : text.length
+    );
+    return { key: heading[1], name: body.match(/^ {4}name:\s*(.+)$/m)?.[1].trim(), body };
+  });
+}
+
+function findUnrequiredGates() {
+  const required = requiredContexts();
+  const jobs = jobsOf(CI_WORKFLOW);
+  const offenders = [];
+  for (const { pattern, label } of MUST_BLOCK_MERGE) {
+    const hosts = jobs.filter((job) => pattern.test(job.body));
+    if (hosts.length === 0) {
+      offenders.push(`${label}: runs in no ${CI_WORKFLOW} job at all`);
+      continue;
+    }
+    for (const job of hosts) {
+      const context = job.name ?? job.key;
+      // A matrix job's contexts read "<name> (<value>)", so a prefix match
+      // counts as required alongside an exact one.
+      const isRequired = required.some(
+        (candidate) => candidate === context || candidate.startsWith(`${context} (`)
+      );
+      if (!isRequired) {
+        offenders.push(
+          `${label}: runs in job "${context}", which is not a required status check in ${RULESET}`
+        );
+      }
+    }
+  }
+  return offenders;
+}
+
+const unrequiredGates = findUnrequiredGates();
+if (unrequiredGates.length > 0) {
+  console.error(
+    'A merge-blocking gate runs in a job GitHub does not require, so it can go red while the\n' +
+      'pull request merges anyway — the same outcome as deleting it. Either move the step into\n' +
+      'a required job, or add its job to the required contexts in the ruleset:\n'
+  );
+  for (const message of unrequiredGates) console.error(`  ${message}`);
+  process.exit(1);
+}
+
 const files = readdirSync(WORKFLOWS_DIR)
   .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
   .map((f) => join(WORKFLOWS_DIR, f));
