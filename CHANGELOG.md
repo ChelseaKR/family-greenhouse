@@ -29,6 +29,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   than making it. A household that has not set a zone keeps exactly the
   behaviour it has today.
 
+### Security
+
+- **Mail sent to security@ could add headers to the copy we forwarded.** The
+  inbound forwarder moves the original `From` into a `Reply-To` on a message
+  re-sent from our own DKIM-aligned domain. It sanitised that value for the
+  visible display name but not for the `Reply-To` line, and it removed only the
+  message's own line ending — so a sender who put a bare newline inside their
+  `From` header had whatever followed it emitted as a header of their choosing.
+  A `Bcc` was reachable this way, on a message carrying this project's sending
+  reputation. Every carriage return and newline is now collapsed out of the
+  value before it reaches either header. Nobody is known to have used this; it
+  was found by writing the first tests the function has ever had.
+
 ## [0.28.0] - 2026-09-05
 
 ### Fixed
