@@ -213,6 +213,23 @@ const checks = [
     'the site health check requires the app identity string, not merely a 200',
     siteSearchString !== null && siteSearchString.includes('og:site_name'),
   ],
+  // `apiHealthCheck` was extracted alongside the other three and then never
+  // asserted — the alarm that reads it was checked, and the probe it reads
+  // FROM was not. So the API check could be a plain HTTP GET on a 10-minute
+  // interval with no SNI and every gate here stayed green, because nothing
+  // looked. Found by `lint:scripts` (#443) as an unused binding, which is the
+  // only reason it surfaced at all: a variable pulled out for checking and
+  // then not checked leaves no other trace.
+  //
+  // Asserted even though the API probe defaults OFF (`count = 0`). The HCL is
+  // committed either way, and the moment someone flips it on is exactly the
+  // moment nobody re-reads its shape.
+  [
+    'the API health check, when enabled, probes the way the site check does',
+    /type\s*=\s*"HTTPS_STR_MATCH"/u.test(apiHealthCheck) &&
+      /request_interval\s*=\s*30/u.test(apiHealthCheck) &&
+      /enable_sni\s*=\s*true/u.test(apiHealthCheck),
+  ],
   // The coupling that keeps the string honest. Route 53 can only match a
   // literal, so if the tag's markup changes the health check starts failing
   // against a healthy site. Failing HERE means that lands as a red pre-push
