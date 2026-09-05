@@ -70,7 +70,18 @@ export function manualChunks(id: string): string | undefined {
   // is what catches it). Every future deferred namespace would
   // need another exclusion; matching the one file that is loaded
   // at startup needs none.
-  if (/src\/i18n\/locales\/[\w-]+\/translation\.json$/.test(id)) {
+  //
+  // ENGLISH ONLY, for the same reason. `[\w-]+` here used to capture every
+  // locale, which pinned the Spanish catalog into this startup chunk too —
+  // 86.6 kB of JSON downloaded by every visitor for a language SUPPORTED_LANGS
+  // does not offer them (#467). src/i18n/nonEnglishCatalog.ts now `import()`s
+  // the non-English catalogs on demand, and a rule that names them by pattern
+  // would silently undo that split exactly the way a locales-wide rule undid
+  // the legal one: the dynamic import still resolves, Spanish still renders,
+  // and the bytes are back on the startup path. English is the fallback
+  // catalog every visitor needs on first paint, so it is the startup catalog
+  // and it is the only one named here.
+  if (/src\/i18n\/locales\/en\/translation\.json$/.test(id)) {
     return 'i18n';
   }
   return undefined;

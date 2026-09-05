@@ -10,7 +10,10 @@ import esLegal from '@/i18n/locales/es/legal.json';
 import enTranslation from '@/i18n/locales/en/translation.json';
 import esTranslation from '@/i18n/locales/es/translation.json';
 
-import { manualChunks } from '../../../vite.manualChunks';
+// `.ts` extension deliberate — see the note in ./nonEnglishCatalog.test.ts.
+// Without it this guard reads the compiled sibling `tsc -b` leaves behind, so
+// after any build it reports on the previous build's rule.
+import { manualChunks } from '../../../vite.manualChunks.ts';
 
 /**
  * The `legal.*` copy is deliberately NOT in the startup catalog: it is ~37 kB

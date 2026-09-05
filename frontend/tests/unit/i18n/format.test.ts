@@ -9,6 +9,7 @@ import { formatCurrency, formatDate, formatRelativeDay, formatTime } from '@/i18
 
 afterEach(async () => {
   await i18n.changeLanguage('en');
+  i18n.removeResourceBundle('es', 'translation');
 });
 
 describe('formatDate', () => {
@@ -30,6 +31,14 @@ describe('formatDate', () => {
   });
 
   it('follows the active i18next language when no override is given', async () => {
+    // Register a Spanish bundle first. i18next only lets `changeLanguage(l)`
+    // stick when either `l` is in `supportedLngs` or the store already has some
+    // translations for it (i18next.js `changeLanguage` → `setLng`), and this
+    // build's `supportedLngs` is `['en']` — Spanish is a staged asset, fetched
+    // on demand (src/i18n/nonEnglishCatalog.ts), not bundled. This test used to
+    // pass only because the Spanish catalog was statically imported into
+    // `resources` for every visitor, which is the 86.6 kB #467 was about.
+    i18n.addResourceBundle('es', 'translation', { common: { yes: 'Sí' } }, true, true);
     await i18n.changeLanguage('es');
 
     expect(formatDate('2026-05-12T15:00:00Z', { timeZone: 'UTC' })).toBe('12 may 2026');

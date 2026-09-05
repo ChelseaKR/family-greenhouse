@@ -49,10 +49,20 @@ review notes before and neither is true:
   (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
   The PWA offline story is a web-only feature.
 
-Not present anywhere in the tree: deep links (the only Android `intent-filter`
-is `MAIN`/`LAUNCHER`, there is no iOS entitlements file, and no
-`assetlinks.json` or `apple-app-site-association` is served), so every link the
-backend mails opens the browser even for a user who has the app installed.
+Not present anywhere in the tree: deep links. The only Android `intent-filter`
+is `MAIN`/`LAUNCHER`; `ios/App/App/App.entitlements` exists but declares only
+`aps-environment`, no Associated Domains; and no `assetlinks.json` or
+`apple-app-site-association` is served. So every link the backend mails —
+invites, sitter links, the `/tasks?filter=due` reminder link, unsubscribe, the
+calendar feed — opens the browser even for a user who has the app installed,
+and asks them to sign in again. Closing that needs three things this repo
+cannot supply on its own: `@capacitor/app` (nothing else delivers `appUrlOpen`
+to the WebView), the release signing certificate's SHA-256 fingerprint for
+`assetlinks.json`, and the Apple Team ID for `apple-app-site-association`.
+Half of it is worse than none: an `intent-filter` with `autoVerify="true"` and
+no matching `assetlinks.json` fails verification on Android 12+, so links keep
+opening the browser while the manifest claims otherwise. Tracked in
+[#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) §2.
 
 ## Build flow
 
@@ -135,14 +145,21 @@ Remaining work for delivery:
    `frontend/android/app/`. The Gradle build already applies the
    google-services plugin only when that file exists, so the project builds
    fine without it (push simply won't work).
-2. **iOS (APNs):** in the Apple Developer portal create an APNs key; in Xcode
-   enable the **Push Notifications** capability on the App target (the
-   AppDelegate APNs forwarding is already wired). Commit the resulting
-   `App.entitlements` and its `CODE_SIGN_ENTITLEMENTS` build setting — an
-   uncommitted Xcode capability has to be redone on every fresh clone, and
-   without an `aps-environment` entitlement `PushNotifications.register()`
-   fails at runtime. Easiest delivery path is uploading the APNs key to the
-   same Firebase project and sending everything through FCM.
+2. **iOS (APNs):** in the Apple Developer portal create an APNs key, and
+   enable the Push Notifications capability for the App ID. The Xcode half is
+   **already committed** and no longer a manual step:
+   `ios/App/App/App.entitlements` declares `aps-environment` and both build
+   configurations set `CODE_SIGN_ENTITLEMENTS`, so a fresh clone archives with
+   the entitlement instead of silently omitting it. The value is
+   `$(APS_ENVIRONMENT)`, set to `development` in Debug and `production` in
+   Release, so an archive cannot ship a sandbox APNs environment — the failure
+   that mints tokens the production gateway rejects and reads, from the
+   backend, as a delivery bug. `tests/unit/config/iosEntitlements.test.ts`
+   holds all of that; `scripts/validate-store-release.mjs` additionally
+   requires it once `registerNativePush()` has a call site. What is still
+   outstanding here is the Apple-side key and the AppDelegate forwarding is
+   already wired. Easiest delivery path is uploading the APNs key to the same
+   Firebase project and sending everything through FCM.
 3. **Backend sender:** a `sendDevicePush` sibling to
    `notifier.sendBrowserPush` that calls the FCM HTTP v1 API with the stored
    tokens, pruning tokens FCM reports as dead (mirror the 404/410 cleanup the
