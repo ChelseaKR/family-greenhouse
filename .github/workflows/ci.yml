@@ -107,39 +107,30 @@ jobs:
         # output, so it is safe on a plain CI checkout.
         run: npm run mobile:validate
 
-      - name: Validate commits
-        if: github.event_name == 'pull_request'
-        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
-
-  i18n:
-    name: i18n Gates
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Catalog gates (key parity, placeholder parity, plural categories, TODO markers, BCP-47, UTF-8)
         # STANDARDS/INTERNATIONALIZATION-STANDARD.md §4 G1/G3/G5/G6 —
         # shared with `npm run verify` (frontend `i18n:check`) so local == CI.
+        #
+        # Lives in `Lint` rather than a job of its own for the same reason the
+        # settled-read ratchet above does: `Lint` is a required status check
+        # and the old `i18n Gates` job was not, so key parity, placeholder
+        # parity, plural categories and the hardcoded-string ratchet could all
+        # go red without blocking a merge (CICD-467). scripts/
+        # check-no-silenced-gates.mjs now asserts that these two stay in a
+        # required job.
         working-directory: frontend
         run: node scripts/check-i18n-catalogs.mjs
 
       - name: Hardcoded-string ratchet (no new untranslatable JSX text)
         # §4 G2 as a ratchet against scripts/i18n-hardcoded-baseline.json —
-        # existing debt is pinned per file and may only shrink.
+        # existing debt is pinned per file and may only shrink. Also covers
+        # aria-label/alt/title/placeholder literals (CICD-468).
         working-directory: frontend
         run: node scripts/check-hardcoded-strings.mjs
+
+      - name: Validate commits
+        if: github.event_name == 'pull_request'
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
   typecheck:
     name: Type Check
