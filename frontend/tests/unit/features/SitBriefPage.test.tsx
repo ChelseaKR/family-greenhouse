@@ -8,6 +8,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import i18n from '@/i18n';
+import enCatalog from '@/i18n/locales/en/translation.json';
+import esCatalog from '@/i18n/locales/es/translation.json';
 import { SitBriefPage } from '@/features/sitter/SitBriefPage';
 import {
   sitterService,
@@ -108,7 +110,22 @@ describe('SitBriefPage', () => {
     );
     renderPage();
 
-    expect(await screen.findByText(/No note for this plant/)).toBeInTheDocument();
+    // WHOLE-STRING, not a prefix. This assertion used to be
+    // findByText(/No note for this plant/), and it passed for two years while
+    // the string it matched continued "…Water when the top of the soil is dry
+    // if you're unsure" — invented advice, in the same text node, under a
+    // heading that said the household wrote it. A prefix match cannot see a
+    // fabricated second sentence, so the note element's ENTIRE text is pinned.
+    const note = await screen.findByText('No note for this plant.');
+    expect(note).toHaveTextContent(/^No note for this plant\.$/);
+
+    // …and no heading over it claiming the household wrote that line. Both
+    // care-note headings are attributions; neither belongs on an absence.
+    expect(screen.queryByText('The household’s note')).not.toBeInTheDocument();
+    expect(screen.queryByText('House rule')).not.toBeInTheDocument();
+
+    // The promise the page makes at the top, which the invented sentence broke.
+    expect(screen.getByText(/nothing here is generated advice/)).toBeInTheDocument();
     expect(screen.getByText(/No placement note/)).toBeInTheDocument();
     // Nothing that reads as household instruction was fabricated.
     expect(screen.queryByText('Bottom-water this one')).not.toBeInTheDocument();
@@ -182,5 +199,27 @@ describe('SitBriefPage', () => {
       'href',
       `/sit/${TOKEN}`
     );
+  });
+});
+
+/**
+ * The invention lived in the CATALOGS, in both of them, not in the component.
+ * A rendering test only ever covers the locale it renders in, and `es` is
+ * fetched on demand (see src/i18n/index.ts) so it cannot be rendered here at
+ * all — which is exactly how the Spanish copy carried the same fabricated
+ * watering rule unwatched. So the guard lives where the strings do.
+ */
+describe('sitterBrief.noCareNote, in every catalog', () => {
+  /** Anything that reads as an instruction about how to care for the plant. */
+  const CARE_INSTRUCTION =
+    /\b(water|watering|soil|dry|damp|moist|feed|mist|riega|regar|riego|tierra|seca|húmed|abona|rocía)/i;
+
+  it.each([
+    ['en', enCatalog.sitterBrief.noCareNote],
+    ['es', esCatalog.sitterBrief.noCareNote],
+  ])('%s states the absence and nothing else', (_lang, value) => {
+    expect(value).not.toMatch(CARE_INSTRUCTION);
+    // One sentence. The second sentence is where the advice hid.
+    expect(value.replace(/[.!?]\s*$/, '')).not.toMatch(/[.!?]/);
   });
 });
