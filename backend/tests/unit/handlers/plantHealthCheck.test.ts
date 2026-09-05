@@ -188,6 +188,44 @@ describe('plants health-check handler', () => {
     expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 400);
   });
 
+  it('resolves the cap from ENTITLEMENT, so a failed card stops spending a paid allowance (#476)', async () => {
+    // Every scan is a real Bedrock invocation, and Stripe retries a failed
+    // charge for weeks before it cancels — so `planId` alone kept a household
+    // mid-dunning on the paid allowance for the whole dunning window.
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'greenhouse',
+      status: 'past_due',
+    } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockImplementation(async (lookupPlanId) =>
+      (await lookupPlanId()) === 'greenhouse' ? 400 : 200
+    );
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    // The free tier's allowance — the same treatment a downgrade already gets.
+    expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 200);
+    expect(leafHealthBudget.reserveUsage).not.toHaveBeenCalledWith('hh-1', 400);
+  });
+
+  it('keeps the paid allowance for a lifetime owner whose later subscription was cancelled (#476)', async () => {
+    // A lifetime purchase is an entitlement floor with no refund path; no
+    // subscription status may fall below it.
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'greenhouse',
+    } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockImplementation(async (lookupPlanId) =>
+      (await lookupPlanId()) === 'greenhouse' ? 400 : 200
+    );
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 400);
+  });
+
   it('503s before Bedrock when the cap cannot be resolved (a cap we cannot determine is not one to spend against)', async () => {
     vi.mocked(leafHealthBudget.resolveMonthlyCap).mockRejectedValue(new Error('ddb down'));
     const checkPlantHealth = await subject();

@@ -126,6 +126,50 @@ describe('GET /chat/budget', () => {
     expect(JSON.parse(res.body)).toMatchObject({ inputTokensCap: 250000, outputTokensCap: 50000 });
   });
 
+  it('reports the ENTITLED tier cap, not the plan row, once a card has failed (#476)', async () => {
+    // The turn itself is enforced against getEntitledPlan (services/chat/
+    // index.ts), so a past_due Greenhouse household is refused outright. This
+    // endpoint read `planId` and reported the Greenhouse cap anyway — a
+    // confident "used X of Y" whose Y is not the Y anything enforces.
+    process.env.CHAT_BUDGET_INPUT_TOKENS_SEEDLING = '62500';
+    process.env.CHAT_BUDGET_OUTPUT_TOKENS_SEEDLING = '12500';
+    process.env.CHAT_BUDGET_INPUT_TOKENS_GREENHOUSE = '900000';
+    process.env.CHAT_BUDGET_OUTPUT_TOKENS_GREENHOUSE = '180000';
+    const getChatBudget = await subject();
+
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'greenhouse',
+      status: 'past_due',
+    } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
+    const res = (await getChatBudget(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      inputTokensCap: 62500,
+      outputTokensCap: 12500,
+    });
+  });
+
+  it('still reports the paid cap while the subscription is in good standing (#476)', async () => {
+    // The negative control on the conversion: entitlement is not a blanket
+    // downgrade. `active`, `trialing` and an absent status all still grant it.
+    process.env.CHAT_BUDGET_INPUT_TOKENS_GREENHOUSE = '900000';
+    process.env.CHAT_BUDGET_OUTPUT_TOKENS_GREENHOUSE = '180000';
+    const getChatBudget = await subject();
+
+    for (const status of ['active', 'trialing', undefined]) {
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        ...(status ? { status } : {}),
+      } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
+      const res = (await getChatBudget(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toMatchObject({
+        inputTokensCap: 900000,
+        outputTokensCap: 180000,
+      });
+    }
+  });
+
   it('503s — without reading the usage row — when the cap cannot be resolved (never report a cap we could not determine)', async () => {
     process.env.CHAT_BUDGET_INPUT_TOKENS_SEEDLING = '62500';
     vi.mocked(billing.getHouseholdSubscription).mockRejectedValueOnce(new Error('ddb down'));
