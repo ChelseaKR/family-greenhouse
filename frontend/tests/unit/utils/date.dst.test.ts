@@ -14,7 +14,7 @@
  * EST) so the instants themselves are unambiguous.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { calendarDaysBetween, formatRelativeDate } from '@/utils/date';
+import { calendarDaysBetween, formatRelativeDate, isOverdue, overdueAt } from '@/utils/date';
 
 // EST is UTC-5 → getTimezoneOffset() === 300 in winter. If the TZ override
 // didn't take, these assertions would be meaningless; skip instead.
@@ -51,6 +51,28 @@ describe.runIf(tzActive)('DST fall-back (America/New_York, 2026-11-01)', () => {
     const mon = new Date('2026-11-02T12:00:00-05:00');
     expect(calendarDaysBetween(sun, mon)).toBe(1);
     expect(calendarDaysBetween(mon, sun)).toBe(-1);
+  });
+
+  it('overdueAt lands on real local midnight across the 25-hour day', () => {
+    // A task due during the 25-hour Sunday turns overdue at Monday 00:00 EST,
+    // not 24h after Sunday's midnight (which is 23:00 Sunday EST).
+    expect(overdueAt('2026-11-01T12:00:00-05:00')).toBe(
+      new Date('2026-11-02T00:00:00-05:00').getTime()
+    );
+    // ...and the predicate agrees on both sides of that instant (#591).
+    expect(isOverdue('2026-11-01T12:00:00-05:00', new Date('2026-11-01T23:30:00-05:00'))).toBe(
+      false
+    );
+    expect(isOverdue('2026-11-01T12:00:00-05:00', new Date('2026-11-02T00:30:00-05:00'))).toBe(
+      true
+    );
+  });
+
+  it('overdueAt lands on real local midnight across the 23-hour day', () => {
+    // Spring forward 2027-03-14: the local day is 23 hours long.
+    expect(overdueAt('2027-03-14T12:00:00-04:00')).toBe(
+      new Date('2027-03-15T00:00:00-04:00').getTime()
+    );
   });
 
   it('calendarDaysBetween is 0 within the same (25-hour) local day', () => {

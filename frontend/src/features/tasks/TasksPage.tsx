@@ -37,7 +37,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
-import { calendarDaysBetween } from '@/utils/date';
+import { calendarDaysBetween, isOverdue, isToday } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useSpaces } from '@/hooks/useSpaces';
 import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
@@ -73,22 +73,6 @@ function formatDueDate(dateString: string): string {
     return 'Tomorrow';
   }
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function isOverdue(dateString: string): boolean {
-  const date = new Date(dateString);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime() < today.getTime();
-}
-
-function isToday(dateString: string): boolean {
-  const date = new Date(dateString);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime() === today.getTime();
 }
 
 export function TasksPage() {

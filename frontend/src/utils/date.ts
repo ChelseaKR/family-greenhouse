@@ -71,12 +71,42 @@ export function formatRelativeDate(dateString: string): string {
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-export function isOverdue(dateString: string): boolean {
+/**
+ * Is this due date behind the *calendar day* we are in? A household's "today"
+ * is a day, not an instant: a task due at 09:00 is still today's job at 17:00,
+ * which is why `firstDueIso` above puts a task created today at the END of
+ * today (#346, #539).
+ *
+ * `now` is injectable so callers that already read the clock — and schedulers
+ * that must ask "is it overdue *at this instant*" — classify against one
+ * reading instead of racing their own.
+ */
+export function isOverdue(dateString: string, now: Date = new Date()): boolean {
   const date = new Date(dateString);
-  const today = new Date();
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   date.setHours(0, 0, 0, 0);
   return date.getTime() < today.getTime();
+}
+
+/**
+ * The instant `isOverdue(dateString)` first turns true: local midnight at the
+ * start of the day AFTER the due date's local calendar day.
+ *
+ * For anything that wakes up to announce an overdue task. Waking at the due
+ * *instant* instead fires while every surface in the app still labels the task
+ * "Today" — the notification and the red state were never true at the same
+ * time (#591). `isOverdue(d, now) === overdueAt(d) <= now.getTime()` by
+ * construction, and a test pins that; whoever changes one must change both.
+ *
+ * DST-safe: `setHours`/`setDate` are wall-clock, so a 23- or 25-hour day still
+ * ends at the next local midnight.
+ */
+export function overdueAt(dateString: string): number {
+  const startOfNextDay = new Date(dateString);
+  startOfNextDay.setHours(0, 0, 0, 0);
+  startOfNextDay.setDate(startOfNextDay.getDate() + 1);
+  return startOfNextDay.getTime();
 }
 
 /**
