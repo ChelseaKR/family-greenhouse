@@ -13,7 +13,8 @@ import i18next from 'eslint-plugin-i18next';
 //
 // The per-workspace `npm run lint` scripts run from inside each workspace and
 // resolve frontend/eslint.config.mjs or backend/eslint.config.mjs. This root
-// config exists so that the husky + lint-staged pre-commit hook — which runs
+// config exists so that the lint-staged pre-commit hook (.githooks/pre-commit) —
+// which runs
 // `eslint --fix backend/src/x.ts frontend/src/y.tsx` from the repo root — lints
 // staged files in BOTH workspaces with the same rules. Flat config does not
 // auto-discover nested config files, so the workspace rule sets are mirrored

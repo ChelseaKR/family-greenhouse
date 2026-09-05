@@ -63,6 +63,24 @@ jobs:
         # local pre-push and CI run the identical check — see CICD-27.
         run: node scripts/check-no-bare-markers.mjs
 
+      - name: Git hooks are wired to a tracked directory (#544)
+        # `npm ci` above runs `prepare`, which points core.hooksPath at the
+        # TRACKED .githooks/. This step re-derives that wiring from git rather
+        # than trusting it: the hooks exist, are executable ON DISK and in the
+        # INDEX (mode 100755 — a hook that is executable on one laptop protects
+        # only that laptop), and pre-push still runs `npm run verify`.
+        #
+        # The index-mode assertion is the one that only CI can usefully make,
+        # and it is the property that failed: core.hooksPath was `.husky/_`, a
+        # directory husky generates and git-ignores, so a `git worktree add`
+        # inherited the path into a tree where nothing was there. Git ran no
+        # hook and pushed — exit 0, no warning.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
+        run: npm run hooks:check
+
       - name: No silenced test/security/lint gates in workflows (P0-3)
         # Regression gate for the exact bypasses this remediation pass closed
         # (cd-staging.yml's continue-on-error on e2e; the skip-lighthouse

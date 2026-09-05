@@ -8,7 +8,7 @@
  * actually mattered — stated that coverage was "configured but not enforced"
  * and that "we don't gate CI on coverage %". Both claims were false: floors
  * sit in BOTH vitest configs, the required `Test Backend` / `Test Frontend` CI
- * jobs run `test:coverage`, and `.husky/pre-push` runs `npm run verify` which
+ * jobs run `test:coverage`, and `.githooks/pre-push` runs `npm run verify` which
  * chains the same command. A contributor reading that section would have
  * concluded a coverage drop couldn't block their merge, and been wrong.
  *
@@ -234,8 +234,14 @@ for (const job of ['Test Frontend', 'Test Backend']) {
   }
 }
 
-if (!read('.husky/pre-push').includes('npm run verify')) {
-  errors.push(`.husky/pre-push no longer runs \`npm run verify\`, but ${DOC_PATH} says it does.`);
+// The hook moved from `.husky/pre-push` (reached through husky's generated,
+// git-ignored `.husky/_` shim) to the tracked `.githooks/pre-push` — see #544
+// and scripts/check-git-hooks.mjs. `read()` throws on a missing file, so a
+// rename cannot turn this assertion into a vacuous pass.
+if (!read('.githooks/pre-push').includes('npm run verify')) {
+  errors.push(
+    `.githooks/pre-push no longer runs \`npm run verify\`, but ${DOC_PATH} says it does.`
+  );
 }
 
 // `verify` used to be a literal `&&` chain and this was a substring match on

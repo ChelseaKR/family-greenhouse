@@ -27,11 +27,16 @@ Sign in at http://localhost:3000 with `test@example.com` / `password123`.
 
 Three tiers, all enforced:
 
-- **pre-commit** (husky + lint-staged): ESLint + Prettier on changed files.
+- **pre-commit** (lint-staged): ESLint + Prettier on changed files.
 - **pre-push**: `npm run verify` (the full local gate below, including both workspaces' coverage floors).
+
+The hooks live in the tracked [`.githooks/`](.githooks) directory and `core.hooksPath` is pointed at it by `npm install` (package.json's `prepare` runs `scripts/install-git-hooks.mjs`; `npm run hooks:install` does it on its own). Tracked matters: the hooks used to be reached through husky's generated, git-ignored `.husky/_`, and because worktrees share `.git/config`, a fresh `git worktree add` inherited a hooksPath that pointed at nothing — git found no hook and pushed, silently and with exit 0 (#544). A tracked directory cannot be absent.
+
+**In a new worktree, run `npm ci` before you push.** Worktrees do not share `node_modules`, and the pre-push hook now refuses the push when dependencies are missing rather than skipping the gate. `npm run verify` re-asserts the whole wiring on every run (`scripts/check-git-hooks.mjs`).
+
 - **CI** (`.github/workflows/ci.yml`): lint, typecheck, frontend+backend tests, Semgrep SAST, gitleaks, `npm audit`, terraform validate, build, Lighthouse, bundle-size, Playwright e2e + a11y.
 
-Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — the same stages CI runs: `format:check`, `lint`, `typecheck`, `test:coverage`, `i18n:check`, `reads:check`, `observability:check`, `npm audit (--omit=dev --audit-level=high)`, the bare-marker / silenced-gate / docs-testing guards, and the figures, API-spec, sitemap and brand checks. `test:coverage` is `vitest run --coverage` in both workspaces, so the coverage floors that gate `Test Frontend` / `Test Backend` are enforced locally too, not only in CI. `.husky/pre-push` already calls it.
+Run locally before pushing: `make verify` (the portfolio-standard entry point, which runs `npm run verify`) — the same stages CI runs: `format:check`, `lint`, `typecheck`, `test:coverage`, `i18n:check`, `reads:check`, `observability:check`, `npm audit (--omit=dev --audit-level=high)`, the bare-marker / silenced-gate / docs-testing guards, and the figures, API-spec, sitemap and brand checks. `test:coverage` is `vitest run --coverage` in both workspaces, so the coverage floors that gate `Test Frontend` / `Test Backend` are enforced locally too, not only in CI. `.githooks/pre-push` already calls it.
 
 Those steps run **concurrently**, not as a chain — `scripts/run-gate.mjs` schedules the list in [`scripts/gate-steps.mjs`](scripts/gate-steps.mjs) across the machine's cores, and the run fails if any single step does, naming it and reprinting its output. Nothing is skipped or sampled; it is the same set of checks, overlapped. Notes for when it misbehaves:
 

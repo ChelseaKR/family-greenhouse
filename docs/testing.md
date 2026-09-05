@@ -319,7 +319,7 @@ below any of them exits non-zero:
 Those floors are enforced in three places, all running the same command:
 
 - **CI** — the required `Test Backend` and `Test Frontend` jobs run `npm run test:coverage`, so a PR that drops below a floor cannot merge.
-- **Pre-push** — `.husky/pre-push` runs `npm run verify`, which chains `test:coverage`.
+- **Pre-push** — `.githooks/pre-push` runs `npm run verify`, which chains `test:coverage`.
 - **Locally** — `npm run verify`, or a single workspace:
 
 ```bash

@@ -1,0 +1,69 @@
+#!/usr/bin/env sh
+# Pre-push: full quality gate before code reaches origin. `npm run verify`
+# runs scripts/run-gate.mjs, which runs every check the gate has ever run —
+# format:check, both workspaces' lint / typecheck / test:coverage (tests *and*
+# the coverage floors, exactly what CI's Test Frontend / Test Backend jobs
+# run), i18n, settled-read-state ratchets, observability, the production
+# dependency audit, the bare-marker and silenced-gate greps, docs/testing.md,
+# figures, API spec, sitemap and brand — but concurrently instead of in a
+# fifteen-link `&&` chain: measured at 98s and 123s on a busy 10-core laptop
+# against 305s for the chain. The step list is scripts/gate-steps.mjs; a
+# failure in any one of them fails the push and names itself. These are the
+# same stages CI runs (see CICD-27 / CONTRIBUTING.md), so a green pre-push
+# almost always means a green CI run.
+#
+# The cheap checks are unscheduled and report in the first few seconds, so a
+# bare marker or a stale doc no longer waits behind the test suites.
+#
+# If the machine is already busy, `GATE_JOBS=2 git push` narrows the pool;
+# `npm run verify -- --jobs 1` reproduces close to the old serial behaviour.
+#
+# To skip in an emergency: `git push --no-verify`. Don't make this a habit.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS FILE IS TRACKED (#544)
+#
+# This hook used to live at `.husky/pre-push` and be reached through
+# `core.hooksPath=.husky/_` — a shim directory husky GENERATES during
+# `npm install` and that is git-ignored. Worktrees share `.git/config`, so a
+# `git worktree add` inherited that hooksPath while `.husky/_` did not exist
+# in the new worktree. Git looked for a hook, found nothing, and pushed:
+# exit 0, six lines of output, no warning. A missing directory rendered as a
+# clean push — this repo's own named defect class, landing on the mechanism
+# that enforces every other rule.
+#
+# `.githooks/` is a TRACKED directory, so `git worktree add`, `git clone` and
+# `git checkout` all materialise this file by construction. It cannot be
+# absent. What CAN still be absent in a fresh worktree is `node_modules`, so
+# that case is checked below and fails LOUDLY instead of half-running.
+# scripts/check-git-hooks.mjs asserts the wiring itself on every gate run.
+# ---------------------------------------------------------------------------
+
+set -e
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+# `node_modules/.package-lock.json` is npm's own install marker: it is
+# written by a completed `npm ci`/`npm install` and by nothing else, so it
+# distinguishes "installed" from "a stray node_modules left by something".
+if [ ! -d node_modules ] || [ ! -f node_modules/.package-lock.json ]; then
+  echo "pre-push: BLOCKED — dependencies are not installed in this working tree." >&2
+  echo "" >&2
+  echo "  $root" >&2
+  echo "" >&2
+  echo "The quality gate cannot run, so this push is refused rather than going out" >&2
+  echo "ungated (#544). Fix it with:" >&2
+  echo "" >&2
+  echo "  npm ci" >&2
+  echo "" >&2
+  echo "This is the usual state of a freshly created \`git worktree add\` — worktrees" >&2
+  echo "do not share node_modules with the checkout they were made from." >&2
+  exit 1
+fi
+
+# Parity with the husky shim this replaced: workspace binaries on PATH.
+PATH="$root/node_modules/.bin:$PATH"
+export PATH
+
+npm run verify
