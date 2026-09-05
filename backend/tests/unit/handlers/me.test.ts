@@ -379,6 +379,37 @@ describe('me handler', () => {
       expect(cognitoUsers.deleteUser).not.toHaveBeenCalled();
     });
 
+    it('does not report an erasure it did not finish when a plant cascade fails', async () => {
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const accountCleanup = await import('../../../src/services/accountCleanup.js');
+      const plantService = await import('../../../src/services/plantService.js');
+      const billingEmails = await import('../../../src/services/billingEmails.js');
+      const { deleteMe } = await import('../../../src/handlers/me/handler.js');
+      await mockUserScopedCleanup();
+      await mockSoloHousehold();
+      // What a throttled cascade now does: DynamoDB left rows unprocessed, so
+      // deletePlant refuses to delete the plant row that makes them findable.
+      vi.mocked(plantService.deletePlant).mockRejectedValue(
+        new Error('Plant cascade left 3 row(s) unprocessed after 4 attempts')
+      );
+
+      const res = (await deleteMe(
+        buildEvent({ httpMethod: 'DELETE' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      // 204 here would be a compliance claim we cannot support: photo rows
+      // carrying uploadedBy, a caption and an image URL would survive the
+      // account that owns them, unreachable and with no TTL.
+      expect(res.statusCode).toBe(500);
+      expect(accountCleanup.deleteAbandonedHouseholdData).not.toHaveBeenCalled();
+      expect(accountCleanup.deleteUserScopedData).not.toHaveBeenCalled();
+      expect(cognitoUsers.deleteUser).not.toHaveBeenCalled();
+      // And no "your account was deleted" email for a deletion that stopped.
+      expect(billingEmails.sendAccountDeletionEmail).not.toHaveBeenCalled();
+    });
+
     it('still deletes the account when the subscription was already cancelled (safe retry)', async () => {
       const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
       const accountCleanup = await import('../../../src/services/accountCleanup.js');
