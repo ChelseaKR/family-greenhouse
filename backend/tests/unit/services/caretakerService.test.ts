@@ -8,6 +8,14 @@
  * permission surface stays disjoint from everything a member can do.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scryptSync } from 'node:crypto';
+
+/** The production hash, restated here so a silent change to the salt or the
+ *  KDF fails a test rather than quietly stranding every live seat — and a
+ *  caretaker whose link stops resolving cannot ask for a replacement. */
+function expectedHash(token: string): string {
+  return scryptSync(token, 'family-greenhouse-caretaker-v1', 32).toString('hex');
+}
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
@@ -99,7 +107,13 @@ describe('createCaretaker', () => {
     const put = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       input: { Item: Record<string, unknown> };
     };
-    expect(put.input.Item.PK).toBe(`CARETAKER#${seat.token}`);
+    // #568: the row is keyed by the token's hash, and the plaintext is on no
+    // attribute of it — a table export yields nothing that opens the seat.
+    expect(put.input.Item.PK).toBe(`CARETAKER#${expectedHash(seat.token)}`);
+    expect(put.input.Item.PK).not.toBe(`CARETAKER#${seat.token}`);
+    expect(put.input.Item.tokenHash).toBe(expectedHash(seat.token));
+    expect(Object.values(put.input.Item)).not.toContain(seat.token);
+    expect(put.input.Item.token).toBeUndefined();
     expect(put.input.Item.GSI1PK).toBe(`HOUSEHOLD#${HH}#CARETAKER`);
     expect(put.input.Item.name).toBe('Dana');
     expect(put.input.Item.ttl as number).toBeGreaterThan(Date.parse(expiresAt) / 1000);
@@ -116,6 +130,9 @@ describe('createCaretaker', () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
     expect('token' in svc.toSummary(seat)).toBe(false);
+    // keyToken is the row's partition key — for a pre-#568 row that value IS
+    // the secret, so the management view must not carry it either.
+    expect('keyToken' in svc.toSummary(seat)).toBe(false);
   });
 });
 
@@ -165,6 +182,8 @@ describe('revokeCaretaker', () => {
     const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
       input: { Key: Record<string, string> };
     };
+    // `activeRow()` is a pre-#568 row (plaintext `token`, no `tokenHash`), so
+    // its PK suffix IS the plaintext. The hashed generation is covered below.
     expect(update.input.Key.PK).toBe(`CARETAKER#${TOKEN}`);
   });
 
@@ -409,5 +428,159 @@ describe('caretakerService — the seat list is the whole seat list', () => {
       .mockResolvedValueOnce({} as never);
 
     expect(await svc.revokeCaretaker(HH, 'seat-old')).toBe(true);
+  });
+});
+
+/**
+ * #568: a caretaker seat grants a whole household's due-task list, completion,
+ * photo upload and notes, and it used to be stored as
+ * `PK: CARETAKER#{plaintext}`. Any table export, point-in-time restore, or
+ * principal with `dynamodb:Scan` came away with live, working seats — while
+ * the calendar token, the API key, and (since #551) the sitter and kiosk links
+ * in the same dump came away as scrypt digests. This is that inconsistency
+ * closed, plus the migration it needs.
+ *
+ * The migration matters more here than anywhere else in the set: a caretaker
+ * is not the account holder and has no account at all, so a seat that stops
+ * resolving cannot be re-issued on request. The legacy-row test below is the
+ * one that proves an existing link survives the change.
+ */
+describe('caretakerService — the token is not in the table (#568)', () => {
+  // mockReset, not clearAllMocks: a queued mockResolvedValueOnce that a
+  // previous test never consumed would otherwise answer the first read here.
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('resolves a seat written by createCaretaker (hash written, hash read)', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    const minted = await svc.createCaretaker({
+      householdId: HH,
+      createdBy: 'u1',
+      name: 'Dana',
+      startsAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const written = (
+      vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+        input: { Item: Record<string, unknown> };
+      }
+    ).input.Item;
+
+    // Hand the stored row straight back to the read path, keyed the way the
+    // write path keyed it. A round trip is the only assertion that catches a
+    // write/read hash mismatch, which would strand every seat ever minted.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: written } as never);
+    const resolved = await svc.getActiveCaretaker(minted.token);
+    expect(resolved?.id).toBe(minted.id);
+
+    const get = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(get.input.Key.PK).toBe(written.PK);
+    expect(get.input.Key.PK).toBe(`CARETAKER#${expectedHash(minted.token)}`);
+  });
+
+  it('reads the hashed row FIRST, without touching the plaintext key', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(
+      activeRow({ token: undefined, tokenHash: expectedHash(TOKEN) }) as never
+    );
+
+    expect((await svc.getActiveCaretaker(TOKEN))?.householdId).toBe(HH);
+    expect(dynamodb.send).toHaveBeenCalledTimes(1);
+    const get = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(get.input.Key.PK).toBe(`CARETAKER#${expectedHash(TOKEN)}`);
+  });
+
+  it('still resolves a pre-#568 plaintext-keyed row (an existing seat does not break)', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never) // hashed key: no such row
+      .mockResolvedValueOnce(activeRow({ token: TOKEN }) as never); // legacy row
+
+    expect((await svc.getActiveCaretaker(TOKEN))?.householdId).toBe(HH);
+    const legacyGet = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(legacyGet.input.Key.PK).toBe(`CARETAKER#${TOKEN}`);
+  });
+
+  it('honours revocation and the window on a hashed row exactly as before', async () => {
+    const { dynamodb, svc } = await load();
+    // Hashing must not become a way past the checks a plaintext row got.
+    for (const overrides of [
+      { status: 'revoked' },
+      { expiresAt: new Date(Date.now() - 1000).toISOString() },
+      { startsAt: new Date(Date.now() + 60_000).toISOString() },
+    ]) {
+      vi.mocked(dynamodb.send).mockReset();
+      vi.mocked(dynamodb.send).mockResolvedValue(
+        activeRow({ token: undefined, tokenHash: expectedHash(TOKEN), ...overrides }) as never
+      );
+      expect(await svc.getActiveCaretaker(TOKEN)).toBeNull();
+    }
+  });
+
+  it('revokes a hashed row by its hash, not by a token it no longer stores', async () => {
+    const { dynamodb, svc } = await load();
+    const hash = expectedHash(TOKEN);
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ token: undefined, tokenHash: hash }).Item],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeCaretaker(HH, 'seat-1')).toBe(true);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`CARETAKER#${hash}`);
+  });
+
+  it('revokes a legacy plaintext row by its plaintext key (mixed generations)', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          activeRow({
+            id: 'seat-new',
+            token: undefined,
+            tokenHash: expectedHash('n'.repeat(64)),
+          }).Item,
+          activeRow({ id: 'seat-legacy', token: 'z'.repeat(64) }).Item,
+        ],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeCaretaker(HH, 'seat-legacy')).toBe(true);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes[0].input.Key?.PK).toBe(`CARETAKER#${'z'.repeat(64)}`);
+  });
+
+  it('a listed seat carries no plaintext token for the handler to leak', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [activeRow({ token: undefined, tokenHash: expectedHash(TOKEN) }).Item],
+    } as never);
+    const seats = await svc.listCaretakers(HH);
+    expect(seats).toHaveLength(1);
+    expect(seats[0].token).toBeNull();
+    expect(seats[0].keyToken).toBe(expectedHash(TOKEN));
+    expect('token' in svc.toSummary(seats[0])).toBe(false);
+  });
+
+  it('a caretaker token cannot resolve as a sitter link (distinct salts)', async () => {
+    const sitterHash = scryptSync(TOKEN, 'family-greenhouse-sitter-v1', 32).toString('hex');
+    expect(expectedHash(TOKEN)).not.toBe(sitterHash);
   });
 });
