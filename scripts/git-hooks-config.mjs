@@ -16,3 +16,15 @@ export const HOOKS_DIR = '.githooks';
 
 /** Hooks that must exist and be executable for the wiring to be complete. */
 export const REQUIRED_HOOKS = ['pre-commit', 'commit-msg', 'pre-push'];
+
+/**
+ * The committed SSH allowed-signers file, relative to the worktree root.
+ *
+ * Kept relative on purpose: `git config` stores this string verbatim, so an
+ * absolute path would be baked into whichever directory the clone happened to
+ * live in and would break the moment the repo moved or was cloned elsewhere.
+ */
+export const ALLOWED_SIGNERS_FILE = '.github/allowed_signers';
+
+/** The git config key that points at it. */
+export const ALLOWED_SIGNERS_KEY = 'gpg.ssh.allowedSignersFile';
