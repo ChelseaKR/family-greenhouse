@@ -187,8 +187,23 @@ Safari. They fall into four groups:
 
 - **Golden paths** — `auth`, `happy-path`, `plant-crud`, `create-plant`, `task-completion`, `register-flow`, `join-second-household`, `space-overview`, `shared-care-pulse`, `pricing-interval`, `integration-functionality`, `no-care-data`
 - **Accessibility** — `a11y` and `a11y-authenticated` (axe over public and authenticated routes), plus `keyboard-path`, `reflow`, and `reduced-motion`
-- **Rendering** — `visual` and `visual-regression` (screenshot baselines, committed per browser under `*-snapshots/`), `responsive-ux`
+- **Rendering** — `visual` and `responsive-ux`. Also `visual-regression`
+  (screenshot baselines, committed per browser under `*-snapshots/`) — but
+  read the next paragraph before counting it as coverage.
 - **Notifications** — `notification-browser-surfaces`, `foreground-notification-timing`
+
+> **`visual-regression` does not execute in CI.** Every committed baseline is
+> `*-darwin.png` and the runners are Linux, so the spec skips itself on
+> `process.env.CI` (`visual-regression.spec.ts:30`) and
+> `.github/workflows/e2e-crossbrowser.yml` skips it for the same reason. It
+> therefore contributes nothing to the required
+> `E2E + accessibility (Playwright)` check that contains it — a required check
+> with a no-op inside. The deferral is deliberate and documented in the spec;
+> what was not documented is this line, which listed the suite as live
+> coverage. Lifting it means generating five browser variants across five pages
+> on a Linux runner and committing them. `scripts/check-no-silenced-gates.mjs`
+> now scans specs for this pattern, so the next one has to be argued for rather
+> than merely added.
 
 Two further specs are excluded from this matrix by `testIgnore` and run only
 from their own workflows: `post-deploy-smoke.spec.ts` (production CD, described
@@ -295,7 +310,7 @@ below any of them exits non-zero:
 
 | Workspace | Lines | Statements | Branches | Functions |
 | --------- | ----- | ---------- | -------- | --------- |
-| Backend   | 82    | 81         | 74       | 82        |
+| Backend   | 87    | 86         | 78       | 89        |
 | Frontend  | 76    | 75         | 65       | 66        |
 
 <!-- END:COVERAGE-THRESHOLDS -->
