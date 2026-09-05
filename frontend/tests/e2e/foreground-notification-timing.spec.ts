@@ -29,6 +29,18 @@ async function updateTaskDue(
   expect(updated.ok(), 'notification fixture task update should succeed').toBeTruthy();
 }
 
+/**
+ * A due date that is genuinely in a previous calendar day.
+ *
+ * 26 hours rather than 24: a 24-hour offset lands on the same wall-clock time
+ * yesterday, which on the day a DST transition removes an hour can still
+ * resolve to today. The predicate under test is a calendar-day comparison, so
+ * the fixture has to clear a calendar day, not a duration.
+ */
+function yesterdayIso(): string {
+  return new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
+}
+
 test('an open tab alerts at the due time, respects permission, and dedupes the occurrence', async ({
   page,
   context,
@@ -89,7 +101,13 @@ test('an open tab alerts at the due time, respects permission, and dedupes the o
   }, CALLS_KEY);
 
   expect(await page.evaluate(() => Notification.permission)).not.toBe('granted');
-  await updateTaskDue(request, account, new Date(Date.now() + 1_000).toISOString());
+  // Yesterday, not "a second from now". Since #591 the alert fires when a task
+  // turns OVERDUE — at local midnight after its due day — not at the instant it
+  // falls due. A task due later today is not overdue, so a due-soon fixture here
+  // would make this assertion pass whether or not the permission check works:
+  // nothing would alert either way. An already-overdue task is the only fixture
+  // that isolates the thing under test.
+  await updateTaskDue(request, account, yesterdayIso());
   await page.reload();
   await page.waitForTimeout(1_500);
   expect(await page.evaluate((callsKey) => sessionStorage.getItem(callsKey), CALLS_KEY)).toBeNull();
@@ -97,7 +115,7 @@ test('an open tab alerts at the due time, respects permission, and dedupes the o
   await context.grantPermissions(['notifications'], { origin: 'http://localhost:3000' });
   expect(await page.evaluate(() => Notification.permission)).toBe('granted');
 
-  await updateTaskDue(request, account, new Date(Date.now() + 5_000).toISOString());
+  await updateTaskDue(request, account, yesterdayIso());
   await page.reload();
   await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible();
 
