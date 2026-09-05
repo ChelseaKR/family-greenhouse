@@ -34,12 +34,37 @@
  * ## Security model (inherited from sitter links, unchanged)
  *
  *   - 256-bit CSPRNG token, the only credential, in the URL path.
- *   - `PK = CARETAKER#{token}` so a lookup is one GetItem — no enumeration.
+ *   - At rest the token is HASHED, never stored (#568). `PK =
+ *     CARETAKER#{scrypt(token)}`, so a lookup is still one GetItem with no
+ *     enumeration surface — the property the plaintext key was chosen for
+ *     survives — while a table export, a point-in-time restore, or anyone with
+ *     `dynamodb:Scan` now walks away with a digest instead of a live seat.
+ *     This is the same migration #551 made for sitter and kiosk links, and it
+ *     costs nothing here because the seat token is returned exactly once, at
+ *     creation (`handlers/caretakers/management.ts`), and is never read back
+ *     for display: `listCaretakers` goes through `toSummary`, which strips it.
  *   - Rows carry a DynamoDB `ttl`, AND every read re-checks `status` and the
  *     `[startsAt, expiresAt]` window, so a not-yet-swept row is never honoured
  *     past its window.
  *   - Validation failures are generic (null) so the public endpoints can't be
  *     used as a token-existence oracle.
+ *
+ * ## Seats minted before #568 keep working
+ *
+ * A caretaker whose link stops resolving cannot ask for a new one — they are
+ * not the account holder and have no account at all. So rows written before
+ * #568 (keyed by the PLAINTEXT token, carrying it as a `token` attribute) are
+ * still resolved: `getActiveCaretaker` falls back to a second point read on
+ * the legacy key. Both reads are `GetItem` on the partition key, so the
+ * fallback costs one extra point read on a miss and adds no enumeration
+ * surface.
+ *
+ * There is deliberately no rewrite-on-read: a delete + put on an anonymous
+ * public read path can leave two live rows on a partial failure. The legacy
+ * generation only ever shrinks on its own — every caretaker row carries a
+ * `ttl` of `expiresAt` + 3 days, and `MAX_CARETAKER_DAYS` is 180, so the last
+ * plaintext row deletes itself within one engagement window with nothing to
+ * run.
  *
  * ## Reads never collapse into "nothing happened"
  *
@@ -55,7 +80,7 @@ import {
   UpdateCommand,
   type QueryCommandInput,
 } from '@aws-sdk/lib-dynamodb';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -98,8 +123,22 @@ export const CARETAKER_FORBIDDEN_CAPABILITIES = [
 export interface Caretaker {
   /** Opaque id used in the management API (list/revoke). NOT the secret. */
   id: string;
-  /** The 256-bit secret token. Returned to the creator exactly once. */
-  token: string;
+  /**
+   * The 256-bit secret token, present ONLY on the object `createCaretaker`
+   * returns — that is the one moment it exists in this system. Since #568 it
+   * is not stored, so a seat read back out of DynamoDB carries `null` here
+   * unless it is a pre-#568 row that still holds its plaintext.
+   */
+  token: string | null;
+  /**
+   * The row's own partition-key suffix: the token's scrypt digest on rows
+   * written since #568, the plaintext token on rows written before it. It
+   * exists so revocation can address the base row of either generation
+   * without the household ever holding a token. NEVER put it in a response —
+   * for a legacy row it IS the secret; `toSummary` is the only thing that
+   * should be handed to a caller.
+   */
+  keyToken: string;
   householdId: string;
   createdBy: string;
   createdAt: string;
@@ -112,8 +151,13 @@ export interface Caretaker {
   status: CaretakerStatus;
 }
 
-/** A caretaker seat as shown to the household — never the token. */
-export type CaretakerSummary = Omit<Caretaker, 'token'>;
+/** A caretaker seat as shown to the household — never the token, and never
+ *  `keyToken` either (on a legacy row that value IS the token). */
+export type CaretakerSummary = Omit<Caretaker, 'token' | 'keyToken'>;
+
+/** A seat as it comes back from `createCaretaker` — the one place the
+ *  plaintext token exists, and the only place it is non-null. */
+export type MintedCaretaker = Caretaker & { token: string };
 
 export interface CaretakerVisitTaskEntry {
   taskId: string;
@@ -185,7 +229,27 @@ export const VISIT_DETAIL_CAP = 100;
 // re-check expiresAt, so the buffer is invisible. Mirrors sitterService.
 const TTL_BUFFER_MS = 3 * 24 * 60 * 60 * 1000;
 
-const caretakerPk = (token: string) => `CARETAKER#${token}`;
+/**
+ * Deterministic, memory-hard hash of a caretaker token — the row's partition
+ * key. Same construction and same reasoning as `apiKeys.hashKey`,
+ * `calendarTokens.hashToken` and `sitterService.hashToken`: a per-row random
+ * salt (bcrypt/argon2) would make the point read impossible, and a fixed salt
+ * costs nothing here because the input is a 256-bit CSPRNG value rather than a
+ * human-chosen password, so there is no precomputation to defend against.
+ * scrypt rather than SHA-256 because the repo's
+ * `js/insufficient-password-hash` policy rejects an unsalted digest.
+ *
+ * The salt is DIFFERENT from every other credential's, so a token minted for
+ * one surface can never resolve on another even if it is pasted there.
+ */
+function hashToken(token: string): string {
+  return scryptSync(token, 'family-greenhouse-caretaker-v1', 32).toString('hex');
+}
+
+/** The base row's key, addressed by its partition-key SUFFIX — the token's
+ *  hash on rows written since #568, the plaintext on rows written before it.
+ *  Never pass a raw token here except on the legacy read fallback. */
+const caretakerPk = (keyToken: string) => `CARETAKER#${keyToken}`;
 const caretakerGsiPk = (householdId: string) => `HOUSEHOLD#${householdId}#CARETAKER`;
 /** Partition holding a household's visit records AND its open-visit pointers. */
 export const visitPk = (householdId: string) => `HOUSEHOLD#${householdId}#CARETAKER_VISIT`;
@@ -193,9 +257,14 @@ const openVisitSk = (caretakerId: string) => `OPEN#${caretakerId}`;
 const visitSk = (startedAt: string, visitId: string) => `VISIT#${startedAt}#${visitId}`;
 
 function itemToCaretaker(item: Record<string, unknown>): Caretaker {
+  // `tokenHash` on rows written since #568; the plaintext `token` on rows
+  // written before it. Either way this is exactly the row's PK suffix, which
+  // is all revocation needs.
+  const keyToken = (item.tokenHash as string | undefined) ?? (item.token as string);
   return {
     id: item.id as string,
-    token: item.token as string,
+    token: (item.token as string | undefined) ?? null,
+    keyToken,
     householdId: item.householdId as string,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
@@ -206,10 +275,12 @@ function itemToCaretaker(item: Record<string, unknown>): Caretaker {
   };
 }
 
-/** Strip the secret token before handing a seat to the household. */
+/** Strip the secret token — and the row's key suffix, which for a pre-#568 row
+ *  IS the token — before handing a seat to the household. */
 export function toSummary(caretaker: Caretaker): CaretakerSummary {
-  const { token: _token, ...summary } = caretaker;
+  const { token: _token, keyToken: _keyToken, ...summary } = caretaker;
   void _token;
+  void _keyToken;
   return summary;
 }
 
@@ -219,15 +290,44 @@ export async function createCaretaker(input: {
   name: string;
   startsAt: string;
   expiresAt: string;
-}): Promise<Caretaker> {
+}): Promise<MintedCaretaker> {
   // 256-bit CSPRNG token — 64 hex chars, drawn from the OS CSPRNG. Do NOT
   // swap this for uuid()/Math.random (predictable / lower entropy).
   const token = randomBytes(32).toString('hex');
+  const tokenHash = hashToken(token);
+  const id = uuid();
   const now = new Date().toISOString();
 
-  const caretaker: Caretaker = {
-    id: uuid(),
+  // The item is written field by field rather than spread from the seat
+  // record, because the record carries the plaintext and the row must NOT
+  // (#568). A spread here is exactly how the plaintext got onto the row.
+  const item: DynamoDBItem = {
+    PK: caretakerPk(tokenHash),
+    SK: 'METADATA',
+    // Mirror onto GSI1 so the household can list its seats in one query.
+    GSI1PK: caretakerGsiPk(input.householdId),
+    GSI1SK: now,
+    entityType: 'Caretaker',
+    // Both the PK suffix and the attribute every revoke path reads through.
+    // The plaintext appears nowhere on the row.
+    tokenHash,
+    id,
+    householdId: input.householdId,
+    createdBy: input.createdBy,
+    createdAt: now,
+    name: input.name,
+    startsAt: input.startsAt,
+    expiresAt: input.expiresAt,
+    status: 'active',
+    ttl: Math.floor((Date.parse(input.expiresAt) + TTL_BUFFER_MS) / 1000),
+  };
+
+  await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+
+  return {
+    id,
     token,
+    keyToken: tokenHash,
     householdId: input.householdId,
     createdBy: input.createdBy,
     createdAt: now,
@@ -236,20 +336,13 @@ export async function createCaretaker(input: {
     expiresAt: input.expiresAt,
     status: 'active',
   };
+}
 
-  const item: DynamoDBItem = {
-    PK: caretakerPk(token),
-    SK: 'METADATA',
-    // Mirror onto GSI1 so the household can list its seats in one query.
-    GSI1PK: caretakerGsiPk(input.householdId),
-    GSI1SK: now,
-    entityType: 'Caretaker',
-    ...caretaker,
-    ttl: Math.floor((Date.parse(input.expiresAt) + TTL_BUFFER_MS) / 1000),
-  };
-
-  await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-  return caretaker;
+async function readCaretakerRow(pk: string): Promise<Record<string, unknown> | null> {
+  const result = await dynamodb.send(
+    new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: 'METADATA' } })
+  );
+  return (result?.Item as Record<string, unknown> | undefined) ?? null;
 }
 
 /**
@@ -266,12 +359,19 @@ export async function getActiveCaretaker(
   // reaches DynamoDB. 64 lowercase hex chars only.
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
 
-  const result = await dynamodb.send(
-    new GetCommand({ TableName: TABLE_NAME, Key: { PK: caretakerPk(token), SK: 'METADATA' } })
-  );
-  if (!result.Item) return null;
+  // Hashed row first — that is every seat minted since #568. A miss falls back
+  // to the pre-#568 plaintext-keyed row so a caretaker's existing link keeps
+  // working; they have no account and cannot ask for a replacement. BOTH are
+  // GetItem on the partition key, so the fallback costs one extra point read
+  // on a miss and adds no enumeration surface; and nothing here writes a
+  // plaintext row back, so the legacy generation only ever shrinks (every
+  // caretaker row carries a TTL).
+  const item =
+    (await readCaretakerRow(caretakerPk(hashToken(token)))) ??
+    (await readCaretakerRow(caretakerPk(token)));
+  if (!item) return null;
 
-  const caretaker = itemToCaretaker(result.Item);
+  const caretaker = itemToCaretaker(item);
   if (caretaker.status !== 'active') return null;
   const nowIso = now.toISOString();
   if (nowIso < caretaker.startsAt) return null; // window not open yet
@@ -290,8 +390,9 @@ export async function getActiveCaretaker(
 const CARETAKER_PAGE_SIZE = 100;
 
 /** All seats for a household (active + revoked, not yet TTL-swept), newest
- *  first. Tokens are included so the service layer can return them; the
- *  HANDLER strips them via toSummary before responding. */
+ *  first. Rows carry `keyToken` (the row's own PK suffix) so the service layer
+ *  can revoke them; since #568 they carry no plaintext token at all, and the
+ *  HANDLER strips both via toSummary before responding. */
 export async function listCaretakers(householdId: string): Promise<Caretaker[]> {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
@@ -330,7 +431,11 @@ export async function revokeCaretaker(householdId: string, id: string): Promise<
   await dynamodb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: { PK: caretakerPk(target.token), SK: 'METADATA' },
+      // The row's own partition-key suffix — the hash on rows written since
+      // #568, the plaintext on pre-#568 rows — NOT a token the row no longer
+      // stores. Keying off `target.token` here would address
+      // `CARETAKER#undefined` and silently fail to revoke a live seat.
+      Key: { PK: caretakerPk(target.keyToken), SK: 'METADATA' },
       UpdateExpression: 'SET #status = :revoked',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':revoked': 'revoked' },

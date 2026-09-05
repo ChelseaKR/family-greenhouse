@@ -318,9 +318,13 @@ interface SitterLink {
   photoCount?: number;
 }
 
-/** Mirrors caretakerService.Caretaker (CARETAKER#{token} row). Unlike a
- *  sitter link this identity has a NAME, which is what every action it takes
- *  is attributed to. */
+/** Mirrors caretakerService.Caretaker. Unlike a sitter link this identity has
+ *  a NAME, which is what every action it takes is attributed to.
+ *
+ *  This dev mock keys seats by the plaintext token in an in-memory Map; the
+ *  production row is `CARETAKER#{scrypt(token)}` with no plaintext on it
+ *  (#568). The mock has no table to export, so it mirrors the SHAPE and the
+ *  resolution rules rather than the at-rest posture. */
 interface Caretaker {
   id: string;
   token: string;

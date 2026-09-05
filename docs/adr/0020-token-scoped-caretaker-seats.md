@@ -49,8 +49,13 @@ that, and giving them a member row to take it away again is the wrong shape.
 to one household.** Concretely:
 
 1. **No account.** A 256-bit CSPRNG token in the URL is the only credential,
-   stored at `PK = CARETAKER#{token}` so a lookup is one `GetItem` with no
-   enumeration surface. No Cognito user, no password, no email, no sign-in.
+   stored at `PK = CARETAKER#{scrypt(token)}` so a lookup is one `GetItem` with
+   no enumeration surface _and_ a table export yields a digest rather than a
+   live seat (#568; the same migration #551 made for sitter and kiosk links).
+   Seats minted before that keep their plaintext row and keep working — the
+   read falls back to one more point read on the legacy key, because a
+   caretaker has no account and cannot ask for a replacement link. No Cognito
+   user, no password, no email, no sign-in.
 2. **Named.** Unlike a sitter link — whose completions read "a plant sitter" —
    a seat carries the name the household typed, and every action it takes is
    attributed to that name in the activity feed and in the report. The name is
