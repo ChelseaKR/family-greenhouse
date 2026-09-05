@@ -428,6 +428,63 @@ resource "aws_cloudwatch_log_metric_filter" "digests_run_sent" {
   }
 }
 
+# Scheduled-run TRUNCATION (#458).
+#
+# Read this next to the note above, because it closes the hole that note's fix
+# would otherwise have opened.
+#
+# These jobs used to walk every household in a serial loop with no clock in it.
+# Past a few hundred households the loop ran past the 30-second Lambda timeout
+# and was killed wherever it happened to be — and EventBridge's retry restarted
+# it at household #1 and died in the same place, so the tail of the list was
+# not delayed, it was unreachable. That failure DID at least produce a Lambda
+# `Errors` data point, which the scheduled-function alarm below fires on at
+# `> 0`.
+#
+# `services/scheduledFanOut.ts` now stops cleanly on a deadline and resumes
+# next run from where it stopped. That is the fix — but it also means an
+# over-long run RETURNS SUCCESSFULLY, which would have deleted the only signal
+# the old shape had. That is precisely the defect #461 fixed, re-created from
+# the other side. So the run summaries carry `truncated`, and these filters and
+# alarms watch it.
+#
+# A truncated run is not a per-household failure and must not be counted as
+# one: nobody was mailed wrongly and nothing was lost. It is a CAPACITY signal
+# — the fleet no longer fits its budget — and the remedy is a bigger budget or
+# the GSI household directory, not a page at 3am. Hence its own metric rather
+# than folding it into `failed`.
+resource "aws_cloudwatch_log_metric_filter" "reminders_run_truncated" {
+  count = var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-reminders-run-truncated-${var.environment}"
+  log_group_name = var.reminders_lambda_log_group_name
+  # Both passes on the hourly schedule: the reminder fan-out and the
+  # household-email pass that rides the same invocation.
+  pattern = "{ ($.msg = \"reminders.run_complete\" && $.truncated IS TRUE) || ($.msg = \"household_email.run_complete\" && $.truncated IS TRUE) }"
+
+  metric_transformation {
+    name          = "RemindersRunTruncated"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "digests_run_truncated" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-digests-run-truncated-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ ($.msg = \"digest.run_complete\" && $.truncated IS TRUE) || ($.msg = \"recap.run_complete\" && $.truncated IS TRUE) }"
+
+  metric_transformation {
+    name          = "DigestsRunTruncated"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
 # CloudWatch Alarms
 #
 # Alarm strategy (cost-driven consolidation): standard alarms are ~$0.10/mo
@@ -957,6 +1014,58 @@ resource "aws_cloudwatch_metric_alarm" "digests_run_failed" {
 
   tags = {
     Name = "${var.project_name}-digests-run-failed-alarm-${var.environment}"
+  }
+}
+
+# Scheduled runs that could not finish inside their budget. See the metric
+# filters above for why this is a separate signal from `failed`.
+#
+# `> 0` over a window wide enough to contain the run, matching the failure
+# alarms: one truncated run means some households were skipped this cycle, and
+# the resume only guarantees they are reached EVENTUALLY. Two cycles in a row
+# means the fleet is falling behind faster than it catches up.
+resource "aws_cloudwatch_metric_alarm" "reminders_run_truncated" {
+  count = var.enable_alarms && var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-reminders-run-truncated-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  metric_name         = aws_cloudwatch_log_metric_filter.reminders_run_truncated[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  period              = 3600
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "The hourly reminder scan ran out of its time budget two hours running, so some households were not reached in either. The resume makes them eventually-reminded rather than never-reminded, but two consecutive truncations mean the fleet is outgrowing a 30-second invocation: raise the timeout, or land the GSI household directory that removes the full-table scan."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-reminders-run-truncated-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "digests_run_truncated" {
+  count = var.enable_alarms && var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-digests-run-truncated-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.digests_run_truncated[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  # A day, for the same reason as the digest failure alarm: the window has to
+  # contain the run it is watching.
+  period             = 86400
+  statistic          = "Sum"
+  threshold          = 0
+  alarm_description  = "A weekly digest or yearly recap run stopped on its deadline with households left. Unlike the hourly scan there is no next hour to catch up in — the digest's four Monday runs are the whole budget for the week, so a truncation here can mean a household simply gets no digest that week."
+  alarm_actions      = [aws_sns_topic.alerts.arn]
+  ok_actions         = [aws_sns_topic.alerts.arn]
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-digests-run-truncated-alarm-${var.environment}"
   }
 }
 
