@@ -3,6 +3,16 @@ import react from '@vitejs/plugin-react';
 import { availableParallelism } from 'node:os';
 import { resolve } from 'path';
 
+// How many quality gates share this machine right now, as counted by
+// scripts/gate-census.mjs and handed down by scripts/run-gate.mjs. Absent —
+// CI, `npm test` by hand, an editor's test runner — it is 1, and every number
+// below is exactly what it was before #596.
+//
+// This is read rather than counted here on purpose: the gate does the counting
+// once, for all of its steps, and a config file that shells out to `ps` every
+// time vitest loads it would be a surprising thing for `npm test` to do.
+const gateRuns = Math.max(1, Math.floor(Number(process.env.GATE_PEERS)) || 1);
+
 // Pin the test timezone to one that observes DST so the date-math
 // regression tests (tests/unit/utils/date.dst.test.ts) actually exercise
 // the fall-back/spring-forward transitions. This must happen here — in the
@@ -94,7 +104,24 @@ export default defineConfig({
     // The halving also keeps CI where this landed: a 2-vCPU runner resolves
     // to a single worker and a 4-vCPU one to two, so `Test Frontend` is not
     // re-tuned by this.
-    maxWorkers: Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2))),
+    //
+    // Divided again by the number of gate runs sharing the machine (#596).
+    // `availableParallelism()` reports cores, not FREE cores, so the cap above
+    // was four workers per gate however many gates there were: three
+    // concurrent `npm run verify` runs put twelve jsdom workers plus three
+    // coverage passes on ten cores, measured at load average 131. That is not
+    // a slower suite, it is a different one — `NotificationSettings.test.tsx`
+    // takes 9.35s alone and was measured at 56.29s with nothing else in its
+    // own gate competing with it, and at that ratio a `findBy*` query stops
+    // waiting for the code under test and starts waiting for a CPU slice.
+    //
+    // Raising `testTimeout` again would not have reached the other half of it:
+    // in vitest 4.1.11 the pool runner's own START_TIMEOUT/STOP_TIMEOUT are
+    // module-level 60s constants passed straight to `withTimeout`, with no
+    // config path at all, so a worker that is starved while STARTING kills the
+    // whole run — including files the change never touched. Less contention is
+    // the only thing that reaches that.
+    maxWorkers: Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2 / gateRuns))),
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
