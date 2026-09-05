@@ -81,7 +81,7 @@
       },
       "planStatus": {
         "heading": "Estado de los planes",
-        "body": "El registro de cuentas gratuitas está abierto. Los planes de pago Garden y Greenhouse están disponibles en la web, con facturación mensual o anual; Garden también se ofrece como compra única de por vida. Las compras, las mejoras y los cambios de plan los realiza una persona administradora del hogar en <em>Ajustes → Facturación</em>, y toda suscripción mensual o anual nueva empieza con una prueba gratuita de 14 días. Los planes de pago no se venden dentro de las aplicaciones móviles. Si crees que un cargo o evento de facturación te ha afectado, escríbenos para que podamos investigarlo y resolverlo directamente."
+        "body": "El registro de cuentas gratuitas está abierto. Los planes de pago Garden y Greenhouse están disponibles en la web, con facturación mensual. La facturación anual y la compra única de por vida de Garden ya no están a la venta; los hogares que ya tienen una la conservan, al precio y con las condiciones con los que la compraron. Las compras, las mejoras y los cambios de plan los realiza una persona administradora del hogar en <em>Ajustes → Facturación</em>, y la primera suscripción de pago de un hogar empieza con una prueba gratuita de 14 días. Los planes de pago no se venden dentro de las aplicaciones móviles. Si crees que un cargo o evento de facturación te ha afectado, escríbenos para que podamos investigarlo y resolverlo directamente."
       },
       "limitations": {
         "heading": "Limitaciones",
