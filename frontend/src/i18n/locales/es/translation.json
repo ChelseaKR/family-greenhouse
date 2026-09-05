@@ -731,7 +731,16 @@
       "save": "Guardar vacaciones",
       "cancelWindow": "Cancelar vacaciones",
       "noCoverOptions": "Añade otro miembro para delegar el cuidado.",
-      "description": "Sus recordatorios irán al miembro que cubre hasta que termine el periodo."
+      "description": "Sus recordatorios irán al miembro que cubre hasta que termine el periodo.",
+      "sitter": {
+        "days_one": "1 día",
+        "days_many": "{{count}} días",
+        "days_other": "{{count}} días",
+        "tripHint": "Son {{trip}} fuera. Un enlace de cuidador le muestra a quien riegue lo que toca, sin necesidad de cuenta.",
+        "capLine": "Son {{trip}} fuera, y un enlace de cuidador de tu plan cubre {{cap}}.",
+        "setUp": "Crear un enlace de cuidador",
+        "lockedBody": "Ventanas de cuidador más largas, una guía de traspaso imprimible, fotos mientras estás fuera y un resumen a la vuelta."
+      }
     },
     "sitterLinksLoadFailed": "No pudimos cargar tus enlaces de cuidador existentes en este momento; los enlaces que creaste antes siguen activos.",
     "careLoad": {
@@ -1343,6 +1352,7 @@
       "plant_cap": "Espacio para más plantas",
       "member_cap": "Espacio para más miembros del hogar",
       "api_keys": "Claves de API",
+      "away_kit": "El Kit de Viaje: enlaces de cuidador más largos, la guía de traspaso y el resumen de vuelta",
       "garden_plan": "El plan Garden",
       "greenhouse_plan": "El plan Greenhouse"
     }

@@ -21,6 +21,7 @@ import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
 // Local-timezone day boundaries, shared with the sitter-link form.
 import { toStartOfDayIso, toEndOfDayIso } from './localDates';
+import { TripSitterOffer } from './TripSitterOffer';
 
 interface MemberVacationProps {
   householdId: string;
@@ -126,66 +127,70 @@ export function MemberVacation({
   }
 
   return (
-    <form
-      className="mt-2 space-y-2 rounded-md border border-primary-100 bg-primary-50/50 p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!coveredBy || !startDate || !endDate) return;
-        setMutation.mutate();
-      }}
-    >
-      <p className="text-xs text-gray-600">{t('household.vacation.description')}</p>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="block text-xs font-medium text-gray-700">
-          {t('household.vacation.startDateLabel')}
-          <input
-            type="date"
-            required
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="input mt-1 block text-sm"
-          />
-        </label>
-        <label className="block text-xs font-medium text-gray-700">
-          {t('household.vacation.endDateLabel')}
-          <input
-            type="date"
-            required
-            value={endDate}
-            min={startDate || undefined}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="input mt-1 block text-sm"
-          />
-        </label>
-        <label className="block text-xs font-medium text-gray-700">
-          {t('household.vacation.coveredByLabel')}
-          <select
-            value={coveredBy}
-            onChange={(e) => setCoveredBy(e.target.value)}
-            className="input mt-1 block text-sm"
+    <>
+      <form
+        className="mt-2 space-y-2 rounded-md border border-primary-100 bg-primary-50/50 p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!coveredBy || !startDate || !endDate) return;
+          setMutation.mutate();
+        }}
+      >
+        <p className="text-xs text-gray-600">{t('household.vacation.description')}</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block text-xs font-medium text-gray-700">
+            {t('household.vacation.startDateLabel')}
+            <input
+              type="date"
+              required
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="input mt-1 block text-sm"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700">
+            {t('household.vacation.endDateLabel')}
+            <input
+              type="date"
+              required
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="input mt-1 block text-sm"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700">
+            {t('household.vacation.coveredByLabel')}
+            <select
+              value={coveredBy}
+              onChange={(e) => setCoveredBy(e.target.value)}
+              className="input mt-1 block text-sm"
+            >
+              {coverOptions.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="submit"
+            size="sm"
+            isLoading={setMutation.isPending}
+            disabled={!coveredBy || !startDate || !endDate}
           >
-            {coverOptions.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button
-          type="submit"
-          size="sm"
-          isLoading={setMutation.isPending}
-          disabled={!coveredBy || !startDate || !endDate}
-        >
-          {t('household.vacation.save')}
-        </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={() => setFormOpen(false)}>
-          {t('common.cancel')}
-        </Button>
-      </div>
-      {setMutation.isError && <Alert variant="error">{getErrorMessage(setMutation.error)}</Alert>}
-    </form>
+            {t('household.vacation.save')}
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setFormOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+        {setMutation.isError && <Alert variant="error">{getErrorMessage(setMutation.error)}</Alert>}
+      </form>
+      {/* The moment of intent: a dated trip has just been typed. #480 */}
+      <TripSitterOffer householdId={householdId} startDate={startDate} endDate={endDate} />
+    </>
   );
 }

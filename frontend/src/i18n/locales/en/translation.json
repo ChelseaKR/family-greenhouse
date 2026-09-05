@@ -710,7 +710,15 @@
       "save": "Save vacation",
       "cancelWindow": "Cancel vacation",
       "noCoverOptions": "Add another member to hand off care.",
-      "description": "Their reminders go to the covering member until the window ends."
+      "description": "Their reminders go to the covering member until the window ends.",
+      "sitter": {
+        "days_one": "1 day",
+        "days_other": "{{count}} days",
+        "tripHint": "That’s {{trip}} away. A plant-sitter link lets whoever is watering see what’s due, with no account needed.",
+        "capLine": "That’s {{trip}} away, and one sitter link on your plan covers {{cap}}.",
+        "setUp": "Set up a sitter link",
+        "lockedBody": "Longer sitter windows, a printable handoff brief, photos back while you’re away, and a recap when you return."
+      }
     },
     "sitterLinksLoadFailed": "We couldn’t load your existing sitter links just now — any links you created earlier are still active.",
     "careLoad": {
@@ -1302,6 +1310,7 @@
       "plant_cap": "Room for more plants",
       "member_cap": "Room for more household members",
       "api_keys": "API keys",
+      "away_kit": "The Away Kit — longer sitter links, the handoff brief and the return recap",
       "garden_plan": "The Garden plan",
       "greenhouse_plan": "The Greenhouse plan"
     }
