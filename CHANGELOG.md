@@ -26,6 +26,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   they had just finished setting up. New tasks are now due at the end of the day
   they were created, in the creator's own timezone, so all four surfaces agree.
 
+- **A placement check that could not be run looked like a placement that
+  passed.** The plant page's placement card warns when a species that may be
+  toxic sits in a room marked as reachable by pets. For any species outside the
+  small curated table, one species read supplied that check — and when the read
+  failed, the check vanished along with the whole card, which is exactly what a
+  household sees when the spot is fine. The card now says the placement has not
+  been checked instead of disappearing.
+
 ## [0.27.0] - 2026-09-05
 
 ### Added
