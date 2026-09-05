@@ -55,6 +55,7 @@
     "markers:check": "node scripts/check-no-bare-markers.mjs",
     "gates:check": "node scripts/check-no-silenced-gates.mjs",
     "docs:testing:check": "node scripts/check-docs-testing.mjs",
+    "adr:check": "node scripts/check-adr-index.mjs",
     "api:check": "node scripts/check-api-spec.mjs",
     "sitemap:check": "npm run sitemap:check --workspace frontend",
     "brand:check": "npm run brand:check --workspace frontend",

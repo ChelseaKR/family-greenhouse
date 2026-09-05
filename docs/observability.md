@@ -13,8 +13,9 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
   above 500 ms in two of three five-minute periods.
 - Native `AWS/ApiGateway Count`, `4xx`, and `5xx` use the real HTTP API `ApiId` and catch gateway-level
   failures. Lambda errors, Lambda throttles, DynamoDB read/write throttles, DLQs, and auth failures
-  have separate alarms. There is no Route53 health check — external availability is checked from
-  GitHub Actions instead; see "External availability checks" below and issue #464.
+  have separate alarms. External availability is checked from outside the stack entirely — a Route 53
+  health check and a GitHub Actions job, neither of which reads a metric this stack publishes. See
+  "External availability checks" below.
 - **Server-side logs are redacted at the logger.** `backend/src/utils/logger.ts` censors `email`,
   `to`, `phone`, `password`, `pin`, `token`/`refreshToken`/`accessToken`/`idToken`, `apiKey`,
   `imageBase64` and `authorization` — at the top level and one or two levels down — with
@@ -35,11 +36,59 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
 
 ## External availability checks
 
-Every alarm in `infrastructure/modules/monitoring` uses
-`treat_missing_data = "notBreaching"`, so "traffic went to zero" is
-indistinguishable from "everything is healthy". The only signals that can see a
-total outage are external, and they live in `.github/workflows/uptime.yml`
-(`*/15 * * * *`, plus `workflow_dispatch`):
+Every alarm in `infrastructure/modules/monitoring` except two uses
+`treat_missing_data = "notBreaching"`. That is right for each of them
+individually — no throttle events means not throttling — and collectively it
+means **"the stack served nobody" produces no data points and therefore no
+alarm**. Nothing that reads a metric this stack publishes can see a total
+outage. The checks that can are all external, and there are two of them,
+deliberately different from each other.
+
+### 1. Route 53 health checks (30 seconds, into the alerts SNS topic)
+
+Declared at the bottom of `infrastructure/modules/monitoring/main.tf`.
+
+| Check                                   | Fetches                        | Passes only if                                              | Gate                       |
+| --------------------------------------- | ------------------------------ | ----------------------------------------------------------- | -------------------------- |
+| `aws_route53_health_check.site`         | `https://<site>/login`         | HTTP 200 **and** the body contains the app's `og:site_name` | `enable_site_health_check` |
+| `aws_route53_health_check.api` (opt-in) | `https://<api>/<stage>/health` | HTTP 200 **and** the body contains `"status":"ok"`          | `enable_api_health_check`  |
+
+Four properties of these matter more than the fact that they exist:
+
+- **The path is not `/`.** `site_health_check_path` carries a `validation`
+  block that refuses `/` outright. During the outage these exist to catch,
+  `/` was the one route still answering 200 — a check on `/` would have
+  reported a total outage as healthy. `/login` is also not prerendered, so
+  fetching it exercises CloudFront's 403/404 → `/app-shell.html` rewrite,
+  which is the machinery that actually failed.
+- **A 200 is not enough.** `HTTPS_STR_MATCH` requires a literal string in the
+  first 5120 bytes. The site check looks for the `og:site_name` meta tag
+  `headToTags()` emits on the SPA shell and every prerendered page; the API
+  check looks for `"status":"ok"`, which `GET /health` does **not** emit when
+  its DynamoDB probe fails (it reports `degraded`). A healthy CDN serving
+  someone else's 200, or a reachable-but-broken API, fails both.
+- **Missing data is breaching.** `site_unreachable` and `api_unreachable` are
+  the only two alarms in the module that set
+  `treat_missing_data = "breaching"`. Every other alarm is looking for a bad
+  value among good ones, where absent data honestly means nothing bad
+  happened. These two are looking for absence itself, so if Route 53 stops
+  publishing `HealthCheckStatus` — the health check was deleted, the metric is
+  unavailable — the alarm fires rather than sitting green. **"Could not
+  check" is never reported as "checked and fine."**
+- **They notify the same place as everything else.** `alarm_actions` and
+  `ok_actions` both point at the alerts SNS topic, so a total outage arrives
+  where every other alarm arrives, and recovery is announced too.
+
+Detection is roughly three minutes: 90 seconds for three consecutive failed
+probes to flip the aggregate, then two 60-second alarm periods.
+
+Route 53 publishes `AWS/Route53 HealthCheckStatus` in **us-east-1 only**, and
+a CloudWatch alarm can only notify an SNS topic in its own region. Both alarms
+carry a `precondition` that fails the plan, with an explanation, if the stack
+is ever deployed elsewhere — rather than creating an alarm that silently
+cannot deliver.
+
+### 2. GitHub Actions (`.github/workflows/uptime.yml`, 15 minutes)
 
 | Job                | What it fetches                                           | What it proves                                                                                                                    |
 | ------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,16 +99,45 @@ total outage are external, and they live in `.github/workflows/uptime.yml`
 `scripts/synthetic-page-check.mjs` is the page check. It has no dependencies
 (global `fetch`) so the job is a checkout plus one `node` invocation.
 
-The `pages` job exists because the `health` job passed fourteen minutes into a
-total frontend outage on 2026-09-04 (issue #464): the API was healthy and every
-route except `/` was answering 403, and nothing in the check ever loaded a page.
+This is the **deeper** of the two layers and is not superseded by the health
+checks: it parses the HTML and asserts four structural properties across four
+routes, where Route 53 can only match one literal string. What it cannot do is
+run often or report reliably — a 15-minute cron on GitHub's best-effort
+scheduler, which GitHub disables outright on repositories with no recent
+activity, reporting by workflow-failure email rather than to the alerts topic.
+The health checks are the opposite trade. Both exist because neither subsumes
+the other.
 
-Two gaps in this arrangement are known and tracked in issue #464, not closed
-here: the cadence is fifteen minutes rather than the 30 seconds this document
-once claimed, and a failure arrives as a workflow-failure email rather than
-through the alerts SNS topic every CloudWatch alarm routes to. There is no
-`aws_route53_health_check` in `infrastructure/`; choosing between adding one and
-routing these jobs into SNS is an open owner decision.
+### Why both, and what is still not covered
+
+The `pages` job and the site health check both exist because the `health` job
+passed fourteen minutes into a total frontend outage on 2026-09-04
+(issue #464): the API was healthy, every route except `/` was answering 403,
+and nothing in the check ever loaded a page.
+
+Still open, and deliberately not claimed as solved here:
+
+- **The frontend error rail cannot report the failures worth alarming on.**
+  `reportFrontendError` posts to `/telemetry/frontend` fire-and-forget
+  (`frontend/src/services/frontendTelemetry.ts`), so an unreachable API, a
+  CORS misconfiguration, or a crash before `initFrontendTelemetry()` runs all
+  destroy the delivery path for the very report that would raise the alarm.
+  The alarm that reads it is a metric filter on the **api** Lambda log group
+  with `treat_missing_data = "notBreaching"`, so a total frontend outage
+  produces zero data points and it sits green. Fixing this needs an
+  out-of-band collector (which is what Sentry would be, with a DSN); that is a
+  product decision about a third-party dependency and the privacy surface
+  documented below, not a bug to quietly patch. Tracked in issue #464.
+- **Deleting the health check deletes its alarm.** Setting
+  `enable_site_health_check = false` removes the probe and the alarm together,
+  so there is no runtime signal left to go missing. `check
+"something_can_see_a_total_outage"` in the monitoring module warns on every
+  plan when an environment has alarms but no site health check, and
+  `npm run observability:check` fails if the resources leave the repo — but
+  neither can page you about a change already applied.
+- **A partial outage below the probe.** One broken route, one broken API
+  endpoint, or a failure that only reproduces for signed-in users is invisible
+  to both layers; they check four public routes and one health endpoint.
 
 ## Where alarms are created
 
@@ -68,11 +146,18 @@ The title of this page is deliberate: alarms and the dashboard are a
 `enable_monitoring_dashboard` (root variables, both defaulting to `true`) gate
 every `aws_cloudwatch_metric_alarm` and the `aws_cloudwatch_dashboard` in
 `infrastructure/modules/monitoring`. Production sets neither and therefore keeps
-all 28 alarms and its dashboard; `environments/staging/terraform.tfvars` sets
-both `false`.
+every alarm and its dashboard; `environments/staging/terraform.tfvars` sets both
+`false`.
 
-Eight of those 28 were added on 2026-09-04 for three blind spots, at roughly
-$0.80/month:
+The live alarm count is deliberately not written here. It was, as "28", and
+this change would have made it wrong — the same hand-maintained-figure defect
+`check-docs-testing.mjs` and `check-doc-figures.mjs` were each written to
+retire. `npm run observability:check` refuses to let a count back into this
+section; `grep -c 'resource "aws_cloudwatch_metric_alarm"'
+infrastructure/modules/monitoring/main.tf` is the count of alarm _declarations_
+(several expand over `for_each`, so it is a floor, not the number AWS bills).
+
+Three blind spots were closed on 2026-09-04, at roughly $0.80/month:
 
 - **Scheduled-run failures** (`*-reminders-run-failed`, `*-digests-run-failed`).
   The reminder and digest fan-outs catch each per-household error, count it and

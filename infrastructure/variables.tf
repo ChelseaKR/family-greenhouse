@@ -80,6 +80,18 @@ variable "enable_monitoring_dashboard" {
   default     = true
 }
 
+variable "enable_site_health_check" {
+  description = "Create the Route 53 health check that fetches a real (non-`/`) site page every 30 seconds and alarms into the alerts SNS topic when it stops serving this app. ~$2.60/month. Defaults true: with it off, nothing in this stack can tell a total outage from a quiet hour, which is how a forty-minute frontend outage went unnoticed on 2026-09-04 (issue #464). Staging sets it false."
+  type        = bool
+  default     = true
+}
+
+variable "enable_api_health_check" {
+  description = "Create the Route 53 health check that fetches GET /health every 30 seconds. ~$2.60/month in Route 53 fees plus ~$2-4/month of API Gateway, Lambda, DynamoDB and log cost from the ~1.3M extra requests it generates. Off by default: .github/workflows/uptime.yml already checks /health every 15 minutes for free. Turn it on to move API-outage detection to ~3 minutes and into the alerts topic."
+  type        = bool
+  default     = false
+}
+
 variable "email_from_address" {
   description = "Friendly From header for Cognito mail (signup confirmations, password resets). E.g. 'Family Greenhouse <hello@familygreenhouse.net>'. Required when domain_name is set."
   type        = string

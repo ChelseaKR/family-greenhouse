@@ -111,8 +111,12 @@ resource "aws_ce_anomaly_subscription" "alerts" {
 
 # User-facing service-level signals come from the structured API access log.
 # Native API Gateway metrics remain as a platform backstop, but application
-# request/error panels deliberately exclude GET /health so the 30-second
-# synthetic probe cannot swamp the two real users' traffic or error rate.
+# request/error panels deliberately exclude GET /health so external probe
+# traffic cannot swamp the two real users' traffic or error rate. That
+# exclusion is load-bearing: `.github/workflows/uptime.yml` polls /health
+# every 15 minutes, and the optional Route 53 API health check at the bottom
+# of this file polls it every 30 seconds from ~15 locations, which is roughly
+# 1.3M requests a month against a handful of real ones.
 resource "aws_cloudwatch_dashboard" "main" {
   count = var.enable_dashboard ? 1 : 0
 
@@ -1340,5 +1344,218 @@ check "alarms_have_a_notification_destination" {
       length(aws_sns_topic_subscription.email) + length(aws_sns_topic_subscription.sms) > 0
     )
     error_message = "enable_alarms is true but the ${var.environment} alerts topic has no subscribers: alert_email and alert_sms_number are both empty, so every alarm here notifies nobody while still billing ~$0.10/month. Set alert_email (and/or alert_sms_number) in this environment's tfvars, or set enable_alarms = false."
+  }
+}
+
+# ===========================================================================
+# External availability — the only monitoring here that can see a total outage
+# ===========================================================================
+#
+# Everything above this line reads a metric THIS STACK publishes, and every
+# alarm above sets treat_missing_data = "notBreaching". Each of those choices
+# is right on its own: no throttle events means not throttling, no 5xx means
+# no errors. Together they mean "the stack served nobody for forty minutes"
+# produces zero data points and zero alarms.
+#
+# That is not hypothetical. On 2026-09-04 the production frontend answered 403
+# on every route except `/` for roughly forty minutes. None of the 28 alarms
+# fired. The API was healthy throughout, so the 15-minute GitHub Actions
+# `/health` curl passed fourteen minutes into it. The outage was found by a
+# human loading the site (issue #464).
+#
+# ## What this section adds, and what it does not replace
+#
+# `.github/workflows/uptime.yml` stays. It is the DEEPER of the two checks:
+# scripts/synthetic-page-check.mjs parses the HTML and asserts the app root
+# element, the module script, og:site_name and a non-empty title, on four
+# routes, and proves it can still fail via a negative control. What it cannot
+# do is run often or report reliably — a 15-minute cron on GitHub's
+# best-effort scheduler, which GitHub disables outright on repositories with
+# no recent activity, reporting by workflow-failure email rather than to the
+# alerts topic every other alarm here uses.
+#
+# These health checks are the opposite trade. Shallower assertion — HTTP 200
+# plus one literal string in the first 5120 bytes — but fetched every 30
+# seconds from Route 53's global checker fleet, with the result published as
+# a CloudWatch metric that alarms into the same SNS topic as everything else.
+# Detection goes from "up to 15 minutes, if the cron ran" to about three
+# minutes (90s for the health check to fail three times, then two 60s alarm
+# periods).
+#
+# Neither check subsumes the other, which is why both exist.
+#
+# ## treat_missing_data
+#
+# The two alarms below are the only ones in this module that set
+# `treat_missing_data = "breaching"`, and it is the whole point of them. Every
+# other alarm here is watching for a bad value among good ones, where absent
+# data honestly means "nothing bad happened". These two are watching for
+# absence itself. If Route 53 stops publishing HealthCheckStatus — the health
+# check was deleted, the metric is unavailable, the account lost the
+# permission — then "we could not check" must not render as "checked and
+# fine". It renders as ALARM.
+#
+# ## Region
+#
+# Route 53 publishes AWS/Route53 HealthCheckStatus into us-east-1 ONLY. The
+# alarms must therefore live in us-east-1, and so must the SNS topic they
+# notify, because CloudWatch cannot target a topic in another region. Both
+# environments of this stack are us-east-1 (see environments/*/terraform.tfvars
+# and backend.tf). The preconditions below say that out loud, so a region
+# change fails the plan with an explanation instead of creating an alarm that
+# silently cannot deliver.
+
+locals {
+  site_health_check_enabled = var.enable_site_health_check && var.site_health_check_host != ""
+  api_health_check_enabled = (
+    var.enable_api_health_check &&
+    var.api_health_check_host != "" &&
+    var.api_health_check_path != ""
+  )
+
+  # Shared by both preconditions below. Kept as a local so the two error
+  # messages cannot drift apart from the condition they explain.
+  alarms_can_read_route53 = data.aws_region.current.name == "us-east-1"
+
+  route53_alarm_region_error = join(" ", [
+    "Route 53 publishes AWS/Route53 HealthCheckStatus in us-east-1 only, and a CloudWatch alarm can only notify an SNS topic in its own region.",
+    "This stack is deployed to ${data.aws_region.current.name}, so this alarm would either find no metric or be unable to reach ${aws_sns_topic.alerts.arn}.",
+    "To run this stack outside us-east-1, give modules/monitoring an aws.us_east_1 provider alias, create the alerts topic (or a second one) there, and put these alarms on it.",
+    "Until then set enable_site_health_check and enable_api_health_check to false — and note that with them off, nothing in this module can distinguish a total outage from a quiet hour (issue #464).",
+  ])
+}
+
+# The site probe. Fetches a REAL PAGE, not `/`, and requires the response to
+# contain a string only this app emits — because the outage that motivated
+# this served a 403 from a CloudFront distribution that was itself perfectly
+# healthy. "The CDN answered" is not the question; "the CDN answered with our
+# app" is.
+resource "aws_route53_health_check" "site" {
+  count = local.site_health_check_enabled ? 1 : 0
+
+  type          = "HTTPS_STR_MATCH"
+  fqdn          = var.site_health_check_host
+  port          = 443
+  resource_path = var.site_health_check_path
+  search_string = var.site_health_check_search_string
+
+  # CloudFront serves this domain off a SNI certificate; without this the TLS
+  # handshake fails and the check is unhealthy for the wrong reason.
+  enable_sni = true
+
+  # 30s is Route 53's normal interval (10s is available at +$1.00/month and
+  # buys ~60 seconds of detection time, which is not worth it here).
+  request_interval = 30
+
+  # Three consecutive failures before the aggregate flips, so a single
+  # checker's transient network blip cannot page. 3 x 30s = 90 seconds.
+  failure_threshold = 3
+
+  # +$1.00/month and this stack has no latency SLO that Route 53 would inform;
+  # ApplicationLatency above is the latency signal.
+  measure_latency = false
+
+  tags = {
+    Name = "${var.project_name}-site-${var.environment}"
+  }
+}
+
+resource "aws_route53_health_check" "api" {
+  count = local.api_health_check_enabled ? 1 : 0
+
+  type              = "HTTPS_STR_MATCH"
+  fqdn              = var.api_health_check_host
+  port              = 443
+  resource_path     = var.api_health_check_path
+  search_string     = var.api_health_check_search_string
+  enable_sni        = true
+  request_interval  = 30
+  failure_threshold = 3
+  measure_latency   = false
+
+  tags = {
+    Name = "${var.project_name}-api-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "site_unreachable" {
+  count = var.enable_alarms && local.site_health_check_enabled ? 1 : 0
+
+  alarm_name          = "${var.project_name}-site-unreachable-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "${var.site_health_check_host}${var.site_health_check_path} is not serving this application to Route 53's checkers, OR Route 53 stopped reporting on it. Either way nobody can use the site. This is the alarm for a total outage: check CloudFront, the frontend S3 bucket policy/OAC, and the most recent frontend deploy before anything else."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+
+  # NOT "notBreaching", unlike every other alarm in this module. This alarm
+  # exists to detect absence; if the signal itself goes absent, "we could not
+  # check" must not be reported as "checked and fine". See the section header.
+  treat_missing_data = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.site[0].id
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.alarms_can_read_route53
+      error_message = local.route53_alarm_region_error
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-site-unreachable-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_unreachable" {
+  count = var.enable_alarms && local.api_health_check_enabled ? 1 : 0
+
+  alarm_name          = "${var.project_name}-api-unreachable-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "GET ${var.api_health_check_path} is not answering ${var.api_health_check_search_string} to Route 53's checkers, OR Route 53 stopped reporting on it. The health route reports \"degraded\" when its DynamoDB probe fails, so this fires for a reachable-but-broken API too, not only for an unreachable one."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.api[0].id
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.alarms_can_read_route53
+      error_message = local.route53_alarm_region_error
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-api-unreachable-alarm-${var.environment}"
+  }
+}
+
+# The companion to alarms_have_a_notification_destination above. That one
+# catches "alarms exist but reach nobody"; this one catches "alarms exist,
+# reach someone, and still cannot see the failure that matters most".
+#
+# A `check` rather than a precondition for the same reason as its sibling: it
+# warns on every plan instead of blocking, so an environment can deliberately
+# run without external probes — it just cannot do so quietly.
+check "something_can_see_a_total_outage" {
+  assert {
+    condition     = !var.enable_alarms || local.site_health_check_enabled
+    error_message = "The ${var.environment} stack creates CloudWatch alarms but no external site health check, so nothing in this module can tell 'serving nobody' from 'quiet': every alarm here uses treat_missing_data = \"notBreaching\". That is the exact state in which a forty-minute total frontend outage went unnoticed on 2026-09-04 (issue #464). Set enable_site_health_check = true with a site_health_check_host (~$2.60/month), or accept that the only thing standing between a total outage and a customer telling you about it is .github/workflows/uptime.yml — a 15-minute cron on GitHub's best-effort scheduler that reports by workflow-failure email."
   }
 }
