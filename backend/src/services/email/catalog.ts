@@ -121,6 +121,12 @@ const en: Catalog = {
   'digest.trend.steady':
     'Your household completed {{now}} tasks in the last seven days — about the same as the week before.',
   'digest.trend.unavailable': 'We could not load your household’s 30-day trend.',
+  'digest.driftHeading': 'A schedule worth a tweak',
+  'digest.drift.everyDays_one': 'every day',
+  'digest.drift.everyDays_other': 'every {{count}} days',
+  'digest.drift.line':
+    '{{task}}: this actually happens about {{actual}}, but the schedule says {{scheduled}}.',
+  'digest.drift.cta': 'Open the plant to match its schedule to reality in one tap.',
   'digest.petHeading': 'Worth knowing',
   'digest.pet.line': '{{plant}} is toxic to {{pets}}, and it lives somewhere they can reach.',
   'digest.pet.cats': 'cats',
@@ -255,6 +261,13 @@ const es: Catalog = {
   'digest.trend.steady':
     'Tu hogar completó {{now}} tareas en los últimos siete días, más o menos como la semana anterior.',
   'digest.trend.unavailable': 'No pudimos cargar la tendencia de los últimos 30 días de tu hogar.',
+  'digest.driftHeading': 'Un calendario que conviene ajustar',
+  'digest.drift.everyDays_one': 'cada día',
+  'digest.drift.everyDays_many': 'cada {{count}} días',
+  'digest.drift.everyDays_other': 'cada {{count}} días',
+  'digest.drift.line':
+    '{{task}}: en la práctica se hace {{actual}}, pero el calendario dice {{scheduled}}.',
+  'digest.drift.cta': 'Abre la planta para ajustar su calendario a la realidad con un toque.',
   'digest.petHeading': 'Conviene saberlo',
   'digest.pet.line': '{{plant}} es tóxica para {{pets}} y está en un sitio a su alcance.',
   'digest.pet.cats': 'los gatos',

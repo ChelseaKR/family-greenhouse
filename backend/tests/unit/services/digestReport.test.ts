@@ -9,6 +9,8 @@ vi.mock('../../../src/services/taskService.js', () => ({
 vi.mock('../../../src/services/plantService.js', () => ({ getPlants: vi.fn() }));
 vi.mock('../../../src/services/spaceService.js', () => ({ getSpaces: vi.fn() }));
 vi.mock('../../../src/services/householdService.js', () => ({ getHousehold: vi.fn() }));
+vi.mock('../../../src/services/billing.js', () => ({ getHouseholdSubscription: vi.fn() }));
+vi.mock('../../../src/services/doubleCare.js', () => ({ getScheduleDriftForPlant: vi.fn() }));
 vi.mock('../../../src/services/climate.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/services/climate.js')>();
   return { ...actual, peekCachedWeather: vi.fn() };
@@ -18,6 +20,8 @@ const taskService = await import('../../../src/services/taskService.js');
 const plantService = await import('../../../src/services/plantService.js');
 const spaceService = await import('../../../src/services/spaceService.js');
 const householdService = await import('../../../src/services/householdService.js');
+const billing = await import('../../../src/services/billing.js');
+const doubleCare = await import('../../../src/services/doubleCare.js');
 const climate = await import('../../../src/services/climate.js');
 const report = await import('../../../src/services/digestReport.js');
 
@@ -78,6 +82,7 @@ function emptyReport(over: Partial<report.DigestReport> = {}): report.DigestRepo
     weather: { status: 'none' },
     trend: { status: 'ok', last7: 0, prev7: 0 },
     pets: { status: 'ok', warnings: [] },
+    drift: { status: 'ok', finding: null },
     awayUserIds: new Set(),
     coverage: new Map(),
     ...over,
@@ -95,6 +100,7 @@ const row = (over: Partial<report.AtRiskRow> = {}): report.AtRiskRow => ({
   assignedTo: null,
   assignedToName: null,
   unclaimed: true,
+  scheduledIntervalDays: 7,
   ...over,
 });
 
@@ -109,6 +115,10 @@ beforeEach(() => {
   vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValue([] as never);
   vi.mocked(spaceService.getSpaces).mockResolvedValue([] as never);
   vi.mocked(climate.peekCachedWeather).mockResolvedValue({ status: 'miss' } as never);
+  // Free tier by default: the drift section is Garden-and-up, so every test
+  // that does not opt in gets the `not_in_plan` state.
+  vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' } as never);
+  vi.mocked(doubleCare.getScheduleDriftForPlant).mockResolvedValue([] as never);
 });
 
 // ---------------------------------------------------------------------------
@@ -134,6 +144,15 @@ describe('gatherAtRisk', () => {
     // Nobody has taken Pothos, so it leads even though it is least overdue.
     expect(result.rows.map((r) => r.plantName)).toEqual(['Pothos', 'Monstera', 'Fern']);
     expect(result.onTrack).toBe(0);
+  });
+
+  it("carries the task's scheduled interval so drift needs no second read", async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([plant({ id: 'p1' })] as never);
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([
+      task({ plantId: 'p1', frequency: 14 }),
+    ] as never);
+    const result = await report.gatherAtRisk('hh', NOW);
+    expect(result.status === 'ok' && result.rows[0].scheduledIntervalDays).toBe(14);
   });
 
   it('counts on-track plants so the digest can lead with what is fine', async () => {
@@ -326,6 +345,159 @@ describe('gatherPetWarnings', () => {
   });
 });
 
+describe('gatherScheduleDrift', () => {
+  /** A `ScheduleDrift` payload with a reading over the threshold. */
+  const drifted = (over: Record<string, unknown> = {}) => ({
+    taskId: 't1',
+    scheduledIntervalDays: 7,
+    completionsConsidered: 6,
+    requiredCompletions: 4,
+    drift: {
+      medianIntervalDays: 11.2,
+      driftPct: 0.6,
+      suggestedFrequency: 11,
+      exceedsThreshold: true,
+    },
+    reason: null,
+    ...over,
+  });
+
+  const garden = () =>
+    vi
+      .mocked(billing.getHouseholdSubscription)
+      .mockResolvedValue({ planId: 'garden', status: 'active' } as never);
+
+  it('never reads a history for a household without the toolkit', async () => {
+    // Free tier: the drift suggestion is Garden-and-up, and a plan we DID read
+    // is a reason not to look, not a failure to look.
+    await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
+      status: 'not_in_plan',
+    });
+    expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
+  });
+
+  it('reads entitlement, not the plan row: a past_due Garden household is not in plan', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'garden',
+      status: 'past_due',
+    } as never);
+    await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
+      status: 'not_in_plan',
+    });
+    expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
+  });
+
+  it('says the plan could not be read rather than assuming either answer', async () => {
+    vi.mocked(billing.getHouseholdSubscription).mockRejectedValue(new Error('ddb down'));
+    await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
+      status: 'unavailable',
+    });
+    expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
+  });
+
+  it('carries the strongest reading across the listed plants', async () => {
+    garden();
+    vi.mocked(doubleCare.getScheduleDriftForPlant)
+      .mockResolvedValueOnce([drifted({ drift: { ...drifted().drift, driftPct: 0.4 } })] as never)
+      .mockResolvedValueOnce([
+        drifted({
+          taskId: 't2',
+          scheduledIntervalDays: 30,
+          drift: { ...drifted().drift, driftPct: -0.7, suggestedFrequency: 9 },
+        }),
+      ] as never);
+
+    await expect(
+      report.gatherScheduleDrift('hh', [
+        row(),
+        row({
+          plantId: 'p2',
+          plantName: 'Fiddle Leaf',
+          taskId: 't2',
+          scheduledIntervalDays: 30,
+        }),
+      ])
+    ).resolves.toEqual({
+      status: 'ok',
+      finding: {
+        plantId: 'p2',
+        plantName: 'Fiddle Leaf',
+        taskId: 't2',
+        taskType: 'water',
+        customLabel: null,
+        actualIntervalDays: 9,
+        scheduledIntervalDays: 30,
+      },
+    });
+  });
+
+  it('finds nothing when no reading crosses the threshold', async () => {
+    garden();
+    vi.mocked(doubleCare.getScheduleDriftForPlant).mockResolvedValue([
+      drifted({ drift: { ...drifted().drift, exceedsThreshold: false } }),
+    ] as never);
+    await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
+      status: 'ok',
+      finding: null,
+    });
+  });
+
+  it('separates "not enough history yet" from "we could not read the history"', async () => {
+    garden();
+    // Too few completions: we looked, the answer is simply not knowable yet.
+    vi.mocked(doubleCare.getScheduleDriftForPlant).mockResolvedValue([
+      { ...drifted(), drift: null, reason: 'insufficient_completions' },
+    ] as never);
+    await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
+      status: 'ok',
+      finding: null,
+    });
+
+    // Every read failed: that is NOT "nothing drifted".
+    vi.mocked(doubleCare.getScheduleDriftForPlant).mockResolvedValue([
+      { ...drifted(), drift: null, reason: 'history_unavailable' },
+    ] as never);
+    await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
+      status: 'unavailable',
+    });
+  });
+
+  it('still reports a finding when only some of the histories could be read', async () => {
+    garden();
+    vi.mocked(doubleCare.getScheduleDriftForPlant)
+      .mockResolvedValueOnce([
+        { ...drifted(), drift: null, reason: 'history_unavailable' },
+      ] as never)
+      .mockResolvedValueOnce([drifted({ taskId: 't2' })] as never);
+    const result = await report.gatherScheduleDrift('hh', [
+      row(),
+      row({ plantId: 'p2', taskId: 't2' }),
+    ]);
+    expect(result).toEqual({
+      status: 'ok',
+      finding: expect.objectContaining({ plantId: 'p2', actualIntervalDays: 11 }),
+    });
+  });
+
+  it('costs nothing at all when the digest lists no plants', async () => {
+    await expect(report.gatherScheduleDrift('hh', [])).resolves.toEqual({
+      status: 'ok',
+      finding: null,
+    });
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+    expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
+  });
+
+  it("asks for drift on the listed task using the row's own scheduled interval", async () => {
+    garden();
+    vi.mocked(doubleCare.getScheduleDriftForPlant).mockResolvedValue([drifted()] as never);
+    await report.gatherScheduleDrift('hh', [row({ scheduledIntervalDays: 14 })]);
+    expect(doubleCare.getScheduleDriftForPlant).toHaveBeenCalledWith('hh', 'p1', [
+      { id: 't1', frequency: 14 },
+    ]);
+  });
+});
+
 describe('digestIsWorthSending', () => {
   it('sends when there is something to do', () => {
     expect(
@@ -500,6 +672,103 @@ describe('composeDigestEmail', () => {
     expect(html).toContain('<img src="https://app.example/plants/hh/p1/a.jpg"');
   });
 
+  it('carries one schedule-drift reading, with both intervals and a deep link', () => {
+    const { text, html } = report.composeDigestEmail(
+      emptyReport({
+        atRisk: { status: 'ok', rows: [row()], onTrack: 0, orphanTasks: 0 },
+        drift: {
+          status: 'ok',
+          finding: {
+            plantId: 'p1',
+            plantName: 'Monstera',
+            taskId: 't1',
+            taskType: 'water',
+            customLabel: null,
+            actualIntervalDays: 11,
+            scheduledIntervalDays: 7,
+          },
+        },
+      }),
+      recipient()
+    );
+    expect(text).toContain('A SCHEDULE WORTH A TWEAK'); // headings render upper-case in text
+    expect(text).toContain(
+      'Watering: this actually happens about every 11 days, but the schedule says every 7 days.'
+    );
+    expect(text).toContain('Open the plant to match its schedule to reality in one tap.');
+    // The tap has to land where the one-tap action actually lives.
+    expect(html).toContain('https://app.example/plants/p1?task=t1');
+  });
+
+  it('singularizes a one-day interval instead of saying "every 1 days"', () => {
+    const { text } = report.composeDigestEmail(
+      emptyReport({
+        atRisk: { status: 'ok', rows: [row()], onTrack: 0, orphanTasks: 0 },
+        drift: {
+          status: 'ok',
+          finding: {
+            plantId: 'p1',
+            plantName: 'Monstera',
+            taskId: 't1',
+            taskType: 'water',
+            customLabel: null,
+            actualIntervalDays: 1,
+            scheduledIntervalDays: 4,
+          },
+        },
+      }),
+      recipient()
+    );
+    expect(text).toContain('about every day, but the schedule says every 4 days');
+  });
+
+  it('names a custom task by its own label, never the word "custom"', () => {
+    const { text } = report.composeDigestEmail(
+      emptyReport({
+        atRisk: { status: 'ok', rows: [row()], onTrack: 0, orphanTasks: 0 },
+        drift: {
+          status: 'ok',
+          finding: {
+            plantId: 'p1',
+            plantName: 'Monstera',
+            taskId: 't1',
+            taskType: 'custom',
+            customLabel: 'Misting',
+            actualIntervalDays: 11,
+            scheduledIntervalDays: 7,
+          },
+        },
+      }),
+      recipient()
+    );
+    expect(text).toContain('Misting: this actually happens about every 11 days');
+  });
+
+  it('says nothing about drift in any state that is not a real finding', () => {
+    // Positive end state first: the email still renders its at-risk row, so a
+    // missing drift section is a real absence and not an unrendered email.
+    for (const drift of [
+      { status: 'ok', finding: null },
+      { status: 'not_in_plan' },
+      { status: 'unavailable' },
+    ] as const) {
+      const { text } = report.composeDigestEmail(
+        emptyReport({
+          atRisk: { status: 'ok', rows: [row()], onTrack: 0, orphanTasks: 0 },
+          drift,
+        }),
+        recipient()
+      );
+      expect(text).toContain('Monstera');
+      expect(text).not.toContain('A SCHEDULE WORTH A TWEAK');
+      expect(text).not.toContain('schedule says');
+      // `unavailable` fires on a failed BILLING read, so at that point we do
+      // not know the tier. A "we could not check your schedules" line would
+      // advertise a paid feature to a free household off a failed read.
+      expect(text).not.toContain('match its schedule');
+    }
+  });
+
   it('renders an honest line for each failed section', () => {
     const { text } = report.composeDigestEmail(
       emptyReport({
@@ -586,5 +855,37 @@ describe('composeDigestEmail', () => {
     expect(text).toContain('Empecemos por lo bueno: 4 de tus plantas van al día.');
     expect(text).toContain('Riego · 6 días de retraso');
     expect(text).toContain('Todavía nadie la ha cogido.');
+  });
+
+  it('writes the drift reading in Spanish, singular and plural', () => {
+    const finding = (over: Partial<report.DriftFinding> = {}): report.DriftFinding => ({
+      plantId: 'p1',
+      plantName: 'Monstera',
+      taskId: 't1',
+      taskType: 'water',
+      customLabel: null,
+      actualIntervalDays: 11,
+      scheduledIntervalDays: 7,
+      ...over,
+    });
+    const render = (f: report.DriftFinding) =>
+      report.composeDigestEmail(
+        emptyReport({
+          atRisk: { status: 'ok', rows: [row()], onTrack: 0, orphanTasks: 0 },
+          drift: { status: 'ok', finding: f },
+        }),
+        recipient({ locale: 'es' })
+      ).text;
+
+    expect(render(finding())).toContain(
+      'Riego: en la práctica se hace cada 11 días, pero el calendario dice cada 7 días.'
+    );
+    // `_one` in Spanish, not the English `_other` leaking through.
+    expect(render(finding({ actualIntervalDays: 1 }))).toContain(
+      'se hace cada día, pero el calendario dice cada 7 días'
+    );
+    expect(render(finding())).toContain(
+      'Abre la planta para ajustar su calendario a la realidad con un toque.'
+    );
   });
 });

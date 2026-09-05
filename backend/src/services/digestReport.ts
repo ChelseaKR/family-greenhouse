@@ -32,9 +32,12 @@
  * OpenWeatherMap key and a weekly summary is not worth giving it one.
  */
 import { PET_TOXICITY, type PetToxicityEntry } from '../models/petToxicity.js';
+import { getEntitledPlan, hasHouseholdToolkit } from '../models/plans.js';
 import type { Plant, PlantSpace, Task } from '../models/types.js';
 import { logger } from '../utils/logger.js';
+import * as billing from './billing.js';
 import * as climate from './climate.js';
+import * as doubleCare from './doubleCare.js';
 import * as householdService from './householdService.js';
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
@@ -78,6 +81,9 @@ export interface AtRiskRow {
   assignedToName: string | null;
   /** True when nobody has taken this task — the "up for grabs" case. */
   unclaimed: boolean;
+  /** The task's scheduled interval in whole days. Carried so the drift
+   *  section can read this row's rhythm without a second task read. */
+  scheduledIntervalDays: number;
 }
 
 export type AtRiskResult =
@@ -113,6 +119,54 @@ export interface PetWarning {
 
 export type PetResult = { status: 'ok'; warnings: PetWarning[] } | { status: 'unavailable' };
 
+/** The one schedule-drift reading the digest carries, already ranked. */
+export interface DriftFinding {
+  plantId: string;
+  plantName: string;
+  taskId: string;
+  taskType: Task['type'];
+  /** The user's own label for a custom task, or null — same rule as AtRiskRow. */
+  customLabel: string | null;
+  /** Whole-day interval the household actually keeps (the server's suggestion). */
+  actualIntervalDays: number;
+  /** Whole-day interval the task is scheduled at. */
+  scheduledIntervalDays: number;
+}
+
+/**
+ * Whether the digest has a schedule-drift reading worth a line.
+ *
+ * Four states kept apart, and only one of them renders anything:
+ *
+ *   - `ok` + a finding — the strongest reading over the threshold;
+ *   - `ok` + `finding: null` — we looked and nothing drifted;
+ *   - `not_in_plan` — the household is not on the Garden household toolkit,
+ *     so we never looked;
+ *   - `unavailable` — the plan read failed, or every history read did.
+ *
+ * ## Why the failed state renders NOTHING, unlike every other section here
+ *
+ * This is a deliberate exception to the module rule at the top of the file,
+ * for two reasons that do not apply to the at-risk / pet / weather sections.
+ *
+ * First, absence here is not an all-clear. Those sections make a positive
+ * claim when they are quiet ("nothing is overdue", "no pet risk"); this one
+ * has no quiet claim at all — it either names a schedule worth changing or
+ * says nothing, which is the same rule `ScheduleDriftHint` already states on
+ * the plant page ("an absent suggestion is not a claim that the schedule is
+ * right"). Second, `unavailable` fires when the BILLING read fails, and at
+ * that point we do not know the tier. Rendering "we could not check your
+ * schedules" would advertise a paid feature to free-tier households on the
+ * strength of a failed read — worse than silence in both directions.
+ *
+ * The state is still discriminated rather than collapsed into a bare `null`,
+ * because the log line has to be able to say WHICH of the four happened.
+ */
+export type DriftResult =
+  | { status: 'ok'; finding: DriftFinding | null }
+  | { status: 'not_in_plan' }
+  | { status: 'unavailable' };
+
 export interface CoverageInfo {
   coverName: string | null;
   awayName: string | null;
@@ -127,6 +181,8 @@ export interface DigestReport {
   weather: WeatherResult;
   trend: TrendResult;
   pets: PetResult;
+  /** One schedule-drift reading, or an explicit reason there is none. */
+  drift: DriftResult;
   /** Members with an active vacation window: they are away, so nothing is
    *  routed to them and they receive no digest. */
   awayUserIds: Set<string>;
@@ -202,6 +258,7 @@ export async function gatherAtRisk(householdId: string, now: Date): Promise<AtRi
       assignedTo: task.assignedTo,
       assignedToName: task.assignedToName,
       unclaimed: task.assignedTo === null,
+      scheduledIntervalDays: task.frequency,
     });
   }
 
@@ -407,6 +464,113 @@ export async function gatherPetWarnings(
   return { status: 'ok', warnings };
 }
 
+/**
+ * The strongest schedule-drift reading among the plants this digest is
+ * already listing — "you water this about every 11 days; it's scheduled every
+ * 7" — so the household toolkit's best insight reaches someone who did not go
+ * looking for it.
+ *
+ * ## Why this exists at all
+ *
+ * `computeScheduleDrift` has shipped and worked for a while, and its only
+ * render site is `ScheduleDriftHint` on ONE plant's detail page, which only
+ * appears for a plant that has already drifted. Nobody browses plant detail
+ * pages hoping to find schedule advice they do not know exists, so the
+ * feature was effectively unreachable (#481). This is the push.
+ *
+ * ## Cost, and the blind spot the cost buys
+ *
+ * One billing read plus at most one completion-partition query per LISTED
+ * at-risk row (`TOP_PLANTS`, so ≤5) — the same per-plant query shape
+ * `GET /plants/{id}/schedule-drift` already serves, and no new index.
+ *
+ * The consequence, stated rather than hidden: scanning the at-risk rows sees
+ * only the UNDER-care direction. A task done LESS often than scheduled runs
+ * chronically overdue, so it is exactly what the at-risk list holds; a task
+ * done MORE often than scheduled pushes its own `nextDue` forward every time
+ * and is never overdue, so it never appears here and its drift stays as
+ * invisible as before. Covering that direction needs a candidate set the
+ * digest does not have (every task in the household, not just the late ones)
+ * and a household-wide completion scan to go with it. Deliberately left for a
+ * decision about what that scan is worth, rather than silently half-done.
+ *
+ * The reading itself comes from `getScheduleDriftForPlant` — the same call
+ * the plant page and the one-tap `matchTaskSchedule` use — so the number in
+ * the email is computed from the same sample as the number on the page the
+ * link lands on. This section never computes its own arithmetic.
+ */
+export async function gatherScheduleDrift(
+  householdId: string,
+  rows: AtRiskRow[]
+): Promise<DriftResult> {
+  if (rows.length === 0) return { status: 'ok', finding: null };
+
+  let plan;
+  try {
+    plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, householdId, msg: 'digest.drift_plan_read_failed' },
+      'digest.drift_plan_read_failed'
+    );
+    return { status: 'unavailable' };
+  }
+  // ENTITLEMENT, not the plan row (#476): a past_due household is not being
+  // granted the toolkit, so it does not get the toolkit's insight by email.
+  if (!hasHouseholdToolkit(plan)) return { status: 'not_in_plan' };
+
+  const readings = await Promise.all(
+    rows.map(async (row) => ({
+      row,
+      reading: (
+        await doubleCare.getScheduleDriftForPlant(householdId, row.plantId, [
+          { id: row.taskId, frequency: row.scheduledIntervalDays },
+        ])
+      )[0],
+    }))
+  );
+
+  let unreadable = 0;
+  let best: { row: AtRiskRow; suggested: number; driftPct: number } | null = null;
+  for (const { row, reading } of readings) {
+    if (!reading || reading.reason === 'history_unavailable') {
+      unreadable += 1;
+      continue;
+    }
+    const drift = reading.drift;
+    if (!drift || !drift.exceedsThreshold) continue;
+    if (!best || Math.abs(drift.driftPct) > Math.abs(best.driftPct)) {
+      best = { row, suggested: drift.suggestedFrequency, driftPct: drift.driftPct };
+    }
+  }
+
+  if (!best) {
+    // Every history read failed: we did not look, and saying "nothing drifted"
+    // would be the absence-as-a-value defect this file exists to avoid.
+    if (unreadable === readings.length) {
+      logger.warn(
+        { householdId, plants: readings.length, msg: 'digest.drift_history_unreadable' },
+        'digest.drift_history_unreadable'
+      );
+      return { status: 'unavailable' };
+    }
+    return { status: 'ok', finding: null };
+  }
+
+  return {
+    status: 'ok',
+    finding: {
+      plantId: best.row.plantId,
+      plantName: best.row.plantName,
+      taskId: best.row.taskId,
+      taskType: best.row.taskType,
+      customLabel: best.row.customLabel,
+      actualIntervalDays: best.suggested,
+      scheduledIntervalDays: best.row.scheduledIntervalDays,
+    },
+  };
+}
+
 export type HouseholdNameResult =
   { status: 'ok'; name: string } | { status: 'unnamed' } | { status: 'unavailable' };
 
@@ -475,11 +639,12 @@ export async function gatherDigestReport(
     );
   }
 
-  const [lastCare, weather, trend, pets] = await Promise.all([
+  const [lastCare, weather, trend, pets, drift] = await Promise.all([
     gatherLastCare(householdId, listed, now),
     gatherWeather(householdId),
     gatherTrend(householdId),
     gatherPetWarnings(householdId, listed),
+    gatherScheduleDrift(householdId, listed),
   ]);
 
   return {
@@ -490,6 +655,7 @@ export async function gatherDigestReport(
     weather,
     trend,
     pets,
+    drift,
     awayUserIds,
     coverage,
   };
@@ -537,7 +703,7 @@ export interface DigestRecipient {
   unsubscribeUrl: string | null;
 }
 
-function taskLabel(locale: EmailLocale, row: AtRiskRow): string {
+function taskLabel(locale: EmailLocale, row: Pick<AtRiskRow, 'taskType' | 'customLabel'>): string {
   if (row.taskType === 'custom') {
     // A custom task with no label used to render the literal string "custom"
     // as if it were the task's name.
@@ -580,6 +746,38 @@ function assignmentLine(locale: EmailLocale, report: DigestReport, row: AtRiskRo
   }
   if (!row.assignedToName) return null;
   return t(locale, 'digest.assigned.to', { name: row.assignedToName });
+}
+
+/**
+ * The schedule-drift section: a heading and one row naming the plant, the two
+ * intervals, and where to change it. Returns `[]` for every state except a
+ * real finding — see `DriftResult` for why the failure states say nothing.
+ *
+ * The link is `taskUrl`, so the tap lands on the plant page carrying the task
+ * id, which is where the one-tap "match schedule to reality" already lives.
+ * The email deliberately does not carry the action itself: changing a
+ * household's schedule from an unauthenticated email click would need a
+ * capability token, and this is a suggestion, not a chore.
+ */
+function driftBlocks(locale: EmailLocale, drift: DriftResult): EmailBlock[] {
+  if (drift.status !== 'ok' || !drift.finding) return [];
+  const finding = drift.finding;
+  return [
+    { kind: 'heading', text: t(locale, 'digest.driftHeading') },
+    {
+      kind: 'row',
+      title: finding.plantName,
+      href: taskUrl(finding.plantId, finding.taskId),
+      lines: [
+        t(locale, 'digest.drift.line', {
+          task: taskLabel(locale, finding),
+          actual: tn(locale, 'digest.drift.everyDays', finding.actualIntervalDays),
+          scheduled: tn(locale, 'digest.drift.everyDays', finding.scheduledIntervalDays),
+        }),
+        t(locale, 'digest.drift.cta'),
+      ],
+    },
+  ];
 }
 
 function trendBlock(locale: EmailLocale, trend: TrendResult): EmailBlock | null {
@@ -682,6 +880,9 @@ export function composeDigestEmail(
       });
     }
   }
+
+  // After the list, before the CTA: the reading explains the rows above it.
+  blocks.push(...driftBlocks(locale, report.drift));
 
   blocks.push({ kind: 'button', label: t(locale, 'digest.cta'), href: tasksUrl() });
 

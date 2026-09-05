@@ -405,11 +405,30 @@ sentence saying we could not look — never as an empty list or a zero.
 | Weather tip                                         | `climate.peekCachedWeather` — cache only                          | "We could not read your local forecast this week."     |
 | 7-vs-7-day trend                                    | `getDailyCompletionCounts(30)`                                    | "We could not load your household's 30-day trend."     |
 | Pet safety                                          | curated `models/petToxicity.ts` × `PlantSpace.petAccess === true` | "We could not check which spaces your pets can reach." |
+| One schedule-drift reading (Garden and up)          | `doubleCare.getScheduleDriftForPlant` per listed row              | nothing — see below                                    |
 
 Reading plants with the `'all'` filter costs the same single query and lets the
 gather step tell a task on a plant that legitimately died from a task whose
 plant row is missing entirely; the latter is counted and logged as
 `digest.orphan_overdue_tasks`.
+
+**The drift line is the one section that says nothing when it fails**, and
+that is a deliberate exception to the rule above rather than an oversight.
+Every other section makes a positive claim when it is quiet ("nothing is
+overdue", "no pet risk"), so its silence has to be explained; this one either
+names a schedule worth changing or says nothing at all, which is the rule
+`ScheduleDriftHint` already states on the plant page. And its `unavailable`
+state fires on a failed BILLING read, when the tier is unknown — a "we could
+not check your schedules" line would then advertise a paid feature to free-tier
+households on the strength of a read that did not land. All four states
+(`ok` with a finding, `ok` with none, `not_in_plan`, `unavailable`) stay
+discriminated in the payload and in the logs.
+
+It scans only the plants the digest is already listing, which sees the
+UNDER-care direction only: a task done less often than scheduled runs
+chronically overdue and is therefore in that list, while a task done MORE often
+than scheduled pushes its own `nextDue` forward and never appears. Covering the
+over-care direction needs a household-wide completion scan and is not built.
 
 **The weather is cache-only on purpose.** `climate.getWeatherCached` calls
 OpenWeatherMap on a miss, spends from the shared daily budget, and throws
