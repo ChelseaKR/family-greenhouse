@@ -40,7 +40,6 @@
     "healthCheckedUnknown": "{{actor}} ran a leaf-health check on {{plant}}",
     "healthCheckedUnlabelled": "{{actor}} requested a leaf-health check for {{plant}} — this record doesn't say whether a real analysis ran or a demo result was shown",
     "healthDemo": "{{actor}} viewed a demo leaf-health result for {{plant}} — no image analysis was performed",
-    "aTask": "a task",
     "scheduleMatched": "{{actor}} matched the {{task}} schedule for {{plant}} to reality ({{from}} → {{to}} days)",
     "upgradeRequested": "{{actor}} asked the household admins to upgrade for {{feature}}",
     "upgradeRequestedUnknown": "{{actor}} asked the household admins to upgrade",
@@ -164,7 +163,8 @@
     "title": "Placement check",
     "description": "A gentle check for {{space}} based on the details you have added.",
     "lightCheck": "{{space}} is marked as {{current}}, while this species usually needs at least {{recommended}}. Observe its growth before deciding whether to move it.",
-    "petCheck": "This species may be toxic if chewed, and {{space}} is marked as accessible to pets. Consider moving it out of reach."
+    "petCheck": "This species may be toxic if chewed, and {{space}} is marked as accessible to pets. Consider moving it out of reach.",
+    "unchecked": "We couldn’t load this species’ light and pet-safety details, so {{space}} has not been checked. No warning here does not mean the spot is suitable — try again in a little while."
   },
   "careRounds": {
     "displayMode": "Task organization",
