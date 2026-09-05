@@ -6,6 +6,7 @@ import { spaceService } from '@/services/spaceService';
 import { householdService } from '@/services/householdService';
 import { getErrorMessage } from '@/services/api';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useSpaces } from '@/hooks/useSpaces';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
@@ -26,10 +27,7 @@ export function SpaceManagerPanel() {
   const [lightLevel, setLightLevel] = useState<'' | LightLevel>('');
   const [petAccess, setPetAccess] = useState<PetAccessChoice>('');
   const [defaultCaregiverId, setDefaultCaregiverId] = useState('');
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-  });
+  const { spaces, unavailable: spacesUnavailable } = useSpaces();
   const { data: household } = useQuery({
     queryKey: ['household', householdId],
     queryFn: () => householdService.getHousehold(householdId!),
@@ -168,6 +166,14 @@ export function SpaceManagerPanel() {
           <span className="block text-xs text-gray-600">{t('spaces.defaultCaregiverHint')}</span>
         </label>
       </div>
+
+      {/* An empty list here is a claim — "you have not made any rooms yet" —
+          and a failed read must not be allowed to make it. */}
+      {spacesUnavailable && (
+        <Alert variant="error" className="mt-5">
+          {t('spaces.roomsUnavailableShort')}
+        </Alert>
+      )}
 
       {spaces.length > 0 && (
         <ul className="mt-5 divide-y divide-primary-100/60 border-t border-primary-100/60">

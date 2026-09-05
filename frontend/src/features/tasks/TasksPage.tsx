@@ -39,10 +39,10 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
-import { spaceService } from '@/services/spaceService';
+import { useSpaces } from '@/hooks/useSpaces';
 import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
 import { TaskLocation } from '@/components/TaskLocation';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { plantLocationLabel } from '@/utils/spaces';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
@@ -153,16 +153,19 @@ export function TasksPage() {
     enabled: Boolean(householdId),
   });
   const {
-    data: spaces = [],
-    isLoading: spacesLoading,
+    spaces,
+    byId: spacesById,
+    status: spacesStatus,
+    unavailable: spacesUnavailable,
     error: spacesError,
-  } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-    enabled: Boolean(householdId),
-  });
+  } = useSpaces();
+  const spacesLoading = spacesStatus === 'loading';
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
-  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+  // A failed rooms read only becomes a blocking error when a room FILTER is
+  // active (below); the rest of the page still works. What it must not do is
+  // let every task quietly read "Unplaced" — the placement is unknown, not
+  // absent.
+  const unplacedLabel = spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
   const activeSpaceFilter =
     requestedSpaceFilter === 'unplaced' ||
     (requestedSpaceFilter != null && spacesById.has(requestedSpaceFilter))
@@ -213,8 +216,8 @@ export function TasksPage() {
     skipReasonFor,
     locationFor: (task) =>
       plantsById.has(task.plantId)
-        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, t('spaces.unplaced'))
-        : t('spaces.unplaced'),
+        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
+        : unplacedLabel,
     onClaim: (id) => claimMutation.mutate(id),
     onUnclaim: (id) => unclaimMutation.mutate(id),
     onAsk: (task) => setAskTarget(task),

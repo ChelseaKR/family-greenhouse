@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,10 +7,10 @@ import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useSpaces } from '@/hooks/useSpaces';
 import { getErrorMessage } from '@/services/api';
 import { plantService, type Plant } from '@/services/plantService';
-import { spaceService } from '@/services/spaceService';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { plantLocationLabel } from '@/utils/spaces';
 import { toast } from '@/store/toastStore';
 
 interface MovePlantsDialogProps {
@@ -33,12 +33,11 @@ export function MovePlantsDialog({ isOpen, onClose, plant }: MovePlantsDialogPro
     queryFn: () => plantService.getPlants(),
     enabled: isOpen && !plant,
   });
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-    enabled: isOpen,
-  });
-  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+  const {
+    spaces,
+    byId: spacesById,
+    unavailable: spacesUnavailable,
+  } = useSpaces({ enabled: isOpen });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -159,7 +158,13 @@ export function MovePlantsDialog({ isOpen, onClose, plant }: MovePlantsDialogPro
                                   {candidate.name}
                                 </span>
                                 <span className="max-w-40 truncate text-xs text-gray-600">
-                                  {plantLocationLabel(candidate, spacesById)}
+                                  {plantLocationLabel(
+                                    candidate,
+                                    spacesById,
+                                    spacesUnavailable
+                                      ? t('spaces.locationUnknown')
+                                      : t('spaces.unplaced')
+                                  )}
                                 </span>
                               </label>
                             </li>
@@ -169,11 +174,19 @@ export function MovePlantsDialog({ isOpen, onClose, plant }: MovePlantsDialogPro
                     </div>
                   )}
 
+                  {/* Without this the destination picker renders with only
+                      "Unplaced" in it — "you have nowhere to move this" — on a
+                      dialog the user opened specifically to move something. */}
+                  {spacesUnavailable && (
+                    <Alert variant="error">{t('spaces.roomsUnavailableShort')}</Alert>
+                  )}
+
                   <label className="block">
                     <span className="label">{t('spaces.moveDestination')}</span>
                     <select
                       className="input"
                       value={spaceId}
+                      disabled={spacesUnavailable}
                       onChange={(event) => setSpaceId(event.target.value)}
                     >
                       <option value="">{t('spaces.unplaced')}</option>

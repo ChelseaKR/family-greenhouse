@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { spaceService } from '@/services/spaceService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useSpaces } from '@/hooks/useSpaces';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 
@@ -33,10 +34,7 @@ export function SpacePicker({
   const [name, setName] = useState('');
   const [environment, setEnvironment] = useState<'inside' | 'outside'>('inside');
 
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-  });
+  const { spaces, unavailable: spacesUnavailable } = useSpaces();
 
   const createMutation = useMutation({
     mutationFn: () => spaceService.createSpace({ name, environment }),
@@ -82,6 +80,10 @@ export function SpacePicker({
           </optgroup>
         )}
       </select>
+      {/* A failed read must not render as "this household has no rooms": the
+          picker would silently offer only "Unplaced" on a control the user
+          opened specifically to choose a room. */}
+      {spacesUnavailable && <p className="error-message">{t('spaces.roomsUnavailableShort')}</p>}
       {error && <p className="error-message">{error}</p>}
 
       {allowCreate &&

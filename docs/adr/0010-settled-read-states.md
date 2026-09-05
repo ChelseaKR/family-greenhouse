@@ -93,10 +93,19 @@ Both gates are deliberately narrow, and the honest limits are these.
 
 The **frontend** gate:
 
-- detects **one shape** — a `useQuery` destructured for `data` without any
-  outcome field, plus an `if (!data) return null` guard. That is the shape that
-  produced #350 and #351.
-- does **not** detect the coalescing shape (`data?.length ?? 0`,
+- detects **two shapes**. `silent-guard` is a `useQuery` destructured for
+  `data` without any outcome field, plus an `if (!data) return null` guard —
+  the shape that produced #350 and #351. `default-literal`, added 2026-09-04,
+  is `const { data: spaces = [] } = useQuery(…)` with no outcome field bound:
+  the same collapse, and strictly harder to see, because it happens once at the
+  declaration and is invisible at every use site downstream. Seven components
+  read the household's rooms that way, so a failed `GET /spaces` reached
+  `spaceOverview` as an empty map and filed **every** plant under `'unplaced'` —
+  a household that had spent months organising its plants into rooms was told,
+  with no error and no hint, that it had organised nothing (#456). Only a
+  _literal_ default counts: `data: x = fallbackFromProps` is a deliberate
+  choice with a name attached.
+- does **not** detect the coalescing shape at a USE site (`data?.length ?? 0`,
   `(tasks ?? [])`) that produced #348 and #349. Distinguishing that from a
   legitimate default needs type information the scanner does not have. Those
   stay a review concern, and this ADR is the rule reviewers cite.
@@ -104,6 +113,11 @@ The **frontend** gate:
   correct idiom is frequently `data === undefined` after the loading guard,
   which reads no error field at all. A gate demanding `isError` would fail
   `AnalyticsPage`, which is right.
+
+Both scripts take `--src` and `--baseline` so their own tests can run the real
+script against fixtures, in both directions. The frontend half shipped without
+tests and gained them alongside `default-literal`
+(`frontend/tests/unit/scripts/checkSettledReadStates.test.ts`).
 
 The **backend** gate looks for a read — a DynamoDB / S3 / SSM / Cognito
 get-style command, a counter read-back via `UpdateCommand … ReturnValues`, a
@@ -141,12 +155,20 @@ leave to people.
 
 ## Consequences
 
-- **Four occurrences are accepted, with reasons.** `HouseholdSwitcher`,
+- **The frontend baseline holds acceptances only.** `HouseholdSwitcher`,
   `YearInReviewCard`, `PhotoTimeline` and `SuggestedCareCard` all vanish on a
-  failed read, and none of them carries a warning, a count, or a safety fact —
-  their absence asserts nothing a reader would act on. Each baseline entry says
-  why in a sentence. These are judgements, not exemptions: if one of those
-  components ever gains a warning, its entry stops being true and must go.
+  failed read, and `AddPlantPage`'s task-template list defaults to empty — none
+  of them carries a warning, a count, or a safety fact, so their absence asserts
+  nothing a reader would act on. Each baseline entry says why in a sentence.
+  These are judgements, not exemptions: if one of those components ever gains a
+  warning, its entry stops being true and must go.
+- **The rooms read became a hook.** `useSpaces()` returns
+  `{ status: 'loading' | 'ready' | 'unavailable', spaces, byId }`, so the
+  failure state cannot be dropped by forgetting to destructure it, and the
+  seven call sites stopped each re-deriving the same lookup map. Where the
+  rooms are unavailable the plants still render — they loaded fine — under
+  "Room unknown" with a banner saying what could not be read, rather than
+  under "Unplaced".
 - **The backend pins nine occurrences, all of them acceptances.** They are
   attribution fallbacks (`'Someone'`, an email local-part for an account with
   no name attribute) and cache reads whose miss and failure both correctly
