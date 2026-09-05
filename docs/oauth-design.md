@@ -8,7 +8,7 @@
 ## Why API keys aren't enough
 
 Today's keys (`services/apiKeys.ts`) are household-scoped bearer secrets:
-SHA-256-hashed at rest, looked up via GSI3, carrying scope arrays
+SHA-256-hashed at rest, looked up via GSI1, carrying scope arrays
 (`read:*`, `write:tasks`), Greenhouse-gated, admin-issued. They're right for
 "my own script" and wrong for "a third-party app my users sign into":
 

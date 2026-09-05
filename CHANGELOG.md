@@ -18,6 +18,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **The public API rejected every request, from the day it shipped.** API-key
+  authentication resolved a presented key by querying a `GSI3` index that the
+  table Terraform has never defined — `infrastructure/modules/database/main.tf`
+  declares `GSI1` and `GSI2` and nothing else creates a third, which the live
+  production table confirms. DynamoDB answers a Query naming a missing index
+  with `ValidationException` rather than an empty result, so no `/api/v1/*`
+  request could authenticate in any environment. Key rows are now written to
+  and read from `GSI1` under the `APIKEY_HASH#` partition prefix, the same
+  pattern `calendarTokens.ts` already uses, so the fix needs no table change.
+  Two new checks in the backend suite fail the build if any source file ever
+  again queries an index — or writes a GSI key attribute — the committed
+  Terraform does not declare. **Any API key minted before this change must be
+  re-created under Settings → API keys:** its row carries the old attribute
+  names. Nothing is lost, because no key issued to date has ever worked.
+
 - **A plant added five minutes ago was already overdue.** Every task created in
   the app was due at the instant it was created, so a second later the sitter
   view showed a red "overdue" badge, `?overdue=true` counted it, and the weekly
