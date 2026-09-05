@@ -215,7 +215,14 @@ export function SitterPhotoBack({ token, tasks, onLinkInactive }: SitterPhotoBac
         </Button>
       </div>
 
-      <div aria-live="polite">
+      {/* No aria-live on this wrapper: it contains nothing but Alerts, and
+          each Alert is already a live region with the right politeness for its
+          variant. Declaring one here made the success Alert's own
+          role="status" a nested polite region (announced twice) and put the
+          error's role="alert" — assertive — inside a polite parent, which is
+          the case Alert's own docs warn about. Dropping the attribute keeps
+          the failed send assertive, which is what it should be. */}
+      <div>
         {sentCount > 0 && !error && (
           <Alert variant="success" className="mt-3">
             {t('sitter.photo.sent', { count: sentCount })}

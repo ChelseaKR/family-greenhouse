@@ -226,9 +226,13 @@ export function CaretakerPage() {
             </Alert>
           )}
 
+          {/* The wrapper owns this announcement — completing the last task
+              replaces the list with the Alert, which is one change. The Alert
+              passes live="off" so its own role="status" does not nest a polite
+              region inside this polite region and announce twice. */}
           <div className="mt-10 space-y-3" aria-live="polite">
             {remaining.length === 0 ? (
-              <Alert variant="success" title={t('caretaker.page.allDoneTitle')}>
+              <Alert variant="success" title={t('caretaker.page.allDoneTitle')} live="off">
                 {t('caretaker.page.allDoneBody')}
               </Alert>
             ) : (

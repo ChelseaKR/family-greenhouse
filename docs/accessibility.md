@@ -13,12 +13,13 @@ document maps criteria to where they're enforced or to a deliberate choice.
 
 ## Automated enforcement
 
-Four layers, all gating:
+Five layers, all gating:
 
 1. **Lighthouse CI** runs the `accessibility` category against **exactly two URLs**, `/` and `/login` (`frontend/lighthouserc.cjs`, `lighthouserc.mobile.cjs`), on every PR — both desktop and mobile. The mobile config is the tighter target. Threshold: 0.95 minimum (currently 1.00 on those two pages). Every authenticated surface, every other prerendered marketing route and every public token route is outside this gate; `/` and `/login` are also the two simplest pages in the app, so "1.00" is a narrower statement than it looks.
 2. **Playwright + `@axe-core/playwright`** scans the routes enumerated in the two spec files — not every route in `frontend/src/App.tsx`; see [What the axe sweep does not reach](#what-the-axe-sweep-does-not-reach) for the gap. `ENFORCED_TAGS` is `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`/`wcag22aa` — **AA only** (both spec files removed the `wcag2aaa`/`wcag21aaa` tags; see the constant at the top of each). Zero violations required at that level. (`tests/e2e/a11y.spec.ts`, `a11y-authenticated.spec.ts`). The AAA criteria below (contrast-enhanced, target size) are real but are **not** axe-gated — they're maintained by convention + manual review, per criterion below.
 3. **`eslint-plugin-jsx-a11y` at `strict`** (not just `recommended`) — static analysis at lint time catches missing alt text, invalid ARIA, unlabeled controls, etc., and fails the build.
 4. **`jest-axe`** structural checks on shared primitives in the unit suite (`tests/unit/a11y/components.a11y.test.tsx`) — fast feedback in jsdom (contrast, which needs layout, is left to layer 2).
+5. **Nested live regions** (`tests/unit/a11y/nestedLiveRegions.a11y.test.tsx`) — asserts that no `aria-live`/`role="alert"`/`role="status"` element has a live-region ancestor, on each surface where a page declares its own live region and renders `Alert`s inside it. **No axe rule covers this**: a polite region inside a polite region and an assertive one inside a polite one are both valid ARIA, and both are wrong — the first announces twice, the second defeats the parent. It is a consequence of `Alert` choosing its politeness by variant, so the invariant is pinned structurally rather than per component.
 
 **Target size (2.5.5 AAA):** the shared `Button` enforces a 44×44 CSS-px floor (`min-h-touch`/`min-w-touch`, the `--spacing-touch` = 44px token in the `@theme` block of `frontend/src/index.css`); raw interactive controls (view toggles, snooze menu items, the household-switcher add button) carry the same floor. axe does not mechanically check target size, so this is maintained by convention + review.
 
