@@ -5,6 +5,12 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (i) {
     return { input: i, kind: 'Put' };
   }),
+  DeleteCommand: vi.fn(function (i) {
+    return { input: i, kind: 'Delete' };
+  }),
+  UpdateCommand: vi.fn(function (i) {
+    return { input: i, kind: 'Update' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -203,5 +209,203 @@ describe('emailEvents handler', () => {
         })
       )
     ).rejects.toThrow('ddb down');
+  });
+});
+
+/**
+ * A DynamoDB stand-in that honours the three conditional writes the claim
+ * lifecycle depends on. `send.mockResolvedValue({})` cannot express any of
+ * them, and the defect these tests cover is entirely about what the second
+ * attempt reads back, so the table has to remember.
+ */
+interface FakeCommand {
+  kind: 'Put' | 'Delete' | 'Update';
+  input: {
+    Item?: Record<string, unknown>;
+    Key?: { PK: string; SK: string };
+    ConditionExpression?: string;
+    ExpressionAttributeValues?: Record<string, unknown>;
+  };
+}
+
+function conditionalCheckFailed(): Error {
+  const err = new Error('The conditional request failed');
+  err.name = 'ConditionalCheckFailedException';
+  return err;
+}
+
+function installFakeTable(): Map<string, Record<string, unknown>> {
+  const table = new Map<string, Record<string, unknown>>();
+  const keyOf = (k: { PK: string; SK: string }) => `${k.PK}|${k.SK}`;
+  send.mockImplementation((command: FakeCommand) => {
+    const values = command.input.ExpressionAttributeValues ?? {};
+    // The conditions are READ off the command rather than assumed, so a claim
+    // that stops leasing — `attribute_not_exists(PK)` alone — is rejected here
+    // exactly as DynamoDB would reject it, instead of being quietly forgiven.
+    const condition = command.input.ConditionExpression ?? '';
+    if (command.kind === 'Put') {
+      const item = command.input.Item as Record<string, unknown> & { PK: string; SK: string };
+      const existing = table.get(keyOf(item));
+      // `attribute_not_exists(PK) OR (#status = :applying AND leaseExpiresAt <= :now)`
+      const reclaimable =
+        existing !== undefined &&
+        condition.includes('leaseExpiresAt <= :now') &&
+        existing.status === values[':applying'] &&
+        Number(existing.leaseExpiresAt ?? 0) <= Number(values[':now']);
+      if (existing && condition.includes('attribute_not_exists(PK)') && !reclaimable) {
+        return Promise.reject(conditionalCheckFailed());
+      }
+      table.set(keyOf(item), { ...item });
+      return Promise.resolve({});
+    }
+    const key = keyOf(command.input.Key as { PK: string; SK: string });
+    const existing = table.get(key);
+    if (command.kind === 'Delete') {
+      // `reservationId = :reservationId`
+      const guarded = condition.includes('reservationId = :reservationId');
+      if (!existing || (guarded && existing.reservationId !== values[':reservationId'])) {
+        return Promise.reject(conditionalCheckFailed());
+      }
+      table.delete(key);
+      return Promise.resolve({});
+    }
+    // Update — the finalize. `#status = :applying AND reservationId = :reservationId`
+    if (
+      !existing ||
+      (condition.includes('#status = :applying') && existing.status !== values[':applying']) ||
+      (condition.includes('reservationId = :reservationId') &&
+        existing.reservationId !== values[':reservationId'])
+    ) {
+      return Promise.reject(conditionalCheckFailed());
+    }
+    const { leaseExpiresAt: _lease, reservationId: _reservation, ...kept } = existing;
+    table.set(key, { ...kept, status: values[':applied'], processedAt: values[':processedAt'] });
+    return Promise.resolve({});
+  });
+  return table;
+}
+
+const hardBounce = {
+  eventType: 'Bounce',
+  mail: { messageId: 'claim-1' },
+  bounce: {
+    bounceType: 'Permanent',
+    bounceSubType: 'General',
+    bouncedRecipients: [{ emailAddress: 'gone@b.com' }],
+  },
+};
+
+describe('emailEvents claim lifecycle', () => {
+  it('re-applies a bounce whose first attempt failed, rather than reading its own claim as a duplicate', async () => {
+    const table = installFakeTable();
+    vi.mocked(emailSuppression.recordHardBounce).mockRejectedValueOnce(new Error('ddb throttled'));
+
+    await expect(handler(snsEvent(hardBounce))).rejects.toThrow('ddb throttled');
+    // The failed attempt handed its claim back; nothing is left behind to be
+    // mistaken for a completed event.
+    expect(table.size).toBe(0);
+
+    // Lambda's async retry: the same SNS record, a second time.
+    const retry = await handler(snsEvent(hardBounce));
+    expect(retry).toEqual({ processed: 1, duplicate: 0, ignored: 0 });
+    expect(emailSuppression.recordHardBounce).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds the claim as a lease during the apply and finalizes it only after the write returns', async () => {
+    const table = installFakeTable();
+    vi.mocked(emailSuppression.recordHardBounce).mockImplementationOnce(async () => {
+      const marker = [...table.values()][0];
+      // Mid-apply the marker records an intention, not an effect.
+      expect(marker.status).toBe('applying');
+      expect(Number(marker.leaseExpiresAt)).toBeGreaterThan(0);
+      expect(marker.processedAt).toBeUndefined();
+      return { state: 'suppressed', reason: 'hard_bounce' } as never;
+    });
+
+    await handler(snsEvent(hardBounce));
+
+    const marker = [...table.values()][0];
+    expect(marker.status).toBe('applied');
+    expect(marker.leaseExpiresAt).toBeUndefined();
+    expect(marker.reservationId).toBeUndefined();
+    expect(marker.processedAt).toEqual(expect.any(String));
+  });
+
+  it('still treats a genuine re-delivery of an applied event as a duplicate', async () => {
+    installFakeTable();
+    expect(await handler(snsEvent(hardBounce))).toEqual({
+      processed: 1,
+      duplicate: 0,
+      ignored: 0,
+    });
+    expect(await handler(snsEvent(hardBounce))).toEqual({
+      processed: 0,
+      duplicate: 1,
+      ignored: 0,
+    });
+    expect(emailSuppression.recordHardBounce).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a re-delivery while the lease is live and reclaims the claim once it expires', async () => {
+    const table = installFakeTable();
+    const stored = send.getMockImplementation() as (c: FakeCommand) => Promise<unknown>;
+    // A Lambda killed mid-loop never gets to release. Model that by failing the
+    // release itself, so the claim survives the failed attempt.
+    send.mockImplementation((command: FakeCommand) =>
+      command.kind === 'Delete' ? Promise.reject(new Error('release failed')) : stored(command)
+    );
+    vi.mocked(emailSuppression.recordHardBounce).mockRejectedValueOnce(new Error('ddb throttled'));
+
+    const t0 = new Date('2026-09-05T00:00:00.000Z');
+    await expect(applyNotification(hardBounce, t0)).rejects.toThrow('ddb throttled');
+    expect([...table.values()][0].status).toBe('applying');
+
+    // Inside the lease window a re-delivery is still a duplicate: another
+    // invocation may be applying this very event right now.
+    expect(await applyNotification(hardBounce, new Date(t0.getTime() + 60_000))).toEqual({
+      processed: 0,
+      duplicate: 1,
+      ignored: 0,
+    });
+    expect(emailSuppression.recordHardBounce).toHaveBeenCalledTimes(1);
+
+    // Past the lease the abandoned claim is reclaimable, so the bounce lands.
+    expect(await applyNotification(hardBounce, new Date(t0.getTime() + 6 * 60_000))).toEqual({
+      processed: 1,
+      duplicate: 0,
+      ignored: 0,
+    });
+    expect(emailSuppression.recordHardBounce).toHaveBeenCalledTimes(2);
+  });
+
+  it('suppresses every complained recipient even when one write fails, then rethrows', async () => {
+    installFakeTable();
+    const complaint = {
+      eventType: 'Complaint',
+      mail: { messageId: 'claim-2' },
+      complaint: {
+        complaintFeedbackType: 'abuse',
+        complainedRecipients: [{ emailAddress: 'a@b.com' }, { emailAddress: 'c@d.com' }],
+      },
+    };
+    vi.mocked(emailSuppression.recordComplaint).mockRejectedValueOnce(new Error('ddb throttled'));
+
+    await expect(handler(snsEvent(complaint))).rejects.toThrow('ddb throttled');
+    // The second recipient is not collateral damage of the first one's failure.
+    expect(emailSuppression.recordComplaint).toHaveBeenCalledWith(
+      'c@d.com',
+      'abuse',
+      expect.any(Date)
+    );
+    expect(emailSuppression.recordComplaint).toHaveBeenCalledTimes(2);
+
+    // And the retry picks up the one that failed.
+    await handler(snsEvent(complaint));
+    expect(emailSuppression.recordComplaint).toHaveBeenCalledWith(
+      'a@b.com',
+      'abuse',
+      expect.any(Date)
+    );
+    expect(emailSuppression.recordComplaint).toHaveBeenCalledTimes(4);
   });
 });
