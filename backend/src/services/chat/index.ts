@@ -12,7 +12,12 @@ import createHttpError from 'http-errors';
 import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
 import * as billing from '../billing.js';
-import { askSprout, isSproutIntegrationEnabled, type SproutCitation } from '../sprout.js';
+import {
+  askSprout,
+  isSproutIntegrationEnabled,
+  type SproutCitation,
+  type SproutCoverage,
+} from '../sprout.js';
 import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import {
   invokeChatModel,
@@ -56,6 +61,7 @@ import {
   reserveBudget,
   type TurnBudgetReconciliation,
 } from './persistence.js';
+import { isDisplayOnlyBlock } from './types.js';
 import type {
   BudgetState,
   ChatMessageRecord,
@@ -207,6 +213,18 @@ export interface RunChatTurnResult {
   };
   /** Present when the feature-flagged first-party Sprout path answered. */
   citations?: SproutCitation[];
+  /**
+   * Sprout's own required per-answer disclosure, verbatim. Omitted when Sprout
+   * sent an empty one — the schema permits it, and an empty string rendered as
+   * a disclosure is worse than none.
+   */
+  disclosure?: string;
+  /**
+   * How much of the household this answer was actually computed over (#549).
+   * Aggregate integers only. Returned so a caller can qualify the answer
+   * rather than inherit `buildSproutContext`'s reductions silently.
+   */
+  coverage?: SproutCoverage;
   provider?: 'sprout' | 'bedrock';
 }
 
@@ -237,11 +255,13 @@ function sanitizeToolResultBlock(block: ContentBlock): ContentBlock {
 function toBedrockMessages(history: ChatMessageRecord[]): BedrockMessage[] {
   return history.map((m) => ({
     role: m.role,
-    // Citation blocks are Family Greenhouse display metadata, not Anthropic
-    // content blocks. Strip them before replaying a Sprout-authored turn into
-    // a later Bedrock fallback. Persisted tool results may contain fields used
-    // by the authenticated UI; redact them again at this model boundary.
-    content: m.content.filter((block) => block.type !== 'citation').map(sanitizeToolResultBlock),
+    // Citation, disclosure and coverage blocks are Family Greenhouse display
+    // metadata, not Anthropic content blocks. Strip them before replaying a
+    // Sprout-authored turn into a later Bedrock fallback — the list lives on
+    // the ContentBlock union in types.ts so a new display block cannot be
+    // added without this boundary seeing it. Persisted tool results may
+    // contain fields used by the authenticated UI; redact them again here.
+    content: m.content.filter((block) => !isDisplayOnlyBlock(block)).map(sanitizeToolResultBlock),
   }));
 }
 
@@ -610,11 +630,38 @@ async function* turnEvents(
   if (isSproutIntegrationEnabled()) {
     let sprout: Awaited<ReturnType<typeof askSprout>> | undefined;
     try {
-      sprout = await askSprout({ householdId, question: message });
+      sprout = await askSprout({
+        householdId,
+        question: message,
+        // The language of THIS question, on the rule blockCopy.ts already
+        // settled for the block messages and for the same reason: what Sprout
+        // is told decides the language of the answer AND of the disclosure
+        // shown underneath it, so leaving the 'en' default in place handed a
+        // Spanish speaker an English disclosure. `language` is already part of
+        // the request contract Sprout accepts, so nothing new crosses.
+        language: detectChatLocale(message),
+      });
     } catch (err) {
       logger.warn({ err: (err as Error).message }, 'sprout_integration_fallback');
     }
     if (sprout) {
+      // askSprout returns five fields and this turn used to read two of them,
+      // dropping `disclosure`, `observations` and `coverage` on the floor
+      // (#579). `disclosure` and `coverage` are persisted below as display
+      // blocks alongside the citations, so both survive with the answer and a
+      // reload shows what the live turn showed. `observations` are counted in
+      // the audit line but deliberately NOT persisted: what a household-scoped
+      // number may assert when its coverage is partial is the open product
+      // decision in #549, and storing a numerator for some later consumer to
+      // render without its denominator is precisely that defect, pre-built.
+      const disclosure = sprout.disclosure.trim();
+      if (!disclosure) {
+        // Required by the response contract but permitted to be empty by its
+        // own schema (`z.string()`, no minimum). Nothing is shown in that
+        // case, which is the honest outcome — but a silently absent
+        // disclosure should not look like a delivered one from the outside.
+        logger.warn({ conversationId }, 'sprout_answer_without_disclosure');
+      }
       const userRecord: ChatMessageRecord = {
         conversationId,
         timestamp: new Date().toISOString(),
@@ -628,6 +675,11 @@ async function* turnEvents(
         content: [
           { type: 'text', text: sprout.text },
           ...sprout.citations.map((citation) => ({ type: 'citation' as const, ...citation })),
+          ...(disclosure ? [{ type: 'disclosure' as const, text: disclosure }] : []),
+          // Attached whether or not it is partial and whether or not Sprout
+          // returned an observation: the PROSE above came out of the same
+          // reduced set, so the qualification belongs to the whole answer.
+          { type: 'coverage' as const, ...sprout.coverage },
         ],
       };
       try {
@@ -669,6 +721,8 @@ async function* turnEvents(
         assistantText: sprout.text,
         proposals: [],
         citations: sprout.citations,
+        disclosure: disclosure || undefined,
+        coverage: sprout.coverage,
         provider: 'sprout',
         budgetRemaining: {
           inputTokens: Math.max(0, budgetConfig.maxInputTokensPerMonth - budget.inputTokens),
@@ -692,7 +746,26 @@ async function* turnEvents(
       audit('chat.message_sent', {
         actorId: userId,
         householdId,
-        metadata: { conversationId, provider: 'sprout', citationCount: sprout.citations.length },
+        metadata: {
+          conversationId,
+          provider: 'sprout',
+          citationCount: sprout.citations.length,
+          // Aggregate integers and booleans only, no strings — the same
+          // reason `coverage` itself is safe to carry. This is what makes
+          // "did this answer come from a subset of the household?" answerable
+          // in production today, ahead of any decision about what to render.
+          observationCount: sprout.observations.length,
+          disclosed: disclosure.length > 0,
+          coveragePartial: sprout.coverage.partial,
+          plantsIncluded: sprout.coverage.plants.included,
+          plantsTotal: sprout.coverage.plants.total,
+          plantsUnmatched: sprout.coverage.plants.unmatched,
+          plantsTruncated: sprout.coverage.plants.truncated,
+          tasksIncluded: sprout.coverage.tasks.included,
+          tasksTotal: sprout.coverage.tasks.total,
+          tasksUnmatched: sprout.coverage.tasks.unmatched,
+          tasksTruncated: sprout.coverage.tasks.truncated,
+        },
       });
       yield { type: 'start', conversationId };
       yield { type: 'done', result };

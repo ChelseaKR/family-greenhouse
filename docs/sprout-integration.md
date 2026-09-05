@@ -59,11 +59,53 @@ the household rather than from anything in the reply — so a reply cannot
 overstate its own coverage. `provenance: 'household'` says where a number came
 from; `coverage.complete` says how much of the household it covers.
 
+## What the chat turn does with the reply
+
+`askSprout` returns five fields. A turn read two of them — the prose and the
+citations — and dropped `disclosure`, `observations` and `coverage` on the
+floor, so the coverage work above was wired to nothing (#579). What happens to
+each now:
+
+- **`disclosure`** is shown to the user and persisted with the answer as a
+  `disclosure` content block, so a reloaded transcript carries it too. Every
+  word is Sprout's; Family Greenhouse writes none of it. The request now sends
+  the language of the question (the rule `chat/blockCopy.ts` already uses for
+  the block messages), so the disclosure arrives in the language the reader is
+  having the conversation in. An empty disclosure — the schema permits one —
+  renders nothing and logs `sprout_answer_without_disclosure` rather than
+  passing for a delivered one.
+- **`coverage`** is persisted as a `coverage` content block on the answer,
+  whether or not it is partial, because the prose came from the same reduced
+  set. That is what lets a stored answer still be qualified later; before it,
+  the facts lived only for the lifetime of the function call. Aggregate
+  integers only, so it crosses to the browser under the same contract it
+  crossed to Sprout under. **Nothing renders it yet** — see the first open
+  decision below.
+- **`observations`** are counted on the `chat.message_sent` audit line and are
+  deliberately not persisted. Storing a household-scoped numerator for a later
+  consumer to render without its denominator is the #549 defect pre-built, and
+  what such a number may assert is the same open decision.
+
+The audit line carries `observationCount`, `disclosed`, `coveragePartial` and
+the plant/task included/total/unmatched/truncated integers, so "did this answer
+come from a subset of the household?" is answerable in production without
+waiting for any of that to be rendered.
+
+Citation, disclosure and coverage blocks are Family Greenhouse display
+metadata, not Anthropic content blocks: `chat/types.ts` lists them and
+`toBedrockMessages` strips every one before a later Bedrock fallback replays
+the conversation.
+
 Two things this does **not** settle, both owner decisions:
 
-- **What Sprout asserts.** Whether an answer hedges, states its denominator, or
-  declines a count when `partial` is true is a policy in the Sprout service.
-  Family Greenhouse supplies the facts; it does not choose the wording.
+- **What is asserted when coverage is partial.** Whether an answer hedges,
+  states its denominator ("1 of the 3 plants I can identify") or declines a
+  count is a policy in the Sprout service, and the matching question on this
+  side is whether Family Greenhouse also shows a caveat of its own next to the
+  answer. Family Greenhouse supplies the facts; it does not choose the wording.
+  This is now implementable rather than blocked: the coverage reaches the turn
+  result, the persisted record and the browser, so a decision about the
+  sentence is a decision about copy, not about plumbing.
 - **Whether the cap stays.** It is a real cap, not a page size — nothing
   fetches the remainder. It remains for now because the payload crosses a
   service boundary; raising or removing it is a separate call.
