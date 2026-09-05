@@ -189,7 +189,12 @@ describe('NotificationSettings', () => {
 
   it('shows the verified badge straight away for an already-verified number', async () => {
     await renderSettings(prefs({ phone: '+15551234567', phoneVerified: true, sms: true }));
-    expect(screen.getByTestId('phone-verified-badge')).toBeInTheDocument();
+    // `findBy`, not `getBy`: the badge needs `phoneDraft === prefs.phone`, and
+    // `phoneDraft` is filled by an effect that runs AFTER the render which
+    // first shows the digest checkbox `renderSettings` waits for. On a quiet
+    // machine that effect has always flushed by now; under contention it has
+    // not, and this asserted the badge's absence a beat too early (#596).
+    expect(await screen.findByTestId('phone-verified-badge')).toBeInTheDocument();
     const smsToggle = screen.getByRole('checkbox', { name: 'SMS notifications' });
     expect(smsToggle).toBeChecked();
     expect(smsToggle).toBeEnabled(); // can always turn OFF
