@@ -459,26 +459,31 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         id: 'stop-emails',
-        q: 'How do I stop the emails? There’s no unsubscribe link.',
+        q: 'How do I stop the emails?',
         a: (
           <>
             <p>
-              Correct — our emails have no unsubscribe link today, which is a gap we&rsquo;d rather
-              name than hide. Turn them off in <em>Settings → Notifications</em> by unticking{' '}
-              <strong>Email</strong>. That also stops the weekly digest and the annual recap.
+              The weekly digest and the annual recap carry an{' '}
+              <strong>Unsubscribe from these</strong> link in the footer, and they are sent with the
+              headers that put a one-click <strong>Unsubscribe</strong> button at the top of the
+              message in Gmail, Apple Mail and other clients that support them. Either one works in
+              a single click, and neither needs you to be signed in.
             </p>
             <p>
-              If you want reminders but not the Monday summary, untick just{' '}
+              For finer control, open <em>Settings → Notifications</em>. Unticking{' '}
+              <strong>Email</strong> stops everything, including task reminders — those carry no
+              unsubscribe link of their own, because they are answering a task you created. If you
+              want reminders but not the Monday summary, untick just{' '}
               <strong>Weekly plant digest</strong> and leave email on. One email always goes out
               regardless of preferences: the welcome message when you first create a household.
             </p>
             <p>
-              If you can&rsquo;t sign in to change this, email{' '}
+              If you can&rsquo;t sign in and have no recent digest to unsubscribe from, email{' '}
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and we&rsquo;ll do it for you.
             </p>
           </>
         ),
-        text: 'Correct, our emails have no unsubscribe link today, which is a gap we would rather name than hide. Turn them off in Settings then Notifications by unticking Email. That also stops the weekly digest and the annual recap. If you want reminders but not the Monday summary, untick just Weekly plant digest and leave email on. One email always goes out regardless of preferences: the welcome message when you first create a household. If you cannot sign in to change this, email support and we will do it for you.',
+        text: 'The weekly digest and the annual recap carry an Unsubscribe from these link in the footer, and they are sent with the headers that put a one-click Unsubscribe button at the top of the message in Gmail, Apple Mail and other clients that support them. Either one works in a single click, and neither needs you to be signed in. For finer control, open Settings then Notifications. Unticking Email stops everything, including task reminders, which carry no unsubscribe link of their own because they are answering a task you created. If you want reminders but not the Monday summary, untick just Weekly plant digest and leave email on. One email always goes out regardless of preferences: the welcome message when you first create a household. If you cannot sign in and have no recent digest to unsubscribe from, email support and we will do it for you.',
       },
       {
         id: 'weekly-digest',
