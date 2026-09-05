@@ -11,9 +11,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router';
+import { http, HttpResponse } from 'msw';
 import { MemberVacation } from '@/features/household/MemberVacation';
 import { taskService } from '@/services/taskService';
+import { useAuthStore } from '@/store/authStore';
 import type { HouseholdMember } from '@/services/householdService';
+import { server } from '../../msw/server';
 
 vi.mock('@/services/taskService', () => ({
   taskService: {
@@ -42,13 +46,15 @@ function renderForm() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemberVacation
-        householdId="hh-1"
-        member={member}
-        members={[member, cover]}
-        canManage
-        window={undefined}
-      />
+      <MemoryRouter>
+        <MemberVacation
+          householdId="hh-1"
+          member={member}
+          members={[member, cover]}
+          canManage
+          window={undefined}
+        />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -105,5 +111,107 @@ describe('MemberVacation date window', () => {
     // an offset that reflects the local (America/New_York) timezone.
     expect(startDate).not.toMatch(/T00:00:00\.000Z$/);
     expect(endDate).not.toMatch(/T23:59:59\.000Z$/);
+  });
+});
+
+/**
+ * The wiring #480 asks for: the vacation form is where a trip is declared,
+ * and it never mentioned sitter links. These assert that the offer is
+ * actually mounted in that form and reads the dates as they are typed — the
+ * placement, not the copy, which `TripSitterOffer.test.tsx` covers.
+ */
+describe('MemberVacation sitter offer', () => {
+  const API = 'http://localhost:4000';
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      accessToken: 'access-1',
+      user: {
+        id: 'user-1',
+        email: 'me@example.com',
+        name: 'Alice',
+        householdId: 'hh-1',
+        householdRole: 'member',
+      },
+      activeHouseholdId: 'hh-1',
+    });
+    server.use(
+      http.get(`${API}/billing/plans`, () =>
+        HttpResponse.json({
+          paymentsAvailable: true,
+          commercialHold: { active: false, effectiveDate: '2026-09-01' },
+          plans: [
+            {
+              id: 'seedling',
+              name: 'Seedling',
+              description: '',
+              maxPlants: 20,
+              maxMembers: 3,
+              limits: {
+                homes: 1,
+                members: 3,
+                plants: 20,
+                tags: 0,
+                analyticsHistoryDays: 30,
+                sitterLinkMaxDays: 7,
+                sitterLinksActive: 1,
+              },
+              features: {
+                awayKit: false,
+                householdToolkit: false,
+                plantTags: false,
+                crossHomeToday: false,
+                kiosk: false,
+                caretakerSeats: false,
+                moveDay: false,
+                chat: false,
+                apiKeys: false,
+              },
+            },
+            {
+              id: 'garden',
+              name: 'Garden',
+              description: '',
+              maxPlants: 200,
+              maxMembers: null,
+              monthlyPrice: 4.99,
+            },
+          ],
+        })
+      ),
+      http.get(`${API}/billing/me`, () => HttpResponse.json({ planId: 'seedling' })),
+      http.get(`${API}/me/households`, () =>
+        HttpResponse.json([{ householdId: 'hh-1', name: 'Home', role: 'member', joinedAt: '' }])
+      ),
+      http.get(`${API}/households/hh-1`, () =>
+        HttpResponse.json({
+          id: 'hh-1',
+          name: 'Home',
+          createdAt: '',
+          createdBy: 'user-2',
+          members: [
+            { userId: 'user-2', name: 'Bob', role: 'admin', joinedAt: '' },
+            { userId: 'user-1', name: 'Alice', role: 'member', joinedAt: '' },
+          ],
+        })
+      )
+    );
+  });
+
+  it('offers a sitter link the moment a trip longer than the free window is typed', async () => {
+    renderForm();
+    fireEvent.click(screen.getByText('Set vacation'));
+
+    // Before the dates are complete the form says nothing about sitters: an
+    // empty window is not a trip.
+    expect(screen.queryByRole('link', { name: 'Set up a sitter link' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-06-03' } });
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-06-24' } });
+
+    expect(
+      await screen.findByText(/That’s 22 days away, and one sitter link on your plan covers 7 days/)
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Ask Bob to upgrade/ })).toBeInTheDocument();
   });
 });

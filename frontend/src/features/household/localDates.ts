@@ -28,3 +28,39 @@ export function todayLocalDateValue(now: Date = new Date()): string {
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** What an `<input type="date">` gives us when it holds a real date. */
+const DATE_INPUT = /^\d{4}-\d{2}-\d{2}$/;
+
+function localDayMs(date: string, endOfDay: boolean): number | null {
+  if (!DATE_INPUT.test(date)) return null;
+  const [y, m, d] = date.split('-').map(Number);
+  const parsed = endOfDay
+    ? new Date(y, m - 1, d, 23, 59, 59, 999)
+    : new Date(y, m - 1, d, 0, 0, 0, 0);
+  const ms = parsed.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Whole days of sitter coverage a trip needs, or null when the two dates are
+ * not both a real date in order.
+ *
+ * INCLUSIVE of both ends, and that is the load-bearing part. A window from
+ * June 3rd to June 24th runs from local midnight on the 3rd to local
+ * 23:59:59.999 on the 24th — 22 days, not 21 — and 22 is the number that
+ * matters, because `SitterLinksCard` builds a link as `startsAt + n days`.
+ * A link created for 21 days would expire at midnight on the 24th and leave
+ * the last day of the trip uncovered. Under-counting here would tell someone
+ * their free 7-day link covers a trip it does not.
+ *
+ * Null is "we cannot say" — a half-filled form — and callers must render it
+ * as saying nothing, never as a zero-day trip.
+ */
+export function tripLengthDays(startDate: string, endDate: string): number | null {
+  const start = localDayMs(startDate, false);
+  const end = localDayMs(endDate, true);
+  if (start === null || end === null || end < start) return null;
+  return Math.ceil((end - start) / DAY_MS);
+}

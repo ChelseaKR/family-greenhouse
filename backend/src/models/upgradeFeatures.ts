@@ -49,6 +49,7 @@ export const UPGRADE_FEATURES = [
   'plant_cap',
   'member_cap',
   'api_keys',
+  'away_kit',
   'garden_plan',
   'greenhouse_plan',
 ] as const;
@@ -83,6 +84,13 @@ export const FEATURE_CATALOG: Record<UpgradeFeature, FeatureSpec> = {
   plant_cap: { label: 'Room for more plants', minimumPlan: 'next_plant_cap' },
   member_cap: { label: 'Room for more household members', minimumPlan: 'next_member_cap' },
   api_keys: { label: 'API keys', minimumPlan: 'greenhouse' },
+  // The Away Kit is the one boundary `planIncludesAwayKit` draws, so the ask
+  // names the bundle rather than any single piece of it. Asked from the
+  // vacation form, which is where a trip is declared (#480).
+  away_kit: {
+    label: 'The Away Kit — longer sitter links, the handoff brief and the return recap',
+    minimumPlan: 'garden',
+  },
   garden_plan: { label: 'The Garden plan', minimumPlan: 'garden' },
   greenhouse_plan: { label: 'The Greenhouse plan', minimumPlan: 'greenhouse' },
 };

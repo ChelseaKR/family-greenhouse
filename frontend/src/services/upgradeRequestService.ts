@@ -21,6 +21,7 @@ export const UPGRADE_FEATURES = [
   'plant_cap',
   'member_cap',
   'api_keys',
+  'away_kit',
   'garden_plan',
   'greenhouse_plan',
 ] as const;
@@ -39,6 +40,7 @@ const FIXED_MINIMUM_PLAN: Partial<Record<UpgradeFeature, PaidPlanId>> = {
   identifications: 'garden',
   leaf_health: 'garden',
   api_keys: 'greenhouse',
+  away_kit: 'garden',
   garden_plan: 'garden',
   greenhouse_plan: 'greenhouse',
 };

@@ -140,6 +140,18 @@ Nothing on this path touches Stripe. Delivery flags in the response are honest: 
 
 Adopting the lock on a new gated surface is three steps: add the feature id to `FEATURE_CATALOG` in `backend/src/models/upgradeFeatures.ts` (mirror it in `frontend/src/services/upgradeRequestService.ts`), add `locked.features.<id>` to both i18n catalogs, and wrap the gated UI in `<LockedFeature feature="<id>">`.
 
+**Where an ask fires matters as much as what it says.** The Away Kit's prompt
+used to appear only in `SitterLinksCard`, when someone typed a window longer
+than seven days — the moment of _failure_, and only for the minority who push
+against a wall the form already shows them. `away_kit` is now also asked from
+`TripSitterOffer`, mounted in the vacation form, which is where a person
+declares a dated trip and which mentioned sitter links nowhere (#480). The
+component says two true things there: that a sitter link exists at all (free,
+and the pointer half is not an upsell), and — only from a `sitterLinkMaxDays`
+it actually read — how long one link on this plan covers. It renders the
+locked card only on `features.awayKit === false`, so a Garden household over
+its own 90-day cap is told the cap and offered nothing.
+
 ### Split the bill
 
 On each paid tier card in Settings → Billing, `frontend/src/features/pricing/SplitTheBill.tsx` prints "$4.99 ÷ 4 members ≈ $1.25 each" from the live catalog price and the household's active member count (`usageDetail.memberCount` from `GET /billing/me`). The arithmetic is integer cents (`billSplit.ts`): the shares always sum to the total and an uneven split states the exact breakdown. A share action uses the Web Share API where available and copies a plain-text line otherwise. It hides itself for a household of one and whenever the member count is unknown — an unreadable count is never rendered as a split. The app never collects from members; one subscription covers the household.

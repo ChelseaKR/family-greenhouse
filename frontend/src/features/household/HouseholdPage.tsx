@@ -284,7 +284,14 @@ export function HouseholdPage() {
           traveller is rarely the admin. A separate component so the
           create/copy/revoke state stays self-contained; it decides per link
           whether this member may revoke it. */}
-      {householdId && <SitterLinksCard householdId={householdId} members={household.members} />}
+      {/* `#sitter-links` is the jump target `TripSitterOffer` points a member
+          at from the vacation form below (#480) — the moment they declare a
+          trip is the moment to reach this form. Keep the id if this moves. */}
+      {householdId && (
+        <div id="sitter-links" className="scroll-mt-4">
+          <SitterLinksCard householdId={householdId} members={household.members} />
+        </div>
+      )}
 
       {/* Return recap — deliberately NOT admin-gated: the sitter looked after
           the whole household's plants, so every member can see what happened

@@ -1974,6 +1974,7 @@ paths:
                       plant_cap,
                       member_cap,
                       api_keys,
+                      away_kit,
                       garden_plan,
                       greenhouse_plan,
                     ]
