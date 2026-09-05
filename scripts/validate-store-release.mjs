@@ -320,6 +320,92 @@ for (const ignoredPath of [
   }
 }
 
+// --- Checks that need no signing material, no populated .env and no `cap
+// --- sync` output, so they run in every mode and therefore in CI (#470).
+
+// `--production` asserts VITE_CHAT_STREAM_URL is unset and VITE_BETA_MODE is
+// false, but it reads process.env and only ever runs from
+// build-mobile-release.sh on a maintainer's laptop. Those assertions are the
+// reason the flag exists, and CI never reached them; worse, running them in
+// CI as-is would pass vacuously, because an unset variable in a checkout with
+// no .env looks exactly like the correct answer.
+//
+// The file that actually decides both values is committed. Every release
+// environment is copied from .env.mobile.production.example (see
+// docs/mobile.md's build flow), so a stream URL enabled in the template
+// propagates into store builds — which is precisely the failure the
+// production check exists to stop. Assert the template instead: a real check,
+// on a real file, with no secrets, on every PR.
+const envExamplePath = 'frontend/.env.mobile.production.example';
+const envExample = read(envExamplePath);
+const templateValues = new Map();
+for (const line of envExample.split('\n')) {
+  const entry = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+  if (entry) templateValues.set(entry[1], entry[2].trim());
+}
+if (templateValues.has('VITE_CHAT_STREAM_URL')) {
+  fail(
+    `${envExamplePath} sets VITE_CHAT_STREAM_URL; native chat would select the SSE path ` +
+      'CapacitorHttp cannot read. Keep it commented out.'
+  );
+}
+if (templateValues.get('VITE_BETA_MODE') !== 'false') {
+  fail(`${envExamplePath} must set VITE_BETA_MODE=false for public store builds`);
+}
+if (templateValues.has('VITE_API_URL')) {
+  assertHttps(templateValues.get('VITE_API_URL'), `${envExamplePath} VITE_API_URL`);
+}
+
+// "Native push UI must remain hidden for this release" used to be a warn()
+// string, and warn() never touches the exit code (#469, #470) — a requirement
+// stated in a message that no code implemented. Implement it.
+//
+// Reachability, not intent, is the testable property: registerNativePush() is
+// currently exported and called by nothing but its own unit test, so the UI is
+// hidden as a consequence of there being no call site. The day someone adds
+// one, both platforms' push material becomes mandatory.
+//
+// The two halves are checked in different modes on purpose. The iOS
+// entitlements file is not a secret and belongs in the repo — docs/mobile.md
+// still makes "enable the Push Notifications capability in Xcode" a manual
+// step that must be redone on every fresh clone, and without an
+// aps-environment entitlement PushNotifications.register() fails at runtime —
+// so it is required as soon as a call site exists, in any mode. Android's
+// google-services.json genuinely cannot live in a checkout (it is gitignored
+// as service material), so it is required only in --production.
+const nativePushEntryPoint = 'frontend/src/services/nativePush.ts';
+const pushCallSites = execFileSync(
+  'git',
+  ['grep', '-l', '-E', 'registerNativePush\\s*\\(', '--', 'frontend/src'],
+  { cwd: root, encoding: 'utf8' }
+)
+  .split('\n')
+  .filter(Boolean)
+  .filter((path) => path !== nativePushEntryPoint);
+const nativePushIsReachable = pushCallSites.length > 0;
+
+if (nativePushIsReachable) {
+  const entitlements = ['frontend/ios/App/App/App.entitlements'].filter((path) =>
+    existsSync(resolve(root, path))
+  );
+  const declaresApsEnvironment = entitlements.some((path) =>
+    read(path).includes('aps-environment')
+  );
+  if (!declaresApsEnvironment) {
+    fail(
+      `Native push is reachable from ${pushCallSites.join(', ')} but no committed iOS ` +
+        'entitlements file declares aps-environment; PushNotifications.register() fails at ' +
+        'runtime without it'
+    );
+  }
+  if (!xcodeProject.includes('CODE_SIGN_ENTITLEMENTS')) {
+    fail(
+      'Native push is reachable but the Xcode project sets no CODE_SIGN_ENTITLEMENTS, so the ' +
+        'entitlements file is not applied to the App target'
+    );
+  }
+}
+
 if (production) {
   const requiredEnvironment = [
     'VITE_API_URL',
@@ -370,8 +456,11 @@ if (production) {
     } catch (error) {
       fail(`Could not validate google-services.json: ${String(error)}`);
     }
-  } else {
-    warn('Android push credentials are absent; native push UI must remain hidden for this release');
+  } else if (nativePushIsReachable) {
+    fail(
+      'Native push UI is reachable but frontend/android/app/google-services.json is absent; ' +
+        'a store build would ship a reminder toggle that cannot deliver'
+    );
   }
 }
 
@@ -402,6 +491,17 @@ if (!production && !existsSync(resolve(root, 'frontend/android/app/google-servic
 }
 
 for (const message of warnings) console.warn(`WARN: ${message}`);
+
+// A validator whose production mode has non-fatal findings is a validator you
+// have to read the output of, which is the failure mode this script exists to
+// remove (#470). Warnings are for the CI/day-to-day modes, where "signing
+// material is intentionally absent" is information rather than a defect. A
+// store build is the last moment anything is checked at all, so at that point
+// there is no such thing as a finding worth printing and not acting on.
+if (production && warnings.length) {
+  errors.push(...warnings.map((message) => `${message} (warnings are fatal in --production)`));
+}
+
 if (errors.length) {
   console.error(`Store release validation failed:\n- ${errors.join('\n- ')}`);
   process.exit(1);

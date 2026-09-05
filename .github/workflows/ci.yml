@@ -105,6 +105,20 @@ jobs:
         # Runs the default (non-`--production`, non-`--synced`) mode, which
         # needs no signing material, no populated .env, and no `cap sync`
         # output, so it is safe on a plain CI checkout.
+        #
+        # That mode used to be the cheap half of the file: everything a store
+        # build depends on sat behind `--production`/`--synced` and ran only
+        # when someone remembered `npm run mobile:release` locally (CICD-470).
+        # The checks that are assertions about COMMITTED files have since been
+        # moved out of those blocks so they run here too — the release env
+        # template's VITE_CHAT_STREAM_URL/VITE_BETA_MODE values, and the
+        # native-push reachability gate. Reading them from process.env in CI
+        # would have passed vacuously, so they read the committed template
+        # instead.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
         run: npm run mobile:validate
 
       - name: Catalog gates (key parity, placeholder parity, plural categories, TODO markers, BCP-47, UTF-8)

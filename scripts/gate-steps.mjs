@@ -175,4 +175,10 @@ export const STEPS = [
     weight: 0,
     why: 'brand assets drifting from their sources',
   },
+  {
+    id: 'mobile:validate',
+    script: 'mobile:validate',
+    weight: 0,
+    why: 'native version parity, store listing metadata, and the store-build config',
+  },
 ];
