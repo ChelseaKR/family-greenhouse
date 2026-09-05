@@ -346,10 +346,25 @@ jobs:
         # the vite-6 migration). Critical CVEs in runtime deps still block.
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Run Gitleaks (license-free CLI, blocking)
+      - name: Run Gitleaks — commit history AND working tree (#442)
         # Run the MIT-licensed binary directly so the gate stays independent
         # of repository visibility and action-wrapper licensing. A non-zero
         # exit blocks the build; `--redact` keeps any match out of the log.
+        #
+        # This step used to be ONE gitleaks command with no `--no-git`, which
+        # means git mode: gitleaks walks commits and scans PATCHES, not the
+        # files on disk. That is the right thing to do — a secret committed and
+        # then removed still needs catching — but it is an argument for running
+        # history mode AS WELL AS file mode. Measured with this pinned version,
+        # one fresh repo per case: a secret introduced only while resolving a
+        # merge conflict, and a secret in a file `.gitattributes` marks binary,
+        # both exit 0 in history mode and exit 1 under `--no-git`.
+        #
+        # scripts/check-secrets.mjs runs both as separate spawns with separately
+        # checked exit codes — never a pipeline, which reports only the last
+        # stage's status. It lives in a script rather than in this YAML so the
+        # flags cannot drift between here and `npm run verify`, which runs the
+        # identical check (CICD-27).
         env:
           GITLEAKS_VERSION: 8.30.1
         run: |
@@ -357,7 +372,7 @@ jobs:
           curl -sSfL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             | tar -xz -C /tmp gitleaks
-          /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+          GITLEAKS_BIN=/tmp/gitleaks node scripts/check-secrets.mjs
 
   sast:
     name: SAST (Semgrep)
