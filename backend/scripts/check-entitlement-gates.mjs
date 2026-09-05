@@ -43,6 +43,32 @@
  * a `past_due` household entitled is exactly the defect #476 is about,
  * pointed the other way.
  *
+ * …and every COMPARISON THAT NAMES A TIER, `plan.id === 'seedling'` (#592),
+ * recorded under the synthetic callee `PlanId===`:
+ *
+ * That shape asks which tier a household is on, where a gate wants to know
+ * whether the tier INCLUDES the feature. Those are different questions with
+ * the same answer for every tier that exists today, so a gate written this way
+ * is never wrong on the day it is written — which is why review keeps letting
+ * it through. It becomes wrong when a tier is added BETWEEN two existing ones:
+ * the new tier's `features` row is authored deliberately in `models/plans.ts`
+ * beside the others, and a comparison naming one id ignores it. Nothing
+ * reports the result, because a tier receiving a feature it was not granted
+ * produces no error and no log line — just a working feature.
+ *
+ * Three gates were written this way while the rest of the codebase read flags:
+ * chat on `plan.id === 'seedling'`, and both halves of API keys on
+ * `id !== 'greenhouse'`. Each sat beside a `PlanFeatures` flag that already
+ * held the answer, and chat spends Bedrock tokens per turn, so the leak would
+ * have had a direct marginal cost.
+ *
+ * Naming a tier is not always a gate — a price rule, an upsell target, a
+ * lifecycle event and an ordering test all legitimately name one. Those are
+ * baselined with the reason, like every other entry here.
+ *
+ * The ids come from `PLAN_ORDER` in `models/plans.ts`, never from a list in
+ * this file: see readPlanIds().
+ *
  * `getEntitledPlan(…)` is NOT a finding. It is the answer.
  *
  * Only the SUBSCRIPT form `PLANS[expr]` is a finding. `PLANS.garden` and
@@ -56,15 +82,18 @@
  * ## What it deliberately does NOT look for
  *
  *   - `models/plans.ts` itself — the module that defines all of the above.
- *   - A bare comparison against the plan row, `sub.planId === 'greenhouse'`.
- *     This is the shape that remains invisible, and it is stated here rather
- *     than left to be discovered: `.planId` is read legitimately all over the
- *     codebase (the truthful tier `/billing/me` publishes, the tier a checkout
- *     is buying, the id passed INTO `getEntitledPlan`), so matching on it
- *     would produce a baseline of mechanical entries that nobody reads. The
- *     two sites that compared it to decide entitlement — `apiKeys` in
- *     production (#540) and its local-server mirror — now go through
- *     `getEntitledPlan`, and a new one would be caught in review, not here.
+ *   - A bare READ of `.planId`. It is read legitimately all over the codebase
+ *     (the truthful tier `/billing/me` publishes, the tier a checkout is
+ *     buying, the id passed INTO `getEntitledPlan`), so matching the read
+ *     would produce a baseline of mechanical entries that nobody reads.
+ *
+ *     This bullet used to say the same about the COMPARISON,
+ *     `sub.planId === 'greenhouse'`, and left it to review. #592 is what that
+ *     cost: review had let three of them through, and the note here predicted
+ *     "a new one would be caught in review, not here" one issue before a new
+ *     one was not. The comparison is a far narrower shape than the read — ten
+ *     occurrences in the whole tree, each with a real reason — so it is now
+ *     matched; see `PlanId===` above. The read still is not.
  *   - `strongestPlan(ids)` — the per-USER homes cap resolves the strongest
  *     tier across every household a person belongs to, from plan ROWS, in
  *     `services/homesGate.ts` and its local-server mirror. #476 did not
@@ -155,6 +184,20 @@ const ISSUED_GRANT_READER = 'getEntitledPlanForIssuedGrant';
 const CATALOG = 'PLANS';
 /** The synthetic callee name a catalog index is recorded under. */
 const CATALOG_INDEX = 'PLANS[]';
+/**
+ * The synthetic callee name a tier-naming comparison is recorded under. Both
+ * `===` and `!==` (and their loose forms) record here; `arg` carries the whole
+ * comparison, operator included, so the baseline reason can be argued about
+ * the actual expression.
+ */
+const PLAN_ID_COMPARISON = 'PlanId===';
+/** Operators whose operands are being compared for identity. */
+const EQUALITY_OPERATORS = new Set([
+  ts.SyntaxKind.EqualsEqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsEqualsToken,
+  ts.SyntaxKind.EqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsToken,
+]);
 
 /** Files that define these helpers, or that this gate cannot usefully see. */
 const EXCLUDED = new Set([
@@ -283,6 +326,56 @@ function argText(call) {
   return exprText(call.arguments[0]);
 }
 
+/**
+ * The tier ids, read out of `PLAN_ORDER` in `models/plans.ts`.
+ *
+ * Deliberately NOT a list in this file. The case this finding class exists for
+ * is a FOURTH tier (#592) — and a checker carrying its own copy of the three
+ * current ids would not recognise the new one, so it would stay green through
+ * exactly the scenario it was written to catch. Rebuilding the defect inside
+ * the control is worse than not having the control.
+ *
+ * Always read from the real backend tree, never from `--src`: the plan catalog
+ * is this repository's, not the scanned fixture's.
+ */
+function readPlanIds() {
+  const abs = path.join(BACKEND_DIR, 'src', 'models', 'plans.ts');
+  const text = readFileSync(abs, 'utf8');
+  const sourceFile = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true);
+  const ids = new Set();
+  walkDeep(sourceFile, (n) => {
+    if (
+      ts.isVariableDeclaration(n) &&
+      ts.isIdentifier(n.name) &&
+      n.name.text === 'PLAN_ORDER' &&
+      n.initializer
+    ) {
+      const array = unwrap(n.initializer);
+      if (ts.isArrayLiteralExpression(array)) {
+        for (const element of array.elements) {
+          if (ts.isStringLiteral(element)) ids.add(element.text);
+        }
+      }
+    }
+    return true;
+  });
+  if (ids.size === 0) {
+    // Scanning for an empty set would report green over every tier comparison
+    // in the tree — "found nothing" rendered as "nothing to find", which is
+    // this repository's named defect class. Refuse instead.
+    console.error(
+      'Could not read any plan id from PLAN_ORDER in models/plans.ts.\n' +
+        'The tier-comparison check would then match nothing and report green,\n' +
+        'so this gate refuses to run rather than pass vacuously. If PLAN_ORDER\n' +
+        'moved or changed shape, update readPlanIds() in this file.'
+    );
+    process.exit(2);
+  }
+  return ids;
+}
+
+const PLAN_IDS = readPlanIds();
+
 // ---------------------------------------------------------------------------
 // Scan
 // ---------------------------------------------------------------------------
@@ -323,6 +416,18 @@ for (const abs of sourceFiles(SRC)) {
       if (calleeName(n.expression) === CATALOG) {
         record(n, CATALOG_INDEX, exprText(n.argumentExpression));
       }
+      return true;
+    }
+    // `plan.id === 'seedling'` — a tier NAMED IN THE SOURCE TEXT. Matched on
+    // the literal side only: the other operand is whatever holds the id, and
+    // matching THAT would drag in every legitimate `.planId` read (see the
+    // header). Property access on the catalog (`PLANS.garden.id === x`) is not
+    // special-cased; it lands here through the literal like everything else.
+    if (ts.isBinaryExpression(n) && EQUALITY_OPERATORS.has(n.operatorToken.kind)) {
+      const namesATier = [n.left, n.right]
+        .map(unwrap)
+        .some((side) => ts.isStringLiteral(side) && PLAN_IDS.has(side.text));
+      if (namesATier) record(n, PLAN_ID_COMPARISON, exprText(n));
       return true;
     }
     if (!ts.isCallExpression(n)) return true;
@@ -377,10 +482,14 @@ if (added.length === 0 && stale.length === 0 && drifted.length === 0 && malforme
 }
 
 const addedRow = added.filter(
-  (f) => f.callee !== ISSUED_GRANT_READER && f.callee !== CATALOG_INDEX
+  (f) =>
+    f.callee !== ISSUED_GRANT_READER &&
+    f.callee !== CATALOG_INDEX &&
+    f.callee !== PLAN_ID_COMPARISON
 );
 const addedLenient = added.filter((f) => f.callee === ISSUED_GRANT_READER);
 const addedCatalog = added.filter((f) => f.callee === CATALOG_INDEX);
+const addedComparison = added.filter((f) => f.callee === PLAN_ID_COMPARISON);
 
 if (addedRow.length > 0) {
   console.error(
@@ -426,6 +535,33 @@ if (addedCatalog.length > 0) {
       'question has to be named.\n' +
       'If it is not entitlement at all — a catalog lookup on an id that is already\n' +
       'resolved, a price table, an upsell target — add the entry to\n' +
+      'backend/scripts/entitlement-gates-baseline.json with that reason.\n'
+  );
+}
+
+if (addedComparison.length > 0) {
+  console.error(
+    'A paid-feature decision made by NAMING A TIER in the source text.\n' +
+      "`plan.id === 'seedling'` asks which tier a household is on. A gate wants to\n" +
+      'know whether that tier INCLUDES the feature, which is a different question\n' +
+      'with the same answer only for the tiers that exist right now. It stops being\n' +
+      'the same answer the day a tier is added between two existing ones: the new\n' +
+      "tier's `features` row is authored deliberately in models/plans.ts, and a\n" +
+      'comparison naming one id ignores it. Nothing reports that — the tier just\n' +
+      'gets a working feature, spending whatever the feature spends (#592).\n'
+  );
+  for (const f of addedComparison) {
+    console.error(`  - ${f.key}  (line ${f.line}: ${f.arg})`);
+  }
+  console.error(
+    '\nIf a PlanFeatures flag covers it, read the flag:\n' +
+      "  featureOf(getEntitledPlan(sub), 'chat')\n" +
+      'The Plan-taking form, so the gate still says WHICH plan it means.\n' +
+      '(`planHasFeature(plan.id, …)` reaches the same answer by putting an already\n' +
+      'resolved plan back through the plan ROW, and is a finding above for exactly\n' +
+      'that reason — it is not the way out of this one.)\n' +
+      'If it is not entitlement at all — a price rule, an upsell target, a lifecycle\n' +
+      'event, an ordering test — add the entry to\n' +
       'backend/scripts/entitlement-gates-baseline.json with that reason.\n'
   );
 }

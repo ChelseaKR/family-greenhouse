@@ -101,6 +101,7 @@ import type {
   ToolResultBlock,
   ToolUseBlock,
 } from '../../../src/services/chat/types.js';
+import { PLANS } from '../../../src/models/plans.js';
 import * as plantService from '../../../src/services/plantService.js';
 import * as climateService from '../../../src/services/climate.js';
 import * as householdService from '../../../src/services/householdService.js';
@@ -755,6 +756,49 @@ describe('runChatTurn', () => {
     expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
     expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
   });
+
+  /**
+   * The same gate, asserted on the BASIS it now decides by (#592).
+   *
+   * The case above names Seedling, and every assertion that names a tier is
+   * what lets a deny-list on `plan.id` come back: it stays green whether the
+   * gate reads the id or the flag, because with three tiers the two agree for
+   * every input that exists. These cases are GENERATED from `features.chat`,
+   * so the tier that must be refused is whichever tier's own row says so.
+   *
+   * A fourth tier added between Seedling and Garden extends this test the
+   * moment its row is written in `models/plans.ts` — with no edit here, and
+   * whichever way its `chat` flag is authored. That is precisely the input the
+   * id comparison would have got wrong, and precisely the input no
+   * hand-written list of tier names would have covered.
+   */
+  it.each(Object.values(PLANS).map((plan) => [plan.id, plan.features.chat] as const))(
+    'decides the turn by features.chat, not by the plan id: %s (chat=%s)',
+    async (planId, tierIncludesChat) => {
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId });
+
+      if (tierIncludesChat) {
+        vi.mocked(invokeChatModel).mockResolvedValueOnce({
+          content: [{ type: 'text', text: 'hi' }],
+          stopReason: 'end_turn',
+          usage: { inputTokens: 10, outputTokens: 5 },
+        });
+        await expect(
+          runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+        ).resolves.toBeDefined();
+        expect(vi.mocked(invokeChatModel)).toHaveBeenCalledTimes(1);
+        return;
+      }
+
+      await expect(
+        runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+      ).rejects.toMatchObject({ statusCode: 402 });
+      // Before any idempotency/budget/Bedrock work, as the comment on the gate
+      // promises: a refused tier must not cost a token.
+      expect(vi.mocked(reserveBudget)).not.toHaveBeenCalled();
+      expect(vi.mocked(invokeChatModel)).not.toHaveBeenCalled();
+    }
+  );
 
   it.each(['past_due', 'unpaid', 'incomplete'])(
     'rejects with 402 when the Garden subscription is %s — each turn spends Bedrock tokens',
