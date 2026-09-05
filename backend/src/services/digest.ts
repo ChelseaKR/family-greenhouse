@@ -231,6 +231,42 @@ async function finalizeWeeklyDigestSlot(
 }
 
 /**
+ * Classify this household's engagement and log the answer. Best-effort.
+ *
+ * Wrapped so retention observation can never cost a household its digest:
+ * a throw here is a warning line, not a missed email. The one thing it must
+ * never do is guess — `householdLapse` returns `unavailable` with a reason for
+ * every read it could not complete, and that reason is logged as itself rather
+ * than folded into a count of lapsing households.
+ */
+async function observeEngagement(
+  householdId: string,
+  atRisk: digestReport.AtRiskResult,
+  now: Date
+): Promise<void> {
+  try {
+    const engagement = await householdLapse.readHouseholdEngagement(
+      householdId,
+      householdLapse.overdueFromAtRisk(atRisk),
+      now
+    );
+    logger.info(
+      {
+        householdId,
+        ...householdLapse.engagementLogFields(engagement),
+        msg: 'retention.household_engagement',
+      },
+      'retention.household_engagement'
+    );
+  } catch (err) {
+    logger.warn(
+      { householdId, err: (err as Error).message, msg: 'retention.engagement_observe_failed' },
+      'retention.engagement_observe_failed'
+    );
+  }
+}
+
+/**
  * Send the weekly digest for ONE household.
  *
  * The old shape was `if (atRisk.length === 0) return 0` before reading
@@ -282,42 +318,6 @@ async function finalizeWeeklyDigestSlot(
  * building — and it only ever REMOVES recipients, so evaluating it late can
  * never cause an unwanted send.
  */
-/**
- * Classify this household's engagement and log the answer. Best-effort.
- *
- * Wrapped so retention observation can never cost a household its digest:
- * a throw here is a warning line, not a missed email. The one thing it must
- * never do is guess — `householdLapse` returns `unavailable` with a reason for
- * every read it could not complete, and that reason is logged as itself rather
- * than folded into a count of lapsing households.
- */
-async function observeEngagement(
-  householdId: string,
-  atRisk: digestReport.AtRiskResult,
-  now: Date
-): Promise<void> {
-  try {
-    const engagement = await householdLapse.readHouseholdEngagement(
-      householdId,
-      householdLapse.overdueFromAtRisk(atRisk),
-      now
-    );
-    logger.info(
-      {
-        householdId,
-        ...householdLapse.engagementLogFields(engagement),
-        msg: 'retention.household_engagement',
-      },
-      'retention.household_engagement'
-    );
-  } catch (err) {
-    logger.warn(
-      { householdId, err: (err as Error).message, msg: 'retention.engagement_observe_failed' },
-      'retention.engagement_observe_failed'
-    );
-  }
-}
-
 export async function digestHousehold(
   householdId: string,
   now: Date = new Date()
