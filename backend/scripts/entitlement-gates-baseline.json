@@ -1,5 +1,5 @@
 {
-  "$comment": "Accepted calls to the plan-ROW readers (getPlan / planLimits / planHasFeature) and to the deliberate leniency getEntitledPlanForIssuedGrant. See scripts/check-entitlement-gates.mjs, docs/billing.md and #476. Each entry states why this call is NOT a paid-feature gate resolved from the wrong question — or, for getEntitledPlanForIssuedGrant, which already-issued grant it continues, who holds it, and what bounds it. `arg` pins the first argument's source text: the reason is an argument about WHAT is passed, so the gate fails when that changes and the reason has to be re-argued. `node scripts/check-entitlement-gates.mjs --print` prints a skeleton for every current finding. The list may only SHRINK: adding an entry admits new debt and needs the reason to hold up in review; a stale entry fails the gate so a fix must delete its line. `getEntitledPlan(sub)` is never a finding — it is the rule.",
+  "$comment": "Accepted calls to the plan-ROW readers (getPlan / planLimits / planHasFeature), catalog indexes (recorded as the callee `PLANS[]`), and the deliberate leniency getEntitledPlanForIssuedGrant. See scripts/check-entitlement-gates.mjs, docs/billing.md and #476. Each entry states why this call is NOT a paid-feature gate resolved from the wrong question — or, for getEntitledPlanForIssuedGrant, which already-issued grant it continues, who holds it, and what bounds it. `arg` pins the source text of the first argument, or of the index expression for a `PLANS[]` entry: the reason is an argument about WHAT is passed, so the gate fails when that changes and the reason has to be re-argued. A key's middle segment is the enclosing function, or `METHOD /path` for an Express route handler in the dev server. `node scripts/check-entitlement-gates.mjs --print` prints a skeleton for every current finding. The list may only SHRINK: adding an entry admits new debt and needs the reason to hold up in review; a stale entry fails the gate so a fix must delete its line. `getEntitledPlan(sub)` is never a finding — it is the rule.",
   "accepted": {
     "handlers/billing/handler.ts::checkoutSchema::getPlan": {
       "reason": "Not entitlement. `v.planId` is the tier the request is asking to BUY, read out of the checkout body, and the refine only asks whether that tier still offers the requested billing interval (withdrawn cadences). There is no household subscription in scope at schema-validation time, and nothing here grants anything.",
@@ -25,9 +25,25 @@
       "reason": "CONTINUING, same grant and same bounds as the two sitter routes above. Both callers (getSitterPhotoStatus, uploadSitterPhoto) are the anonymous token routes, reached only after sitterService has validated an active, unexpired link. The photo-back cap is per-link and enforced separately.",
       "arg": "sub"
     },
-    "local-server.ts::<anonymous>::planHasFeature": {
-      "reason": "The in-memory dev server, not production. It mirrors the production defect here and at ~20 further sites that index the catalog directly (`PLANS[h?.planId ?? 'seedling']`) — a shape this gate cannot see, recorded as a known blind spot in its header. Converting local-server is tracked in #476 and is a separate change; deployed behaviour is what the handlers above define.",
-      "arg": "h?.planId ?? 'seedling'"
+    "local-server.ts::GET /sitter/:token::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING, dev server. Mirrors handlers/tasks/handler.ts::getSitterView above: the `briefAvailable` flag on the anonymous sitter view. `getActiveSitterLink` has already enforced active + inside [startsAt, expiresAt] before this line, so an expired or revoked link never reaches it. It must agree with GET /sitter/:token/brief below, or the sitter page offers a control that then 404s. Issuing a NEW link is gated on getEntitledPlan in POST /households/:id/sitter-links.",
+      "arg": "subscriptionOf(link.householdId)"
+    },
+    "local-server.ts::GET /sitter/:token/brief::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING, dev server. Mirrors handlers/tasks/handler.ts::getSitterBrief above — same already-validated link, same bounds. The sitter holding it is not the buyer and cannot enter a payment method; the plants are what pay for a link that dies overnight.",
+      "arg": "subscriptionOf(link.householdId)"
+    },
+    "local-server.ts::POST /households/:id/move-day::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING, dev server. Mirrors handlers/climate/moveDay.ts::evaluateMoveDay above: the grant is a claimed Move Day season, already materialised as claimable tasks in the household's own task list, with a 14-day card window bounding it. Firing a NEW season two lines below uses getEntitledPlan and answers 'quiet' rather than 'ready', so an unentitled household leaves the season UNCLAIMED instead of burning the 180-day re-fire gap.",
+      "arg": "moveDaySub"
+    },
+    "local-server.ts::awayKitEnabledFor::getEntitledPlanForIssuedGrant": {
+      "reason": "CONTINUING, dev server. Mirrors handlers/tasks/sitterPhotos.ts::awayKitEnabledFor above. Both callers are the anonymous sitter photo routes (GET and POST /sitter/:token/photos), reached only after getActiveSitterLink validated the link; the per-link photo cap is enforced separately. The away RECAP deliberately does NOT call this — it is read by a signed-in member of the buying household and resolves through `entitledPlan`, exactly as handlers/households/awayRecap.ts does.",
+      "arg": "subscriptionOf(householdId)"
+    },
+    "models/upgradeFeatures.ts::resolveTargetPlan::PLANS[]": {
+      "reason": "Not a gate — the opposite, and the same function the getPlan entry below already covers. `id` iterates PLAN_ORDER looking for the lowest tier that RAISES the cap a member is asking for: an upsell target, not a grant. Newly listed because the gate now sees catalog indexing, not because this code changed.",
+      "arg": "id"
     },
     "models/upgradeFeatures.ts::resolveTargetPlan::getPlan": {
       "reason": "Not a gate — the opposite. Resolves which tier to UPSELL a household to given the tier it is on, and returns null when that tier already includes the feature. Reading the plan row is correct here: a household that already holds the tier must not be sold it again, whatever its payment status, which is the same rule services/billing.ts's double-pay guard enforces.",
@@ -68,6 +84,10 @@
     "services/escalation.ts::runEscalations::getPlan": {
       "reason": "Not a plan-row read. `rule.planId` is ALREADY the entitled plan id: getEscalationRule resolves it through getEntitledPlan from the same projected GetItem (planId + subscriptionStatus + lifetimePlanId), so this is a catalog lookup on a resolved id. Delete this line if that resolution ever moves back to the row.",
       "arg": "rule.planId"
+    },
+    "services/stripePrices.ts::expectedPriceFor::PLANS[]": {
+      "reason": "Not entitlement. `planId` is a PlanId parameter naming which catalog row to read the expected Stripe amounts from, so the price-drift check can compare the catalog against the live Price objects. No household is in scope — the function takes a tier and a cadence and returns a price row. Newly listed because the gate now sees catalog indexing, not because this code changed.",
+      "arg": "planId"
     }
   }
 }

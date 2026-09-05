@@ -26,25 +26,54 @@
  *   - `getEntitledPlanForIssuedGrant(…)` — the deliberate LENIENCY: what an
  *     already-issued, unexpired grant keeps while the card is failing
  *
+ * …and every INDEX INTO THE CATALOG, `PLANS[…]`:
+ *
+ *   - `PLANS[h?.planId ?? 'seedling']` is `getPlan` with the fallback written
+ *     out by hand. It reaches the identical wrong answer while naming none of
+ *     the functions above, so it was invisible here until local-server was
+ *     converted — which is how `src/local-server.ts` came to mirror the
+ *     production defect at twenty sites while this gate reported green. A
+ *     control that cannot see a shape does not constrain it.
+ *
  * The first three answer "which tier is on file", which is not the same
- * question as "may this household do this right now". The fourth answers the
- * right question the lenient way, which is a product decision each time and
- * must not spread by copy-paste — a new site that quietly keeps a `past_due`
- * household entitled is exactly the defect #476 is about, pointed the other
- * way.
+ * question as "may this household do this right now"; the catalog index
+ * answers it with one less function call. `getEntitledPlanForIssuedGrant`
+ * answers the right question the lenient way, which is a product decision
+ * each time and must not spread by copy-paste — a new site that quietly keeps
+ * a `past_due` household entitled is exactly the defect #476 is about,
+ * pointed the other way.
  *
  * `getEntitledPlan(…)` is NOT a finding. It is the answer.
+ *
+ * Only the SUBSCRIPT form `PLANS[expr]` is a finding. `PLANS.garden` and
+ * `PLANS.seedling` name one fixed tier in the source text and cannot carry a
+ * household's plan id — they are the upgrade target in a message
+ * (`services/sitterPlanGate.ts`) and the free-tier floor — and
+ * `Object.values(PLANS)` is the catalog itself. The line is syntactic on
+ * purpose: it is the expression between the brackets that decides whose tier
+ * this is, and that expression is what gets pinned as `arg`.
  *
  * ## What it deliberately does NOT look for
  *
  *   - `models/plans.ts` itself — the module that defines all of the above.
- *   - `src/local-server.ts` — the in-memory dev server resolves plans by
- *     indexing the catalog directly (`PLANS[h?.planId ?? 'seedling']`) at ~20
- *     sites, a shape this gate cannot see. It mirrors the production defect
- *     and is tracked in #476; it is not production code, and converting it is
- *     a separate change. Its two calls that DO use the named helpers are
- *     baselined below like any other.
- *   - `PLANS[…]` index expressions anywhere. Same blind spot, stated once.
+ *   - A bare comparison against the plan row, `sub.planId === 'greenhouse'`.
+ *     This is the shape that remains invisible, and it is stated here rather
+ *     than left to be discovered: `.planId` is read legitimately all over the
+ *     codebase (the truthful tier `/billing/me` publishes, the tier a checkout
+ *     is buying, the id passed INTO `getEntitledPlan`), so matching on it
+ *     would produce a baseline of mechanical entries that nobody reads. The
+ *     two sites that compared it to decide entitlement — `apiKeys` in
+ *     production (#540) and its local-server mirror — now go through
+ *     `getEntitledPlan`, and a new one would be caught in review, not here.
+ *   - `strongestPlan(ids)` — the per-USER homes cap resolves the strongest
+ *     tier across every household a person belongs to, from plan ROWS, in
+ *     `services/homesGate.ts` and its local-server mirror. #476 did not
+ *     convert it and neither does the local-server pass: whether one
+ *     household's failing card should shrink a DIFFERENT household's homes
+ *     allowance is an unasked product question, and a gate entry that says
+ *     "pending a decision" is the hand-maintained list this file exists to
+ *     replace. Adding it here is the first step of answering it, not a
+ *     substitute for it.
  *   - Whether a converted site chose the RIGHT one of the two entry points.
  *     That is a product question — which is why every accepted entry records
  *     the reason in prose, and why the argument it was called with is pinned.
@@ -56,9 +85,11 @@
  * without changing the key, turning "the plan being purchased" into "the
  * household's own subscription" while the gate stayed green.
  *
- * So each entry also records `arg`: the source text of the first argument,
- * whitespace-normalised. The gate fails when it no longer matches. That is
- * the cheap, syntactic, falsifiable half of the reason.
+ * So each entry also records `arg`: the source text of the first argument —
+ * or, for a `PLANS[…]` finding, of the index expression, which is the same
+ * thing one syntax down — whitespace-normalised. The gate fails when it no
+ * longer matches. That is the cheap, syntactic, falsifiable half of the
+ * reason.
  *
  * ## The ratchet
  *
@@ -116,6 +147,14 @@ const BASELINE_PATH = args.baseline
 const PLAN_ROW_READERS = new Set(['getPlan', 'planLimits', 'planHasFeature']);
 /** The deliberate leniency, baselined for the same reason (see the header). */
 const ISSUED_GRANT_READER = 'getEntitledPlanForIssuedGrant';
+/**
+ * The catalog itself. `PLANS[expr]` is `getPlan(expr)` with the unknown-id
+ * fallback inlined, so it reads the plan ROW and is a finding for exactly the
+ * same reason — see the header for why only the subscript form counts.
+ */
+const CATALOG = 'PLANS';
+/** The synthetic callee name a catalog index is recorded under. */
+const CATALOG_INDEX = 'PLANS[]';
 
 /** Files that define these helpers, or that this gate cannot usefully see. */
 const EXCLUDED = new Set([
@@ -184,11 +223,42 @@ function enclosingFunction(node) {
   return null;
 }
 
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'all']);
+
+/**
+ * `GET /sitter/:token` for a handler passed straight to an Express route —
+ * `app.get('/sitter/:token', authMiddleware, (req, res) => …)`.
+ *
+ * Without this every gate in `local-server.ts` keys as `<anonymous>`, and the
+ * repeats inside one file take `#2`, `#3`, … suffixes that renumber whenever
+ * an unrelated route is inserted above them. A baseline whose keys move when
+ * untouched code moves is a baseline that gets updated without being read.
+ *
+ * Guarded so it cannot fire on an ordinary callback: the function must NOT be
+ * the first argument (`list.map((x) => …)`), the first argument must be a
+ * string literal, and the method must be an HTTP verb.
+ */
+function expressRouteName(fn) {
+  const call = fn.parent;
+  if (!call || !ts.isCallExpression(call)) return null;
+  if (call.arguments.length < 2 || call.arguments[0] === fn) return null;
+  if (!call.arguments.includes(fn)) return null;
+  const target = unwrap(call.expression);
+  if (!ts.isPropertyAccessExpression(target)) return null;
+  const method = target.name.text;
+  if (!HTTP_METHODS.has(method)) return null;
+  const path = call.arguments[0];
+  if (!ts.isStringLiteral(path)) return null;
+  return `${method.toUpperCase()} ${path.text}`;
+}
+
 function functionName(fn) {
   if (!fn) return '<module>';
   if ((ts.isFunctionDeclaration(fn) || ts.isMethodDeclaration(fn)) && fn.name) {
     return fn.name.getText();
   }
+  const route = expressRouteName(fn);
+  if (route) return route;
   let cur = fn.parent;
   while (cur) {
     if (ts.isVariableDeclaration(cur) && ts.isIdentifier(cur.name)) return cur.name.text;
@@ -202,11 +272,15 @@ function functionName(fn) {
   return '<anonymous>';
 }
 
+/** Source text of one expression, whitespace-collapsed. */
+function exprText(node) {
+  if (!node) return '';
+  return node.getText().replace(/\s+/g, ' ').trim();
+}
+
 /** The first argument's source text, whitespace-collapsed. */
 function argText(call) {
-  const first = call.arguments[0];
-  if (!first) return '';
-  return first.getText().replace(/\s+/g, ' ').trim();
+  return exprText(call.arguments[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -225,14 +299,10 @@ for (const abs of sourceFiles(SRC)) {
   const sourceFile = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true);
   const seen = new Map();
 
-  walkDeep(sourceFile, (n) => {
-    if (!ts.isCallExpression(n)) return true;
-    const name = calleeName(n.expression);
-    if (!name) return true;
-    if (!PLAN_ROW_READERS.has(name) && name !== ISSUED_GRANT_READER) return true;
-
-    const fn = functionName(enclosingFunction(n));
-    const base = `${rel}::${fn}::${name}`;
+  /** Record one occurrence. Repeats inside one function get a `#n` suffix. */
+  const record = (node, callee, arg) => {
+    const fn = functionName(enclosingFunction(node));
+    const base = `${rel}::${fn}::${callee}`;
     const count = (seen.get(base) ?? 0) + 1;
     seen.set(base, count);
     const key = count === 1 ? base : `${base}#${count}`;
@@ -240,10 +310,27 @@ for (const abs of sourceFiles(SRC)) {
       key,
       rel,
       fn,
-      callee: name,
-      arg: argText(n),
-      line: sourceFile.getLineAndCharacterOfPosition(n.getStart()).line + 1,
+      callee,
+      arg,
+      line: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
     });
+  };
+
+  walkDeep(sourceFile, (n) => {
+    // `PLANS[…]`. Property access (`PLANS.garden`) is deliberately not a
+    // finding: it names one fixed tier and cannot carry a household's plan id.
+    if (ts.isElementAccessExpression(n)) {
+      if (calleeName(n.expression) === CATALOG) {
+        record(n, CATALOG_INDEX, exprText(n.argumentExpression));
+      }
+      return true;
+    }
+    if (!ts.isCallExpression(n)) return true;
+    const name = calleeName(n.expression);
+    if (!name) return true;
+    if (!PLAN_ROW_READERS.has(name) && name !== ISSUED_GRANT_READER) return true;
+
+    record(n, name, argText(n));
     return true;
   });
 }
@@ -289,8 +376,11 @@ if (added.length === 0 && stale.length === 0 && drifted.length === 0 && malforme
   process.exit(0);
 }
 
-const addedRow = added.filter((f) => f.callee !== ISSUED_GRANT_READER);
+const addedRow = added.filter(
+  (f) => f.callee !== ISSUED_GRANT_READER && f.callee !== CATALOG_INDEX
+);
 const addedLenient = added.filter((f) => f.callee === ISSUED_GRANT_READER);
+const addedCatalog = added.filter((f) => f.callee === CATALOG_INDEX);
 
 if (addedRow.length > 0) {
   console.error(
@@ -311,6 +401,31 @@ if (addedRow.length > 0) {
       '`getEntitledPlanForIssuedGrant(sub)` and say why in the baseline.\n' +
       'If it is not entitlement at all — a plan being purchased, a tier named in an\n' +
       'email, an upsell target — add the entry to\n' +
+      'backend/scripts/entitlement-gates-baseline.json with that reason.\n'
+  );
+}
+
+if (addedCatalog.length > 0) {
+  console.error(
+    'A paid-feature decision resolved by INDEXING THE PLAN CATALOG.\n' +
+      "`PLANS[h?.planId ?? 'seedling']` is `getPlan(h?.planId)` with the unknown-id\n" +
+      'fallback written out by hand. It reads which tier the household is ON and\n' +
+      'cannot see whether that tier is being PAID for, and it cannot see a lifetime\n' +
+      'purchase either — the same two failures as `getPlan(sub.planId)`, reached\n' +
+      'without naming any function this gate watches. That is how `local-server.ts`\n' +
+      'mirrored the production defect at twenty sites while this gate stayed green.\n'
+  );
+  for (const f of addedCatalog) {
+    console.error(`  - ${f.key}  (line ${f.line}: PLANS[${f.arg}])`);
+  }
+  console.error(
+    '\nResolve it through the same two entry points as everything else:\n' +
+      '`getEntitledPlan(sub)` for what a household MAY START, or\n' +
+      '`getEntitledPlanForIssuedGrant(sub)` for what an already-issued, unexpired\n' +
+      'grant KEEPS. Both take the subscription, not the plan id, precisely so the\n' +
+      'question has to be named.\n' +
+      'If it is not entitlement at all — a catalog lookup on an id that is already\n' +
+      'resolved, a price table, an upsell target — add the entry to\n' +
       'backend/scripts/entitlement-gates-baseline.json with that reason.\n'
   );
 }

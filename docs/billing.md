@@ -122,15 +122,35 @@ double-care detector.
 `backend/scripts/check-entitlement-gates.mjs` (`npm run entitlements:check`,
 in `npm run verify` and CI's required Lint job) fails on any new call to
 `getPlan` / `planLimits` / `planHasFeature` — or to
-`getEntitledPlanForIssuedGrant` — that is not in
-`backend/scripts/entitlement-gates-baseline.json` with a reason and the pinned
-argument it is called with. It fails equally on a stale entry and on an entry
-whose argument has drifted, so the baseline can only shrink.
+`getEntitledPlanForIssuedGrant`, or any index into the catalog, `PLANS[…]` —
+that is not in `backend/scripts/entitlement-gates-baseline.json` with a reason
+and the pinned argument it is called with. It fails equally on a stale entry
+and on an entry whose argument has drifted, so the baseline can only shrink.
 
 It exists because this section used to claim "every paid-feature gate uses it"
 and that was not true: the rule stopped applying to code written after #364,
 and a new violating gate landed _while_ #476 was open. A hand-maintained list
 of gates is a snapshot, not a control.
+
+`PLANS[…]` was added after the fact, and the reason is worth keeping. The gate
+originally watched function names only, so `PLANS[h?.planId ?? 'seedling']` —
+`getPlan` with the unknown-id fallback written out by hand, reaching the same
+wrong answer — was invisible to it. `src/local-server.ts` resolved twenty
+paid-feature decisions that way, so the dev server kept granting a `past_due`
+household everything and kept dropping a lifetime owner to Seedling, while the
+gate reported green. That mattered because the integration suite exercises the
+mock: a test could pass against behaviour production does not have.
+`tests/integration/local-server-entitlement.test.ts` now pins the mock's
+answers against the table above, the way `tests/integration/route-parity.test.ts`
+pins its route table.
+
+Still invisible, and stated here rather than left to be found: a bare
+comparison against the plan row (`sub.planId === 'greenhouse'`), because
+`.planId` is read legitimately almost everywhere; and `strongestPlan(ids)`, the
+per-USER homes cap, which resolves from plan rows in `services/homesGate.ts`
+and its mock mirror. #476 did not convert the homes cap — whether one
+household's failing card should shrink a _different_ household's homes
+allowance is an open product question, not an oversight.
 
 The 402 response body carries a friendly explanation referencing the plan name; the frontend shows it as an error toast and links to `/settings/billing`.
 
