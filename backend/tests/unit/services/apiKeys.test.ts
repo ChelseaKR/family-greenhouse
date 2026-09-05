@@ -35,8 +35,12 @@ describe('apiKeys service', () => {
     const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       input: { Item: Record<string, unknown> };
     };
-    // The stored row carries the hash on GSI3PK, never the plaintext.
-    expect(cmd.input.Item.GSI3PK).toBe(`APIKEY_HASH#${_internal.hashKey(result.plaintext)}`);
+    // The stored row carries the hash on GSI1PK, never the plaintext. GSI1 is
+    // one of the two indexes the table Terraform actually defines — see #400,
+    // where this was written to (and read from) a GSI3 that has never existed.
+    expect(cmd.input.Item.GSI1PK).toBe(`APIKEY_HASH#${_internal.hashKey(result.plaintext)}`);
+    expect(cmd.input.Item.GSI1SK).toBe('HOUSEHOLD#hh-1');
+    expect(cmd.input.Item.GSI3PK).toBeUndefined();
     expect(JSON.stringify(cmd.input.Item)).not.toContain(result.plaintext.slice(3));
   });
 
@@ -105,7 +109,7 @@ describe('apiKeys service', () => {
     expect(await lookupApiKey('not-fg-prefix')).toBeNull();
   });
 
-  it('lookupApiKey returns null when GSI3 returns no match', async () => {
+  it('lookupApiKey returns null when the lookup index returns no match', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] });
     const { lookupApiKey } = await import('../../../src/services/apiKeys.js');
@@ -114,7 +118,7 @@ describe('apiKeys service', () => {
 
   it('lookupApiKey returns the record for a known hash', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
-    // 1st send: the GSI3 query. 2nd send: the best-effort lastUsedAt
+    // 1st send: the index query. 2nd send: the best-effort lastUsedAt
     // update — its promise is `.catch()`-chained, so it must resolve.
     vi.mocked(dynamodb.send)
       .mockResolvedValueOnce({
@@ -137,6 +141,16 @@ describe('apiKeys service', () => {
     const result = await lookupApiKey('fg_anything');
     expect(result?.id).toBe('k1');
     expect(result?.householdId).toBe('hh');
+    // #400: the lookup must name an index the table actually has, and must
+    // read it on the same attribute createApiKey writes. A Query naming a
+    // missing index raises ValidationException — it does not degrade — so
+    // this is the difference between a working public API and one that
+    // rejects every caller.
+    const query = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { IndexName: string; KeyConditionExpression: string };
+    };
+    expect(query.input.IndexName).toBe('GSI1');
+    expect(query.input.KeyConditionExpression).toBe('GSI1PK = :pk');
   });
 
   it('lookupApiKey awaits a CONDITIONED lastUsedAt bump (no revoked-key resurrection)', async () => {

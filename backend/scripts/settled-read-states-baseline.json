@@ -54,7 +54,7 @@
       "callers": ["handlers/plants/health.ts::checkPlantHealth"]
     },
     "services/apiKeys.ts::lookupApiKey::unpaginated-limit": {
-      "reason": "Not a listing. GSI3 is keyed by the scrypt hash of the presented key, so at most one row can match and `Limit: 1` IS the answer; a second row would be a hash collision, and honouring the first is the right response to that too. The household's key LIST is listApiKeys, which pages.",
+      "reason": "Not a listing. The GSI1 partition is keyed by the scrypt hash of the presented key (APIKEY_HASH#…), so at most one row can match and `Limit: 1` IS the answer; a second row would be a hash collision, and honouring the first is the right response to that too. The household's key LIST is listApiKeys, which pages.",
       "callers": ["middleware/apiKey.ts::before"]
     },
     "services/calendarTokens.ts::resolveCalendarToken::unpaginated-limit": {

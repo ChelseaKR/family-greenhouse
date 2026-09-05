@@ -4,7 +4,7 @@
  *
  *   - Reads `Authorization: Bearer fg_...` (or the alternate `X-Api-Key`
  *     header) instead of Cognito JWT claims.
- *   - Looks up the key in DDB (one point read via GSI3).
+ *   - Looks up the key in DDB (one point read via GSI1).
  *   - Attaches an `event.user` shape compatible with downstream `requireHousehold`
  *     so existing handler code can be reused.
  *
