@@ -97,7 +97,23 @@ export function CareGuidePage() {
     return <Navigate to="/care" replace />;
   }
 
-  const related = CARE_GUIDES.filter((g) => g.slug !== guide.slug).slice(0, 3);
+  // Rotate from this guide's own position rather than slicing the front of
+  // the array. `.slice(0, 3)` took the first three entries every time, so all
+  // 24 guides linked to pothos / snake-plant / monstera — those three
+  // collected 23 sibling links each and the other 20 collected none, leaving
+  // them with a single inbound link site-wide (the /care index). Rotation
+  // spreads the same 72 links three-per-guide with no manual curation.
+  //
+  // It buys distribution, not topical relevance: the real win is a curated
+  // `relatedSlugs` on CareGuide (pothos <-> heartleaf-philodendron, the two
+  // people constantly confuse; snake-plant <-> zz-plant, the unkillable
+  // pair). That is content work; this is the mechanical half.
+  const relatedCount = Math.min(3, CARE_GUIDES.length - 1);
+  const guideIndex = CARE_GUIDES.findIndex((g) => g.slug === guide.slug);
+  const related = Array.from(
+    { length: relatedCount },
+    (_, i) => CARE_GUIDES[(guideIndex + 1 + i) % CARE_GUIDES.length]
+  ).filter((g) => g !== undefined);
 
   return (
     <PublicShell width="article">
