@@ -347,6 +347,75 @@ resource "aws_cloudwatch_log_metric_filter" "frontend_errors" {
 }
 
 # ---------------------------------------------------------------------------
+# Whether the frontend rail can report at all (issue #576)
+#
+# FrontendErrors above is derived from reports that SURVIVED a cross-origin
+# POST to this API — DNS, TLS, CORS, the gateway, the rate limiter, the strict
+# schema and the Lambda. Every one of those is a place a report dies leaving
+# no trace, because `send()` used to discard both the rejection and the
+# resolved response. So `FrontendErrors == 0` had two meanings and the stack
+# could not tell them apart: nobody hit an error, or nobody could tell us.
+#
+# These two filters separate them. Both read `kind = "delivery"` lines, which
+# are statements about the rail rather than about the app:
+#
+#   source = "browser"   — a browser is reporting, now that delivery works
+#                          again, that N earlier reports never landed. A late
+#                          signal by construction: a browser cannot deliver
+#                          news of an outage during the outage. It is still
+#                          the difference between an outage that leaves a
+#                          trace and one that leaves nothing.
+#
+#   source = "synthetic" — scripts/telemetry-delivery-check.mjs, run every 15
+#                          minutes from .github/workflows/uptime.yml. It sends
+#                          the report a browser would send, with the preflight
+#                          a browser would send first, and asserts the CORS
+#                          headers a browser would require. Its cadence does
+#                          not depend on anyone visiting the site, which is
+#                          the property that makes its ABSENCE meaningful.
+#
+# That last point is the whole design. `treat_missing_data = "breaching"`
+# is only honest for a metric with a floor. FrontendErrors has no floor and
+# never will — this product can genuinely go an hour with no visitors — which
+# is why #576 could not be fixed by editing one attribute on the alarm below.
+# Compare the `sent` metric further down: published on purpose, alarmed on
+# purpose never, for exactly the same reason.
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudwatch_log_metric_filter" "frontend_reports_undelivered" {
+  name           = "${var.project_name}-frontend-reports-undelivered-${var.environment}"
+  log_group_name = var.api_lambda_log_group_name
+  pattern        = "{ $.msg = \"frontend_telemetry\" && $.kind = \"delivery\" && $.source = \"browser\" }"
+
+  metric_transformation {
+    # One point per SESSION that lost reports, not per report lost. A single
+    # visitor on a bad train connection produces one point no matter how many
+    # reports they lost, so the alarm threshold counts distinct browsers.
+    name          = "FrontendReportsUndelivered"
+    namespace     = "FamilyGreenhouse/Frontend/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "frontend_telemetry_probe" {
+  name           = "${var.project_name}-frontend-telemetry-probe-${var.environment}"
+  log_group_name = var.api_lambda_log_group_name
+  pattern        = "{ $.msg = \"frontend_telemetry\" && $.kind = \"delivery\" && $.source = \"synthetic\" }"
+
+  metric_transformation {
+    name      = "FrontendTelemetryProbe"
+    namespace = "FamilyGreenhouse/Frontend/${var.environment}"
+    value     = "1"
+    # Publishes an explicit 0 for any period the log group had events but no
+    # probe among them, so the alarm can distinguish "the probe stopped" from
+    # "the whole log group went quiet" — the latter arriving as missing data,
+    # which the alarm treats as breaching anyway.
+    default_value = "0"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Scheduled-run outcome metrics
 #
 # The problem these exist for: `reminders.ts:834`, `digest.ts:396` and
@@ -866,7 +935,93 @@ resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
   alarm_description   = "Three or more sanitized browser errors arrived within five minutes"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
+  # Stays "notBreaching", deliberately, and do not "fix" this to breaching.
+  # This alarm asks "are browsers erroring?", and at this traffic level a
+  # five-minute window with no reports is overwhelmingly the healthy answer:
+  # an alarm that paged on it would be trained away inside a month, which is
+  # worse than the gap it closed. The question "could a browser have told us?"
+  # is a DIFFERENT question and belongs to the two alarms below, which is what
+  # issue #576 was actually about. scripts/check-observability.mjs asserts
+  # both postures, in both directions, so neither can drift into the other.
+  treat_missing_data = "notBreaching"
+}
+
+# One point here is one browser SESSION that lost reports, so this reads
+# "three different browsers could not reach us in five minutes" — not "one
+# visitor has bad wifi", which is the noise this threshold sits above.
+#
+# notBreaching, and for once that is not the defect: no such report simply
+# means no browser has told us it lost anything. The absence that MATTERS —
+# nobody being able to tell us anything at all — is what the probe alarm below
+# watches, and that one is breaching.
+resource "aws_cloudwatch_metric_alarm" "frontend_reports_undelivered" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-frontend-reports-undelivered-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "FrontendReportsUndelivered"
+  namespace           = "FamilyGreenhouse/Frontend/${var.environment}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 2
+  alarm_description   = "Three or more browser sessions reported that earlier error reports never reached this API. Those reports are gone; only their count survived. Check CORS on POST /telemetry/frontend, the API's reachability from the public internet, and the rate limiter before assuming the browsers were at fault."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-frontend-reports-undelivered-alarm-${var.environment}"
+  }
+}
+
+# The dead-man's switch for the error rail, and the third alarm in this module
+# to set treat_missing_data = "breaching" (see the two Route 53 alarms at the
+# bottom of this file for the identical reasoning applied to the site).
+#
+# The metric is a synthetic report delivered every 15 minutes by
+# .github/workflows/uptime.yml. Silence therefore means one of: the API is
+# unreachable, CORS on POST /telemetry/frontend is broken, the route moved,
+# the schema drifted, the log group or metric filter changed shape, or the
+# workflow stopped running. Every one of those means the same operational
+# thing — the frontend error rail is not trustworthy right now — and until
+# issue #576 every one of them was invisible.
+#
+# The honest cost of this alarm: it can page because GitHub Actions was slow
+# rather than because production broke. A 3600s period with two evaluation
+# periods tolerates roughly seven consecutive missed 15-minute runs before it
+# fires, which makes that unlikely without being impossible. Detection is
+# therefore ~2 hours, which is right for a diagnostic layer — the Route 53
+# site check is what detects an outage in ~3 minutes. Moving this to an
+# EventBridge canary inside AWS would remove the GitHub dependency; it would
+# also add a Lambda, and that trade was not worth making before the signal
+# exists at all.
+resource "aws_cloudwatch_metric_alarm" "frontend_telemetry_unreportable" {
+  count = var.enable_alarms && var.enable_telemetry_delivery_alarm ? 1 : 0
+
+  alarm_name          = "${var.project_name}-frontend-telemetry-unreportable-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  metric_name         = "FrontendTelemetryProbe"
+  namespace           = "FamilyGreenhouse/Frontend/${var.environment}"
+  period              = 3600
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "No synthetic telemetry delivery probe has reached this API for two hours, so a browser probably cannot deliver an error report either — and the frontend-errors alarm reads that silence as health. Causes, in rough order: CORS on POST /telemetry/frontend, the API's public reachability, a renamed route or drifted schema, the metric filter, or .github/workflows/uptime.yml not running. Until this clears, treat a green frontend-errors alarm as unknown rather than as good news."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+
+  # NOT "notBreaching". This alarm exists to detect absence; if the signal
+  # itself goes absent, "we could not check" must not render as "checked and
+  # fine". Honest here and nowhere else in this file except the Route 53
+  # alarms, because this is the only frontend metric with a floor that does
+  # not depend on somebody visiting the site.
+  treat_missing_data = "breaching"
+
+  tags = {
+    Name = "${var.project_name}-frontend-telemetry-unreportable-alarm-${var.environment}"
+  }
 }
 
 # Dead-letter queue depth. Any message here = an async invocation (the hourly
@@ -1386,11 +1541,12 @@ check "alarms_have_a_notification_destination" {
 #
 # ## treat_missing_data
 #
-# The two alarms below are the only ones in this module that set
-# `treat_missing_data = "breaching"`, and it is the whole point of them. Every
-# other alarm here is watching for a bad value among good ones, where absent
-# data honestly means "nothing bad happened". These two are watching for
-# absence itself. If Route 53 stops publishing HealthCheckStatus — the health
+# The two alarms below set `treat_missing_data = "breaching"`, and it is the
+# whole point of them. (The frontend-rail heartbeat alarm added for issue #576
+# is the only other one in this module that does; it has the same reasoning
+# written out at its own definition.) The ordinary alarms here are watching for
+# a bad value among good ones, where absent data honestly means "nothing bad
+# happened". These are watching for absence itself. If Route 53 stops publishing HealthCheckStatus — the health
 # check was deleted, the metric is unavailable, the account lost the
 # permission — then "we could not check" must not render as "checked and
 # fine". It renders as ALARM.

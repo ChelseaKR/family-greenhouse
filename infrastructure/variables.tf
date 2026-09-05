@@ -92,6 +92,12 @@ variable "enable_api_health_check" {
   default     = false
 }
 
+variable "enable_telemetry_delivery_alarm" {
+  description = "Create the alarm that fires when the frontend error rail has not been able to deliver anything for two hours (issue #576). ~$0.10/month. Defaults true: without it, `FrontendErrors == 0` means either 'no browser errors' or 'no browser could tell us' and nothing distinguishes them. It reads a heartbeat sent every 15 minutes by .github/workflows/uptime.yml, which probes production — so staging sets it false, because an alarm watching for a heartbeat nobody sends is correct to page forever."
+  type        = bool
+  default     = true
+}
+
 variable "email_from_address" {
   description = "Friendly From header for Cognito mail (signup confirmations, password resets). E.g. 'Family Greenhouse <hello@familygreenhouse.net>'. Required when domain_name is set."
   type        = string

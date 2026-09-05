@@ -138,6 +138,12 @@ variable "enable_api_health_check" {
   default     = false
 }
 
+variable "enable_telemetry_delivery_alarm" {
+  description = "Create the alarm that fires when no synthetic telemetry delivery probe has reached this environment's API for two hours — i.e. when a browser probably could not deliver an error report either (issue #576). ~$0.10/month, and no probe traffic cost beyond ~96 extra API requests a day. It sets treat_missing_data = \"breaching\", so ONLY turn it on for an environment that .github/workflows/uptime.yml actually probes: with nothing sending the heartbeat the alarm is correct to page and will do so forever. The uptime workflow probes production (vars.HEALTHCHECK_URL), which is why staging sets this false."
+  type        = bool
+  default     = false
+}
+
 variable "site_health_check_host" {
   description = "Hostname (no scheme, no path) Route 53 fetches to prove the site is serving this app. Empty disables the site health check even when enable_site_health_check is true."
   type        = string

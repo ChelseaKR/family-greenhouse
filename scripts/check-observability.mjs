@@ -12,6 +12,8 @@ const telemetryModel = read('backend/src/models/telemetry.ts');
 const frontendAnalytics = read('frontend/src/services/analytics.ts');
 const browser = read('frontend/src/services/frontendTelemetry.ts');
 const main = read('frontend/src/main.tsx');
+const telemetryBoot = read('frontend/src/telemetryBoot.ts');
+const deliveryCheck = read('scripts/telemetry-delivery-check.mjs');
 const boundary = read('frontend/src/components/RouteErrorBoundary.tsx');
 const production = read('.github/workflows/cd-production.yml');
 const rootInfrastructure = read('infrastructure/main.tf');
@@ -48,6 +50,55 @@ const siteHealthCheck = tfResource(monitoring, 'aws_route53_health_check', 'site
 const apiHealthCheck = tfResource(monitoring, 'aws_route53_health_check', 'api');
 const siteAlarm = tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'site_unreachable');
 const apiAlarm = tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'api_unreachable');
+const frontendErrorsAlarm = tfResource(
+  monitoring,
+  'aws_cloudwatch_metric_alarm',
+  'frontend_errors'
+);
+const undeliveredFilter = tfResource(
+  monitoring,
+  'aws_cloudwatch_log_metric_filter',
+  'frontend_reports_undelivered'
+);
+const probeFilter = tfResource(
+  monitoring,
+  'aws_cloudwatch_log_metric_filter',
+  'frontend_telemetry_probe'
+);
+const undeliveredAlarm = tfResource(
+  monitoring,
+  'aws_cloudwatch_metric_alarm',
+  'frontend_reports_undelivered'
+);
+const probeAlarm = tfResource(
+  monitoring,
+  'aws_cloudwatch_metric_alarm',
+  'frontend_telemetry_unreportable'
+);
+
+/**
+ * Source with comments removed, so an assertion about CODE is not satisfied or
+ * defeated by prose. `frontendTelemetry.ts` explains the fire-and-forget
+ * sender it replaced by quoting it, and a whole-file search for that quote
+ * would otherwise read the explanation as the defect.
+ */
+function stripComments(source) {
+  return source.replaceAll(/\/\*[\s\S]*?\*\//gu, '').replaceAll(/^\s*\/\/.*$/gmu, '');
+}
+
+/**
+ * The first `import` statement in a module, which is the one whose side
+ * effects run before every other module body. Null when there is none.
+ */
+function firstImportLine(source) {
+  return /^import\b.*$/mu.exec(source)?.[0] ?? null;
+}
+
+/** The `telemetry-delivery` job of the uptime workflow, or '' if absent. */
+const deliveryJob = (() => {
+  const start = uptimeWorkflow.indexOf('\n  telemetry-delivery:');
+  return start === -1 ? '' : uptimeWorkflow.slice(start);
+})();
 
 /**
  * The default value of a Terraform `variable` block, unescaped from HCL's
@@ -115,7 +166,19 @@ const checks = [
     'frontend and backend product event vocabularies match',
     JSON.stringify(frontendEventNames) === JSON.stringify(backendEventNames),
   ],
-  ['browser telemetry initialized', /initFrontendTelemetry\(\)/u.test(main)],
+  // Was `/initFrontendTelemetry\(\)/.test(main)`, which passed from anywhere
+  // in main.tsx — including where it used to be, at line 26, AFTER every
+  // import's body had already run (issue #576). ES modules evaluate
+  // dependencies before the importing module, so React, the whole ./App route
+  // tree, ./i18n and both stores were all evaluated with no error handler
+  // installed. Asserting the CALL exists is not the same as asserting it
+  // happens first, so this now asserts the position.
+  [
+    'browser telemetry is hooked before any other module body runs',
+    firstImportLine(main) === "import './telemetryBoot';" &&
+      /^initFrontendTelemetry\(\);$/mu.test(telemetryBoot) &&
+      !/initFrontendTelemetry\(\)/u.test(main),
+  ],
   ['React boundary reports failures', /reportFrontendError\(error\)/u.test(boundary)],
   ['browser telemetry omits stacks', !/stack:/u.test(browser)],
   [
@@ -320,6 +383,107 @@ const checks = [
     'docs/observability.md states no hand-maintained live alarm count',
     !/\b\d+ alarms and its dashboard\b/u.test(observabilityDoc) &&
       !/\bkeeps all \d+ alarms\b/u.test(observabilityDoc),
+  ],
+  // ---------------------------------------------------------------------
+  // Whether the frontend rail can report at all (#576). #552 closed the
+  // external-availability half of #464 and left this half open, in its own
+  // words: `reportFrontendError` posts fire-and-forget to the API it exists
+  // to report failures OF, so an unreachable API, a CORS block or a crash
+  // before init destroys the report that would raise the alarm — and that
+  // alarm reads the resulting silence as health. These checks are what stop
+  // any part of that coming back.
+  // ---------------------------------------------------------------------
+  // `void fetch(...).catch(() => {})` discarded the rejection AND never read
+  // the resolved response, so a 404 from a renamed route, a 400 from a schema
+  // change, a 401 from added auth and a 429 from the rate limiter were all
+  // indistinguishable from a delivered report — and from each other.
+  [
+    'a browser report that does not land is counted rather than swallowed',
+    !/\.catch\(\(\) => \{\}\)/u.test(stripComments(browser)) &&
+      /delivered = response\?\.ok === true;/u.test(browser) &&
+      /recordUndelivered\(\);/u.test(browser),
+  ],
+  // The count has to outlive the tab: an app that broke badly enough to lose
+  // its telemetry is one the visitor closed. sessionStorage would throw the
+  // evidence away at exactly the moment it became worth having.
+  [
+    'undelivered reports survive the reload and are handed over later',
+    /localStorage\.setItem\(UNDELIVERED_KEY/u.test(browser) &&
+      /kind: 'delivery',\n\s+source: 'browser',/u.test(browser) &&
+      /undelivered: record\.count,/u.test(browser) &&
+      /flushUndelivered\(\);/u.test(browser),
+  ],
+  // A public, IP-rate-limited endpoint: these fields are operational hints
+  // from an untrusted client, so they are bounded rather than trusted. Keep
+  // the bounds tied to the constants the browser clamps to.
+  [
+    'the telemetry schema accepts delivery reports and bounds them',
+    /kind: z\.literal\('delivery'\)/u.test(telemetryModel) &&
+      /source: z\.enum\(\['browser', 'synthetic'\]\)/u.test(telemetryModel) &&
+      /undelivered: z\.number\(\)\.int\(\)\.nonnegative\(\)\.max\(9999\)/u.test(telemetryModel) &&
+      /ageMinutes: z\.number\(\)\.int\(\)\.nonnegative\(\)\.max\(20_160\)/u.test(telemetryModel),
+  ],
+  // A CORS misconfiguration silences the entire rail and produces, in the
+  // words of infrastructure/modules/api/main.tf, "no log on our side". Only a
+  // client can see it, and every real client it happens to is silenced by
+  // definition — so the probe has to be a client, sending the preflight a
+  // browser sends and requiring the headers a browser requires.
+  [
+    'the delivery probe sends what a browser sends and checks what a browser checks',
+    /method: 'OPTIONS'/u.test(deliveryCheck) &&
+      /'Access-Control-Request-Method': 'POST'/u.test(deliveryCheck) &&
+      /access-control-allow-origin/u.test(deliveryCheck) &&
+      /access-control-allow-headers/u.test(deliveryCheck) &&
+      /EXPECTED_POST_STATUS = 204/u.test(deliveryCheck) &&
+      /source: 'synthetic'/u.test(deliveryCheck),
+  ],
+  // Same discipline as the page check's negative control. A probe that cannot
+  // go red is a green tick, and this one's whole job is to be the thing that
+  // notices when nothing else can.
+  [
+    'the delivery probe runs on a schedule and proves it can fail',
+    /scripts\/telemetry-delivery-check\.mjs/u.test(deliveryJob) &&
+      /--expect-failure/u.test(deliveryJob),
+  ],
+  // Two metrics, because there are two questions. "A browser told us it lost
+  // reports" and "no browser can tell us anything" are different failures
+  // with different thresholds and different missing-data postures.
+  [
+    'browser losses and the synthetic heartbeat are separate metrics',
+    /\$\.kind = \\"delivery\\" && \$\.source = \\"browser\\"/u.test(undeliveredFilter) &&
+      /name\s*=\s*"FrontendReportsUndelivered"/u.test(undeliveredFilter) &&
+      /\$\.kind = \\"delivery\\" && \$\.source = \\"synthetic\\"/u.test(probeFilter) &&
+      /name\s*=\s*"FrontendTelemetryProbe"/u.test(probeFilter) &&
+      /default_value\s*=\s*"0"/u.test(probeFilter),
+  ],
+  // THE line for this issue, and the same line #552 drew for the site. The
+  // heartbeat has a floor because its cadence is synthetic, so its absence
+  // means something — and "we could not check" must not render as "checked
+  // and fine".
+  [
+    'the frontend rail heartbeat alarm treats missing data as breaching',
+    /treat_missing_data\s*=\s*"breaching"/u.test(probeAlarm) &&
+      !/treat_missing_data\s*=\s*"notBreaching"/u.test(probeAlarm) &&
+      /comparison_operator\s*=\s*"LessThanThreshold"/u.test(probeAlarm) &&
+      /alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(probeAlarm),
+  ],
+  // And the other direction, which matters just as much. FrontendErrors has
+  // no floor — this product can genuinely go an hour with no visitors — so
+  // "fixing" it to breaching would page on every quiet window and be trained
+  // away inside a month. Both postures are asserted so neither can drift into
+  // the other on the strength of half of this reasoning.
+  [
+    'the frontend-errors alarm still treats a quiet window as quiet, not as broken',
+    /treat_missing_data\s*=\s*"notBreaching"/u.test(frontendErrorsAlarm) &&
+      !/treat_missing_data\s*=\s*"breaching"/u.test(frontendErrorsAlarm) &&
+      /treat_missing_data\s*=\s*"notBreaching"/u.test(undeliveredAlarm) &&
+      !/treat_missing_data\s*=\s*"breaching"/u.test(undeliveredAlarm),
+  ],
+  [
+    'docs/observability.md documents the delivery signals rather than the gap',
+    /FrontendTelemetryProbe/u.test(observabilityDoc) &&
+      /FrontendReportsUndelivered/u.test(observabilityDoc) &&
+      !/Fixing this needs an out-of-band collector/u.test(observabilityDoc),
   ],
   [
     'production smoke uses component health',

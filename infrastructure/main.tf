@@ -372,9 +372,18 @@ module "monitoring" {
   # the host is its first path segment and the stage goes into the path.
   enable_site_health_check = var.enable_site_health_check
   enable_api_health_check  = var.enable_api_health_check
-  site_health_check_host   = replace(module.frontend.site_url, "https://", "")
-  api_health_check_host    = split("/", replace(module.api.api_url, "https://", ""))[0]
-  api_health_check_path    = "/${var.environment}/health"
+
+  # Whether the frontend error rail can report at all (issue #576). The two
+  # health checks above watch the site and the API from outside; this watches
+  # the reporting path itself, which runs THROUGH the API it reports failures
+  # of and was therefore silent in exactly the cases worth alarming on. Its
+  # heartbeat comes from .github/workflows/uptime.yml, so it belongs only to an
+  # environment that workflow actually probes.
+  enable_telemetry_delivery_alarm = var.enable_telemetry_delivery_alarm
+
+  site_health_check_host = replace(module.frontend.site_url, "https://", "")
+  api_health_check_host  = split("/", replace(module.api.api_url, "https://", ""))[0]
+  api_health_check_path  = "/${var.environment}/health"
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its
