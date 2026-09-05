@@ -145,13 +145,43 @@ if (
   problems.push('scripts/brand-assets/og-image.svg contains paid-conversion copy');
 }
 
+// The card advertises the free plan's plant limit, so it can go stale the
+// moment that limit is re-cut — and it did: #422 raised Seedling to 20 plants
+// on 2026-09-04 while the card, last rendered 2026-07-19, kept saying 10.
+// Every unfurl of all 59 URLs then undersold the free tier by half, directly
+// contradicting the og:description beside it.
+//
+// The hash pair below could not catch that. It binds the raster to its SVG —
+// it proves the picture matches its source, not that either matches the plan
+// they describe. Nobody re-ran the renderer, so both hashes stayed valid and
+// the gate stayed green. This assertion binds the number to its actual source
+// of truth instead, so re-cutting the tier fails the gate until the card is
+// regenerated.
+const seedlingPlants = /seedling:\s*\{[\s\S]*?limits:\s*\{[\s\S]*?plants:\s*(\d+)/.exec(
+  readFileSync(resolve(root, '../backend/src/models/plans.ts'), 'utf8')
+)?.[1];
+const advertisedPlants = /FREE FOR UP TO (\d+) PLANTS/i.exec(socialSource)?.[1];
+if (!seedlingPlants) {
+  problems.push(
+    "could not read the Seedling plant limit from backend/src/models/plans.ts — this check can't verify the social card's free-tier claim"
+  );
+} else if (!advertisedPlants) {
+  problems.push(
+    'scripts/brand-assets/og-image.svg no longer carries a "FREE FOR UP TO <n> PLANTS" badge; update or remove this check with it'
+  );
+} else if (advertisedPlants !== seedlingPlants) {
+  problems.push(
+    `social card advertises ${advertisedPlants} free plants but the Seedling plan allows ${seedlingPlants}; edit og-image.svg, re-run render-brand-assets.sh, and update the reviewed hash pair`
+  );
+}
+
 // The PNG is checked into source control and can otherwise drift from its SVG
 // while still passing the dimension gate. These reviewed hashes bind the pair:
 // a deliberate social-card edit must regenerate the raster and update both
 // values in the same change.
 const reviewedSocialCardHashes = {
-  source: 'e9cc7b7955977c4c8cd6a75eea8fab9b776f00ea7347ae9a8df58b753dfef10f',
-  raster: 'be98c2cd7dba8c54814cd60b2fd21efb305efb5b029aeb8ac0a0003567938989',
+  source: '1c4138253d503dd5cd8a6bf0aca35033f90bf381ebdc4df4e79250ad1a5bad9b',
+  raster: 'c6aaca0c98da9cc6e8c27b3bea465c24eaf7a1fed195361a8ff01c53ab84b940',
 };
 const actualSocialCardHashes = {
   source: sha256(readFileSync(socialSourcePath)),
