@@ -328,6 +328,91 @@ describe('households handler', () => {
       expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 180);
     });
 
+    it('clamps the daily series to the FREE window while the card has failed (#476)', async () => {
+      // A plan LIMIT, and a downgrade already narrows it (ADR 0014). The
+      // completion rows are never trimmed — only the window this request may
+      // ask for — so nothing is lost when the card is fixed.
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status: 'past_due',
+      } as never);
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toEqual({
+        days: 30,
+        series: [],
+        historyLimitDays: 30,
+        doubleCare: { status: 'not_in_plan' },
+      });
+      expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 30);
+    });
+
+    it('keeps the unlimited window for a lifetime Garden owner after a cancellation (#476)', async () => {
+      // The paired positive control AND the lifetime floor: reading the plan
+      // row here resolved an outright owner to Seedling and silently cut
+      // their history to 30 days.
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'seedling',
+        status: 'canceled',
+        lifetimePlanId: 'garden',
+      } as never);
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toMatchObject({ days: 180, historyLimitDays: null });
+    });
+
+    it('windows the year-in-review to the FREE window while the card has failed (#476)', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        status: 'past_due',
+      } as never);
+      vi.mocked(taskService.getCompletionReview).mockResolvedValueOnce({
+        totalCompletions: 2,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+      });
+      const res = (await getYearInReview(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { year: String(new Date().getFullYear()) },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).historyLimitDays).toBe(30);
+      // The windowed path was taken: getYearInReview (the unwindowed read)
+      // was never called.
+      expect(taskService.getYearInReview).not.toHaveBeenCalled();
+    });
+
     it('windows the year-in-review on Seedling to the trailing 30 days of that year, never trimming rows', async () => {
       const billing = await import('../../../src/services/billing.js');
       const taskService = await import('../../../src/services/taskService.js');
@@ -1560,6 +1645,49 @@ describe('households handler — PUT /households/{id}/escalation (ADR 0018)', ()
     expect(escalation.setEscalationRule).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'paused'])(
+    'is entitlement-gated: 402 while the card has failed (%s), and nothing is stored (#476)',
+    async (status) => {
+      // Turning auto-handoff ON starts a new class of email for the whole
+      // household — a new grant. The stored rule of a household that was
+      // already on is left alone and separately gated at scan time in
+      // services/escalation.ts, so nothing needs cleaning up.
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const escalation = await import('../../../src/services/escalation.js');
+      const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+      const res = (await setEscalationRule(
+        escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still stores the rule for a lifetime Garden owner after a later cancellation (#476)', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockResolvedValueOnce(7);
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(escalation.setEscalationRule).toHaveBeenCalledWith('hh-1', 7);
+  });
+
   it('refuses another household’s id (403)', async () => {
     const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
     const res = (await setEscalationRule(
@@ -1686,6 +1814,91 @@ describe('sitter links — member access and revocation model', () => {
     expect(res.statusCode).toBe(402);
     expect(JSON.parse(res.body).message).toMatch(/up to 7 days.*Garden allows up to 90 days/);
     expect(sitterService.createSitterLink).not.toHaveBeenCalled();
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+    'refuses (402) a Garden-length window while the card has failed (%s) — issuing is a NEW grant (#476)',
+    async (status) => {
+      // The half of the sitter-link decision that follows the card. A
+      // household mid-dunning may not mint a new link or a longer window;
+      // the link it already handed out keeps working to its expiry (see
+      // tests/unit/handlers/sitter.test.ts).
+      await warm('member');
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const sitterService = await import('../../../src/services/sitterService.js');
+      const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+      const res = (await createSitterLink(
+        buildEvent(memberClaims, {
+          httpMethod: 'POST',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(402);
+      // Falls back to Seedling's cap, which is the documented downgrade
+      // behaviour — not a lockout. A 7-day link is still available.
+      expect(JSON.parse(res.body).message).toMatch(/up to 7 days/);
+      expect(sitterService.createSitterLink).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['active', 'trialing', undefined])(
+    'still issues a 30-day link while the subscription is in good standing (%s) (#476)',
+    async (status) => {
+      // The paired positive control: the conversion cannot pass by denying
+      // everyone. `active`, `trialing` and no recorded status all still get
+      // the Garden window.
+      await warm('member');
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        ...(status ? { status } : {}),
+      } as never);
+      const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+      const res = (await createSitterLink(
+        buildEvent(memberClaims, {
+          httpMethod: 'POST',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+    }
+  );
+
+  it('still issues a 30-day link for a lifetime Garden owner after a later cancellation (#476)', async () => {
+    // The entitlement FLOOR at an issuing gate: `getPlan(sub.planId)` alone
+    // resolved this household to Seedling and would have capped it at 7 days
+    // — destroying part of a one-time purchase with no refund path.
+    await warm('member');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
   });
 
   it('refuses (402) a second live link on Seedling; ended and revoked rows do not count', async () => {

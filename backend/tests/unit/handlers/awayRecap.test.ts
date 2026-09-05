@@ -188,6 +188,55 @@ describe('GET /households/{id}/away-recap', () => {
     expect(sitterService.listSitterLinks).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'paused'])(
+    '402s while the card has failed (%s), before any link read (#476)',
+    async (status) => {
+      // Unlike the sitter's own routes, the recap is read by a signed-in
+      // MEMBER of the household — the person who can fix the card — and only
+      // for a window that has already ENDED, so nothing is mid-flight. It
+      // follows the documented downgrade contract rather than the
+      // already-issued-grant rule.
+      const billing = await import('../../../src/services/billing.js');
+      const sitterService = await import('../../../src/services/sitterService.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const { getAwayRecap } = await import('../../../src/handlers/households/awayRecap.js');
+
+      const res = (await getAwayRecap(
+        buildEvent(memberClaims),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(402);
+      expect(sitterService.listSitterLinks).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still serves a lifetime Garden owner whose later subscription was cancelled (#476)', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    const { getAwayRecap } = await import('../../../src/handlers/households/awayRecap.js');
+
+    const res = (await getAwayRecap(
+      buildEvent(memberClaims),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    // Past the gate: it reached the link read, which is the assertion that
+    // matters here (the 404 below is "no window has ended yet").
+    expect(res.statusCode).not.toBe(402);
+    expect(sitterService.listSitterLinks).toHaveBeenCalled();
+  });
+
   it('403s a caller whose active household is not the one in the path', async () => {
     const { getAwayRecap } = await import('../../../src/handlers/households/awayRecap.js');
     const res = (await getAwayRecap(

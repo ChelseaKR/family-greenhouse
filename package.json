@@ -51,6 +51,7 @@
     "tests:wired:check": "node scripts/check-test-scripts-run.mjs",
     "i18n:check": "npm run i18n:check --workspace frontend",
     "reads:check": "npm run reads:check --workspaces --if-present",
+    "entitlements:check": "npm run entitlements:check --workspace backend",
     "mobile:validate": "node scripts/validate-store-release.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "audit:check": "node scripts/check-audit.mjs",

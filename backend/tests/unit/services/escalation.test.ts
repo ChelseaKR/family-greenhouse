@@ -167,7 +167,46 @@ describe('escalation — rule storage', () => {
     const { getEscalationRule } = await import('../../../src/services/escalation.js');
     expect(await getEscalationRule('hh')).toEqual({ escalateAfterDays: 7, planId: 'garden' });
     expect(sent).toHaveLength(1);
-    expect(sent[0].input.ProjectionExpression).toBe('escalateAfterDays, planId');
+    // #476: subscriptionStatus and lifetimePlanId ride along on the SAME
+    // GetItem, so consulting payment status costs no extra read.
+    expect(sent[0].input.ProjectionExpression).toBe(
+      'escalateAfterDays, planId, subscriptionStatus, lifetimePlanId'
+    );
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+    'resolves the gating plan from ENTITLEMENT: %s reads as the free tier (#476)',
+    async (subscriptionStatus) => {
+      // PUT /households/{id}/escalation now refuses to turn the rule ON for a
+      // household mid-dunning. Without this the hourly scan would keep ACTING
+      // on a rule already stored — the two halves of one feature disagreeing.
+      await mockStore({ escalateAfterDays: 7, planId: 'garden', subscriptionStatus });
+      const { getEscalationRule } = await import('../../../src/services/escalation.js');
+      expect(await getEscalationRule('hh')).toEqual({
+        escalateAfterDays: 7,
+        planId: 'seedling',
+      });
+    }
+  );
+
+  it.each(['active', 'trialing', undefined])(
+    'keeps the paid tier while the subscription is in good standing (%s) (#476)',
+    async (subscriptionStatus) => {
+      await mockStore({ escalateAfterDays: 7, planId: 'garden', subscriptionStatus });
+      const { getEscalationRule } = await import('../../../src/services/escalation.js');
+      expect((await getEscalationRule('hh')).planId).toBe('garden');
+    }
+  );
+
+  it('never falls below a lifetime purchase (#476)', async () => {
+    await mockStore({
+      escalateAfterDays: 7,
+      planId: 'seedling',
+      subscriptionStatus: 'canceled',
+      lifetimePlanId: 'garden',
+    });
+    const { getEscalationRule } = await import('../../../src/services/escalation.js');
+    expect((await getEscalationRule('hh')).planId).toBe('garden');
   });
 
   it('a corrupt stored rule reads as off; an unknown plan reads as the free tier', async () => {
@@ -241,6 +280,23 @@ describe('escalation — the scan hook', () => {
 
   it('is gated to plans with the household toolkit: a Seedling rule is stored but never acted on', async () => {
     const { sent } = await mockStore({ escalateAfterDays: 5, planId: 'seedling' });
+    await members();
+    const notifier = await import('../../../src/services/notifier.js');
+    const { runEscalations } = await import('../../../src/services/escalation.js');
+    expect(await runEscalations('hh', [task()], NOW)).toEqual({ escalated: 0, notified: 0 });
+    expect(sent).toHaveLength(1);
+    expect(notifier.sendToUser).not.toHaveBeenCalled();
+  });
+
+  it('stops acting on a stored rule while the card has failed, after the single rule read (#476)', async () => {
+    // Every escalation sends real email. A household mid-dunning keeps its
+    // stored rule — no data cleanup — and the scan resumes by itself once
+    // the card is fixed.
+    const { sent } = await mockStore({
+      escalateAfterDays: 5,
+      planId: 'garden',
+      subscriptionStatus: 'past_due',
+    });
     await members();
     const notifier = await import('../../../src/services/notifier.js');
     const { runEscalations } = await import('../../../src/services/escalation.js');

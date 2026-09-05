@@ -21,7 +21,7 @@ import {
   requireHousehold,
   type AuthenticatedEvent,
 } from '../../middleware/auth.js';
-import { getPlan, planIncludesAwayKit } from '../../models/plans.js';
+import { getEntitledPlan, planIncludesAwayKit } from '../../models/plans.js';
 import * as billing from '../../services/billing.js';
 import * as sitterService from '../../services/sitterService.js';
 import {
@@ -43,8 +43,15 @@ export const getAwayRecap = createHandler(
       throw createHttpError(403, 'Access denied');
     }
 
+    // ENTITLEMENT, not the plan row (#476). Unlike the sitter's own routes,
+    // this one is read by a MEMBER of the household, signed in, on their own
+    // account — the person who can fix the card. Nothing is mid-flight: the
+    // recap is only served for a window that has already ended. So it follows
+    // the documented downgrade contract (a downgraded household loses the
+    // Away Kit here too) rather than the already-issued-grant rule that keeps
+    // the sitter's brief and photo-back alive.
     const sub = await billing.getHouseholdSubscription(householdId);
-    if (!planIncludesAwayKit(getPlan(sub.planId))) {
+    if (!planIncludesAwayKit(getEntitledPlan(sub))) {
       throw createHttpError(402, 'The Away Kit is included with Garden and Greenhouse.');
     }
 

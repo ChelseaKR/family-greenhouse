@@ -10,7 +10,7 @@
  * §7(d) of the paid-feature brief is right that locking members out of things
  * they need is this product's recurring mistake.
  *
- * Gating: Greenhouse only, via `planHasFeature(planId, 'caretakerSeats')`.
+ * Gating: Greenhouse only, via `featureOf(getEntitledPlan(sub), 'caretakerSeats')`.
  * The gate is on the CREATE path only. Listing, revoking and reporting stay
  * open on every tier so a household that downgrades can still see, stop, and
  * account for the seats it already handed out — a paywall that traps a live
@@ -30,7 +30,7 @@ import { createCaretakerSchema, CreateCaretakerInput } from '../../models/careta
 import * as caretakerService from '../../services/caretakerService.js';
 import { buildCaretakerReport, resolveReportRange } from '../../services/caretakerReport.js';
 import * as billing from '../../services/billing.js';
-import { planHasFeature } from '../../models/plans.js';
+import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 
@@ -51,9 +51,19 @@ function requirePathHousehold(
   return householdId;
 }
 
+/**
+ * ENTITLEMENT, not the plan row (#476). One caller, `createCaretaker` — the
+ * gate is on CREATE only (see the file header), so this is purely the
+ * STARTING question and a household mid-dunning may not mint a new seat. Every
+ * seat it already handed out keeps working, and list/revoke/report stay open
+ * on every tier, so nothing already issued is trapped behind the gate.
+ *
+ * This call site is also the ratchet's own evidence: it landed AFTER #476 was
+ * written and was therefore missing from that issue's table.
+ */
 async function requireCaretakerSeatsPlan(householdId: string): Promise<void> {
   const sub = await billing.getHouseholdSubscription(householdId);
-  if (!planHasFeature(sub.planId, 'caretakerSeats')) {
+  if (!featureOf(getEntitledPlan(sub), 'caretakerSeats')) {
     throw createHttpError(
       402,
       'Caretaker seats are included with the Greenhouse plan. Upgrade to add a caretaker.'

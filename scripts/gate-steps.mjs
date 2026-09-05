@@ -133,6 +133,12 @@ export const STEPS = [
     why: 'ADR 0010 settled-read-state ratchet (DynamoDB/SSM/Cognito/fetch reads)',
   },
   {
+    id: 'entitlements:check',
+    script: 'entitlements:check',
+    weight: 0,
+    why: 'a paid-feature gate resolved from the plan ROW instead of from payment status — the rule #364 introduced and code written after it silently stopped following (#476)',
+  },
+  {
     id: 'observability:check',
     script: 'observability:check',
     weight: 0,

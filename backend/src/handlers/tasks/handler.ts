@@ -38,7 +38,12 @@ import * as householdService from '../../services/householdService.js';
 import * as billing from '../../services/billing.js';
 import * as doubleCare from '../../services/doubleCare.js';
 import { nextDueAfterMatch } from '../../services/doubleCareRules.js';
-import { getPlan, hasHouseholdToolkit, Plan } from '../../models/plans.js';
+import {
+  getEntitledPlan,
+  getEntitledPlanForIssuedGrant,
+  hasHouseholdToolkit,
+  Plan,
+} from '../../models/plans.js';
 import * as householdEmails from '../../services/householdEmails.js';
 import { recordActivity } from '../../services/activity.js';
 import { resolveInheritedAssignee } from '../../services/assignmentResolver.js';
@@ -58,7 +63,14 @@ import { logger } from '../../utils/logger.js';
  */
 async function resolvePlanBestEffort(householdId: string): Promise<Plan | null> {
   try {
-    return getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    // ENTITLEMENT, not the plan row (#476). Every caller is a member of the
+    // household acting on their own account — the double-care detector on
+    // completion and the two drift endpoints — so this is the STARTING
+    // question: nothing here was issued to a third party who cannot fix the
+    // card. A household mid-dunning gets the free tier's behaviour, exactly
+    // as a downgrade already gives it. It also picks up the lifetime floor,
+    // so an outright purchase survives a later subscription being cancelled.
+    return getEntitledPlan(await billing.getHouseholdSubscription(householdId));
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
     return null;
@@ -929,7 +941,12 @@ export const getSitterView = createHandler(
       // offers it only when the link can actually open it. It says nothing
       // about the household beyond that, and only to a holder of a valid
       // token — the brief endpoint itself stays a generic 404 either way.
-      briefAvailable: sitterBriefIncluded(getPlan(subscription.planId)),
+      // CONTINUING, not starting (#476): this link was already issued, is
+      // inside its window, and is in the sitter's hands. The sitter is not
+      // the buyer and cannot fix a failed card, so a link that worked when it
+      // was shared keeps working until `expiresAt`. Issuing a NEW link is
+      // gated on entitlement in handlers/households/handler.ts.
+      briefAvailable: sitterBriefIncluded(getEntitledPlanForIssuedGrant(subscription)),
     });
   }
   // No authMiddleware — anonymous sitter. 60/min per IP absorbs the
@@ -956,7 +973,13 @@ export const getSitterBrief = createHandler(
     if (!link) {
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
-    const plan = getPlan((await billing.getHouseholdSubscription(link.householdId)).planId);
+    // CONTINUING, not starting (#476) — same reasoning as the task view
+    // above: an already-issued, unexpired link keeps the brief it was shared
+    // with. Revoking it mid-trip punishes the one person in the transaction
+    // who cannot do anything about the card, and can genuinely kill plants.
+    const plan = getEntitledPlanForIssuedGrant(
+      await billing.getHouseholdSubscription(link.householdId)
+    );
     if (!sitterBriefIncluded(plan)) {
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }

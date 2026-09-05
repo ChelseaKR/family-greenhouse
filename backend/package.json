@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "reads:check": "node scripts/check-settled-read-states.mjs",
+    "entitlements:check": "node scripts/check-entitlement-gates.mjs",
     "eval": "vitest run tests/eval"
   },
   "dependencies": {

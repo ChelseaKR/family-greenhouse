@@ -23,7 +23,7 @@ import {
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import * as kioskService from '../../services/kioskService.js';
 import * as billing from '../../services/billing.js';
-import { planHasFeature } from '../../models/plans.js';
+import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 
@@ -42,10 +42,18 @@ type IssueKioskLinkInput = z.infer<typeof issueKioskLinkSchema>;
 /** Greenhouse-only. The gate reads the plan catalog (`features.kiosk`) rather
  *  than comparing a plan id, so a future tier that includes the kiosk is one
  *  boolean away. A failed billing read THROWS — it is never treated as
- *  "no entitlement" or as "entitled". */
+ *  "no entitlement" or as "entitled".
+ *
+ *  ENTITLEMENT, not the plan row (#476), and only on the ISSUE path — this
+ *  helper has exactly one caller, `issueKioskLink` below. Mounting a NEW wall
+ *  display is a new grant and follows the card. A screen already on the wall
+ *  is never re-checked: `GET /kiosk/{token}` (handlers/tasks/kiosk.ts) has no
+ *  plan gate at all, deliberately, for the same reason a printed plant tag
+ *  does not — the display is a physical object in a room, and the people
+ *  reading it are not the buyer. Revoke stays ungated, which is the control. */
 async function requireKioskEntitlement(householdId: string): Promise<void> {
   const sub = await billing.getHouseholdSubscription(householdId);
-  if (!planHasFeature(sub.planId, 'kiosk')) {
+  if (!featureOf(getEntitledPlan(sub), 'kiosk')) {
     throw createHttpError(
       402,
       'The kiosk display is included with the Greenhouse plan. Upgrade to set up a wall display.'

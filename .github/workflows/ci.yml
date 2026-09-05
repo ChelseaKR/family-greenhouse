@@ -139,6 +139,18 @@ jobs:
         # actually block a merge.
         run: npm run reads:check
 
+      - name: Entitlement-gate ratchet (a paid feature must follow payment status)
+        # #476, direction 4. PR #364 introduced `getEntitledPlan` and converted
+        # every call site that existed then; the rule silently stopped applying
+        # to code written after it, and by the time #476 was filed a dozen new
+        # gates read `getPlan(sub.planId)` again — one of them added WHILE the
+        # issue was open, so its own table was stale before anyone worked it.
+        # Shared with `npm run verify` (root `entitlements:check`) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27). Lives in the required
+        # `Lint` job so it can actually block a merge.
+        run: npm run entitlements:check
+
       - name: Store release readiness (native version parity + listing metadata)
         # `npm run mobile:validate` existed but nothing ran it, so the only
         # thing keeping the native projects in step with package.json was

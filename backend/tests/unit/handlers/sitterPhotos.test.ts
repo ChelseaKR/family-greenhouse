@@ -310,6 +310,54 @@ describe('POST /sitter/{token}/photos (public)', () => {
     expect(s3.send).not.toHaveBeenCalled();
   });
 
+  it.each(['past_due', 'unpaid', 'paused'])(
+    'still accepts a photo while the household card has failed (%s) (#476)',
+    async (status) => {
+      // CONTINUING, not starting. The link was issued while entitled and is
+      // still inside its window; the sitter holding it cannot fix the card
+      // and is documenting a visit that is happening right now.
+      await wireDynamo({ photoCountAfter: 3 });
+      const { s3 } = await wireStorage();
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+        planId: 'garden',
+        status,
+      } as never);
+      const { uploadSitterPhoto } = await import('../../../src/handlers/tasks/sitterPhotos.js');
+
+      const res = (await uploadSitterPhoto(
+        uploadEvent({ taskId: 'task-1', image: JPEG_B64 }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+      expect(s3.send).toHaveBeenCalled();
+    }
+  );
+
+  it('still 402s a free-tier household that is past_due (#476)', async () => {
+    // Paired positive control: leniency about STATUS is not leniency about
+    // the TIER. Seedling never had photo-back and still does not.
+    await wireDynamo({});
+    const { s3 } = await wireStorage();
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'seedling',
+      status: 'past_due',
+    } as never);
+    const { uploadSitterPhoto } = await import('../../../src/handlers/tasks/sitterPhotos.js');
+
+    const res = (await uploadSitterPhoto(
+      uploadEvent({ taskId: 'task-1', image: JPEG_B64 }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(402);
+    expect(s3.send).not.toHaveBeenCalled();
+  });
+
   it('404s a task that is not in the token’s household (scoped read) without touching storage', async () => {
     const dynamodb = await wireDynamo({});
     const { taskService, s3 } = await wireStorage();
@@ -502,6 +550,31 @@ describe('GET /sitter/{token}/photos (public)', () => {
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ enabled: false, max: 60, used: null, remaining: null });
+  });
+
+  it('still reports enabled while the household card has failed (#476)', async () => {
+    // The status endpoint has to agree with the upload endpoint, or the
+    // sitter page hides a control that would have worked.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
+      const sent = cmd as Sent;
+      if (sent.kind === 'Get' && sent.input.ProjectionExpression === 'photoCount') {
+        return { Item: { photoCount: 12 } };
+      }
+      return { Item: linkRow() };
+    });
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'garden',
+      status: 'past_due',
+    } as never);
+    const { getSitterPhotoStatus } = await import('../../../src/handlers/tasks/sitterPhotos.js');
+    const res = (await getSitterPhotoStatus(
+      anonEvent({ httpMethod: 'GET' }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(JSON.parse(res.body)).toEqual({ enabled: true, max: 60, used: 12, remaining: 48 });
   });
 
   it('404s an expired link', async () => {

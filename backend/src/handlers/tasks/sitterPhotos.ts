@@ -42,7 +42,7 @@ import createHttpError from 'http-errors';
 import { createHandler } from '../../middleware/handler.js';
 import { rateLimit } from '../../middleware/rateLimit.js';
 import { validateBody, type ValidatedEvent } from '../../middleware/validation.js';
-import { getPlan, planIncludesAwayKit } from '../../models/plans.js';
+import { getEntitledPlanForIssuedGrant, planIncludesAwayKit } from '../../models/plans.js';
 import * as sitterService from '../../services/sitterService.js';
 import * as taskService from '../../services/taskService.js';
 import * as plantService from '../../services/plantService.js';
@@ -71,9 +71,18 @@ import { createdResponse, successResponse } from '../../utils/response.js';
 const SITTER_DISPLAY_NAME = 'a plant sitter';
 const INACTIVE_LINK_MESSAGE = 'This sitter link is invalid or has expired.';
 
+/**
+ * CONTINUING, not starting (#476). Both callers are the anonymous sitter
+ * routes, reached only with a valid, unexpired link token that the household
+ * issued while entitled. The sitter is not the buyer, cannot fix a failed
+ * card, and is standing in the kitchen right now — so photo-back stays on for
+ * the life of the link. Issuing a NEW link is gated on entitlement in
+ * handlers/households/handler.ts, which is where a household mid-dunning is
+ * actually stopped.
+ */
 async function awayKitEnabledFor(householdId: string): Promise<boolean> {
   const sub = await billing.getHouseholdSubscription(householdId);
-  return planIncludesAwayKit(getPlan(sub.planId));
+  return planIncludesAwayKit(getEntitledPlanForIssuedGrant(sub));
 }
 
 // GET /sitter/:token/photos

@@ -110,6 +110,32 @@ describe('GET /kiosk/{token} (public)', () => {
     expect(Object.keys(body).sort()).toEqual(['pollIntervalSeconds', 'tasks']);
   });
 
+  it('is NOT entitlement-gated, deliberately: a mounted display keeps working while the card has failed (#476)', async () => {
+    // The kiosk is a screen on a wall and the people reading it are not the
+    // buyer. Entitlement is asked once, when the link is ISSUED; revoking it
+    // is the control. The billing service is never consulted on this path,
+    // and this test is what keeps that a decision rather than an omission.
+    const { getActiveKioskLink } = await import('../../../src/services/kioskService.js');
+    const { getSitterTasks } = await import('../../../src/services/taskService.js');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(getActiveKioskLink).mockResolvedValueOnce(activeLink() as never);
+    vi.mocked(getSitterTasks).mockResolvedValueOnce([] as never);
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'seedling',
+      status: 'past_due',
+    } as never);
+
+    const { getKioskView } = await import('../../../src/handlers/tasks/kiosk.js');
+    const res = (await getKioskView(
+      anonEvent({ path: `/kiosk/${TOKEN}`, pathParameters: { token: TOKEN } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+  });
+
   it('supplies its own rolling cutoff, not a sitter link’s expiresAt', async () => {
     const { getActiveKioskLink, KIOSK_LOOKAHEAD_DAYS } =
       await import('../../../src/services/kioskService.js');
@@ -371,6 +397,56 @@ describe('POST /households/{id}/kiosk-link (issue)', () => {
     expect(body.token).toBe(TOKEN);
     expect(body.url).toBe(`https://app.example.test/kiosk/${TOKEN}`);
     expect(vi.mocked(kiosk.issueKioskLink).mock.calls[0][0].pollIntervalSeconds).toBe(600);
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+    '402s while the card has failed (%s) — mounting a NEW display is a new grant (#476)',
+    async (status) => {
+      const billing = await import('../../../src/services/billing.js');
+      const kiosk = await import('../../../src/services/kioskService.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+        planId: 'greenhouse',
+        status,
+      } as never);
+
+      const { issueKioskLink } = await import('../../../src/handlers/households/kioskLink.js');
+      const res = (await issueKioskLink(
+        authedEvent({ body: JSON.stringify({}) }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(402);
+      expect(kiosk.issueKioskLink).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still issues for a lifetime Greenhouse owner after a later cancellation (#476)', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    const kiosk = await import('../../../src/services/kioskService.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'greenhouse',
+    } as never);
+    vi.mocked(kiosk.issueKioskLink).mockResolvedValueOnce({
+      id: 'kiosk-1',
+      token: TOKEN,
+      householdId: 'hh-1',
+      createdBy: 'u1',
+      createdAt: 'now',
+      status: 'active',
+      pollIntervalSeconds: 300,
+    } as never);
+
+    const { issueKioskLink } = await import('../../../src/handlers/households/kioskLink.js');
+    const res = (await issueKioskLink(
+      authedEvent({ body: JSON.stringify({}) }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
   });
 
   it('rejects a poll interval outside the supported band', async () => {
