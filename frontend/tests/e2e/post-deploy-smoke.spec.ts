@@ -100,7 +100,16 @@ function smokeEmail(kind: 'public' | 'authenticated'): string {
 
 const PASSWORD = 'E2E-Smoke!Pass1234';
 
-function assertResponseStatus(response: APIResponse, expected: number, label: string): void {
+/**
+ * Both Playwright response shapes reach this helper: `APIResponse` from
+ * `request.*`, and the navigation `Response` from `page.waitForResponse`. It
+ * reads two members, so it asks for two members. It was declared `APIResponse`
+ * while all six call sites pass a page `Response` — a type error that stood
+ * because `frontend/tests/` was outside tsconfig's `include` (#440).
+ */
+type StatusAndUrl = Pick<APIResponse, 'status' | 'url'>;
+
+function assertResponseStatus(response: StatusAndUrl, expected: number, label: string): void {
   if (response.status() === expected) return;
   const diagnostic = safeResponseDiagnostic(response.url(), response.status());
   throw new Error(
@@ -526,13 +535,22 @@ async function purgeUploadedS3Object(target: SmokeS3ObjectTarget | undefined): P
           nextVersionIdMarker: page.NextVersionIdMarker,
         };
       } catch (error) {
+        // Deliberately NOT attaching `cause`. safeAwsErrorName() is a
+        // sanitisation boundary: it passes through only a whitelisted error
+        // NAME and falls back to 'AwsError'. This suite runs against
+        // production with real credentials and a presigned S3 URL, and an
+        // attached cause would print the raw AWS error — message, request id,
+        // and whatever else the SDK put in it — into the CI log and the HTML
+        // report. The smoke config disables traces (`trace: 'off'`) for
+        // exactly this reason; re-attaching the cause here would undo it.
+        // eslint-disable-next-line preserve-caught-error -- sanitisation boundary, see above
         throw new Error(`S3 version listing failed (${safeAwsErrorName(error)})`);
       }
     },
     deleteVersions: async ({ bucket, objects }) => {
-      let errorCount = 0;
+      let result;
       try {
-        const result = await s3.send(
+        result = await s3.send(
           new DeleteObjectsCommand({
             Bucket: bucket,
             Delete: {
@@ -544,10 +562,16 @@ async function purgeUploadedS3Object(target: SmokeS3ObjectTarget | undefined): P
             },
           })
         );
-        errorCount = result.Errors?.length ?? 0;
       } catch (error) {
+        // Same sanitisation boundary as the sibling rethrow above: an attached
+        // cause would print the raw AWS error into the CI log and report.
+        // eslint-disable-next-line preserve-caught-error -- sanitisation boundary, see above
         throw new Error(`S3 version deletion failed (${safeAwsErrorName(error)})`);
       }
+      // Read the count outside the try. Assigning it inside and reading it
+      // after tripped `no-useless-assignment`, whose analysis cannot see that
+      // the catch always throws.
+      const errorCount = result.Errors?.length ?? 0;
       if (errorCount > 0) {
         throw new Error(`S3 version deletion returned ${errorCount} error(s)`);
       }

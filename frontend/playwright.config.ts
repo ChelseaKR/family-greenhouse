@@ -25,12 +25,24 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     // The app honors prefers-reduced-motion; prefer the calm rendering in tests.
-    // NOTE: the @playwright/test page fixture does not reliably apply this
-    // option (manual newContext() does), so the a11y specs additionally
-    // wait for document.getAnimations() to finish before running axe —
-    // otherwise axe samples mid-fade opacity and reports blended colors as
-    // contrast violations.
-    reducedMotion: 'reduce',
+    // The a11y specs additionally wait for document.getAnimations() to finish
+    // before running axe — otherwise axe samples mid-fade opacity and reports
+    // blended colors as contrast violations.
+    // Reduced motion, at the ONE key Playwright actually reads. This used to be
+    // `reducedMotion: 'reduce'` directly under `use`, which is not a member of
+    // PlaywrightTestOptions in 1.62 — the runner accepted the config and
+    // ignored the key. Measured, not inferred: with the old form a page
+    // evaluating `matchMedia('(prefers-reduced-motion: reduce)').matches`
+    // returned FALSE; under `contextOptions` it returns TRUE. The file was
+    // outside tsconfig's `include` and outside the lint globs, so nothing
+    // reported the dead key for as long as it sat there (#440).
+    //
+    // The NOTE this replaces read "the page fixture does not reliably apply
+    // this option (manual newContext() does)" — that was the symptom of the
+    // option never being applied at all. The a11y specs' waits on
+    // document.getAnimations() stay: they are load-bearing regardless, and
+    // nothing here should start depending on this option having been broken.
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     {

@@ -176,6 +176,12 @@ export const STEPS = [
     why: 'brand assets drifting from their sources',
   },
   {
+    id: 'smoke:parse',
+    script: 'smoke:parse',
+    weight: 1,
+    why: 'the post-deploy smoke spec — the one whose failure ROLLS BACK production — failing to load or registering no tests (#440)',
+  },
+  {
     id: 'mobile:validate',
     script: 'mobile:validate',
     weight: 0,

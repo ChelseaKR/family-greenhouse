@@ -62,7 +62,9 @@ test('an open tab alerts at the due time, respects permission, and dedupes the o
       construct(target, args, newTarget) {
         // Only record after Chromium's real constructor succeeds. Recording
         // first would let the test pass even if the browser rejected delivery.
-        const notification = Reflect.construct(target, args, newTarget);
+        // `Reflect.construct` is typed `any`; name the type the proxy target
+        // actually produces so the unsafe-any rules have something to check.
+        const notification = Reflect.construct(target, args, newTarget) as Notification;
         const title = String(args[0]);
         const options = (args[1] ?? {}) as NotificationOptions;
         let calls: CapturedNotification[] = [];

@@ -67,7 +67,16 @@ async function expectNoDocumentOverflow(page: Page, label: string) {
         tag: element.tagName.toLowerCase(),
         className: element.className.toString().slice(0, 120),
         text: element.textContent?.trim().slice(0, 60),
-        rect: element.getBoundingClientRect().toJSON(),
+        // `DOMRect.toJSON()` is typed `any` in lib.dom; spell out the fields
+        // this diagnostic actually reports.
+        rect: (({ top, right, bottom, left, width, height }) => ({
+          top,
+          right,
+          bottom,
+          left,
+          width,
+          height,
+        }))(element.getBoundingClientRect()),
       }));
 
     return {

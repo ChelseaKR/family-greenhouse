@@ -56,6 +56,9 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
+        # frontend's `lint` covers `src`, `tests/e2e` and `playwright.config.ts`.
+        # The e2e tree was previously outside every lint glob despite being the
+        # only code that can revert a production release (#440).
         run: npm run lint
 
       - name: No bare TODO/FIXME/HACK markers
@@ -165,12 +168,35 @@ jobs:
         run: npm ci
 
       - name: TypeScript check - Frontend
+        # `npm run typecheck` in frontend is now two programs: tsconfig.json
+        # (src) and tsconfig.e2e.json (tests/e2e + playwright.config.ts). The
+        # e2e tree used to be outside every static check — see #440 and the
+        # header of frontend/tsconfig.e2e.json.
         working-directory: frontend
         run: npm run typecheck
 
       - name: TypeScript check - Backend
         working-directory: backend
         run: npm run typecheck
+
+      - name: Post-deploy smoke spec still loads (#440)
+        # `post-deploy-smoke.spec.ts` cannot RUN on a pull request — it needs a
+        # deployed Cognito pool, and playwright.smoke.config.ts throws at module
+        # load without E2E_BASE_URL. But it is the only code in the repo that can
+        # revert a production release (cd-production.yml fires `rollback` on any
+        # non-success from the smoke job), and PR CI executes it nowhere, so a
+        # load error in it would be discovered by production.
+        #
+        # `--list` under placeholder env vars proves the file and its imports
+        # parse, the Playwright API it calls still exists, and its two tests are
+        # still registered. It cannot prove an assertion inside a test is still
+        # true — that limit is stated in the script rather than left implicit.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places pattern
+        # as check-no-bare-markers.mjs (CICD-27).
+        working-directory: frontend
+        run: npm run smoke:parse
 
   test-frontend:
     name: Test Frontend
