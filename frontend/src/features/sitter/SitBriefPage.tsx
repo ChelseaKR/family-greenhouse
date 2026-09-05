@@ -65,16 +65,22 @@ function PlantCard({ plant }: { plant: SitterBriefPlant }) {
       </div>
 
       <div className="mt-4">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-gray-600">
-          {plant.careNoteSource === 'rule'
-            ? t('sitterBrief.houseRule')
-            : t('sitterBrief.householdNote')}
-        </h3>
         {plant.careNote ? (
-          <p className="mt-1 text-sm text-ink">{plant.careNote}</p>
+          <>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-gray-600">
+              {plant.careNoteSource === 'rule'
+                ? t('sitterBrief.houseRule')
+                : t('sitterBrief.householdNote')}
+            </h3>
+            <p className="mt-1 text-sm text-ink">{plant.careNote}</p>
+          </>
         ) : (
-          // An absence, stated. Never a generated substitute.
-          <p className="mt-1 text-sm italic text-gray-600">{t('sitterBrief.noCareNote')}</p>
+          // An absence, stated — and stated on its own. No generated
+          // substitute, and no "The household's note" heading over a line the
+          // household did not write, because a sitter reads the heading as
+          // attribution. Same rule as the pet-safety block below: when there
+          // is nothing verified to show, show nothing that implies there is.
+          <p className="text-sm italic text-gray-600">{t('sitterBrief.noCareNote')}</p>
         )}
       </div>
 

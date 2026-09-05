@@ -823,7 +823,7 @@
     "noPlace": "No placement note — ask where this one lives.",
     "houseRule": "House rule",
     "householdNote": "The household’s note",
-    "noCareNote": "No note for this plant. Water when the top of the soil is dry if you’re unsure, and let them know what you did.",
+    "noCareNote": "No note for this plant.",
     "whileYoureHere": "While you’re here",
     "nothingDue": "Nothing due during your window.",
     "due": "due {{date}}",

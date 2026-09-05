@@ -851,7 +851,7 @@
     "noPlace": "Sin nota de ubicación: pregunta dónde vive esta planta.",
     "houseRule": "Norma de la casa",
     "householdNote": "La nota del hogar",
-    "noCareNote": "Sin nota para esta planta. Si dudas, riega cuando la capa superior de tierra esté seca y cuéntales qué hiciste.",
+    "noCareNote": "Sin nota para esta planta.",
     "whileYoureHere": "Mientras estés aquí",
     "nothingDue": "No hay nada pendiente durante tu periodo.",
     "due": "para el {{date}}",
