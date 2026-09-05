@@ -345,6 +345,117 @@ describe('gatherPetWarnings', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// One plants query per report (#580)
+// ---------------------------------------------------------------------------
+
+describe('the household plants are queried once per report (#580)', () => {
+  // `getPlants` issues the SAME DynamoDB Query for every filter value and
+  // applies the filter in memory afterwards, so `gatherAtRisk`'s `'all'` read
+  // and `gatherPetWarnings`' `'active'` read were the same partition twice.
+  //
+  // Every test here needs a NON-EMPTY at-risk list. `gatherPetWarnings`
+  // returns early without reading anything when `rows` is empty, so a quiet
+  // household would count one query either way and the assertions would pass
+  // against the unfixed code.
+  const petSafe = () => {
+    vi.mocked(spaceService.getSpaces).mockResolvedValue([{ id: 's1', petAccess: true }] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([
+      plant({ id: 'p1', name: 'Monstera', spaceId: 's1' }),
+    ] as never);
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([task({ plantId: 'p1' })] as never);
+  };
+
+  it('gatherAtRisk carries the active plants it has already read', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([
+      plant({ id: 'p1' }),
+      plant({ id: 'p2', name: 'Gone', status: 'died' }),
+    ] as never);
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([task({ plantId: 'p1' })] as never);
+
+    const result = await report.gatherAtRisk('hh', NOW);
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    // The ACTIVE subset — the exact rows `getPlants(id, 'active')` returns,
+    // computed from the `'all'` rows already in hand. The dead plant is out.
+    expect(result.activePlants?.map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('builds a whole report on ONE plants query, not two', async () => {
+    petSafe();
+    await report.gatherDigestReport('hh', NOW);
+    // Two before this change: `gatherAtRisk` read `'all'` and
+    // `gatherPetWarnings` read `'active'` off the same partition.
+    expect(plantService.getPlants).toHaveBeenCalledTimes(1);
+    expect(plantService.getPlants).toHaveBeenCalledWith('hh', 'all');
+  });
+
+  it('costs no plants query at all when the caller hands in the at-risk read', async () => {
+    // #545's hoisted path: `digestHousehold` pays for `gatherAtRisk` as its
+    // cheap gate, then hands the result down. The saving has to survive that
+    // handoff or it merely moves — so the plants come along with the result.
+    petSafe();
+    const atRisk = await report.gatherAtRisk('hh', NOW);
+    vi.mocked(plantService.getPlants).mockClear();
+
+    await report.gatherDigestReport('hh', NOW, atRisk);
+    expect(plantService.getPlants).not.toHaveBeenCalled();
+  });
+
+  it('still reads the plants when a precomputed result carries none', async () => {
+    // `undefined` means "go and read", never "this household has no plants".
+    // An AtRiskResult from anywhere but `gatherAtRisk` has nothing to give,
+    // and assuming empty would silently drop every pet-safety line.
+    petSafe();
+    const atRisk = {
+      status: 'ok' as const,
+      rows: [row({ plantId: 'p1' })],
+      onTrack: 0,
+      orphanTasks: 0,
+    };
+
+    const built = await report.gatherDigestReport('hh', NOW, atRisk);
+    expect(plantService.getPlants).toHaveBeenCalledTimes(1);
+    expect(plantService.getPlants).toHaveBeenCalledWith('hh', 'active');
+    expect(built.pets).toEqual({
+      status: 'ok',
+      warnings: [{ plantId: 'p1', plantName: 'Monstera', pets: 'both' }],
+    });
+  });
+
+  it('reports a failed spaces read as unavailable even when the plants were handed in', async () => {
+    // The branch this change is most likely to break, and it breaks SILENTLY:
+    // skipping the plants read must not turn a failed SPACES read into a clean
+    // empty warning list. That is the same unsafe absence ADR 0011 forbids,
+    // just quieter.
+    vi.mocked(spaceService.getSpaces).mockRejectedValue(new Error('ddb down'));
+    const plants = [plant({ id: 'p1', spaceId: 's1' })];
+
+    await expect(report.gatherPetWarnings('hh', [row()], plants as never)).resolves.toEqual({
+      status: 'unavailable',
+    });
+    // And it got there without a read of its own — the spaces read is what
+    // failed, and it is still issued.
+    expect(plantService.getPlants).not.toHaveBeenCalled();
+  });
+
+  it('produces the same warnings from handed-in plants as from its own read', async () => {
+    vi.mocked(spaceService.getSpaces).mockResolvedValue([{ id: 's1', petAccess: true }] as never);
+    const plants = [plant({ id: 'p1', name: 'Monstera', spaceId: 's1' })];
+    vi.mocked(plantService.getPlants).mockResolvedValue(plants as never);
+    const rows = [row({ plantId: 'p1' })];
+
+    const fromRead = await report.gatherPetWarnings('hh', rows);
+    const fromHandoff = await report.gatherPetWarnings('hh', rows, plants as never);
+
+    expect(fromHandoff).toEqual(fromRead);
+    expect(fromHandoff).toEqual({
+      status: 'ok',
+      warnings: [{ plantId: 'p1', plantName: 'Monstera', pets: 'both' }],
+    });
+  });
+});
+
 describe('gatherScheduleDrift', () => {
   /** A `ScheduleDrift` payload with a reading over the threshold. */
   const drifted = (over: Record<string, unknown> = {}) => ({

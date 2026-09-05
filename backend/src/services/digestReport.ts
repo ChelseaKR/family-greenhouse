@@ -97,6 +97,25 @@ export type AtRiskResult =
       /** Overdue tasks whose plant row does not exist at all. A genuine data
        *  inconsistency, distinct from a task on a plant that died. */
       orphanTasks: number;
+      /**
+       * The household's ACTIVE plants, exactly as `getPlants(id, 'active')`
+       * would have returned them (#580).
+       *
+       * Carried, not re-read, because `getPlants` issues the SAME single
+       * DynamoDB Query for every filter value and applies `filter` in memory
+       * afterwards (`plantService.ts`) — so `'active'` is a strict subset of
+       * the `'all'` rows `gatherAtRisk` already holds, computed from the
+       * identical row set. `gatherPetWarnings` used to buy that subset with a
+       * second Query of the same partition; now it is handed this.
+       *
+       * OPTIONAL on purpose, and the optionality is load-bearing. A consumer
+       * holding an `AtRiskResult` from somewhere other than `gatherAtRisk`
+       * (a synthetic one, or a future cache) has no plants to give, and the
+       * read must then still happen: `undefined` means "go and read", never
+       * "the household has no plants". `gatherPetWarnings` keeps its own read
+       * as the fallback for exactly that reason.
+       */
+      activePlants?: Plant[];
     }
   | { status: 'unavailable' };
 
@@ -213,6 +232,9 @@ function wholeDaysOverdue(nextDue: string, now: Date): number | null {
  *     `orphanTasks` and logged, distinct from a task on a plant that legitimately
  *     died or was given away. Reading plants with the `'all'` filter costs the
  *     same single query and is what makes the two distinguishable.
+ *
+ * Returns the active subset on `activePlants` so the rest of the report does
+ * not pay for the same partition twice (#580).
  */
 export async function gatherAtRisk(householdId: string, now: Date): Promise<AtRiskResult> {
   let overdue: Task[];
@@ -288,6 +310,11 @@ export async function gatherAtRisk(householdId: string, now: Date): Promise<AtRi
     rows: ranked,
     onTrack: Math.max(0, active.length - ranked.length),
     orphanTasks,
+    // Handed on rather than re-queried by `gatherPetWarnings` (#580). This is
+    // the same array `onTrack` is counted from, so the two can never disagree
+    // about which plants are active — the pair of Queries could, if a write
+    // landed between them.
+    activePlants: active,
   };
 }
 
@@ -423,17 +450,29 @@ function toxicityFor(plant: { name: string; species: string | null }): PetToxici
  * A failed spaces read is `unavailable`, not silence: dropping a pet-safety
  * line because a query failed is an unsafe absence, which is exactly what ADR
  * 0011 exists to prevent.
+ *
+ * @param activePlants The household's active plants, when the caller already
+ *   holds them — `gatherAtRisk` does, on `AtRiskResult.activePlants`, and
+ *   passing them here removes the second Query of the same partition (#580).
+ *
+ *   Supplying them removes ONLY the plants read. The spaces read is still
+ *   issued, still inside the try, and still turns a failure into
+ *   `unavailable`: the saving must not be able to convert a failed spaces read
+ *   into a clean empty warning list, which is the same unsafe absence in a
+ *   quieter costume. Omit the argument and the plants read happens exactly as
+ *   before, so a caller with nothing to give loses nothing but the saving.
  */
 export async function gatherPetWarnings(
   householdId: string,
-  rows: AtRiskRow[]
+  rows: AtRiskRow[],
+  activePlants?: Plant[]
 ): Promise<PetResult> {
   if (rows.length === 0) return { status: 'ok', warnings: [] };
   let spaces: PlantSpace[];
   let plants: Plant[];
   try {
     spaces = await spaceService.getSpaces(householdId);
-    plants = await plantService.getPlants(householdId, 'active');
+    plants = activePlants ?? (await plantService.getPlants(householdId, 'active'));
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, householdId, msg: 'digest.pet_read_failed' },
@@ -609,11 +648,21 @@ export async function gatherDigestReport(
    * and it decides whether the household has anything worth mailing at all,
    * so paying for it once instead of twice is the whole point of gating on it
    * early. Omitted, this reads it here exactly as before.
+   *
+   * Since #580 it also carries the household's active plants, so the saving
+   * survives the hoist: handing this in removes the plants Query from the pet
+   * section too, rather than moving it. An `AtRiskResult` without them still
+   * works — the pet section reads for itself.
    */
   precomputedAtRisk?: AtRiskResult
 ): Promise<DigestReport> {
   const atRisk = precomputedAtRisk ?? (await gatherAtRisk(householdId, now));
   const listed = atRisk.status === 'ok' ? atRisk.rows.slice(0, TOP_PLANTS) : [];
+  // The active plants the at-risk read already paid for, handed to the pet
+  // section instead of it querying the same partition again (#580). Undefined
+  // when the caller supplied an `AtRiskResult` that carries none — the pet
+  // section then reads for itself, exactly as before.
+  const activePlants = atRisk.status === 'ok' ? atRisk.activePlants : undefined;
 
   const name = await readHouseholdName(householdId);
   const householdName = name.status === 'ok' ? name.name : null;
@@ -643,7 +692,7 @@ export async function gatherDigestReport(
     gatherLastCare(householdId, listed, now),
     gatherWeather(householdId),
     gatherTrend(householdId),
-    gatherPetWarnings(householdId, listed),
+    gatherPetWarnings(householdId, listed, activePlants),
     gatherScheduleDrift(householdId, listed),
   ]);
 
