@@ -391,8 +391,20 @@ jobs:
           # pages (dist/<route>/index.html) are rebuilt on every deploy, so a
           # 1-year immutable cache would pin stale copy at the edge and in
           # browsers until the URL changed — which it never does.
+          #
+          # NO --delete here, deliberately. It used to be, and it broke every
+          # tab that was open across a release: the tab holds the PREVIOUS
+          # index chunk, which names the previous `<Route>-<hash>.js`, and the
+          # sync had just deleted that file. The next lazy navigation 404s and
+          # the user gets "The page's code couldn't be fetched" on the page
+          # they were about to use. Observed on /confirm-email minutes after
+          # this release — which is the worst possible page for it, because a
+          # confirmation link is followed once and often in a tab that has been
+          # sitting open.
+          #
+          # The old objects are content-hashed and immutable, so keeping them
+          # costs storage and nothing else. They are pruned below.
           aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
-            --delete \
             --cache-control "max-age=31536000,public" \
             --exclude "*.html" \
             --exclude "sw.js" \
@@ -412,6 +424,63 @@ jobs:
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
           aws s3 cp dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+      - name: Prune superseded assets past the grace period
+        # Replaces the `--delete` removed from the asset sync above, with a
+        # delay so an open tab keeps working until it is refreshed.
+        #
+        # An object is deleted only when BOTH are true:
+        #   1. it is absent from the build just deployed, and
+        #   2. it was last modified more than GRACE_DAYS ago.
+        #
+        # Condition 1 is what makes this safe, and an S3 lifecycle rule cannot
+        # express it. `aws s3 sync` SKIPS unchanged files, so a chunk whose
+        # content is stable across releases — `vendor-*.js` is the obvious one
+        # — keeps an old LastModified while still being live. A pure age rule
+        # would delete exactly those: the assets so stable they never needed
+        # re-uploading. That failure mode is silent and total.
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
+          GRACE_DAYS: '7'
+        run: |
+          set -euo pipefail
+
+          cutoff=$(date -u -d "${GRACE_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "pruning assets absent from this build and older than ${cutoff}"
+
+          # What this build actually contains, as bucket keys.
+          ( cd dist && find . -type f | sed 's|^\./||' ) | sort > /tmp/shipped.txt
+
+          # What the bucket holds, with last-modified, oldest first.
+          aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
+            --query "Contents[?LastModified<'${cutoff}'].Key" --output text \
+            | tr '\t' '\n' | sed '/^$/d' | sort > /tmp/stale.txt
+
+          # Only the ones this build does not ship.
+          comm -23 /tmp/stale.txt /tmp/shipped.txt > /tmp/prune.txt
+          count=$(wc -l < /tmp/prune.txt | tr -d ' ')
+
+          if [ "$count" -eq 0 ]; then
+            echo "nothing to prune"
+            exit 0
+          fi
+
+          # Refuse to run away. A prune that suddenly wants to remove most of
+          # the bucket means the diff is wrong — an empty dist/, a changed
+          # prefix — not that the bucket is genuinely that stale. Deleting the
+          # live site is not a recoverable mistake, so stop and say so.
+          total=$(aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
+            --query 'length(Contents)' --output text)
+          if [ "$count" -gt $(( total / 2 )) ]; then
+            echo "::error::prune wants to delete ${count} of ${total} objects — refusing. The build/bucket diff is wrong, not the bucket."
+            exit 1
+          fi
+
+          echo "deleting ${count} superseded objects (of ${total}):"
+          sed 's/^/  /' /tmp/prune.txt
+          while read -r key; do
+            [ -n "$key" ] && aws s3 rm "s3://${FRONTEND_BUCKET}/${key}" --only-show-errors
+          done < /tmp/prune.txt
 
       - name: Invalidate CloudFront
         env:
