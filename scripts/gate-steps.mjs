@@ -1,6 +1,6 @@
 /**
  * The local quality gate's step list — the single source of truth for what
- * `npm run verify` (and therefore `.husky/pre-push`) runs.
+ * `npm run verify` (and therefore `.githooks/pre-push`) runs.
  *
  * Every step is an npm script invoked exactly as npm would invoke it, so the
  * gate can never drift from the workspace's own definition of `lint` or
@@ -99,6 +99,12 @@ export const STEPS = [
   },
 
   // --- Cheap checks: unscheduled, so they report in seconds.
+  {
+    id: 'hooks:check',
+    script: 'hooks:check',
+    weight: 0,
+    why: 'the pre-push hook wiring itself — core.hooksPath pointing at a tracked, executable, gate-running hook (#544)',
+  },
   {
     id: 'i18n:check',
     script: 'i18n:check',

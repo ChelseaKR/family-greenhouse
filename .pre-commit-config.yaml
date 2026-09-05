@@ -1,5 +1,5 @@
 # Pre-commit-framework mirror of the hooks this repo already enforces via
-# husky + lint-staged (.husky/pre-commit) — same tools, same scope, so either
+# lint-staged (.githooks/pre-commit) — same tools, same scope, so either
 # entry point gives identical results. Local hooks run through the repo's own
 # node_modules, so versions come from package-lock.json and match CI exactly.
 # Install with: pre-commit install

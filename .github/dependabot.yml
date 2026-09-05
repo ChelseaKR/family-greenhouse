@@ -1,7 +1,7 @@
 version: 2
 updates:
   # --- npm workspaces ---
-  # Root holds shared tooling (eslint, prettier, husky); the two workspaces
+  # Root holds shared tooling (eslint, prettier, commitlint); the two workspaces
   # carry their own runtime deps. Dependabot needs one entry per manifest.
   - package-ecosystem: npm
     directory: /

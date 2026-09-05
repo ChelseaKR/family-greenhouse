@@ -98,7 +98,7 @@ fix(billing): clamp price-id env lookup
 docs: rewrite README
 ```
 
-Types we use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. The commitlint hook in `.husky/` will reject anything else.
+Types we use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. The commitlint hook in `.githooks/` will reject anything else.
 
 ## Standards conformance
 

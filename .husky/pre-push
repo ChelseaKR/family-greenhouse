@@ -1,21 +1,24 @@
-# Pre-push: full quality gate before code reaches origin. `npm run verify`
-# runs scripts/run-gate.mjs, which runs every check the gate has ever run —
-# format:check, both workspaces' lint / typecheck / test:coverage (tests *and*
-# the coverage floors, exactly what CI's Test Frontend / Test Backend jobs
-# run), i18n, settled-read-state ratchets, observability, the production
-# dependency audit, the bare-marker and silenced-gate greps, docs/testing.md,
-# figures, API spec, sitemap and brand — but concurrently instead of in a
-# fifteen-link `&&` chain: measured at 98s and 123s on a busy 10-core laptop
-# against 305s for the chain. The step list is scripts/gate-steps.mjs; a
-# failure in any one of them fails the push and names itself. These are the
-# same stages CI runs (see CICD-27 / CONTRIBUTING.md), so a green pre-push
-# almost always means a green CI run.
+#!/usr/bin/env sh
+# TOMBSTONE — this file is no longer the pre-push gate.
 #
-# The cheap checks are unscheduled and report in the first few seconds, so a
-# bare marker or a stale doc no longer waits behind the test suites.
+# The hooks moved to the TRACKED `.githooks/` directory and `core.hooksPath`
+# now points there (#544). This file exists only to catch the transition
+# window: a checkout that pulled the move but has NOT re-run `npm install`
+# still has `core.hooksPath=.husky/_`, and husky's shim exits 0 when the
+# script it sources is absent. Deleting this file outright would therefore
+# reproduce the exact defect the move was made to close — a missing file
+# rendered as a clean push.
 #
-# If the machine is already busy, `GATE_JOBS=2 git push` narrows the pool;
-# `npm run verify -- --jobs 1` reproduces close to the old serial behaviour.
-#
-# To skip in an emergency: `git push --no-verify`. Don't make this a habit.
-npm run verify
+# So it fails loudly instead. Remove `.husky/` entirely once every checkout
+# has run `npm ci` at least once on a commit containing `.githooks/`.
+echo "pre-push: BLOCKED — this checkout's git hooks are stale." >&2
+echo "" >&2
+echo "The pre-push gate moved from .husky/ to the tracked .githooks/ directory" >&2
+echo "(#544), and core.hooksPath in this checkout still points at .husky/_ ." >&2
+echo "Re-wire it — one command, and \`npm ci\` does it too:" >&2
+echo "" >&2
+echo "  npm run hooks:install" >&2
+echo "" >&2
+echo "Then push again. Refusing rather than passing, because a hook that cannot" >&2
+echo "find its script is exactly the silent no-op this move removed." >&2
+exit 1

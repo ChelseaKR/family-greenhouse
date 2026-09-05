@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runs the local quality gate (`npm run verify`, and so `.husky/pre-push`)
+ * Runs the local quality gate (`npm run verify`, and so `.githooks/pre-push`)
  * with its independent steps in parallel.
  *
  * Why: `verify` was a serial `&&` chain of fifteen commands. Measured on a
