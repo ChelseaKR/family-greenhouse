@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Task } from '@/services/plantService';
+import { isOverdue, overdueAt } from '@/utils/date';
 import { isEnabledLocally, notify } from '@/utils/notifications';
 
 const STORAGE_KEY_PREFIX = 'fg.overdueAlerts.announced';
@@ -36,8 +37,17 @@ function saveAnnounced(key: string, ids: Set<string>): void {
 
 /**
  * Fires a single browser notification when previously-not-overdue tasks
- * become overdue. The hook schedules one timeout for the nearest future due
- * date, then reschedules after that boundary; it does not poll.
+ * become overdue. The hook schedules one timeout for the nearest future
+ * overdue transition, then reschedules after that boundary; it does not poll.
+ *
+ * "Overdue" here is `utils/date`'s calendar-day predicate — the same function
+ * the dashboard this hook feeds uses to build its Overdue bucket and its
+ * "Today" row labels. It used to be a plain instant comparison
+ * (`dueAt <= now`), so a task due at 09:00 notified at 09:00 and then sat in
+ * the dashboard's "Today" bucket until local midnight, when the dedupe set
+ * suppressed any second alert: the alert and the red state were never true at
+ * the same time (#591). Anything that classifies a task as overdue must use
+ * `isOverdue`, and anything that wakes up for one must use `overdueAt`.
  *
  * On the FIRST run with data in a browser session, the entire currently-
  * overdue batch is seeded as "already seen" WITHOUT notifying — otherwise
@@ -91,10 +101,16 @@ export function useOverdueAlerts(
       if (!tasks || !isEnabledLocally()) return;
 
       const now = Date.now();
+      const nowDate = new Date(now);
+      // `overdueFrom` is when each task TURNS overdue (local midnight after
+      // its due day), which is both the classification boundary and the only
+      // instant worth waking for. Unparseable dates drop out here.
       const scheduledTasks = tasks
-        .map((task) => ({ task, dueAt: new Date(task.nextDue).getTime() }))
-        .filter((entry) => Number.isFinite(entry.dueAt));
-      const overdue = scheduledTasks.filter(({ dueAt }) => dueAt <= now);
+        .map((task) => ({ task, overdueFrom: overdueAt(task.nextDue) }))
+        .filter((entry) => Number.isFinite(entry.overdueFrom));
+      // The dashboard's own predicate, on the dashboard's own value, read off
+      // one clock reading rather than racing a second one.
+      const overdue = scheduledTasks.filter(({ task }) => isOverdue(task.nextDue, nowDate));
 
       if (announced.current === null) {
         const stored = loadAnnounced(key);
@@ -134,19 +150,20 @@ export function useOverdueAlerts(
 
       if (changed) saveAnnounced(key, announced.current);
 
-      const nextDueAt = scheduledTasks.reduce(
-        (nearest, { dueAt }) => (dueAt > now && dueAt < nearest ? dueAt : nearest),
+      const nextTransitionAt = scheduledTasks.reduce(
+        (nearest, { overdueFrom }) =>
+          overdueFrom > now && overdueFrom < nearest ? overdueFrom : nearest,
         Number.POSITIVE_INFINITY
       );
-      if (Number.isFinite(nextDueAt)) {
-        timeoutId = window.setTimeout(reconcile, Math.min(nextDueAt - now, MAX_TIMEOUT_MS));
+      if (Number.isFinite(nextTransitionAt)) {
+        timeoutId = window.setTimeout(reconcile, Math.min(nextTransitionAt - now, MAX_TIMEOUT_MS));
       }
     };
 
     // Timers can be suspended in background tabs or fire late after a laptop
     // sleeps. Reconcile immediately when the page becomes active/restored so
-    // wall-clock changes cannot leave an already-due task waiting on a stale
-    // timeout. These are event-driven checkpoints, not an interval.
+    // wall-clock changes cannot leave an already-overdue task waiting on a
+    // stale timeout. These are event-driven checkpoints, not an interval.
     const reconcileWhenVisible = () => {
       if (document.visibilityState === 'visible') reconcile();
     };

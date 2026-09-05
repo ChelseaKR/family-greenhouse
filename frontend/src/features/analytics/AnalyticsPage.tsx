@@ -10,7 +10,7 @@ import { Card, CardHeader } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { calendarDaysBetween } from '@/utils/date';
+import { calendarDaysBetween, isOverdue } from '@/utils/date';
 import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
 import { CoverageCard } from './CoverageCard';
@@ -45,14 +45,6 @@ const TASK_TYPE_COLORS: Record<string, string> = {
   repot: 'bg-amber-500',
   custom: 'bg-stone-400',
 };
-
-function isOverdue(nextDue: string, now = new Date()): boolean {
-  const due = new Date(nextDue);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return due.getTime() < today.getTime();
-}
 
 function daysOverdue(nextDue: string, now = new Date()): number {
   // Calendar days between the due date and today, DST-safe (raw local-midnight
