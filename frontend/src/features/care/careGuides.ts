@@ -651,7 +651,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Fiddle Leaf Fig',
     scientificName: 'Ficus lyrata',
     alsoKnownAs: ['Fiddle-Leaf Fig', 'Banjo Fig', 'Ficus lyrata'],
-    metaTitle: 'Fiddle Leaf Fig Care: How Often to Water (and Why It Drops Leaves)',
+    metaTitle: 'Fiddle Leaf Fig Care: Watering + Why It Drops Leaves',
     metaDescription:
       'How often to water a fiddle leaf fig, the light it actually needs, why the leaves get brown spots or drop, and how to keep one alive in a shared home.',
     reviewed: '2026-09-02',
@@ -831,7 +831,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Anthurium',
     scientificName: 'Anthurium andraeanum',
     alsoKnownAs: ['Flamingo Flower', 'Flamingo Lily', 'Painter’s Palette', 'Tail Flower'],
-    metaTitle: 'Anthurium Care: How Often to Water + Why It Stopped Flowering',
+    metaTitle: 'Anthurium Care: Watering + Why It Stopped Flowering',
     metaDescription:
       'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
     reviewed: '2026-09-02',
@@ -891,7 +891,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Chinese Evergreen',
     scientificName: 'Aglaonema',
     alsoKnownAs: ['Aglaonema', 'Silver Bay', 'Chinese Evergreen Plant'],
-    metaTitle: 'Chinese Evergreen (Aglaonema) Care: Watering, Light, Pet Safety',
+    metaTitle: 'Chinese Evergreen Care: Watering, Light, Pet Safety',
     metaDescription:
       'How often to water a Chinese evergreen, why it thrives in low light, what yellow or curling leaves mean, and whether aglaonema is safe for pets.',
     reviewed: '2026-09-02',
@@ -1191,7 +1191,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Christmas Cactus',
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
-    metaTitle: 'Christmas Cactus Care: Watering, Light, and How to Make It Flower',
+    metaTitle: 'Christmas Cactus Care: Watering + How to Make It Bloom',
     metaDescription:
       'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
     reviewed: '2026-09-02',
@@ -1311,7 +1311,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Moth Orchid',
     scientificName: 'Phalaenopsis',
     alsoKnownAs: ['Phalaenopsis', 'Phal', 'Moon Orchid', 'Supermarket Orchid'],
-    metaTitle: 'Orchid Care: How Often to Water a Moth Orchid (and Rebloom It)',
+    metaTitle: 'Orchid Care: Watering a Moth Orchid + Reblooming It',
     metaDescription:
       'How often to water a phalaenopsis orchid, what the roots are telling you, how to get it to flower again, and why orchids are pet-safe.',
     reviewed: '2026-09-02',
@@ -1431,7 +1431,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Nerve Plant',
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
-    metaTitle: 'Nerve Plant (Fittonia) Care: Why It Keeps Fainting + Pet Safety',
+    metaTitle: 'Nerve Plant Care: Why It Keeps Fainting + Pet Safety',
     metaDescription:
       'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
     reviewed: '2026-09-02',
