@@ -135,6 +135,33 @@ export interface InvokeChatModelArgs {
   tools: ToolDefinition[];
   /** Hard token cap on the model's response (defense against runaway output). */
   maxOutputTokens?: number;
+  /**
+   * Epoch-ms ceiling for the WHOLE turn — the missing half of
+   * `BEDROCK_TIMEOUT_MS`, which bounds a hung CALL and says so.
+   *
+   * Set once by the caller at the start of a turn and passed to every call in
+   * it; each one shortens its own timeout to what is left, and refuses
+   * outright once nothing is. Optional: a call made without one keeps the
+   * per-call bound alone, which is what every other caller wants.
+   */
+  deadlineAt?: number;
+}
+
+/**
+ * How long THIS call may take: the per-call bound, clipped to whatever remains
+ * of the turn's deadline. Zero or less means the turn is already out of time.
+ */
+function callTimeoutMs(deadlineAt: number | undefined, now: number): number {
+  if (deadlineAt === undefined) return BEDROCK_TIMEOUT_MS;
+  return Math.min(BEDROCK_TIMEOUT_MS, deadlineAt - now);
+}
+
+/** Thrown instead of starting a call the turn has no time left to make. */
+export class ChatTurnDeadlineError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChatTurnDeadlineError';
+  }
 }
 
 /**
@@ -206,15 +233,21 @@ export async function invokeChatModel(args: InvokeChatModelArgs): Promise<Bedroc
 
   // Bound the round-trip so a hung Bedrock connection can't hold the chat
   // Lambda for its full 90 seconds — same AbortController pattern as
-  // leafHealth.ts / plantIdentification.ts / weather.ts.
+  // leafHealth.ts / plantIdentification.ts / weather.ts. Clipped to the turn's
+  // deadline when it has one, so six bounded calls cannot outlast the Lambda
+  // between them.
+  const timeoutMs = callTimeoutMs(args.deadlineAt, Date.now());
+  if (timeoutMs <= 0) {
+    throw new ChatTurnDeadlineError('Chat turn deadline passed before this Bedrock call');
+  }
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), BEDROCK_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let result;
   try {
     result = await client.send(command, { abortSignal: ctrl.signal });
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
-      throw new Error(`Bedrock timed out after ${BEDROCK_TIMEOUT_MS}ms`, { cause: err });
+      throw new Error(`Bedrock timed out after ${timeoutMs}ms`, { cause: err });
     }
     throw err;
   } finally {
@@ -306,11 +339,15 @@ export async function* invokeChatModelStream(
     body: JSON.stringify(buildPayload(args)),
   });
 
-  // Same bound as the sync path. The signal covers the whole stream, not just
-  // the handshake: a stream that stops producing events mid-turn is exactly the
-  // hang this exists for.
+  // Same bound as the sync path, turn deadline included. The signal covers the
+  // whole stream, not just the handshake: a stream that stops producing events
+  // mid-turn is exactly the hang this exists for.
+  const timeoutMs = callTimeoutMs(args.deadlineAt, Date.now());
+  if (timeoutMs <= 0) {
+    throw new ChatTurnDeadlineError('Chat turn deadline passed before this Bedrock call');
+  }
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), BEDROCK_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const result = await client.send(command, { abortSignal: ctrl.signal });
     if (!result.body) {
@@ -407,7 +444,7 @@ export async function* invokeChatModelStream(
     };
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
-      throw new Error(`Bedrock stream timed out after ${BEDROCK_TIMEOUT_MS}ms`, { cause: err });
+      throw new Error(`Bedrock stream timed out after ${timeoutMs}ms`, { cause: err });
     }
     throw err;
   } finally {

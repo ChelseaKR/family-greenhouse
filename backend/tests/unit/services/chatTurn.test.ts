@@ -299,6 +299,16 @@ describe('runChatTurn', () => {
     expect(vi.mocked(plantService.getPlants)).toHaveBeenCalledWith('hh-1');
     // Bedrock called twice (tool_use turn + final turn).
     expect(vi.mocked(invokeChatModel)).toHaveBeenCalledTimes(2);
+    // #460: every call in the loop carries ONE turn-wide deadline, and it is
+    // the same instant for both — a deadline recomputed per call would bound
+    // each call again and the turn not at all, which is the state this fixes.
+    const deadlines = vi.mocked(invokeChatModel).mock.calls.map((c) => c[0].deadlineAt);
+    expect(deadlines[0]).toBeTypeOf('number');
+    expect(deadlines[1]).toBe(deadlines[0]);
+    // Inside the 90s chat Lambda, with room left for the `finally` that
+    // reconciles the budget reservation and resolves the turn claim.
+    expect(deadlines[0]! - Date.now()).toBeLessThanOrEqual(80_000);
+    expect(deadlines[0]! - Date.now()).toBeGreaterThan(60_000);
     // Combined budget reconcile across both Bedrock calls (actual - reserved).
     expect(vi.mocked(incrementBudget)).toHaveBeenCalledWith('hh-1', {
       inputTokens: 450 - RESERVE_INPUT_TOKENS,
