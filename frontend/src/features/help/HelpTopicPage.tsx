@@ -45,8 +45,8 @@ export function HelpTopicPage() {
   useMetaTags(
     section
       ? {
-          title: `${section.title} — Family Greenhouse help`,
-          description: section.description,
+          title: section.metaTitle ?? `${section.title} — Family Greenhouse help`,
+          description: section.metaDescription ?? section.description,
           canonical: siteUrl(`/help/${section.id}`),
           robots: 'index, follow',
           jsonLd,

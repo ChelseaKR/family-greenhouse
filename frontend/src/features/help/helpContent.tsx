@@ -50,6 +50,20 @@ export interface HelpSection {
   id: string;
   title: string;
   description: string;
+  /**
+   * SERP copy for `/help/<id>`, kept separate from `title`/`description`
+   * because those two have on-page jobs: `title` is the H1 AND the sidebar
+   * nav label, `description` is the PageIntro lede. Optimised for the nav
+   * they read as labels ("Your data", "Tasks and streaks") — strings nobody
+   * types into a search box — and the ledes run 41-74 characters, well under
+   * the ~110 floor, so Google discarded them and synthesised its own snippet
+   * on all nine pages.
+   *
+   * Same split `careGuides.ts` already uses for the same reason. Both fall
+   * back to title/description when absent.
+   */
+  metaTitle?: string;
+  metaDescription?: string;
   articles: HelpArticle[];
   /**
    * Hidden inside the iOS/Android shells. The store builds neither sell plans
@@ -64,6 +78,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'getting-started',
     title: 'Getting started',
     description: 'Your first plant, and what the app does with it.',
+    metaTitle: 'How to Add Your First Plant — Family Greenhouse',
+    metaDescription:
+      'Add your first plant, understand the care tasks Family Greenhouse creates for it automatically, and what happens when a species has no guide.',
     articles: [
       {
         id: 'add-first-plant',
@@ -155,6 +172,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'plants',
     title: 'Plants and photos',
     description: 'Photos, limits, importing, and what happens when a plant dies.',
+    metaTitle: 'Plant Photos, Limits & Importing — Family Greenhouse',
+    metaDescription:
+      'Photo requirements and size limits, how many plants your plan allows, importing an existing collection, and what to do when a plant dies.',
     articles: [
       {
         id: 'photo-requirements',
@@ -293,6 +313,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'tasks',
     title: 'Tasks and streaks',
     description: 'Completing, snoozing, and what the streak number really means.',
+    metaTitle: 'Care Tasks, Snoozing & Streaks — Family Greenhouse',
+    metaDescription:
+      'How marking a task done differs from snoozing it, what the streak number actually counts, and how to pause tasks while you are away.',
     articles: [
       {
         id: 'done-vs-snooze',
@@ -358,6 +381,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'reminders',
     title: 'Reminders and notifications',
     description: 'Why a reminder did or didn’t arrive, and how to turn things off.',
+    metaTitle: 'Why Didn’t My Plant Reminder Arrive? — Family Greenhouse',
+    metaDescription:
+      'Fix missing watering reminders: browser notification permissions, quiet hours and time zones, the weekly digest, and how to turn emails off.',
     articles: [
       {
         id: 'no-reminder',
@@ -545,6 +571,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'households',
     title: 'Households and members',
     description: 'Sharing with the people you live with, and taking access back.',
+    metaTitle: 'Invite Household Members & Share Plants — Family Greenhouse',
+    metaDescription:
+      'Invite the people you live with, the difference between admins and members, what each person can see, and how to remove someone’s access.',
     articles: [
       {
         id: 'invite-someone',
@@ -673,6 +702,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'sitters',
     title: 'Plant sitters',
     description: 'Handing your plants to a neighbour without handing over your account.',
+    metaTitle: 'Plant Sitter Links: Share Care Without Your Password',
+    metaDescription:
+      'Give a neighbour a plant-sitter link instead of your account: what they can see, what they can log, and how to revoke access when you are back.',
     articles: [
       {
         id: 'create-sitter-link',
@@ -751,6 +783,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'billing',
     title: 'Plans, payment and cancelling',
     description: 'What the free plan keeps, what you get for paying, and how to stop paying.',
+    metaTitle: 'Plans, Billing & Cancelling — Family Greenhouse',
+    metaDescription:
+      'What the free plan keeps forever, what paying adds, who in a household can buy, how the 14-day trial works, and how to cancel without losing data.',
     webOnly: true,
     articles: [
       {
@@ -935,6 +970,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'data',
     title: 'Your data',
     description: 'Getting it out, and deleting it for good.',
+    metaTitle: 'Export or Delete Your Plant Data — Family Greenhouse',
+    metaDescription:
+      'Download a copy of your plants, photos and care history, and permanently delete your Family Greenhouse account and everything in it.',
     articles: [
       {
         id: 'export',
@@ -1066,6 +1104,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'limits',
     title: 'Devices and known limits',
     description: 'What works where, and what we haven’t built yet.',
+    metaTitle: 'Device Support & Known Limits — Family Greenhouse',
+    metaDescription:
+      'Which features work on iOS, Android and the web, what needs a browser, and the things we have not built yet — stated plainly rather than hidden.',
     articles: [
       {
         id: 'mobile-apps',
