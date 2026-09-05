@@ -225,6 +225,33 @@ describe('billing handler', () => {
       expect(getCreditBalance).toHaveBeenCalledWith('hh-1');
     });
 
+    it('publishes trialAvailable on the wire, so the UI can qualify its trial copy (#602)', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+
+      // A returning household: cancelled, trial already spent. Before #602 the
+      // wire carried nothing about this, so Settings → Billing promised it 14
+      // free days immediately above a button that charges at once.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'seedling',
+        stripeCustomerId: 'cus_1',
+        status: 'canceled',
+        trialAvailable: false,
+      });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('trialAvailable');
+      expect(body.trialAvailable).toBe(false);
+      // The date behind the boolean stays internal.
+      expect(body).not.toHaveProperty('trialConsumedAt');
+    });
+
     it('publishes the top-up credit balance, and an UNREADABLE balance as null rather than 0', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');

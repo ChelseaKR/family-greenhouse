@@ -10,7 +10,10 @@
 Family Greenhouse accepts free Seedling accounts for one home with up to 3
 people and 20 plants; no credit card is required. Paid Garden and Greenhouse
 plans are sold on the hosted web app through Stripe Checkout as **monthly
-subscriptions that start with a 14-day trial**, and a household admin manages
+subscriptions, a household's first of which starts with a 14-day trial** (the
+trial is once per household — `trialConsumedAt` in
+`backend/src/services/billing.ts` survives cancellation, so a household that
+resubscribes is charged at once), and a household admin manages
 the plan from Settings → Billing via the Stripe customer portal. Paid plans are
 not sold inside the mobile apps.
 

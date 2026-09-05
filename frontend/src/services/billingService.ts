@@ -129,6 +129,13 @@ export interface SubscriptionState {
    *  active/trialing throughout, so this is the only signal that the plan is
    *  ending — without it a cancellation is invisible in the UI. */
   cancelAtPeriodEnd?: boolean;
+  /** Whether a NEW subscription checkout for this household would include the
+   *  14-day free trial. The trial is once per household, not once per
+   *  checkout, so a household that had one before and resubscribes is charged
+   *  at once. `undefined` is UNKNOWN — an older backend, or a response cached
+   *  before the field existed — and must never be read as `false`; go through
+   *  `resolveTrialOffer`, which keeps the three states apart. */
+  trialAvailable?: boolean;
   /** Legacy shape: present only when both counters are known. */
   usage?: PlanUsage;
   /** Additive nullable shape. Older backends do not send it. */
@@ -136,6 +143,24 @@ export interface SubscriptionState {
   /** Identification top-up credits. `null` means the balance could not be
    *  read — unknown, never zero. Absent from older backends. */
   identifyCredits?: IdentifyCreditBalance | null;
+}
+
+/**
+ * Whether this household's next subscription would start with the free trial.
+ *
+ * Three states, not two, for the same reason `PlanLimitState` has three: a
+ * missing `trialAvailable` is not evidence that the trial is gone. Reading
+ * `undefined` as "used" would tell a first-time buyer on an older backend that
+ * they are about to be charged when they are not, which is the mirror image of
+ * the defect this exists to fix — so `unknown` is its own answer and gets its
+ * own sentence, one that is true whichever way the real state falls.
+ */
+export type TrialOffer = 'available' | 'used' | 'unknown';
+
+export function resolveTrialOffer(subscription?: SubscriptionState | null): TrialOffer {
+  if (subscription?.trialAvailable === true) return 'available';
+  if (subscription?.trialAvailable === false) return 'used';
+  return 'unknown';
 }
 
 /** Prefer the nullable contract, with rolling-deploy fallback to legacy usage. */

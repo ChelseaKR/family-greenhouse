@@ -16,15 +16,21 @@
  * middle one is money:
  *
  *   subscription_activated  → a 14-day TRIAL began (or a lifetime purchase
- *                             completed — the one case where it is revenue).
+ *                             completed — the one case where it is always
+ *                             revenue).
  *   subscription_paid       → the subscription became `active`, which Stripe
  *                             only does once an invoice has actually been
  *                             paid. This is the paid conversion.
  *   subscription_deactivated→ the subscription was deleted at Stripe. Churn.
  *
- * Do not read `subscription_activated` as revenue for recurring plans: every
- * subscription checkout carries `trial_period_days: 14`, so no money has moved
- * when it fires. See docs/analytics.md.
+ * Do not read `subscription_activated` as revenue for recurring plans: a
+ * household's FIRST subscription checkout carries `trial_period_days: 14`, so
+ * no money has moved when it fires. It is not a reliable "no money yet" marker
+ * either — the trial is once per household (`trialConsumedAt`), so a household
+ * that resubscribes gets no trial days and IS charged at checkout. Neither
+ * direction can be inferred from this event alone; `subscription_paid` is the
+ * one that means money. See docs/analytics.md and the caveat at the emit site
+ * in `services/billing.ts`.
  *
  * Privacy / safety:
  *  - distinct_id is a stable household-scoped id (`household:<householdId>`)

@@ -291,7 +291,12 @@ webhook the first time Stripe confirms a trial (a `trialing` subscription, a
 subscription carrying trial dates, or a subscription-mode Session that required
 no payment) and is never cleared by cancellation. Re-subscribing after
 cancelling stays deliberately possible; collecting a second 14 free days does
-not. The marker is internal and is not exposed by `GET /billing/me`.
+not. The marker itself is internal and is not exposed by `GET /billing/me`;
+what that endpoint publishes is the derived boolean `trialAvailable`, so the UI
+can say which of the two a household is about to buy without ever learning the
+date (#602). Every user-facing sentence about the trial has to be written for
+both cases — the acquisition surfaces say a household's FIRST subscription,
+and Settings → Billing branches on `trialAvailable`.
 
 ### Price reconciliation
 
@@ -322,7 +327,7 @@ change entitlement: `invoice.paid`, `invoice.upcoming`,
 alongside `invoice.paid` for the same money, and handling both would send two
 receipts for one charge.
 
-Three of these also emit a server-side product event (`backend/src/utils/serverAnalytics.ts`). The distinction that matters: every subscription checkout carries `trial_period_days: 14`, so checkout completion is a **trial start**, and the money-moved signal is the later `trialing → active` transition. See [`docs/analytics.md`](analytics.md) for the full contract — including why paid conversion keys off `customer.subscription.updated` rather than `invoice.payment_succeeded`, and how the dedupe ledger keeps an at-least-once redelivery from double-counting revenue.
+Three of these also emit a server-side product event (`backend/src/utils/serverAnalytics.ts`). The distinction that matters: a subscription checkout carries `trial_period_days: 14` only when the household has not consumed its trial (see "The free trial is once per household" above), so for a household's FIRST subscription checkout completion is a **trial start**, and the money-moved signal is the later `trialing → active` transition. A household that already spent its trial gets no trial days and is charged at checkout, so `subscription_activated` is not a reliable "no money has moved yet" marker for it — the caveat `applyStripeEvent` already spells out at the emit site. See [`docs/analytics.md`](analytics.md) for the full contract — including why paid conversion keys off `customer.subscription.updated` rather than `invoice.payment_succeeded`, and how the dedupe ledger keeps an at-least-once redelivery from double-counting revenue.
 
 ## Billing emails
 

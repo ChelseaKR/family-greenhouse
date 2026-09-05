@@ -49,7 +49,7 @@ export function PricingPage() {
       ? PUBLIC_REGISTRATION_AVAILABLE
         ? 'Create a free Family Greenhouse account for one home, up to 3 people and 20 plants. Paid plans, purchases, and plan changes remain paused.'
         : 'Paid plans, purchases, plan changes, and new account registration are paused.'
-      : 'Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. Paid plans begin with a 14-day trial.',
+      : 'Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.',
     canonical: siteUrl('/pricing'),
   });
 
@@ -88,7 +88,7 @@ export function PricingPage() {
             ? PUBLIC_REGISTRATION_AVAILABLE
               ? 'Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.'
               : 'New account registration, paid plans, purchases, and plan changes are currently paused.'
-            : 'Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands — both begin with a 14-day trial you can cancel any time.'
+            : 'Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.'
         }
       />
 
