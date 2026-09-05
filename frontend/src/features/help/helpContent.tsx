@@ -631,13 +631,14 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Someone can’t join — it says the household is full.',
         a: (
           <p>
-            Member caps are 6 on Seedling, 6 on Garden and 50 on Greenhouse, and they are checked at
-            the moment someone joins. Note that Garden raises your plant limit but not your member
-            limit — Greenhouse is the tier that adds people. Either remove a member you no longer
-            need, or move to Greenhouse.
+            The free <strong>Seedling</strong> plan holds three people. <strong>Garden</strong> and{' '}
+            <strong>Greenhouse</strong> have no member limit at all, so Garden — the cheaper of the
+            two — is the tier that lifts this. The cap is checked at the moment someone joins, and
+            it only ever blocks a new join: if you are already over it, everyone you have stays, and
+            stays editable. Either remove a member you no longer need, or move to Garden.
           </p>
         ),
-        text: 'Member caps are 6 on Seedling, 6 on Garden and 50 on Greenhouse, and they are checked at the moment someone joins. Garden raises your plant limit but not your member limit; Greenhouse is the tier that adds people. Either remove a member you no longer need, or move to Greenhouse.',
+        text: 'The free Seedling plan holds three people. Garden and Greenhouse have no member limit at all, so Garden, the cheaper of the two, is the tier that lifts this. The cap is checked at the moment someone joins, and it only ever blocks a new join: if you are already over it, everyone you have stays, and stays editable. Either remove a member you no longer need, or move to Garden.',
       },
       {
         id: 'multiple-households',
@@ -679,13 +680,15 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <p>
             An admin creates a sitter link on the <strong>Household</strong> page, choosing how long
-            it should last (up to 60 days; the form suggests 14). You send that link to your sitter
-            — they need no account, no password and no app. The link is shown{' '}
+            it should last — up to 7 days on the free <strong>Seedling</strong> plan, and up to 90
+            on <strong>Garden</strong> and <strong>Greenhouse</strong>. The form suggests 14, or
+            your plan&rsquo;s maximum where that is lower. You send that link to your sitter — they
+            need no account, no password and no app. The link is shown{' '}
             <strong>once, at the moment you create it</strong>, so copy it then; we cannot show it
             to you again afterwards.
           </p>
         ),
-        text: 'An admin creates a sitter link on the Household page, choosing how long it should last, up to 60 days, with the form suggesting 14. You send that link to your sitter: they need no account, no password and no app. The link is shown once, at the moment you create it, so copy it then; we cannot show it to you again afterwards.',
+        text: 'An admin creates a sitter link on the Household page, choosing how long it should last: up to 7 days on the free Seedling plan, and up to 90 on Garden and Greenhouse. The form suggests 14, or your plan maximum where that is lower. You send that link to your sitter: they need no account, no password and no app. The link is shown once, at the moment you create it, so copy it then; we cannot show it to you again afterwards.',
       },
       {
         id: 'sitter-sees',
@@ -733,12 +736,13 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <p>
             An admin revokes the link on the <strong>Household</strong> page and it stops working
-            immediately. Otherwise it expires by itself on the date you chose, at most 60 days out.
-            Anyone holding the link can use it — it is the credential, so only send it to someone
-            you trust, and revoke it if you forward it to the wrong person.
+            immediately. Otherwise it expires by itself on the date you chose — at most 7 days out
+            on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the
+            link can use it — it is the credential, so only send it to someone you trust, and revoke
+            it if you forward it to the wrong person.
           </p>
         ),
-        text: 'An admin revokes the link on the Household page and it stops working immediately. Otherwise it expires by itself on the date you chose, at most 60 days out. Anyone holding the link can use it, because it is the credential, so only send it to someone you trust and revoke it if you forward it to the wrong person.',
+        text: 'An admin revokes the link on the Household page and it stops working immediately. Otherwise it expires by itself on the date you chose: at most 7 days out on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the link can use it, because it is the credential, so only send it to someone you trust and revoke it if you forward it to the wrong person.',
       },
     ],
   },
