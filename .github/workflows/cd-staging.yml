@@ -213,7 +213,9 @@ jobs:
             --exclude "*.html" \
             --exclude "sw.js" \
             --exclude "push-handler.js" \
-            --exclude "*.json"
+            --exclude "*.json" \
+            --exclude "robots.txt" \
+            --exclude "sitemap.xml"
 
           # All HTML: the prerendered routes, the homepage, and app-shell.html
           # (CloudFront's error response + the service worker's offline
@@ -228,6 +230,19 @@ jobs:
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
           aws s3 cp dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+          # robots.txt and sitemap.xml match none of the excludes above, so
+          # they were landing in the immutable tier with a 1-year max-age. The
+          # post-deploy invalidation flushes the CloudFront edge, but the
+          # RESPONSE still carries max-age=31536000 — so Googlebot's own cache
+          # keeps the old copy, and a new route added to the sitemap goes
+          # undiscovered through that channel until the crawler's entry ages
+          # out. An hour is short enough to propagate and long enough to cost
+          # nothing.
+          aws s3 cp dist/robots.txt "s3://${FRONTEND_BUCKET}/robots.txt" \
+            --cache-control "max-age=3600,public"
+          aws s3 cp dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
+            --cache-control "max-age=3600,public"
 
       - name: Invalidate CloudFront
         env:

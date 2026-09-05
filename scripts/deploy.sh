@@ -65,16 +65,32 @@ VITE_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
 
 # Deploy frontend
 echo "Deploying frontend to S3..."
+# Hashed, immutable assets. The exclude here used to be the literal
+# "index.html", which matches ONLY the root key — so pricing/index.html,
+# blog/<slug>/index.html and app-shell.html all went up with a 1-year
+# immutable cache at URLs that never change. The CD workflows already do the
+# two-phase split below; this script had drifted from them.
 aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
     --delete \
     --cache-control "max-age=31536000,public" \
-    --exclude "index.html" \
+    --exclude "*.html" \
     --exclude "sw.js" \
     --exclude "push-handler.js" \
-    --exclude "*.json"
+    --exclude "*.json" \
+    --exclude "robots.txt" \
+    --exclude "sitemap.xml"
 
-aws s3 cp frontend/dist/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+# All HTML, rebuilt every deploy at stable URLs.
+aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
+    --delete \
+    --exclude "*" \
+    --include "*.html" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+aws s3 cp frontend/dist/robots.txt "s3://${FRONTEND_BUCKET}/robots.txt" \
+    --cache-control "max-age=3600,public"
+aws s3 cp frontend/dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
+    --cache-control "max-age=3600,public"
 aws s3 cp frontend/dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 aws s3 cp frontend/dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
