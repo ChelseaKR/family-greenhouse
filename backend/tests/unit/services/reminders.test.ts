@@ -933,6 +933,43 @@ describe('reminders service', () => {
     expect(summary).toMatchObject({ households: 2, sent: 0, failed: 2 });
   });
 
+  // #458. The serial loop had no clock in it: past a few hundred households
+  // it ran past the 30-second Lambda timeout and was KILLED wherever it
+  // happened to be, and EventBridge's retry restarted it at household #1 and
+  // died in the same place. The households in the tail were not delayed, they
+  // were unreachable — and the run summary said nothing, because there was no
+  // summary from a killed process at all.
+  it('stops on its deadline and reports what it could not reach, instead of being killed mid-list', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const tasks = await import('../../../src/services/taskService.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const { remindAllHouseholds } = await import('../../../src/services/reminders.js');
+    await mockConditionalMarkerStore();
+    await mockActivePlants(['p1']);
+    await mockNoPestOptIns();
+
+    vi.mocked(household.listAllHouseholdIds).mockResolvedValue(['hhA', 'hhB']);
+    vi.mocked(tasks.getTasksDueBy).mockResolvedValue([
+      { nextDue: soon, plantId: 'p1', assignedTo: 'u1' },
+    ] as never);
+
+    // A budget that is already spent — the state the old loop reached by
+    // running into the timeout, except now it is observed rather than fatal.
+    const result = await remindAllHouseholds(NOW, { deadlineAt: Date.now() - 1 });
+
+    expect(result.households).toBe(2);
+    expect(result.attempted).toBe(0);
+    expect(result.truncated).toBe(true);
+    // Nothing was reminded, and the summary line says so rather than reading
+    // like a calm hour: `households: 2, sent: 0` on its own is exactly what a
+    // quiet hour looks like.
+    const summary = vi
+      .mocked(logger.info)
+      .mock.calls.map(([fields]) => fields as Record<string, unknown>)
+      .find((fields) => fields?.msg === 'reminders.run_complete');
+    expect(summary).toMatchObject({ households: 2, attempted: 0, sent: 0, truncated: true });
+  });
+
   describe('pest alerts wiring', () => {
     it('delivers pest alerts to opted-in members and marks AFTER successful delivery', async () => {
       const household = await import('../../../src/services/householdService.js');

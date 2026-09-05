@@ -457,8 +457,12 @@ describe('runWeeklyDigests', () => {
 
     await expect(runWeeklyDigests(NOW)).resolves.toEqual({
       households: 2,
+      // Both were reached: an untruncated run visits every household, so
+      // `attempted` equals `households` and nothing was left for next time.
+      attempted: 2,
       sent: 1,
       failed: 1,
+      truncated: false,
     });
   });
 });

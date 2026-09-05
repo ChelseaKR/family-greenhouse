@@ -68,11 +68,11 @@ The title of this page is deliberate: alarms and the dashboard are a
 `enable_monitoring_dashboard` (root variables, both defaulting to `true`) gate
 every `aws_cloudwatch_metric_alarm` and the `aws_cloudwatch_dashboard` in
 `infrastructure/modules/monitoring`. Production sets neither and therefore keeps
-all 26 alarms and its dashboard; `environments/staging/terraform.tfvars` sets
+all 28 alarms and its dashboard; `environments/staging/terraform.tfvars` sets
 both `false`.
 
-Six of those 26 were added on 2026-09-04 for two blind spots, at roughly
-$0.60/month:
+Eight of those 28 were added on 2026-09-04 for three blind spots, at roughly
+$0.80/month:
 
 - **Scheduled-run failures** (`*-reminders-run-failed`, `*-digests-run-failed`).
   The reminder and digest fan-outs catch each per-household error, count it and
@@ -95,6 +95,25 @@ $0.60/month:
   at `> 0` over one period; `chat` keeps the volume threshold that suits a
   user-facing path. `Duration` alarms stay on `reminders` + `chat` only — a
   weekly digest legitimately runs long.
+- **Scheduled-run truncation** (`*-reminders-run-truncated`,
+  `*-digests-run-truncated`). Read this one next to the first bullet, because
+  it closes the hole that bullet's fix would otherwise have opened. The
+  fan-outs used to walk every household in a serial loop with no clock in it;
+  past a few hundred households a run went past its 30-second timeout and was
+  killed wherever it happened to be, and EventBridge's retry restarted it at
+  household #1 and died in the same place — so the tail of the list was not
+  delayed, it was unreachable. That failure at least produced a Lambda
+  `Errors` point. `services/scheduledFanOut.ts` now stops cleanly on a
+  deadline and resumes next run from where it stopped, which fixes the tail —
+  and makes the run RETURN SUCCESSFULLY, deleting the only signal the old
+  shape had. So the run summaries carry `truncated` and these alarms watch it.
+  It is deliberately not folded into `failed`: nobody was mailed wrongly and
+  nothing was lost, so this is a capacity signal (raise the timeout, or land
+  the GSI household directory that removes the full-table scan), not a
+  correctness one. Reminders alarm only on two consecutive truncated hours,
+  because one hour is caught up by the next; digests alarm on one, because the
+  four Monday runs are the whole budget for that week and there is no next run
+  to catch up in.
 - **SES reputation** (`*-ses-bounce-rate`, `*-ses-complaint-rate`).
   `reputation_metrics_enabled` has been on since the email module shipped and
   nothing watched what it published. AWS reviews an identity at a 5% bounce

@@ -63,6 +63,7 @@ import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
 import * as emailSuppression from './emailSuppression.js';
 import * as escalation from './escalation.js';
+import * as scheduledFanOut from './scheduledFanOut.js';
 import { resolveEmailLocale } from './email/locale.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -835,28 +836,50 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
  * Hourly scan across every household. Best-effort per household — one
  * household's failure must not abort the rest of the run.
  *
- * `households` is how many were ATTEMPTED and `failed` how many of those
- * threw. Without `failed`, a run where every household crashed summarised
- * as `{ households: N, sent: 0 }` — indistinguishable from "nobody had
- * anything due".
+ * `households` is how many were ENUMERATED, `attempted` how many of those
+ * this run got to, and `failed` how many of those threw. Without `failed`, a
+ * run where every household crashed summarised as `{ households: N, sent: 0 }`
+ * — indistinguishable from "nobody had anything due".
+ *
+ * `attempted` and `truncated` exist because the serial loop this replaced had
+ * no clock in it: past a few hundred households it ran past the 30-second
+ * Lambda timeout and was killed wherever it happened to be, and EventBridge's
+ * retry restarted it at household #1 and died in the same place. The
+ * households in the tail were not delayed, they were unreachable, and nothing
+ * anywhere said so. `services/scheduledFanOut.ts` bounds the concurrency,
+ * stops on a deadline instead of being killed, and resumes the next hour from
+ * where it stopped; the counters here are what make a run that could not
+ * finish visible rather than merely quiet.
  */
 export async function remindAllHouseholds(
-  now: Date = new Date()
-): Promise<{ households: number; sent: number; failed: number }> {
+  now: Date = new Date(),
+  options: { deadlineAt?: number } = {}
+): Promise<{
+  households: number;
+  attempted: number;
+  sent: number;
+  failed: number;
+  truncated: boolean;
+}> {
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
   let failed = 0;
-  for (const id of ids) {
-    try {
-      sent += await remindHousehold(id, now);
-    } catch (err) {
-      // Best-effort, but never silent: a swallowed error here previously hid
-      // real failures (e.g. Intl throwing on a corrupt stored timezone, which
-      // aborted reminders for every member after the bad one).
-      failed += 1;
-      logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
-    }
-  }
+  const fanOut = await scheduledFanOut.fanOutHouseholds(
+    'reminders',
+    ids,
+    async (id) => {
+      try {
+        sent += await remindHousehold(id, now);
+      } catch (err) {
+        // Best-effort, but never silent: a swallowed error here previously hid
+        // real failures (e.g. Intl throwing on a corrupt stored timezone, which
+        // aborted reminders for every member after the bad one).
+        failed += 1;
+        logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
+      }
+    },
+    { deadlineAt: options.deadlineAt }
+  );
   // The run's own summary, as a structured line, because the counters existed
   // nowhere else: the per-household catch above logs at WARN (below every
   // metric filter) and the handler then returns normally, so an hour in which
@@ -866,8 +889,21 @@ export async function remindAllHouseholds(
   // this mirrors; the metric filters in
   // infrastructure/modules/monitoring/main.tf read both.
   logger.info(
-    { households: ids.length, sent, failed, msg: 'reminders.run_complete' },
+    {
+      households: fanOut.total,
+      attempted: fanOut.attempted,
+      sent,
+      failed,
+      truncated: fanOut.truncated,
+      msg: 'reminders.run_complete',
+    },
     'reminders.run_complete'
   );
-  return { households: ids.length, sent, failed };
+  return {
+    households: fanOut.total,
+    attempted: fanOut.attempted,
+    sent,
+    failed,
+    truncated: fanOut.truncated,
+  };
 }

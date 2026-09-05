@@ -35,6 +35,7 @@ import * as plantService from './plantService.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
 import * as digestReport from './digestReport.js';
+import * as scheduledFanOut from './scheduledFanOut.js';
 import { mintUnsubscribeToken, type EmailCategory } from './email/capability.js';
 import { t, tn, formatYear, type EmailLocale } from './email/catalog.js';
 import { analyticsUrl, plantUrl, settingsUrl, unsubscribeUrl } from './email/links.js';
@@ -383,26 +384,52 @@ export async function digestHousehold(
  * remindAllHouseholds).
  */
 export async function runWeeklyDigests(
-  now: Date = new Date()
-): Promise<{ households: number; sent: number; failed: number }> {
+  now: Date = new Date(),
+  options: { deadlineAt?: number } = {}
+): Promise<{
+  households: number;
+  attempted: number;
+  sent: number;
+  failed: number;
+  truncated: boolean;
+}> {
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
-  // `households` counts attempts; `failed` keeps a run where every household
-  // threw from summarising as "nobody had anything due".
+  // `households` counts what was enumerated and `attempted` what this run got
+  // to; `failed` keeps a run where every household threw from summarising as
+  // "nobody had anything due".
   let failed = 0;
-  for (const id of ids) {
-    try {
-      sent += await digestHousehold(id, now);
-    } catch (err) {
-      failed += 1;
-      logger.warn({ err: (err as Error).message, householdId: id }, 'digest.household_failed');
-    }
-  }
+  const fanOut = await scheduledFanOut.fanOutHouseholds(
+    'weeklyDigest',
+    ids,
+    async (id) => {
+      try {
+        sent += await digestHousehold(id, now);
+      } catch (err) {
+        failed += 1;
+        logger.warn({ err: (err as Error).message, householdId: id }, 'digest.household_failed');
+      }
+    },
+    { deadlineAt: options.deadlineAt }
+  );
   logger.info(
-    { households: ids.length, sent, failed, msg: 'digest.run_complete' },
+    {
+      households: fanOut.total,
+      attempted: fanOut.attempted,
+      sent,
+      failed,
+      truncated: fanOut.truncated,
+      msg: 'digest.run_complete',
+    },
     'digest.run_complete'
   );
-  return { households: ids.length, sent, failed };
+  return {
+    households: fanOut.total,
+    attempted: fanOut.attempted,
+    sent,
+    failed,
+    truncated: fanOut.truncated,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -776,23 +803,51 @@ export async function recapHousehold(
  */
 export async function runYearRecaps(
   year?: number,
-  now: Date = new Date()
-): Promise<{ households: number; sent: number; failed: number; year: number }> {
+  now: Date = new Date(),
+  options: { deadlineAt?: number } = {}
+): Promise<{
+  households: number;
+  attempted: number;
+  sent: number;
+  failed: number;
+  truncated: boolean;
+  year: number;
+}> {
   const recapYear = year ?? defaultRecapYear(now);
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
   let failed = 0;
-  for (const id of ids) {
-    try {
-      sent += await recapHousehold(id, recapYear, now);
-    } catch (err) {
-      failed += 1;
-      logger.warn({ err: (err as Error).message, householdId: id }, 'recap.household_failed');
-    }
-  }
+  const fanOut = await scheduledFanOut.fanOutHouseholds(
+    'yearRecap',
+    ids,
+    async (id) => {
+      try {
+        sent += await recapHousehold(id, recapYear, now);
+      } catch (err) {
+        failed += 1;
+        logger.warn({ err: (err as Error).message, householdId: id }, 'recap.household_failed');
+      }
+    },
+    { deadlineAt: options.deadlineAt }
+  );
   logger.info(
-    { households: ids.length, sent, failed, year: recapYear, msg: 'recap.run_complete' },
+    {
+      households: fanOut.total,
+      attempted: fanOut.attempted,
+      sent,
+      failed,
+      truncated: fanOut.truncated,
+      year: recapYear,
+      msg: 'recap.run_complete',
+    },
     'recap.run_complete'
   );
-  return { households: ids.length, sent, failed, year: recapYear };
+  return {
+    households: fanOut.total,
+    attempted: fanOut.attempted,
+    sent,
+    failed,
+    truncated: fanOut.truncated,
+    year: recapYear,
+  };
 }

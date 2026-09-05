@@ -109,6 +109,32 @@ const checks = [
     /-\(reminders\|digests\|emailEvents\)-/u.test(monitoring) &&
       /contains\(local\.scheduled_lambda_names, each\.value\) \? 0 : 5/u.test(monitoring),
   ],
+  // #458. The scheduled fan-out now stops on a deadline and resumes next run
+  // instead of being killed by the Lambda timeout mid-list. That is the fix,
+  // but it converts a timeout (a Lambda `Errors` point the alarm above fires
+  // on) into a successful return — so without a signal of its own, "the job
+  // could not get through the fleet" would go back to being invisible. These
+  // three checks are what keep it visible.
+  [
+    'scheduled runs report whether they finished the fleet',
+    /truncated: fanOut\.truncated/u.test(read('backend/src/services/reminders.ts')) &&
+      /truncated: fanOut\.truncated/u.test(read('backend/src/services/digest.ts')) &&
+      /summary\.truncated = fanOut\.truncated/u.test(
+        read('backend/src/services/householdEmails.ts')
+      ),
+  ],
+  [
+    'scheduled-run truncation metric filters exist for reminders and digests',
+    /reminders\.run_complete\\" && \$\.truncated IS TRUE/u.test(monitoring) &&
+      /household_email\.run_complete\\" && \$\.truncated IS TRUE/u.test(monitoring) &&
+      /digest\.run_complete\\" && \$\.truncated IS TRUE/u.test(monitoring) &&
+      /recap\.run_complete\\" && \$\.truncated IS TRUE/u.test(monitoring),
+  ],
+  [
+    'scheduled-run truncation alarms above zero',
+    /aws_cloudwatch_metric_alarm" "reminders_run_truncated/u.test(monitoring) &&
+      /aws_cloudwatch_metric_alarm" "digests_run_truncated/u.test(monitoring),
+  ],
   // reputation_metrics_enabled has been on since the email module shipped; the
   // numbers it publishes were watched by nothing. A paused SES identity's
   // first symptom is that password resets stop.
