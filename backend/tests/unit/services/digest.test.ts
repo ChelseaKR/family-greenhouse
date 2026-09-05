@@ -44,6 +44,11 @@ vi.mock('../../../src/services/emailNotifier.js', () => ({
 // gets mailed, in what language, once.
 vi.mock('../../../src/services/digestReport.js', () => ({
   gatherDigestReport: vi.fn(),
+  // #459: the cheap at-risk gate `digestHousehold` now runs BEFORE any member
+  // or preference read. Defaults to "worth sending" so every existing test
+  // reaches the code it was written for.
+  gatherAtRisk: vi.fn(async () => ({ status: 'ok', rows: [{}], onTrack: 0, orphanTasks: 0 })),
+  atRiskIsWorthSending: vi.fn(() => true),
   digestIsWorthSending: vi.fn(() => true),
   composeDigestEmail: vi.fn(() => ({
     subject: 'Weekly digest: 1 plant could use some care',
@@ -150,6 +155,7 @@ beforeEach(async () => {
   const report = await import('../../../src/services/digestReport.js');
   vi.mocked(report.gatherDigestReport).mockResolvedValue(okReport() as never);
   vi.mocked(report.digestIsWorthSending).mockReturnValue(true);
+  vi.mocked(report.atRiskIsWorthSending).mockReturnValue(true);
   vi.mocked(report.readHouseholdName).mockResolvedValue({
     status: 'ok',
     name: 'The Kim House',
@@ -363,6 +369,112 @@ describe('suppression must not burn the weekly marker', () => {
   });
 });
 
+describe('weekly digest: recipient gates run before the report is built (#459)', () => {
+  // The EventBridge rule fires four times on Monday so households in every
+  // timezone get their digest at a reasonable local hour, and the per-ISO-week
+  // marker is what stops them getting four. That marker used to be the LAST
+  // gate, so runs 2, 3 and 4 rebuilt the whole report for every household that
+  // had already been digested at 00:00, in order to discover that it had.
+  it('does not build the report when every member was already digested this week', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    // Run 1 of the Monday: sends, and burns the week's marker.
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+    expect(report.gatherDigestReport).toHaveBeenCalledTimes(1);
+
+    // Runs 2, 3 and 4: the marker already says this member has been digested,
+    // so there is nobody to build a report for.
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    expect(report.gatherDigestReport).toHaveBeenCalledTimes(1);
+
+    // And the skip is on the record — a household that stops receiving digests
+    // has to be explicable from the logs.
+    const skips = info.mock.calls
+      .map(([fields]) => fields as unknown as Record<string, unknown>)
+      .filter((fields) => fields?.msg === 'digest.skipped_no_recipients');
+    expect(skips).toHaveLength(3);
+    expect(skips[0]).toMatchObject({ householdId: 'hh', members: 1 });
+    info.mockRestore();
+  });
+
+  it('does not build the report when every member is inside their quiet hours', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA, memberB] as never);
+    await mockPrefs({ u1: {}, u2: {} });
+    vi.mocked(prefs.isInDndWindow).mockReturnValue(true);
+
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    // Deferred, not skipped: neither weekly marker was claimed, so a later run
+    // in the same week still delivers.
+    expect(report.gatherDigestReport).not.toHaveBeenCalled();
+    // `vi.clearAllMocks()` clears calls, not implementations — restore the
+    // shared default so this cannot leak into the next test.
+    vi.mocked(prefs.isInDndWindow).mockReturnValue(false);
+  });
+
+  it('does not build the report when nobody has the weekly digest turned on', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: { weeklyDigest: false } });
+
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    expect(report.gatherDigestReport).not.toHaveBeenCalled();
+  });
+
+  it('reads the at-risk rows once and hands them to the report, not twice', async () => {
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    const atRisk = { status: 'ok', rows: [{ plantId: 'p1' }], onTrack: 0, orphanTasks: 0 };
+    vi.mocked(report.gatherAtRisk).mockResolvedValue(atRisk as never);
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    expect(await digestHousehold('hh', NOW)).toBe(1);
+
+    expect(report.gatherAtRisk).toHaveBeenCalledTimes(1);
+    // Gating on it early would be a false economy if the report then read it
+    // again — the two queries would just move rather than disappear.
+    expect(vi.mocked(report.gatherDigestReport).mock.calls[0][2]).toBe(atRisk);
+  });
+
+  it('still checks the away set, which only the report can answer', async () => {
+    // The issue proposed hoisting this one with the others. It cannot be
+    // hoisted: `awayUserIds` is produced BY the report, out of the household's
+    // vacation map. It stays below, where it costs nothing.
+    const household = await import('../../../src/services/householdService.js');
+    const report = await import('../../../src/services/digestReport.js');
+    const email = await import('../../../src/services/emailNotifier.js');
+    const { digestHousehold } = await import('../../../src/services/digest.js');
+    await mockConditionalMarkerStore();
+    vi.mocked(report.gatherDigestReport).mockResolvedValue(
+      okReport({ awayUserIds: new Set(['u1']) }) as never
+    );
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+    await mockPrefs({ u1: {} });
+
+    expect(await digestHousehold('hh', NOW)).toBe(0);
+    expect(email.sendEmailAccepted).not.toHaveBeenCalled();
+  });
+});
+
 describe('weekly digest: nothing to say', () => {
   it('skips the send and logs why rather than mailing a cheerful nothing', async () => {
     const household = await import('../../../src/services/householdService.js');
@@ -370,6 +482,9 @@ describe('weekly digest: nothing to say', () => {
     const report = await import('../../../src/services/digestReport.js');
     const { digestHousehold } = await import('../../../src/services/digest.js');
     await mockConditionalMarkerStore();
+    // #459 moved this decision onto the at-risk result alone so it can be made
+    // from two reads instead of thirteen; `digestIsWorthSending` still agrees.
+    vi.mocked(report.atRiskIsWorthSending).mockReturnValue(false);
     vi.mocked(report.digestIsWorthSending).mockReturnValue(false);
     vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
     await mockPrefs({ u1: {} });
@@ -378,6 +493,8 @@ describe('weekly digest: nothing to say', () => {
     expect(email.sendEmailAccepted).not.toHaveBeenCalled();
     // No member or preference reads at all on the quiet path.
     expect(household.getHouseholdMembers).not.toHaveBeenCalled();
+    // …and none of the eleven reads the rest of the report costs, either.
+    expect(report.gatherDigestReport).not.toHaveBeenCalled();
   });
 
   it('STILL sends when the at-risk read failed, so silence is not an all-clear', async () => {
@@ -386,7 +503,11 @@ describe('weekly digest: nothing to say', () => {
     const report = await import('../../../src/services/digestReport.js');
     const { digestHousehold } = await import('../../../src/services/digest.js');
     await mockConditionalMarkerStore();
-    // The real predicate, against a report whose at-risk read failed.
+    // The real predicates, against an at-risk read that failed.
+    vi.mocked(report.atRiskIsWorthSending).mockImplementation(
+      (a) => a.status !== 'ok' || a.rows.length > 0
+    );
+    vi.mocked(report.gatherAtRisk).mockResolvedValue({ status: 'unavailable' } as never);
     vi.mocked(report.digestIsWorthSending).mockImplementation(
       (r) => r.atRisk.status !== 'ok' || r.atRisk.rows.length > 0
     );

@@ -249,12 +249,98 @@ async function finalizeWeeklyDigestSlot(
  *
  * Each member receives it only when their email channel AND the weeklyDigest
  * pref are on, at most once per ISO week. Returns how many digests were sent.
+ *
+ * ## Why the recipient checks come first (#459)
+ *
+ * The report used to be gathered on the FIRST line, and every reason not to
+ * send it was evaluated afterwards. The EventBridge rule fires four times on
+ * Monday so households in any timezone get their digest at a reasonable local
+ * hour, and the per-ISO-week marker is what stops them getting four — but that
+ * marker was the LAST gate. So runs 2, 3 and 4 rebuilt the whole ~13-read
+ * report for every household already digested at 00:00, in order to discover
+ * that it had been.
+ *
+ * The order is now cheapest-question-first:
+ *
+ *   1. the at-risk read alone (2 queries) — does this household have anything
+ *      worth mailing? A naive hoist that put the recipient checks first would
+ *      have made a household with nothing at risk MORE expensive, because it
+ *      would pay for the member and preference reads before discovering there
+ *      was nothing to send;
+ *   2. the recipient gates (1 member query + a point read per member) — is
+ *      there anyone to send it to this run? These are not extra reads: they
+ *      all happened anyway, just after the report was built and discarded;
+ *   3. the rest of the report (~11 reads), which reuses the at-risk result
+ *      from step 1 rather than reading it again.
+ *
+ * The away check is the one that STAYS below, and hoisting it with the others
+ * does not work: `awayUserIds` is produced BY `gatherDigestReport` (out of
+ * `taskService.getActiveVacationMap`), so hoisting it would mean either
+ * building the report anyway or issuing a second vacation query. It costs
+ * nothing where it is — by then we have already decided the report is worth
+ * building — and it only ever REMOVES recipients, so evaluating it late can
+ * never cause an unwanted send.
  */
 export async function digestHousehold(
   householdId: string,
   now: Date = new Date()
 ): Promise<number> {
-  const report = await digestReport.gatherDigestReport(householdId, now);
+  // Gate 1, two reads: is there anything to say? This is the cheapest question
+  // in the routine and it rejects every household with nothing overdue, so it
+  // goes first — and the result is handed to `gatherDigestReport` below rather
+  // than read a second time.
+  const atRisk = await digestReport.gatherAtRisk(householdId, now);
+  if (!digestReport.atRiskIsWorthSending(atRisk)) {
+    logger.info(
+      { householdId, atRisk: atRisk.status, msg: 'digest.skipped_nothing_to_say' },
+      'digest.skipped_nothing_to_say'
+    );
+    return 0;
+  }
+
+  // Gate 2: is there anyone to say it to? One member query plus a point read
+  // per member — reads that all happened anyway, just after the report.
+  const members = await householdService.getHouseholdMembers(householdId);
+  const { ordered, prefs: allPrefs, householdLocale } = await readMemberPrefs(members);
+
+  /** Members who could receive this digest, decided before the report exists. */
+  const candidates: Array<{
+    member: HouseholdMember;
+    prefs: notificationPrefs.NotificationPreferences;
+  }> = [];
+  for (const member of ordered) {
+    const prefs = allPrefs.get(member.userId);
+    if (!prefs || !prefs.email || !prefs.weeklyDigest) continue;
+    // EventBridge retries at several UTC hours on Monday. Skip (without
+    // claiming the weekly slot) during this recipient's local quiet window;
+    // the next invocation can deliver once they are awake.
+    if (notificationPrefs.isInDndWindow(prefs, now)) continue;
+    // Cheap pre-check skips an already-digested member so a same-week retry
+    // never re-emails. This is the gate that used to run LAST, after the whole
+    // report had been built and was about to be thrown away.
+    if (await alreadyDigestedThisWeek(member.userId, householdId, now)) continue;
+    candidates.push({ member, prefs });
+  }
+
+  if (candidates.length === 0) {
+    // Logged for the same reason `digest.skipped_nothing_to_say` is: a
+    // household that stops receiving digests has to be explicable from the
+    // logs, and "nobody was eligible this run" and "there was nothing worth
+    // saying" are different answers to that question. Without a line of its
+    // own, hoisting the gates would have turned three quarters of every Monday
+    // into silence with no record.
+    logger.info(
+      { householdId, members: ordered.length, msg: 'digest.skipped_no_recipients' },
+      'digest.skipped_no_recipients'
+    );
+    return 0;
+  }
+
+  // Only now the other ~11 reads, and without re-reading the at-risk rows.
+  const report = await digestReport.gatherDigestReport(householdId, now, atRisk);
+  // Implied by gate 1 for every household that reaches here — kept because
+  // this predicate, not the cheap one, is the definition of record, so a
+  // future clause added to it takes effect without anyone remembering to.
   if (!digestReport.digestIsWorthSending(report)) {
     logger.info(
       {
@@ -267,23 +353,12 @@ export async function digestHousehold(
     return 0;
   }
 
-  const members = await householdService.getHouseholdMembers(householdId);
-  const { ordered, prefs: allPrefs, householdLocale } = await readMemberPrefs(members);
-
   let sent = 0;
-  for (const member of ordered) {
-    const prefs = allPrefs.get(member.userId);
-    if (!prefs || !prefs.email || !prefs.weeklyDigest) continue;
+  for (const { member, prefs } of candidates) {
     // Vacation mode means "do not bother me". Their tasks are already routed
-    // to the covering member, who is named on the row.
+    // to the covering member, who is named on the row. Stays here because it
+    // reads out of the report — see the note above.
     if (report.awayUserIds.has(member.userId)) continue;
-    // EventBridge retries at several UTC hours on Monday. Skip (without
-    // claiming the weekly slot) during this recipient's local quiet window;
-    // the next invocation can deliver once they are awake.
-    if (notificationPrefs.isInDndWindow(prefs, now)) continue;
-    // Cheap pre-check skips an already-digested member so a same-week retry
-    // never re-emails.
-    if (await alreadyDigestedThisWeek(member.userId, householdId, now)) continue;
     const reservationId = await reserveWeeklyDigestSlot(member.userId, householdId, now);
     if (!reservationId) continue;
 
