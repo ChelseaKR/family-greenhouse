@@ -256,14 +256,26 @@ export function ScanTagPage() {
             </section>
           )}
 
+          {/* This wrapper owns the announcement for the whole due-task region:
+              marking a task done removes it from the list below and swaps in
+              the thanks Alert, and that is one change, not two. Both Alerts
+              therefore pass live="off" — same reasoning, and same pattern, as
+              PetSafePage. Without it the success Alert's role="status" nests a
+              polite region inside a polite region (announced twice) and the
+              error's role="alert" is an assertive region inside a polite one,
+              which defeats the wrapper entirely. */}
           <div className="mt-8 space-y-4" aria-live="polite">
             {thanks && (
-              <Alert variant="success" title={t('plantTags.scan.thanksTitle', { name: thanks })}>
+              <Alert
+                variant="success"
+                title={t('plantTags.scan.thanksTitle', { name: thanks })}
+                live="off"
+              >
                 {t('plantTags.scan.thanksBody')}
               </Alert>
             )}
             {completionFailed && (
-              <Alert variant="error" title={t('plantTags.scan.completeFailedTitle')}>
+              <Alert variant="error" title={t('plantTags.scan.completeFailedTitle')} live="off">
                 {t('plantTags.scan.completeFailedBody')}
               </Alert>
             )}

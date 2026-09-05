@@ -179,10 +179,13 @@ export function SitPage() {
             </p>
           )}
 
-          {/* Live region announces completions to screen readers. */}
+          {/* Live region announces completions to screen readers. The Alert
+              passes live="off" so its own role="status" does not nest a polite
+              region inside this one; the wrapper is what should speak, because
+              finishing the last task is a single change to this region. */}
           <div className="mt-10 space-y-3" aria-live="polite">
             {allDone ? (
-              <Alert variant="success" title="All caught up — you’re a star 🌿">
+              <Alert variant="success" title="All caught up — you’re a star 🌿" live="off">
                 Every plant has been looked after. Thank you so much for helping out!
               </Alert>
             ) : (
