@@ -149,6 +149,98 @@ describe('emailSuppression.getDeliveryStates', () => {
       status: 'unknown',
     });
   });
+
+  // A roster over 100 is the case ADR 0014 made reachable: membership is
+  // UNLIMITED on Garden and Greenhouse, and householdService.MEMBER_QUERY_LIMIT
+  // is that query's page size, not a cap. These four cases fail on the code
+  // this replaced, which refused any roster over 100 keys outright.
+  const roster = (n: number) => Array.from({ length: n }, (_, i) => `m${i}@b.com`);
+
+  it('chunks a roster over 100 into whole BatchGet requests covering every key', async () => {
+    // `…Once` twice, never a standing `mockResolvedValue`: the shared
+    // `beforeEach` calls `clearAllMocks`, which clears calls but NOT
+    // implementations, so a standing one would answer every later test in the
+    // file too.
+    send
+      .mockResolvedValueOnce({ Responses: { 'test-table': [] } })
+      .mockResolvedValueOnce({ Responses: { 'test-table': [] } });
+
+    const result = await emailSuppression.getDeliveryStates(roster(150));
+
+    expect(result.status).toBe('ok');
+    expect(send).toHaveBeenCalledTimes(2);
+    const chunks = send.mock.calls.map(
+      (c) => (c[0] as { input: { RequestItems: Record<string, { Keys: { PK: string }[] }> } }).input
+    );
+    expect(chunks[0].RequestItems['test-table'].Keys).toHaveLength(100);
+    expect(chunks[1].RequestItems['test-table'].Keys).toHaveLength(50);
+    // Every address is asked about exactly once — no key dropped between the
+    // slices, none sent twice.
+    const asked = chunks.flatMap((c) => c.RequestItems['test-table'].Keys.map((k) => k.PK));
+    expect(new Set(asked).size).toBe(150);
+    expect(asked).toEqual(roster(150).map((e) => `EMAIL#${e}`));
+  });
+
+  it('merges the chunks into one map, so a bounce past key 100 is still visible', async () => {
+    const suppressed = (email: string) => ({
+      email,
+      state: 'suppressed',
+      reason: 'bounce',
+      softBounceCount: 0,
+      firstEventAt: NOW.toISOString(),
+      lastEventAt: NOW.toISOString(),
+    });
+    // One hit in the first chunk, one in the second: a merge that kept only the
+    // last response, or only the first, drops one of these.
+    send
+      .mockResolvedValueOnce({ Responses: { 'test-table': [suppressed('m7@b.com')] } })
+      .mockResolvedValueOnce({ Responses: { 'test-table': [suppressed('m130@b.com')] } });
+
+    const result = await emailSuppression.getDeliveryStates(roster(150));
+
+    expect(result.status).toBe('ok');
+    expect(result.status === 'ok' && result.states.get('m7@b.com')?.state).toBe('suppressed');
+    expect(result.status === 'ok' && result.states.get('m130@b.com')?.state).toBe('suppressed');
+    expect(result.status === 'ok' && result.states.size).toBe(2);
+    expect(result.status === 'ok' && result.states.has('m42@b.com')).toBe(false);
+  });
+
+  it('a later chunk leaving keys unprocessed makes the WHOLE roster unknown', async () => {
+    send.mockResolvedValueOnce({ Responses: { 'test-table': [] } }).mockResolvedValueOnce({
+      Responses: { 'test-table': [] },
+      UnprocessedKeys: { 'test-table': { Keys: [{ PK: 'EMAIL#m130@b.com' }] } },
+    });
+
+    await expect(emailSuppression.getDeliveryStates(roster(150))).resolves.toEqual({
+      status: 'unknown',
+    });
+  });
+
+  it('a later chunk throwing makes the WHOLE roster unknown, not a partial map', async () => {
+    send
+      .mockResolvedValueOnce({ Responses: { 'test-table': [] } })
+      .mockRejectedValueOnce(new Error('boom'));
+
+    await expect(emailSuppression.getDeliveryStates(roster(150))).resolves.toEqual({
+      status: 'unknown',
+    });
+  });
+
+  it('sends exactly one request for a roster of exactly 100 — the boundary', async () => {
+    send.mockResolvedValueOnce({ Responses: { 'test-table': [] } });
+    const result = await emailSuppression.getDeliveryStates(roster(100));
+    expect(result.status).toBe('ok');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends two requests for 101 — one key past the boundary is not a refusal', async () => {
+    send
+      .mockResolvedValueOnce({ Responses: { 'test-table': [] } })
+      .mockResolvedValueOnce({ Responses: { 'test-table': [] } });
+    const result = await emailSuppression.getDeliveryStates(roster(101));
+    expect(result.status).toBe('ok');
+    expect(send).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('emailSuppression bounce and complaint recording', () => {

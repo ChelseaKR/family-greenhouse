@@ -134,43 +134,72 @@ export async function checkAddress(email: string): Promise<AddressStatus> {
 }
 
 /**
+ * Keys per `BatchGetItem` request. A transport limit imposed by DynamoDB, NOT
+ * a cap on the roster: `getDeliveryStates` chunks its keys and merges the
+ * responses, so a roster of any size is looked up in full.
+ *
+ * This used to be a hard refusal — `if (unique.length > 100) return
+ * { status: 'unknown' }` — justified by a constant in another file:
+ * `householdService.MEMBER_QUERY_LIMIT` was read as a bound on the roster. It
+ * is not one, and its own docstring says so; it is that query's PAGE SIZE, and
+ * the query follows `LastEvaluatedKey` to exhaustion. ADR 0014 then made Garden
+ * and Greenhouse membership unlimited, so the roster handed to this function
+ * has no bound at all. A household above 100 distinct member addresses got
+ * `emailStatus: 'unknown'` on every row forever, and the hard-bounce fact
+ * `getHouseholdMembersPublic` exists to surface simply stopped being visible.
+ *
+ * That is the same cross-file coupling the member query and the caretaker,
+ * kiosk, plant-tag, sitter, API-key and space listings each removed by paging
+ * (#527, #529). This was the surviving reader of it.
+ */
+const BATCH_GET_KEY_LIMIT = 100;
+
+/**
  * Batch variant for roster-shaped views (the household members list). Returns
  * a single `unknown` for the whole batch rather than a partially-populated map:
  * a map that silently omitted the addresses DynamoDB could not return would
  * render "everyone is reachable" out of a failed read.
+ *
+ * All-or-nothing spans the chunks too: one chunk that throws or leaves keys
+ * unprocessed makes the WHOLE roster `unknown`, not just its own slice — a
+ * merged map missing one chunk is exactly the partial map the paragraph above
+ * refuses, and the earlier chunks' `ok` rows would be the ones rendered.
  */
 export async function getDeliveryStates(
   emails: readonly string[]
 ): Promise<{ status: 'ok'; states: Map<string, EmailDeliveryState> } | { status: 'unknown' }> {
   const unique = [...new Set(emails.map(normalizeAddress))].filter((e) => e.length > 0);
   if (unique.length === 0) return { status: 'ok', states: new Map() };
-  // BatchGetItem caps at 100 keys per request; the member roster is bounded by
-  // householdService.MEMBER_QUERY_LIMIT (100), so one request always suffices.
-  if (unique.length > 100) return { status: 'unknown' };
 
-  try {
-    const result = await dynamodb.send(
-      new BatchGetCommand({
-        RequestItems: {
-          [TABLE_NAME]: { Keys: unique.map((email) => key(email)) },
-        },
-      })
-    );
-    const unprocessed = result.UnprocessedKeys?.[TABLE_NAME]?.Keys?.length ?? 0;
-    if (unprocessed > 0) {
-      logger.warn({ unprocessed }, 'email_suppression.batch_incomplete');
+  const states = new Map<string, EmailDeliveryState>();
+  for (let offset = 0; offset < unique.length; offset += BATCH_GET_KEY_LIMIT) {
+    const chunk = unique.slice(offset, offset + BATCH_GET_KEY_LIMIT);
+    try {
+      const result = await dynamodb.send(
+        new BatchGetCommand({
+          RequestItems: {
+            [TABLE_NAME]: { Keys: chunk.map((email) => key(email)) },
+          },
+        })
+      );
+      const unprocessed = result.UnprocessedKeys?.[TABLE_NAME]?.Keys?.length ?? 0;
+      if (unprocessed > 0) {
+        logger.warn({ unprocessed, keys: unique.length }, 'email_suppression.batch_incomplete');
+        return { status: 'unknown' };
+      }
+      for (const item of result.Responses?.[TABLE_NAME] ?? []) {
+        const state = toState(item as Record<string, unknown>);
+        if (state) states.set(normalizeAddress(state.email), state);
+      }
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, keys: unique.length },
+        'email_suppression.batch_failed'
+      );
       return { status: 'unknown' };
     }
-    const states = new Map<string, EmailDeliveryState>();
-    for (const item of result.Responses?.[TABLE_NAME] ?? []) {
-      const state = toState(item as Record<string, unknown>);
-      if (state) states.set(normalizeAddress(state.email), state);
-    }
-    return { status: 'ok', states };
-  } catch (err) {
-    logger.warn({ err: (err as Error).message }, 'email_suppression.batch_failed');
-    return { status: 'unknown' };
   }
+  return { status: 'ok', states };
 }
 
 async function suppress(
