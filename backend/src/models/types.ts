@@ -1,3 +1,7 @@
+import type { SeasonalCadence } from '../services/seasonalCadence.js';
+
+export type { SeasonalCadence };
+
 export interface User {
   id: string;
   email: string;
@@ -216,6 +220,19 @@ export interface Task {
   type: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
   customType: string | null;
   frequency: number;
+  /**
+   * Optional seasonal profile: up to four cadences, one per season, that
+   * override `frequency` while their season is in force
+   * (services/seasonalCadence.ts). Absent on every task that has not been
+   * given one, which is the default and the whole population today.
+   *
+   * `frequency` remains the task's base interval and is NOT redundant: it is
+   * what the schedule uses for a season the profile leaves unset, and for a
+   * household with no location to season the profile by. A cadence names a
+   * SEASON rather than a month range, so the same profile follows a household
+   * that moves hemispheres without a row being rewritten.
+   */
+  seasonalCadences?: SeasonalCadence[] | null;
   lastCompleted: string | null;
   nextDue: string;
   assignedTo: string | null;

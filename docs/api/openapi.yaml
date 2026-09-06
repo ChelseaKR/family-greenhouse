@@ -71,6 +71,27 @@ components:
           enum: [water, fertilize, prune, repot, custom]
         customType: { type: string, nullable: true }
         frequency: { type: integer, minimum: 1, maximum: 365 }
+        seasonalCadences:
+          type: array
+          nullable: true
+          maxItems: 4
+          description: >-
+            Optional seasonal profile: at most one cadence per season, each
+            overriding `frequency` while its season is in force. Seasons are
+            meteorological and are mapped to months through the household's
+            hemisphere (from its stored location), so the same profile follows
+            a household that moves across the equator. `frequency` stays the
+            base interval and is what the schedule uses for a season with no
+            cadence set, and for a household with no location. Absent or null
+            means no seasonal profile.
+          items:
+            type: object
+            required: [season, frequency]
+            properties:
+              season:
+                type: string
+                enum: [spring, summer, autumn, winter]
+              frequency: { type: integer, minimum: 1, maximum: 365 }
         lastCompleted: { type: string, format: date-time, nullable: true }
         nextDue: { type: string, format: date-time }
         assignedTo: { type: string, nullable: true }

@@ -309,7 +309,8 @@ export const calendarIcs = createHandler(
       throw createHttpError(403, 'No household selected');
     }
     const tasks = await taskService.getTasks(user.householdId);
-    return icsResponse(buildIcs(tasks));
+    const hemisphere = await taskService.hemisphereForTasks(user.householdId, tasks);
+    return icsResponse(buildIcs(tasks, new Date(), hemisphere));
   }
 ).use(authMiddleware());
 
@@ -434,7 +435,8 @@ export const calendarFeed = createHandler(
     // Scoped by the grant, never by anything the request carries: a token
     // for household A cannot be pointed at household B.
     const tasks = await taskService.getTasks(grant.householdId);
-    return icsResponse(buildIcs(tasks));
+    const hemisphere = await taskService.hemisphereForTasks(grant.householdId, tasks);
+    return icsResponse(buildIcs(tasks, new Date(), hemisphere));
   }
 ).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
 

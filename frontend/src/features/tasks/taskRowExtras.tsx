@@ -13,6 +13,8 @@
 import { useTranslation } from 'react-i18next';
 import { HandRaisedIcon, CloudIcon, MegaphoneIcon } from '@heroicons/react/24/outline';
 import { SnoozeReason, TaskWithCoverage } from '@/services/taskService';
+import type { Task } from '@/services/plantService';
+import { hemisphereForLatitude, nextCadenceChange, resolveCadence } from './seasonalCadence';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { isHelpRequestOpen } from './helpRequest';
@@ -177,5 +179,62 @@ export function ClimateSkipChip({ reason, onSkip, isPending }: ClimateSkipChipPr
       <CloudIcon className="h-3.5 w-3.5" aria-hidden="true" />
       {reason === 'rain' ? t('tasks.skipRain') : t('tasks.skipFrost')}
     </button>
+  );
+}
+
+/**
+ * "every 14 days · autumn cadence until 1 Mar" — what a seasonally-scheduled
+ * task is ACTUALLY on right now (`features/tasks/seasonalCadence.ts`).
+ *
+ * The badge exists because the task row's headline interval is the task's base
+ * `frequency`, and on a task with a seasonal profile that is not the number
+ * the schedule uses. A row that says "every 7 days" while the server advances
+ * by 14 is this repo's named defect class wearing a different hat: a value
+ * rendered where the real answer is somewhere else.
+ *
+ * Renders nothing for a task with no profile (every task today). A household
+ * with no location gets the "seasons unavailable" line rather than a silently
+ * assumed hemisphere — the profile is set, so the household HAS asked for
+ * seasonal scheduling and is entitled to know why it is not happening.
+ */
+export function SeasonalCadenceBadge({
+  task,
+  latitude,
+  now,
+}: {
+  task: Pick<Task, 'frequency' | 'seasonalCadences'>;
+  latitude: number | null | undefined;
+  now?: Date;
+}) {
+  const { t, i18n } = useTranslation();
+  if (!task.seasonalCadences || task.seasonalCadences.length === 0) return null;
+
+  const at = now ?? new Date();
+  const hemisphere = hemisphereForLatitude(latitude);
+  const resolved = resolveCadence(task.frequency, task.seasonalCadences, hemisphere, at);
+
+  if (resolved.season === null) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-900 ring-1 ring-primary-200">
+        {t('tasks.seasonal.noLocation')}
+      </span>
+    );
+  }
+
+  const interval = t('tasks.seasonal.interval', { count: resolved.frequency });
+  const season = t(`tasks.seasonal.season.${resolved.season}`);
+  const changesOn = nextCadenceChange(task.frequency, task.seasonalCadences, hemisphere, at);
+  const label = changesOn
+    ? t('tasks.seasonal.chipUntil', {
+        interval,
+        season,
+        date: changesOn.toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' }),
+      })
+    : t('tasks.seasonal.chip', { interval, season });
+
+  return (
+    <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-900 ring-1 ring-primary-200">
+      {label}
+    </span>
   );
 }
