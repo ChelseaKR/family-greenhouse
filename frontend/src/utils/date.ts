@@ -144,12 +144,27 @@ export function isToday(dateString: string): boolean {
   return date.getTime() === today.getTime();
 }
 
-export function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-export function toISODateString(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
+/*
+ * `addDays` and `toISODateString` used to live here. Both were exported, both
+ * were tested, and neither was called from anywhere in the application (#342,
+ * closing note). They are gone rather than kept "in case", because the second
+ * one was a trap for whoever called it first:
+ *
+ *   toISODateString(date) => date.toISOString().split('T')[0]
+ *
+ * `toISOString()` is UTC. Every other helper in this file reads a `Date` in
+ * the BROWSER's zone — `isToday`, `isOverdue` and `calendarDaysBetween` all
+ * use `getFullYear`/`getMonth`/`getDate`. So a caller mixing them got the
+ * local day from one and the UTC day from the other, and they disagree for
+ * part of every day: at 23:00 on 15 April in New York the helper returned
+ * `2024-04-16`. Its one test passed `2024-04-15T12:00:00Z` — noon UTC, the
+ * one value in the day that cannot expose it. That is the same shape as the
+ * ICS test #342 §3 calls out, and the same shape as a gate that cannot fail.
+ *
+ * Nothing zone-aware replaces them here on purpose. ADR 0025 §6 phase 6 is
+ * where `utils/date.ts` and its two copy-pasted duplicates in `TasksPage` and
+ * `AnalyticsPage` collapse onto the household's zone; a day helper written
+ * before that decision would be a third answer to the question phase 6 exists
+ * to settle. Anything needing "the calendar day of this instant" should wait
+ * for it, or state the zone it means at the call site.
+ */

@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  formatDate,
-  formatRelativeDate,
-  isOverdue,
-  isToday,
-  overdueAt,
-  addDays,
-  toISODateString,
-} from '@/utils/date';
+import { formatDate, formatRelativeDate, isOverdue, isToday, overdueAt } from '@/utils/date';
 
 describe('date utils', () => {
   beforeEach(() => {
@@ -118,34 +110,6 @@ describe('date utils', () => {
     it('returns false for other dates', () => {
       expect(isToday('2024-04-14T12:00:00Z')).toBe(false);
       expect(isToday('2024-04-16T12:00:00Z')).toBe(false);
-    });
-  });
-
-  describe('addDays', () => {
-    it('adds days correctly', () => {
-      const date = new Date(2024, 3, 15);
-      const result = addDays(date, 5);
-      expect(result.getDate()).toBe(20);
-    });
-
-    it('handles negative days', () => {
-      const date = new Date(2024, 3, 15);
-      const result = addDays(date, -5);
-      expect(result.getDate()).toBe(10);
-    });
-
-    it('rolls over month boundaries', () => {
-      const date = new Date(2024, 3, 28);
-      const result = addDays(date, 5);
-      expect(result.getMonth()).toBe(4);
-      expect(result.getDate()).toBe(3);
-    });
-  });
-
-  describe('toISODateString', () => {
-    it('returns date in YYYY-MM-DD format', () => {
-      const date = new Date('2024-04-15T12:00:00Z');
-      expect(toISODateString(date)).toBe('2024-04-15');
     });
   });
 });
