@@ -14,6 +14,10 @@
 //   1. `/assets/...`  content-addressed build output. Left alone, always. The
 //      name contains the hash of the bytes, so the object either exists or it
 //      genuinely does not, and "does not" must reach the viewer as a 404.
+//   1b. `/.well-known/...` well-known URIs (RFC 8615). Left alone for the same
+//      reason, plus one of its own: `apple-app-site-association` is
+//      extensionless, so rule (3) would rewrite it to the shell and Apple
+//      would never see the file the deploy uploaded.
 //   2. A prerendered public page (PRERENDERED below). Mapped onto its object:
 //      `/care/monstera` -> `/care/monstera/index.html`.
 //   3. Any other extensionless path. Rewritten to `/app-shell.html` BY NAME —
@@ -117,6 +121,23 @@ function handler(event) {
   // (1) Content-addressed build output. Never a route, never rewritten: a
   // request for a chunk that is not there has to be a miss, not the shell.
   if (uri === '/assets' || uri.indexOf('/assets/') === 0) {
+    return request;
+  }
+
+  // (1b) `/.well-known/...` is a registry of well-known URIs (RFC 8615), not a
+  // route. `assetlinks.json` would survive rule (3) by accident — its last
+  // segment has a dot — but `apple-app-site-association` is extensionless by
+  // Apple's spec, so without this it is rewritten to `/app-shell.html` and
+  // Apple's CDN fetches `200 text/html` no matter what the deploy uploaded.
+  // The file would be in the bucket, correctly typed, and unreachable.
+  //
+  // Passing it through also means a MISSING association file answers 404
+  // rather than 200-with-the-shell, which is the difference between Android's
+  // verifier reporting "no such file" and reporting a JSON parse error on a
+  // page of HTML. Same reasoning as `/assets/` above, and it works for the
+  // same reason: the frontend bucket grants `s3:ListBucket`, so a missing
+  // object is a 404 that no `custom_error_response` rescues.
+  if (uri === '/.well-known' || uri.indexOf('/.well-known/') === 0) {
     return request;
   }
 

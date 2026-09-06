@@ -411,7 +411,8 @@ jobs:
             --exclude "push-handler.js" \
             --exclude "*.json" \
             --exclude "robots.txt" \
-            --exclude "sitemap.xml"
+            --exclude "sitemap.xml" \
+            --exclude ".well-known/*"
 
           # All HTML: the prerendered routes, the homepage, and app-shell.html
           # (CloudFront's error response + the service worker's offline
@@ -439,6 +440,53 @@ jobs:
             --cache-control "max-age=3600,public"
           aws s3 cp dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
             --cache-control "max-age=3600,public"
+
+          # The deep-link association files, when a build carries them. Neither
+          # would be uploaded correctly by the syncs above, and each fails a
+          # different way:
+          #
+          #   .well-known/assetlinks.json — matches `--exclude "*.json"` in the
+          #   immutable sync and `*.html` in the second, so NEITHER sync claims
+          #   it. It would never reach the bucket at all, and nothing would say
+          #   so: a successful deploy, and Android's verifier fetching a URL
+          #   that does not exist.
+          #
+          #   .well-known/apple-app-site-association — extensionless, so it
+          #   matched no exclude and rode the immutable sync up with
+          #   `max-age=31536000` and a guessed `binary/octet-stream`. Apple
+          #   requires `application/json`, and a 1-year immutable cache on the
+          #   file that names the signing team is the wrong lifetime for the
+          #   one document you edit when a certificate changes.
+          #
+          # `--exclude ".well-known/*"` above now keeps the generic sync off
+          # both, so this block is the only thing that uploads them and its
+          # headers are the headers they get.
+          #
+          # Guarded, because the files are not in the tree yet (#469 §2). The
+          # app-side half of deep linking needs the release keystore's SHA-256
+          # fingerprint and the Apple Team ID, which this repo cannot supply;
+          # this prepares the serving side so that adding them is a one-file
+          # change rather than a deploy debugging session. Until then both `if`s
+          # are false and the step is a no-op. scripts/check-well-known.mjs
+          # fails the gate if a file appears in frontend/public/.well-known/
+          # that this block does not name.
+          #
+          # max-age=300 because an association file changes exactly when a
+          # signing certificate or Team ID does, both platforms re-fetch on
+          # their own schedule, and a stale copy at the edge means verification
+          # keeps failing for a fix that has already shipped.
+          if [ -f dist/.well-known/assetlinks.json ]; then
+            aws s3 cp dist/.well-known/assetlinks.json \
+              "s3://${FRONTEND_BUCKET}/.well-known/assetlinks.json" \
+              --content-type "application/json" \
+              --cache-control "max-age=300,public"
+          fi
+          if [ -f dist/.well-known/apple-app-site-association ]; then
+            aws s3 cp dist/.well-known/apple-app-site-association \
+              "s3://${FRONTEND_BUCKET}/.well-known/apple-app-site-association" \
+              --content-type "application/json" \
+              --cache-control "max-age=300,public"
+          fi
 
       - name: Prune superseded assets past the grace period
         # Replaces the `--delete` removed from the asset sync above, with a

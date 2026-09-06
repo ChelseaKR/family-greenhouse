@@ -215,7 +215,8 @@ jobs:
             --exclude "push-handler.js" \
             --exclude "*.json" \
             --exclude "robots.txt" \
-            --exclude "sitemap.xml"
+            --exclude "sitemap.xml" \
+            --exclude ".well-known/*"
 
           # All HTML: the prerendered routes, the homepage, and app-shell.html
           # (CloudFront's error response + the service worker's offline
@@ -243,6 +244,43 @@ jobs:
             --cache-control "max-age=3600,public"
           aws s3 cp dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
             --cache-control "max-age=3600,public"
+
+          # The deep-link association files, when a build carries them. Neither
+          # would be uploaded correctly by the syncs above, and each fails a
+          # different way:
+          #
+          #   .well-known/assetlinks.json — matches `--exclude "*.json"` in the
+          #   immutable sync and `*.html` in the second, so NEITHER sync claims
+          #   it. It would never reach the bucket at all, and nothing would say
+          #   so: a successful deploy, and Android's verifier fetching a URL
+          #   that does not exist.
+          #
+          #   .well-known/apple-app-site-association — extensionless, so it
+          #   matched no exclude and rode the immutable sync up with
+          #   `max-age=31536000` and a guessed `binary/octet-stream`. Apple
+          #   requires `application/json`.
+          #
+          # `--exclude ".well-known/*"` above now keeps the generic sync off
+          # both, so this block is the only thing that uploads them and its
+          # headers are the headers they get.
+          #
+          # Guarded, because the files are not in the tree yet (#469 §2), and
+          # staging is where a first association file gets tried before it is
+          # ever pointed at a store build. Kept identical to cd-production.yml
+          # on purpose: an association file that verifies here and not there is
+          # the worst way to learn the two paths had drifted.
+          if [ -f dist/.well-known/assetlinks.json ]; then
+            aws s3 cp dist/.well-known/assetlinks.json \
+              "s3://${FRONTEND_BUCKET}/.well-known/assetlinks.json" \
+              --content-type "application/json" \
+              --cache-control "max-age=300,public"
+          fi
+          if [ -f dist/.well-known/apple-app-site-association ]; then
+            aws s3 cp dist/.well-known/apple-app-site-association \
+              "s3://${FRONTEND_BUCKET}/.well-known/apple-app-site-association" \
+              --content-type "application/json" \
+              --cache-control "max-age=300,public"
+          fi
 
       - name: Invalidate CloudFront
         env:

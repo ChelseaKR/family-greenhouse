@@ -18,6 +18,21 @@
 - [ ] Apple Developer and Google Play accounts have accepted current agreements.
 - [ ] Reviewer account is seeded and its credentials are stored only in the store consoles.
 - [ ] Android upload keystore is created, backed up, and exposed through the four `ANDROID_UPLOAD_*` environment variables.
+- [ ] Deep links, in this order — the serving half is already wired and gated
+      (`npm run well-known:check`), so what is left is the three values this
+      repo cannot derive. See `docs/mobile.md`, "The serving half is ready".
+  - [ ] `keytool -list -v` (or Play Console → Setup → App integrity) for the
+        upload certificate's SHA-256 fingerprint → commit
+        `frontend/public/.well-known/assetlinks.json`.
+  - [ ] Apple Developer → Membership for the Team ID → commit
+        `frontend/public/.well-known/apple-app-site-association`.
+  - [ ] Deploy, then confirm both URLs return `200 application/json` on the
+        live domain before touching the native projects. A missing file now
+        answers 404 rather than the app shell, so this is checkable.
+  - [ ] Only then: `@capacitor/app` + `appUrlOpen` handler, the
+        `autoVerify="true"` intent-filter, and the Associated Domains
+        entitlement. Doing these first makes Android 12+ record a failed
+        verification and keep sending links to the browser.
 - [ ] Xcode 26+, Apple team signing, and the explicit `net.familygreenhouse.app` App ID are configured.
 - [ ] Physical iPhone, iPad, and Android smoke tests pass against production.
 

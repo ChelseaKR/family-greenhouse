@@ -78,7 +78,8 @@ aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
     --exclude "push-handler.js" \
     --exclude "*.json" \
     --exclude "robots.txt" \
-    --exclude "sitemap.xml"
+    --exclude "sitemap.xml" \
+    --exclude ".well-known/*"
 
 # All HTML, rebuilt every deploy at stable URLs.
 aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
@@ -95,6 +96,35 @@ aws s3 cp frontend/dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 aws s3 cp frontend/dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+# The deep-link association files, when a build carries them. Neither would be
+# uploaded correctly by the syncs above: `assetlinks.json` matches
+# `--exclude "*.json"` in the first and `*.html` in the second, so NEITHER sync
+# claims it and it would never reach the bucket; `apple-app-site-association`
+# is extensionless, so it matched no exclude and rode the immutable sync up
+# with a 1-year max-age and a guessed `binary/octet-stream` content type, where
+# Apple requires `application/json`. `--exclude ".well-known/*"` above keeps the
+# generic sync off both, so these two commands are the only thing that uploads
+# them and their headers are the headers the files get.
+#
+# Guarded, because the files are not in the tree yet (#469 §2): the app-side
+# half needs the release keystore's SHA-256 fingerprint and the Apple Team ID,
+# which this repo cannot supply. Until those land both tests are false and this
+# is a no-op. Kept in step with the two CD workflows — this script has drifted
+# from them before, and the last time it did every prerendered page went up
+# immutable.
+if [[ -f frontend/dist/.well-known/assetlinks.json ]]; then
+    aws s3 cp frontend/dist/.well-known/assetlinks.json \
+        "s3://${FRONTEND_BUCKET}/.well-known/assetlinks.json" \
+        --content-type "application/json" \
+        --cache-control "max-age=300,public"
+fi
+if [[ -f frontend/dist/.well-known/apple-app-site-association ]]; then
+    aws s3 cp frontend/dist/.well-known/apple-app-site-association \
+        "s3://${FRONTEND_BUCKET}/.well-known/apple-app-site-association" \
+        --content-type "application/json" \
+        --cache-control "max-age=300,public"
+fi
 
 # Invalidate CloudFront
 echo "Invalidating CloudFront cache..."

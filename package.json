@@ -70,6 +70,7 @@
     "brand:check": "npm run brand:check --workspace frontend",
     "smoke:parse": "npm run smoke:parse --workspace frontend",
     "figures:check": "node scripts/check-doc-figures.mjs",
+    "well-known:check": "node scripts/check-well-known.mjs",
     "mobile:release": "frontend/scripts/build-mobile-release.sh",
     "verify": "node scripts/run-gate.mjs"
   },

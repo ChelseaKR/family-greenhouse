@@ -64,6 +64,53 @@ no matching `assetlinks.json` fails verification on Android 12+, so links keep
 opening the browser while the manifest claims otherwise. Tracked in
 [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) §2.
 
+### The serving half is ready; the app half is not
+
+The deploy and CDN path for the two association files is now wired and gated,
+so the day the values above exist, publishing them is a one-file change rather
+than a debugging session. Nothing app-side was enabled — no entitlement, no
+`autoVerify` intent-filter, no invented fingerprint or Team ID — precisely
+because half a setup is worse than none.
+
+**What is ready.** Drop a file at `frontend/public/.well-known/assetlinks.json`
+or `frontend/public/.well-known/apple-app-site-association`, and:
+
+- Both CD workflows and `scripts/deploy.sh` upload it explicitly, with
+  `--content-type application/json` and `max-age=300`. The uploads are guarded
+  on the file existing, so they are no-ops until it does.
+- The immutable asset sync excludes `.well-known/*`, so nothing else can claim
+  those keys. This matters: before, `assetlinks.json` was excluded from the
+  first sync by its `*.json` filter and not picked up by the second sync's
+  `*.html` filter, so **no sync uploaded it at all** and the deploy still went
+  green; `apple-app-site-association` is extensionless, so it matched no
+  exclude and went up with a 1-year immutable cache and a guessed
+  `binary/octet-stream`.
+- The CloudFront viewer-request function passes `/.well-known/` through
+  untouched. Without that, `apple-app-site-association` — extensionless by
+  Apple's spec — was rewritten to `/app-shell.html`, so Apple would have
+  fetched `200 text/html` no matter what the deploy uploaded. Passing it
+  through also means a missing file answers an honest 404 instead of a 200
+  carrying HTML, which is the difference between Android's verifier reporting
+  "not found" and reporting a JSON parse error.
+- `npm run well-known:check` (`scripts/check-well-known.mjs`, a step in
+  `npm run verify`) fails if any of that is removed, or if a file appears in
+  `frontend/public/.well-known/` that the deploy path does not name or that is
+  not valid JSON.
+
+**What is still blocked, and on whom.** All three are maintainer-held values;
+none can be derived from this repository:
+
+| Needed                                                        | Where it comes from                                                                                    | What it unblocks                                                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity      | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter                                               |
+| Apple Team ID                                                 | Apple Developer → Membership                                                                           | `apple-app-site-association` (`<TeamID>.net.familygreenhouse.app`), and only then the Associated Domains entitlement |
+| `@capacitor/app`                                              | `npm i @capacitor/app` in `frontend`, plus a row in the plugin table above and an `appUrlOpen` handler | the WebView actually navigating to the incoming URL instead of opening cold                                          |
+
+The order matters and is the whole reason the app half is not staged here: the
+association file has to be **live and verifiable at the domain first**, then
+the intent-filter and entitlement. Reversed, Android 12+ records a failed
+verification and keeps sending links to the browser.
+
 ## Build flow
 
 ```bash
