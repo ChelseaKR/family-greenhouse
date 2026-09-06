@@ -369,6 +369,21 @@
     "browsePrompt": "Just browsing? Read our",
     "careGuides": "plant care guides"
   },
+  "petSafeSpecies": {
+    "title": "Every plant we have a guide for, and its pet verdict",
+    "lede": "The line under each plant is the toxicity note from that plant’s own care guide, word for word. Open a guide for the rest — watering, light, and what usually goes wrong.",
+    "safeHeading": "Safe around cats and dogs",
+    "unsafeHeading": "Keep these away from cats and dogs",
+    "unclearHeading": "Read the guide before you decide",
+    "badgeSafe": "Pet-safe",
+    "badgeCaution": "Mildly toxic",
+    "badgeToxic": "Toxic",
+    "badgeUnclear": "Check the guide",
+    "allGuides": "Browse all plant care guides",
+    "readingHeading": "More on plants and pets",
+    "readingSafeIntro": "Shopping for something new?",
+    "readingToxicIntro": "Already living with one from the second list?"
+  },
   "plants": {
     "title": "Plants",
     "addPlant": "Add plant",

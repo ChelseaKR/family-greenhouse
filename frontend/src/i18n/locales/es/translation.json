@@ -380,6 +380,21 @@
     "browsePrompt": "¿Solo estás mirando? Lee nuestras",
     "careGuides": "guías de cuidado de plantas"
   },
+  "petSafeSpecies": {
+    "title": "Todas las plantas con guía, y su veredicto para mascotas",
+    "lede": "La frase que aparece bajo cada planta es la nota de toxicidad de su propia guía de cuidado, palabra por palabra. Abre la guía para lo demás: riego, luz y qué suele salir mal.",
+    "safeHeading": "Seguras cerca de gatos y perros",
+    "unsafeHeading": "Manténlas lejos de gatos y perros",
+    "unclearHeading": "Lee la guía antes de decidir",
+    "badgeSafe": "Segura para mascotas",
+    "badgeCaution": "Levemente tóxica",
+    "badgeToxic": "Tóxica",
+    "badgeUnclear": "Consulta la guía",
+    "allGuides": "Ver todas las guías de cuidado",
+    "readingHeading": "Más sobre plantas y mascotas",
+    "readingSafeIntro": "¿Estás buscando una planta nueva?",
+    "readingToxicIntro": "¿Ya convives con alguna de la segunda lista?"
+  },
   "plants": {
     "title": "Plantas",
     "addPlant": "Añadir planta",
