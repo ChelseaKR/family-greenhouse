@@ -33,20 +33,41 @@ export function HelpTopicPage() {
     if (!section) return undefined;
     return {
       '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: section.articles.map((article) => ({
-        '@type': 'Question',
-        name: article.q,
-        acceptedAnswer: { '@type': 'Answer', text: article.text },
-      })),
+      '@graph': [
+        {
+          '@type': 'FAQPage',
+          '@id': siteUrl(`/help/${section.id}`),
+          name: section.title,
+          description: section.description,
+          mainEntity: section.articles.map((article) => ({
+            '@type': 'Question',
+            name: article.q,
+            // The anchors already exist on the page and HelpPage.test.tsx
+            // pins them, so deep-linking a single answer is free.
+            url: siteUrl(`/help/${section.id}#${article.id}`),
+            acceptedAnswer: { '@type': 'Answer', text: article.text },
+          })),
+        },
+        // /help/<topic> was the only nested route without a breadcrumb —
+        // /blog/:slug and /care/:slug both had one. Nine pages were losing
+        // the SERP trail for no reason.
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl('/') },
+            { '@type': 'ListItem', position: 2, name: 'Help', item: siteUrl('/help') },
+            { '@type': 'ListItem', position: 3, name: section.title },
+          ],
+        },
+      ],
     };
   }, [section]);
 
   useMetaTags(
     section
       ? {
-          title: `${section.title} — Family Greenhouse help`,
-          description: section.description,
+          title: section.metaTitle ?? `${section.title} — Family Greenhouse help`,
+          description: section.metaDescription ?? section.description,
           canonical: siteUrl(`/help/${section.id}`),
           robots: 'index, follow',
           jsonLd,

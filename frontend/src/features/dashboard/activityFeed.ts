@@ -30,6 +30,11 @@ const ACTIVITY_CATEGORIES: Record<ActivityType, ActivityCategory> = {
   'sitter_link.revoked': 'people',
   'task.schedule_matched': 'tasks',
   'upgrade.requested': 'people',
+  'task.help_requested': 'tasks',
+  'task.escalated': 'tasks',
+  // A caretaker note is about the care that happened on a visit, so it reads
+  // with the task events rather than with membership changes.
+  'caretaker.note': 'tasks',
 };
 
 export function filterActivity(events: ActivityEvent[], filter: ActivityFilter): ActivityEvent[] {

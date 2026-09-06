@@ -66,7 +66,7 @@
         "service": "<strong>The service, as described.</strong> We try to keep the app available, accurate, and free of basic bugs. We don’t promise zero downtime; see <em>Limitations</em> below.",
         "data": "<strong>Your data, treated with care.</strong> See our <privacyLink>Privacy Policy</privacyLink> for the specifics.",
         "notice": "<strong>Reasonable notice before changes.</strong> Material features and usage limits are stable for at least 14 days from announcement. Bug fixes and improvements ship continuously.",
-        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for up to 10 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
+        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 3 people and 20 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
       },
       "fromYou": {
         "heading": "What we expect from you",
@@ -81,16 +81,16 @@
       },
       "planStatus": {
         "heading": "Plan status",
-        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>, and a household’s first paid subscription starts with a 14-day free trial. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
       },
       "trial": {
         "heading": "Free trials",
-        "intro": "Every new subscription starts with a 14-day free trial. Checkout collects a card before the trial begins, and nothing is charged while it runs. The billing page shows the date the trial ends.",
+        "intro": "A household’s first paid subscription starts with a 14-day free trial. Checkout collects a card before the trial begins, and nothing is charged while it runs; the billing page shows the date the trial ends. The trial is once per household: if your household has already used it, starting a subscription again charges the card at checkout, with no trial.",
         "ending": "When the 14 days are up, the first payment is taken automatically and the subscription starts. To stop that, cancel before the trial ends — see <em>Cancelling</em> below. Cancelling during a trial costs nothing: the household keeps the paid features until the trial’s last day, then moves to the free Seedling plan."
       },
       "renewal": {
         "heading": "Automatic renewal",
-        "cadence": "Subscriptions renew automatically until they are cancelled. A monthly plan renews every month, counting from the end of the free trial, and each renewal is charged to the card on file without asking again.",
+        "cadence": "Subscriptions renew automatically until they are cancelled. A monthly plan renews every month — counting from the end of the free trial, or from the day of purchase where no trial applied — and each renewal is charged to the card on file without asking again.",
         "price": "The amount charged is the price of the plan your subscription is on — the price it was started at, not whatever is advertised later. Households still on a yearly plan renew once a year at the price they bought. The withdrawn Garden lifetime purchase never renews: it was a single payment, and there is nothing to cancel."
       },
       "cancellation": {

@@ -48,10 +48,11 @@ import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
+import { formatRelativeDay } from '@/i18n/format';
 import { toast } from '@/store/toastStore';
 import { PlantImage } from '@/components/PlantImage';
-import { spaceService } from '@/services/spaceService';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { useSpaces } from '@/hooks/useSpaces';
+import { plantLocationLabel } from '@/utils/spaces';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { householdService } from '@/services/householdService';
 import { seasonalHomeSuggestion } from './seasonalHomes';
@@ -93,10 +94,7 @@ export function PlantDetailPage() {
     queryFn: () => plantService.getPlant(plantId!),
     enabled: !!plantId,
   });
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-  });
+  const { spaces, byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
   const { data: household, isFetched: householdLoaded } = useQuery({
     queryKey: ['household', householdId],
     queryFn: () => householdService.getHousehold(householdId!),
@@ -106,6 +104,11 @@ export function PlantDetailPage() {
   // Title reflects the plant once it's loaded; falls back to a generic
   // "Plant" label during the loading flash.
   useDocumentTitle(plant?.name ?? 'Plant');
+
+  // Newest watering inside the recent-completions window the API returns.
+  const lastWatered = plant?.recentCompletions.find(
+    (completion) => completion.taskType === 'water'
+  );
 
   const deleteMutation = useMutation({
     mutationFn: () => plantService.deletePlant(plantId!),
@@ -222,7 +225,6 @@ export function PlantDetailPage() {
 
   const seasonalSuggestion = seasonalHomeSuggestion(plant, spaces, household?.location?.lat);
   const hasSeasonalHomes = Boolean(plant.summerSpaceId || plant.winterSpaceId);
-  const spacesById = spaceMap(spaces);
 
   return (
     <div className="space-y-6">
@@ -279,6 +281,12 @@ export function PlantDetailPage() {
               </div>
               <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
               {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
+              {/* Provenance, only when the server actually recorded one. A
+                  plant with no `speciesSource` (every row predating the field)
+                  says nothing rather than claiming a person typed it. */}
+              {plant.species && plant.speciesSource === 'identified' && (
+                <p className="text-xs text-gray-500">{t('plants.identify.fromPhoto')}</p>
+              )}
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
               {(plant.status ?? 'active') === 'active' && (
@@ -358,7 +366,13 @@ export function PlantDetailPage() {
             {(plant.spaceId || plant.location) && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">Space</dt>
-                <dd className="text-sm text-gray-900">{plantLocationLabel(plant, spacesById)}</dd>
+                <dd className="text-sm text-gray-900">
+                  {plantLocationLabel(
+                    plant,
+                    spacesById,
+                    spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced')
+                  )}
+                </dd>
               </div>
             )}
             {plant.summerSpaceId && (
@@ -540,6 +554,21 @@ export function PlantDetailPage() {
       {/* Care history */}
       <Card>
         <CardHeader title="Care History" description="Recent task completions" />
+
+        {/* Who last watered this — the household question the app could
+            already answer and never did (ADR 0016). Read off the plant
+            payload's own `recentCompletions`, so it costs no extra request
+            and inherits this page's existing error state: if the plant read
+            failed we are on the error branch above, never here claiming
+            nobody has watered it. */}
+        <p className="mb-4 text-sm text-gray-700" data-testid="last-watered">
+          {lastWatered
+            ? t('plants.lastWateredBy', {
+                when: formatRelativeDay(lastWatered.completedAt),
+                name: lastWatered.completedByName,
+              })
+            : t('plants.noWateringYet')}
+        </p>
 
         {plant.recentCompletions.length === 0 ? (
           <p className="text-sm text-gray-500">No care history yet.</p>

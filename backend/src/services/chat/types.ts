@@ -4,6 +4,7 @@
  * Kept in their own module so the tool definitions, the Bedrock client
  * wrapper, and the persistence layer can all import without circular deps.
  */
+import type { SproutCoverage } from '../sprout.js';
 
 /** One turn in a conversation, persisted in DDB. */
 export interface ChatMessageRecord {
@@ -22,7 +23,28 @@ export interface ChatMessageRecord {
   costUsd?: number;
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | CitationBlock;
+export type ContentBlock =
+  TextBlock | ToolUseBlock | ToolResultBlock | CitationBlock | DisclosureBlock | CoverageBlock;
+
+/**
+ * Block types that are Family Greenhouse DISPLAY metadata rather than
+ * Anthropic content blocks: they are persisted with a turn and rendered, and
+ * they must never be replayed into a model payload.
+ *
+ * A set rather than an inline `!== 'citation'` test at the one call site,
+ * because the list has now grown twice. `toBedrockMessages` reads this, so a
+ * display-only block type added to the union without being added here is a
+ * block that silently starts crossing the model boundary.
+ */
+const DISPLAY_ONLY_BLOCK_TYPES = new Set<ContentBlock['type']>([
+  'citation',
+  'disclosure',
+  'coverage',
+]);
+
+export function isDisplayOnlyBlock(block: ContentBlock): boolean {
+  return DISPLAY_ONLY_BLOCK_TYPES.has(block.type);
+}
 
 export interface TextBlock {
   type: 'text';
@@ -36,6 +58,43 @@ export interface CitationBlock {
   url: string;
   source: string;
   fetch_date: string;
+}
+
+/**
+ * Sprout's own per-answer disclosure, persisted with the answer it belongs to.
+ *
+ * `disclosure` is a REQUIRED field of the Sprout answer contract
+ * (`services/sprout.ts`), it is named for the person reading the reply, and
+ * every word in it is written by Sprout — Family Greenhouse authors none of
+ * it. It used to be dropped in `runChatTurn` (#579), so an AI answer was shown
+ * with the statement the contract attaches to it removed. Persisted as a block
+ * rather than a record field so it survives a reload down the same path the
+ * citations already take (`getConversation` round-trips `content` verbatim).
+ *
+ * Absent when Sprout sent an empty string: the schema allows one, and no block
+ * is a truer record of "no disclosure arrived" than an empty one.
+ */
+export interface DisclosureBlock {
+  type: 'disclosure';
+  text: string;
+}
+
+/**
+ * How much of the household the answer above was actually computed over
+ * (#549, wired up in #579).
+ *
+ * Aggregate integers only — the same values `buildSproutContext` counted, and
+ * the same reason they exist: a bare number over a silently reduced set reads
+ * as a household total. Persisting it is what lets a stored answer still be
+ * qualified later ("computed over 40 of your 112 plants"); before this the
+ * facts lived only for the lifetime of the function call.
+ *
+ * It carries no plant name, no user-typed species and no id, so persisting and
+ * returning it widens nothing at the privacy boundary documented on
+ * `buildSproutContext`.
+ */
+export interface CoverageBlock extends SproutCoverage {
+  type: 'coverage';
 }
 
 export interface ToolUseBlock {

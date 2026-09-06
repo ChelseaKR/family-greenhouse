@@ -303,6 +303,9 @@ describe('plantService', () => {
         tags: [],
         perenualSpeciesId: null,
         canonicalSpecies: null,
+        // Unknown provenance, not an assumed 'user' — legacy rows genuinely
+        // never recorded where their species came from (#344).
+        speciesSource: null,
         status: 'active',
         statusChangedAt: null,
         parentPlantId: null,
@@ -435,6 +438,101 @@ describe('plantService', () => {
       // 2 query calls + 2 batch calls (30 tasks chunked 25+5) + 1 plant
       // Delete + 1 plantCount decrement.
       expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(6);
+    });
+
+    it('resubmits exactly the keys DynamoDB left unprocessed', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { deletePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // tasks
+      // Two per-plant rows: a completion and a photo.
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [
+          { PK: 'HOUSEHOLD#hh#PLANT#p1', SK: 'COMPLETION#2025#abc' },
+          { PK: 'HOUSEHOLD#hh#PLANT#p1', SK: 'PHOTO#2025#xyz' },
+        ],
+      });
+      // BatchWrite #1: DynamoDB throttles the photo row. HTTP 200 — the
+      // response is a success, the delete simply did not happen.
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        UnprocessedItems: {
+          'test-table': [
+            { DeleteRequest: { Key: { PK: 'HOUSEHOLD#hh#PLANT#p1', SK: 'PHOTO#2025#xyz' } } },
+          ],
+        },
+      });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // BatchWrite #2: accepted
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Attributes: {
+          id: 'p1',
+          householdId: 'hh',
+          name: 'p',
+          createdAt: '',
+          createdBy: '',
+          updatedAt: '',
+        },
+      });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // plantCount decrement
+
+      await deletePlant('hh', 'p1');
+
+      const calls = vi.mocked(dynamodb.send).mock.calls;
+      const resubmit = calls[3][0] as unknown as {
+        kind: string;
+        input: {
+          RequestItems: Record<
+            string,
+            Array<{ DeleteRequest: { Key: { PK: string; SK: string } } }>
+          >;
+        };
+      };
+      expect(resubmit.kind).toBe('BatchWrite');
+      // Only the declined row is re-sent — not the whole chunk again.
+      expect(resubmit.input.RequestItems['test-table']).toEqual([
+        { DeleteRequest: { Key: { PK: 'HOUSEHOLD#hh#PLANT#p1', SK: 'PHOTO#2025#xyz' } } },
+      ]);
+      // And the delete still completes: plant row + counter.
+      expect(calls).toHaveLength(6);
+    });
+
+    it('throws and leaves the plant row in place when rows stay unprocessed', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { deletePlant } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] }); // tasks
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [{ PK: 'HOUSEHOLD#hh#PLANT#p1', SK: 'PHOTO#2025#xyz' }],
+      });
+      // Every attempt declines the same row. Queued one per attempt rather
+      // than as a standing mock, so the count below is exact and nothing
+      // leaks into the next test.
+      const declined = {
+        UnprocessedItems: {
+          'test-table': [
+            { DeleteRequest: { Key: { PK: 'HOUSEHOLD#hh#PLANT#p1', SK: 'PHOTO#2025#xyz' } } },
+          ],
+        },
+      };
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce(declined)
+        .mockResolvedValueOnce(declined)
+        .mockResolvedValueOnce(declined)
+        .mockResolvedValueOnce(declined);
+
+      try {
+        await expect(deletePlant('hh', 'p1')).rejects.toThrow(/unprocessed/);
+
+        const kinds = vi
+          .mocked(dynamodb.send)
+          .mock.calls.map((call) => (call[0] as unknown as { kind: string }).kind);
+        // Bounded: four attempts at the chunk, then it gives up.
+        expect(kinds.filter((kind) => kind === 'BatchWrite')).toHaveLength(4);
+        // The plant row survives, so the orphaned photo row is still reachable
+        // through it — deleting the parent is what makes the child unfindable.
+        expect(kinds).not.toContain('Delete');
+      } finally {
+        // `clearAllMocks` clears calls but not the queued once-values, so a
+        // failure here would otherwise hand its leftovers to the next test.
+        vi.mocked(dynamodb.send).mockReset();
+      }
     });
 
     it('does NOT decrement plantCount when the deleted plant had already left active', async () => {

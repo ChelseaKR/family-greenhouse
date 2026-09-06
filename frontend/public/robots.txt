@@ -2,8 +2,14 @@
 #
 # Public marketing routes are crawlable. Anything behind auth (dashboard,
 # plant detail, settings, etc.) gets disallowed because crawling them is
-# wasted effort — they 401-redirect to /login. The /api/* prefix is off-
-# limits since it's machine-readable JSON, not user-facing pages.
+# wasted effort — they 401-redirect to /login.
+#
+# /login and /register are deliberately NOT disallowed. They answer from
+# app-shell.html, which carries `noindex, follow`, and /register is linked
+# from the homepage. Blocking a linked URL stops Google fetching it, and a
+# page it cannot fetch is a page whose noindex it never reads — which is how
+# a blocked-but-linked URL ends up indexed url-only. Letting the crawl
+# through so the noindex is seen is the stronger exclusion.
 
 User-agent: *
 Allow: /
@@ -13,8 +19,6 @@ Allow: /changelog
 Allow: /legal
 Allow: /status
 
-Disallow: /api/
-Disallow: /auth/
 Disallow: /dashboard
 Disallow: /plants
 Disallow: /tasks
@@ -27,9 +31,33 @@ Disallow: /confirm-email
 Disallow: /reset-password
 Disallow: /forgot-password
 Disallow: /join/
-# Token-scoped, no-account surfaces. Not linked from anywhere and not in the
-# sitemap, but a wall-display URL that leaks into a crawl is a leaked token.
+# Token-scoped, no-account surfaces. None of these are linked from anywhere or
+# listed in the sitemap, but a URL that leaks into a crawl IS a leaked
+# credential: every one of them carries the whole secret in its path, and
+# presenting it is the entire authorization check.
+#
+#   /join/<code>    128-bit household invite  (householdService.createInvite)
+#   /kiosk/<token>  256-bit wall display      (kioskService)
+#   /sit/<token>    256-bit sitter link       (sitterService), plus /sit/<t>/brief
+#   /tag/<token>    256-bit plant tag         (plantTagService)
+#   /shared/<code>  128-bit plant share card  (plantService.createPlantShare)
+#   /caretaker/<t> 256-bit caretaker seat     (caretakerVisitService)
+#
+# Disallowing these keeps a well-behaved crawler from ever FETCHING the token.
+# Keeping them out of a search index is a separate control and does not depend
+# on this file: dist/app-shell.html — CloudFront's 403/404 response, and
+# therefore what answers every one of these paths — carries `noindex` (ADR
+# 0013), so an indexer that reaches one anyway still must not list it.
+#
+# Trade-off worth knowing before editing: /shared/ exists to be pasted into a
+# chat, and social link-preview crawlers honour robots.txt too, so this line
+# also costs the branded unfurl on a shared plant card. The noindex above is
+# the stronger of the two controls; drop this one line if the preview matters
+# more than keeping crawlers from fetching share codes at all.
 Disallow: /kiosk/
-Disallow: /coming-soon
+Disallow: /sit/
+Disallow: /tag/
+Disallow: /shared/
+Disallow: /caretaker/
 
 Sitemap: https://familygreenhouse.net/sitemap.xml

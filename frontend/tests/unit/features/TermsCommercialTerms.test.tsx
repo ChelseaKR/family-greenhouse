@@ -150,13 +150,43 @@ describe('terms: the trial length is the one the backend actually asks Stripe fo
     // A path that did not resolve is a failed read, not "no trial" — say so
     // rather than passing on an empty string.
     expect(billingPath, 'could not locate backend/src/services/billing.ts').toBeDefined();
-    const match = billingSource.match(/trial_period_days:\s*(\d+)/);
-    expect(match, 'trial_period_days is no longer set in services/billing.ts').not.toBeNull();
-    const days = match![1];
+    // The value is written either as a literal or through a named constant
+    // (`trial_period_days: TRIAL_PERIOD_DAYS`). Follow the indirection rather
+    // than matching only digits: a constant that this test could not resolve
+    // is a failed read, and must fail loudly instead of reading as "no trial".
+    const setting = billingSource.match(/trial_period_days:\s*([A-Za-z0-9_]+)/);
+    expect(setting, 'trial_period_days is no longer set in services/billing.ts').not.toBeNull();
+    const token = setting![1];
+    const days = /^\d+$/.test(token)
+      ? token
+      : billingSource.match(new RegExp(`\\b${token}\\s*=\\s*(\\d+)`))?.[1];
+    expect(days, `trial_period_days is set to \`${token}\`, whose value was not found`).toBeDefined();
 
     expect(enLegal.legal.terms.trial.intro).toContain(`${days}-day free trial`);
     expect(enLegal.legal.terms.trial.ending).toContain(`When the ${days} days are up`);
     expect(esLegal.legal.terms.trial.intro).toContain(`prueba gratuita de ${days} días`);
     expect(esLegal.legal.terms.trial.ending).toContain(`Cuando pasan los ${days} días`);
+  });
+
+  /**
+   * The trial is once per HOUSEHOLD, not once per subscription:
+   * `createCheckoutSession` omits `trial_period_days` entirely when
+   * `trialConsumedAt` is set, and that marker is deliberately never cleared by
+   * cancellation. A household that resubscribes is therefore charged at
+   * checkout with no free period. The Terms are what a paying household is
+   * held to, so they must not promise a trial to someone who will not get one.
+   */
+  it('does not promise a trial the backend withholds from a returning household', () => {
+    expect(billingPath, 'could not locate backend/src/services/billing.ts').toBeDefined();
+    expect(
+      billingSource,
+      'the trial is no longer gated on trialConsumedAt — re-read the Terms trial section against the new rule'
+    ).toMatch(/trialConsumedAt\s*\?\s*\{\}\s*:\s*\{\s*trial_period_days/);
+
+    // Neither locale may claim the trial applies to every new subscription.
+    expect(enLegal.legal.terms.trial.intro).toContain('first paid subscription');
+    expect(enLegal.legal.terms.trial.intro).toMatch(/once per household/i);
+    expect(esLegal.legal.terms.trial.intro).toContain('primera suscripción de pago');
+    expect(esLegal.legal.terms.trial.intro).toMatch(/una sola por hogar/i);
   });
 });

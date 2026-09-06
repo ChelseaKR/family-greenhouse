@@ -21,6 +21,45 @@ export default tseslint.config(
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
   jsxA11y.flatConfigs.strict,
+  // ---- Plain-ESM tooling: scripts/**/*.mjs (#443) ----
+  //
+  // Mirrors the root eslint.config.mjs block of the same name; see there for
+  // the rationale. Mirrored rather than inherited because ESLint 10 resolves
+  // the NEAREST eslint.config.mjs to the file being linted, so the root config
+  // never governs anything inside a workspace.
+  //
+  // These files are in no tsconfig program and want no type information. The
+  // project service is switched off explicitly: `tseslint.config()` installs
+  // the TypeScript parser for every file in the config, and its service then
+  // looks for a tsconfig to own each one and aborts when it cannot decide.
+  {
+    files: ['scripts/**/*.mjs'],
+    // `disableTypeChecked` because this workspace's config turns on
+    // recommendedTypeChecked for every file it governs, and a type-aware rule
+    // on a file with no type information is a crash, not a lint.
+    extends: [js.configs.recommended, tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node },
+      parserOptions: {
+        projectService: false,
+        project: null,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      // Same pin as the `src` block below: eslint-plugin-react is applied at the
+      // top of this config, so it also sees these files and warns without it.
+      react: { version: '19.2' },
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // These are CLI tools; console IS the interface.
+      'no-console': 'off',
+    },
+  },
+
   {
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: {
@@ -82,12 +121,64 @@ export default tseslint.config(
     },
   },
   {
+    // ---- End-to-end tree (#440) ----
+    //
+    // `frontend/tests/e2e/**` is the only code in this repo that can revert a
+    // production release — a non-success from the post-deploy smoke job fires
+    // `rollback` in cd-production.yml — and it was covered by no static check
+    // at all: `tsconfig.json` includes only `src`, this config's `files` glob
+    // was `src/**`, and `playwright.config.ts`'s `testIgnore` keeps
+    // post-deploy-smoke.spec.ts and store-screenshots.spec.ts out of the PR
+    // e2e run. Compiled by nothing, linted by nothing, executed only by
+    // production.
+    //
+    // Type-aware rules are ON, pointed at tsconfig.e2e.json. That is the whole
+    // reason this block is worth having over a plain parse: no-floating-promises
+    // is the rule that catches an un-awaited Playwright call, which is a
+    // silently-passing assertion — the same defect class as everything else
+    // here.
+    //
+    // `playwright.config.ts` and the two per-suite configs are in scope
+    // deliberately: they decide which specs run at all.
+    files: ['tests/e2e/**/*.ts', 'playwright.config.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: {
+        // Specs are Node programs that also evaluate code inside the page.
+        ...globals.node,
+        ...globals.browser,
+      },
+      parserOptions: {
+        project: ['./tsconfig.e2e.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      // Same pin as the `src` block: ESLint 10 removed context.getFilename(),
+      // which eslint-plugin-react's 'detect' codepath still calls.
+      react: { version: '19.2' },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Specs log deliberately when they tear down real cloud fixtures.
+      'no-console': 'off',
+    },
+  },
+
+  {
     // i18n enforcement is opt-in per-folder while we migrate. Areas in
     // this allowlist MUST use `t()` for user-visible strings; English
     // literals in JSX trigger a build-blocking error. The legal pages are
     // enrolled: they render entirely from `legal.*` keys. The Help FAQ is
     // *deliberately* not enrolled — translating curated articles is a
     // separate workstream from translating UI chrome.
+    //
+    // Scope, precisely: `markupOnly: true` restricts this rule to JSX TEXT
+    // NODES, and `ignoreAttribute` below is an EXCLUSION list, not a coverage
+    // list — `aria-label` and `placeholder` are on it. So this rule checks no
+    // attributes. Attribute coverage lives in the per-file ratchet in
+    // scripts/check-hardcoded-strings.mjs; see docs/i18n.md.
     files: ['src/features/settings/PreferencesSettings.tsx', 'src/features/legal/**/*.tsx'],
     plugins: {
       i18next,

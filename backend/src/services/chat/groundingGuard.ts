@@ -60,6 +60,13 @@
  * structured (`RetrievedSpan.petSafety`), per-species, and matched to the
  * plant the clause names where it names one. See `checkSafetyClaims`.
  *
+ * A THIRD recognized claim class (ADR 0026): a COUNT OR TOTALITY CLAIM ABOUT
+ * THE USER'S OWN COLLECTION — "you have 12 plants", "none of your plants are
+ * toxic" — checked not against a corpus but against how much of the household
+ * the answering service was actually given (`checkHouseholdClaims`). It exists
+ * for the Sprout path, whose payload is a strict subset of the household twice
+ * over (#549). Same rule as the other two: an unsupported claim blocks.
+ *
  * This module is unit-tested against synthetic fixtures
  * (chatGroundingGuard.test.ts) and wired into the live turnEvents() response
  * path. When RAG context is present, the completed answer is checked before
@@ -67,6 +74,7 @@
  * a safe verification message. Streaming RAG answers are buffered until this
  * check completes so ungrounded text is never transiently shown.
  */
+import type { SproutCoverage } from '../sprout.js';
 
 export type PetSpecies = 'cats' | 'dogs';
 export type PetSafetyVerdict = 'toxic' | 'non-toxic';
@@ -621,5 +629,161 @@ export function checkGrounding(
     unclassifiedNumericSentences,
     safetyClaimsChecked: safety.safetyClaimsChecked,
     ungroundedSafetyClaims: safety.ungroundedSafetyClaims,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Household count and totality claims (ADR 0026)
+// ---------------------------------------------------------------------------
+
+/**
+ * The two reduced sets in a Sprout payload. Which noun a claim uses picks the
+ * set it has to be answerable from, the same way an observation's `kind` does.
+ */
+type HouseholdSet = 'plants' | 'tasks';
+
+/**
+ * `collection` sits with the plant nouns on purpose: "nothing in your
+ * collection is toxic" is a claim about the plants, and it is the phrasing an
+ * all-clear most often takes.
+ */
+const HOUSEHOLD_NOUN: Record<HouseholdSet, string> = {
+  plants: String.raw`(?:plants?|houseplants?|collections?|plantas?|coleccion(?:es)?)`,
+  tasks: String.raw`(?:tasks?|chores?|reminders?|waterings?|tareas?|recordatorios?|riegos?)`,
+};
+
+/**
+ * The claim has to be about THIS user's collection. Without a second-person
+ * cue, "most plants prefer bright indirect light" is corpus advice about
+ * plants in general, and how much of the household crossed says nothing about
+ * whether it is true.
+ */
+const COLLECTION_CUE =
+  /\b(?:your|yours|you\s+have|you'?ve|you\s+own|you\s+keep|i\s+can\s+see|i\s+see|tus?|tienes|tiene|tuy[ao]s?)\b/;
+
+/**
+ * Counting words as well as digits — "one of your plants is toxic" is the same
+ * assertion as "1 of your plants is toxic". The Spanish `un`/`una` are
+ * deliberately absent: they are also the indefinite article, so "una planta"
+ * ("a plant") would read as a count of one.
+ */
+const HOUSEHOLD_COUNT = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)`;
+
+/**
+ * A universal quantifier makes the whole household the subject, which is the
+ * same overstatement as a bare number. "None of your plants are toxic to cats"
+ * is the sentence #549 was filed about.
+ */
+const HOUSEHOLD_TOTALITY = String.raw`(?:all|every|each|both|none|no|nothing|any|todas?|todos?|cada|ningun[ao]?|ningunos?|nada)`;
+
+/**
+ * Up to two words between the quantity and the noun ("12 toxic plants", "all
+ * of your plants"), never crossing a conjunction — otherwise "water every 2
+ * weeks and check your plants" would read as a count of plants.
+ */
+const HOUSEHOLD_FILLER = String.raw`(?:(?!(?:and|or|but|y|o|pero)\b)[a-z0-9%'-]+\s+){0,2}?`;
+
+/**
+ * The partitive "of" / "de" is free, and does not spend one of the two filler
+ * words: "none of your 112 plants" has three words between the quantifier and
+ * the noun, and it is the form a hedged-looking all-clear most often takes.
+ */
+function householdClaimPattern(quantity: string, noun: string): RegExp {
+  return new RegExp(String.raw`\b${quantity}\s+(?:(?:of|de)\s+)?${HOUSEHOLD_FILLER}${noun}\b`, 'g');
+}
+
+const HOUSEHOLD_CLAIM_PATTERNS: Record<HouseholdSet, Record<'count' | 'totality', RegExp>> = {
+  plants: {
+    count: householdClaimPattern(HOUSEHOLD_COUNT, HOUSEHOLD_NOUN.plants),
+    totality: householdClaimPattern(HOUSEHOLD_TOTALITY, HOUSEHOLD_NOUN.plants),
+  },
+  tasks: {
+    count: householdClaimPattern(HOUSEHOLD_COUNT, HOUSEHOLD_NOUN.tasks),
+    totality: householdClaimPattern(HOUSEHOLD_TOTALITY, HOUSEHOLD_NOUN.tasks),
+  },
+};
+
+/**
+ * A conditional is not an assertion: "if any of your plants show yellowing,
+ * move them" states nothing about how many there are. The safety guard's hedge
+ * vocabulary, plus the temporal conditionals that shape care advice.
+ *
+ * Only the text BEFORE the claim is scanned, so a hedge later in the sentence
+ * ("you have 12 plants, if that helps") cannot retract a claim already made.
+ * Negation is deliberately NOT a skip here, unlike `isHedged`: "none of your
+ * plants" is a negation, and it is exactly the claim being caught.
+ */
+const HOUSEHOLD_HEDGE_PATTERN = new RegExp(
+  `${HEDGE_PATTERN.source}|\\b(?:when|whenever|once|cuando|mientras)\\b`
+);
+
+export interface HouseholdClaimResult {
+  /** Sentences carrying a recognized household count or totality claim. */
+  householdClaimsChecked: string[];
+  /**
+   * Those the coverage cannot support. Each one blocks: the set it counts over
+   * did not all cross, so the number is of a subset the reader was never told
+   * about.
+   */
+  unsupportedHouseholdClaims: string[];
+}
+
+/**
+ * Checks an answer's claims about the size or composition of the user's own
+ * collection against how much of that collection the answering service was
+ * actually given (#549, ADR 0026).
+ *
+ * `buildSproutContext` reduces the household twice — a canonical-species
+ * privacy filter, then `SPROUT_CONTEXT_CAP` — and `coverage` reports both. A
+ * count computed over what crossed is a true statement about the household
+ * only when `complete` is set for that set; otherwise it is a subset presented
+ * as a total, and unlike a wrong care tip a wrong count carries nothing in it
+ * that could make a reader doubt it.
+ *
+ * Two claim shapes, one exception between them:
+ *
+ *   - a COUNT ("you have 12 plants") is supported when the sentence also
+ *     states the household total for that set — that is what "say what the
+ *     number is OF" means, and the total is ours, sent in the payload, so a
+ *     denominator can only be right by having been given one;
+ *   - a TOTALITY ("none of your plants are toxic") has no such exception. A
+ *     denominator cannot rescue a universal claim over a set that did not all
+ *     cross: "none of your 112 plants" asserts something about 112 plants when
+ *     40 of them were seen.
+ *
+ * Bounded over-blocking, on the ADR 0011 precedent: a care generality phrased
+ * as "all your plants will want more light in winter" is a totality claim
+ * about the household by this test, and is blocked while coverage is partial.
+ * The claim shape is what is recognizable; the intent behind it is not. Known
+ * gap in the other direction: a quantifier trailing its noun ("your plants are
+ * all fine") is not matched.
+ */
+export function checkHouseholdClaims(
+  answerText: string,
+  coverage: SproutCoverage
+): HouseholdClaimResult {
+  const checked = new Set<string>();
+  const unsupported = new Set<string>();
+  for (const sentence of splitSentences(answerText)) {
+    if (/[?¿]/.test(sentence)) continue;
+    const folded = foldText(sentence);
+    if (!COLLECTION_CUE.test(folded)) continue;
+    const numbers = new Set(extractNumbers(sentence));
+    for (const set of ['plants', 'tasks'] as const) {
+      const setCoverage = coverage[set];
+      for (const kind of ['count', 'totality'] as const) {
+        for (const match of folded.matchAll(HOUSEHOLD_CLAIM_PATTERNS[set][kind])) {
+          if (HOUSEHOLD_HEDGE_PATTERN.test(folded.slice(0, match.index))) continue;
+          checked.add(sentence);
+          if (setCoverage.complete) continue;
+          if (kind === 'count' && numbers.has(String(setCoverage.total))) continue;
+          unsupported.add(sentence);
+        }
+      }
+    }
+  }
+  return {
+    householdClaimsChecked: [...checked],
+    unsupportedHouseholdClaims: [...unsupported],
   };
 }

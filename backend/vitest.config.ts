@@ -1,14 +1,28 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 
-// Pin the zone the suite runs in to what the deployed Lambdas use (no TZ
-// override exists in infrastructure/, so they run UTC). The recurrence math
-// in taskService (`setDate(getDate() + frequency)`) is local-zone arithmetic,
-// so without this the snooze/next-due date assertions were only green on
-// laptops whose zone happened to have no DST transition inside the fixture
-// window. Set here, in the main process, for the same reason as the frontend
-// config: worker threads inherit it, but assigning TZ inside one is inert.
-// An explicitly exported TZ (e.g. to reproduce a zone-specific failure) wins.
+// Pin the zone the suite runs in to what the deployed Lambdas use: `TZ = "UTC"`
+// on `local.lambda_environment` in infrastructure/modules/api/main.tf.
+//
+// That pin did not used to exist. The Lambdas inherited UTC from the AWS
+// platform default and this line mirrored an assumption nothing in the
+// repository stated, so both halves were right by coincidence (#590). They now
+// agree by reference, and tests/unit/config/lambdaTimeZone.test.ts fails if
+// either side moves.
+//
+// The recurrence math in taskService (`setDate(getDate() + frequency)`) is
+// local-zone arithmetic, so without this the snooze/next-due date assertions
+// were only green on laptops whose zone happened to have no DST transition
+// inside the fixture window. Set here, in the main process, for the same
+// reason as the frontend config: worker threads inherit it, but assigning TZ
+// inside one is inert.
+//
+// `??=`, not `=`, deliberately. This pins the TEST PROCESS, which is a
+// different fact from the deployed Lambdas' zone — no unit test can observe
+// the latter by running, only by reading the deployment config, which is what
+// tests/unit/config/lambdaTimeZone.test.ts does. Overwriting would delete the
+// escape hatch (an explicitly exported TZ, e.g. to reproduce a zone-specific
+// failure, wins) without making anything more observable.
 process.env.TZ ??= 'UTC';
 
 export default defineConfig({
@@ -36,6 +50,17 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
+      // Every exclusion names a file, so a reader can judge it. `**/index.ts`
+      // used to sit here and read as a barrel-file exclusion — in most
+      // codebases that is exactly what it is. In this tree the ONLY file it
+      // matched under src/ was `services/chat/index.ts`: 1,159 lines carrying
+      // runChatTurn, the Bedrock tool loop, SYSTEM_PROMPT, the budget
+      // reserve/reconcile, and the GROUNDING_BLOCK / PET_SAFETY_BLOCK
+      // substitution — ADR 0011's entire enforcement point, the mechanism that
+      // stops the assistant telling someone a plant is safe for their cat.
+      // Deleting every chat test in the repo would not have moved a single
+      // number below. A glob that hides its subject is the problem; these
+      // name theirs.
       exclude: [
         'node_modules/',
         'dist/',
@@ -43,31 +68,46 @@ export default defineConfig({
         'src/local-server.ts',
         'src/utils/sentry.ts',
         '**/*.config.*',
-        '**/index.ts',
       ],
       // Ratchet (CQ-16, P1-5 — both defined in README "Standards conformance",
-      // see its "Finding IDs" note): measured 2026-08-04 was lines 84.47 /
-      // statements 83.31 / branches 76.01 / functions 84.57 — up from the
-      // 2026-07-05 rung (82.84 / 82.05 / 73.77 / 82.27) purely from coverage
-      // that feature/fix PRs already added since, not from a dedicated
-      // coverage push. Floors set ~2pp below the new measurement, same
-      // methodology as before (not the standard's 80x4-perFile target,
-      // reached honestly rather than jump-cut, which just breeds exclusions).
+      // see its "Finding IDs" note). Rungs, each measured and then floored
+      // ~2pp below, never jump-cut to the standard's 80x4-perFile target
+      // (which just breeds exclusions):
       //
-      // `perFile: true` is NOT safe yet despite the aggregate sitting within
-      // 10pp of 80 on every dimension — per-file coverage is highly uneven
-      // (e.g. `services/householdUsage.ts` measured 0%, `handlers/apiKeys`
-      // ~19%, `services/chatReports.ts` 20% on 2026-08-04), so flipping it on
-      // would fail CI immediately. Revisit once the lagging files are
-      // individually covered, not just once the aggregate looks close.
+      //   2026-07-05   82.84 / 82.05 / 73.77 / 82.27   floors 80/80/71/80
+      //   2026-08-04   84.47 / 83.31 / 76.01 / 84.57   floors 82/81/74/82
+      //   2026-09-04   89.68 / 88.89 / 80.77 / 91.03   floors 87/86/78/89
       //
-      // Raise again with a tracked issue once the next wave of feature/fix
-      // coverage lands; see README "Standards conformance" (CODE-QUALITY row).
+      // (lines / statements / branches / functions.) The 2026-09-04 rung is
+      // the first measured with `services/chat/index.ts` INCLUDED — see the
+      // exclusion note above. Including it moved the aggregate UP, by about a
+      // tenth of a point on each dimension: the file measures 90.99 / 82.54 /
+      // 96.87 / 91.49, above the suite average. So the problem the exclusion
+      // caused was never that the file was untested. It was that nothing
+      // required it to STAY tested, on the highest-consequence code in the
+      // backend and the only code that produces free-form text to a user.
+      //
+      // Hence the per-file floor below it. `perFile: true` GLOBALLY is still
+      // not safe — per-file coverage is uneven (`services/householdUsage.ts`
+      // measured 0%, `handlers/apiKeys` ~19% on 2026-08-04) — but a targeted
+      // floor on the one file where an untested branch has the worst
+      // consequence is a smaller, different commitment, and it is what makes
+      // "did anyone test the branch that blocks an ungrounded pet-safety
+      // claim" a question the gate actually asks.
       thresholds: {
-        lines: 82,
-        statements: 81,
-        branches: 74,
-        functions: 82,
+        lines: 87,
+        statements: 86,
+        branches: 78,
+        functions: 89,
+        // ADR 0011's enforcement point. Floors ~2pp below its 2026-09-04
+        // measurement, same methodology as the aggregate. Deleting the chat
+        // tests now reddens CI here first, and says which file.
+        'src/services/chat/index.ts': {
+          lines: 89,
+          statements: 88,
+          branches: 80,
+          functions: 94,
+        },
       },
     },
   },

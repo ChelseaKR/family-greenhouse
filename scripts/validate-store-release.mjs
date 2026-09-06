@@ -142,6 +142,56 @@ const capacitor = read('frontend/capacitor.config.ts');
 const appId = match(capacitor, /appId:\s*['"]([^'"]+)['"]/, 'Capacitor appId');
 const appName = match(capacitor, /appName:\s*['"]([^'"]+)['"]/, 'Capacitor appName');
 
+// docs/mobile.md's "Native capabilities" table is what App Review notes get
+// written from, and it drifted into claiming capabilities the binary does not
+// have: the Guideline 4.2 section pitched "camera photo capture + the offline
+// app shell" to a reviewer when there is no @capacitor/camera and no runtime
+// caching on iOS (#469). A doc overstating the app to a store reviewer is its
+// own risk, so the table is derived from the dependency list rather than
+// maintained by hand: adding or dropping a plugin fails this check until the
+// doc moves with it.
+//
+// The second half — that each plugin is linked by BOTH native projects — is
+// what makes the table mean "the shells can do this" rather than "an npm
+// package is installed". `cap sync` regenerates those two files; a plugin
+// added to package.json and never synced is in neither.
+const CAPACITOR_PLATFORM_PACKAGES = ['@capacitor/core', '@capacitor/ios', '@capacitor/android'];
+const installedPlugins = Object.keys(packages.frontend.dependencies ?? {})
+  .filter((name) => name.startsWith('@capacitor/'))
+  .filter((name) => !CAPACITOR_PLATFORM_PACKAGES.includes(name))
+  .sort();
+
+const mobileDoc = read('docs/mobile.md');
+const pluginTable = mobileDoc.match(
+  /<!--\s*capacitor-plugins:start\s*-->([\s\S]*?)<!--\s*capacitor-plugins:end\s*-->/
+);
+if (!pluginTable) {
+  fail('docs/mobile.md is missing the capacitor-plugins table markers');
+} else {
+  const documented = [...pluginTable[1].matchAll(/`(@capacitor\/[a-z0-9-]+)`/g)]
+    .map((row) => row[1])
+    .sort();
+  const undocumented = installedPlugins.filter((name) => !documented.includes(name));
+  const overclaimed = documented.filter((name) => !installedPlugins.includes(name));
+  for (const name of undocumented) {
+    fail(`docs/mobile.md "Native capabilities" does not list installed plugin ${name}`);
+  }
+  for (const name of overclaimed) {
+    fail(`docs/mobile.md "Native capabilities" claims ${name}, which is not installed`);
+  }
+}
+
+const androidPluginLinks = read('frontend/android/capacitor.settings.gradle');
+const iosPluginLinks = read('frontend/ios/App/CapApp-SPM/Package.swift');
+for (const name of installedPlugins) {
+  if (!androidPluginLinks.includes(`${name}/android`)) {
+    fail(`Android project does not link ${name}; run npx cap sync`);
+  }
+  if (!iosPluginLinks.includes(`node_modules/${name}`)) {
+    fail(`iOS project does not link ${name}; run npx cap sync`);
+  }
+}
+
 const androidBuild = read('frontend/android/app/build.gradle');
 assertEqual(
   match(androidBuild, /applicationId\s+['"]([^'"]+)['"]/, 'Android applicationId'),
@@ -270,6 +320,92 @@ for (const ignoredPath of [
   }
 }
 
+// --- Checks that need no signing material, no populated .env and no `cap
+// --- sync` output, so they run in every mode and therefore in CI (#470).
+
+// `--production` asserts VITE_CHAT_STREAM_URL is unset and VITE_BETA_MODE is
+// false, but it reads process.env and only ever runs from
+// build-mobile-release.sh on a maintainer's laptop. Those assertions are the
+// reason the flag exists, and CI never reached them; worse, running them in
+// CI as-is would pass vacuously, because an unset variable in a checkout with
+// no .env looks exactly like the correct answer.
+//
+// The file that actually decides both values is committed. Every release
+// environment is copied from .env.mobile.production.example (see
+// docs/mobile.md's build flow), so a stream URL enabled in the template
+// propagates into store builds — which is precisely the failure the
+// production check exists to stop. Assert the template instead: a real check,
+// on a real file, with no secrets, on every PR.
+const envExamplePath = 'frontend/.env.mobile.production.example';
+const envExample = read(envExamplePath);
+const templateValues = new Map();
+for (const line of envExample.split('\n')) {
+  const entry = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+  if (entry) templateValues.set(entry[1], entry[2].trim());
+}
+if (templateValues.has('VITE_CHAT_STREAM_URL')) {
+  fail(
+    `${envExamplePath} sets VITE_CHAT_STREAM_URL; native chat would select the SSE path ` +
+      'CapacitorHttp cannot read. Keep it commented out.'
+  );
+}
+if (templateValues.get('VITE_BETA_MODE') !== 'false') {
+  fail(`${envExamplePath} must set VITE_BETA_MODE=false for public store builds`);
+}
+if (templateValues.has('VITE_API_URL')) {
+  assertHttps(templateValues.get('VITE_API_URL'), `${envExamplePath} VITE_API_URL`);
+}
+
+// "Native push UI must remain hidden for this release" used to be a warn()
+// string, and warn() never touches the exit code (#469, #470) — a requirement
+// stated in a message that no code implemented. Implement it.
+//
+// Reachability, not intent, is the testable property: registerNativePush() is
+// currently exported and called by nothing but its own unit test, so the UI is
+// hidden as a consequence of there being no call site. The day someone adds
+// one, both platforms' push material becomes mandatory.
+//
+// The two halves are checked in different modes on purpose. The iOS
+// entitlements file is not a secret and belongs in the repo — docs/mobile.md
+// still makes "enable the Push Notifications capability in Xcode" a manual
+// step that must be redone on every fresh clone, and without an
+// aps-environment entitlement PushNotifications.register() fails at runtime —
+// so it is required as soon as a call site exists, in any mode. Android's
+// google-services.json genuinely cannot live in a checkout (it is gitignored
+// as service material), so it is required only in --production.
+const nativePushEntryPoint = 'frontend/src/services/nativePush.ts';
+const pushCallSites = execFileSync(
+  'git',
+  ['grep', '-l', '-E', 'registerNativePush\\s*\\(', '--', 'frontend/src'],
+  { cwd: root, encoding: 'utf8' }
+)
+  .split('\n')
+  .filter(Boolean)
+  .filter((path) => path !== nativePushEntryPoint);
+const nativePushIsReachable = pushCallSites.length > 0;
+
+if (nativePushIsReachable) {
+  const entitlements = ['frontend/ios/App/App/App.entitlements'].filter((path) =>
+    existsSync(resolve(root, path))
+  );
+  const declaresApsEnvironment = entitlements.some((path) =>
+    read(path).includes('aps-environment')
+  );
+  if (!declaresApsEnvironment) {
+    fail(
+      `Native push is reachable from ${pushCallSites.join(', ')} but no committed iOS ` +
+        'entitlements file declares aps-environment; PushNotifications.register() fails at ' +
+        'runtime without it'
+    );
+  }
+  if (!xcodeProject.includes('CODE_SIGN_ENTITLEMENTS')) {
+    fail(
+      'Native push is reachable but the Xcode project sets no CODE_SIGN_ENTITLEMENTS, so the ' +
+        'entitlements file is not applied to the App target'
+    );
+  }
+}
+
 if (production) {
   const requiredEnvironment = [
     'VITE_API_URL',
@@ -320,8 +456,11 @@ if (production) {
     } catch (error) {
       fail(`Could not validate google-services.json: ${String(error)}`);
     }
-  } else {
-    warn('Android push credentials are absent; native push UI must remain hidden for this release');
+  } else if (nativePushIsReachable) {
+    fail(
+      'Native push UI is reachable but frontend/android/app/google-services.json is absent; ' +
+        'a store build would ship a reminder toggle that cannot deliver'
+    );
   }
 }
 
@@ -352,6 +491,17 @@ if (!production && !existsSync(resolve(root, 'frontend/android/app/google-servic
 }
 
 for (const message of warnings) console.warn(`WARN: ${message}`);
+
+// A validator whose production mode has non-fatal findings is a validator you
+// have to read the output of, which is the failure mode this script exists to
+// remove (#470). Warnings are for the CI/day-to-day modes, where "signing
+// material is intentionally absent" is information rather than a defect. A
+// store build is the last moment anything is checked at all, so at that point
+// there is no such thing as a finding worth printing and not acting on.
+if (production && warnings.length) {
+  errors.push(...warnings.map((message) => `${message} (warnings are fatal in --production)`));
+}
+
 if (errors.length) {
   console.error(`Store release validation failed:\n- ${errors.join('\n- ')}`);
   process.exit(1);

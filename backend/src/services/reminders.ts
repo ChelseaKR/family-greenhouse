@@ -10,6 +10,12 @@
  * `notifier.sendToUser`, which respects per-user channel prefs + the DND window
  * and degrades to a structured log line when a channel isn't configured.
  *
+ * Volume: the daily cap below bounds how OFTEN a household hears from us;
+ * `REMINDER_OVERDUE_DECAY_DAYS` bounds how long. Without it the due window has
+ * only a near edge, so a household that stops keeping up is reminded every
+ * morning forever about a list that only grows — see that constant for why
+ * that is a bug and not a feature.
+ *
  * Spam control: the scan is hourly and the due window is 24h, so the same due
  * task is eligible on every run. A per-user, per-household, per-day dedupe
  * marker per delivery channel caps each channel at one reminder for each
@@ -62,20 +68,57 @@ import * as climate from './climate.js';
 import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
 import * as emailSuppression from './emailSuppression.js';
+import * as escalation from './escalation.js';
+import * as scheduledFanOut from './scheduledFanOut.js';
+import { resolveEmailLocale } from './email/locale.js';
 
 const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * The locale every reminder is composed in today.
+ * When a task stops being part of the DAILY reminder (#478).
  *
- * `reminderEmail` carries complete en + es catalogs, but nothing in the
- * backend stores a user's language: `NotificationPreferences` has `timezone`
- * and no locale, and Cognito's custom schema adds only household id/role. When
- * the per-user locale field lands (branch `feat/useful-emails` owns it), this
- * constant becomes a read of that field and nothing else here changes.
+ * `DUE_WINDOW_MS` above splits "ask before it's late" from "nag after it is",
+ * and it has no far edge: `taskService.getTasksDueBy` queries `GSI1SK <=
+ * cutoff` with no lower bound, so every overdue task is in the window forever,
+ * at any age. The consequence is the opposite of what the rest of this
+ * codebase's anti-nag reasoning intends — a household that has fallen behind
+ * receives a reminder EVERY morning (a household that is on top of things gets
+ * one only when something is actually due), each row carrying a `daysOverdue`
+ * that grows without bound. The app nags hardest exactly where someone has
+ * already checked out.
+ *
+ * So the window gets a far edge. A task this many whole days overdue drops out
+ * of the daily reminder and is carried by the weekly digest instead
+ * (`digestReport.gatherAtRisk` has no age ceiling and is not given one).
+ * Nothing is hidden: the reminder states how many it is not listing, the
+ * digest still ranks them, and the app still shows them. What ends is the
+ * daily re-reading of the same list.
+ *
+ * Deliberately NOT applied to:
+ *   - a task whose `nextDue` did not parse (`DueState.unknown`). We do not
+ *     know how overdue it is, so we cannot decide it is old. It stays, which
+ *     is also the case most in need of a human.
+ *   - the escalation pass below, which is handed the unfiltered `due` list —
+ *     auto-handoff has its own floor and its own at-most-once write, and this
+ *     constant must not quietly change who a task hands off to.
  */
-const REMINDER_LOCALE_ADOPTION: reminderEmail.ReminderLocale = 'en';
+export const REMINDER_OVERDUE_DECAY_DAYS = 14;
+
+/**
+ * The language a reminder is composed in when its recipient has never chosen
+ * one. Not a pin: the per-member locale is read below from
+ * `NotificationPreferences.emailLocale` through the canonical resolver in
+ * `services/email/locale.ts`, and this is only the last step of that chain.
+ *
+ * It used to be a constant every reminder was pinned to, with a docstring
+ * saying "nothing in the backend stores a user's language". That stopped being
+ * true when `emailLocale` landed; the reminder path kept sending English to
+ * users who had chosen Spanish, with a complete Spanish catalog sitting in
+ * `reminderEmail`. The push and SMS bodies fanned out from
+ * `notifier.sendToUser` inherited the same English.
+ */
+const REMINDER_LOCALE_DEFAULT: reminderEmail.ReminderLocale = 'en';
 // Markers outlive their day by a comfortable margin; DynamoDB TTL sweeps them.
 const MARKER_TTL_SECONDS = 48 * 60 * 60;
 // Long enough for the notifier's provider calls, short enough that a killed
@@ -342,6 +385,18 @@ function dueStateFor(nextDue: string | null | undefined, now: Date): DueState {
   return days <= 0 ? { kind: 'today' } : { kind: 'overdue', days };
 }
 
+/**
+ * Has this task been overdue long enough to drop out of the daily reminder?
+ *
+ * Derived from `dueStateFor`, not from a second date calculation, so "resting"
+ * and "N days overdue" can never disagree. `unknown` is false by construction:
+ * an unreadable due date is not an old one.
+ */
+export function isRestingOverdue(nextDue: string | null | undefined, now: Date): boolean {
+  const state = dueStateFor(nextDue, now);
+  return state.kind === 'overdue' && state.days >= REMINDER_OVERDUE_DECAY_DAYS;
+}
+
 /** Most urgent first: longest-overdue, then today, then upcoming, then the
  *  rows whose due date we could not read (last, but never dropped). */
 const DUE_RANK: Record<DueState['kind'], number> = {
@@ -428,8 +483,33 @@ export async function remindHousehold(
     due = dueWindowTasks.filter((t) => activePlantNames.has(t.plantId));
   }
 
+  // Split the due window at its new far edge. `due` stays whole — the
+  // escalation pass at the bottom of this function reads it — and only the
+  // reminder composition works from `fresh`.
+  const fresh: Task[] = [];
+  const resting: Task[] = [];
+  for (const task of due) {
+    (isRestingOverdue(task.nextDue, now) ? resting : fresh).push(task);
+  }
+  if (resting.length > 0) {
+    logger.info(
+      {
+        householdId,
+        resting: resting.length,
+        fresh: fresh.length,
+        afterDays: REMINDER_OVERDUE_DECAY_DAYS,
+        msg: 'reminders.overdue_resting',
+      },
+      'reminders.overdue_resting'
+    );
+  }
+
   let sent = 0;
-  if (due.length > 0) {
+  // Gate on `fresh`, not `due`: a household whose entire backlog has aged past
+  // the far edge sends nobody a reminder today, and does not pay for the member
+  // or vacation reads to establish that. That silence IS the fix — the weekly
+  // digest still names every one of those tasks.
+  if (fresh.length > 0) {
     const members = await householdService.getHouseholdMembers(householdId);
     const memberIds = new Set(members.map((m) => m.userId));
 
@@ -457,14 +537,22 @@ export async function remindHousehold(
     // Unassigned tasks — and tasks whose effective assignee can't be
     // reached (left the household, or away with no valid cover) — roll up
     // into every member's reminder so they don't silently fall on the floor.
-    const unassigned = due.filter((t) => !deliverable(effectiveAssignee(t)));
+    const unassigned = fresh.filter((t) => !deliverable(effectiveAssignee(t)));
+
+    /** Same two buckets over the aged-out rows. Counted per member, never
+     *  listed, and disjoint by the same rule the two above are. */
+    const restingUnassigned = resting.filter((t) => !deliverable(effectiveAssignee(t)));
 
     /** One rendered row. Plant names come from the active-plant read, which
      *  every task in `due` already matched; an empty stored name resolves to
      *  null so the composer says the name is missing rather than printing "". */
-    const rowFor = (t: Task, upForGrabs: boolean): ReminderTaskRow => ({
+    const rowFor = (
+      t: Task,
+      upForGrabs: boolean,
+      locale: reminderEmail.ReminderLocale
+    ): ReminderTaskRow => ({
       plantName: activePlantNames.get(t.plantId)?.trim() || null,
-      taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, REMINDER_LOCALE_ADOPTION),
+      taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, locale),
       due: dueStateFor(t.nextDue, now),
       upForGrabs,
       url: frontendUrl(`/plants/${encodeURIComponent(t.plantId)}`),
@@ -484,9 +572,16 @@ export async function remindHousehold(
       // vacation mode. Their tasks are in someone else's `mine` below.
       if (vacations.has(member.userId)) continue;
 
-      const mine = due.filter((t) => effectiveAssignee(t) === member.userId);
+      const mine = fresh.filter((t) => effectiveAssignee(t) === member.userId);
       const tasksForMember = [...mine, ...unassigned];
       if (tasksForMember.length === 0) continue;
+
+      // Stated as one number in the body, never listed and never in the
+      // subject. Same partition as `mine` / `unassigned`, so a task cannot be
+      // counted in both halves.
+      const restingForMember =
+        resting.filter((t) => effectiveAssignee(t) === member.userId).length +
+        restingUnassigned.length;
 
       // Keep aggregate markers written by earlier releases authoritative until
       // they age out, then reserve only the still-pending eligible channels.
@@ -533,9 +628,17 @@ export async function remindHousehold(
       // `unassigned` are nobody's, and are marked claimable rather than folded
       // into an anonymous integer that five people each read as someone
       // else's problem.
+      // The recipient's own stored language, or English when nobody has told
+      // us. Passed `null` for the household step deliberately: that step is a
+      // member fan-out and this loop already runs per member per hour.
+      const memberLocale =
+        resolveEmailLocale(memberPrefs.emailLocale, null).locale === 'es'
+          ? 'es'
+          : REMINDER_LOCALE_DEFAULT;
+
       const rows = [
-        ...mine.map((t) => rowFor(t, false)),
-        ...unassigned.map((t) => rowFor(t, true)),
+        ...mine.map((t) => rowFor(t, false, memberLocale)),
+        ...unassigned.map((t) => rowFor(t, true, memberLocale)),
       ].sort(compareRows);
 
       // Tell the cover whose tasks they're picking up, and why. A member row
@@ -562,8 +665,10 @@ export async function remindHousehold(
         rows,
         covering,
         climate: await householdClimate(),
-        locale: REMINDER_LOCALE_ADOPTION,
+        locale: memberLocale,
         timeZone,
+        restingCount: restingForMember,
+        restingAfterDays: REMINDER_OVERDUE_DECAY_DAYS,
       });
 
       let result: notifier.SendResult;
@@ -664,6 +769,16 @@ export async function remindHousehold(
       );
       if (memberDelivered) sent += 1;
     }
+  }
+
+  // Auto-handoff (ADR 0018) rides on the same due-window query: `due` is the
+  // already-fetched, active-plant-filtered list, so when nothing is ≥5 days
+  // overdue this costs no reads at all. Best-effort, after the reminder loop
+  // so an escalation can never suppress or duplicate today's reminders.
+  try {
+    await escalation.runEscalations(householdId, due, now);
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, householdId }, 'reminders.escalation_failed');
   }
 
   // Seasonal pest alerts ride along with the reminder run (the prefs toggle
@@ -807,27 +922,74 @@ async function runPestAlerts(householdId: string, now: Date): Promise<void> {
  * Hourly scan across every household. Best-effort per household — one
  * household's failure must not abort the rest of the run.
  *
- * `households` is how many were ATTEMPTED and `failed` how many of those
- * threw. Without `failed`, a run where every household crashed summarised
- * as `{ households: N, sent: 0 }` — indistinguishable from "nobody had
- * anything due".
+ * `households` is how many were ENUMERATED, `attempted` how many of those
+ * this run got to, and `failed` how many of those threw. Without `failed`, a
+ * run where every household crashed summarised as `{ households: N, sent: 0 }`
+ * — indistinguishable from "nobody had anything due".
+ *
+ * `attempted` and `truncated` exist because the serial loop this replaced had
+ * no clock in it: past a few hundred households it ran past the 30-second
+ * Lambda timeout and was killed wherever it happened to be, and EventBridge's
+ * retry restarted it at household #1 and died in the same place. The
+ * households in the tail were not delayed, they were unreachable, and nothing
+ * anywhere said so. `services/scheduledFanOut.ts` bounds the concurrency,
+ * stops on a deadline instead of being killed, and resumes the next hour from
+ * where it stopped; the counters here are what make a run that could not
+ * finish visible rather than merely quiet.
  */
 export async function remindAllHouseholds(
-  now: Date = new Date()
-): Promise<{ households: number; sent: number; failed: number }> {
+  now: Date = new Date(),
+  options: { deadlineAt?: number } = {}
+): Promise<{
+  households: number;
+  attempted: number;
+  sent: number;
+  failed: number;
+  truncated: boolean;
+}> {
   const ids = await householdService.listAllHouseholdIds();
   let sent = 0;
   let failed = 0;
-  for (const id of ids) {
-    try {
-      sent += await remindHousehold(id, now);
-    } catch (err) {
-      // Best-effort, but never silent: a swallowed error here previously hid
-      // real failures (e.g. Intl throwing on a corrupt stored timezone, which
-      // aborted reminders for every member after the bad one).
-      failed += 1;
-      logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
-    }
-  }
-  return { households: ids.length, sent, failed };
+  const fanOut = await scheduledFanOut.fanOutHouseholds(
+    'reminders',
+    ids,
+    async (id) => {
+      try {
+        sent += await remindHousehold(id, now);
+      } catch (err) {
+        // Best-effort, but never silent: a swallowed error here previously hid
+        // real failures (e.g. Intl throwing on a corrupt stored timezone, which
+        // aborted reminders for every member after the bad one).
+        failed += 1;
+        logger.warn({ err: (err as Error).message, householdId: id }, 'reminders.household_failed');
+      }
+    },
+    { deadlineAt: options.deadlineAt }
+  );
+  // The run's own summary, as a structured line, because the counters existed
+  // nowhere else: the per-household catch above logs at WARN (below every
+  // metric filter) and the handler then returns normally, so an hour in which
+  // EVERY household failed produced no Lambda error, nothing in the DLQ, and
+  // no data point anywhere. It was byte-identical, from the outside, to an
+  // hour with nothing due. `digest.run_complete` already existed and is what
+  // this mirrors; the metric filters in
+  // infrastructure/modules/monitoring/main.tf read both.
+  logger.info(
+    {
+      households: fanOut.total,
+      attempted: fanOut.attempted,
+      sent,
+      failed,
+      truncated: fanOut.truncated,
+      msg: 'reminders.run_complete',
+    },
+    'reminders.run_complete'
+  );
+  return {
+    households: fanOut.total,
+    attempted: fanOut.attempted,
+    sent,
+    failed,
+    truncated: fanOut.truncated,
+  };
 }

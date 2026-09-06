@@ -8,7 +8,7 @@
  * actually mattered — stated that coverage was "configured but not enforced"
  * and that "we don't gate CI on coverage %". Both claims were false: floors
  * sit in BOTH vitest configs, the required `Test Backend` / `Test Frontend` CI
- * jobs run `test:coverage`, and `.husky/pre-push` runs `npm run verify` which
+ * jobs run `test:coverage`, and `.githooks/pre-push` runs `npm run verify` which
  * chains the same command. A contributor reading that section would have
  * concluded a coverage drop couldn't block their merge, and been wrong.
  *
@@ -41,6 +41,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { STEPS as GATE_STEPS } from './gate-steps.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DOC_PATH = 'docs/testing.md';
@@ -233,15 +234,36 @@ for (const job of ['Test Frontend', 'Test Backend']) {
   }
 }
 
-if (!read('.husky/pre-push').includes('npm run verify')) {
-  errors.push(`.husky/pre-push no longer runs \`npm run verify\`, but ${DOC_PATH} says it does.`);
+// The hook moved from `.husky/pre-push` (reached through husky's generated,
+// git-ignored `.husky/_` shim) to the tracked `.githooks/pre-push` — see #544
+// and scripts/check-git-hooks.mjs. `read()` throws on a missing file, so a
+// rename cannot turn this assertion into a vacuous pass.
+if (!read('.githooks/pre-push').includes('npm run verify')) {
+  errors.push(
+    `.githooks/pre-push no longer runs \`npm run verify\`, but ${DOC_PATH} says it does.`
+  );
 }
 
-const verify = JSON.parse(read('package.json')).scripts.verify ?? '';
-if (!verify.includes('test:coverage')) {
+// `verify` used to be a literal `&&` chain and this was a substring match on
+// it. It now delegates to scripts/run-gate.mjs, so the same claim — pre-push
+// enforces BOTH workspaces' coverage floors — is checked against the gate's
+// own step list, per workspace. That is stricter than the substring ever was:
+// the old form was satisfied by a single `--workspaces` invocation whose
+// `--if-present` would have quietly skipped a workspace that lost the script.
+const rootPkg = JSON.parse(read('package.json'));
+const verify = rootPkg.scripts.verify ?? '';
+if (!verify.includes('run-gate.mjs')) {
   errors.push(
-    `package.json: \`verify\` no longer chains \`test:coverage\`, but ${DOC_PATH} says it does.`
+    `package.json: \`verify\` no longer runs scripts/run-gate.mjs, so the gate steps below cannot be checked. If the gate moved, update this script too.`
   );
+} else {
+  for (const ws of rootPkg.workspaces ?? []) {
+    if (!GATE_STEPS.some((s) => s.workspace === ws && s.script === 'test:coverage')) {
+      errors.push(
+        `scripts/gate-steps.mjs: no \`test:coverage\` step for the \`${ws}\` workspace, but ${DOC_PATH} says pre-push enforces every workspace's coverage floors.`
+      );
+    }
+  }
 }
 
 // The exact retired claims. These were live and false; keep them retired.

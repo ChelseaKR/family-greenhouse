@@ -181,10 +181,11 @@ describe('plants handler — propagation + shares', () => {
       const res = (await createPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(201);
       expect(plantService.createPlant).toHaveBeenCalledWith(
-        { name: 'Cutting', parentPlantId: PARENT_ID },
+        // No species on the cutting form → provenance is unknown, not 'user'.
+        { name: 'Cutting', parentPlantId: PARENT_ID, speciesSource: null },
         'hh-1',
         'user-1',
-        500
+        200
       );
       // Parented create records the more specific event type.
       expect(activity.recordActivity).toHaveBeenCalledWith(
@@ -251,7 +252,7 @@ describe('plants handler — propagation + shares', () => {
         'hh-1',
         CHILD_ID,
         { parentPlantId: null },
-        500 // garden plan's maxPlants, per the billing.js mock above
+        200 // garden plan's plant cap, per the billing.js mock above
       );
     });
   });
@@ -390,7 +391,7 @@ describe('plants handler — propagation + shares', () => {
         },
         'hh-1', // the ACCEPTOR's household, not the share's
         'user-1',
-        500
+        200
       );
       expect(activity.recordActivity).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -416,7 +417,7 @@ describe('plants handler — propagation + shares', () => {
       });
       const res = (await acceptSharedPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(402);
-      expect(res.body).toMatch(/Seedling plan is limited to 10 plants/);
+      expect(res.body).toMatch(/Seedling plan is limited to 20 plants/);
     });
 
     it('requires authentication (401 without claims)', async () => {

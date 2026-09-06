@@ -3,6 +3,9 @@ import { DeleteCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamod
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import * as billing from './billing.js';
+import * as kioskService from './kioskService.js';
+import * as plantTagService from './plantTagService.js';
+import * as sitterService from './sitterService.js';
 
 const DELETED_USER_ID = 'deleted-user';
 const DELETED_USER_NAME = 'Former member';
@@ -204,6 +207,11 @@ export async function deleteUserScopedData(userId: string): Promise<void> {
  * deletion must clear all four boundaries; deleting only the visible plants
  * leaves a usable sitter link or a live wall display and a substantial amount
  * of household data behind.
+ * Activity events and caretaker visit records use dedicated partitions, while
+ * sitter and caretaker credentials use secret-token partitions projected onto
+ * GSI1. Account deletion must clear every one of those boundaries; deleting
+ * only the visible plants leaves a usable sitter link or caretaker token and a
+ * substantial amount of household data behind.
  *
  * Plant-specific S3 objects and per-plant rows are removed by
  * plantService.deletePlant before this runs. This final partition sweep is
@@ -231,6 +239,37 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
     ProjectionExpression: 'PK, SK',
   });
   await deleteItems(kioskItems);
+  // Caretaker seats share the sitter posture: a secret-token partition
+  // projected onto GSI1. Their visit records live in a third partition. Both
+  // must go, for the same reason the sitter links do — a surviving token is a
+  // live credential into an erased household.
+  const caretakerItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#CARETAKER` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(caretakerItems);
+
+  const caretakerVisitItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#CARETAKER_VISIT` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(caretakerVisitItems);
+
+  // Plant tags (ADR 0016) use the same secret-token-partition shape as sitter
+  // links. The household PIN row sits in the base partition and is swept below.
+  const plantTagItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#PLANTTAG` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(plantTagItems);
 
   const activityItems = await queryAllItems({
     TableName: TABLE_NAME,
@@ -272,6 +311,53 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
  * happened. Names and stable user ids are replaced, active assignments are
  * cleared, and creator ids on retained household objects are anonymized.
  */
+export interface RevokedCredentialCounts {
+  plantTags: number;
+  sitterLinks: number;
+  kioskLinks: number;
+}
+
+/**
+ * Revoke the long-lived credentials a departing member minted.
+ *
+ * Removing someone used to revoke their session and nothing else: the JWT path
+ * re-reads the membership row on every request, so access died at once — but
+ * every capability token they had issued lived in the `HOUSEHOLD#{id}` or
+ * secret-token partitions and kept working. Plant tags and kiosk links never
+ * expire at all; sitter links last up to 7 days free / 90 paid (#449).
+ *
+ * MUST BE CALLED BEFORE `anonymizeUserInHousehold`. That function overwrites
+ * `createdBy` with DELETED_USER_ID on exactly these rows — deliberately, so a
+ * shared household keeps its labels working when someone deletes their
+ * ACCOUNT. Once it has run, nothing can tell which credentials the departing
+ * member created, so revocation is no longer possible.
+ *
+ * API keys are deliberately absent: `middleware/apiKey.ts` re-checks the
+ * creator's membership on every use, so the key stops working without the row
+ * disappearing — which leaves a remaining admin able to see in Settings why
+ * their integration stopped, and to re-mint deliberately.
+ *
+ * Failures propagate. A half-revoked departure is worth a 500 the caller can
+ * retry, not a silent "we tried".
+ */
+export async function revokeCredentialsCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<RevokedCredentialCounts> {
+  const [plantTags, sitterLinks, kioskLinks] = await Promise.all([
+    plantTagService.revokeTagsCreatedBy(householdId, userId),
+    sitterService.revokeSitterLinksCreatedBy(householdId, userId),
+    kioskService.revokeKioskLinksCreatedBy(householdId, userId),
+  ]);
+  if (plantTags + sitterLinks + kioskLinks > 0) {
+    logger.info(
+      { householdId, plantTags, sitterLinks, kioskLinks },
+      'member_removal.credentials_revoked'
+    );
+  }
+  return { plantTags, sitterLinks, kioskLinks };
+}
+
 export async function anonymizeUserInHousehold(householdId: string, userId: string): Promise<void> {
   const plantIds: string[] = [];
   await forEachQueryPage(
@@ -366,6 +452,33 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
       )
   );
 
+  // Plant tags (ADR 0016): same shape as sitter links — the labels keep
+  // working for the household, but the departed issuer's id is scrubbed.
+  await forEachQueryPage(
+    {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#PLANTTAG` },
+    },
+    (tags) =>
+      mapBounded(
+        tags.filter((tag) => tag.createdBy === userId),
+        async (tag) => {
+          await dynamodb.send(
+            new UpdateCommand({
+              TableName: TABLE_NAME,
+              Key: { PK: tag.PK, SK: tag.SK },
+              UpdateExpression: 'SET #createdBy = :deletedId',
+              ExpressionAttributeNames: { '#createdBy': 'createdBy' },
+              ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },
+              ConditionExpression: 'attribute_exists(PK)',
+            })
+          );
+        }
+      )
+  );
+
   // Kiosk credentials, same treatment: the household's wall display keeps
   // working when one member leaves, but the departed member's id is scrubbed.
   await forEachQueryPage(
@@ -383,6 +496,35 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
             new UpdateCommand({
               TableName: TABLE_NAME,
               Key: { PK: link.PK, SK: link.SK },
+              UpdateExpression: 'SET #createdBy = :deletedId',
+              ExpressionAttributeNames: { '#createdBy': 'createdBy' },
+              ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },
+              ConditionExpression: 'attribute_exists(PK)',
+            })
+          );
+        }
+      )
+  );
+
+  // Caretaker seats, like sitter links, outlive a departing member: the
+  // household may still be relying on them. Scrub only the departed creator's
+  // stable id. Visit records name the CARETAKER, never a member, so they need
+  // no scrub — and rewriting them would falsify the household's own record.
+  await forEachQueryPage(
+    {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#CARETAKER` },
+    },
+    (seats) =>
+      mapBounded(
+        seats.filter((seat) => seat.createdBy === userId),
+        async (seat) => {
+          await dynamodb.send(
+            new UpdateCommand({
+              TableName: TABLE_NAME,
+              Key: { PK: seat.PK, SK: seat.SK },
               UpdateExpression: 'SET #createdBy = :deletedId',
               ExpressionAttributeNames: { '#createdBy': 'createdBy' },
               ExpressionAttributeValues: { ':deletedId': DELETED_USER_ID },

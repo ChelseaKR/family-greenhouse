@@ -12,6 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // @ts-nocheck
 import express from 'express';
+import expressRateLimit, { MemoryStore } from 'express-rate-limit';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'node:crypto';
@@ -38,13 +39,34 @@ import {
   updateTaskSchema,
   completeTaskSchema,
   snoozeTaskSchema,
+  askForHelpSchema,
   setVacationSchema,
   applyTemplateSchema,
   applyTemplateBulkSchema,
   createSitterLinkSchema,
+  setEscalationRuleSchema,
+  setHouseholdTimeZoneSchema,
 } from './models/schemas.js';
+import type { SpaceRotation } from './models/types.js';
+import { resolveInheritedAssignee, isExplicitAssignment } from './services/assignmentResolver.js';
+import { ASK_HELP_WINDOW_MS, normalizeHelpNote } from './services/askFamilyRule.js';
+import { normalizeHouseholdTimeZone } from './services/householdTimeZone.js';
 import { TEMPLATES } from './models/taskTemplates.js';
-import { PLANS, planSummary, planHasFeature, hasHouseholdToolkit } from './models/plans.js';
+import {
+  PLANS,
+  planSummary,
+  featureOf,
+  getEntitledPlan,
+  getEntitledPlanForIssuedGrant,
+  hasHouseholdToolkit,
+  planIncludesAwayKit,
+  planIncludesCrossHomeToday,
+  planHasMoveDay,
+  atCap,
+  limitOf,
+  strongestPlan,
+} from './models/plans.js';
+import type { EntitlementSubscription, Plan } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
 // would take this whole dev server down before it could serve a request.
@@ -66,6 +88,24 @@ import {
   resolveTargetPlan,
   type UpgradeFeature,
 } from './models/upgradeFeatures.js';
+import {
+  CROSS_HOME_TODAY_LOCKED_MESSAGE,
+  InvalidUntilError,
+  isDueBy,
+  resolveCutoff,
+} from './models/crossHomeToday.js';
+import {
+  assignRoundRobin,
+  isMoveDayApplicable,
+  moveTaskLabel,
+  planMoves,
+} from './services/moveDayPlan.js';
+import type { MoveDayList } from './services/moveDayPlan.js';
+import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import { IDENTIFICATION_CONFIDENCE_FLOOR } from './services/plantIdentification.js';
+import { analyticsWindow } from './services/analyticsWindow.js';
+// Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
+import { computeCoverage } from './services/coverageMath.js';
 import { lookupToxicity } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
@@ -80,8 +120,35 @@ import {
 import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
+import {
+  registerPlantTagRoutes,
+  type LocalPlantTag,
+  type LocalPlantTagPin,
+} from './local-server-plant-tags.js';
+import { STORE_DEMO_LOGIN, seedStoreDemoHousehold } from './local-server-store-demo.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
+import { buildCaretakerReport, resolveReportRange } from './services/caretakerReport.js';
+import {
+  SITTER_PHOTO_BODY_MAX_BYTES,
+  SITTER_PHOTO_EXTENSIONS,
+  SITTER_PHOTO_MAX_PER_LINK,
+  admitSitterPhoto,
+  sitterActorId,
+  sitterPhotoUploadSchema,
+  takeSitterPhotoToken,
+} from './services/sitterPhotoPolicy.js';
+import { buildAwayRecap, pickRecapLink, recapWindow } from './services/awayRecapModel.js';
+import {
+  isEmailCategory,
+  signToken,
+  verifyTokenWithSecret,
+} from './services/email/capabilityToken.js';
+import {
+  renderConfirmPage,
+  renderDonePage,
+  renderInvalidPage,
+} from './services/email/unsubscribePage.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
@@ -104,7 +171,10 @@ const PORT = process.env.PORT || 4000;
 // explicitly keeps the mock and production route surfaces in lockstep.
 app.options('/*proxy', cors());
 app.use(cors());
-app.use(express.json());
+// Production caps bodies per route (middleware/bodySize.ts); the largest is
+// the sitter photo-back upload (SITTER_PHOTO_BODY_MAX_BYTES). Express's
+// 100 KB default would reject that route's in-spec bodies before it ran.
+app.use(express.json({ limit: SITTER_PHOTO_BODY_MAX_BYTES }));
 
 // In-memory storage for local development
 interface Membership {
@@ -134,12 +204,25 @@ interface Household {
   name: string;
   /** Optional saved location for climate-aware care tips. */
   location?: { city: string; lat: number; lon: number } | null;
+  /** Auto-handoff rule (ADR 0018); null/absent = off. */
+  escalateAfterDays?: number | null;
+  /** IANA zone, `''`/absent = never set (#342, ADR 0025). Read by nothing. */
+  timezone?: string;
   createdAt: string;
   createdBy: string;
   planId?: 'seedling' | 'garden' | 'greenhouse';
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   subscriptionStatus?: string;
+  /**
+   * A tier bought outright. Mirrors the `lifetimePlanId` attribute on the
+   * production METADATA row (services/billing.ts): an entitlement FLOOR that
+   * no subscription status may fall below, because there is no refund path.
+   * Nothing in the mock writes it — /billing/checkout answers 503 like
+   * production's commercial hold — so a test seeds it directly, exactly as it
+   * seeds `planId` and `subscriptionStatus`.
+   */
+  lifetimePlanId?: 'seedling' | 'garden' | 'greenhouse';
 }
 
 interface Invite {
@@ -184,6 +267,8 @@ interface PlantSpace {
   lightLevel: 'low' | 'medium' | 'bright' | null;
   petAccess: boolean | null;
   defaultCaregiverId: string | null;
+  /** Care rotation (ADR 0018); mirrors models/types.ts SpaceRotation. */
+  rotation: SpaceRotation | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -218,8 +303,18 @@ interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  assignmentSource: 'space_default' | null;
+  assignmentSource: 'space_default' | 'move_day' | 'rotation' | null;
   notes: string | null;
+  /** Auto-handoff marker; mirrors models/types.ts. */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  escalatedFrom?: string | null;
+  /** "Ask family to do it" marker (ADR 0024); mirrors models/types.ts. */
+  helpAskedAt?: string | null;
+  helpAskedBy?: string | null;
+  helpAskedByName?: string | null;
+  helpAskedNote?: string | null;
+  helpAskedForDue?: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -236,6 +331,45 @@ interface SitterLink {
   expiresAt: string;
   status: 'active' | 'revoked';
   label: string | null;
+  /** Photos stored through this link (Away Kit photo-back). Mirrors the
+   *  `photoCount` attribute the production row carries. */
+  photoCount?: number;
+}
+
+/** Mirrors caretakerService.Caretaker. Unlike a sitter link this identity has
+ *  a NAME, which is what every action it takes is attributed to.
+ *
+ *  This dev mock keys seats by the plaintext token in an in-memory Map; the
+ *  production row is `CARETAKER#{scrypt(token)}` with no plaintext on it
+ *  (#568). The mock has no table to export, so it mirrors the SHAPE and the
+ *  resolution rules rather than the at-rest posture. */
+interface Caretaker {
+  id: string;
+  token: string;
+  householdId: string;
+  createdBy: string;
+  createdAt: string;
+  name: string;
+  startsAt: string;
+  expiresAt: string;
+  status: 'active' | 'revoked';
+}
+
+/** Mirrors caretakerService.CaretakerVisit. `startedAt` is the timestamp of
+ *  the visit's FIRST action — the arrival time, observed not claimed. */
+interface CaretakerVisit {
+  id: string;
+  householdId: string;
+  caretakerId: string;
+  caretakerName: string;
+  startedAt: string;
+  lastActionAt: string;
+  tasksCompleted: Array<Record<string, unknown>>;
+  photos: Array<Record<string, unknown>>;
+  notes: Array<Record<string, unknown>>;
+  taskCount: number;
+  photoCount: number;
+  noteCount: number;
 }
 
 /** Mirrors kioskService.KioskLink (KIOSK#{token} row). Long-lived by design —
@@ -291,6 +425,8 @@ interface NotificationPrefsRecord {
   taskUpForGrabs: boolean;
   coverageUpdates: boolean;
   careCredit: boolean;
+  yearRecap: boolean;
+  emailLocale: '' | 'en' | 'es';
   phoneVerified: boolean;
   updatedAt: string;
 }
@@ -320,6 +456,9 @@ interface PlantPhoto {
   uploadedBy: string;
   uploadedAt: string;
   caption: string | null;
+  /** Mirrors plantService.PlantPhoto: set on sitter photo-back uploads. */
+  viaSitter?: boolean;
+  sitterLinkId?: string;
 }
 
 /** Mirrors taskService.VacationWindow (PK=HOUSEHOLD#{id}, SK=VACATION#{userId}). */
@@ -419,10 +558,21 @@ export const db = {
   pendingConfirmations: new Map<string, string>(), // email -> confirmation code
   sitterLinks: new Map<string, SitterLink>(), // keyed by token (the secret)
   calendarTokens: new Map<string, CalendarToken>(), // keyed by token (the secret)
+  plantTags: new Map<string, LocalPlantTag>(), // ADR 0016 — keyed by token (the secret)
+  plantTagPins: new Map<string, LocalPlantTagPin>(), // householdId -> PIN hash, never the PIN
+  caretakers: new Map<string, Caretaker>(), // keyed by token (the secret)
+  caretakerVisits: new Map<string, CaretakerVisit>(), // keyed by visit id
+  // Open-visit pointers, keyed `${householdId}|${caretakerId}` — mirrors the
+  // OPEN#{caretakerId} row in the visit partition.
+  caretakerOpenVisits: new Map<string, { visitId: string; lastActionAt: string }>(),
   kioskLinks: new Map<string, KioskLink>(), // keyed by token (the secret)
   // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
   // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
   upgradeRequests: new Map<string, { requestedAt: string }>(),
+  // "Ask family to do it" rate-limit markers, keyed
+  // `${householdId}|${taskId}|${userId}` (mirrors the
+  // TASK_HELP_ASK#{taskId}#{userId} marker + its 24-hour window, ADR 0024).
+  helpAsks: new Map<string, { askedAt: string }>(),
   // Tiny local object store used by the real browser upload flow. A presign
   // creates a capability token, PUT stores the bytes, confirm verifies the
   // object exists, and /mock-images serves the confirmed URL from this API.
@@ -441,6 +591,16 @@ export const seedHouseholdId = '550e8400-e29b-41d4-a716-446655440001';
 export const seedUserId = '550e8400-e29b-41d4-a716-446655440000';
 export let seedPlantId = '';
 export let seedTaskId = '';
+
+/**
+ * Two Maps that live outside `db` because they mirror rows production keeps
+ * elsewhere: the `MOVEDAY#{season}` record (services/moveDay.ts) and the
+ * monthly identification meter (services/identifyBudget.ts). Declared here
+ * rather than beside the routes that use them only so `resetDb` — which runs
+ * at module load to seed — can clear them without a temporal-dead-zone error.
+ */
+const moveDayRecords = new Map<string, MoveDayList>(); // `${householdId}#${season}`
+const identifyUsage = new Map<string, number>(); // `${yyyy-mm}#${bucketId}`
 
 export function resetDb(): void {
   db.users.clear();
@@ -468,10 +628,23 @@ export function resetDb(): void {
   db.pendingConfirmations.clear();
   db.sitterLinks.clear();
   db.calendarTokens.clear();
+  db.plantTags.clear();
+  db.plantTagPins.clear();
+  db.caretakers.clear();
+  db.caretakerVisits.clear();
+  db.caretakerOpenVisits.clear();
   db.kioskLinks.clear();
   db.upgradeRequests.clear();
+  db.helpAsks.clear();
   db.mockUploadGrants.clear();
   db.mockImages.clear();
+  // Not reset before this change, so a Move Day fired in one test stayed
+  // "claimed" for every later test in the same worker — the seed household id
+  // is a constant. A reset that leaves state behind is the same class of
+  // problem as the rest of this change: a test can pass against a condition
+  // it never set up.
+  moveDayRecords.clear();
+  identifyUsage.clear();
 
   const now = new Date().toISOString();
 
@@ -503,6 +676,7 @@ export function resetDb(): void {
     lightLevel: null,
     petAccess: null,
     defaultCaregiverId: null,
+    rotation: null,
     createdAt: now,
     createdBy: seedUserId,
     updatedAt: now,
@@ -549,6 +723,12 @@ export function resetDb(): void {
     createdBy: seedUserId,
     createdAt: now,
   });
+
+  // Opt-in second household for the store screenshot run only. Off by
+  // default so every existing caller of resetDb() sees exactly the fixture it
+  // was written against — including the integration tests that count the
+  // global `db.photos` / `db.completions` Maps. See local-server-store-demo.ts.
+  if (process.env.SEED_STORE_DEMO === '1') seedStoreDemoHousehold(db);
 }
 
 resetDb();
@@ -707,6 +887,27 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
 }
 
 /** Production HouseholdMember row shape for a household's roster. */
+/**
+ * Mirrors services/homesGate.ts (ADR 0014): the strongest plan across every
+ * household the user is in — plus the one being joined — decides the homes
+ * cap. A user already above it keeps every home and is refused only the next
+ * one. Returns the 402 message, or null when the add is allowed.
+ */
+function homesRefusal(
+  dbUser: { memberships: Membership[] },
+  joiningHouseholdId: string | null
+): string | null {
+  const ids = new Set(dbUser.memberships.map((m) => m.householdId));
+  if (joiningHouseholdId) ids.add(joiningHouseholdId);
+  const plan = strongestPlan([...ids].map((id) => db.households.get(id)?.planId));
+  const limit = limitOf(plan, 'homes');
+  const count = dbUser.memberships.length;
+  if (!atCap(count, limit)) return null;
+  const homes = limit === 1 ? '1 home' : `${limit} homes`;
+  const belongs = count === 1 ? '1 household' : `${count} households`;
+  return `Your ${plan.name} plan includes ${homes} and you already belong to ${belongs}. Upgrade to Greenhouse for unlimited homes.`;
+}
+
 function membersOf(householdId: string) {
   const members: Array<{
     householdId: string;
@@ -746,9 +947,53 @@ function recordActivity(input: RecordActivityInput): void {
   });
 }
 
-/** Mirrors handlers/tasks resolvePlanBestEffort + hasHouseholdToolkit. */
+/**
+ * The subscription row entitlement is resolved against. Mirrors
+ * `services/billing.getHouseholdSubscription` — three fields, because
+ * entitlement is three questions: which tier is on file, whether it is being
+ * paid for, and what was bought outright and can never be taken back.
+ *
+ * Before this pass every gate below read `PLANS[h?.planId ?? 'seedling']`,
+ * which is `getPlan(h?.planId)` with the fallback written out by hand: it
+ * could see the first field and neither of the other two. So the mock granted
+ * a `past_due` household everything for the whole dunning window, and dropped
+ * a household that had bought a tier outright to Seedling the moment an
+ * unrelated subscription was cancelled — the same two defects #364 and #476
+ * fixed in the handlers. That divergence matters here for one reason: the
+ * integration suite tests the MOCK, so a test could pass against behaviour
+ * production does not have.
+ */
+function subscriptionOf(householdId: string | null | undefined): EntitlementSubscription {
+  const h = householdId ? db.households.get(householdId) : undefined;
+  return {
+    planId: h?.planId,
+    status: h?.subscriptionStatus,
+    lifetimePlanId: h?.lifetimePlanId,
+  };
+}
+
+/**
+ * What this household MAY START. The default question and the one nearly
+ * every gate below is asking; see models/plans.ts.
+ */
+function entitledPlan(householdId: string | null | undefined): Plan {
+  return getEntitledPlan(subscriptionOf(householdId));
+}
+
+/*
+ * There is deliberately NO `issuedGrantPlan` beside it.
+ * `getEntitledPlanForIssuedGrant` is the exception, not the rule, and
+ * scripts/check-entitlement-gates.mjs flags every call to it so each use has
+ * to carry a written reason in the baseline. A helper would funnel them into
+ * one finding and make the next one free — which is exactly the accounting
+ * the gate exists to prevent. The four uses below each name it.
+ */
+
+/** Mirrors handlers/tasks resolvePlanBestEffort + hasHouseholdToolkit: the
+ *  double-care detector and the drift endpoints, every one of them read by a
+ *  member of the household on their own account — the STARTING question. */
 function householdHasToolkit(householdId: string): boolean {
-  return hasHouseholdToolkit(PLANS[db.households.get(householdId)?.planId ?? 'seedling']);
+  return hasHouseholdToolkit(entitledPlan(householdId));
 }
 
 // Health check
@@ -831,6 +1076,28 @@ app.post('/__test__/accounts', validateBody(signupSchema), (req, res) => {
   } catch (error) {
     return res.status(400).json({ message: (error as Error).message });
   }
+});
+
+const testPlanSchema = z.object({
+  planId: z.enum(['seedling', 'garden', 'greenhouse']),
+});
+
+// Browser-test entitlement fixture, behind the same opt-in and the same
+// indistinguishable-from-unknown 404 as the account route above. A paid tier
+// cannot be BOUGHT here — /billing/checkout mirrors production's commercial
+// hold with a 503 — so an in-process test seeds `db` directly and a browser
+// test, which has no such access, seeds it through this. It sets the plan and
+// nothing else: no Stripe ids, no subscription row, so it can never stand in
+// for the webhook path those tests cover.
+app.post('/__test__/households/:id/plan', validateBody(testPlanSchema), (req, res) => {
+  if (process.env.ALLOW_TEST_ACCOUNT_PROVISIONING !== '1') {
+    return res.status(404).json({ message: 'Not found' });
+  }
+
+  const household = db.households.get(req.params.id);
+  if (!household) return res.status(404).json({ message: 'Household not found' });
+  household.planId = (req as any).validatedBody.planId;
+  return res.json({ id: household.id, planId: household.planId });
 });
 
 app.post('/auth/confirm', validateBody(confirmEmailSchema), (req, res) => {
@@ -974,6 +1241,19 @@ app.delete('/me', authMiddleware, (req, res) => {
       for (const [token, link] of db.kioskLinks.entries()) {
         if (link.householdId === m.householdId) db.kioskLinks.delete(token);
       }
+      for (const [token, tag] of db.plantTags.entries()) {
+        if (tag.householdId === m.householdId) db.plantTags.delete(token);
+      }
+      db.plantTagPins.delete(m.householdId);
+      for (const [token, caretaker] of db.caretakers.entries()) {
+        if (caretaker.householdId === m.householdId) db.caretakers.delete(token);
+      }
+      for (const [vid, visit] of db.caretakerVisits.entries()) {
+        if (visit.householdId === m.householdId) db.caretakerVisits.delete(vid);
+      }
+      for (const key of [...db.caretakerOpenVisits.keys()]) {
+        if (key.startsWith(`${m.householdId}|`)) db.caretakerOpenVisits.delete(key);
+      }
       for (const [code, invite] of db.invites.entries()) {
         if (invite.householdId === m.householdId) db.invites.delete(code);
       }
@@ -1027,9 +1307,19 @@ app.delete('/me', authMiddleware, (req, res) => {
         link.createdBy = 'deleted-user';
       }
     }
+    for (const caretaker of db.caretakers.values()) {
+      if (caretaker.householdId === m.householdId && caretaker.createdBy === dbUser.id) {
+        caretaker.createdBy = 'deleted-user';
+      }
+    }
     for (const link of db.kioskLinks.values()) {
       if (link.householdId === m.householdId && link.createdBy === dbUser.id) {
         link.createdBy = 'deleted-user';
+      }
+    }
+    for (const tag of db.plantTags.values()) {
+      if (tag.householdId === m.householdId && tag.createdBy === dbUser.id) {
+        tag.createdBy = 'deleted-user';
       }
     }
     for (const report of db.chatReports.values()) {
@@ -1092,6 +1382,54 @@ app.get('/me/households', authMiddleware, (req, res) => {
     };
   });
   res.json(list);
+});
+
+// GET /me/today
+// Cross-home Today (ADR 0017). Mirrors handlers/me/today.ts +
+// services/crossHomeToday.ts: due-by-cutoff and overdue tasks across EVERY
+// membership, grouped by household with the household name on every row,
+// the membership's own role per group, and a household whose row is gone
+// returned as an explicit `unavailable` entry rather than dropped. Not
+// household-pinned; the gate is per user across every membership.
+app.get('/me/today', authMiddleware, (req, res) => {
+  const user = (req as any).user;
+  const memberships = db.users.get(user.userId)?.memberships ?? [];
+
+  let cutoff: string;
+  try {
+    cutoff = resolveCutoff(typeof req.query.until === 'string' ? req.query.until : undefined);
+  } catch (err) {
+    if (err instanceof InvalidUntilError) return res.status(400).json({ message: err.message });
+    throw err;
+  }
+
+  const entitled = memberships.some((m) => planIncludesCrossHomeToday(entitledPlan(m.householdId)));
+  if (!entitled) {
+    return res.status(402).json({ message: CROSS_HOME_TODAY_LOCKED_MESSAGE });
+  }
+
+  const households = memberships.map((m) => {
+    const h = db.households.get(m.householdId);
+    if (!h) {
+      return {
+        householdId: m.householdId,
+        name: null,
+        role: m.role,
+        status: 'unavailable' as const,
+      };
+    }
+    const due = [...db.tasks.values()]
+      .filter(
+        (t) => t.householdId === h.id && isActivePlant(t.plantId) && isDueBy(t.nextDue, cutoff)
+      )
+      .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
+      .map((t) => ({ ...t, plantName: db.plants.get(t.plantId)?.name ?? t.plantName }));
+    const tasks = annotateCoverage(due, h.id).map((t) => ({ ...t, householdName: h.name }));
+    return { householdId: m.householdId, name: h.name, role: m.role, status: 'ok' as const, tasks };
+  });
+
+  res.set('Cache-Control', 'private, no-store');
+  res.json({ generatedAt: new Date().toISOString(), cutoff, households });
 });
 
 // GET /me/export
@@ -1354,6 +1692,14 @@ app.post('/households', authMiddleware, validateBody(createHouseholdSchema), (re
     return res.status(404).json({ message: 'User not found' });
   }
 
+  // Homes gate — mirrors handlers/households/handler.ts (ADR 0014). The first
+  // household is always allowed; a user already above the cap keeps every
+  // home and is refused only this next one.
+  if (dbUser.memberships.length > 0) {
+    const refused = homesRefusal(dbUser, null);
+    if (refused) return res.status(402).json({ message: refused });
+  }
+
   const now = new Date().toISOString();
   const household: Household = {
     id: householdId,
@@ -1390,6 +1736,10 @@ app.get('/households/:id', authMiddleware, requireHousehold, (req, res) => {
 
   res.json({
     ...household,
+    // Production's `getHousehold` normalises on read and so always answers
+    // with the field; a bare spread would omit it while unset and let the
+    // client see `undefined` here but `''` in prod.
+    timezone: normalizeHouseholdTimeZone(household.timezone),
     // `emailStatus` mirrors getHouseholdMembersPublic: deliverability without
     // the address. The mock has no failing store, so it never reports the
     // third state (`unknown`) that production returns on a failed lookup.
@@ -1463,6 +1813,192 @@ app.put(
     // so the frontend round-trip works end-to-end without a key.
     household.location = { city, lat: 0, lon: 0 };
     res.json(household);
+  }
+);
+
+// Seasonal Move Day — mirrors handlers/climate/moveDay.ts + services/moveDay.ts
+// over the in-memory store, sharing the pure rules in services/moveDayPlan.ts.
+// Local dev has no weather integration, so the cached snapshot is never
+// available and the production answer is `unavailable`. Pass
+// `?season=winter|summer` to simulate the frost/heat line being crossed; the
+// `signal` numbers are then the simulation's, not a measurement.
+const MOVE_DAY_CARD_MS = 14 * 24 * 60 * 60 * 1000;
+const MOVE_DAY_REFIRE_GAP_MS = 180 * 24 * 60 * 60 * 1000;
+
+app.post('/households/:id/move-day', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (req.params.id !== user.householdId) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const household = db.households.get(req.params.id);
+  if (!household) return res.status(404).json({ message: 'Household not found' });
+  // Two entitlement questions, not one (#476) — mirrors
+  // handlers/climate/moveDay.ts and the `mayFire` option on
+  // services/moveDay.evaluateMoveDay.
+  //
+  //   CONTINUING — a season already claimed stays visible for its 14 days
+  //   even if the card fails on day 3. The tasks are already in the
+  //   household's list and half the plants are already inside; a
+  //   half-finished frost move is worse than either whole outcome.
+  //
+  //   STARTING — firing a NEW season claims it for 180 days, so a household
+  //   that may not start one goes 'quiet' rather than 'ready': the season is
+  //   left unclaimed and the next load after the card is fixed fires it.
+  const moveDaySub = subscriptionOf(household.id);
+  if (!planHasMoveDay(getEntitledPlanForIssuedGrant(moveDaySub))) {
+    return res.json({ status: 'locked' });
+  }
+  const mayFire = planHasMoveDay(getEntitledPlan(moveDaySub));
+
+  const plants = [...db.plants.values()].filter(
+    (p) => p.householdId === household.id && p.status === 'active'
+  );
+  const spaces = [...db.spaces.values()].filter((s) => s.householdId === household.id);
+  if (!isMoveDayApplicable(plants, spaces)) return res.json({ status: 'not_applicable' });
+
+  const now = Date.now();
+  const recent = (['winter', 'summer'] as const)
+    .map((season) => moveDayRecords.get(`${household.id}#${season}`))
+    .filter((r): r is MoveDayList => !!r && now - Date.parse(r.firedAt) < MOVE_DAY_CARD_MS)
+    .sort((a, b) => b.firedAt.localeCompare(a.firedAt))[0];
+  if (recent) return res.json({ status: 'ready', list: recent });
+
+  // Everything past this point CLAIMS the season — see the note above the
+  // gate. 'quiet', not 'locked': the season is untouched.
+  if (!mayFire) return res.json({ status: 'quiet' });
+
+  const requested = req.query.season;
+  const season = requested === 'winter' || requested === 'summer' ? requested : null;
+  if (!season) return res.json({ status: 'unavailable' });
+
+  const key = `${household.id}#${season}`;
+  const same = moveDayRecords.get(key);
+  if (same && now - Date.parse(same.firedAt) < MOVE_DAY_REFIRE_GAP_MS) {
+    return res.json({ status: 'quiet' });
+  }
+  const items = planMoves(plants, spaces, season);
+  if (items.length === 0) return res.json({ status: 'quiet' });
+
+  const nowIso = new Date(now).toISOString();
+  const away = new Set(
+    [...db.vacations.values()]
+      .filter((w) => w.householdId === household.id && w.startDate <= nowIso && nowIso <= w.endDate)
+      .map((w) => w.userId)
+  );
+  const assignees = [...db.users.values()]
+    .flatMap((u) => {
+      const membership = u.memberships.find((m) => m.householdId === household.id);
+      return membership && !away.has(u.id)
+        ? [{ userId: u.id, name: u.name, joinedAt: membership.joinedAt }]
+        : [];
+    })
+    .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.userId.localeCompare(b.userId));
+  assignRoundRobin(items, assignees);
+
+  for (const item of items) {
+    const task = buildTask(
+      {
+        plantId: item.plantId,
+        type: 'custom',
+        customType: moveTaskLabel(item.toSpaceName),
+        frequency: 365,
+        nextDue: nowIso,
+      },
+      household.id,
+      user.userId,
+      item.plantName
+    );
+    task.assignedTo = item.assigneeId;
+    task.assignedToName = item.assigneeName;
+    task.assignmentSource = item.assigneeId ? 'move_day' : null;
+    item.taskId = task.id;
+  }
+
+  const list: MoveDayList = {
+    season,
+    firedAt: nowIso,
+    // Simulated — mirrors FROST_LOW_C / HEAT_HIGH_C in services/climate.ts.
+    signal: {
+      tempC: season === 'summer' ? 34 : 9,
+      lowC: season === 'winter' ? 3 : 18,
+      frostLineC: 5,
+      heatLineC: 32,
+    },
+    items,
+    tenderWithoutWinterHome: [],
+    // The in-memory store has no species cache to fail, so the check is
+    // always complete here.
+    tenderCheckFailures: 0,
+  };
+  moveDayRecords.set(key, list);
+  res.json({ status: 'ready', list });
+});
+
+// PUT /households/:id/escalation — mirrors handlers/households setEscalationRule:
+// admin-only, plan-gated (402 without the household toolkit), 5-day floor via
+// the shared schema. Stored on the household so GET /households/:id returns it.
+app.put(
+  '/households/:id/escalation',
+  authMiddleware,
+  requireHousehold,
+  validateBody(setEscalationRuleSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (user.householdRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin role required' });
+    }
+    const household = db.households.get(req.params.id);
+    if (!household) return res.status(404).json({ message: 'Household not found' });
+    // ENTITLEMENT, not the plan row (#476): turning auto-handoff ON starts a
+    // new class of email for the whole household. A rule already stored keeps
+    // its row, so nothing is lost when the card is fixed.
+    //
+    // `hasHouseholdToolkit(plan)`, not `plan.householdToolkit`: the flag lives
+    // at `plan.features.householdToolkit`, and `householdToolkit` is a field of
+    // PlanSummary, not of Plan. This file is `@ts-nocheck`, so the misreach
+    // read `undefined` and this route answered 402 on EVERY tier — a mock-only
+    // divergence from the production handler that nothing typed could catch.
+    const plan = entitledPlan(household.id);
+    if (!hasHouseholdToolkit(plan)) {
+      return res.status(402).json({
+        message: `Auto-handoff is part of the household toolkit, which the ${plan.name} plan does not include. Upgrade to turn it on.`,
+      });
+    }
+    const { escalateAfterDays } = (req as any).validatedBody as {
+      escalateAfterDays: number | null;
+    };
+    household.escalateAfterDays = escalateAfterDays;
+    res.json({ escalateAfterDays });
+  }
+);
+
+// Household IANA zone (#342, ADR 0025). Admin-only, not plan-gated, and — as
+// in production — consulted by nothing: every due-date, window and reminder
+// path in this file still does instant math.
+app.put(
+  '/households/:id/timezone',
+  authMiddleware,
+  requireHousehold,
+  validateBody(setHouseholdTimeZoneSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (user.householdRole !== 'admin') {
+      return res.status(403).json({ message: 'Admin role required' });
+    }
+    const household = db.households.get(req.params.id);
+    if (!household) return res.status(404).json({ message: 'Household not found' });
+    const { timezone } = (req as any).validatedBody as { timezone: string };
+    // `''` clears rather than stores, mirroring the REMOVE in householdService.
+    const normalized = normalizeHouseholdTimeZone(timezone);
+    if (normalized === '') delete household.timezone;
+    else household.timezone = normalized;
+    res.json({ timezone: normalized });
   }
 );
 
@@ -1629,7 +2165,12 @@ app.post(
     const body = (req as any).validatedBody;
     const now = new Date();
     // Plan gate — mirrors the handler: window length + live-link count.
-    const plan = PLANS[db.households.get(req.params.id)?.planId ?? 'seedling'] ?? PLANS.seedling;
+    // ENTITLEMENT (#476): this is the ISSUING half of the sitter-link
+    // decision and the piece that makes the other half safe. A household
+    // mid-dunning cannot mint a new link or a longer window, while a link it
+    // already handed out keeps working to its expiry (see GET /sitter/:token
+    // and the photo routes below).
+    const plan = entitledPlan(req.params.id);
     const startsAt: string = body.startsAt ?? now.toISOString();
     const gate = checkSitterLinkPlanGate(plan, {
       windowDays: sitterWindowDays(startsAt, body.expiresAt),
@@ -1722,6 +2263,234 @@ app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHouseh
   res.status(204).end();
 });
 
+// --- Caretaker seats (authed management) ----------------------------------
+// Mirrors handlers/caretakers/management.ts. Create/list/revoke are admin
+// gated like sitter links; the proof-of-visit report is open to any member.
+
+/** Mirrors caretakerService.CARETAKER_PERMISSIONS — the COMPLETE list of what
+ *  a caretaker may do, strictly narrower than a member. */
+const CARETAKER_PERMISSIONS = ['task.complete', 'photo.add', 'note.add'];
+/** Mirrors caretakerService.MAX_CARETAKER_DAYS. */
+const MAX_CARETAKER_DAYS = 180;
+/** Mirrors caretakerService.VISIT_IDLE_MS. */
+const CARETAKER_VISIT_IDLE_MS = 6 * 60 * 60 * 1000;
+
+/** Mirrors models/caretakerSchemas.createCaretakerSchema. */
+const createCaretakerSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    startsAt: z.string().datetime().optional(),
+    expiresAt: z.string().datetime(),
+  })
+  .superRefine((val, ctx) => {
+    const start = val.startsAt ? Date.parse(val.startsAt) : Date.now();
+    const end = Date.parse(val.expiresAt);
+    if (end <= start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expiresAt'],
+        message: 'expiresAt must be in the future (after startsAt)',
+      });
+    } else if (end - start > MAX_CARETAKER_DAYS * 24 * 60 * 60 * 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expiresAt'],
+        message: `A caretaker seat cannot last longer than ${MAX_CARETAKER_DAYS} days`,
+      });
+    }
+  });
+
+/** Non-secret view of a caretaker seat (no token). Mirrors toSummary. */
+function caretakerSummary(caretaker: Caretaker) {
+  const { token: _token, ...summary } = caretaker;
+  void _token;
+  return summary;
+}
+
+// POST /households/:id/caretakers
+app.post(
+  '/households/:id/caretakers',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody(createCaretakerSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    // ENTITLEMENT (#476): a seat is a live credential handed to a paid
+    // helper. List, revoke and the visit report stay open on every tier, so
+    // no already-issued seat is trapped by this gate.
+    if (!featureOf(entitledPlan(req.params.id), 'caretakerSeats')) {
+      return res.status(402).json({
+        message:
+          'Caretaker seats are included with the Greenhouse plan. Upgrade to add a caretaker.',
+      });
+    }
+    const body = (req as any).validatedBody;
+    const now = new Date();
+    const token = randomBytes(32).toString('hex'); // 256-bit, like the service
+    const caretaker: Caretaker = {
+      id: uuidv4(),
+      token,
+      householdId: req.params.id,
+      createdBy: user.userId,
+      createdAt: now.toISOString(),
+      name: body.name,
+      startsAt: body.startsAt ?? now.toISOString(),
+      expiresAt: body.expiresAt,
+      status: 'active',
+    };
+    db.caretakers.set(token, caretaker);
+
+    const baseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+
+    res.status(201).json({
+      ...caretakerSummary(caretaker),
+      token,
+      url: `${baseUrl}/caretaker/${token}`,
+      permissions: CARETAKER_PERMISSIONS,
+    });
+  }
+);
+
+// GET /households/:id/caretakers
+app.get(
+  '/households/:id/caretakers',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const caretakers = [...db.caretakers.values()]
+      .filter((c) => c.householdId === req.params.id)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(caretakerSummary);
+    res.json(caretakers);
+  }
+);
+
+// DELETE /households/:id/caretakers/:caretakerId
+app.delete(
+  '/households/:id/caretakers/:caretakerId',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const target = [...db.caretakers.values()].find(
+      (c) => c.householdId === req.params.id && c.id === req.params.caretakerId
+    );
+    if (!target) {
+      return res.status(404).json({ message: 'Caretaker not found' });
+    }
+    // Revocation stops the token immediately. Visits already recorded stay:
+    // they are the record of work that actually happened.
+    target.status = 'revoked';
+    res.status(204).end();
+  }
+);
+
+// GET /households/:id/caretaker-report
+app.get('/households/:id/caretaker-report', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const range = resolveReportRange(
+    req.query.from ?? defaultFrom.toISOString(),
+    req.query.to ?? now.toISOString()
+  );
+  if (!range) {
+    return res
+      .status(400)
+      .json({ message: 'from and to must be valid dates, with to on or after from' });
+  }
+  const visits = [...db.caretakerVisits.values()].filter(
+    (v) =>
+      v.householdId === req.params.id && v.startedAt >= range.fromIso && v.startedAt <= range.toIso
+  );
+  res.json(
+    buildCaretakerReport({
+      householdId: req.params.id,
+      from: range.fromIso,
+      to: range.toIso,
+      visits: visits as any,
+      generatedAt: now.toISOString(),
+    })
+  );
+});
+
+/** Token → seat only if active and within [startsAt, expiresAt]. Generic null
+ *  on any miss, mirroring caretakerService.getActiveCaretaker. */
+function getActiveCaretaker(token: string): Caretaker | null {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const caretaker = db.caretakers.get(token);
+  if (!caretaker || caretaker.status !== 'active') return null;
+  const nowIso = new Date().toISOString();
+  if (nowIso < caretaker.startsAt || nowIso > caretaker.expiresAt) return null;
+  return caretaker;
+}
+
+/** Fold one action into the caretaker's visit, opening a new visit when the
+ *  last action is older than the idle window. Mirrors
+ *  caretakerService.recordCaretakerAction. */
+function recordCaretakerAction(
+  caretaker: Caretaker,
+  kind: 'task' | 'photo' | 'note',
+  entry: Record<string, unknown>
+): string {
+  const now = new Date();
+  const key = `${caretaker.householdId}|${caretaker.id}`;
+  const open = db.caretakerOpenVisits.get(key);
+  const existing = open ? db.caretakerVisits.get(open.visitId) : undefined;
+  const fresh =
+    existing !== undefined &&
+    now.getTime() - Date.parse(open!.lastActionAt) <= CARETAKER_VISIT_IDLE_MS;
+
+  const field = { task: 'tasksCompleted', photo: 'photos', note: 'notes' }[kind];
+  const counter = { task: 'taskCount', photo: 'photoCount', note: 'noteCount' }[kind];
+
+  if (fresh && existing) {
+    (existing as any)[field].push(entry);
+    (existing as any)[counter] += 1;
+    existing.lastActionAt = now.toISOString();
+    db.caretakerOpenVisits.set(key, { visitId: existing.id, lastActionAt: now.toISOString() });
+    return existing.id;
+  }
+
+  const visitId = uuidv4();
+  const visit: CaretakerVisit = {
+    id: visitId,
+    householdId: caretaker.householdId,
+    caretakerId: caretaker.id,
+    caretakerName: caretaker.name,
+    startedAt: now.toISOString(),
+    lastActionAt: now.toISOString(),
+    tasksCompleted: kind === 'task' ? [entry] : [],
+    photos: kind === 'photo' ? [entry] : [],
+    notes: kind === 'note' ? [entry] : [],
+    taskCount: kind === 'task' ? 1 : 0,
+    photoCount: kind === 'photo' ? 1 : 0,
+    noteCount: kind === 'note' ? 1 : 0,
+  };
+  db.caretakerVisits.set(visitId, visit);
+  db.caretakerOpenVisits.set(key, { visitId, lastActionAt: now.toISOString() });
+  return visitId;
+}
+
 // --- Kiosk (wall display) links (authed management) ------------------------
 // Mirrors handlers/households/kioskLink.ts: issue / get / revoke. Admin-gated
 // like sitter links, and Greenhouse-gated (features.kiosk in models/plans.ts).
@@ -1757,8 +2526,10 @@ app.post(
     if (user.householdId !== req.params.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
-    const h = db.households.get(user.householdId);
-    if (!planHasFeature(h?.planId ?? 'seedling', 'kiosk')) {
+    // ENTITLEMENT (#476): issuing is gated, the mounted display below is not
+    // — a screen on a wall is a physical object and the person in front of it
+    // cannot fix the card. Revoke is ungated too; that is the control.
+    if (!featureOf(entitledPlan(user.householdId), 'kiosk')) {
       return res.status(402).json({
         message:
           'The kiosk display is included with the Greenhouse plan. Upgrade to set up a wall display.',
@@ -2012,11 +2783,19 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
     return res.status(400).json({ message: 'You are already a member of this household' });
   }
 
-  const plan = PLANS[household.planId ?? 'seedling'];
+  // Homes gate — the joined household's plan counts, so a Greenhouse home
+  // always takes another hand (ADR 0014).
+  const refusedHome = homesRefusal(dbUser, invite.householdId);
+  if (refusedHome) return res.status(402).json({ message: refusedHome });
+
+  // ENTITLEMENT, not the plan row (#476) — mirrors handlers/households
+  // joinHousehold. Caps limit NEW growth only: a household already above the
+  // cap keeps every member.
+  const plan = entitledPlan(invite.householdId);
   const existingMembers = membersOf(invite.householdId);
-  if (existingMembers.length >= plan.maxMembers) {
+  if (atCap(existingMembers.length, limitOf(plan, 'members'))) {
     return res.status(402).json({
-      message: `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`,
+      message: `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`,
     });
   }
 
@@ -2185,17 +2964,60 @@ app.delete(
 
 // ============ PLANT ROUTES ============
 
+/** Members + not-yet-ended vacation windows: the shared resolver's context. */
+function assignmentContextOf(householdId: string) {
+  return {
+    members: membersOf(householdId).map((m) => ({ userId: m.userId, name: m.name })),
+    vacations: [...db.vacations.values()].filter((w) => w.householdId === householdId),
+  };
+}
+
+function rotationMembersValid(householdId: string, memberIds: string[]): boolean {
+  const ids = new Set(membersOf(householdId).map((m) => m.userId));
+  return memberIds.every((id) => ids.has(id));
+}
+
+/**
+ * Mirrors taskService.reassignInheritedOccurrence: a task whose assignment is
+ * INHERITED re-inherits from its space when a new occurrence is generated —
+ * which is where care rotation actually advances. Explicit assignments and
+ * claims are never stomped. Called from every surface that completes a task
+ * (app, sitter link, public API), because each one generates an occurrence.
+ */
+function advanceInheritedAssignment(task: Task): void {
+  if (isExplicitAssignment(task)) return;
+  const plant = db.plants.get(task.plantId);
+  const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+  if (!space) return;
+  const inherited = resolveInheritedAssignee(
+    space,
+    assignmentContextOf(task.householdId),
+    new Date(task.nextDue)
+  );
+  task.assignedTo = inherited.userId;
+  task.assignedToName = inherited.name;
+  task.assignmentSource = inherited.source;
+}
+
+/** Mirrors handlers/plants listSpaces: derived rotationTurn on rotating spaces. */
 app.get('/spaces', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
+  const ctx = assignmentContextOf(user.householdId);
   res.json(
     [...db.spaces.values()]
       .filter((space) => space.householdId === user.householdId)
-      .map((space) => ({
-        ...space,
-        lightLevel: space.lightLevel ?? null,
-        petAccess: space.petAccess ?? null,
-        defaultCaregiverId: space.defaultCaregiverId ?? null,
-      }))
+      .map((space) => {
+        const base = {
+          ...space,
+          lightLevel: space.lightLevel ?? null,
+          petAccess: space.petAccess ?? null,
+          defaultCaregiverId: space.defaultCaregiverId ?? null,
+          rotation: space.rotation ?? null,
+        };
+        if (!base.rotation) return base;
+        const turn = resolveInheritedAssignee(base, ctx, new Date());
+        return { ...base, rotationTurn: { turnUserId: turn.userId, turnName: turn.name } };
+      })
       .sort((a, b) => a.name.localeCompare(b.name))
   );
 });
@@ -2225,6 +3047,11 @@ app.post(
         .status(400)
         .json({ message: 'defaultCaregiverId must be a current household member' });
     }
+    if (input.rotation && !rotationMembersValid(user.householdId, input.rotation.memberIds)) {
+      return res
+        .status(400)
+        .json({ message: 'rotation.memberIds must all be current household members' });
+    }
     const now = new Date().toISOString();
     const space: PlantSpace = {
       id: uuidv4(),
@@ -2236,6 +3063,7 @@ app.post(
       lightLevel: input.lightLevel ?? null,
       petAccess: input.petAccess ?? null,
       defaultCaregiverId: input.defaultCaregiverId ?? null,
+      rotation: input.rotation ? { ...input.rotation, anchor: input.rotation.anchor ?? now } : null,
       createdAt: now,
       createdBy: user.userId,
       updatedAt: now,
@@ -2291,6 +3119,27 @@ app.put(
     if (input.petAccess !== undefined) space.petAccess = input.petAccess;
     if (input.defaultCaregiverId !== undefined) {
       space.defaultCaregiverId = input.defaultCaregiverId;
+    }
+    if (input.rotation !== undefined) {
+      if (input.rotation === null) {
+        space.rotation = null;
+      } else {
+        if (!rotationMembersValid(user.householdId, input.rotation.memberIds)) {
+          return res
+            .status(400)
+            .json({ message: 'rotation.memberIds must all be current household members' });
+        }
+        // Keep the anchor when the cadence is unchanged, mirroring spaceService.
+        space.rotation = {
+          memberIds: input.rotation.memberIds,
+          cadence: input.rotation.cadence,
+          anchor:
+            input.rotation.anchor ??
+            (space.rotation && space.rotation.cadence === input.rotation.cadence
+              ? space.rotation.anchor
+              : new Date().toISOString()),
+        };
+      }
     }
     space.updatedAt = new Date().toISOString();
     res.json(space);
@@ -2359,14 +3208,14 @@ app.post(
       parentPlantId,
     } = (req as any).validatedBody;
 
-    const h = db.households.get(user.householdId);
-    const plan = PLANS[h?.planId ?? 'seedling'];
+    // ENTITLEMENT, not the plan row (#476). Caps limit NEW growth only.
+    const plan = entitledPlan(user.householdId);
     const existing = [...db.plants.values()].filter(
       (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
     );
-    if (existing.length >= plan.maxPlants) {
+    if (atCap(existing.length, limitOf(plan, 'plants'))) {
       return res.status(402).json({
-        message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`,
+        message: `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`,
       });
     }
 
@@ -2485,9 +3334,11 @@ app.post(
     const user = (req as any).user;
     const { plants } = (req as any).validatedBody;
 
-    const h = db.households.get(user.householdId);
-    const plan = PLANS[h?.planId ?? 'seedling'];
-    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive existing plants before importing more.`;
+    // ENTITLEMENT, not the plan row (#476): a bulk import must refuse at the
+    // same cap single-plant creation does, or it walks a household past a
+    // limit the next POST /plants would enforce.
+    const plan = entitledPlan(user.householdId);
+    const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive existing plants before importing more.`;
 
     const results: Array<{
       index: number;
@@ -2507,7 +3358,7 @@ app.post(
       const active = [...db.plants.values()].filter(
         (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
       );
-      if (active.length >= plan.maxPlants) {
+      if (atCap(active.length, limitOf(plan, 'plants'))) {
         planLimitHit = true;
         results.push({ index, status: 'skipped', error: planLimitMessage });
         continue;
@@ -2733,6 +3584,15 @@ app.delete('/plants/:id', authMiddleware, requireHousehold, (req, res) => {
 
   db.plants.delete(req.params.id);
 
+  // A printed plant tag dies with its plant (mirrors the production handler's
+  // best-effort revoke, ADR 0016).
+  for (const tag of db.plantTags.values()) {
+    if (tag.plantId === req.params.id && tag.status === 'active') {
+      tag.status = 'revoked';
+      tag.revokedAt = new Date().toISOString();
+    }
+  }
+
   // Cascade tasks + photos, like plantService.deletePlant.
   for (const [taskId, task] of db.tasks.entries()) {
     if (task.plantId === req.params.id) {
@@ -2756,21 +3616,21 @@ const identifySchema = z.object({
 // Mirrors services/identifyBudget.ts: in-memory monthly identification usage
 // keyed `${yyyy-mm}#${householdId | user:userId}`. Enforcement only when
 // IDENTIFY_METERING_ENABLED=1, matching production (default off for beta).
-const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 3, garden: 30, greenhouse: 100 };
-const identifyUsage = new Map<string, number>();
+const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 1, garden: 30, greenhouse: 100 };
 
 function identifyMeterFor(user: { userId: string; householdId: string | null }) {
   const ym = new Date().toISOString().slice(0, 7);
   const bucketId = user.householdId ?? `user:${user.userId}`;
   const key = `${ym}#${bucketId}`;
-  const planId = user.householdId
-    ? (db.households.get(user.householdId)?.planId ?? 'seedling')
-    : 'seedling';
-  const plan = PLANS[planId] ?? PLANS.seedling;
+  // ENTITLEMENT, not the plan row (#476) — mirrors handlers/plants/identify.ts.
+  // Plant.id calls cost real money, so an unpaid subscription must not buy a
+  // larger monthly allowance. The route has no requireHousehold, so a
+  // householdless caller gets the free tier's, exactly as production does.
+  const plan = user.householdId ? entitledPlan(user.householdId) : PLANS.seedling;
   return {
     key,
     planName: plan.name,
-    allowance: IDENTIFY_ALLOWANCES[planId] ?? IDENTIFY_ALLOWANCES.seedling,
+    allowance: IDENTIFY_ALLOWANCES[plan.id] ?? IDENTIFY_ALLOWANCES.seedling,
     used: identifyUsage.get(key) ?? 0,
     meteringEnabled: process.env.IDENTIFY_METERING_ENABLED === '1',
   };
@@ -2780,9 +3640,17 @@ app.post('/plants/identify', authMiddleware, validateBody(identifySchema), async
   const { image } = (req as any).validatedBody;
   const meter = identifyMeterFor((req as any).user);
   if (meter.meteringEnabled && meter.used >= meter.allowance) {
-    // Mirrors the production 402 contract: plan name + upgrade pointer.
+    // Mirrors the production 402 contract: plan name + upgrade pointer, plus
+    // the top-up `details`. The mock sells no packs (checkout is 503 below),
+    // so the offer is never available and the balance is a real zero.
     return res.status(402).json({
       message: `Your ${meter.planName} plan is limited to ${meter.allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+      details: {
+        code: 'IDENTIFY_BUDGET_EXHAUSTED',
+        topUpAvailable: false,
+        credits: (req as any).user.householdId ? { remaining: 0, expiresAt: null } : null,
+        topUp: null,
+      },
     });
   }
   if (!process.env.PLANT_ID_API_KEY) {
@@ -2818,18 +3686,25 @@ app.post('/plants/identify', authMiddleware, validateBody(identifySchema), async
     });
     if (!r.ok) return res.status(502).json({ message: `plant.id ${r.status}` });
     const data: any = await r.json();
+    // Sort before slicing and flag a weak top candidate, exactly as
+    // services/plantIdentification.ts does — the dev server must not make the
+    // ordering assumption production stopped making.
     const suggestions = (data?.result?.classification?.suggestions ?? [])
-      .slice(0, 5)
       .map((s: any) => ({
         scientificName: s.name,
         commonName: s.details?.common_names?.[0] ?? null,
         probability: s.probability,
-      }));
+      }))
+      .sort((a: any, b: any) => b.probability - a.probability)
+      .slice(0, 5);
     const used = meter.used + 1;
     identifyUsage.set(meter.key, used);
     res.json({
       configured: true,
       suggestions,
+      confidenceFloor: IDENTIFICATION_CONFIDENCE_FLOOR,
+      lowConfidence:
+        suggestions.length > 0 && suggestions[0].probability < IDENTIFICATION_CONFIDENCE_FLOOR,
       usage: { used, allowance: meter.allowance, meteringEnabled: meter.meteringEnabled },
     });
   } catch (err: any) {
@@ -3145,7 +4020,12 @@ app.get('/sitter/:token', (req, res) => {
   if (!link) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
-  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
+  // CONTINUING (#476). The link was issued while the household was entitled,
+  // carries an `expiresAt` that getActiveSitterLink has already enforced, and
+  // is held by a sitter who is not the buyer and cannot fix the card. This
+  // flag must agree with the brief route below or the page offers a control
+  // that then 404s.
+  const plan = getEntitledPlanForIssuedGrant(subscriptionOf(link.householdId));
   res.json({
     label: link.label,
     expiresAt: link.expiresAt,
@@ -3223,7 +4103,9 @@ app.get('/sitter/:token/brief', (req, res) => {
   }
   // Paid half of the Away Kit. A plan without it answers the SAME generic 404
   // as a bad token — an anonymous sitter is never told the household's tier.
-  const plan = PLANS[db.households.get(link.householdId)?.planId ?? 'seedling'] ?? PLANS.seedling;
+  // CONTINUING (#476) — same already-validated link, same bounds, as the
+  // sitter view above. Issuing a NEW link is gated on entitlement.
+  const plan = getEntitledPlanForIssuedGrant(subscriptionOf(link.householdId));
   if (!sitterBriefIncluded(plan)) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
@@ -3267,6 +4149,7 @@ app.post(
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
+    advanceInheritedAssignment(task);
 
     const completionId = uuidv4();
     db.completions.set(completionId, {
@@ -3408,6 +4291,278 @@ app.post(
   }
 );
 
+// --- Caretaker seats PUBLIC endpoints (no auth) ---------------------------
+// Mirrors handlers/caretakers/public.ts + photos.ts. The 256-bit token is the
+// only credential. The permission surface is exactly CARETAKER_PERMISSIONS —
+// complete a task, add a note, add a photo — and nothing else: no plant
+// editing, no member list, no other caretakers, no billing, no settings.
+
+const CARETAKER_INACTIVE_MESSAGE = 'This caretaker link is invalid or has expired.';
+
+/** Mirrors handlers/caretakers/shared.ts lookaheadDays. */
+function caretakerLookaheadDays(expiresAt: string, now: Date): number {
+  const remainingMs = Date.parse(expiresAt) - now.getTime();
+  if (!Number.isFinite(remainingMs)) return 1;
+  return Math.max(1, Math.min(14, Math.ceil(remainingMs / (24 * 60 * 60 * 1000))));
+}
+
+/** Same PII-free projection as sitterTasksFor, with the caretaker's own
+ *  lookahead window. */
+function caretakerTasksFor(householdId: string, days: number) {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + days);
+  const cutoffIso = cutoff.toISOString();
+  const nowIso = now.toISOString();
+  return [...db.tasks.values()]
+    .filter((t) => t.householdId === householdId)
+    .filter((t) => (db.plants.get(t.plantId)?.status ?? 'active') === 'active')
+    .filter((t) => t.nextDue <= cutoffIso)
+    .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime())
+    .map((t) => {
+      const plant = db.plants.get(t.plantId);
+      const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+      return {
+        taskId: t.id,
+        // The caretaker projection adds the opaque plantId their photo routes
+        // need; the sitter projection deliberately does not carry it.
+        plantId: t.plantId,
+        plantName: t.plantName,
+        taskType: t.customType || t.type,
+        dueDate: t.nextDue,
+        spaceName: space?.name ?? plant?.location ?? null,
+        placementNote: plant?.placementNote ?? null,
+        overdue: t.nextDue < nowIso,
+      };
+    });
+}
+
+// GET /caretaker/:token
+app.get('/caretaker/:token', (req, res) => {
+  const caretaker = getActiveCaretaker(req.params.token);
+  if (!caretaker) {
+    return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+  }
+  res.json({
+    caretakerName: caretaker.name,
+    startsAt: caretaker.startsAt,
+    expiresAt: caretaker.expiresAt,
+    permissions: CARETAKER_PERMISSIONS,
+    tasks: caretakerTasksFor(
+      caretaker.householdId,
+      caretakerLookaheadDays(caretaker.expiresAt, new Date())
+    ),
+  });
+});
+
+const caretakerCompleteTaskSchema = z
+  .object({ expectedNextDue: z.string().datetime().optional() })
+  .nullish();
+
+// POST /caretaker/:token/tasks/:taskId/complete
+app.post(
+  '/caretaker/:token/tasks/:taskId/complete',
+  validateBody(caretakerCompleteTaskSchema),
+  (req, res) => {
+    const caretaker = getActiveCaretaker(req.params.token);
+    if (!caretaker) {
+      return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+    }
+    const task = db.tasks.get(req.params.taskId);
+    // Cross-household guard: the task must live in the token's household.
+    if (!task || task.householdId !== caretaker.householdId) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const expectedNextDue = (req as any).validatedBody?.expectedNextDue as string | undefined;
+    const taskType = task.customType || task.type;
+    if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
+      return res.json({
+        taskId: task.id,
+        plantName: task.plantName,
+        taskType,
+        dueDate: task.nextDue,
+        overdue: false,
+        visitRecorded: true,
+      });
+    }
+
+    const now = new Date();
+    const nextDue = new Date(now);
+    nextDue.setDate(nextDue.getDate() + task.frequency);
+    task.lastCompleted = now.toISOString();
+    task.nextDue = nextDue.toISOString();
+
+    const actorId = `caretaker:${caretaker.id}`;
+    const completionId = uuidv4();
+    db.completions.set(completionId, {
+      id: completionId,
+      householdId: task.householdId,
+      plantId: task.plantId,
+      taskId: task.id,
+      taskType,
+      completedBy: actorId,
+      completedByName: caretaker.name,
+      completedAt: now.toISOString(),
+      notes: null,
+    });
+    recordCaretakerAction(caretaker, 'task', {
+      taskId: task.id,
+      plantId: task.plantId,
+      plantName: task.plantName,
+      taskType,
+      at: now.toISOString(),
+    });
+    recordActivity({
+      type: 'task.completed',
+      householdId: task.householdId,
+      actorId,
+      actorName: caretaker.name,
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType,
+        viaCaretaker: true,
+      },
+    });
+
+    res.json({
+      taskId: task.id,
+      plantName: task.plantName,
+      taskType,
+      dueDate: task.nextDue,
+      overdue: false,
+      visitRecorded: true,
+    });
+  }
+);
+
+const caretakerNoteSchema = z.object({ text: z.string().trim().min(1).max(500) });
+
+// POST /caretaker/:token/notes
+app.post('/caretaker/:token/notes', validateBody(caretakerNoteSchema), (req, res) => {
+  const caretaker = getActiveCaretaker(req.params.token);
+  if (!caretaker) {
+    return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+  }
+  const { text } = (req as any).validatedBody;
+  const at = new Date().toISOString();
+  recordCaretakerAction(caretaker, 'note', { text, at });
+  recordActivity({
+    type: 'caretaker.note',
+    householdId: caretaker.householdId,
+    actorId: `caretaker:${caretaker.id}`,
+    actorName: caretaker.name,
+    payload: { text },
+  });
+  res.json({ text, at, visitRecorded: true });
+});
+
+// POST /caretaker/:token/plants/:plantId/photo
+app.post(
+  '/caretaker/:token/plants/:plantId/photo',
+  validateBody(imageUploadRequestSchema),
+  (req, res) => {
+    const caretaker = getActiveCaretaker(req.params.token);
+    if (!caretaker) {
+      return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+    }
+    const plant = db.plants.get(req.params.plantId);
+    if (!plant || plant.householdId !== caretaker.householdId) {
+      return res.status(404).json({ message: 'Plant not found' });
+    }
+    const contentType = (req as any).validatedBody?.contentType ?? 'image/jpeg';
+    const ext = IMAGE_CONTENT_TYPES[contentType];
+    const key = `plants/${caretaker.householdId}/${String(req.params.plantId)}/${uuidv4()}.${ext}`;
+    const uploadToken = uuidv4();
+    db.mockUploadGrants.set(uploadToken, { key, contentType });
+    res.json({
+      uploadUrl: `http://localhost:${PORT}/mock-upload/${uploadToken}`,
+      imageUrl: `${imageBaseUrl()}/${key}`,
+    });
+  }
+);
+
+// POST /caretaker/:token/plants/:plantId/photo/confirm
+app.post(
+  '/caretaker/:token/plants/:plantId/photo/confirm',
+  validateBody(confirmImageUploadSchema),
+  (req, res) => {
+    const caretaker = getActiveCaretaker(req.params.token);
+    if (!caretaker) {
+      return res.status(404).json({ message: CARETAKER_INACTIVE_MESSAGE });
+    }
+    const plant = db.plants.get(req.params.plantId);
+    if (!plant || plant.householdId !== caretaker.householdId) {
+      return res.status(404).json({ message: 'Plant not found' });
+    }
+    const { imageUrl } = (req as any).validatedBody;
+    const keyPrefix = `plants/${caretaker.householdId}/${String(req.params.plantId)}/`;
+    const expectedPrefixes = [
+      `${imageBaseUrl()}/${keyPrefix}`,
+      `https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`,
+    ];
+    const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
+    if (!matchedPrefix) {
+      return res
+        .status(400)
+        .json({ message: 'imageUrl does not match a key issued for this plant' });
+    }
+    const filename = imageUrl.slice(matchedPrefix.length);
+    if (!/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(filename)) {
+      return res
+        .status(400)
+        .json({ message: 'imageUrl does not match a key issued for this plant' });
+    }
+    const uploaded = db.mockImages.get(`${keyPrefix}${filename}`);
+    if (!uploaded) {
+      return res
+        .status(400)
+        .json({ message: 'Uploaded image not found; upload it before confirming' });
+    }
+    if (uploaded.body.length === 0) {
+      return res.status(400).json({ message: 'Uploaded image is empty' });
+    }
+    if (uploaded.body.length > MAX_IMAGE_BYTES) {
+      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
+    }
+    if (!(uploaded.contentType in IMAGE_CONTENT_TYPES)) {
+      return res.status(400).json({ message: 'Uploaded file is not a valid image' });
+    }
+
+    const actorId = `caretaker:${caretaker.id}`;
+    const now = new Date().toISOString();
+    plant.imageUrl = imageUrl;
+    plant.updatedAt = now;
+    const photoId = uuidv4();
+    db.photos.set(photoId, {
+      id: photoId,
+      plantId: req.params.plantId,
+      householdId: plant.householdId,
+      imageUrl,
+      uploadedBy: actorId,
+      uploadedAt: now,
+      caption: null,
+    });
+    recordCaretakerAction(caretaker, 'photo', {
+      photoId,
+      plantId: req.params.plantId,
+      plantName: plant.name,
+      imageUrl,
+      at: now,
+    });
+    recordActivity({
+      type: 'photo.uploaded',
+      householdId: plant.householdId,
+      actorId,
+      actorName: caretaker.name,
+      payload: { plantId: req.params.plantId, photoId },
+    });
+    res.json({ imageUrl, photo: db.photos.get(photoId), visitRecorded: true });
+  }
+);
+
 // POST /plants/shared/:code/accept — copy the card into the CALLER's
 // household via the normal create path (plan cap applies → 402). Accepting
 // into the source household is allowed (harmless duplicate); the image is
@@ -3419,14 +4574,15 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
     return res.status(404).json({ message: 'This share link is invalid or has expired' });
   }
 
-  const h = db.households.get(user.householdId);
-  const plan = PLANS[h?.planId ?? 'seedling'];
+  // ENTITLEMENT, not the plan row (#476) — the same cap the normal create
+  // path enforces, reached through the share-accept copy.
+  const plan = entitledPlan(user.householdId);
   const existing = [...db.plants.values()].filter(
     (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
   );
-  if (existing.length >= plan.maxPlants) {
+  if (atCap(existing.length, limitOf(plan, 'plants'))) {
     return res.status(402).json({
-      message: `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`,
+      message: `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`,
     });
   }
 
@@ -3584,12 +4740,15 @@ function buildTask(
   // now + frequency.
   const nextDue = input.nextDue || now.toISOString();
   const plant = db.plants.get(input.plantId);
-  const defaultAssigneeId = plant?.spaceId
-    ? (db.spaces.get(plant.spaceId)?.defaultCaregiverId ?? undefined)
-    : undefined;
-  let assignedTo = input.assignedTo ?? defaultAssigneeId ?? null;
+  const space = plant?.spaceId ? db.spaces.get(plant.spaceId) : undefined;
+  // Mirrors handlers/tasks inheritedAssignmentForPlant: the shared resolver
+  // ranks rotation above the space default, for the occurrence's own due date.
+  const inherited = space
+    ? resolveInheritedAssignee(space, assignmentContextOf(householdId), new Date(nextDue))
+    : { userId: null, name: null, source: null as Task['assignmentSource'] };
+  let assignedTo = input.assignedTo ?? inherited.userId ?? null;
   let assignmentSource: Task['assignmentSource'] =
-    input.assignedTo === undefined && defaultAssigneeId ? 'space_default' : null;
+    input.assignedTo === undefined && inherited.userId ? inherited.source : null;
   let assignedToName: string | null = null;
   if (assignedTo) {
     const assignee = db.users.get(assignedTo);
@@ -3725,7 +4884,8 @@ app.post('/tasks/:id/claim', authMiddleware, requireHousehold, (req, res) => {
   if (!task || task.householdId !== user.householdId) {
     return res.status(404).json({ message: 'Task not found' });
   }
-  if (task.assignedTo && task.assignmentSource !== 'space_default') {
+  // Inherited assignments (space default OR rotation turn) can be taken over.
+  if (task.assignedTo && task.assignmentSource === null) {
     return res.status(409).json({ message: 'Already claimed' });
   }
   const dbUser = db.users.get(user.userId);
@@ -3775,6 +4935,116 @@ app.post('/tasks/:id/unclaim', authMiddleware, requireHousehold, (req, res) => {
   });
   res.json({ ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName });
 });
+
+// POST /tasks/:id/ask — mirrors services/askFamily.askFamilyForHelp: the
+// occurrence goes up for grabs through the SAME escalated state auto-handoff
+// uses, the ask is recorded on the row, and everyone but the asker, anyone
+// away and anyone inside Do-Not-Disturb is notified. Free on every tier.
+app.post(
+  '/tasks/:id/ask',
+  authMiddleware,
+  requireHousehold,
+  validateBody(askForHelpSchema),
+  (req, res) => {
+    const user = (req as any).user;
+    const body = (req as any).validatedBody as { note?: string; expectedNextDue?: string };
+    const task = db.tasks.get(req.params.id);
+    if (!task || task.householdId !== user.householdId) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    if (body.expectedNextDue && body.expectedNextDue !== task.nextDue) {
+      return res
+        .status(409)
+        .json({ message: 'This task changed while you were asking. Reload and try again.' });
+    }
+    // Somebody else's explicit claim is theirs to release; inherited
+    // assignments stay askable, exactly as they stay claimable.
+    if (task.assignedTo && task.assignmentSource === null && task.assignedTo !== user.userId) {
+      return res.status(403).json({
+        message:
+          'This task is assigned to someone else — only they can ask the household to take it.',
+      });
+    }
+    if (task.helpAskedForDue === task.nextDue) {
+      return res
+        .status(409)
+        .json({ message: 'Someone has already asked the household about this one.' });
+    }
+
+    const now = new Date();
+    const markerKey = `${user.householdId}|${task.id}|${String(user.userId)}`;
+    const previous = db.helpAsks.get(markerKey);
+    if (previous && now.getTime() - Date.parse(previous.askedAt) < ASK_HELP_WINDOW_MS) {
+      return res.status(429).json({
+        message: 'You already asked about this task today. You can ask again tomorrow.',
+        details: {
+          nextAllowedAt: new Date(Date.parse(previous.askedAt) + ASK_HELP_WINDOW_MS).toISOString(),
+        },
+      });
+    }
+    db.helpAsks.set(markerKey, { askedAt: now.toISOString() });
+
+    const members = membersOf(user.householdId);
+    const askerName =
+      members.find((m) => m.userId === user.userId)?.name?.trim() || 'A household member';
+    const note = normalizeHelpNote(body.note);
+    const vacations = activeVacationMap(user.householdId, now.toISOString());
+    const recipients = members.filter(
+      (m) =>
+        m.userId !== user.userId &&
+        !vacations.has(m.userId) &&
+        !localInDndWindow(db.notificationPrefs.get(m.userId) ?? defaultPrefs(m.userId), now)
+    );
+    const skipped = members
+      .filter((m) => m.userId !== user.userId && !recipients.some((r) => r.userId === m.userId))
+      .map((m) => ({
+        userId: m.userId,
+        name: m.name,
+        reason: vacations.has(m.userId) ? 'away' : 'dnd',
+      }));
+
+    task.helpAskedAt = now.toISOString();
+    task.helpAskedBy = user.userId;
+    task.helpAskedByName = askerName;
+    task.helpAskedNote = note;
+    task.helpAskedForDue = task.nextDue;
+    task.escalatedAt = now.toISOString();
+    task.escalatedForDue = task.nextDue;
+    task.escalatedFrom = task.assignedTo ?? task.escalatedFrom ?? null;
+    task.assignedTo = null;
+    task.assignedToName = null;
+    task.assignmentSource = null;
+
+    recordActivity({
+      type: 'task.help_requested',
+      householdId: user.householdId,
+      actorId: user.userId,
+      actorName: askerName,
+      payload: {
+        taskId: task.id,
+        plantId: task.plantId,
+        plantName: task.plantName,
+        taskType: task.customType || task.type,
+        note,
+        notified: recipients.length,
+      },
+    });
+
+    // The mock never sends: `delivered` counts what actually left the
+    // building, and in dev nothing does. Reporting the recipient count here
+    // would be exactly the "absence rendered as a value" defect the real
+    // service is written to avoid.
+    res.json({
+      task: { ...task, plantName: db.plants.get(task.plantId)?.name ?? task.plantName },
+      note,
+      askedAt: now.toISOString(),
+      nextAllowedAt: new Date(now.getTime() + ASK_HELP_WINDOW_MS).toISOString(),
+      recipients: recipients.map((r) => ({ userId: r.userId, name: r.name })),
+      skipped,
+      delivered: 0,
+    });
+  }
+);
 
 app.post(
   '/plants/apply-template-bulk',
@@ -4005,6 +5275,7 @@ app.post(
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
+    advanceInheritedAssignment(task);
 
     const dbUser = db.users.get(user.userId);
     const completionId = uuidv4();
@@ -4108,10 +5379,18 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     return res.status(403).json({ message: 'Access denied' });
   }
   const daysRaw = req.query.days;
-  const days = Math.max(
+  const requestedDays = Math.max(
     1,
     Math.min(180, typeof daysRaw === 'string' ? parseInt(daysRaw, 10) || 30 : 30)
   );
+  // Analytics window — mirrors handlers/households/handler.ts (ADR 0014).
+  // ENTITLEMENT, not the plan row (#476): the window is a plan LIMIT and a
+  // downgrade already narrows it. Completion rows are never trimmed — only
+  // the window a request may ask for.
+  const plan = entitledPlan(req.params.id);
+  const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
+  const days =
+    historyLimitDays === null ? requestedDays : Math.min(requestedDays, historyLimitDays);
   const now = new Date();
   const start = new Date(now);
   start.setDate(start.getDate() - days + 1);
@@ -4147,7 +5426,44 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     days,
     series: [...buckets.entries()].map(([date, count]) => ({ date, count })),
     doubleCare,
+    historyLimitDays,
   });
+});
+
+// Mirrors handlers/households getCoverage: Garden-and-up, same pure
+// computeCoverage over the in-memory tables. Not a leaderboard — see
+// services/coverageMath.ts.
+app.get('/households/:id/analytics/coverage', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  const householdId = req.params.id;
+  if (user.householdId !== householdId) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  // ENTITLEMENT, not the plan row (#476): a per-request report for a
+  // signed-in member of the buying household — nothing issued, nothing in a
+  // third party's hands.
+  const plan = entitledPlan(householdId);
+  if (!hasHouseholdToolkit(plan)) {
+    return res.status(402).json({
+      message: 'Coverage is part of the household toolkit, included with the Garden plan and up.',
+    });
+  }
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const report = computeCoverage({
+    members: membersOf(householdId).map((m) => ({ userId: m.userId, name: m.name })),
+    plants: [...db.plants.values()]
+      .filter((p) => p.householdId === householdId && (p.status ?? 'active') === 'active')
+      .map((p) => ({ id: p.id, name: p.name })),
+    completions: [...db.completions.values()]
+      .filter((c) => c.householdId === householdId)
+      .map((c) => ({ plantId: c.plantId, completedBy: c.completedBy })),
+    windows: [...db.vacations.values()].filter(
+      (w) => w.householdId === householdId && w.endDate >= nowIso
+    ),
+    now,
+  });
+  res.json(report);
 });
 
 app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req, res) => {
@@ -4160,8 +5476,17 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
   if (!Number.isFinite(year) || year < 2020 || year > 2100) {
     return res.status(400).json({ message: 'year must be between 2020 and 2100' });
   }
-  const start = `${year}-01-01T00:00:00.000Z`;
-  const end = `${year + 1}-01-01T00:00:00.000Z`;
+  // Analytics window — mirrors handlers/households/handler.ts (ADR 0014):
+  // the free tier gets the year intersected with its trailing window.
+  // ENTITLEMENT, not the plan row (#476) — the same window limit as the daily
+  // analytics above, resolved the same way.
+  const plan = entitledPlan(req.params.id);
+  const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
+  const window =
+    historyLimitDays === null
+      ? { start: `${year}-01-01T00:00:00.000Z`, end: `${year + 1}-01-01T00:00:00.000Z` }
+      : analyticsWindow(year, historyLimitDays);
+  const { start, end } = window;
   const items = [...db.completions.values()].filter(
     (c) => c.householdId === req.params.id && c.completedAt >= start && c.completedAt < end
   );
@@ -4176,6 +5501,8 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
   }
   res.json({
     year,
+    historyLimitDays,
+    ...(historyLimitDays === null ? {} : { windowStart: start, windowEnd: end }),
     totalCompletions: items.length,
     byMember: [...memberCounts.entries()]
       .map(([userId, v]) => ({ userId, name: v.name, count: v.count }))
@@ -4302,6 +5629,7 @@ app.get('/billing/plans', (_req, res) => {
       effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
     },
     plans: Object.values(PLANS).map((plan) => planSummary(plan, paymentsAvailable)),
+    identifyTopUp: identifyTopUpSummary(paymentsAvailable),
   });
 });
 
@@ -4309,17 +5637,22 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
   const h = db.households.get(user.householdId);
   // Usage mirrors the production METADATA counters: active plants + members.
+  // `planId` below stays the tier the household is ON — that is what
+  // production publishes from the subscription row, and it is truthful. The
+  // CAPS have to be the ones actually ENFORCED (#476): resolving them off
+  // planId alone would advertise Garden's plant cap to a past_due household
+  // whose next POST /plants is refused at Seedling's.
   const planId = h?.planId ?? 'seedling';
-  const plan = PLANS[planId] ?? PLANS.seedling;
+  const plan = entitledPlan(user.householdId);
   const plantCount = [...db.plants.values()].filter(
     (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
   ).length;
   const memberCount = membersOf(user.householdId).length;
   const usage = {
     plantCount,
-    maxPlants: plan.maxPlants,
+    maxPlants: limitOf(plan, 'plants'),
     memberCount,
-    maxMembers: plan.maxMembers,
+    maxMembers: limitOf(plan, 'members'),
   };
   res.json({
     planId,
@@ -4330,6 +5663,8 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
     // shape and the additive nullable-capable shape with identical values.
     usage,
     usageDetail: usage,
+    // The mock sells no top-up packs, so the balance is a real zero.
+    identifyCredits: { remaining: 0, expiresAt: null },
   });
 });
 
@@ -4348,6 +5683,21 @@ app.post(
     // The mock mirrors production's fail-closed commercial status. Tests that
     // need a paid entitlement seed the in-memory fixture directly.
     res.status(503).json({ message: 'Payments are currently paused.' });
+  }
+);
+
+// Mirrors topUpCheckout in handlers/billing/handler.ts: the mock never has
+// a top-up price configured, so it answers the same fail-closed 400.
+app.post(
+  '/billing/top-up/checkout',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (_req, res) => {
+    res.status(400).json({
+      message: 'Identification top-up packs are not available in this environment.',
+      details: { code: 'TOP_UP_NOT_CONFIGURED' },
+    });
   }
 );
 
@@ -4520,6 +5870,9 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     taskUpForGrabs: true,
     coverageUpdates: true,
     careCredit: true,
+    yearRecap: true,
+    // '' is "never chosen" — deliberately distinguishable from 'en'.
+    emailLocale: '',
     phoneVerified: false,
     updatedAt: new Date().toISOString(),
   };
@@ -4559,6 +5912,8 @@ const prefsSchema = z
     taskUpForGrabs: z.boolean().optional(),
     coverageUpdates: z.boolean().optional(),
     careCredit: z.boolean().optional(),
+    yearRecap: z.boolean().optional(),
+    emailLocale: z.enum(['', 'en', 'es']).optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
     message: 'Quiet hours require both a start and end time',
@@ -4681,11 +6036,160 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     taskUpForGrabs: body.taskUpForGrabs ?? current.taskUpForGrabs,
     coverageUpdates: body.coverageUpdates ?? current.coverageUpdates,
     careCredit: body.careCredit ?? current.careCredit,
+    yearRecap: body.yearRecap ?? current.yearRecap,
+    emailLocale: body.emailLocale ?? current.emailLocale,
     phoneVerified,
     updatedAt: new Date().toISOString(),
   };
   db.notificationPrefs.set(user.userId, updated);
   res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
+});
+
+/**
+ * One-click unsubscribe (RFC 8058), mirroring
+ * handlers/notifications/handler.ts. Secrets live in memory here instead of
+ * `USER#{id}/EMAILCAP`, but the token format and the verification rules are
+ * the production ones — `verifyTokenWithSecret` is the same function the
+ * Lambda calls, so a dev-minted link behaves exactly like a real one.
+ *
+ * `GET /notifications/email/dev-token?category=weekly_digest` is DEV ONLY:
+ * it mints a link so the flow can be exercised without SES.
+ */
+/**
+ * Per-IP throttle for the unauthenticated unsubscribe routes, mirroring the
+ * production limits in handlers/notifications/handler.ts (GET 30/min for link
+ * prefetchers, POST 10/min).
+ *
+ * Production is already protected three ways and this dev mirror is not
+ * internet-facing — it refuses to boot when NODE_ENV=production (top of this
+ * file). It gets a limiter anyway for two reasons. First, a dev mirror that
+ * behaves differently from production is its own class of bug: the point of
+ * this file is that what you exercise locally is what ships. Second, CodeQL
+ * reads `verifyTokenWithSecret` as an authorization decision on an
+ * unauthenticated route and flags the missing throttle
+ * (js/missing-rate-limiting) — correctly, on the code as written. Mirroring
+ * the real limit is cheaper and more honest than suppressing the alert.
+ *
+ * `express-rate-limit` rather than a hand-rolled bucket: a hand-rolled one
+ * worked but CodeQL only recognises known limiter libraries, so the alert
+ * stayed open on code that was actually rate-limited. It is a devDependency
+ * alongside `express` itself — `local-server.ts` is the dev server and is not
+ * in the Lambda bundle (backend/esbuild.config.js takes only
+ * `handlers/**\/handler.ts`), so this adds zero production bytes.
+ *
+ * The two routes get SEPARATE limiter instances, and therefore separate
+ * stores, so a scanning proxy prefetching the GET cannot spend the POST's
+ * budget and hand a 429 to the human who then clicks Unsubscribe. Production
+ * gets the same separation for free by keying on API Gateway's per-method
+ * routeKey.
+ */
+const unsubscribeFormStore = new MemoryStore();
+const unsubscribeSubmitStore = new MemoryStore();
+
+function unsubscribeLimiter(limit: number, store: MemoryStore) {
+  return expressRateLimit({
+    windowMs: 60_000,
+    limit,
+    store,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) =>
+      res.status(429).json({ message: 'Too many requests. Please slow down and try again.' }),
+  });
+}
+
+const unsubscribeFormRateLimit = unsubscribeLimiter(30, unsubscribeFormStore);
+const unsubscribeSubmitRateLimit = unsubscribeLimiter(10, unsubscribeSubmitStore);
+
+/** Mirrors `__resetRateLimitForTests` in middleware/rateLimit.ts so an
+ *  integration test can exercise the limiter without leaking buckets into the
+ *  next case. */
+export function __resetUnsubscribeRateLimitForTests(): void {
+  void unsubscribeFormStore.resetAll?.();
+  void unsubscribeSubmitStore.resetAll?.();
+}
+
+const emailCapabilitySecrets = new Map<string, string>();
+function localCapabilitySecret(userId: string): string {
+  const existing = emailCapabilitySecrets.get(userId);
+  if (existing) return existing;
+  const fresh = randomBytes(32).toString('base64url');
+  emailCapabilitySecrets.set(userId, fresh);
+  return fresh;
+}
+
+function localTokenUserId(token: string): string | null {
+  const parts = token.split('.');
+  if (parts.length !== 5 || parts[0] !== 'v1') return null;
+  try {
+    const userId = Buffer.from(parts[1], 'base64url').toString('utf8');
+    return userId || null;
+  } catch {
+    return null;
+  }
+}
+
+function unsubscribeLang(req: { query: Record<string, unknown> }): 'en' | 'es' {
+  return req.query.lang === 'es' ? 'es' : 'en';
+}
+
+type HtmlResponse = {
+  status: (code: number) => HtmlResponse;
+  type: (kind: string) => HtmlResponse;
+  set: (header: string, value: string) => HtmlResponse;
+  send: (body: string) => unknown;
+};
+
+function sendUnsubscribeHtml(res: HtmlResponse, status: number, body: string): void {
+  res.status(status).type('html').set('Cache-Control', 'no-store').send(body);
+}
+
+app.get('/notifications/email/dev-token', authMiddleware, (req, res) => {
+  const user = (req as any).user;
+  const category = isEmailCategory(req.query.category) ? req.query.category : 'weekly_digest';
+  const expiresAt = Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60;
+  const token = signToken(localCapabilitySecret(user.userId), user.userId, category, expiresAt);
+  res.json({ token, url: `http://localhost:4000/notifications/email/unsubscribe?t=${token}` });
+});
+
+app.get('/notifications/email/unsubscribe', unsubscribeFormRateLimit, (req, res) => {
+  const locale = unsubscribeLang(req);
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  const userId = token ? localTokenUserId(token) : null;
+  if (!token || !userId) return sendUnsubscribeHtml(res, 400, renderInvalidPage(locale));
+  const verified = verifyTokenWithSecret(token, localCapabilitySecret(userId));
+  if (verified.status !== 'ok') return sendUnsubscribeHtml(res, 410, renderInvalidPage(locale));
+  return sendUnsubscribeHtml(
+    res,
+    200,
+    renderConfirmPage({
+      locale,
+      actionUrl: `http://localhost:4000/notifications/email/unsubscribe?t=${encodeURIComponent(token)}&lang=${locale}`,
+      category: verified.category,
+    })
+  );
+});
+
+app.post('/notifications/email/unsubscribe', unsubscribeSubmitRateLimit, (req, res) => {
+  const locale = unsubscribeLang(req);
+  const token = typeof req.query.t === 'string' ? req.query.t : '';
+  const userId = token ? localTokenUserId(token) : null;
+  if (!token || !userId) return sendUnsubscribeHtml(res, 400, renderInvalidPage(locale));
+  const verified = verifyTokenWithSecret(token, localCapabilitySecret(userId));
+  if (verified.status !== 'ok') return sendUnsubscribeHtml(res, 410, renderInvalidPage(locale));
+  const current = db.notificationPrefs.get(verified.userId) ?? defaultPrefs(verified.userId);
+  const field =
+    verified.category === 'weekly_digest'
+      ? 'weeklyDigest'
+      : verified.category === 'year_recap'
+        ? 'yearRecap'
+        : 'pestAlerts';
+  db.notificationPrefs.set(verified.userId, {
+    ...current,
+    [field]: false,
+    updatedAt: new Date().toISOString(),
+  });
+  return sendUnsubscribeHtml(res, 200, renderDonePage(locale, verified.category));
 });
 
 app.post(
@@ -5047,8 +6551,12 @@ app.post(
   validateBody(createApiKeySchema),
   (req, res) => {
     const user = (req as any).user;
-    const h = db.households.get(user.householdId);
-    if ((h?.planId ?? 'seedling') !== 'greenhouse') {
+    // ENTITLEMENT, not the plan row (#476/#540). Using a key is gated on
+    // entitlement in production's middleware/apiKey.ts, so minting one off
+    // `planId` alone was the inconsistent half: a past_due household could
+    // issue a key its own next request would then be refused with.
+    // And the FLAG, not the id (#592), mirroring the production handler.
+    if (!featureOf(entitledPlan(user.householdId), 'apiKeys')) {
       return res.status(402).json({
         message: 'API access is included with the Greenhouse plan. Upgrade to issue API keys.',
       });
@@ -5207,6 +6715,7 @@ app.post(
     nextDue.setDate(nextDue.getDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
+    advanceInheritedAssignment(task);
 
     const completionId = uuidv4();
     db.completions.set(completionId, {
@@ -5271,6 +6780,194 @@ app.post(
   }
 );
 
+// ============ AWAY KIT: SITTER PHOTO-BACK + RETURN RECAP ============
+// Mirrors handlers/tasks/sitterPhotos.ts and handlers/households/awayRecap.ts.
+// The admission policy (sizes, magic bytes, schema, per-token brake) and the
+// recap folding are the SAME modules production uses, so the mock can't
+// drift on what is refused or what a recap contains; only storage differs
+// (the in-memory mock image store instead of S3/DynamoDB).
+
+/**
+ * CONTINUING (#476) — mirrors handlers/tasks/sitterPhotos.awayKitEnabledFor.
+ * Both callers are the anonymous sitter-token routes, reached only after
+ * getActiveSitterLink has validated an active, unexpired link held by someone
+ * who is not the buyer. The per-link photo cap is enforced separately.
+ *
+ * The away RECAP is NOT this question and does not call this: it is read by a
+ * signed-in member of the buying household, for a window that has already
+ * ended. See the route below.
+ */
+function awayKitEnabledFor(householdId: string): boolean {
+  return planIncludesAwayKit(getEntitledPlanForIssuedGrant(subscriptionOf(householdId)));
+}
+
+// GET /sitter/:token/photos
+app.get('/sitter/:token/photos', (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  if (!awayKitEnabledFor(link.householdId)) {
+    return res.json({
+      enabled: false,
+      max: SITTER_PHOTO_MAX_PER_LINK,
+      used: null,
+      remaining: null,
+    });
+  }
+  const used = link.photoCount ?? 0;
+  res.json({
+    enabled: true,
+    max: SITTER_PHOTO_MAX_PER_LINK,
+    used,
+    remaining: Math.max(0, SITTER_PHOTO_MAX_PER_LINK - used),
+  });
+});
+
+// POST /sitter/:token/photos
+app.post('/sitter/:token/photos', validateBody(sitterPhotoUploadSchema), (req, res) => {
+  const link = getActiveSitterLink(req.params.token);
+  if (!link) {
+    return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
+  }
+  if (!takeSitterPhotoToken(link.token)) {
+    return res
+      .status(429)
+      .json({ message: 'Too many photos at once. Please wait a minute and try again.' });
+  }
+  if (!awayKitEnabledFor(link.householdId)) {
+    return res
+      .status(402)
+      .json({ message: 'Photo-back is not included in this household’s plan.' });
+  }
+  const body = (req as any).validatedBody;
+  const task = db.tasks.get(body.taskId);
+  // Cross-household guard: the task must live in the token's household.
+  if (!task || task.householdId !== link.householdId) {
+    return res.status(404).json({ message: 'Task not found' });
+  }
+  const plant = db.plants.get(task.plantId);
+  if (!plant || plant.householdId !== link.householdId) {
+    return res.status(404).json({ message: 'Task not found' });
+  }
+  const admitted = admitSitterPhoto(body.image);
+  if (!admitted.ok) {
+    return res.status(admitted.status).json({ message: admitted.message });
+  }
+  const used = link.photoCount ?? 0;
+  if (used >= SITTER_PHOTO_MAX_PER_LINK) {
+    return res
+      .status(409)
+      .json({ message: `This link has reached its ${SITTER_PHOTO_MAX_PER_LINK}-photo limit.` });
+  }
+  link.photoCount = used + 1;
+
+  const key = `plants/${link.householdId}/${plant.id}/${uuidv4()}.${SITTER_PHOTO_EXTENSIONS[admitted.contentType]}`;
+  db.mockImages.set(key, { body: admitted.bytes, contentType: admitted.contentType });
+  const imageUrl = `${imageBaseUrl()}/${key}`;
+  const now = new Date().toISOString();
+  const photoId = uuidv4();
+  const caption = body.caption?.trim() ? body.caption.trim() : null;
+  // Timeline-only: a sitter never replaces the plant's primary image.
+  db.photos.set(photoId, {
+    id: photoId,
+    plantId: plant.id,
+    householdId: link.householdId,
+    imageUrl,
+    uploadedBy: sitterActorId(link.id),
+    uploadedAt: now,
+    caption,
+    viaSitter: true,
+    sitterLinkId: link.id,
+  });
+  recordActivity({
+    type: 'photo.uploaded',
+    householdId: link.householdId,
+    actorId: sitterActorId(link.id),
+    actorName: 'a plant sitter',
+    payload: {
+      plantId: plant.id,
+      photoId,
+      plantName: plant.name,
+      imageUrl,
+      caption,
+      viaSitter: true,
+      sitterLinkId: link.id,
+    },
+  });
+  // PII-free acknowledgement — the stored URL (household + plant ids in the
+  // key path) is deliberately not returned to the sitter.
+  res.status(201).json({
+    photoId,
+    plantName: plant.name,
+    caption,
+    uploadedAt: now,
+    used: used + 1,
+    remaining: Math.max(0, SITTER_PHOTO_MAX_PER_LINK - (used + 1)),
+  });
+});
+
+// GET /households/:id/away-recap
+app.get('/households/:id/away-recap', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  // ENTITLEMENT, not the already-issued-grant rule (#476), and not
+  // awayKitEnabledFor above. Unlike the sitter's own routes this one is read
+  // by a MEMBER of the household, signed in, on their own account — the
+  // person who can fix the card — and nothing is mid-flight, because the
+  // recap is only served for a window that has already ended. So it follows
+  // the documented downgrade contract, exactly as handlers/households/
+  // awayRecap.ts does.
+  if (!planIncludesAwayKit(entitledPlan(req.params.id))) {
+    return res
+      .status(402)
+      .json({ message: 'The Away Kit is included with Garden and Greenhouse.' });
+  }
+  const rawLinkId = req.query.linkId;
+  const linkId =
+    typeof rawLinkId === 'string' && rawLinkId.trim().length > 0 ? rawLinkId.trim() : undefined;
+  const now = new Date();
+  const links = [...db.sitterLinks.values()].filter((l) => l.householdId === req.params.id);
+  const link = pickRecapLink(links, linkId, now);
+  if (!link) {
+    return res
+      .status(404)
+      .json({ message: linkId ? 'Sitter link not found' : 'No sitter window has ended yet' });
+  }
+  const { from, to } = recapWindow(link, now);
+  const actor = sitterActorId(link.id);
+  const inWindow = (at: string) => at >= from && at <= to;
+  // Same two row kinds production's activity partition holds: typed events
+  // plus completions folded into the envelope (dedupeCompletions handles
+  // the pair a sitter completion produces).
+  const events = [
+    ...[...db.activity.values()].filter(
+      (e) => e.householdId === req.params.id && e.actorId === actor && inWindow(e.occurredAt)
+    ),
+    ...[...db.completions.values()]
+      .filter(
+        (c) => c.householdId === req.params.id && c.completedBy === actor && inWindow(c.completedAt)
+      )
+      .map((c) => ({
+        id: c.id,
+        type: 'task.completed' as const,
+        householdId: c.householdId,
+        actorId: c.completedBy,
+        actorName: c.completedByName,
+        occurredAt: c.completedAt,
+        payload: {
+          plantId: c.plantId,
+          taskId: c.taskId,
+          taskType: c.taskType,
+          notes: c.notes ?? null,
+        },
+      })),
+  ];
+  res.json(buildAwayRecap(link, events, false, now));
+});
+
 // ============ MOCK IMAGE OBJECT STORE ============
 
 app.put(
@@ -5311,6 +7008,18 @@ app.get(/^\/mock-images\/(.+)$/, (req, res) => {
   res.send(image.body);
 });
 
+// ============ PLANT TAGS (ADR 0016) ============
+// Mirrors handlers/plantTags/handler.ts — the routes live in
+// local-server-plant-tags.ts and register here in one call.
+registerPlantTagRoutes(app, {
+  db,
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody,
+  recordActivity,
+});
+
 // ============ FALLBACKS ============
 
 // Unknown routes: same JSON 404 shape as production's router dispatcher.
@@ -5349,6 +7058,11 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('\nTest account:');
     console.log('  Email: test@example.com');
     console.log('  Password: password123');
+    if (process.env.SEED_STORE_DEMO === '1') {
+      console.log('\nStore-demo household (SEED_STORE_DEMO=1):');
+      console.log(`  Email: ${STORE_DEMO_LOGIN.email}`);
+      console.log(`  Password: ${STORE_DEMO_LOGIN.password}`);
+    }
     console.log('\nFor new signups, use confirmation code: 123456');
     console.log('========================================\n');
   });

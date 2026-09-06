@@ -32,6 +32,15 @@ locals {
   sprout_secret_arn = var.sprout_integration_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/sprout-disabled" : (
     startswith(var.sprout_integration_secret_id, "arn:") ? var.sprout_integration_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.sprout_integration_secret_id}*"
   )
+  # The Firebase service-account JSON that services/fcmNotifier.ts signs its
+  # FCM HTTP v1 access tokens with. Same name-or-ARN handling and the same
+  # nonexistent-secret sentinel as Sprout above: this is unset in every
+  # environment today, and pointing the grant at a secret that does not exist
+  # is how "device push is not configured" avoids becoming "the notification
+  # Lambdas may read every secret in the account".
+  fcm_secret_arn = var.fcm_service_account_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/fcm-disabled" : (
+    startswith(var.fcm_service_account_secret_id, "arn:") ? var.fcm_service_account_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.fcm_service_account_secret_id}*"
+  )
 }
 
 # API Gateway
@@ -49,7 +58,7 @@ resource "aws_apigatewayv2_api" "main" {
     # declared here or strict browsers (Safari, Firefox) reject the
     # preflight before the request reaches Lambda — failure mode is a
     # silent CORS block with no log on our side.
-    allow_headers     = ["Content-Type", "Authorization", "X-Household-Id", "X-Cognito-Access-Token"]
+    allow_headers     = ["Content-Type", "Authorization", "X-Household-Id", "X-Cognito-Access-Token", "X-Tag-Pin"]
     allow_credentials = true
     max_age           = 300
   }
@@ -285,6 +294,16 @@ resource "aws_iam_role_policy" "lambda" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = local.sprout_secret_arn
+      },
+      {
+        # Firebase service-account JSON for native (APNs/FCM) push delivery.
+        # Read by services/fcmNotifier.ts on the reminders / notifications /
+        # households Lambdas. While fcm_service_account_secret_id is blank the
+        # resource is the disabled sentinel above and the code never calls
+        # Secrets Manager at all.
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = local.fcm_secret_arn
       }
     ]
   })
@@ -312,6 +331,8 @@ locals {
     "climate"       = "climate"
     "apiKeys"       = "apiKeys"
     "api"           = "api"
+    # Plant Tags (ADR 0016): per-plant QR labels, public scan + complete.
+    "plantTags" = "plantTags"
     # Not an HTTP group — invoked by EventBridge (see the schedule below). It
     # gets an unused API integration/permission from the for_each, which is
     # harmless since no route targets it.
@@ -339,6 +360,32 @@ locals {
 # VAPID, Plant.id, or other unrelated credentials.
 locals {
   lambda_environment = {
+    # The process zone every backend Lambda runs in. AWS already defaults the
+    # execution environment to UTC, so this changes no behaviour — it changes
+    # where the property is DECIDED (#590).
+    #
+    # Several date calculations are local-zone arithmetic and are correct only
+    # under UTC. `getDailyCompletionCounts` (services/taskService.ts) is the
+    # sharpest: it builds day buckets from a LOCAL midnight, stringifies them
+    # through a UTC formatter, and matches completions keyed by UTC date. Those
+    # calendars name the same day only while this process runs UTC. When they
+    # disagree nothing raises — the unmatched day keeps its zero-fill and is
+    # published as a real count of zero in the analytics chart and the weekly
+    # digest. `completeTask`'s next-due math and `doubleCareRules` read the
+    # process zone too.
+    #
+    # Inherited, that correctness rested on an AWS platform default that a
+    # runtime bump, a base-image change, or a future default could move with
+    # nothing in this repository noticing. Stated here it is a setting, and
+    # backend/tests/unit/config/lambdaTimeZone.test.ts fails if it is removed.
+    # ADR 0025 phase 5 removes the dependency itself; this does not wait on it.
+    #
+    # `TZ` is an UNRESERVED Lambda environment variable — it is Lambda's own
+    # documented default (`:UTC`) and appears in the "can be extended in your
+    # function configuration" list, not the reserved one — so `terraform apply`
+    # accepts it rather than rejecting the whole environment block.
+    TZ = "UTC"
+
     NODE_ENV             = var.environment
     TABLE_NAME           = var.dynamodb_table_name
     COGNITO_USER_POOL_ID = var.cognito_user_pool_id
@@ -361,6 +408,14 @@ locals {
     # var-shaped contract so a future dedicated assets domain is a wiring
     # change only.
     ASSETS_BASE_URL = var.allowed_origin
+    # PUBLIC_API_URL: this API's externally reachable base, stage path
+    # included. Email capability links (RFC 8058 one-click unsubscribe) must
+    # resolve with no session, so they point at the API — pointing them at the
+    # SPA origin would land on the app shell and 404. `aws_apigatewayv2_api`
+    # does not depend on the Lambdas (only the integrations do), so reading it
+    # here introduces no cycle. Unset means services/email/links.ts omits the
+    # unsubscribe header rather than shipping a link it knows is wrong.
+    PUBLIC_API_URL = "${aws_apigatewayv2_api.main.api_endpoint}/${var.environment}"
     # Source maps in stack traces: esbuild already emits them; this flag
     # tells Node 20 to actually use them when printing CloudWatch errors.
     NODE_OPTIONS = "--enable-source-maps"
@@ -378,6 +433,7 @@ locals {
     STRIPE_PRICE_ID_GARDEN_LIFETIME   = var.stripe_price_id_garden_lifetime
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
+    STRIPE_PRICE_ID_IDENTIFY_TOP_UP   = var.stripe_price_id_identify_top_up
     STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                  = var.payments_enabled
     POSTHOG_KEY                       = var.posthog_key
@@ -400,6 +456,13 @@ locals {
     WEB_PUSH_VAPID_PRIVATE_KEY = var.web_push_vapid_private_key
     WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
     SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
+    # Native (APNs/FCM) push. Blank in every environment today, which is what
+    # makes services/fcmNotifier.ts a no-op: it logs one line per Lambda
+    # container and never opens a socket. Filling this in is the last step of
+    # docs/mobile.md § Push notifications, AFTER the Firebase project and the
+    # APNs key exist — and it still does not make the app's push toggle
+    # reachable, which is a separate frontend change.
+    FCM_SERVICE_ACCOUNT_SECRET_ID = var.fcm_service_account_secret_id
   })
 
   plant_integration_environment = {
@@ -413,6 +476,9 @@ locals {
     LEAF_HEALTH_MONTHLY_CAP_SEEDLING   = var.leaf_health_monthly_cap_seedling
     LEAF_HEALTH_MONTHLY_CAP_GARDEN     = var.leaf_health_monthly_cap_garden
     LEAF_HEALTH_MONTHLY_CAP_GREENHOUSE = var.leaf_health_monthly_cap_greenhouse
+    # "This environment has no Bedrock." Only then does an access error become
+    # the canned demo assessment; everywhere else it is a 503 (services/leafHealth.ts).
+    LEAF_HEALTH_DEMO = var.leaf_health_demo ? "1" : "0"
   }
 
   weather_environment = {
@@ -466,6 +532,9 @@ locals {
     climate = local.weather_environment
     apiKeys = {}
     api     = {}
+    # Plant Tags (ADR 0016) talks to DynamoDB only — no third-party
+    # integration values beyond the shared lambda_environment.
+    plantTags = {}
     # Reminders also get weather: services/reminders.ts adds a rain/frost line
     # to the daily reminder ("Rain is forecast — outdoor plants likely don't
     # need watering today"), which is the exact case that advice exists for.
@@ -515,9 +584,30 @@ resource "aws_lambda_function" "handlers" {
   # binaries (no sharp/bcrypt in the dependency tree), so the bundle is
   # architecture-independent.
   architectures = ["arm64"]
-  # `chat` runs Bedrock InvokeModel up to 5 times per turn (Sonnet 4.6 latency
-  # ~2-6s per call), and the tool-use loop can occasionally push past 30s.
-  # 90s leaves margin without unbounded; memory bump shortens cold starts.
+  # `chat` runs Bedrock InvokeModel up to `MAX_TOOL_CALLS_PER_TURN + 1` = 6
+  # times per turn (backend/src/services/chat/index.ts), and each call is
+  # bounded at 25s by BEDROCK_CHAT_TIMEOUT_MS (services/chat/bedrock.ts). The
+  # worst case is therefore far past 90s, so this ceiling is NOT what keeps a
+  # turn in bounds and must not be read as a latency budget.
+  #
+  # What keeps a turn in bounds is TURN_DEADLINE_MS = 80s in
+  # services/chat/index.ts — a whole-turn wall clock deliberately set BELOW
+  # this timeout so the handler's `finally` still runs. That `finally`
+  # reconciles the RESERVE_INPUT_TOKENS = 8000 budget reservation to real usage
+  # and resolves the turn claim; a killed Lambda runs neither, so the household
+  # is billed 8,000 input tokens for a turn that produced no answer and the
+  # claim sits until its lease expires.
+  #
+  # So 90 is "the 80s turn deadline plus margin for that cleanup and for cold
+  # start", not a per-call figure. Do not lower it to or below 80 without
+  # lowering CHAT_TURN_DEADLINE_MS first: that inverts the ordering the
+  # deadline depends on and silently restores the unreconciled-reservation bug.
+  #
+  # This says nothing about which model on purpose. The model is
+  # var.bedrock_chat_model_id (variables.tf), whose "" default lets the Lambda
+  # fall back to Haiku 4.5 (services/chat/bedrock.ts) — the ordering above
+  # holds whatever that variable is pointed at, which a per-model latency
+  # figure would not. The memory bump below shortens cold starts.
   timeout     = each.key == "chat" ? 90 : 30
   memory_size = each.key == "chat" ? 512 : 256
 
@@ -864,6 +954,12 @@ locals {
     "GET /plants/shared/{code}"         = { group = "plants", auth = "none" }
     "POST /plants/shared/{code}/accept" = { group = "plants", auth = "jwt" }
 
+    # Caretaker photo upload (auth=none, token-scoped). Served by the plants
+    # group because it owns the presign/confirm S3 pipeline; the key is minted
+    # for the token's household + plant, so a crafted URL cannot cross either.
+    "POST /caretaker/{token}/plants/{plantId}/photo"         = { group = "plants", auth = "none" }
+    "POST /caretaker/{token}/plants/{plantId}/photo/confirm" = { group = "plants", auth = "none" }
+
     # --- tasks (templates list is public) ---
     "GET /tasks"                = { group = "tasks", auth = "jwt" }
     "GET /tasks/upcoming"       = { group = "tasks", auth = "jwt" }
@@ -881,6 +977,7 @@ locals {
     "POST /tasks/{id}/snooze"               = { group = "tasks", auth = "jwt" }
     "POST /tasks/{id}/claim"                = { group = "tasks", auth = "jwt" }
     "POST /tasks/{id}/unclaim"              = { group = "tasks", auth = "jwt" }
+    "POST /tasks/{id}/ask"                  = { group = "tasks", auth = "jwt" }
     # Vacation-mode care handoff. Exact-segment route keys win over {id}
     # params in HTTP API route selection, so /tasks/vacation never collides
     # with /tasks/{id}.
@@ -896,6 +993,12 @@ locals {
     "GET /sitter/{token}"                          = { group = "tasks", auth = "none" }
     "GET /sitter/{token}/brief"                    = { group = "tasks", auth = "none" }
     "POST /sitter/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+    # Away Kit photo-back (auth=none, same token). The upload is the one
+    # unauthenticated WRITE into the photo store: 300 KB/file, 60/link
+    # (atomic DynamoDB counter), image magic bytes verified, IP + per-token
+    # rate limits, refused after expiresAt — handlers/tasks/sitterPhotos.ts.
+    "GET /sitter/{token}/photos"  = { group = "tasks", auth = "none" }
+    "POST /sitter/{token}/photos" = { group = "tasks", auth = "none" }
 
     # Kiosk (wall display) PUBLIC endpoints (auth=none). Same token model as
     # the sitter routes above, but LONG-LIVED: the token sits on a screen in a
@@ -904,6 +1007,14 @@ locals {
     # and revocable in one click. See backend/src/services/kioskService.ts.
     "GET /kiosk/{token}"                          = { group = "tasks", auth = "none" }
     "POST /kiosk/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+    # Caretaker seats PUBLIC endpoints (auth=none). Same token-scoped model as
+    # the sitter routes above, but the identity is NAMED and every action is
+    # folded into a proof-of-visit record. The permission surface is exactly
+    # these three plus the two photo routes in the plants group below —
+    # complete a task, leave a note, add a photo — and nothing else.
+    "GET /caretaker/{token}"                          = { group = "tasks", auth = "none" }
+    "POST /caretaker/{token}/tasks/{taskId}/complete" = { group = "tasks", auth = "none" }
+    "POST /caretaker/{token}/notes"                   = { group = "tasks", auth = "none" }
 
     # --- households (invite preview is public) ---
     "POST /households"                                    = { group = "households", auth = "jwt" }
@@ -914,6 +1025,7 @@ locals {
     "POST /households/join/{inviteCode}"                  = { group = "households", auth = "jwt" }
     "GET /households/{id}/activity"                       = { group = "households", auth = "jwt" }
     "GET /households/{id}/analytics/daily"                = { group = "households", auth = "jwt" }
+    "GET /households/{id}/analytics/coverage"             = { group = "households", auth = "jwt" }
     "GET /households/{id}/year-in-review"                 = { group = "households", auth = "jwt" }
     "PUT /households/{householdId}/members/{userId}/role" = { group = "households", auth = "jwt" }
     "DELETE /households/{householdId}/members/{userId}"   = { group = "households", auth = "jwt" }
@@ -932,11 +1044,37 @@ locals {
     # A member asks the household's admins to upgrade for a locked feature
     # (email + push + activity row; once per member per feature per week).
     "POST /households/{id}/upgrade-requests" = { group = "households", auth = "jwt" }
+    # Away Kit return recap (authed, any member): replays sitter-attributed
+    # activity inside a link's window — handlers/households/awayRecap.ts.
+    "GET /households/{id}/away-recap" = { group = "households", auth = "jwt" }
+    # Caretaker-seat management (authed). Create/list/revoke are admin-gated
+    # like sitter links; the proof-of-visit report is open to any member,
+    # because the person handing it to whoever is paying need not be an admin.
+    "POST /households/{id}/caretakers"                 = { group = "households", auth = "jwt" }
+    "GET /households/{id}/caretakers"                  = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/caretakers/{caretakerId}" = { group = "households", auth = "jwt" }
+    "GET /households/{id}/caretaker-report"            = { group = "households", auth = "jwt" }
+
+    # Auto-handoff rule (ADR 0018): admin-only, plan-gated in the handler.
+    "PUT /households/{id}/escalation" = { group = "households", auth = "jwt" }
+    "PUT /households/{id}/timezone"   = { group = "households", auth = "jwt" }
+
+    # Plant Tags (ADR 0016). Management is any-member (a tag grants strictly
+    # less than a member already holds); the PIN is admin-only. The two /tag
+    # routes are PUBLIC: the 256-bit token in the path is the only credential,
+    # scoped to ONE plant + complete-task-only, PIN-checkable, IP-rate-limited.
+    "POST /plants/{plantId}/tag"                = { group = "plantTags", auth = "jwt" }
+    "DELETE /plants/{plantId}/tag"              = { group = "plantTags", auth = "jwt" }
+    "GET /households/{id}/plant-tags"           = { group = "plantTags", auth = "jwt" }
+    "PUT /households/{id}/plant-tags/pin"       = { group = "plantTags", auth = "jwt" }
+    "GET /tag/{token}"                          = { group = "plantTags", auth = "none" }
+    "POST /tag/{token}/tasks/{taskId}/complete" = { group = "plantTags", auth = "none" }
 
     # --- me ---
     "DELETE /me"                = { group = "me", auth = "jwt" }
     "GET /me/export"            = { group = "me", auth = "jwt" }
     "GET /me/households"        = { group = "me", auth = "jwt" }
+    "GET /me/today"             = { group = "me", auth = "jwt" }
     "GET /me/calendar.ics"      = { group = "me", auth = "jwt" }
     "GET /me/calendar-token"    = { group = "me", auth = "jwt" }
     "POST /me/calendar-token"   = { group = "me", auth = "jwt" }
@@ -965,13 +1103,22 @@ locals {
     # the APNs/FCM sender ships (docs/mobile.md § Push notifications).
     "POST /notifications/devices"        = { group = "notifications", auth = "jwt" }
     "POST /notifications/devices/remove" = { group = "notifications", auth = "jwt" }
+    # RFC 8058 one-click unsubscribe (auth=none). The capability token in the
+    # query string is the whole credential; it can only turn ONE email
+    # category off for ONE user and is revocable per user. GET renders a
+    # confirm form (link scanners must not be able to unsubscribe anyone),
+    # POST performs it and is also what a mail provider's automated
+    # List-Unsubscribe-Post hits. Both are IP rate-limited in the handler.
+    "GET /notifications/email/unsubscribe"  = { group = "notifications", auth = "none" }
+    "POST /notifications/email/unsubscribe" = { group = "notifications", auth = "none" }
 
     # --- billing (plans + webhook public; webhook is Stripe-signed) ---
-    "GET /billing/plans"     = { group = "billing", auth = "none" }
-    "GET /billing/me"        = { group = "billing", auth = "jwt" }
-    "POST /billing/checkout" = { group = "billing", auth = "jwt" }
-    "POST /billing/portal"   = { group = "billing", auth = "jwt" }
-    "POST /billing/webhook"  = { group = "billing", auth = "none" }
+    "GET /billing/plans"            = { group = "billing", auth = "none" }
+    "GET /billing/me"               = { group = "billing", auth = "jwt" }
+    "POST /billing/checkout"        = { group = "billing", auth = "jwt" }
+    "POST /billing/top-up/checkout" = { group = "billing", auth = "jwt" }
+    "POST /billing/portal"          = { group = "billing", auth = "jwt" }
+    "POST /billing/webhook"         = { group = "billing", auth = "none" }
 
     # --- species ---
     "GET /species/search" = { group = "species", auth = "jwt" }
@@ -990,8 +1137,9 @@ locals {
     "GET /species/{id}/care-suggestions" = { group = "species", auth = "jwt" }
 
     # --- climate (household-scoped paths, served by the climate Lambda) ---
-    "GET /households/{id}/climate"  = { group = "climate", auth = "jwt" }
-    "PUT /households/{id}/location" = { group = "climate", auth = "jwt" }
+    "GET /households/{id}/climate"   = { group = "climate", auth = "jwt" }
+    "PUT /households/{id}/location"  = { group = "climate", auth = "jwt" }
+    "POST /households/{id}/move-day" = { group = "climate", auth = "jwt" }
 
     # --- api keys (management; JWT) ---
     "GET /api-keys"         = { group = "apiKeys", auth = "jwt" }
@@ -1139,8 +1287,24 @@ resource "aws_lambda_permission" "year_recap_eventbridge" {
 # `count` rather than an unconditional resource: an environment with no domain
 # has no email module, hence no topic. The function is still deployed there;
 # it just never receives anything.
+#
+# The count reads `var.ses_events_enabled`, NOT `var.ses_event_topic_arn`. The
+# ARN is a resource attribute of a topic that lives in another module, so on any
+# run where that topic has not been created yet it is unknown at plan time and
+# Terraform refuses the whole plan:
+#
+#   Error: Invalid count argument
+#   The "count" value depends on resource attributes that cannot be determined
+#   until apply
+#
+# That is a plan-time failure of the ENTIRE root module, so it cannot be reached
+# by `terraform validate` (which never resolves cross-module values) and it only
+# shows up against a state where the topic is absent. `ses_events_enabled` comes
+# from `var.domain_name != ""` in the root — a plain input variable, known before
+# anything is refreshed. The ARN is still used for the values below, where an
+# unknown is perfectly fine.
 resource "aws_sns_topic_subscription" "email_events" {
-  count = var.ses_event_topic_arn == "" ? 0 : 1
+  count = var.ses_events_enabled ? 1 : 0
 
   topic_arn = var.ses_event_topic_arn
   protocol  = "lambda"
@@ -1148,7 +1312,7 @@ resource "aws_sns_topic_subscription" "email_events" {
 }
 
 resource "aws_lambda_permission" "email_events_sns" {
-  count = var.ses_event_topic_arn == "" ? 0 : 1
+  count = var.ses_events_enabled ? 1 : 0
 
   statement_id  = "AllowSNSInvokeEmailEvents"
   action        = "lambda:InvokeFunction"

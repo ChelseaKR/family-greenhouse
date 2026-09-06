@@ -43,6 +43,8 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 
 vi.mock('../../../src/services/householdService.js', () => ({
   getMemberByUserId: vi.fn(),
+  // Read by the occurrence re-resolution (ADR 0018) when a space rotates.
+  getHouseholdMembers: vi.fn(async () => []),
 }));
 
 // Activity records are best-effort side writes; mock them out so dynamo
@@ -509,8 +511,11 @@ describe('taskService', () => {
       .mocked(dynamodb.send)
       .mock.calls.map((c) => (c[0] as unknown as SentCommand).kind);
     // Get → conditional Update → completion Put (in that order, so a failed
-    // condition never leaves a stray completion record).
-    expect(kinds).toEqual(['Get', 'Update', 'Put']);
+    // condition never leaves a stray completion record). The trailing Get is
+    // the new occurrence re-resolving what it inherits from its space
+    // (ADR 0018); it runs AFTER the completion is durable, and this plant has
+    // no space so nothing is rewritten.
+    expect(kinds).toEqual(['Get', 'Update', 'Put', 'Get']);
   });
 
   it('completeTask writes nextDue = completion instant + frequency days (UTC), not the old due date', async () => {
@@ -785,8 +790,10 @@ describe('taskService', () => {
 
       const update = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as SentCommand;
       // Exists AND either unassigned or inherited, atomically.
+      // Unassigned OR inherited (space default or rotation turn) — never an
+      // explicit assignment someone chose.
       expect(update.input.ConditionExpression).toBe(
-        'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault)'
+        'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay OR #assignmentSource = :rotation)'
       );
       expect(update.input.UpdateExpression).toContain('#assignmentSource = :null');
       expect(update.input.ExpressionAttributeValues[':gsi2pk']).toBe(
@@ -1050,5 +1057,212 @@ describe('taskService', () => {
       vi.mocked(dynamodb.send).mockRejectedValueOnce(err);
       expect(await deleteVacationWindow('hh-1', 'user-away')).toBe(false);
     });
+  });
+});
+
+describe('taskService — care rotation advances with the occurrence (ADR 0018)', () => {
+  const ANCHOR = '2026-06-01T00:00:00.000Z';
+  const members = [
+    {
+      householdId: 'hh-1',
+      userId: 'sam',
+      name: 'Sam',
+      email: 's@x.com',
+      role: 'admin',
+      joinedAt: '',
+    },
+    {
+      householdId: 'hh-1',
+      userId: 'priya',
+      name: 'Priya',
+      email: 'p@x.com',
+      role: 'member',
+      joinedAt: '',
+    },
+  ];
+
+  /**
+   * Routes each read to the row it asks for, so the assertions are about
+   * WHICH assignment is written rather than about call ordering.
+   * `advancedNextDue` is what the conditional Update returns — the new
+   * occurrence's due date, which is what rotation must resolve against.
+   */
+  async function mockRotationWorld(options: {
+    task: Record<string, unknown>;
+    advancedNextDue: string;
+    rotation?: Record<string, unknown> | null;
+    defaultCaregiverId?: string | null;
+    vacations?: Record<string, unknown>[];
+  }) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const household = await import('../../../src/services/householdService.js');
+    vi.mocked(household.getHouseholdMembers).mockResolvedValue(members as never);
+    const writes: SentCommand[] = [];
+    vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
+      const c = cmd as SentCommand;
+      const sk = String(c.input.Key?.SK ?? '');
+      if (c.kind === 'Get' && sk.startsWith('TASK#')) return { Item: options.task } as never;
+      if (c.kind === 'Get' && sk.startsWith('PLANT#')) {
+        return {
+          Item: { id: 'p1', householdId: 'hh-1', name: 'Pothos', spaceId: 'space-1' },
+        } as never;
+      }
+      if (c.kind === 'Get' && sk.startsWith('SPACE#')) {
+        return {
+          Item: {
+            id: 'space-1',
+            householdId: 'hh-1',
+            name: 'Balcony',
+            environment: 'outside',
+            defaultCaregiverId: options.defaultCaregiverId ?? null,
+            rotation: options.rotation ?? null,
+            createdAt: '',
+            createdBy: 'sam',
+            updatedAt: '',
+          },
+        } as never;
+      }
+      if (c.kind === 'Query') return { Items: options.vacations ?? [] } as never;
+      if (c.kind === 'Update') {
+        writes.push(c);
+        return {
+          Attributes: {
+            ...options.task,
+            ...(c.input.ExpressionAttributeValues?.[':nextDue'] !== undefined ? {} : {}),
+            lastCompleted: 'now',
+            nextDue: options.advancedNextDue,
+            // Reflect an assignment rewrite so the returned task is realistic.
+            ...(c.input.ExpressionAttributeValues?.[':assignedTo'] !== undefined
+              ? {
+                  assignedTo: c.input.ExpressionAttributeValues[':assignedTo'],
+                  assignedToName: c.input.ExpressionAttributeValues[':assignedToName'],
+                  assignmentSource: c.input.ExpressionAttributeValues[':source'] ?? null,
+                }
+              : {}),
+          },
+        } as never;
+      }
+      return {} as never;
+    });
+    return writes;
+  }
+
+  const rotatingTask = (over: Record<string, unknown> = {}) => ({
+    ...baseTask,
+    plantId: 'p1',
+    assignedTo: 'sam',
+    assignedToName: 'Sam',
+    assignmentSource: 'rotation',
+    ...over,
+  });
+
+  const weekly = { memberIds: ['sam', 'priya'], cadence: 'weekly', anchor: ANCHOR };
+
+  // Vacation windows are read with `listVacationWindows`, which drops windows
+  // that have already ENDED — correct, since an ended window cannot cover a
+  // future occurrence, but it means these fixtures must sit on the real clock
+  // rather than on ANCHOR.
+  const DAY = 24 * 60 * 60 * 1000;
+  const fromNow = (days: number) => new Date(Date.now() + days * DAY).toISOString();
+  const liveWeekly = {
+    memberIds: ['sam', 'priya'],
+    cadence: 'weekly',
+    anchor: fromNow(0),
+  };
+  const nextWeek = fromNow(8); // period 1 → Priya's week
+  const awayWindow = (userId: string, startDays: number, endDays: number) => ({
+    householdId: 'hh-1',
+    userId,
+    coveredBy: 'sam',
+    coveredByName: 'Sam',
+    startDate: fromNow(startDays),
+    endDate: fromNow(endDays),
+    createdBy: userId,
+    createdAt: '',
+  });
+
+  it('hands the next occurrence to the next person in the rotation', async () => {
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    // The new occurrence falls in period 1 → Priya's week.
+    const writes = await mockRotationWorld({
+      task: rotatingTask(),
+      advancedNextDue: '2026-06-09T00:00:00.000Z',
+      rotation: weekly,
+    });
+    const result = await completeTask('hh-1', 't1', 'sam', 'Sam');
+    const reassign = writes[1];
+    expect(reassign.input.ExpressionAttributeValues[':assignedTo']).toBe('priya');
+    expect(reassign.input.ExpressionAttributeValues[':source']).toBe('rotation');
+    // Guarded on the occurrence it resolved for, so a concurrent complete or
+    // snooze cannot be overwritten.
+    expect(reassign.input.ConditionExpression).toBe(
+      'attribute_exists(PK) AND nextDue = :expectedNextDue'
+    );
+    expect(reassign.input.ExpressionAttributeValues[':expectedNextDue']).toBe(
+      '2026-06-09T00:00:00.000Z'
+    );
+    expect(result?.assignedTo).toBe('priya');
+  });
+
+  it('rotation + vacation: skips the member who is away when that occurrence falls due', async () => {
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    // Held by Priya, whose week the next occurrence is — but she is away for
+    // it, so the turn passes to Sam. (Starting from Priya makes the skip a
+    // visible rewrite; a resolution that matches the current holder is
+    // correctly a no-op and writes nothing.)
+    const writes = await mockRotationWorld({
+      task: rotatingTask({ assignedTo: 'priya', assignedToName: 'Priya' }),
+      advancedNextDue: nextWeek,
+      rotation: liveWeekly,
+      vacations: [awayWindow('priya', 7, 14)],
+    });
+    const result = await completeTask('hh-1', 't1', 'priya', 'Priya');
+    expect(writes[1].input.ExpressionAttributeValues[':assignedTo']).toBe('sam');
+    expect(result?.assignedTo).toBe('sam');
+  });
+
+  it('rotation + manual assignment: an explicitly assigned task is never re-assigned', async () => {
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    const writes = await mockRotationWorld({
+      // assignmentSource null + assignedTo set = a person chose this (or claimed it).
+      task: rotatingTask({ assignedTo: 'priya', assignedToName: 'Priya', assignmentSource: null }),
+      advancedNextDue: '2026-06-09T00:00:00.000Z',
+      rotation: weekly,
+    });
+    const result = await completeTask('hh-1', 't1', 'priya', 'Priya');
+    // Exactly one write: the schedule advance. No reassignment, and the space
+    // was never even read.
+    expect(writes).toHaveLength(1);
+    expect(result?.assignedTo).toBe('priya');
+  });
+
+  it('leaves the occurrence up for grabs when everyone in the rotation is away', async () => {
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    const writes = await mockRotationWorld({
+      task: rotatingTask(),
+      advancedNextDue: nextWeek,
+      rotation: liveWeekly,
+      defaultCaregiverId: 'sam',
+      vacations: [awayWindow('sam', -1, 30), awayWindow('priya', -1, 30)],
+    });
+    await completeTask('hh-1', 't1', 'sam', 'Sam');
+    const reassign = writes[1];
+    // Unassigned — and NOT quietly handed to the space's default caregiver,
+    // who is one of the people who is away.
+    expect(reassign.input.UpdateExpression).toContain('REMOVE GSI2PK, GSI2SK');
+    expect(reassign.input.ExpressionAttributeValues[':null']).toBeNull();
+  });
+
+  it('still applies the space default on a space with no rotation', async () => {
+    const { completeTask } = await import('../../../src/services/taskService.js');
+    const writes = await mockRotationWorld({
+      task: rotatingTask({ assignedTo: null, assignedToName: null, assignmentSource: null }),
+      advancedNextDue: '2026-06-09T00:00:00.000Z',
+      rotation: null,
+      defaultCaregiverId: 'priya',
+    });
+    await completeTask('hh-1', 't1', 'sam', 'Sam');
+    expect(writes[1].input.ExpressionAttributeValues[':assignedTo']).toBe('priya');
+    expect(writes[1].input.ExpressionAttributeValues[':source']).toBe('space_default');
   });
 });

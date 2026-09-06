@@ -8,15 +8,36 @@ import { plantService } from '@/services/plantService';
 import { speciesService, type SpeciesSearchResponse } from '@/services/speciesService';
 import { taskService } from '@/services/taskService';
 
-vi.mock('@/services/plantService', () => ({
-  plantService: {
-    identifyPlant: vi.fn(),
-    getPlants: vi.fn(),
-    createPlant: vi.fn(),
-    getImageUploadUrl: vi.fn(),
-    uploadImage: vi.fn(),
-    confirmImageUpload: vi.fn(),
-  },
+vi.mock('@/services/plantService', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/services/plantService')>('@/services/plantService');
+  return {
+    ...actual, // keep identifyBudgetExhaustedFromError (the real 402 parser)
+    plantService: {
+      identifyPlant: vi.fn(),
+      getPlants: vi.fn(),
+      createPlant: vi.fn(),
+      getImageUploadUrl: vi.fn(),
+      uploadImage: vi.fn(),
+      confirmImageUpload: vi.fn(),
+    },
+  };
+});
+
+vi.mock('@/services/billingService', async () => {
+  const actual = await vi.importActual<typeof import('@/services/billingService')>(
+    '@/services/billingService'
+  );
+  return {
+    ...actual,
+    billingService: { ...actual.billingService, createTopUpCheckout: vi.fn() },
+  };
+});
+
+const isAdmin = vi.fn(() => true);
+vi.mock('@/hooks/useActiveHouseholdRole', () => ({
+  useIsHouseholdAdmin: () => isAdmin(),
+  useActiveHouseholdRole: () => (isAdmin() ? 'admin' : 'member'),
 }));
 
 vi.mock('@/services/speciesService', () => ({
@@ -291,5 +312,264 @@ describe('AddPlantPage acceptSuggestion race guard', () => {
     await user.click(screen.getByRole('button', { name: /back in history/i }));
     expect(screen.getByRole('heading', { name: 'Plant detail destination' })).toBeVisible();
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** The 402 POST /plants/identify answers once allowance and credits are spent. */
+function budgetExhausted(details: Record<string, unknown>) {
+  return Object.assign(new Error('Request failed with status code 402'), {
+    isAxiosError: true,
+    response: {
+      status: 402,
+      data: {
+        message: 'Your Garden plan is limited to 30 plant identifications per month.',
+        details: { code: 'IDENTIFY_BUDGET_EXHAUSTED', ...details },
+      },
+    },
+  });
+}
+
+describe('AddPlantPage identification top-up (ADR 0019)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+    vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+  });
+
+  async function pickPhotoAndTryIdentify() {
+    const file = new File(['plant-bytes'], 'plant.jpg', { type: 'image/jpeg' });
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText(/choose a photo/i), file);
+    fireEvent.click(await screen.findByRole('button', { name: /identify from photo/i }));
+  }
+
+  it('offers the pack at the moment of need when the 402 says it can be bought', async () => {
+    vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+      budgetExhausted({
+        topUpAvailable: true,
+        credits: { remaining: 0, expiresAt: null },
+        topUp: { credits: 20, priceUsd: 1.99 },
+      })
+    );
+    renderPage();
+    await pickPhotoAndTryIdentify();
+
+    expect(await screen.findByTestId('identify-top-up-card')).toBeInTheDocument();
+    expect(screen.getByText("This month's identifications are used up")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+    expect(screen.getByText('No identification credits left')).toBeInTheDocument();
+    // The raw server message is not shown as a generic failure on top.
+    expect(screen.queryByText(/Garden plan is limited to/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use' })).not.toBeInTheDocument();
+  });
+
+  it('tells a member the purchase is admin-only rather than hiding the pack', async () => {
+    isAdmin.mockReturnValue(false);
+    vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+      budgetExhausted({
+        topUpAvailable: true,
+        credits: { remaining: 0, expiresAt: null },
+        topUp: { credits: 20, priceUsd: 1.99 },
+      })
+    );
+    renderPage();
+    await pickPhotoAndTryIdentify();
+
+    expect(await screen.findByTestId('identify-top-up-card')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Buy 20/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Only a household admin can buy identification packs.')
+    ).toBeInTheDocument();
+  });
+
+  it('explains the exhausted allowance without an offer when no pack can be bought here', async () => {
+    vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+      budgetExhausted({ topUpAvailable: false, credits: null, topUp: null })
+    );
+    renderPage();
+    await pickPhotoAndTryIdentify();
+
+    expect(
+      await screen.findByText(/This month's plant identifications are used up/)
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
+  });
+
+  it('still surfaces an ordinary failure as before', async () => {
+    vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+      Object.assign(new Error('boom'), {
+        isAxiosError: true,
+        response: { status: 502, data: { message: 'Plant identification failed: upstream' } },
+      })
+    );
+    renderPage();
+    await pickPhotoAndTryIdentify();
+
+    expect(await screen.findByText('Plant identification failed: upstream')).toBeInTheDocument();
+    expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Confidence floor and provenance (#344).
+ *
+ * A species drives watering cadence, light, and pet-toxicity advice, so a
+ * weak guess presented at the same weight as a strong one is not a cosmetic
+ * problem. The floor DEMOTES: every candidate stays listed and every "Use"
+ * keeps working, because filtering would make an empty list mean both "not
+ * confident" and "identification failed".
+ */
+describe('AddPlantPage identification confidence and provenance', () => {
+  const weakSuggestions = [
+    {
+      scientificName: 'Peperomia obtusifolia',
+      commonName: 'Baby rubber plant',
+      probability: 0.18,
+    },
+    { scientificName: 'Pilea peperomioides', commonName: 'Chinese money plant', probability: 0.12 },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+    vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(speciesService.search).mockResolvedValue({ source: 'perenual', results: [] });
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+  });
+
+  it('warns that a below-floor match is not confident, quoting the numbers the server applied', async () => {
+    vi.mocked(plantService.identifyPlant).mockResolvedValue({
+      configured: true,
+      suggestions: weakSuggestions,
+      confidenceFloor: 0.3,
+      lowConfidence: true,
+    });
+    renderPage();
+    await pickPhotoAndIdentify();
+
+    expect(await screen.findByText('Not a confident match')).toBeInTheDocument();
+    // The percentages come from the response, not from a threshold the page
+    // invented: 18% is the top candidate, 30% is the server's floor.
+    expect(screen.getByText(/only 18% sure/)).toBeInTheDocument();
+    expect(screen.getByText(/below the 30%/)).toBeInTheDocument();
+    // …and it says why it matters, because this is what the species decides.
+    expect(screen.getByText(/watering, light, and pet-safety advice/)).toBeInTheDocument();
+    // Demoted, not withheld: both candidates are still offered.
+    expect(screen.getAllByRole('button', { name: 'Use' })).toHaveLength(2);
+    expect(screen.getByText(/Peperomia obtusifolia • 18% confidence/)).toBeInTheDocument();
+  });
+
+  it('says nothing extra when the top candidate clears the floor', async () => {
+    vi.mocked(plantService.identifyPlant).mockResolvedValue({
+      configured: true,
+      suggestions: [
+        { scientificName: 'Monstera deliciosa', commonName: 'Monstera', probability: 0.94 },
+      ],
+      confidenceFloor: 0.3,
+      lowConfidence: false,
+    });
+    renderPage();
+    // Waits on the positive end state (the list rendered) before asserting
+    // that the warning is absent.
+    await pickPhotoAndIdentify();
+    expect(screen.getByText(/Monstera deliciosa • 94% confidence/)).toBeInTheDocument();
+    expect(screen.queryByText('Not a confident match')).not.toBeInTheDocument();
+  });
+
+  it('does not invent a verdict when the server sends no confidence fields', async () => {
+    // An older server omits both. The page must fall back to the list it
+    // always rendered rather than guessing a floor of its own.
+    vi.mocked(plantService.identifyPlant).mockResolvedValue({
+      configured: true,
+      suggestions: weakSuggestions,
+    });
+    renderPage();
+    await pickPhotoAndIdentify();
+    expect(screen.getAllByRole('button', { name: 'Use' })).toHaveLength(2);
+    expect(screen.queryByText('Not a confident match')).not.toBeInTheDocument();
+  });
+
+  it('tells the server the saved species is a photo guess, and stops saying so once it is edited by hand', async () => {
+    vi.mocked(plantService.identifyPlant).mockResolvedValue({
+      configured: true,
+      suggestions: weakSuggestions,
+      confidenceFloor: 0.3,
+      lowConfidence: true,
+    });
+    vi.mocked(plantService.createPlant).mockResolvedValue({
+      id: 'plant-created',
+      householdId: 'household-1',
+      name: 'Baby rubber plant',
+      species: 'Peperomia obtusifolia',
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '2026-04-25T00:00:00.000Z',
+      createdBy: 'user-1',
+      updatedAt: '2026-04-25T00:00:00.000Z',
+    } as never);
+
+    const user = userEvent.setup();
+    renderPage();
+    await pickPhotoAndIdentify();
+
+    // Accepting the suggestion fills in both the species and (because the
+    // name is still blank) the common name.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use' })[0]);
+    await waitFor(() =>
+      expect(speciesService.search).toHaveBeenCalledWith('Peperomia obtusifolia')
+    );
+
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await waitFor(() => expect(plantService.createPlant).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(plantService.createPlant).mock.calls[0][0]).toMatchObject({
+      species: 'Peperomia obtusifolia',
+      identifiedSpecies: 'Peperomia obtusifolia',
+    });
+  });
+
+  it('drops the photo-guess claim when the species is corrected by hand before saving', async () => {
+    vi.mocked(plantService.identifyPlant).mockResolvedValue({
+      configured: true,
+      suggestions: weakSuggestions,
+      confidenceFloor: 0.3,
+      lowConfidence: true,
+    });
+    vi.mocked(plantService.createPlant).mockResolvedValue({
+      id: 'plant-created',
+      householdId: 'household-1',
+      name: 'Baby rubber plant',
+      species: 'Aglaonema commutatum',
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '2026-04-25T00:00:00.000Z',
+      createdBy: 'user-1',
+      updatedAt: '2026-04-25T00:00:00.000Z',
+    } as never);
+
+    const user = userEvent.setup();
+    renderPage();
+    await pickPhotoAndIdentify();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use' })[0]);
+    await waitFor(() =>
+      expect(speciesService.search).toHaveBeenCalledWith('Peperomia obtusifolia')
+    );
+
+    // The person looked at the plant and typed the real species. What gets
+    // saved is now a stated fact, and must not be filed as a model's guess.
+    const speciesField = screen.getByLabelText('Species');
+    await user.clear(speciesField);
+    await user.type(speciesField, 'Aglaonema commutatum');
+
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await waitFor(() => expect(plantService.createPlant).toHaveBeenCalledTimes(1));
+    const payload = vi.mocked(plantService.createPlant).mock.calls[0][0];
+    expect(payload.species).toBe('Aglaonema commutatum');
+    expect(payload.identifiedSpecies).toBeUndefined();
   });
 });

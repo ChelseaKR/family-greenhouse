@@ -9,10 +9,13 @@ import { userRateLimit, rateLimit } from '../../middleware/rateLimit.js';
 import * as sitterService from '../../services/sitterService.js';
 import { buildSitterBrief } from '../../services/sitterBrief.js';
 import { sitterBriefIncluded } from '../../services/sitterPlanGate.js';
+import { sitterPhotoRoutes } from './sitterPhotos.js';
+import * as caretakerPublic from '../caretakers/public.js';
 import {
   createTaskSchema,
   updateTaskSchema,
   snoozeTaskSchema,
+  askForHelpSchema,
   completeTaskSchema,
   applyTemplateSchema,
   applyTemplateBulkSchema,
@@ -20,6 +23,7 @@ import {
   CreateTaskInput,
   UpdateTaskInput,
   SnoozeTaskInput,
+  AskForHelpInput,
   CompleteTaskInput,
   ApplyTemplateInput,
   ApplyTemplateBulkInput,
@@ -27,15 +31,22 @@ import {
   TaskFilters,
 } from '../../models/schemas.js';
 import * as taskService from '../../services/taskService.js';
+import * as askFamily from '../../services/askFamily.js';
 import * as plantService from '../../services/plantService.js';
 import * as spaceService from '../../services/spaceService.js';
 import * as householdService from '../../services/householdService.js';
 import * as billing from '../../services/billing.js';
 import * as doubleCare from '../../services/doubleCare.js';
 import { nextDueAfterMatch } from '../../services/doubleCareRules.js';
-import { getPlan, hasHouseholdToolkit, Plan } from '../../models/plans.js';
+import {
+  getEntitledPlan,
+  getEntitledPlanForIssuedGrant,
+  hasHouseholdToolkit,
+  Plan,
+} from '../../models/plans.js';
 import * as householdEmails from '../../services/householdEmails.js';
 import { recordActivity } from '../../services/activity.js';
+import { resolveInheritedAssignee } from '../../services/assignmentResolver.js';
 import {
   successResponse,
   createdResponse,
@@ -52,7 +63,14 @@ import { logger } from '../../utils/logger.js';
  */
 async function resolvePlanBestEffort(householdId: string): Promise<Plan | null> {
   try {
-    return getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    // ENTITLEMENT, not the plan row (#476). Every caller is a member of the
+    // household acting on their own account — the double-care detector on
+    // completion and the two drift endpoints — so this is the STARTING
+    // question: nothing here was issued to a third party who cannot fix the
+    // card. A household mid-dunning gets the free tier's behaviour, exactly
+    // as a downgrade already gives it. It also picks up the lifetime floor,
+    // so an outright purchase survives a later subscription being cancelled.
+    return getEntitledPlan(await billing.getHouseholdSubscription(householdId));
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
     return null;
@@ -132,14 +150,35 @@ async function resolveCompleterName(
   return email.split('@')[0];
 }
 
-/** Resolve the optional usual caregiver from a plant's current space. The
- * task service re-validates membership and ignores a stale departed member. */
-async function defaultCaregiverForPlant(
+/**
+ * Resolve what a new task INHERITS from its plant's current space — the
+ * rotation turn for its due date if the space has one, otherwise the usual
+ * caregiver (ADR 0018). Ranking lives in the shared resolver, not here.
+ *
+ * Members + vacation windows are read only when the space actually has a
+ * rotation, so spaces without one cost exactly what they did before.
+ */
+async function inheritedAssignmentForPlant(
   householdId: string,
-  plant: { spaceId?: string | null }
-): Promise<string | undefined> {
-  if (!plant.spaceId) return undefined;
-  return (await spaceService.getSpace(householdId, plant.spaceId))?.defaultCaregiverId ?? undefined;
+  plant: { spaceId?: string | null },
+  dueDate: Date
+): Promise<{ defaultAssigneeId?: string; defaultAssignmentSource?: 'space_default' | 'rotation' }> {
+  if (!plant.spaceId) return {};
+  const space = await spaceService.getSpace(householdId, plant.spaceId);
+  if (!space) return {};
+  if (!space.rotation) {
+    return space.defaultCaregiverId
+      ? { defaultAssigneeId: space.defaultCaregiverId, defaultAssignmentSource: 'space_default' }
+      : {};
+  }
+  const [members, vacations] = await Promise.all([
+    householdService.getHouseholdMembers(householdId),
+    taskService.listVacationWindows(householdId),
+  ]);
+  const inherited = resolveInheritedAssignee(space, { members, vacations }, dueDate);
+  return inherited.userId && inherited.source
+    ? { defaultAssigneeId: inherited.userId, defaultAssignmentSource: inherited.source }
+    : {};
 }
 
 // GET /tasks
@@ -204,16 +243,20 @@ export const createTask = createHandler(
 
     let task;
     try {
-      const defaultAssigneeId =
+      const inherited =
         validatedBody.assignedTo === undefined
-          ? await defaultCaregiverForPlant(user.householdId!, plant)
-          : undefined;
+          ? await inheritedAssignmentForPlant(
+              user.householdId!,
+              plant,
+              new Date(validatedBody.nextDue ?? Date.now())
+            )
+          : {};
       task = await taskService.createTask(
         validatedBody,
         user.householdId!,
         user.userId,
         plant.name,
-        { defaultAssigneeId }
+        inherited
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'AssigneeNotMemberError') {
@@ -526,7 +569,7 @@ export const applyTemplateBulk = createHandler(
         continue;
       }
       const taskIds: string[] = [];
-      const defaultAssigneeId = await defaultCaregiverForPlant(user.householdId!, plant);
+      const inherited = await inheritedAssignmentForPlant(user.householdId!, plant, new Date());
       for (const taskDef of tpl.tasks) {
         const t = await taskService.createTask(
           {
@@ -539,7 +582,7 @@ export const applyTemplateBulk = createHandler(
           user.householdId!,
           user.userId,
           plant.name,
-          { defaultAssigneeId }
+          inherited
         );
         taskIds.push(t.id);
       }
@@ -577,7 +620,7 @@ export const applyTemplate = createHandler(
     if (!plant) throw createHttpError(404, 'Plant not found');
 
     const created = [];
-    const defaultAssigneeId = await defaultCaregiverForPlant(user.householdId!, plant);
+    const inherited = await inheritedAssignmentForPlant(user.householdId!, plant, new Date());
     for (const taskDef of tpl.tasks) {
       const task = await taskService.createTask(
         {
@@ -590,7 +633,7 @@ export const applyTemplate = createHandler(
         user.householdId!,
         user.userId,
         plant.name,
-        { defaultAssigneeId }
+        inherited
       );
       created.push(task);
     }
@@ -698,6 +741,60 @@ export const unclaimTask = createHandler(
   .use(authMiddleware())
   .use(userRateLimit())
   .use(requireHousehold());
+
+// POST /tasks/:id/ask — ask the household to pick up this occurrence, with
+// an optional short note (ADR 0024). Free on every tier: this is a person
+// talking to their own household, the same category as claim/unclaim.
+//
+// Refusals, all client-correctable and all exposed:
+//   403  somebody else explicitly holds this task (only they can release it)
+//   404  no such task in this household
+//   409  this occurrence has already been asked about, or it moved under you
+//   429  you already asked about this task inside the 24-hour window (the
+//        body carries `nextAllowedAt` when the marker could be read)
+export const askFamilyForTask = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<AskForHelpInput>;
+    const taskId = event.pathParameters?.id;
+    if (!taskId) {
+      throw createHttpError(400, 'Task ID is required');
+    }
+
+    try {
+      return successResponse(
+        await askFamily.askFamilyForHelp({
+          householdId: user.householdId!,
+          taskId,
+          asker: { userId: user.userId, email: user.email },
+          note: validatedBody.note ?? null,
+          expectedNextDue: validatedBody.expectedNextDue ?? null,
+        })
+      );
+    } catch (err) {
+      // `err.name` (not instanceof) so a test automock of the service module
+      // still maps — the repo's PlanLimitError convention.
+      const name = (err as { name?: string }).name;
+      if (name === 'TaskNotFoundError') throw createHttpError(404, (err as Error).message);
+      if (name === 'TaskHeldByAnotherMemberError') {
+        throw createHttpError(403, (err as Error).message);
+      }
+      if (name === 'HelpAlreadyRequestedError' || name === 'TaskChangedError') {
+        throw createHttpError(409, (err as Error).message);
+      }
+      if (name === 'AskHelpRateLimitedError') {
+        throw createHttpError(429, (err as Error).message, {
+          details: { nextAllowedAt: (err as askFamily.AskHelpRateLimitedError).nextAllowedAt },
+        });
+      }
+      throw err;
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(userRateLimit())
+  .use(requireHousehold())
+  .use(validateBody(askForHelpSchema));
 
 // PUT /tasks/vacation — set (upsert) a vacation window. Body userId defaults
 // to the caller; setting it for someone else requires the admin role.
@@ -844,7 +941,12 @@ export const getSitterView = createHandler(
       // offers it only when the link can actually open it. It says nothing
       // about the household beyond that, and only to a holder of a valid
       // token — the brief endpoint itself stays a generic 404 either way.
-      briefAvailable: sitterBriefIncluded(getPlan(subscription.planId)),
+      // CONTINUING, not starting (#476): this link was already issued, is
+      // inside its window, and is in the sitter's hands. The sitter is not
+      // the buyer and cannot fix a failed card, so a link that worked when it
+      // was shared keeps working until `expiresAt`. Issuing a NEW link is
+      // gated on entitlement in handlers/households/handler.ts.
+      briefAvailable: sitterBriefIncluded(getEntitledPlanForIssuedGrant(subscription)),
     });
   }
   // No authMiddleware — anonymous sitter. 60/min per IP absorbs the
@@ -871,7 +973,13 @@ export const getSitterBrief = createHandler(
     if (!link) {
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
-    const plan = getPlan((await billing.getHouseholdSubscription(link.householdId)).planId);
+    // CONTINUING, not starting (#476) — same reasoning as the task view
+    // above: an already-issued, unexpired link keeps the brief it was shared
+    // with. Revoking it mid-trip punishes the one person in the transaction
+    // who cannot do anything about the card, and can genuinely kill plants.
+    const plan = getEntitledPlanForIssuedGrant(
+      await billing.getHouseholdSubscription(link.householdId)
+    );
     if (!sitterBriefIncluded(plan)) {
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
@@ -1007,6 +1115,7 @@ export const handler = createRouter({
   'POST /tasks/{id}/snooze': snoozeTask,
   'POST /tasks/{id}/claim': claimTask,
   'POST /tasks/{id}/unclaim': unclaimTask,
+  'POST /tasks/{id}/ask': askFamilyForTask,
   'PUT /tasks/vacation': setVacation,
   'DELETE /tasks/vacation/{userId}': deleteVacation,
   'GET /tasks/vacation': listVacations,
@@ -1015,4 +1124,10 @@ export const handler = createRouter({
   'POST /sitter/{token}/tasks/{taskId}/complete': completeSitterTask,
   'GET /kiosk/{token}': getKioskView,
   'POST /kiosk/{token}/tasks/{taskId}/complete': completeKioskTask,
+  ...sitterPhotoRoutes,
+  // Caretaker seats (handlers/caretakers/public.ts) — token-scoped like the
+  // sitter routes above, but named, and every action lands on a visit record.
+  'GET /caretaker/{token}': caretakerPublic.getCaretakerView,
+  'POST /caretaker/{token}/tasks/{taskId}/complete': caretakerPublic.completeCaretakerTask,
+  'POST /caretaker/{token}/notes': caretakerPublic.addCaretakerNote,
 });

@@ -15,6 +15,7 @@ import { successResponse, cacheableResponse } from '../../utils/response.js';
 import * as climate from '../../services/climate.js';
 import { isConfigured } from '../../services/weather.js';
 import * as householdService from '../../services/householdService.js';
+import { evaluateMoveDay } from './moveDay.js';
 
 // GET /households/:id/climate
 // Current weather + derived care tips for the household's saved location.
@@ -157,4 +158,5 @@ export const setLocation = createHandler(
 export const handler = createRouter({
   'GET /households/{id}/climate': getClimate,
   'PUT /households/{id}/location': setLocation,
+  'POST /households/{id}/move-day': evaluateMoveDay,
 });

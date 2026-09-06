@@ -8,6 +8,8 @@ import {
   ExclamationTriangleIcon,
   InformationCircleIcon,
   QuestionMarkCircleIcon,
+  HandRaisedIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -16,11 +18,13 @@ import { climateService } from '@/services/climateService';
 import { householdService, type ActivityEvent } from '@/services/householdService';
 import { deriveClimateSignals, climateSkipSuggestion } from '@/features/tasks/climateSignals';
 import {
+  AskedForHelpBadge,
   ClaimControls,
   ClimateSkipChip,
   CoveringBadge,
   UpForGrabsBadge,
 } from '@/features/tasks/taskRowExtras';
+import { isHelpRequestOpen } from '@/features/tasks/helpRequest';
 import {
   useClaimTaskMutation,
   useCompleteTaskMutation,
@@ -32,6 +36,7 @@ import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
+import { MoveDayCard } from './MoveDayCard';
 import { SharedCarePulse } from './SharedCarePulse';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -43,8 +48,8 @@ import { Alert } from '@/components/Alert';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { PlantImage } from '@/components/PlantImage';
-import { spaceService } from '@/services/spaceService';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { useSpaces } from '@/hooks/useSpaces';
+import { plantLocationLabel } from '@/utils/spaces';
 import { TaskLocation } from '@/components/TaskLocation';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
@@ -75,12 +80,10 @@ export function DashboardPage() {
     queryFn: taskService.getUpcomingTasks,
     enabled: Boolean(householdId),
   });
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-    enabled: Boolean(householdId),
-  });
-  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+  const { byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
+  // A failed rooms read must not render as "Unplaced" — that is a placement
+  // claim nobody computed. `locationUnknown` says which of the two it is.
+  const unplacedLabel = spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
 
   const {
     data: plants,
@@ -163,6 +166,28 @@ export function DashboardPage() {
       (task) => !isOverdue(task.nextDue) && formatDueDate(task.nextDue) !== 'Today'
     ) || [];
 
+  /**
+   * What this card lists: work that can be done now. Not a forecast.
+   *
+   * `GET /tasks/upcoming` returns everything due within SEVEN DAYS, and
+   * completing a task advances `nextDue` by its frequency. So a weekly task —
+   * the most common watering interval there is — lands exactly back inside the
+   * window the moment it is completed and **can never be cleared from this
+   * list**. Observed in production: mark done, refresh, still there, with the
+   * completion correctly recorded and `nextDue` correctly a week out. Nothing
+   * was broken; the card was answering a different question than the one a
+   * person asks when they look at it.
+   *
+   * A card that cannot respond to the action it offers teaches people the
+   * button does not work. Overdue and today are the things a household can
+   * act on; everything else is a schedule, and `/tasks` is where a schedule
+   * belongs.
+   *
+   * `laterTasks` is still computed — the count below tells people the rest of
+   * the week exists, so narrowing this list does not hide anything from them.
+   */
+  const actionableTasks = [...overdueTasks, ...todayTasks];
+
   // `undefined` data covers loading AND a failed fetch. Keying on the loading
   // flag alone published a failed plants/tasks read as the number 0 — "you
   // have no plants", "nothing is overdue" — which is the same
@@ -209,8 +234,16 @@ export function DashboardPage() {
       <Card variant="paper" padding="none">
         <div className="px-6 py-5 border-b border-primary-100/70">
           <CardHeader
-            title="Upcoming tasks"
-            description="Due in the next 7 days"
+            title="To do now"
+            description={
+              // The rest-of-week count belongs here only when there is a list
+              // above it to contrast with. With nothing to do, the empty state
+              // below already says it, and saying it twice on one card reads
+              // as a bug rather than emphasis.
+              laterTasks.length > 0 && actionableTasks.length > 0
+                ? `Overdue and due today — ${laterTasks.length} more later this week`
+                : 'Overdue and due today'
+            }
             action={
               <Link to="/tasks">
                 <Button variant="secondary" size="sm">
@@ -229,26 +262,39 @@ export function DashboardPage() {
           <div className="p-6">
             <Alert variant="error">{getErrorMessage(tasksError)}</Alert>
           </div>
-        ) : !upcomingTasks || upcomingTasks.length === 0 ? (
+        ) : !upcomingTasks || actionableTasks.length === 0 ? (
+          /* Two different empty states, because they mean different things and
+             one of them used to lie. With work still scheduled this week,
+             "All caught up! Add tasks to your plants" is wrong twice over —
+             they have tasks, and more are coming — so it says what is actually
+             true and points at where the rest lives. */
           <EmptyState
-            title="No upcoming tasks"
-            description="All caught up! Add tasks to your plants to see them here."
+            title={laterTasks.length > 0 ? 'Nothing to do right now' : 'No tasks yet'}
+            description={
+              laterTasks.length > 0
+                ? `Nothing is overdue or due today. ${laterTasks.length} ${
+                    laterTasks.length === 1 ? 'task is' : 'tasks are'
+                  } coming up later this week.`
+                : 'Add tasks to your plants to see them here.'
+            }
             action={
-              <Link to="/plants">
-                <Button>View plants</Button>
+              <Link to={laterTasks.length > 0 ? '/tasks' : '/plants'}>
+                <Button>{laterTasks.length > 0 ? 'View all tasks' : 'View plants'}</Button>
               </Link>
             }
           />
         ) : (
           <ul className="divide-y divide-primary-100/60">
-            {[...overdueTasks, ...todayTasks, ...laterTasks].slice(0, 10).map((task) => (
+            {/* Overdue and today only — `laterTasks` is deliberately not here.
+                See the queue note above `actionableTasks`. */}
+            {actionableTasks.slice(0, 10).map((task) => (
               <TaskItem
                 key={task.id}
                 task={task}
                 locationLabel={
                   plantsById.has(task.plantId)
-                    ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById)
-                    : t('spaces.unplaced')
+                    ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
+                    : unplacedLabel
                 }
                 onComplete={careRuleGate.request}
                 isCompleting={
@@ -314,13 +360,16 @@ export function DashboardPage() {
                 </div>
                 <p className="text-sm font-medium text-ink truncate">{plant.name}</p>
                 <p className="text-xs text-gray-600 truncate">
-                  {plantLocationLabel(plant, spacesById)}
+                  {plantLocationLabel(plant, spacesById, unplacedLabel)}
                 </p>
               </Link>
             ))}
           </div>
         )}
       </Card>
+
+      {/* Seasonal Move Day — renders only when a list exists */}
+      <MoveDayCard />
 
       {/* Year-in-review summary */}
       <ClimateCard />
@@ -631,6 +680,47 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
+    case 'task.help_requested': {
+      // A PERSON asked (ADR 0024) — unlike task.escalated this row has an
+      // actor, and their note is the reason the ask beats a silent unclaim.
+      const p = event.payload;
+      icon = <MegaphoneIcon className="h-4 w-4 text-amber-700" aria-hidden="true" />;
+      iconTone = 'bg-amber-50 ring-amber-200';
+      const task = p.taskType ?? t('activity.aTask');
+      const plant = p.plantName ?? t('activity.aPlant');
+      const note = typeof p.note === 'string' && p.note.trim() ? p.note.trim() : null;
+      body = (
+        <>
+          {t('activity.helpRequested', { actor: actorName, task, plant })}
+          {note && <span className="italic"> {t('activity.helpRequestedNote', { note })}</span>}
+        </>
+      );
+      break;
+    }
+    case 'task.escalated': {
+      // System-authored: the row must not lead with an actor name (it is
+      // empty). The copy names the lapse, not a person — nobody is blamed.
+      const p = event.payload;
+      icon = <HandRaisedIcon className="h-4 w-4 text-amber-700" aria-hidden="true" />;
+      iconTone = 'bg-amber-50 ring-amber-200';
+      const days =
+        typeof p.daysOverdue === 'number' && Number.isInteger(p.daysOverdue) && p.daysOverdue > 0
+          ? p.daysOverdue
+          : null;
+      const task = p.taskType ?? t('activity.aTask');
+      const plant = p.plantName ?? t('activity.aPlant');
+      body =
+        days === null
+          ? t('activity.escalatedUnknownDays', { task, plant })
+          : t('activity.escalated', { task, plant, count: days });
+      break;
+    }
+    case 'caretaker.note':
+      // `actorName` is the caretaker's own name — attribution is the whole
+      // reason caretaker seats are named rather than anonymous like a sitter
+      // link, so the feed says who wrote it.
+      body = t('activity.caretakerNote', { actor: actorName, note: event.payload.text });
+      break;
     default: {
       const _exhaustive: never = event;
       void _exhaustive;
@@ -713,7 +803,16 @@ function TaskItem({
           <TaskLocation label={locationLabel} />
           {(!task.assignedTo || task.coveringFor || skipReason) && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              {!task.assignedTo && <UpForGrabsBadge />}
+              {!task.assignedTo &&
+                (isHelpRequestOpen(task) ? (
+                  // A housemate asked (ADR 0024): say who, and show the note.
+                  <AskedForHelpBadge
+                    name={task.helpAskedByName ?? null}
+                    note={task.helpAskedNote}
+                  />
+                ) : (
+                  <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
+                ))}
               {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
               {skipReason && (
                 <ClimateSkipChip

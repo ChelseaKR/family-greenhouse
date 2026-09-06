@@ -8,6 +8,10 @@
  * and From becomes the forwarder address; Return-Path/Sender/DKIM-Signature
  * are stripped so the new send doesn't carry a broken signature.
  *
+ * The original From is attacker-controlled and reaches two header lines of the
+ * outbound message, so every CR and LF is collapsed out of it before it is
+ * interpolated. Tests: backend/tests/unit/config/sesForwarder.test.ts.
+ *
  * FORWARD_TO comes from SSM Parameter Store via Terraform (data source -> env
  * var) so the personal destination address never lives in the repo.
  */
@@ -62,23 +66,90 @@ export function rewrite(rawBytes, originalRecipient) {
   const kept = headers.filter((h) => {
     if (STRIP.test(h)) return false;
     if (/^from:/i.test(h)) {
-      from = h.replace(/^from:\s*/i, '').replace(new RegExp(eol, 'g'), ' ');
+      // Collapse EVERY CR and LF here, not just this message's own line
+      // ending. `headerBlock.split(eol)` only breaks on the complete sequence,
+      // so on a CRLF message a BARE LF inside the From header survives into
+      // this value — and it is interpolated verbatim into `Reply-To:` below.
+      // Sanitising only the display name (`safeName`) left that open: a From
+      // of `"Ev\nBcc: victim@example.com" <ev@bad.test>` produced a real
+      // injected Bcc line on a message sent from our DKIM-aligned domain.
+      from = h
+        .replace(/^from:\s*/i, '')
+        .replace(/[\r\n]+/g, ' ')
+        .trim();
       return false;
     }
     if (/^reply-to:/i.test(h)) return false; // replaced below
     return true;
   });
 
+  // Same treatment, same reason: this reaches two header lines below. SES
+  // fills it from the receipt's recipient list so it is not attacker-supplied
+  // today, which makes this the belt rather than the braces.
+  const mailbox = String(originalRecipient ?? '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+
   // Display the original sender in the visible name; envelope sender is ours.
+  // The quote swap is for the DISPLAY NAME only — `Reply-To` keeps the
+  // original quoting, because a legitimately quoted name (`"Doe, John"`) is
+  // not safely re-quoted with apostrophes and the address is what a reply
+  // needs to reach. Line breaks are the injection vector; quotes are not.
   const safeName = from
     .replace(/"/g, "'")
     .replace(/[\r\n]/g, ' ')
     .trim();
-  kept.push(`From: "${safeName || 'Unknown sender'} (via ${originalRecipient})" <${FROM_ADDRESS}>`);
+  kept.push(`From: "${safeName || 'Unknown sender'} (via ${mailbox})" <${FROM_ADDRESS}>`);
   if (from) kept.push(`Reply-To: ${from}`);
-  kept.push(`X-Forwarded-For-Mailbox: ${originalRecipient}`);
+  kept.push(`X-Forwarded-For-Mailbox: ${mailbox}`);
 
   return Buffer.concat([Buffer.from(kept.join(eol) + sep, 'latin1'), bodyBytes]);
+}
+
+/**
+ * Normalize one SES verdict. SES emits PASS, FAIL, GRAY (scanned, unsure) and
+ * PROCESSING_FAILED (the scan did not complete) — and omits the field entirely
+ * when scanning was not performed at all. `MISSING` stands in for absent so
+ * every outcome is a value the log line can carry, rather than an `undefined`
+ * that silently compares unequal to everything.
+ */
+function verdictOf(value) {
+  return typeof value === 'string' && value ? value : 'MISSING';
+}
+
+const OUTCOME_REASON = {
+  fail: 'scan_failed',
+  inconclusive: 'scan_inconclusive',
+  unscanned: 'scan_unscanned',
+};
+
+/**
+ * Whether this message may be relayed, and — when it may not — which of the
+ * three refusals it is. Pure over the receipt shape; exported for tests.
+ *
+ * FAIL-CLOSED: an explicit PASS on BOTH scans is the only thing that relays.
+ * The old gate was `spam === 'FAIL' || virus === 'FAIL'`, which let three
+ * states through: GRAY, PROCESSING_FAILED, and an absent verdict (because
+ * `undefined === 'FAIL'` is false). Two of those are a scan that could not be
+ * completed, published as a scan that passed — inside a security control, on
+ * the path that re-sends from our DKIM-aligned domain into the maintainer's
+ * inbox, so anything it lets through arrives with our reputation applied.
+ * PROCESSING_FAILED in particular is what SES reports under load or on a
+ * message too large to scan, which correlates with exactly the traffic you
+ * would want scrutinised.
+ *
+ * The refusals stay distinct because they are different facts: `fail` is an
+ * expected verdict on hostile mail and is routine; `inconclusive` is "we
+ * scanned it and are unsure"; `unscanned` is "we did not scan it", which is
+ * the one a human should go and look at.
+ */
+export function scanDecision(receipt) {
+  const spam = verdictOf(receipt?.spamVerdict?.status);
+  const virus = verdictOf(receipt?.virusVerdict?.status);
+  if (spam === 'FAIL' || virus === 'FAIL') return { relay: false, outcome: 'fail', spam, virus };
+  if (spam === 'PASS' && virus === 'PASS') return { relay: true, outcome: 'pass', spam, virus };
+  const scanned = spam === 'GRAY' || virus === 'GRAY';
+  return { relay: false, outcome: scanned ? 'inconclusive' : 'unscanned', spam, virus };
 }
 
 export const handler = async (event) => {
@@ -86,28 +157,38 @@ export const handler = async (event) => {
   if (!record) return { skipped: true };
   const messageId = record.mail?.messageId;
   const recipient = record.receipt?.recipients?.[0] ?? 'unknown@unknown';
+  const key = `${PREFIX}${messageId}`;
 
   // SES stamps spam/virus scan verdicts on the receipt (the receipt rule sets
-  // scan_enabled = true). Refuse to relay anything that FAILED the virus or
-  // spam scan: this forwarder re-sends from our DKIM-aligned domain, so passing
-  // malware/phishing through would launder it under our domain's reputation
-  // straight into the maintainer's inbox. We gate ONLY on virus/spam — not
-  // DKIM/SPF/DMARC, which legitimately fail for plenty of forwarded list mail.
-  // A FAIL is an expected verdict, not a processing error, so we drop and
-  // return cleanly (no throw → no retry, no DLQ).
-  const spam = record.receipt?.spamVerdict?.status;
-  const virus = record.receipt?.virusVerdict?.status;
-  if (spam === 'FAIL' || virus === 'FAIL') {
+  // scan_enabled = true). We gate ONLY on virus/spam — not DKIM/SPF/DMARC,
+  // which legitimately fail for plenty of forwarded list mail.
+  //
+  // Nothing is destroyed by refusing: the receipt rule's S3 action has already
+  // written the raw MIME to `key` before this Lambda runs, so a wrongly-refused
+  // security@ report is still retrievable — which is why the log line names the
+  // bucket and key. None of these is a processing error, so we return cleanly
+  // (no throw → no retry, no DLQ); `mail_not_relayed_scan_unverified` carries
+  // its own CloudWatch alarm so an unscanned message is not just a log line.
+  const scan = scanDecision(record.receipt);
+  if (!scan.relay) {
     console.log(
-      JSON.stringify({ msg: 'mail_dropped_scan_fail', messageId, recipient, spam, virus })
+      JSON.stringify({
+        msg:
+          scan.outcome === 'fail' ? 'mail_dropped_scan_fail' : 'mail_not_relayed_scan_unverified',
+        messageId,
+        recipient,
+        spam: scan.spam,
+        virus: scan.virus,
+        outcome: scan.outcome,
+        bucket: BUCKET,
+        key,
+      })
     );
-    return { dropped: true, reason: 'scan_failed' };
+    return { dropped: true, reason: OUTCOME_REASON[scan.outcome] };
   }
 
   try {
-    const obj = await s3.send(
-      new GetObjectCommand({ Bucket: BUCKET, Key: `${PREFIX}${messageId}` })
-    );
+    const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
     // Read the raw MIME as BYTES, not a UTF-8 string — see rewrite().
     const rawBytes = Buffer.from(await obj.Body.transformToByteArray());
 

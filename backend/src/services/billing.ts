@@ -20,6 +20,14 @@ import { capture } from '../utils/serverAnalytics.js';
 import type { ServerEventProps } from '../utils/serverAnalytics.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
 import { dispatchBillingEmails } from './billingEmails.js';
+import {
+  IDENTIFY_TOP_UP_PACK,
+  identifyTopUpGrantFromEvent,
+  isIdentifyTopUpSession,
+  type IdentifyTopUpGrant,
+} from '../models/identifyTopUp.js';
+import { grantCreditPack } from './identifyCredits.js';
+import { assertPriceMatchesCatalog } from './stripePrices.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -66,11 +74,41 @@ export interface HouseholdSubscription {
    * reasonably concludes the cancellation failed.
    */
   cancelAtPeriodEnd?: boolean;
+  /**
+   * Whether a NEW subscription checkout for this household would include the
+   * free trial. Derived from the internal `trialConsumedAt` below, and the
+   * only thing about it that ever reaches a client.
+   *
+   * It exists because the trial is once per HOUSEHOLD, not once per checkout
+   * (see `markTrialConsumed` and the `subscription_data` guard in
+   * `createCheckoutSession`), and until #602 nothing on the wire said so —
+   * so `Settings → Billing` promised "paid plans start with a 14-day free
+   * trial" directly above the purchase button of a household that had used
+   * its trial and would be charged at once. The UI could not qualify that
+   * sentence because there was no field to branch on.
+   *
+   * The TIMESTAMP stays internal. A client has no use for the date, and the
+   * answer to "would this purchase be free for 14 days?" is a boolean.
+   *
+   * Optional on the type so a caller that describes a subscription it has not
+   * read this from is not forced to invent an answer — `undefined` means
+   * UNKNOWN, never "no trial", and the client renders a sentence that is true
+   * either way when it is missing (an older backend, a cached PWA response).
+   * `getHouseholdSubscription` always sets it.
+   */
+  trialAvailable?: boolean;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
   /** Internal retry marker; never exposed by GET /billing/me. */
   pendingStripeCancellationId?: string;
+  /**
+   * ISO timestamp of the first Stripe-confirmed free trial this household
+   * consumed. Internal; never exposed by GET /billing/me. Write-once (see
+   * `markTrialConsumed`) and deliberately NOT cleared by cancellation, which
+   * is what makes the trial once-per-household rather than once-per-signup.
+   */
+  trialConsumedAt?: string;
 }
 
 async function getHouseholdBillingState(householdId: string): Promise<HouseholdBillingState> {
@@ -91,6 +129,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
     cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
+    trialConsumedAt: item.trialConsumedAt as string | undefined,
   };
 }
 
@@ -106,10 +145,24 @@ export async function getHouseholdSubscription(
     currentPeriodEnd: state.currentPeriodEnd,
     lifetimePlanId: state.lifetimePlanId,
     cancelAtPeriodEnd: state.cancelAtPeriodEnd,
+    // Derived here, at the one boundary where the internal row becomes the
+    // published shape, so there is a single place that decides what a client
+    // learns about the trial: the answer, never the date. This is exactly the
+    // condition `createCheckoutSession` applies below, read off the same row.
+    trialAvailable: !state.trialConsumedAt,
   };
 }
 
-type SubscriptionWriteField = keyof HouseholdSubscription | 'pendingStripeCancellationId';
+/**
+ * Fields `updateHouseholdSubscription` can write onto the metadata row.
+ *
+ * `trialAvailable` is excluded because it is DERIVED at read time from
+ * `trialConsumedAt` and has no attribute of its own. Leaving it in would let a
+ * caller persist a second, staler copy of the same fact — and the row already
+ * has one authority for it, written write-once by `markTrialConsumed`.
+ */
+type SubscriptionWriteField =
+  Exclude<keyof HouseholdSubscription, 'trialAvailable'> | 'pendingStripeCancellationId';
 
 /**
  * Write subscription fields onto the household metadata row.
@@ -219,6 +272,92 @@ export type { BillingInterval } from '../models/plans.js';
 // subscription alongside one that's already charging the customer.
 const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 
+/** Length of the free trial offered on a household's FIRST paid subscription. */
+export const TRIAL_PERIOD_DAYS = 14;
+
+/**
+ * Record that this household has consumed its free trial. Write-once: the
+ * condition keeps the FIRST timestamp, so a redelivered or repeated event
+ * never rewrites it and never resets the entitlement.
+ *
+ * Deliberately a separate write from `updateHouseholdSubscription`, for two
+ * reasons. It must not be subject to that function's `event.created`
+ * out-of-order guard — trial consumption is monotonic, so a late-arriving
+ * older event that reveals a trial is still true. And it must survive
+ * `customer.subscription.deleted`, which resets planId/status but leaves this
+ * attribute alone; that is precisely what stops cancel-and-resubscribe from
+ * minting a fresh 14 days forever.
+ */
+export async function markTrialConsumed(householdId: string): Promise<void> {
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'SET #trialConsumedAt = :now',
+        ConditionExpression: 'attribute_not_exists(#trialConsumedAt)',
+        ExpressionAttributeNames: { '#trialConsumedAt': 'trialConsumedAt' },
+        ExpressionAttributeValues: { ':now': new Date().toISOString() },
+      })
+    );
+  } catch (err) {
+    // Already recorded — keep the original timestamp. Any other error is real
+    // and must reach the webhook, which 5xxs so Stripe redelivers.
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return;
+    throw err;
+  }
+}
+
+/**
+ * Household id carried by a webhook event we minted, independent of whether
+ * the event resolves to a subscription delta. `deltaForStripeEvent` returns
+ * null for events that grant nothing, but a trial can still have started.
+ */
+function householdIdFromEvent(event: Stripe.Event): string | null {
+  const object = event.data.object as unknown as {
+    metadata?: Record<string, string> | null;
+    client_reference_id?: string | null;
+  };
+  return object.metadata?.householdId ?? object.client_reference_id ?? null;
+}
+
+/**
+ * Does this event prove Stripe granted the household a free trial?
+ *
+ * Pure, and exported so the predicate is testable without DynamoDB. Two
+ * sources, because either can arrive first:
+ *   - a subscription that is `trialing`, or that carries trial dates at all
+ *     (Stripe leaves `trial_start`/`trial_end` populated after the trial ends,
+ *     so a converted subscription still reports its consumed trial); and
+ *   - a completed subscription-mode Checkout Session that required no payment,
+ *     which in subscription mode is what a trial looks like at checkout time.
+ */
+export function eventConsumesTrial(event: Stripe.Event): boolean {
+  if (
+    event.type === 'customer.subscription.created' ||
+    event.type === 'customer.subscription.updated'
+  ) {
+    const sub = event.data.object as unknown as {
+      status?: string;
+      trial_start?: number | null;
+      trial_end?: number | null;
+    };
+    return (
+      sub.status === 'trialing' ||
+      typeof sub.trial_start === 'number' ||
+      typeof sub.trial_end === 'number'
+    );
+  }
+  if (
+    event.type === 'checkout.session.completed' ||
+    event.type === 'checkout.session.async_payment_succeeded'
+  ) {
+    const session = event.data.object as unknown as { mode?: string; payment_status?: string };
+    return session.mode !== 'payment' && session.payment_status === 'no_payment_required';
+  }
+  return false;
+}
+
 export async function createCheckoutSession(args: {
   householdId: string;
   customerEmail: string;
@@ -257,7 +396,10 @@ export async function createCheckoutSession(args: {
   const priceId = process.env[priceEnv];
   if (!priceId) throw new Error(`Missing ${priceEnv} for plan ${plan.id}`);
 
-  const sub = await getHouseholdSubscription(args.householdId);
+  // getHouseholdBillingState, not getHouseholdSubscription: the trial guard
+  // below needs `trialConsumedAt`, which is internal and never exposed by
+  // GET /billing/me. Every field the checks below read is on both shapes.
+  const sub = await getHouseholdBillingState(args.householdId);
   // A lifetime purchase is an entitlement FLOOR, and it is invisible to the
   // live-subscription guard below because a one-time purchase has no
   // subscription id. Without this check a household that paid outright for
@@ -295,6 +437,15 @@ export async function createCheckoutSession(args: {
     );
   }
   const stripe = await getStripe();
+  // Never charge an amount the UI did not publish. The configured price id is
+  // resolved from env above, but an id is not evidence of a price: a
+  // transposed `price_…` in tfvars charges whatever it charges, on whatever
+  // cadence it recurs, and neither `stripe_price_ids_are_live` nor anything
+  // else compared it to models/plans.ts. This retrieves the price Stripe would
+  // actually bill and refuses the checkout unless its amount, currency, and
+  // interval match the catalog. Fails closed: a price that cannot be retrieved
+  // is a refusal, not an assumption.
+  await assertPriceMatchesCatalog(stripe, plan.id, interval, priceId);
   // `interval` is stamped onto metadata for analytics/debugging only —
   // entitlement is resolved from `planId`, never the cadence. A lifetime
   // checkout also records the exact subscription it intends to replace. The
@@ -342,7 +493,15 @@ export async function createCheckoutSession(args: {
           ...common,
           subscription_data: {
             metadata,
-            trial_period_days: 14,
+            // The free trial is once per household, not once per checkout.
+            // Without this guard a household could cancel, check out again,
+            // and collect another 14 free days, forever — the resubscribe
+            // itself is deliberate (see the ALREADY_SUBSCRIBED guard above,
+            // which permits a canceled household to return), only the trial
+            // is not. `trialConsumedAt` is written by the webhook the first
+            // time Stripe confirms a trial and is never cleared by
+            // cancellation.
+            ...(sub.trialConsumedAt ? {} : { trial_period_days: TRIAL_PERIOD_DAYS }),
           },
         });
   if (!session.url) throw new Error('Stripe did not return a checkout URL');
@@ -509,6 +668,12 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object;
+      // An identification top-up is a one-time payment that changes NOTHING
+      // on the subscription row: no plan, no cadence, no customer write. It
+      // is applied by `applyStripeEvent` before this function is consulted;
+      // returning null here keeps an unpaid (deferred) top-up from being
+      // read as a malformed lifetime purchase and logged as one.
+      if (isIdentifyTopUpSession(session)) return null;
       const householdId = session.metadata?.householdId ?? session.client_reference_id ?? '';
       if (!householdId) return null;
       const planId = planIdFromMetadata(event, session.metadata);
@@ -551,15 +716,50 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
       // mode==='subscription' (or undefined → treat as subscription for
       // back-compat with the existing recurring checkout flow).
       //
-      // `status` is deliberately NOT written here. This event does not carry
-      // the subscription's status — the session references the subscription by
-      // id — so the previous hardcoded 'active' was a guess, and a wrong one
-      // for every checkout that starts a trial (all of them: subscriptions are
-      // created with trial_period_days). customer.subscription.created and
-      // .updated do carry the real status, so they own the field. Whichever of
-      // the two events arrived last used to win, which is why a trialing
-      // household could end up recorded as active and never see that it was on
-      // a trial or when its first charge would land.
+      // The same rigour the lifetime branch above applies: a completed Session
+      // is not evidence that anything was paid. When the first invoice fails,
+      // Stripe still completes the Session — with `payment_status: 'unpaid'`
+      // and a subscription whose status is `incomplete`. Stamping 'active'
+      // there handed a household full paid caps for a subscription that had
+      // collected nothing.
+      //
+      // Only two payment_status values mean the household is entitled:
+      //   'paid'                → money settled; the subscription is active.
+      //   'no_payment_required' → nothing was owed at checkout, which in
+      //                           subscription mode is the 14-day trial (a
+      //                           100%-off coupon looks the same and is
+      //                           corrected within seconds by the
+      //                           customer.subscription.created event, which
+      //                           carries the authoritative status).
+      // Anything else grants nothing here. Nothing is lost by waiting: we
+      // stamp our metadata onto `subscription_data` too, so
+      // customer.subscription.created/updated arrive with the householdId and
+      // the real status, and record the ids then.
+      const settledStatus =
+        paymentStatus === 'paid'
+          ? 'active'
+          : paymentStatus === 'no_payment_required'
+            ? 'trialing'
+            : null;
+      if (!settledStatus) {
+        logger.warn(
+          {
+            stripeEventId: event.id,
+            type: event.type,
+            householdId,
+            paymentStatus: paymentStatus ?? null,
+          },
+          'stripe_checkout_session_unsettled_no_grant'
+        );
+        return null;
+      }
+
+      // `status` is still not GUESSED. Where Stripe expanded the subscription
+      // onto the Session it carries the authoritative status, and that always
+      // wins over the value inferred from payment_status above; the inference
+      // is only the fallback for the ordinary unexpanded event, and it infers
+      // `trialing` rather than `active` for a trial, which is the thing the
+      // old hardcoded 'active' got wrong.
       const expandedStatus =
         typeof session.subscription === 'object' && session.subscription
           ? (session.subscription as unknown as { status?: string }).status
@@ -573,8 +773,9 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
             typeof session.subscription === 'string'
               ? session.subscription
               : session.subscription?.id,
-          // Only when Stripe actually expanded the subscription for us.
-          ...(expandedStatus ? { status: expandedStatus } : {}),
+          // Stripe's own expanded status when it gave us one, otherwise the
+          // status the settled payment implies.
+          status: expandedStatus ?? settledStatus,
         },
       };
     }
@@ -799,6 +1000,63 @@ async function clearPendingStripeCancellation(
   }
 }
 
+/**
+ * Grant the credit pack a PAID identification top-up checkout bought.
+ *
+ * Idempotent on the Stripe Checkout Session id, independently of the dedupe
+ * ledger: the pack row's key IS the session id and it is created with a
+ * conditional put, so a second delivery of the same event — or a retry
+ * after a crash between the grant and the ledger write — creates nothing.
+ * The ledger is then written AFTER the grant, in the same order as every
+ * other event here (see `recordStripeEventOnce`), and the audit line is
+ * gated on the grant actually having been created, which is the one signal
+ * that is exactly-once by construction.
+ *
+ * Never touches the household METADATA row: a top-up is not entitlement.
+ */
+async function applyIdentifyTopUpGrant(
+  event: Stripe.Event,
+  grant: IdentifyTopUpGrant
+): Promise<void> {
+  const granted = await grantCreditPack({
+    ...grant,
+    validityDays: IDENTIFY_TOP_UP_PACK.validityDays,
+  });
+  const isNew = await recordStripeEventOnce(event.id);
+  if (!isNew) {
+    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_reapplied');
+  }
+  if (!granted) {
+    logger.info(
+      {
+        stripeEventId: event.id,
+        householdId: grant.householdId,
+        stripeSessionId: grant.stripeSessionId,
+      },
+      'identify_top_up_duplicate_grant_skipped'
+    );
+    return;
+  }
+  logger.info(
+    {
+      householdId: grant.householdId,
+      stripeSessionId: grant.stripeSessionId,
+      credits: grant.credits,
+      purchasedAt: grant.purchasedAt,
+    },
+    'identify_top_up_granted'
+  );
+  audit('billing.identify_top_up_granted', {
+    householdId: grant.householdId,
+    metadata: {
+      stripeEventType: event.type,
+      stripeSessionId: grant.stripeSessionId,
+      credits: grant.credits,
+      purchasedAt: grant.purchasedAt,
+    },
+  });
+}
+
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // Money-lifecycle emails, `charge` phase (ADR 0023): receipt, renewal
   // notice, payment failure, card expiring. Dispatched BEFORE any branch
@@ -809,6 +1067,30 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // its receipt, because the charge is already final at Stripe whatever this
   // function then does with our row. Never throws.
   await dispatchBillingEmails(event, 'charge');
+
+  // Record trial consumption FIRST and independently of the delta. It is a
+  // write-once fact that must outlive cancellation, it is not subject to the
+  // out-of-order guard (a late older event revealing a trial is still true),
+  // and it must be recorded even for events that grant nothing — an
+  // `incomplete` trial checkout still burned the trial. It also sits ahead of
+  // the top-up return below so no early exit can ever skip it (a top-up is
+  // mode:'payment', which eventConsumesTrial never counts, so this is
+  // ordering hygiene rather than a live case).
+  if (eventConsumesTrial(event)) {
+    const trialHouseholdId = householdIdFromEvent(event);
+    if (trialHouseholdId) await markTrialConsumed(trialHouseholdId);
+  }
+
+  // A paid identification top-up is its own apply path: credits, not
+  // entitlement. Branch before the subscription delta so the subscription
+  // machinery (ordering guard, lifetime claim, lifecycle analytics) never
+  // sees it. It sits AFTER the email dispatch above precisely because that
+  // comment names this `return` as the one a receipt must survive.
+  const topUpGrant = identifyTopUpGrantFromEvent(event);
+  if (topUpGrant) {
+    await applyIdentifyTopUpGrant(event, topUpGrant);
+    return;
+  }
 
   const delta = deltaForStripeEvent(event);
   if (!delta) return;
@@ -999,8 +1281,12 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     // webhook is the source of truth.
     //
     // NOT a revenue number for recurring plans. `createCheckoutSession` sets
-    // `trial_period_days: 14` on every subscription it creates, so at the moment
-    // this fires the household has started a free trial and no money has moved.
+    // `trial_period_days: 14` on a household's FIRST subscription, so at the
+    // moment this fires that household has started a free trial and no money
+    // has moved. A household that already consumed its trial gets no
+    // `trial_period_days` and its first invoice is charged at checkout — that
+    // case reaches here only with `payment_status: 'paid'`, because an
+    // unsettled session now grants nothing at all.
     // `interval: 'lifetime'` is the exception: a `mode: 'payment'` one-time
     // purchase has no trial, and the delta is only built once Stripe reports
     // `payment_status: 'paid'`, so those really are revenue here. Paid

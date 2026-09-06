@@ -11,12 +11,35 @@
  * Storage:
  *   PK: HOUSEHOLD#{id}
  *   SK: APIKEY#{keyId}
- *   GSI3PK: APIKEY_HASH#{scrypt(plaintext)}   <- index for lookup-by-key
- *   GSI3SK: HOUSEHOLD#{id}
+ *   GSI1PK: APIKEY_HASH#{scrypt(plaintext)}   <- index for lookup-by-key
+ *   GSI1SK: HOUSEHOLD#{id}
  *
- * The GSI3 lookup means we can verify a key on incoming requests with a
+ * The index lookup means we can verify a key on incoming requests with a
  * single point read. We never store the plaintext; once the user gets the
  * "copy your key" screen, we lose it.
+ *
+ * ## Why GSI1 and not a dedicated index (#400)
+ *
+ * This row used to be written to — and read from — `GSI3`, an index the table
+ * Terraform has never defined. `infrastructure/modules/database/main.tf`
+ * declares exactly two: `GSI1` and `GSI2`. A `Query` naming a non-existent
+ * index does not degrade, it raises `ValidationException`, so EVERY public-API
+ * authentication failed closed from the day the feature shipped until this
+ * change. The unit tests could not see it because they mock the DynamoDB
+ * client, so the query never met a real table schema.
+ *
+ * The fix re-keys onto GSI1 rather than adding GSI3, which is what
+ * `calendarTokens.ts` already does for the identical
+ * hash-a-credential-and-look-it-up-by-hash shape (see its header). It needs no
+ * Terraform change and no index backfill window, and it leaves the codebase
+ * with ONE pattern for credential lookup instead of two.
+ *
+ * The partition key namespace is what keeps the shared index safe: every GSI1
+ * query in this repo is an exact `GSI1PK = :pk` match (no `begins_with` on the
+ * partition key anywhere), and `APIKEY_HASH#` collides with no other producer
+ * — `CALTOKEN_HASH#`, `USER#`, `HOUSEHOLD#`, `HOUSEHOLD#…#SITTER` and friends
+ * are all distinct. API keys and calendar tokens additionally hash under
+ * different fixed salts, so one credential can never resolve as the other.
  *
  * Per-key scopes (`read:plants` etc.) live as an array attribute on the same
  * row. Keys created before scopes existed have no attribute; we read those as
@@ -98,7 +121,7 @@ export interface ApiKeyCreateResult {
 }
 
 /**
- * Hash a plaintext key for the GSI3PK lookup index. This MUST stay
+ * Hash a plaintext key for the GSI1PK lookup index. This MUST stay
  * deterministic: `lookupApiKey` resolves an incoming key with a single point
  * read on `APIKEY_HASH#{hashKey(plaintext)}`, so a per-hash random salt
  * (bcrypt/argon2) would make lookup impossible. scryptSync with a fixed
@@ -148,8 +171,8 @@ export async function createApiKey(
       Item: {
         PK: `HOUSEHOLD#${householdId}`,
         SK: `APIKEY#${id}`,
-        GSI3PK: `APIKEY_HASH#${hashKey(plaintext)}`,
-        GSI3SK: `HOUSEHOLD#${householdId}`,
+        GSI1PK: `APIKEY_HASH#${hashKey(plaintext)}`,
+        GSI1SK: `HOUSEHOLD#${householdId}`,
         entityType: 'ApiKey',
         ...record,
       },
@@ -158,19 +181,46 @@ export async function createApiKey(
   return { record, plaintext };
 }
 
+/**
+ * Page size for the key listing. This is a transport detail, NOT a cap: the
+ * query below follows `LastEvaluatedKey` to exhaustion, so the number only
+ * decides how many round trips a household's keys take.
+ *
+ * It used to be a bare `Limit: 50` with no paging, which made the fiftieth
+ * key the last one anybody could see. The keys past it kept authenticating —
+ * `lookupApiKey` resolves by the GSI1 hash and never touches this query —
+ * while
+ * Settings rendered "Active keys (50)" as a total and revocation is only
+ * possible by an id this list is the sole source of. A credential you cannot
+ * see and cannot revoke is the worst form of ADR 0010's defect: not a failed
+ * read published as empty, but a truncated read published as complete.
+ *
+ * The sort key is `APIKEY#{uuid v4}` and Query returns ascending SK order, so
+ * *which* keys fell off the end was decided by random UUID — a key could be
+ * invisible from the moment it was minted.
+ */
+const KEY_PAGE_SIZE = 50;
+
 export async function listApiKeys(householdId: string): Promise<ApiKeyRecord[]> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `HOUSEHOLD#${householdId}`,
-        ':sk': 'APIKEY#',
-      },
-      Limit: 50,
-    })
-  );
-  return (result.Items ?? []).map(mapRecord);
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `HOUSEHOLD#${householdId}`,
+          ':sk': 'APIKEY#',
+        },
+        Limit: KEY_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map(mapRecord);
 }
 
 /**
@@ -208,8 +258,8 @@ export async function lookupApiKey(plaintext: string): Promise<ApiKeyRecord | nu
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
-      IndexName: 'GSI3',
-      KeyConditionExpression: 'GSI3PK = :pk',
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
       ExpressionAttributeValues: {
         ':pk': `APIKEY_HASH#${hashKey(plaintext)}`,
       },

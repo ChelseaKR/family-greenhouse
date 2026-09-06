@@ -24,3 +24,98 @@ jobs:
           test -n "$HEALTHCHECK_URL"
           response="$(curl --fail --silent --show-error --max-time 20 "$HEALTHCHECK_URL")"
           printf '%s' "$response" | jq -e '.status == "ok"' >/dev/null
+
+  pages:
+    name: Synthetic page check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      # The `health` job above passed fourteen minutes into a total frontend
+      # outage on 2026-09-04 (issue #464): it curls the API and never loads a
+      # page, so a CloudFront/S3 failure that 403s every route but `/` is
+      # invisible to it. This job fetches the pages themselves and asserts the
+      # HTML is this app, not merely that something answered 200.
+      - name: Synthetic page check
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+        run: node scripts/synthetic-page-check.mjs --base-url "$SITE_URL"
+
+      # A check that cannot fail is worse than no check. Point the same script
+      # at a URL on the same origin that is definitely NOT an app page and
+      # require it to report a failure. If the assertions ever soften to the
+      # point where anything with a 200 passes, this step goes red while
+      # production is healthy — which is the correct way to find out.
+      - name: Negative control (the check must still be able to fail)
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+        run: |
+          node scripts/synthetic-page-check.mjs \
+            --base-url "$SITE_URL" \
+            --route /robots.txt \
+            --expect-failure
+
+  # Issue #576. The two jobs above prove the site and the API are up. Neither
+  # says anything about whether a browser can REPORT that they are not —
+  # `reportFrontendError` posts to the API it exists to report failures of, and
+  # a CORS misconfiguration silences the whole rail with, in the words of
+  # infrastructure/modules/api/main.tf, "no log on our side". The only thing
+  # that can see that is a client, and every real client it happens to is
+  # silenced by definition. So: a synthetic one.
+  #
+  # It also leaves a heartbeat. The payload is a real `kind: "delivery"` report
+  # with `source: "synthetic"`, which a metric filter turns into
+  # FrontendTelemetryProbe. That metric has a floor because this schedule does
+  # not depend on anyone visiting, which is what lets its alarm say
+  # treat_missing_data = "breaching" honestly. A failure here therefore reports
+  # twice: red workflow now, alerts SNS topic within ~2 hours.
+  telemetry-delivery:
+    name: Telemetry delivery check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Telemetry delivery check
+        env:
+          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+        run: |
+          test -n "$HEALTHCHECK_URL"
+          node scripts/telemetry-delivery-check.mjs \
+            --health-url "$HEALTHCHECK_URL" \
+            --origin "$SITE_URL"
+
+      # Same discipline as the page check's negative control, and the same
+      # reason: an assertion proved only in the passing case is not an
+      # assertion. The site origin serves the SPA, not the API, so
+      # /telemetry/frontend there answers neither the preflight nor the POST.
+      # If this step ever goes green while production is healthy, the check has
+      # stopped checking.
+      - name: Negative control (the check must still be able to fail)
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+        run: |
+          node scripts/telemetry-delivery-check.mjs \
+            --health-url "$SITE_URL/health" \
+            --origin "$SITE_URL" \
+            --expect-failure

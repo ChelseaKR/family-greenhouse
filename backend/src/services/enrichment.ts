@@ -127,7 +127,17 @@ interface CacheRow<T> {
   ttl?: number;
 }
 
-type CacheReadResult<T> = { hit: true; value: T } | { hit: false };
+type CacheReadResult<T> =
+  | { hit: true; value: T }
+  /**
+   * `unavailable` separates "the row is not there" from "we could not look".
+   * Both mean "ask Perenual" to the lookup path, so it ignores the flag — but
+   * a CACHE-ONLY caller (peekSpeciesCached) publishes its answer without ever
+   * asking Perenual, and for that caller the two are opposite facts. Collapsing
+   * them is what let a DynamoDB blip delete a plant from Move Day's frost
+   * warning as though it had been checked and cleared (#454).
+   */
+  | { hit: false; unavailable: boolean };
 
 /**
  * A hit wrapper is necessary because `null` can itself be a valid cached
@@ -140,12 +150,16 @@ async function readCacheEntry<T>(pk: string, sk: string): Promise<CacheReadResul
       new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: sk } })
     );
     const row = result.Item as CacheRow<T> | undefined;
-    if (!row || !Object.prototype.hasOwnProperty.call(row, 'payload')) return { hit: false };
-    if (row.ttl && row.ttl < Math.floor(Date.now() / 1000)) return { hit: false };
+    if (!row || !Object.prototype.hasOwnProperty.call(row, 'payload')) {
+      return { hit: false, unavailable: false };
+    }
+    if (row.ttl && row.ttl < Math.floor(Date.now() / 1000)) {
+      return { hit: false, unavailable: false };
+    }
     return { hit: true, value: row.payload };
   } catch (err) {
     logger.warn({ err: (err as Error).message, pk, sk }, 'perenual.cache_read_failed');
-    return { hit: false };
+    return { hit: false, unavailable: true };
   }
 }
 
@@ -245,6 +259,35 @@ export async function lookupSpeciesCached(id: number): Promise<SpeciesLookupResu
     jitteredTtlSeconds(SPECIES_TTL_DAYS * 86400)
   );
   return fresh;
+}
+
+/**
+ * Cache-only species peek. Unlike every other reader here it NEVER falls
+ * through to Perenual, so its result is published as-is and must therefore be
+ * three-state: a row we have (`cached`, whose value is null for a stored 404),
+ * a row we do not have (`absent`), and a read we could not perform
+ * (`unavailable`). The last one is the whole point — a caller that renders a
+ * safety fact has to be able to say "we could not check this" instead of
+ * silently omitting the plant (#454).
+ */
+export type SpeciesPeekResult =
+  | { status: 'cached'; value: PerenualSpeciesDetail | null }
+  | { status: 'absent' }
+  | { status: 'unavailable' };
+
+/**
+ * Read-only view of the species cache. Never calls Perenual and never touches
+ * the daily budget — Seasonal Move Day uses this so its hardiness hint costs
+ * nothing and is honest about only covering plants whose species were already
+ * looked up.
+ */
+export async function peekSpeciesCached(id: number): Promise<SpeciesPeekResult> {
+  const cached = await readCacheEntry<PerenualSpeciesDetail | null>(
+    'PERENUAL#CACHE',
+    `SPECIES#${id}`
+  );
+  if (cached.hit) return { status: 'cached', value: cached.value };
+  return cached.unavailable ? { status: 'unavailable' } : { status: 'absent' };
 }
 
 /** Nullable projection retained for thumbnails, plant validation, and guides. */

@@ -2,14 +2,39 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { intervalIsOffered, priceFor } from '@/features/pricing/planPricing';
-import type { Plan } from '@/services/billingService';
+import type { Plan, PlanFeatures } from '@/services/billingService';
 
+/** Feature map with everything off, so a fixture names only what it grants. */
+const NO_FEATURES: PlanFeatures = {
+  awayKit: false,
+  householdToolkit: false,
+  plantTags: false,
+  crossHomeToday: false,
+  kiosk: false,
+  caretakerSeats: false,
+  moveDay: false,
+  chat: false,
+  apiKeys: false,
+};
+
+// The catalog as the API publishes it after ADR 0014: `limits` and `features`
+// alongside the legacy cap fields, with `null` for unlimited.
 const seedling: Plan = {
   id: 'seedling',
   name: 'Seedling',
-  description: 'Free',
-  maxPlants: 10,
-  maxMembers: 6,
+  description: 'A couple and their plants',
+  maxPlants: 20,
+  maxMembers: 3,
+  limits: {
+    homes: 1,
+    members: 3,
+    plants: 20,
+    tags: 0,
+    analyticsHistoryDays: 30,
+    sitterLinkMaxDays: 7,
+    sitterLinksActive: 1,
+  },
+  features: { ...NO_FEATURES },
   monthlyPrice: 0,
   annualPrice: null,
   lifetimePrice: null,
@@ -18,9 +43,26 @@ const seedling: Plan = {
 const garden: Plan = {
   id: 'garden',
   name: 'Garden',
-  description: 'Growing families',
-  maxPlants: 500,
-  maxMembers: 6,
+  description: 'A household that has to coordinate',
+  maxPlants: 200,
+  maxMembers: null,
+  limits: {
+    homes: 1,
+    members: null,
+    plants: 200,
+    tags: 50,
+    analyticsHistoryDays: null,
+    sitterLinkMaxDays: 90,
+    sitterLinksActive: null,
+  },
+  features: {
+    ...NO_FEATURES,
+    awayKit: true,
+    householdToolkit: true,
+    plantTags: true,
+    moveDay: true,
+    chat: true,
+  },
   monthlyPrice: 4.99,
   annualPrice: 39.99,
   lifetimePrice: 149,
@@ -29,9 +71,30 @@ const garden: Plan = {
 const greenhouse: Plan = {
   id: 'greenhouse',
   name: 'Greenhouse',
-  description: 'Serious plant parents',
+  description: 'Many homes, many hands',
   maxPlants: 5000,
-  maxMembers: 50,
+  maxMembers: null,
+  limits: {
+    homes: null,
+    members: null,
+    plants: 5000,
+    tags: null,
+    analyticsHistoryDays: null,
+    sitterLinkMaxDays: 90,
+    sitterLinksActive: null,
+  },
+  features: {
+    ...NO_FEATURES,
+    awayKit: true,
+    householdToolkit: true,
+    plantTags: true,
+    crossHomeToday: true,
+    kiosk: true,
+    caretakerSeats: true,
+    moveDay: true,
+    chat: true,
+    apiKeys: true,
+  },
   monthlyPrice: 9.99,
   annualPrice: 79.99,
   lifetimePrice: null,
@@ -85,20 +148,43 @@ describe('PaidPlanGrid', () => {
     expect(screen.getByText('Current plan')).toBeInTheDocument();
   });
 
-  it('lists import and export under the free tier, not as a paid differentiator', () => {
-    // POST /plants/import and GET /me/export are open to every tier (import is
-    // bounded only by the plan's plant cap, which the caps line already shows).
-    // The bullets are cumulative, so naming them under Greenhouse claimed the
-    // lower tiers lack them — contradicting the "Nothing locked away" band,
-    // which promises export to everyone.
+  it('lists import, export and the calendar feed under the free tier, not as a paid differentiator', () => {
+    // POST /plants/import, GET /me/export and the .ics feed are open to every
+    // tier (import is bounded only by the plan's plant cap, which the caps
+    // line already shows). The bullets are cumulative, so naming them under
+    // Greenhouse claimed the lower tiers lack them — contradicting the
+    // "Nothing locked away" band, which promises export to everyone.
     render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
     const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
 
-    expect(card('Seedling').getByText('Import and export (CSV and JSON)')).toBeInTheDocument();
+    expect(
+      card('Seedling').getByText('Import, export and calendar feed (CSV, JSON, .ics)')
+    ).toBeInTheDocument();
     expect(card('Garden').queryByText(/import|export/i)).not.toBeInTheDocument();
     expect(card('Greenhouse').queryByText(/import|export/i)).not.toBeInTheDocument();
     // The one paid-only bullet that is actually enforced stays.
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
+  });
+
+  it('sells no support tier, and calls Garden’s identification difference an allowance', () => {
+    // #607. "Priority support" sat on the $9.99 tier with nothing behind it:
+    // features/legal/SupportPage.tsx hands the one SUPPORT_EMAIL to every
+    // plan, and no queue, routing rule or response-time target exists to
+    // honour it. "Priority plant identification" was a mislabel of a real
+    // difference — IDENTIFY_ALLOWANCES (backend/src/services/identifyBudget.ts)
+    // gives Seedling 1, Garden 30 and Greenhouse 100 a month — so the bullet
+    // now claims the allowance, which is what ships, and not a queue, which
+    // does not exist.
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+    expect(screen.queryByText(/priority/i)).not.toBeInTheDocument();
+    expect(card('Garden').getByText('More plant identifications each month')).toBeInTheDocument();
+    // Greenhouse keeps the two differentiators that are enforced.
+    expect(card('Greenhouse').getByText('Everything in Garden')).toBeInTheDocument();
+    expect(
+      card('Greenhouse').getByText('Unlimited homes — belong to every home you help with')
+    ).toBeInTheDocument();
   });
 
   it('renders no call to action when the caller supplies none', () => {
@@ -115,12 +201,7 @@ describe('withdrawn cadences (annual and lifetime withdrawn from sale)', () => {
   // monthly without any client-side knowledge of the decision.
   const gardenMonthlyOnly: Plan = { ...garden, annualPrice: null, lifetimePrice: null };
   const greenhouseMonthlyOnly: Plan = {
-    id: 'greenhouse',
-    name: 'Greenhouse',
-    description: 'Serious plant parents',
-    maxPlants: 5000,
-    maxMembers: 50,
-    monthlyPrice: 9.99,
+    ...greenhouse,
     annualPrice: null,
     lifetimePrice: null,
   };
@@ -153,5 +234,77 @@ describe('withdrawn cadences (annual and lifetime withdrawn from sale)', () => {
     // annual price again, the toggle returns with no frontend release.
     render(<PaidPlanGrid plans={[seedling, garden, greenhouseMonthlyOnly]} />);
     expect(screen.getByRole('group', { name: 'Billing interval' })).toBeInTheDocument();
+  });
+});
+
+describe('the caps line reads homes, hands and plants (ADR 0014)', () => {
+  const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+  it('states one home, the member cap and the plant cap on the free tier', () => {
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    expect(card('Seedling').getByText('1 home · 3 members · 20 plants')).toBeInTheDocument();
+  });
+
+  it('renders an unlimited cap as "unlimited", never as a number and never as 0', () => {
+    // `null` is the wire's unlimited (backend/src/models/plans.ts). Rendering
+    // it through a numeric path would print "0 members" — a cap of nothing —
+    // which is the opposite of what it means.
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    expect(card('Garden').getByText('1 home · Unlimited members · 200 plants')).toBeInTheDocument();
+    expect(
+      card('Greenhouse').getByText('Unlimited homes · Unlimited members · 5,000 plants')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/0 members|0 homes/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the legacy cap fields when an older backend sends no limits map', () => {
+    const legacy: Plan = {
+      id: 'garden',
+      name: 'Garden',
+      description: 'Growing families',
+      maxPlants: 200,
+      maxMembers: 6,
+      monthlyPrice: 4.99,
+    };
+    render(<PaidPlanGrid plans={[legacy]} />);
+    // No homes claim at all — the old shape cannot say, so the line does not
+    // invent one — but the caps it does carry are still stated.
+    expect(card('Garden').getByText('6 members · 200 plants')).toBeInTheDocument();
+  });
+});
+
+describe('feature bullets follow the catalog flags, and only where the tier gains them', () => {
+  const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+  it('names the assistant on Garden and API keys on Greenhouse, each once', () => {
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    expect(card('Garden').getByText('AI care assistant')).toBeInTheDocument();
+    expect(card('Greenhouse').queryByText('AI care assistant')).not.toBeInTheDocument();
+    expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
+    expect(card('Seedling').queryByText(/assistant|API access/i)).not.toBeInTheDocument();
+  });
+
+  it('claims nothing from the flags when the backend sends no features map', () => {
+    const legacy: Plan = {
+      id: 'greenhouse',
+      name: 'Greenhouse',
+      description: 'Serious plant parents',
+      maxPlants: 5000,
+      maxMembers: 50,
+      monthlyPrice: 9.99,
+    };
+    render(<PaidPlanGrid plans={[legacy]} />);
+    expect(card('Greenhouse').queryByText('API access for automation')).not.toBeInTheDocument();
+  });
+
+  it('hangs a bullet on the tier that first gains it, whatever order the catalog arrives in', () => {
+    // The lists are cumulative, so "new here" has to mean a lower TIER, not
+    // an earlier array index. A catalog in another order must not move the
+    // assistant bullet up to Greenhouse and leave Garden claiming nothing.
+    render(<PaidPlanGrid plans={[greenhouse, seedling, garden]} />);
+    const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+    expect(card('Garden').getByText('AI care assistant')).toBeInTheDocument();
+    expect(card('Greenhouse').queryByText('AI care assistant')).not.toBeInTheDocument();
+    expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
   });
 });

@@ -8,6 +8,13 @@
  * rather than collapsing into "there is no kiosk link".
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scryptSync } from 'node:crypto';
+
+/** The production hash, restated here so a silent change to the salt or the
+ *  KDF fails a test rather than quietly bricking every wall display. */
+function expectedHash(token: string): string {
+  return scryptSync(token, 'family-greenhouse-kiosk-v1', 32).toString('hex');
+}
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
@@ -91,7 +98,14 @@ describe('kioskService.issueKioskLink', () => {
     const put = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
       input: { Item: Record<string, unknown> };
     };
-    expect(put.input.Item.PK).toBe(`KIOSK#${link.token}`);
+    // #450: keyed by the token's hash, with the plaintext on no attribute.
+    // Kiosk rows carry no TTL, so a plaintext one would sit in every backup
+    // for as long as the display lives.
+    expect(put.input.Item.PK).toBe(`KIOSK#${expectedHash(link.token)}`);
+    expect(put.input.Item.PK).not.toBe(`KIOSK#${link.token}`);
+    expect(put.input.Item.tokenHash).toBe(expectedHash(link.token));
+    expect(Object.values(put.input.Item)).not.toContain(link.token);
+    expect(put.input.Item.token).toBeUndefined();
     expect(put.input.Item.SK).toBe('METADATA');
     expect(put.input.Item.GSI1PK).toBe(`HOUSEHOLD#${HH}#KIOSK`);
     expect(put.input.Item.entityType).toBe('KioskLink');
@@ -160,7 +174,10 @@ describe('kioskService.getActiveKioskLink', () => {
     } as never);
     expect(await svc.getActiveKioskLink(TOKEN)).toBeNull();
 
-    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    // Both reads miss: the hashed key and the legacy plaintext key.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never);
     expect(await svc.getActiveKioskLink(TOKEN)).toBeNull();
   });
 
@@ -222,5 +239,193 @@ describe('kioskService.revokeKioskLinks', () => {
     const { dynamodb, svc } = await load();
     vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('dynamo down') as never);
     await expect(svc.revokeKioskLinks(HH)).rejects.toThrow('dynamo down');
+  });
+});
+
+// #449: a kiosk link never expires and shows the whole household's task list,
+// so a member who is removed keeps a live window into the house from anywhere
+// unless the link they issued is revoked with them.
+describe('kioskService.revokeKioskLinksCreatedBy', () => {
+  it('revokes only the departing member’s active links', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          activeRow({ createdBy: 'departing' }),
+          activeRow({ id: 'k2', token: 'b'.repeat(64), createdBy: 'staying' }),
+          activeRow({ id: 'k3', token: 'c'.repeat(64), createdBy: 'departing', status: 'revoked' }),
+        ],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeKioskLinksCreatedBy(HH, 'departing')).toBe(1);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`KIOSK#${TOKEN}`);
+  });
+
+  it('reports 0 when the departing member issued none', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [activeRow({ createdBy: 'someone-else' })],
+    } as never);
+    expect(await svc.revokeKioskLinksCreatedBy(HH, 'departing')).toBe(0);
+  });
+
+  it('THROWS on a failed read rather than reporting 0 revoked', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('dynamo down') as never);
+    await expect(svc.revokeKioskLinksCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
+  });
+});
+
+/**
+ * `revokeKioskLinks` and `revokeKioskLinksCreatedBy` both read through
+ * `listKioskLinks`, so a truncated listing made "revoke everything live"
+ * quietly not revoke everything — and returned a count that said it had.
+ * (#455 / #457 gap 2)
+ */
+describe('kioskService — the link list is the whole link list', () => {
+  // mockReset, not clearAllMocks: a queued mockResolvedValueOnce that a
+  // previous test never consumed would otherwise answer the first query here.
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('follows LastEvaluatedKey and resumes where the first page stopped', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'kiosk-new' })],
+        LastEvaluatedKey: { PK: 'KIOSK#new' },
+      } as never)
+      .mockResolvedValueOnce({ Items: [activeRow({ id: 'kiosk-old' })] } as never);
+
+    const links = await svc.listKioskLinks(HH);
+    expect(links.map((l) => l.id)).toEqual(['kiosk-new', 'kiosk-old']);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({ PK: 'KIOSK#new' });
+  });
+
+  it('revoke-all reaches a live link on the second page, and counts it', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'kiosk-new', token: 'n'.repeat(64), status: 'revoked' })],
+        LastEvaluatedKey: { PK: 'KIOSK#new' },
+      } as never)
+      .mockResolvedValueOnce({
+        Items: [activeRow({ id: 'kiosk-old', token: 'o'.repeat(64) })],
+      } as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeKioskLinks(HH)).toBe(1);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].input.Key?.PK).toBe(`KIOSK#${'o'.repeat(64)}`);
+  });
+});
+
+/**
+ * #450: a kiosk token was stored as `PK: KIOSK#{plaintext}`, and a kiosk row
+ * deliberately has NO ttl — so unlike the sitter link, a plaintext one sits in
+ * every backup and every point-in-time restore for as long as the display is
+ * up. A table export handed over a working wall-display URL for a household's
+ * whole task list; the calendar token beside it in the same export handed over
+ * a scrypt digest.
+ */
+describe('kioskService — the token is not in the table (#450)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resolves a link written by issueKioskLink (hash written, hash read)', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Items: [] } as never) // revoke pass
+      .mockResolvedValueOnce({} as never); // put
+    const minted = await svc.issueKioskLink({ householdId: HH, createdBy: 'u1' });
+    const written = (
+      vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+        input: { Item: Record<string, unknown> };
+      }
+    ).input.Item;
+
+    // The round trip is the only assertion that catches a write/read hash
+    // mismatch, which would brick every display in the field.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: written } as never);
+    expect((await svc.getActiveKioskLink(minted.token))?.id).toBe(minted.id);
+    const get = vi.mocked(dynamodb.send).mock.calls[2][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(get.input.Key.PK).toBe(written.PK);
+    expect(get.input.Key.PK).toBe(`KIOSK#${expectedHash(minted.token)}`);
+  });
+
+  it('reads the hashed row FIRST, without touching the plaintext key', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: activeRow({ token: undefined, tokenHash: expectedHash(TOKEN) }),
+    } as never);
+
+    expect((await svc.getActiveKioskLink(TOKEN))?.householdId).toBe(HH);
+    expect(dynamodb.send).toHaveBeenCalledTimes(1);
+    const get = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(get.input.Key.PK).toBe(`KIOSK#${expectedHash(TOKEN)}`);
+  });
+
+  it('still resolves a pre-#450 plaintext-keyed row (the wall display stays up)', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never) // hashed key: no such row
+      .mockResolvedValueOnce({ Item: activeRow() } as never); // legacy plaintext row
+
+    expect((await svc.getActiveKioskLink(TOKEN))?.householdId).toBe(HH);
+    const legacyGet = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(legacyGet.input.Key.PK).toBe(`KIOSK#${TOKEN}`);
+  });
+
+  it('revoke-everything-live reaches a hashed row and a legacy row alike', async () => {
+    const { dynamodb, svc } = await load();
+    const hash = expectedHash(TOKEN);
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          activeRow({ id: 'k-new', token: undefined, tokenHash: hash }),
+          activeRow({ id: 'k-legacy', token: 'z'.repeat(64) }),
+        ],
+      } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never);
+
+    expect(await svc.revokeKioskLinks(HH)).toBe(2);
+    const keys = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update')
+      .map((c) => c.input.Key?.PK);
+    expect(keys).toEqual([`KIOSK#${hash}`, `KIOSK#${'z'.repeat(64)}`]);
+  });
+
+  it('the current-link summary carries no token for the settings page to leak', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [activeRow({ token: undefined, tokenHash: expectedHash(TOKEN) })],
+    } as never);
+    const summary = await svc.getCurrentKioskLink(HH);
+    expect(summary?.id).toBe('kiosk-1');
+    expect(summary as unknown as Record<string, unknown>).not.toHaveProperty('token');
+    expect(summary as unknown as Record<string, unknown>).not.toHaveProperty('keyToken');
   });
 });

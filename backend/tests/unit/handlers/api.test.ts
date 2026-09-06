@@ -29,6 +29,10 @@ import * as taskService from '../../../src/services/taskService.js';
 import { recordActivity } from '../../../src/services/activity.js';
 import { dynamodb } from '../../../src/utils/dynamodb.js';
 import { __resetRateLimitForTests } from '../../../src/middleware/rateLimit.js';
+import {
+  __resetMembershipCacheForTests,
+  setCachedMembership,
+} from '../../../src/utils/membershipCache.js';
 
 const ALL_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as const;
 
@@ -80,6 +84,12 @@ describe('public API v1 handler', () => {
     __resetRateLimitForTests();
     vi.mocked(apiKeysService.lookupApiKey).mockResolvedValue({ ...keyRecord });
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
+    // apiKeyMiddleware re-checks that the key's creator is STILL a member
+    // (#449). These route tests are about the routes, so the membership is
+    // pre-warmed in the same cache the JWT path uses rather than re-mocked per
+    // test; the check itself is covered in tests/unit/middleware/apiKey.test.ts.
+    __resetMembershipCacheForTests();
+    setCachedMembership(keyRecord.createdBy, keyRecord.householdId, 'admin');
   });
 
   describe('GET /api/v1/me', () => {
@@ -564,6 +574,81 @@ describe('public API v1 handler', () => {
         })
       );
       expect(rawMessage.statusCode).toBe(400);
+    });
+
+    // Issue #576. These lines are what let CloudWatch tell "no browser errors"
+    // apart from "no browser could deliver one" — the browser's own count of
+    // what it lost, and the synthetic heartbeat whose absence is alarmable.
+    it('accepts delivery reports from both sources and bounds their numbers', async () => {
+      const { frontendTelemetry } = await import('../../../src/handlers/api/handler.js');
+      const base = {
+        kind: 'delivery',
+        sessionId: '123e4567-e89b-42d3-a456-426614174000',
+        route: '/login',
+      };
+
+      const post = (body: unknown) =>
+        invoke(
+          frontendTelemetry,
+          buildEvent({
+            httpMethod: 'POST',
+            path: '/telemetry/frontend',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+        );
+
+      const fromBrowser = await post({
+        ...base,
+        source: 'browser',
+        undelivered: 12,
+        ageMinutes: 90,
+      });
+      expect(fromBrowser.statusCode).toBe(204);
+
+      // Byte-for-byte the shape `probePayload()` in
+      // scripts/telemetry-delivery-check.mjs emits, `route: '/'` included. If
+      // this schema drifts from that script the heartbeat stops arriving, the
+      // FrontendTelemetryProbe alarm fires, and the cause would be a 400 that
+      // nobody was looking at — so it is pinned here instead.
+      const fromProbe = await post({
+        kind: 'delivery',
+        source: 'synthetic',
+        sessionId: '123e4567-e89b-42d3-a456-426614174000',
+        route: '/',
+        undelivered: 0,
+        ageMinutes: 0,
+      });
+      expect(fromProbe.statusCode).toBe(204);
+
+      // The route is public and IP-rate-limited, so the numbers are hints from
+      // an untrusted client. Bounded, so a forged body cannot skew a metric by
+      // an unbounded amount.
+      const tooMany = await post({
+        ...base,
+        source: 'browser',
+        undelivered: 10_000,
+        ageMinutes: 0,
+      });
+      expect(tooMany.statusCode).toBe(400);
+
+      const unknownSource = await post({
+        ...base,
+        source: 'sentry',
+        undelivered: 1,
+        ageMinutes: 1,
+      });
+      expect(unknownSource.statusCode).toBe(400);
+
+      // Still strict: a delivery report may not smuggle a payload through.
+      const withPayload = await post({
+        ...base,
+        source: 'browser',
+        undelivered: 1,
+        ageMinutes: 1,
+        message: 'person@example.com failed to load',
+      });
+      expect(withPayload.statusCode).toBe(400);
     });
 
     it('requires JWT auth for typed product events and ignores body identity entirely', async () => {

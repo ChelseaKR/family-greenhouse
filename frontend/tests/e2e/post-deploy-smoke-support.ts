@@ -3,6 +3,146 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HOUSEHOLD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HOUSEHOLD_MEMBERSHIP_PATTERN =
   /^HOUSEHOLD#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * How a smoke fixture is identified in DynamoDB — STRUCTURALLY, by an attribute
+ * written at creation, never by matching a name.
+ *
+ * The defect this exists for: production held 38 households, 35 of them called
+ * "Smoke Test Household", left behind by runs whose teardown never got to
+ * execute. Nothing anywhere excluded them, so every count of "how many
+ * households does this product have" was 92% test debris. The obvious fix —
+ * match the string "Smoke Test Household" — breaks the day someone names their
+ * home that, and it silently deletes their data when it does. An attribute the
+ * application never writes cannot be collided with.
+ *
+ * `scripts/sweep-test-fixtures.mjs` reads these same names. It asserts on
+ * startup that this file still declares every one of them, so the two cannot
+ * drift apart without the sweeper refusing to run.
+ */
+export const TEST_FIXTURE = {
+  /** Present and `true` only on rows a test fixture created. */
+  flag: 'isTestFixture',
+  /** The run that created the row, so one run's debris is separable. */
+  runId: 'testFixtureRunId',
+  /** ISO 8601. The sweeper's age gate reads this, not the row's own createdAt. */
+  createdAt: 'testFixtureCreatedAt',
+  /** Which harness made it, so a second fixture source is distinguishable. */
+  source: 'testFixtureSource',
+  /** Value written by the post-deploy smoke test. */
+  sourceValue: 'post-deploy-smoke',
+  /** Partition prefix of the claim row. */
+  partitionPrefix: 'TESTFIXTURE#',
+  entityType: 'TestFixtureRun',
+} as const;
+
+/**
+ * A claim row: one per smoke run, written BEFORE the browser flow starts.
+ *
+ * This is the part that survives a run that dies. Stamping the household row
+ * is not enough on its own, because a run can be killed between "POST
+ * /households returned 201" and "the stamp landed" — and a killed run is
+ * exactly the case that leaked the 35. The claim row is written while the only
+ * thing that exists is the Cognito user, and it records that user's `sub`, so
+ * the sweeper can find every household the fixture ever joined through GSI1
+ * even if no household row was ever stamped.
+ *
+ * It carries no `ttl` deliberately. A TTL would let DynamoDB delete the claim
+ * before a sweep ran and strand the debris it points at, with nothing left to
+ * find it by. The sweeper deletes the claim last, after the rows it indexes.
+ */
+export interface TestFixtureClaim {
+  PK: string;
+  SK: 'METADATA';
+  entityType: string;
+  isTestFixture: true;
+  testFixtureRunId: string;
+  testFixtureCreatedAt: string;
+  testFixtureSource: string;
+  /** Cognito `sub` — an opaque id, never an email or any other identifier. */
+  cognitoSub: string;
+  /** Cognito service Username, which is a separate contract from `sub`. */
+  cognitoUsername: string;
+}
+
+/** Partition key of a run's claim row. */
+export function testFixtureClaimPartition(runId: string): string {
+  if (!UUID_PATTERN.test(runId)) {
+    throw new Error('Test fixture run id must be a UUID');
+  }
+  return `${TEST_FIXTURE.partitionPrefix}${runId}`;
+}
+
+/** Build the claim row for one smoke run. */
+export function buildTestFixtureClaim(input: {
+  runId: string;
+  createdAt: string;
+  cognitoSub: string;
+  cognitoUsername: string;
+}): TestFixtureClaim {
+  if (!input.cognitoSub || !input.cognitoUsername) {
+    throw new Error('Test fixture claim needs both a Cognito sub and username');
+  }
+  if (Number.isNaN(Date.parse(input.createdAt))) {
+    throw new Error('Test fixture claim needs an ISO 8601 createdAt');
+  }
+  return {
+    PK: testFixtureClaimPartition(input.runId),
+    SK: 'METADATA',
+    entityType: TEST_FIXTURE.entityType,
+    isTestFixture: true,
+    testFixtureRunId: input.runId,
+    testFixtureCreatedAt: input.createdAt,
+    testFixtureSource: TEST_FIXTURE.sourceValue,
+    cognitoSub: input.cognitoSub,
+    cognitoUsername: input.cognitoUsername,
+  };
+}
+
+/**
+ * The `UpdateItem` arguments that stamp an already-created household row as a
+ * fixture. Separate from the claim row because the household is created by the
+ * real API through the real UI — the test only learns its id from the 201.
+ *
+ * `attribute_exists(PK)` so a stamp can never CREATE a row: if the household is
+ * not there, that is a failure to report, not a row to invent.
+ */
+export function buildHouseholdFixtureStamp(input: {
+  householdId: string;
+  runId: string;
+  createdAt: string;
+}): {
+  Key: { PK: string; SK: string };
+  UpdateExpression: string;
+  ConditionExpression: string;
+  ExpressionAttributeNames: Record<string, string>;
+  ExpressionAttributeValues: Record<string, { S: string } | { BOOL: boolean }>;
+} {
+  if (!HOUSEHOLD_ID_PATTERN.test(input.householdId)) {
+    throw new Error('Household fixture stamp needs a household UUID');
+  }
+  if (!UUID_PATTERN.test(input.runId)) {
+    throw new Error('Household fixture stamp needs a run id UUID');
+  }
+  return {
+    Key: { PK: `HOUSEHOLD#${input.householdId}`, SK: 'METADATA' },
+    UpdateExpression: 'SET #flag = :flag, #run = :run, #at = :at, #src = :src',
+    ConditionExpression: 'attribute_exists(PK)',
+    ExpressionAttributeNames: {
+      '#flag': TEST_FIXTURE.flag,
+      '#run': TEST_FIXTURE.runId,
+      '#at': TEST_FIXTURE.createdAt,
+      '#src': TEST_FIXTURE.source,
+    },
+    ExpressionAttributeValues: {
+      ':flag': { BOOL: true },
+      ':run': { S: input.runId },
+      ':at': { S: input.createdAt },
+      ':src': { S: TEST_FIXTURE.sourceValue },
+    },
+  };
+}
 
 /**
  * Build a unique address from an operator-configured, deliverable mailbox
@@ -267,7 +407,9 @@ async function listExactSmokeS3Versions(
   let keyMarker: string | undefined;
   let versionIdMarker: string | undefined;
 
-  do {
+  // `for (;;)` rather than `do ... while (true)`: identical control flow, and
+  // `no-constant-condition` allows the former. Every exit is explicit below.
+  for (;;) {
     const page = await store.listVersions({
       bucket: target.bucket,
       prefix: target.key,
@@ -296,7 +438,7 @@ async function listExactSmokeS3Versions(
     seenMarkers.add(markerFingerprint);
     keyMarker = page.nextKeyMarker;
     versionIdMarker = page.nextVersionIdMarker;
-  } while (true);
+  }
 
   return [...found.values()];
 }

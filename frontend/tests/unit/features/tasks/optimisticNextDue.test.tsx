@@ -6,8 +6,9 @@
  *
  * `backend/src/services/taskService.ts` (`completeTask`) computes
  * `nextDue.setDate(nextDue.getDate() + frequency)` in the process zone, and
- * the deployed Lambdas run in UTC (nothing in `infrastructure/` sets `TZ`;
- * `backend/vitest.config.ts` pins the same). `taskMutations.ts` ran the
+ * the deployed Lambdas run in UTC (`infrastructure/modules/api/main.tf` sets
+ * `TZ = "UTC"` on the Lambda environment — #590; `backend/vitest.config.ts`
+ * pins the same zone for the suite). `taskMutations.ts` ran the
  * identical expression in the BROWSER's zone. Those agree only while no DST
  * transition falls inside the recurrence window — and when one does, the hour
  * they differ by is enough to move the rendered calendar date a whole day.

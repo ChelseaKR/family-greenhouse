@@ -8,6 +8,10 @@ docs/research/
 # Build outputs
 frontend/vite.config.js
 frontend/vite.config.d.ts
+# Same emit, from the chunk rules vite.config.ts imports (tsconfig.node.json
+# is a composite project, so every file it compiles lands beside its source).
+frontend/vite.manualChunks.js
+frontend/vite.manualChunks.d.ts
 dist/
 # SSR bundle for the marketing prerender (frontend/scripts/prerender.mjs).
 # Build artifact of `vite build --ssr`; regenerate it, never commit it.
@@ -47,6 +51,9 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 playwright-report/
+# Per-shard Playwright output (`--reporter=blob`), merged back into one
+# playwright-report/ by CI's "E2E report (merged)" job.
+blob-report/
 test-results/
 .lighthouseci/
 

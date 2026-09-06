@@ -60,14 +60,35 @@ beforeEach(() => {
 });
 
 describe('Dashboard integration', () => {
-  it('completes a task and removes it from the list', async () => {
+  it('completes a task and shows it moved to its next due date', async () => {
     let completed = false;
+    const nextDueAfterCompletion = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     server.use(
       http.get(`${API}/tasks/upcoming`, () => {
-        // After completion, React Query invalidates this query and
-        // refetches — return an empty list on the second hit so the row
-        // drops out of the visible list as the user would experience.
-        if (completed) return HttpResponse.json([]);
+        // The refetch returns the task AGAIN, with its new due date.
+        //
+        // This mock used to answer `[]` here, commented "so the row drops out
+        // of the visible list as the user would experience". That was not what
+        // the server does and not what users experienced. `getUpcomingTasks`
+        // returns everything due within SEVEN DAYS, and completion advances
+        // nextDue by the task's frequency, so a weekly task lands right back
+        // inside the window. The optimistic update filtered the row out, this
+        // mock agreed, and the pair passed — while in production the row
+        // vanished on tap and reappeared a moment later, reading as "it didn't
+        // save". A mock that invents server behaviour turns a test into
+        // confirmation of the author's belief.
+        if (completed) {
+          return HttpResponse.json([
+            {
+              id: 't1',
+              plantId: 'p1',
+              plantName: 'Monstera',
+              type: 'water',
+              nextDue: nextDueAfterCompletion,
+              frequency: 7,
+            },
+          ]);
+        }
         return HttpResponse.json([
           {
             id: 't1',
@@ -147,14 +168,51 @@ describe('Dashboard integration', () => {
 
     await user.click(screen.getByRole('button', { name: /done/i }));
 
-    // After mutation + invalidate, the row should disappear and the
-    // empty-state copy "All caught up!" should appear in its place.
+    // The completion is recorded — that is the part a user must be able to
+    // trust, and the part that looked broken.
     await waitFor(
       () => {
-        expect(screen.queryByRole('button', { name: /done/i })).not.toBeInTheDocument();
+        expect(completed).toBe(true);
       },
       { timeout: 5000 }
     );
-    expect(screen.getByText(/all caught up/i)).toBeInTheDocument();
-  });
+
+    // The row LEAVES this card, because the card lists what can be done now
+    // and the task is no longer due today.
+    //
+    // This assertion was the exact opposite a commit ago, and the reason is
+    // worth keeping. The first fix stopped the row vanishing-then-reappearing
+    // by making it move to its new date — mechanically right, and it left the
+    // real problem untouched: the server's upcoming window is seven days, so a
+    // WEEKLY task lands straight back inside it and could never be cleared
+    // from the dashboard at all. Marking done, refreshing, and still seeing
+    // the task is what a household actually reported.
+    // Wait for a POSITIVE end-state, never for the absence of something.
+    //
+    // `waitFor(() => expect(X).not.toBeInTheDocument())` passes on the first
+    // tick where X happens to be missing — a transient re-render will do — so
+    // it holds whatever the code does. Written that way, this assertion passed
+    // even with the card deliberately reverted to rendering `laterTasks`,
+    // which is the regression it exists to catch. A test that cannot fail is
+    // worse than no test, and this file already carries one such lesson.
+    //
+    // The empty state's own copy is the settled signal: it can only render
+    // once the refetch has landed and left nothing actionable.
+    await waitFor(() => expect(screen.getByText(/nothing to do right now/i)).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+
+    // Now the negatives mean something, because the card has finished.
+    expect(screen.queryByRole('button', { name: /done/i })).not.toBeInTheDocument();
+    // The week is not clear — the task still exists, due in seven days.
+    // "All caught up" here would be the same class of lie as the vanishing row.
+    expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/coming up later this week/i)).toBeInTheDocument();
+    // Three 5s `waitFor` budgets cannot fit inside vitest's 5s default test
+    // timeout, so this test could only ever pass by finishing well under its
+    // own stated allowances — it reported "Test timed out" rather than a
+    // failed assertion whenever the machine was busy. The waits are still
+    // individually bounded, so a condition that never becomes true still
+    // fails; it now fails with the assertion that actually broke.
+  }, 20000);
 });

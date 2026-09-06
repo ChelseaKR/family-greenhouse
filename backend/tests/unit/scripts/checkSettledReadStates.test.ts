@@ -20,7 +20,12 @@ interface RunResult {
   stderr: string;
 }
 
-function run(files: Record<string, string>, accepted: Record<string, string> = {}): RunResult {
+type BaselineEntry = { reason: string; callers: string[] };
+
+function run(
+  files: Record<string, string>,
+  accepted: Record<string, string | BaselineEntry> = {}
+): RunResult {
   const root = mkdtempSync(join(tmpdir(), 'reads-ratchet-'));
   const src = join(root, 'src');
   mkdirSync(src, { recursive: true });
@@ -349,7 +354,10 @@ export async function getUsage(id: string): Promise<number> {
 
     it('passes when every finding is in the baseline', () => {
       const out = run(masked, {
-        'services/budget.ts::getUsage::catch-returns-empty': 'test fixture',
+        'services/budget.ts::getUsage::catch-returns-empty': {
+          reason: 'test fixture',
+          callers: [],
+        },
       });
       expect(out.code).toBe(0);
       expect(out.stdout).toContain('1 accepted occurrences (baseline 1, ratchet-only)');
@@ -372,5 +380,244 @@ export async function getUsage(id: string): Promise<number> {
       const out = run({ 'services/budget.test.ts': masked['services/budget.ts'] });
       expect(out.code).toBe(0);
     });
+  });
+});
+
+/**
+ * Gap 2 of #457: a `Limit` with no `LastEvaluatedKey` follow. Nothing fails
+ * here — no throw, no catch, no error state — so a partial list is published
+ * as a total, entirely outside the catch-anchored shapes above.
+ */
+describe('settled-read-state ratchet (backend) — truncation', () => {
+  const PAGED = `
+import { QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+`;
+
+  it('catches a Query with a Limit and no LastEvaluatedKey follow', () => {
+    const out = run({
+      'services/keys.ts': `${PAGED}
+export async function listKeys(id: string): Promise<string[]> {
+  const result = await dynamodb.send(
+    new QueryCommand({ TableName: TABLE_NAME, KeyConditionExpression: 'PK = :pk', Limit: 50 })
+  );
+  return (result.Items ?? []).map((i) => i.id as string);
+}`,
+    });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('services/keys.ts::listKeys::unpaginated-limit');
+    expect(out.stderr).toContain('one page is returned as the whole result');
+  });
+
+  it('catches the same shape on a Scan', () => {
+    const out = run({
+      'services/sweep.ts': `${PAGED}
+export async function sweep(): Promise<number> {
+  const result = await dynamodb.send(new ScanCommand({ TableName: TABLE_NAME, Limit: 1000 }));
+  return (result.Items ?? []).length;
+}`,
+    });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('services/sweep.ts::sweep::unpaginated-limit');
+  });
+
+  it('does not flag a function that follows LastEvaluatedKey', () => {
+    const out = run({
+      'services/keys.ts': `${PAGED}
+export async function listKeys(id: string): Promise<string[]> {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({ TableName: TABLE_NAME, Limit: 50, ExclusiveStartKey: exclusiveStartKey })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items.map((i) => i.id as string);
+}`,
+    });
+    expect(out.code).toBe(0);
+  });
+
+  it('does not flag a { Limit } handed to a local paginating helper', () => {
+    // The taskService / plantService / coverage shape. The command is built
+    // inside the helper, which pages; the call sites are correct and must
+    // stay quiet or the gate is noise.
+    const out = run({
+      'services/tasks.ts': `${PAGED}
+async function queryAllPages(input: Record<string, unknown>): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({ ...input, ExclusiveStartKey: exclusiveStartKey })
+    );
+    items.push(...((result.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items;
+}
+
+export async function getTasks(id: string): Promise<Record<string, unknown>[]> {
+  return queryAllPages({ TableName: TABLE_NAME, KeyConditionExpression: 'PK = :pk', Limit: 100 });
+}`,
+    });
+    expect(out.code).toBe(0);
+  });
+
+  it('does not flag a Query with no Limit at all', () => {
+    const out = run({
+      'services/keys.ts': `${PAGED}
+export async function listKeys(id: string): Promise<string[]> {
+  const result = await dynamodb.send(new QueryCommand({ TableName: TABLE_NAME }));
+  return (result.Items ?? []).map((i) => i.id as string);
+}`,
+    });
+    expect(out.code).toBe(0);
+  });
+
+  it('accepts a baselined truncation, and reports it in the count', () => {
+    const out = run(
+      {
+        'services/keys.ts': `${PAGED}
+export async function lookupByHash(hash: string): Promise<string | null> {
+  const result = await dynamodb.send(
+    new QueryCommand({ TableName: TABLE_NAME, IndexName: 'GSI3', Limit: 1 })
+  );
+  return (result.Items?.[0]?.id as string) ?? null;
+}`,
+      },
+      {
+        'services/keys.ts::lookupByHash::unpaginated-limit': {
+          reason: 'point read by hash; one row is the whole answer',
+          callers: [],
+        },
+      }
+    );
+    expect(out.code).toBe(0);
+    expect(out.stdout).toContain('1 accepted occurrences (baseline 1, ratchet-only)');
+  });
+});
+
+/**
+ * Gap 1 of #457: the baseline key is `file::function::rule` and the reason
+ * beside it is prose nothing re-validates. A new CALLER can falsify the reason
+ * without moving the key — which is exactly what happened to
+ * `enrichment.readCacheEntry` one day after the gate shipped (#454 / #504).
+ * So the caller set is pinned too.
+ */
+describe('settled-read-state ratchet (backend) — pinned caller sets', () => {
+  const CACHE = `
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+
+export async function readCache(pk: string): Promise<string | null> {
+  try {
+    const r = await dynamodb.send(new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk } }));
+    return (r.Item?.v as string) ?? null;
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function lookupWithProvider(pk: string): Promise<string> {
+  const hit = await readCache(pk);
+  return hit ?? 'from-provider';
+}`;
+
+  const KEY = 'services/cache.ts::readCache::catch-returns-empty';
+  const REASON = 'every caller falls through to the provider, so nothing is published';
+
+  it('passes when the recorded caller set matches the code', () => {
+    const out = run(
+      { 'services/cache.ts': CACHE },
+      { [KEY]: { reason: REASON, callers: ['services/cache.ts::lookupWithProvider'] } }
+    );
+    expect(out.code).toBe(0);
+    expect(out.stdout).toContain('caller sets unchanged');
+  });
+
+  it('fails when a new caller appears — the Move Day case', () => {
+    const out = run(
+      {
+        'services/cache.ts': `${CACHE}
+
+export async function peekOnly(pk: string): Promise<string | null> {
+  return readCache(pk);
+}`,
+      },
+      { [KEY]: { reason: REASON, callers: ['services/cache.ts::lookupWithProvider'] } }
+    );
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('The set of callers of a baselined read has changed');
+    expect(out.stderr).toContain('+ services/cache.ts::peekOnly');
+  });
+
+  it('fails when a recorded caller is gone', () => {
+    const out = run(
+      { 'services/cache.ts': CACHE },
+      {
+        [KEY]: {
+          reason: REASON,
+          callers: ['services/cache.ts::lookupWithProvider', 'services/cache.ts::retired'],
+        },
+      }
+    );
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('- services/cache.ts::retired');
+  });
+
+  it('counts a caller in another file that imports the symbol by name', () => {
+    const out = run(
+      {
+        'services/cache.ts': CACHE,
+        'services/report.ts': `import { readCache } from './cache.js';
+export async function buildReport(pk: string): Promise<string | null> {
+  return readCache(pk);
+}`,
+      },
+      { [KEY]: { reason: REASON, callers: ['services/cache.ts::lookupWithProvider'] } }
+    );
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('+ services/report.ts::buildReport');
+  });
+
+  it('counts a caller reached through a namespace import', () => {
+    const out = run(
+      {
+        'services/cache.ts': CACHE,
+        'services/report.ts': `import * as cache from './cache.js';
+export async function buildReport(pk: string): Promise<string | null> {
+  return cache.readCache(pk);
+}`,
+      },
+      { [KEY]: { reason: REASON, callers: ['services/cache.ts::lookupWithProvider'] } }
+    );
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('+ services/report.ts::buildReport');
+  });
+
+  it('does not count a same-named function in a file that never imports it', () => {
+    const out = run(
+      {
+        'services/cache.ts': CACHE,
+        'services/unrelated.ts': `async function readCache(pk: string): Promise<string> {
+  return pk;
+}
+export async function localOnly(pk: string): Promise<string> {
+  return readCache(pk);
+}`,
+      },
+      { [KEY]: { reason: REASON, callers: ['services/cache.ts::lookupWithProvider'] } }
+    );
+    expect(out.code).toBe(0);
+  });
+
+  it('refuses a baseline entry that records no caller set at all', () => {
+    const out = run({ 'services/cache.ts': CACHE }, { [KEY]: REASON });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain('no recorded caller set');
+    expect(out.stderr).toContain(KEY);
   });
 });

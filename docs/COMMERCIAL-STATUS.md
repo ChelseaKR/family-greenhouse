@@ -4,14 +4,28 @@
 **Free registration reopened:** July 19, 2026
 **Paid-activity hold lifted:** September 1, 2026 — `commercialHoldActive: false` in `commercial-status.json` (PR #369)
 **Production payment gate opened:** September 2, 2026 — `payments_enabled = "1"` in the production tfvars (PR #377, release 0.23.3)
-**Status:** Free accounts open; paid Garden and Greenhouse plans on sale on the web
+**Annual and lifetime withdrawn from sale:** September 2, 2026 — [ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md); `withdrawnIntervals` in `backend/src/models/plans.ts`
+**Status:** Free accounts open; paid Garden and Greenhouse plans on sale on the web, **monthly only**
 
-Family Greenhouse accepts free Seedling accounts for households with up to 10
-plants; no credit card is required. Paid Garden and Greenhouse plans are sold on
-the hosted web app through Stripe Checkout — monthly or annual subscriptions
-that start with a 14-day trial, plus a one-time Garden lifetime purchase — and a
-household admin manages the plan from Settings → Billing via the Stripe customer
-portal. Paid plans are not sold inside the mobile apps.
+Family Greenhouse accepts free Seedling accounts for one home with up to 3
+people and 20 plants; no credit card is required. Paid Garden and Greenhouse
+plans are sold on the hosted web app through Stripe Checkout as **monthly
+subscriptions, a household's first of which starts with a 14-day trial** (the
+trial is once per household — `trialConsumedAt` in
+`backend/src/services/billing.ts` survives cancellation, so a household that
+resubscribes is charged at once), and a household admin manages
+the plan from Settings → Billing via the Stripe customer portal. Paid plans are
+not sold inside the mobile apps.
+
+Garden annual, Greenhouse annual, and the one-time Garden Lifetime purchase were
+withdrawn from sale on 2026-09-02 by [ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md):
+at the verified Plant.id per-identification cost, each of those cadences earns
+less per month than the tier's AI-cost ceiling. Households already on them keep
+their plans and their renewals — the Stripe prices are deliberately not archived
+— but a new one cannot be started. `withdrawnIntervals` in
+`backend/src/models/plans.ts` is the single authority; `isIntervalOffered()`
+reads it on both the publish path and the checkout path, so there is no separate
+list to keep in step.
 
 The source repository and its history remain public portfolio artifacts.
 Pricing, launch, and customer-acquisition documents written during the hold are
@@ -42,11 +56,19 @@ the exact string `"1"`). Both are open in production today.
   (`allow_admin_create_user_only = false`). This is an in-place user-pool policy
   change, not a pool replacement.
 - `GET /billing/plans` reports `paymentsAvailable` from the two gates. With
-  both open it includes the monthly, annual, and lifetime price fields
-  (`planSummary(plan, includePrices)` in `backend/src/models/plans.ts`); with
-  either shut it reports `false` and omits every price field, and the public
-  plan surfaces show no prices, intervals, purchase, upgrade, or portal
-  controls.
+  both open it includes the price fields (`planSummary(plan, includePrices)` in
+  `backend/src/models/plans.ts`); with either shut it reports `false` and omits
+  every price field, and the public plan surfaces show no prices, intervals,
+  purchase, upgrade, or portal controls.
+- A **withdrawn** cadence publishes as an explicit `null` price rather than a
+  number, so a current client renders "not available" instead of an offer. That
+  is why `annualPrice` and `lifetimePrice` publish as `null` on every tier
+  today, while `monthlyPrice` still carries a number on both paid tiers.
+- `POST /billing/checkout` refuses a withdrawn cadence with a 400 before it
+  reaches Stripe. The request schema's `isIntervalOffered` refine catches a
+  well-formed request; `createCheckoutSession` raises `INTERVAL_WITHDRAWN` for
+  any path that gets around the schema, and the handler maps it to the same 400. Both say "That billing option is no longer offered. Existing
+  subscriptions are unaffected."
 - `POST /billing/checkout` and `POST /billing/portal` call
   `assertPaymentActivityAllowed()` before configuration, database, or Stripe
   access. With either gate shut they fail with 503 (`Payments are currently
@@ -55,7 +77,9 @@ paused.` / `Billing access is currently paused.`) and originate nothing.
   to `"0"` at both layers, so a new environment never inherits live payment
   collection; production and staging each set it to `"1"` explicitly.
 - Production `stripe_price_id_*` values are populated for all five prices and
-  `stripe_price_ids_are_live = true`; staging carries test-mode ids with
+  `stripe_price_ids_are_live = true` — the annual and lifetime ids stay
+  configured on purpose, because the subscriptions already on them must keep
+  renewing (ADR 0012); staging carries test-mode ids with
   `stripe_price_ids_are_live = false`. `STRIPE_SECRET_KEY` and
   `STRIPE_WEBHOOK_SECRET` are GitHub Actions secrets forwarded as `TF_VAR_…`
   by the deploy workflows, never committed.
@@ -193,14 +217,23 @@ Elastic IPs, KMS customer keys, or hosted zones in the stack, and DynamoDB is
 
 Using Stripe test card `4242 4242 4242 4242`:
 
-- monthly, annual, and lifetime checkout each complete and grant entitlement
+- monthly checkout completes and grants entitlement
+- checkout for a **withdrawn** cadence is refused with a 400 and originates no
+  Stripe session — today that is Garden `year`, Garden `lifetime`, and
+  Greenhouse `year`
+- `GET /billing/plans` publishes `null` for every withdrawn cadence's price, and
+  the pricing page shows no interval toggle or Lifetime card for it
 - the webhook updates the household's plan (entitlement comes from the
   webhook, never from the checkout response)
 - the billing portal opens, and a plan change made there re-resolves
-  entitlement from the price id, not stale metadata
+  entitlement from the price id, not stale metadata — including for a household
+  still on a withdrawn annual or lifetime price
 - a second purchase attempt on a live subscription is refused with 409
-- a lifetime purchase cancels the prior subscription
 - cancelling returns the household to Seedling at period end
+
+Add back the annual and lifetime purchase checks only if a future decision puts
+one of those cadences back on sale by removing it from `withdrawnIntervals`.
+ADR 0012 records what would have to change first.
 
 ### 5. Configure Stripe in LIVE mode
 

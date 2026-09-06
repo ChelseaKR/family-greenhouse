@@ -4,27 +4,35 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { PricingGrid } from './PricingGrid';
+import { pricingJsonLd } from './pricingJsonLd';
 import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 
 /**
- * The "why would I pay for a plant app" band. Three claims, each one true of
- * the shipped product and checkable against code:
+ * The "why would I pay for a plant app" band. Four claims, each one true of
+ * the shipped product and checkable against code. The line between tiers is
+ * homes and hands, not collection size (ADR 0014):
  *
- *  - per-household billing: one subscription per household id, and every tier
- *    carries a member cap (backend/src/models/plans.ts, services/billing.ts);
- *  - raised caps: the free tier's plant cap is what a paid plan lifts, and
- *    per-plant schedules/photos/history are shipped features;
+ *  - per-household billing: one subscription per household id
+ *    (backend/src/models/plans.ts, services/billing.ts);
+ *  - a household that has to coordinate: Garden's member cap is unlimited
+ *    where free is three, and the analytics window is the full history where
+ *    free renders 30 days (`limits` in models/plans.ts);
+ *  - many homes, many hands: Greenhouse's `homes` limit is unlimited where
+ *    free and Garden are one (services/homesGate.ts), and API keys are
+ *    Greenhouse-only (handlers/apiKeys);
  *  - nothing locked away: cancelling returns the household to the free tier,
  *    over-cap records stay readable and editable, and household export is not
  *    plan-gated (GET /me/export requires auth only).
  *
- * No numbers here: caps come from the API and belong to the grid above.
+ * The caps in the grid above stay API-sourced; the numbers in the copy here
+ * are the free tier's, which the acquisition-surface test pins.
  */
 const WHY_PAID_POINTS = [
   { title: 'pricing.whyHouseholdTitle', body: 'pricing.whyHouseholdBody' },
-  { title: 'pricing.whyRoomTitle', body: 'pricing.whyRoomBody' },
+  { title: 'pricing.whyCoordinateTitle', body: 'pricing.whyCoordinateBody' },
+  { title: 'pricing.whyHomesTitle', body: 'pricing.whyHomesBody' },
   { title: 'pricing.whyLeaveTitle', body: 'pricing.whyLeaveBody' },
 ] as const;
 
@@ -40,10 +48,16 @@ export function PricingPage() {
       : 'Plans and pricing — Family Greenhouse',
     description: COMMERCIAL_HOLD_ACTIVE
       ? PUBLIC_REGISTRATION_AVAILABLE
-        ? 'Create a free Family Greenhouse account for up to 10 plants. Paid plans, purchases, and plan changes remain paused.'
+        ? 'Create a free Family Greenhouse account for one home, up to 3 people and 20 plants. Paid plans, purchases, and plan changes remain paused.'
         : 'Paid plans, purchases, plan changes, and new account registration are paused.'
-      : 'Family Greenhouse is priced per household, not per person. Start free with up to 10 plants and 6 household members, or choose a paid plan for a larger collection. Paid plans begin with a 14-day trial.',
+      : 'Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.',
     canonical: siteUrl('/pricing'),
+    // SoftwareApplication + Offer, from the guarded price mirror rather than
+    // from the runtime catalog: the prerendered HTML is written at build time,
+    // long before any fetch, and it is the only version of this page a crawler
+    // that runs no JavaScript ever sees. Which offers may be published — and
+    // why there is no aggregateRating — is decided in `pricingJsonLd`.
+    jsonLd: pricingJsonLd(),
   });
 
   if (native) {
@@ -79,9 +93,9 @@ export function PricingPage() {
         lede={
           COMMERCIAL_HOLD_ACTIVE
             ? PUBLIC_REGISTRATION_AVAILABLE
-              ? 'Free accounts include up to 10 plants and 6 household members. Paid plans, purchases, and plan changes remain paused.'
+              ? 'Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.'
               : 'New account registration, paid plans, purchases, and plan changes are currently paused.'
-            : 'Everyone you live with shares one plant list, one schedule, and one bill. Free accounts include up to 10 plants and 6 household members. Paid plans raise both limits and begin with a 14-day trial you can cancel any time.'
+            : 'Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.'
         }
       />
 
@@ -119,7 +133,7 @@ export function PricingPage() {
             <h2 className="font-serif text-2xl tracking-tight text-ink text-center">
               {t('pricing.whyHeading')}
             </h2>
-            <ul role="list" className="mt-8 grid gap-6 md:grid-cols-3">
+            <ul role="list" className="mt-8 grid gap-6 md:grid-cols-2">
               {WHY_PAID_POINTS.map((point) => (
                 <li
                   key={point.title}

@@ -13,7 +13,7 @@
 🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
 > **Paid activity hold — July 14, 2026; free registration reopened July 19, 2026.**
-> Family Greenhouse accepts free accounts for households with up to 10 plants.
+> Family Greenhouse accepts free accounts for one home with up to 3 people and 20 plants.
 > It is not currently accepting payments, offering paid plans, or generating
 > revenue. Pricing and billing material is retained as historical product-design
 > documentation. See
@@ -98,7 +98,7 @@ fix(billing): clamp price-id env lookup
 docs: rewrite README
 ```
 
-Types we use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. The commitlint hook in `.husky/` will reject anything else.
+Types we use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. The commitlint hook in `.githooks/` will reject anything else.
 
 ## Standards conformance
 
@@ -110,7 +110,7 @@ This repo is onboarded to the portfolio's `STANDARDS/` (vendored at `docs/standa
 | Code Quality               | Applies (TS/Node; Python N/A — no Python code in this repo)                     | Partial — strict TypeScript, zero-warning ESLint, coverage floors, CODEOWNERS, and branch rules are gated. Backend clears 80% on lines/statements/functions; backend branches (~76%) and all four frontend metrics remain ratcheted below the portfolio's 80% target, tracked under CQ-16/P1-5 |
 | Security & Supply-Chain    | Applies — **ASVS L2** (real PII: emails, phones, photos, household graphs)      | Partial — CodeQL, Semgrep, Gitleaks, npm audit, Scorecard, SHA-pinned Actions, and a complete dependency disposition are gated/evidenced; release SBOM, provenance, and signed-tag enforcement remain gaps                                                                                     |
 | CI/CD                      | Applies                                                                         | Met for current service shape — committed ruleset + CODEOWNERS, strict required checks, OIDC deploys, workflow audit, concurrency, and `make verify` parity; the ruleset keeps an owner break-glass bypass (note below); production deployment retains its explicit Environment approval       |
-| Release & Versioning       | Applies — tagged releases drive prod deploys                                    | Partial — root/workspace versions are aligned at 0.23.5; tag/version and CHANGELOG gates run at the tagged ref. Release SBOM/provenance and blocking signed-tag verification remain open                                                                                                       |
+| Release & Versioning       | Applies — tagged releases drive prod deploys                                    | Partial — root/workspace versions are aligned at 0.29.0; tag/version and CHANGELOG gates run at the tagged ref. Release SBOM/provenance and blocking signed-tag verification remain open                                                                                                       |
 | Observability              | Applies — backend ≈ Tier A-adapted (serverless), frontend ≈ Tier B (Web Vitals) | Met for current service shape — 28-day SLO contract, health-excluded RED metrics, burn-rate alerts, X-Ray, first-party browser RUM, release correlation, and regression gate; see `## Observability` below                                                                                     |
 | Performance                | Applies                                                                         | `size-limit`, Lighthouse, and the CI bundle-size job enforce the current frontend performance budget                                                                                                                                                                                           |
 | Accessibility              | Applies                                                                         | Partial — WCAG 2.2 AA axe coverage spans public and authenticated routes, Lighthouse and keyboard/reflow/reduced-motion gates pass; release-time screen-reader/high-contrast walkthrough and a published ACR/VPAT remain human/external gates                                                  |

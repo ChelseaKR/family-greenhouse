@@ -61,24 +61,6 @@ export function normalizeEmailLocale(value: unknown): EmailLocale {
     : DEFAULT_EMAIL_LOCALE;
 }
 
-/**
- * The locale to write a member's email in.
- *
- * `NotificationPreferences` has no `locale` field on main today — the audit's
- * finding was that "there is no field an email composer could read even if it
- * wanted to". A parallel branch (`feat/useful-emails`) adds one. This reads it
- * structurally so that the day the field lands, every household email switches
- * language with no change here; until then every caller gets the default.
- * Deliberately not a `notificationPrefs` edit: that file is being changed on
- * the other branch and a duplicate field would collide.
- */
-export function preferredEmailLocale(prefs: unknown): EmailLocale {
-  if (prefs && typeof prefs === 'object' && 'locale' in prefs) {
-    return normalizeEmailLocale((prefs as { locale?: unknown }).locale);
-  }
-  return DEFAULT_EMAIL_LOCALE;
-}
-
 // ---------------------------------------------------------------------------
 // Formatting primitives
 // ---------------------------------------------------------------------------
@@ -162,14 +144,21 @@ export function taskLabel(
 // ---------------------------------------------------------------------------
 
 /**
- * Every household email ends the same way: what it was, and the one link that
- * turns it off. The audit's finding — *"our emails have no unsubscribe link
- * today, which is a gap we'd rather name than hide"* — is quoted from the
- * product's own help copy. These emails do not repeat it.
+ * Every household email ends the same way: what it was, and the link that
+ * turns it off.
  *
- * A `List-Unsubscribe` header needs `SendEmailCommand` to become the v2 API,
- * which is `emailNotifier.ts` and belongs to the branch rewriting it; an
- * in-body link is what this branch can ship without touching that file.
+ * This footer is no longer the only opt-out, and the comment that used to
+ * live here — "a `List-Unsubscribe` header needs `SendEmailCommand` to
+ * become the v2 API" — stopped being true in #432. `emailNotifier.ts` sends
+ * raw MIME now, so the digest and the recap carry `List-Unsubscribe` and
+ * `List-Unsubscribe-Post` headers as well as a footer link
+ * (`digestReport.ts`, `digest.ts`).
+ *
+ * Both are kept on purpose: the header is what a mail client's one-click
+ * button uses, the footer link is what a reader clicks, and they resolve to
+ * the same route and the same state. This builder still emits only the
+ * settings link, because it also composes transactional mail — a reminder
+ * answers a task the recipient created and gets no unsubscribe.
  */
 function footer(settingsUrl: string, reason: string, locale: EmailLocale): string[] {
   return locale === 'es'

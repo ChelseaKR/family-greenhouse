@@ -10,6 +10,11 @@ import esLegal from '@/i18n/locales/es/legal.json';
 import enTranslation from '@/i18n/locales/en/translation.json';
 import esTranslation from '@/i18n/locales/es/translation.json';
 
+// `.ts` extension deliberate — see the note in ./nonEnglishCatalog.test.ts.
+// Without it this guard reads the compiled sibling `tsc -b` leaves behind, so
+// after any build it reports on the previous build's rule.
+import { manualChunks } from '../../../vite.manualChunks.ts';
+
 /**
  * The `legal.*` copy is deliberately NOT in the startup catalog: it is ~37 kB
  * of prose that only /legal/privacy, /legal/terms, /support and
@@ -82,19 +87,58 @@ describe('deferred legal catalog', () => {
     // catalog lives in. Nothing fails: the dynamic import still resolves, the
     // pages still render, and the split is silently undone. Measured against
     // PR #419's `i18n` pin, the deferred chunk collapsed to 154 B and the whole
-    // catalog reappeared inside a modulepreloaded chunk. So any rule naming the
-    // locales directory has to say something about `legal` — an exclusion.
-    const config = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
-    // `\\?` because the rule is written as a regex literal, where the path
-    // separators are escaped: /src\/i18n\/locales\//.
-    if (/i18n\\?\/locales/.test(config)) {
-      expect(
-        config,
-        'vite.config.ts pins src/i18n/locales/ to a manual chunk but never mentions legal: ' +
-          'that rule also captures locales/<lng>/legal.json and puts the deferred prose back ' +
-          'on the startup path. Exclude the legal fragments from the rule.'
-      ).toMatch(/legal/);
-    }
+    // catalog reappeared inside a modulepreloaded chunk.
+    //
+    // Run the real rule. Two earlier shapes of this check did not:
+    //
+    //   - a text search for the word `legal` in vite.config.ts, which any
+    //     comment satisfied without the rule doing anything;
+    //   - `await import('../../../vite.config')`, which — measured — handed
+    //     back a config Vite had already bundled and cached, so a config
+    //     patched to return a sentinel chunk name still reported the previous
+    //     build's rule.
+    //
+    // Lifting the `/…/.test(id)` predicates back out of the config's SOURCE
+    // TEXT fixed the staleness, but parsing regex literals needs an
+    // alternation over escapes and character classes that is ambiguous by
+    // construction — the polynomial backtracking CodeQL flags as js/redos.
+    // vite.manualChunks.ts exists so there is nothing left to parse: the
+    // import below is the exact function rollup is handed.
+    const chunkFor = (file: string) => manualChunks(`/repo/frontend/src/i18n/locales/en/${file}`);
+    const startupChunk = chunkFor('translation.json');
+    const legalChunk = chunkFor('legal.json');
+
+    expect(
+      startupChunk,
+      'the locales rule in vite.manualChunks.ts no longer captures the startup catalog, so it ' +
+        'is not doing what it says. Pin locales/<lng>/translation.json or drop the rule.'
+    ).toBeTypeOf('string');
+    expect(
+      legalChunk,
+      `a manualChunks rule captures locales/<lng>/legal.json into '${String(startupChunk)}', the ` +
+        'same chunk as the startup catalog. That prose is loaded on demand by ' +
+        'src/i18n/legalCatalog.ts; naming it in a chunk rule folds it back onto the startup ' +
+        'path. Match translation.json by name, or exclude the legal fragments.'
+    ).not.toBe(startupChunk);
+
+    // The rest of the rule chain, so this exercises the real function rather
+    // than one branch of it — and so a reordering that shadows the locales
+    // rule shows up here.
+    expect(manualChunks('/repo/frontend/node_modules/react-dom/client.js')).toBe('vendor');
+    expect(manualChunks('/repo/frontend/node_modules/@tanstack/react-query/build/x.js')).toBe(
+      'query'
+    );
+    expect(manualChunks('/repo/frontend/node_modules/@headlessui/react/dist/x.js')).toBe('ui');
+    expect(manualChunks('/repo/frontend/src/App.tsx')).toBeUndefined();
+
+    // And the config still delegates here, so the module cannot quietly become
+    // dead code while an inline rule does the real chunking. Plain substring
+    // checks over whitespace-collapsed source — no pattern to backtrack.
+    const config = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8')
+      .split(/\s+/)
+      .join(' ');
+    expect(config).toContain("import { manualChunks } from './vite.manualChunks'");
+    expect(config).toContain('manualChunks: isSsrBuild ? undefined : manualChunks');
   });
 
   it('is never imported eagerly: the chunk module has exactly one importer', () => {

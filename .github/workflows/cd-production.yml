@@ -77,6 +77,7 @@ jobs:
         # workflow-triggering ref.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
 
@@ -140,6 +141,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Setup Node.js
@@ -228,6 +230,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
@@ -375,33 +378,172 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Sync to S3
+        # The bucket name reaches the script through env, never through a
+        # `${{ }}` interpolation inside `run:` (zizmor `template-injection`):
+        # interpolation splices the value into the script text before bash
+        # ever sees it. The step above already reads the same output as
+        # $FRONTEND_BUCKET; this makes the two consistent.
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
         run: |
           # Hashed, immutable assets. Every HTML document is excluded here and
           # uploaded below with a no-cache header: the prerendered marketing
           # pages (dist/<route>/index.html) are rebuilt on every deploy, so a
           # 1-year immutable cache would pin stale copy at the edge and in
           # browsers until the URL changed — which it never does.
-          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
-            --delete \
+          #
+          # NO --delete here, deliberately. It used to be, and it broke every
+          # tab that was open across a release: the tab holds the PREVIOUS
+          # index chunk, which names the previous `<Route>-<hash>.js`, and the
+          # sync had just deleted that file. The next lazy navigation 404s and
+          # the user gets "The page's code couldn't be fetched" on the page
+          # they were about to use. Observed on /confirm-email minutes after
+          # this release — which is the worst possible page for it, because a
+          # confirmation link is followed once and often in a tab that has been
+          # sitting open.
+          #
+          # The old objects are content-hashed and immutable, so keeping them
+          # costs storage and nothing else. They are pruned below.
+          aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
             --cache-control "max-age=31536000,public" \
             --exclude "*.html" \
             --exclude "sw.js" \
             --exclude "push-handler.js" \
-            --exclude "*.json"
+            --exclude "*.json" \
+            --exclude "robots.txt" \
+            --exclude "sitemap.xml" \
+            --exclude ".well-known/*"
 
           # All HTML: the prerendered routes, the homepage, and app-shell.html
           # (CloudFront's error response + the service worker's offline
           # navigation fallback). --delete is scoped by the same filters, so a
           # route removed from the sitemap stops being served.
-          aws s3 sync dist s3://${{ needs.terraform.outputs.frontend_bucket }} \
+          aws s3 sync dist "s3://${FRONTEND_BUCKET}" \
             --delete \
             --exclude "*" \
             --include "*.html" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
-          aws s3 cp dist/sw.js s3://${{ needs.terraform.outputs.frontend_bucket }}/sw.js \
+          aws s3 cp dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
-          aws s3 cp dist/push-handler.js s3://${{ needs.terraform.outputs.frontend_bucket }}/push-handler.js \
+          aws s3 cp dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
             --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+          # robots.txt and sitemap.xml match none of the excludes above, so
+          # they were landing in the immutable tier with a 1-year max-age. The
+          # post-deploy invalidation flushes the CloudFront edge, but the
+          # RESPONSE still carries max-age=31536000 — so Googlebot's own cache
+          # keeps the old copy, and a new route added to the sitemap goes
+          # undiscovered through that channel until the crawler's entry ages
+          # out. An hour is short enough to propagate and long enough to cost
+          # nothing.
+          aws s3 cp dist/robots.txt "s3://${FRONTEND_BUCKET}/robots.txt" \
+            --cache-control "max-age=3600,public"
+          aws s3 cp dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
+            --cache-control "max-age=3600,public"
+
+          # The deep-link association files, when a build carries them. Neither
+          # would be uploaded correctly by the syncs above, and each fails a
+          # different way:
+          #
+          #   .well-known/assetlinks.json — matches `--exclude "*.json"` in the
+          #   immutable sync and `*.html` in the second, so NEITHER sync claims
+          #   it. It would never reach the bucket at all, and nothing would say
+          #   so: a successful deploy, and Android's verifier fetching a URL
+          #   that does not exist.
+          #
+          #   .well-known/apple-app-site-association — extensionless, so it
+          #   matched no exclude and rode the immutable sync up with
+          #   `max-age=31536000` and a guessed `binary/octet-stream`. Apple
+          #   requires `application/json`, and a 1-year immutable cache on the
+          #   file that names the signing team is the wrong lifetime for the
+          #   one document you edit when a certificate changes.
+          #
+          # `--exclude ".well-known/*"` above now keeps the generic sync off
+          # both, so this block is the only thing that uploads them and its
+          # headers are the headers they get.
+          #
+          # Guarded, because the files are not in the tree yet (#469 §2). The
+          # app-side half of deep linking needs the release keystore's SHA-256
+          # fingerprint and the Apple Team ID, which this repo cannot supply;
+          # this prepares the serving side so that adding them is a one-file
+          # change rather than a deploy debugging session. Until then both `if`s
+          # are false and the step is a no-op. scripts/check-well-known.mjs
+          # fails the gate if a file appears in frontend/public/.well-known/
+          # that this block does not name.
+          #
+          # max-age=300 because an association file changes exactly when a
+          # signing certificate or Team ID does, both platforms re-fetch on
+          # their own schedule, and a stale copy at the edge means verification
+          # keeps failing for a fix that has already shipped.
+          if [ -f dist/.well-known/assetlinks.json ]; then
+            aws s3 cp dist/.well-known/assetlinks.json \
+              "s3://${FRONTEND_BUCKET}/.well-known/assetlinks.json" \
+              --content-type "application/json" \
+              --cache-control "max-age=300,public"
+          fi
+          if [ -f dist/.well-known/apple-app-site-association ]; then
+            aws s3 cp dist/.well-known/apple-app-site-association \
+              "s3://${FRONTEND_BUCKET}/.well-known/apple-app-site-association" \
+              --content-type "application/json" \
+              --cache-control "max-age=300,public"
+          fi
+
+      - name: Prune superseded assets past the grace period
+        # Replaces the `--delete` removed from the asset sync above, with a
+        # delay so an open tab keeps working until it is refreshed.
+        #
+        # An object is deleted only when BOTH are true:
+        #   1. it is absent from the build just deployed, and
+        #   2. it was last modified more than GRACE_DAYS ago.
+        #
+        # Condition 1 is what makes this safe, and an S3 lifecycle rule cannot
+        # express it. `aws s3 sync` SKIPS unchanged files, so a chunk whose
+        # content is stable across releases — `vendor-*.js` is the obvious one
+        # — keeps an old LastModified while still being live. A pure age rule
+        # would delete exactly those: the assets so stable they never needed
+        # re-uploading. That failure mode is silent and total.
+        env:
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket }}
+          GRACE_DAYS: '7'
+        run: |
+          set -euo pipefail
+
+          cutoff=$(date -u -d "${GRACE_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "pruning assets absent from this build and older than ${cutoff}"
+
+          # What this build actually contains, as bucket keys.
+          ( cd dist && find . -type f | sed 's|^\./||' ) | sort > /tmp/shipped.txt
+
+          # What the bucket holds, with last-modified, oldest first.
+          aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
+            --query "Contents[?LastModified<'${cutoff}'].Key" --output text \
+            | tr '\t' '\n' | sed '/^$/d' | sort > /tmp/stale.txt
+
+          # Only the ones this build does not ship.
+          comm -23 /tmp/stale.txt /tmp/shipped.txt > /tmp/prune.txt
+          count=$(wc -l < /tmp/prune.txt | tr -d ' ')
+
+          if [ "$count" -eq 0 ]; then
+            echo "nothing to prune"
+            exit 0
+          fi
+
+          # Refuse to run away. A prune that suddenly wants to remove most of
+          # the bucket means the diff is wrong — an empty dist/, a changed
+          # prefix — not that the bucket is genuinely that stale. Deleting the
+          # live site is not a recoverable mistake, so stop and say so.
+          total=$(aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
+            --query 'length(Contents)' --output text)
+          if [ "$count" -gt $(( total / 2 )) ]; then
+            echo "::error::prune wants to delete ${count} of ${total} objects — refusing. The build/bucket diff is wrong, not the bucket."
+            exit 1
+          fi
+
+          echo "deleting ${count} superseded objects (of ${total}):"
+          sed 's/^/  /' /tmp/prune.txt
+          while read -r key; do
+            [ -n "$key" ] && aws s3 rm "s3://${FRONTEND_BUCKET}/${key}" --only-show-errors
+          done < /tmp/prune.txt
 
       - name: Invalidate CloudFront
         env:
@@ -433,6 +575,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
@@ -476,9 +619,30 @@ jobs:
             ver=$(aws lambda list-versions-by-function --function-name "$FUNCTION_NAME" \
               --query 'max_by(Versions[?Version!=`$LATEST`], &to_number(Version)).Version' \
               --output text | sort -n | tail -1)
+            # A function terraform created in THIS run has only $LATEST: no
+            # numbered version exists yet, because nothing has published one.
+            # That is not a broken snapshot, it is a function with nothing to
+            # roll back TO, and failing here would block the first deploy of
+            # every new Lambda this project ever adds. (Observed on v0.25.0:
+            # eight functions snapshotted, `emailEvents` — created minutes
+            # earlier by the same apply — had none.)
+            #
+            # Omitting it from prev-versions.txt is the correct outcome: the
+            # rollback job iterates that file, so an absent line means the new
+            # function is simply left alone, while every pre-existing function
+            # still restores. A function that has EVER deployed will always
+            # have a published version, so this can only be reached on a first
+            # deploy — an existing function reporting none still fails below.
             if [ -z "$ver" ] || [ "$ver" = "None" ]; then
-              echo "::error::${FUNCTION_NAME}: no published version is available for rollback"
-              exit 1
+              created=$(aws lambda get-function-configuration \
+                --function-name "$FUNCTION_NAME" \
+                --query 'LastModified' --output text 2>/dev/null || echo "")
+              if [ -z "$created" ] || [ "$created" = "None" ]; then
+                echo "::error::${FUNCTION_NAME}: function is missing entirely — terraform did not create it"
+                exit 1
+              fi
+              echo "  – ${FUNCTION_NAME} is new (only \$LATEST); nothing to snapshot, excluded from rollback"
+              continue
             fi
 
             # Materialize the captured package before mutating any function.
@@ -599,6 +763,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Setup Node.js
@@ -636,6 +801,28 @@ jobs:
           code=$(curl -s -o /dev/null -w "%{http_code}" "$SITE_URL")
           test "$code" = "200" || { echo "Frontend HTTP $code"; exit 1; }
 
+      # #615. A 200 on `/` says CloudFront answered. It does not say the
+      # distribution can still tell a missing object from a page: until this
+      # release, `/assets/<anything>` answered 200 with the SPA shell, so a
+      # deploy that dropped the JS bundle would have served 200 on every route
+      # — carrying the very og:site_name string `aws_route53_health_check.site`
+      # searches for — while no browser could boot the app.
+      #
+      # This asserts the contract that replaced it: under `/assets/` every name
+      # carries the hash of its own bytes, so a name that does not exist is a
+      # 404, and that 404 does not contain the health check's search string.
+      #
+      # It runs here rather than on the fifteen-minute uptime cron because it
+      # is a property of the DISTRIBUTION: it becomes true when the `terraform`
+      # job above applies, and on a cron it would report the gap between a
+      # merge and the next release as an outage. The predicate behind it is
+      # unit-tested in CI (`npm run test:checks`), so it cannot stop meaning
+      # anything between releases.
+      - name: A missing asset must 404, not serve the app shell (#615)
+        env:
+          SITE_URL: ${{ needs.terraform.outputs.site_url }}
+        run: node scripts/synthetic-page-check.mjs --base-url "$SITE_URL" --missing-asset-404
+
       - name: Critical-path e2e (post-deploy-smoke)
         working-directory: frontend
         env:
@@ -653,6 +840,64 @@ jobs:
           name: playwright-smoke-report-${{ needs.validate.outputs.version }}
           path: frontend/playwright-report
           if-no-files-found: ignore
+
+  sweep-test-fixtures:
+    name: Sweep leaked post-deploy test fixtures
+    runs-on: ubuntu-latest
+    # `always()` is the entire point. The smoke test's own teardown is careful
+    # and complete, and it still left 35 orphan households in production —
+    # because it cannot run when the job is skipped, the run is cancelled, or
+    # the runner dies. This job must therefore run when smoke-tests FAILED, was
+    # SKIPPED, or was CANCELLED, and clean up what a previous run left behind.
+    # It needs Terraform only for the table name, so that is the one result it
+    # requires.
+    needs: [validate, terraform, smoke-tests]
+    if: ${{ always() && needs.terraform.result == 'success' }}
+    # OIDC: assumes AWS_PRODUCTION_ROLE_ARN for the DynamoDB reads and deletes.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Setup Node.js
+        # Cache-free for the same reason the smoke-tests job is: this job holds
+        # `id-token: write`, and CICD-24 forbids pairing a broad OIDC grant with
+        # Actions cache read/write in one job.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Only rows carrying `isTestFixture: true` — an attribute no application
+      # code path writes — and only fixtures older than the age gate, so this
+      # can never race a smoke run that is still going. A household holding a
+      # member who is not a fixture user is skipped and reported, never
+      # deleted. Legacy (pre-marker) debris is NOT swept here: it cannot be
+      # identified by rule, so it stays an operator decision made by running
+      # scripts/sweep-test-fixtures.mjs with --include-legacy by hand.
+      - name: Sweep fixtures older than the age gate
+        env:
+          TABLE_NAME: ${{ needs.terraform.outputs.dynamodb_table_name }}
+        run: |
+          node scripts/sweep-test-fixtures.mjs \
+            --table "$TABLE_NAME" \
+            --region "$AWS_REGION" \
+            --min-age-hours 3 \
+            --apply
 
   cleanup-success-snapshot:
     name: Purge successful release rollback snapshot
@@ -701,6 +946,7 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
@@ -897,8 +1143,13 @@ jobs:
 
       - name: Report successful rollback
         if: ${{ success() && steps.verify_rollback.outcome == 'success' }}
+        # Version reaches the script through env, not `${{ }}` interpolation
+        # inside `run:` (zizmor `template-injection`) — the same pattern the
+        # validate job's steps already use.
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          echo "::warning::Production deploy of ${{ needs.validate.outputs.version }} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
+          echo "::warning::Production deploy of ${VERSION} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
 
   notify:
     name: Notify

@@ -13,6 +13,104 @@ are build artifacts and gitignored.
   reads the injected `window.Capacitor` global so web visitors never download
   the Capacitor runtime.
 
+## Native capabilities
+
+This is the whole list. `scripts/validate-store-release.mjs` asserts that the
+table names exactly the Capacitor plugins in `frontend/package.json`, and that
+both native projects actually link each one — so a plugin cannot be added,
+removed, or left un-synced without this table moving with it.
+
+<!-- capacitor-plugins:start -->
+
+| Plugin                          | What it backs                                                                                                                                      |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below. |
+
+<!-- capacitor-plugins:end -->
+
+Everything else the apps do is the same web code running in a WebView. Two
+things that look native and are not, because both have been written into
+review notes before and neither is true:
+
+- **Photos.** Every photo path is a plain `<input type="file">`
+  (`PlantImageUpload.tsx`, `AddPlantPage.tsx`, `LeafHealthCard.tsx`,
+  `SitterPhotoBack.tsx`, `CaretakerPage.tsx`). There is no `@capacitor/camera`.
+  `LeafHealthCard` adds `capture="environment"`, which makes iOS open the
+  camera directly from the picker — **this is why `NSCameraUsageDescription`
+  and `NSPhotoLibraryUsageDescription` are in `Info.plist` and they must stay**;
+  iOS terminates the app if a purpose string is missing when the picker opens.
+  They are load-bearing for the WebView picker, not leftovers from a camera
+  plugin. What they are not is a native capability a reviewer can distinguish
+  from the mobile website.
+- **Offline.** The shells work offline because `dist/` is copied into the
+  binary, not because anything caches at runtime. On iOS the shell is served
+  from `capacitor://localhost`, a custom `WKURLSchemeHandler` scheme where
+  service workers are unavailable, so `initPwaRegistration()`
+  (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
+  The PWA offline story is a web-only feature.
+
+Not present anywhere in the tree: deep links. The only Android `intent-filter`
+is `MAIN`/`LAUNCHER`; `ios/App/App/App.entitlements` exists but declares only
+`aps-environment`, no Associated Domains; and no `assetlinks.json` or
+`apple-app-site-association` is served. So every link the backend mails —
+invites, sitter links, the `/tasks?filter=due` reminder link, unsubscribe, the
+calendar feed — opens the browser even for a user who has the app installed,
+and asks them to sign in again. Closing that needs three things this repo
+cannot supply on its own: `@capacitor/app` (nothing else delivers `appUrlOpen`
+to the WebView), the release signing certificate's SHA-256 fingerprint for
+`assetlinks.json`, and the Apple Team ID for `apple-app-site-association`.
+Half of it is worse than none: an `intent-filter` with `autoVerify="true"` and
+no matching `assetlinks.json` fails verification on Android 12+, so links keep
+opening the browser while the manifest claims otherwise. Tracked in
+[#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) §2.
+
+### The serving half is ready; the app half is not
+
+The deploy and CDN path for the two association files is now wired and gated,
+so the day the values above exist, publishing them is a one-file change rather
+than a debugging session. Nothing app-side was enabled — no entitlement, no
+`autoVerify` intent-filter, no invented fingerprint or Team ID — precisely
+because half a setup is worse than none.
+
+**What is ready.** Drop a file at `frontend/public/.well-known/assetlinks.json`
+or `frontend/public/.well-known/apple-app-site-association`, and:
+
+- Both CD workflows and `scripts/deploy.sh` upload it explicitly, with
+  `--content-type application/json` and `max-age=300`. The uploads are guarded
+  on the file existing, so they are no-ops until it does.
+- The immutable asset sync excludes `.well-known/*`, so nothing else can claim
+  those keys. This matters: before, `assetlinks.json` was excluded from the
+  first sync by its `*.json` filter and not picked up by the second sync's
+  `*.html` filter, so **no sync uploaded it at all** and the deploy still went
+  green; `apple-app-site-association` is extensionless, so it matched no
+  exclude and went up with a 1-year immutable cache and a guessed
+  `binary/octet-stream`.
+- The CloudFront viewer-request function passes `/.well-known/` through
+  untouched. Without that, `apple-app-site-association` — extensionless by
+  Apple's spec — was rewritten to `/app-shell.html`, so Apple would have
+  fetched `200 text/html` no matter what the deploy uploaded. Passing it
+  through also means a missing file answers an honest 404 instead of a 200
+  carrying HTML, which is the difference between Android's verifier reporting
+  "not found" and reporting a JSON parse error.
+- `npm run well-known:check` (`scripts/check-well-known.mjs`, a step in
+  `npm run verify`) fails if any of that is removed, or if a file appears in
+  `frontend/public/.well-known/` that the deploy path does not name or that is
+  not valid JSON.
+
+**What is still blocked, and on whom.** All three are maintainer-held values;
+none can be derived from this repository:
+
+| Needed                                                        | Where it comes from                                                                                    | What it unblocks                                                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity      | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter                                               |
+| Apple Team ID                                                 | Apple Developer → Membership                                                                           | `apple-app-site-association` (`<TeamID>.net.familygreenhouse.app`), and only then the Associated Domains entitlement |
+| `@capacitor/app`                                              | `npm i @capacitor/app` in `frontend`, plus a row in the plugin table above and an `appUrlOpen` handler | the WebView actually navigating to the incoming URL instead of opening cold                                          |
+
+The order matters and is the whole reason the app half is not staged here: the
+association file has to be **live and verifiable at the domain first**, then
+the intent-filter and entitlement. Reversed, Android 12+ records a failed
+verification and keeps sending links to the browser.
+
 ## Build flow
 
 ```bash
@@ -80,6 +178,13 @@ Current state: native registration and delivery are disabled in the product UI.
 Email/SMS reminders still work. Do not restore the toggle until the following
 delivery work is complete and verified end to end.
 
+This is now enforced rather than remembered. `scripts/validate-store-release.mjs`
+treats a call site for `registerNativePush()` anywhere in `frontend/src` as
+"the push UI is reachable", and from that point requires the committed iOS
+entitlements below in every mode, plus `google-services.json` in
+`--production`. Wiring the toggle back up without the delivery material fails
+the build instead of shipping a reminder switch that cannot deliver.
+
 Remaining work for delivery:
 
 1. **Android (FCM):** create a Firebase project, add the app
@@ -87,16 +192,48 @@ Remaining work for delivery:
    `frontend/android/app/`. The Gradle build already applies the
    google-services plugin only when that file exists, so the project builds
    fine without it (push simply won't work).
-2. **iOS (APNs):** in the Apple Developer portal create an APNs key; in Xcode
-   enable the **Push Notifications** capability on the App target (the
-   AppDelegate APNs forwarding is already wired). Easiest delivery path is
-   uploading the APNs key to the same Firebase project and sending everything
-   through FCM.
-3. **Backend sender:** a `sendDevicePush` sibling to
-   `notifier.sendBrowserPush` that calls the FCM HTTP v1 API with the stored
-   tokens, pruning tokens FCM reports as dead (mirror the 404/410 cleanup the
-   web push path does). Needs the Firebase service-account JSON in Secrets
-   Manager + reminder Lambda wiring.
+2. **iOS (APNs):** in the Apple Developer portal create an APNs key, and
+   enable the Push Notifications capability for the App ID. The Xcode half is
+   **already committed** and no longer a manual step:
+   `ios/App/App/App.entitlements` declares `aps-environment` and both build
+   configurations set `CODE_SIGN_ENTITLEMENTS`, so a fresh clone archives with
+   the entitlement instead of silently omitting it. The value is
+   `$(APS_ENVIRONMENT)`, set to `development` in Debug and `production` in
+   Release, so an archive cannot ship a sandbox APNs environment — the failure
+   that mints tokens the production gateway rejects and reads, from the
+   backend, as a delivery bug. `tests/unit/config/iosEntitlements.test.ts`
+   holds all of that; `scripts/validate-store-release.mjs` additionally
+   requires it once `registerNativePush()` has a call site. What is still
+   outstanding here is the Apple-side key and the AppDelegate forwarding is
+   already wired. Easiest delivery path is uploading the APNs key to the same
+   Firebase project and sending everything through FCM.
+3. **Backend sender: written and wired; unconfigured.** `notifier.sendDevicePush`
+   is the sibling of `sendBrowserPush`, and `services/fcmNotifier.ts` is the
+   FCM HTTP v1 transport behind it (RS256 service-account JWT → OAuth2 access
+   token → `messages:send`, no `firebase-admin` in the Lambda bundle). It runs
+   on the same `browser` preference and the same reminder marker as web push,
+   because to a user they are one channel reached over two transports, and it
+   prunes tokens FCM reports as `UNREGISTERED` — the native form of the
+   404/410 cleanup the web-push path does. `INVALID_ARGUMENT` deliberately
+   does NOT prune: FCM returns it for a malformed message as well as a
+   malformed token, so pruning on it would delete the whole installed base's
+   registrations over one bad payload.
+
+   What is left is credentials, not code. The Lambdas read the Firebase
+   service-account JSON from the Secrets Manager id in
+   `FCM_SERVICE_ACCOUNT_SECRET_ID` (Terraform:
+   `fcm_service_account_secret_id`), which is **blank in every environment**.
+   While it is blank the sender makes no network call and no Secrets Manager
+   call: it logs one `device_push_unconfigured` line per Lambda container and
+   the reminder path behaves exactly as it did before it existed. Filling it
+   in needs items 1 and 2 above to have happened first — the Firebase project
+   issues the service account, and the APNs key uploaded to that project is
+   what makes iOS work.
+
+   Delivery is still not verified end to end, and the toggle stays off until
+   it is. Restoring it is a separate frontend change (a `registerNativePush()`
+   call site), and `scripts/validate-store-release.mjs` will then require
+   `google-services.json` and the iOS entitlements.
 
 ## Store submission checklist
 
@@ -137,10 +274,22 @@ Remaining work for delivery:
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra
-      scrutiny. Camera photo capture + the offline app shell are
-      the differentiation to call out in review notes. If rejected under 4.2,
-      the usual fixes are adding haptics, widgets, or native share — talk to
-      review, don't resubmit blind.
+      scrutiny, and **there is currently no native capability to point a
+      reviewer at.** Do not write review notes that claim otherwise. This item
+      used to name "camera photo capture + the offline app shell"; neither
+      survives a reviewer opening the app. Photo capture is the WebView file
+      picker, identical to the website in mobile Safari; the app opens offline
+      because the bundle is inside the binary, which is what wrapping a web app
+      means rather than a differentiator; and the one linked plugin, push
+      notifications, is deliberately unreachable from the UI. All three are
+      documented under "Native capabilities" above. Closing the gap is a
+      product decision tracked in
+      [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) — the
+      candidates are native camera capture, Universal Links / App Links, or
+      finishing push delivery. A 4.2 rejection is a multi-week loop, so decide
+      before submitting rather than after. If rejected under 4.2, the usual
+      fixes are haptics, widgets, or native share — talk to review, don't
+      resubmit blind.
 - [ ] Demo credentials for a seeded household in the review notes (both
       stores log into the app during review).
 

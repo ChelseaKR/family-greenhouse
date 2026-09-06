@@ -64,9 +64,31 @@ A repo whose value is "the state of the world on a date" (a periodically-regener
 ```bash
 # keyless signed tag via gitsign (preferred — no GPG key management)
 git tag -s v1.4.0 -m "v1.4.0"
+git tag -v v1.4.0                                     # verify before pushing (see below)
 git push origin v1.4.0
 gh workflow run release.yml --ref main -f tag=v1.4.0  # trusted-main release (§4)
 ```
+
+**Verifying a tag locally.** `git tag -v` needs `gpg.ssh.allowedSignersFile` to
+point at the committed `.github/allowed_signers`; git has no default that finds
+a file the repo already tracks. `scripts/install-git-hooks.mjs` sets it during
+`npm ci`, so a clone that has run install needs nothing further. If you see
+
+```
+error: gpg.ssh.allowedSignersFile needs to be configured and exist for ssh signature verification
+```
+
+the config is missing, **not** the signature — set it with:
+
+```bash
+git config gpg.ssh.allowedSignersFile .github/allowed_signers
+```
+
+Keep the path relative so it survives a clone to any directory. Unconfigured,
+`git tag -v` exits 1 on a good tag: it fails closed, so this is a false
+negative rather than a signature you can trust by accident. Git prints the tag
+body before the error, which is what makes it look like it passed if you read
+only the terminal — check the exit code (#582).
 
 ### 3.2 CHANGELOG — Keep a Changelog 1.1.0 — AUTO-GATE on presence, REVIEW-GATE on quality
 Every release-producing repo keeps a `CHANGELOG.md` in **[Keep a Changelog 1.1.0](https://keepachangelog.com/)** format with an `## [Unreleased]` section, reverse-chronological entries, and `Added/Changed/Deprecated/Removed/Fixed/Security` groupings. SemVer links at the bottom.

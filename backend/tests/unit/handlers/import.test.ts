@@ -139,13 +139,13 @@ describe('POST /plants/import', () => {
       { index: 0, status: 'created', plantId: 'p1' },
       { index: 1, status: 'created', plantId: 'p2' },
     ]);
-    // Reuses the single-create path — seedling plan cap (10) handed down.
+    // Reuses the single-create path — seedling plan cap (20) handed down.
     expect(plantService.createPlant).toHaveBeenNthCalledWith(
       1,
       { name: 'Pothos', tags: ['trailing'] },
       'hh-1',
       'user-1',
-      10
+      20
     );
   });
 
@@ -253,6 +253,45 @@ describe('POST /plants/import', () => {
     const body = JSON.parse(res.body);
     expect(body).toMatchObject({ created: 0, skipped: 2, planLimitHit: true });
     expect(activity.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'hands the SEEDLING cap to the service when the Garden subscription is %s',
+    async (status) => {
+      // Import shares POST /plants' cap. Resolving it off planId alone let a
+      // household that had stopped paying import its way to Garden's 200
+      // plants while single-plant creation refused it at Seedling's 20.
+      const plantService = await import('../../../src/services/plantService.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { importPlants } = await import('../../../src/handlers/plants/import.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      });
+      vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'One'));
+      const event = buildEvent({ plants: [{ name: 'One' }] });
+      await importPlants(event, fakeContext, () => {});
+      expect(plantService.createPlant).toHaveBeenCalledWith(
+        expect.anything(),
+        'hh-1',
+        'user-1',
+        20
+      );
+    }
+  );
+
+  it('hands the full Garden cap to the service while the subscription is active', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const billing = await import('../../../src/services/billing.js');
+    const { importPlants } = await import('../../../src/handlers/plants/import.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'garden',
+      status: 'active',
+    });
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'One'));
+    const event = buildEvent({ plants: [{ name: 'One' }] });
+    await importPlants(event, fakeContext, () => {});
+    expect(plantService.createPlant).toHaveBeenCalledWith(expect.anything(), 'hh-1', 'user-1', 200);
   });
 
   it('a non-cap row failure skips only that row and continues', async () => {

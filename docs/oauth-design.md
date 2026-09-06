@@ -8,8 +8,15 @@
 ## Why API keys aren't enough
 
 Today's keys (`services/apiKeys.ts`) are household-scoped bearer secrets:
-SHA-256-hashed at rest, looked up via GSI3, carrying scope arrays
-(`read:*`, `write:tasks`), Greenhouse-gated, admin-issued. They're right for
+scrypt-hashed at rest with a fixed application salt, looked up via GSI1,
+carrying scope arrays (`read:*`, `write:tasks`), Greenhouse-gated,
+admin-issued. The salt is fixed rather than per-row on purpose: lookup
+resolves an incoming key with a single point read on
+`APIKEY_HASH#{hash}`, so a random per-hash salt (bcrypt/argon2) would make
+lookup impossible — and a static salt gives up nothing here because the
+input is a 192-bit CSPRNG value, not a human-chosen password. scrypt is
+memory-hard, which is what satisfies the `js/insufficient-password-hash`
+CodeQL policy that an unsalted SHA-256 digest fails. They're right for
 "my own script" and wrong for "a third-party app my users sign into":
 
 - **No user consent flow.** Only a household admin can mint a key, and the
@@ -92,9 +99,18 @@ grants or a branded consent screen; we'd be fighting it forever.
 ```
 OAUTHCLIENT#{clientId}          | METADATA            — name, redirectUris[], logo, status, ownerEmail
 HOUSEHOLD#{hhId}                | OAUTHGRANT#{userId}#{clientId} — scopes[], grantedAt
-OAUTH#CODE#{sha256(code)}       | METADATA            — clientId, userId, hhId, scopes, codeChallenge, ttl 60s, one-time (conditional delete)
-OAUTH#REFRESH#{sha256(token)}   | METADATA            — grant ref, family id, ttl 90d, rotated-on-use
+OAUTH#CODE#{hash(code)}         | METADATA            — clientId, userId, hhId, scopes, codeChallenge, ttl 60s, one-time (conditional delete)
+OAUTH#REFRESH#{hash(token)}     | METADATA            — grant ref, family id, ttl 90d, rotated-on-use
 ```
+
+`hash(...)` here is the same construction `apiKeys.ts` uses today —
+deterministic scrypt with a fixed application salt — not a bare SHA-256
+digest. Both of these are high-entropy bearer credentials looked up by their
+own hash, so they need the same two properties for the same two reasons:
+deterministic (the lookup is a point read) and memory-hard (the
+`js/insufficient-password-hash` CodeQL policy this repo enforces rejects an
+unsalted digest). Settling it here rather than at implementation time is the
+point of writing it down.
 
 Access tokens are **short-lived (15 min) signed JWTs** (KMS asymmetric key,
 `kid` in header) so the API authorizer verifies them statelessly — no DDB

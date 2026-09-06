@@ -50,6 +50,20 @@ export interface HelpSection {
   id: string;
   title: string;
   description: string;
+  /**
+   * SERP copy for `/help/<id>`, kept separate from `title`/`description`
+   * because those two have on-page jobs: `title` is the H1 AND the sidebar
+   * nav label, `description` is the PageIntro lede. Optimised for the nav
+   * they read as labels ("Your data", "Tasks and streaks") — strings nobody
+   * types into a search box — and the ledes run 41-74 characters, well under
+   * the ~110 floor, so Google discarded them and synthesised its own snippet
+   * on all nine pages.
+   *
+   * Same split `careGuides.ts` already uses for the same reason. Both fall
+   * back to title/description when absent.
+   */
+  metaTitle?: string;
+  metaDescription?: string;
   articles: HelpArticle[];
   /**
    * Hidden inside the iOS/Android shells. The store builds neither sell plans
@@ -64,6 +78,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'getting-started',
     title: 'Getting started',
     description: 'Your first plant, and what the app does with it.',
+    metaTitle: 'How to Add Your First Plant — Family Greenhouse',
+    metaDescription:
+      'Add your first plant, understand the care tasks Family Greenhouse creates for it automatically, and what happens when a species has no guide.',
     articles: [
       {
         id: 'add-first-plant',
@@ -155,6 +172,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'plants',
     title: 'Plants and photos',
     description: 'Photos, limits, importing, and what happens when a plant dies.',
+    metaTitle: 'Plant Photos, Limits & Importing — Family Greenhouse',
+    metaDescription:
+      'Photo requirements and size limits, how many plants your plan allows, importing an existing collection, and what to do when a plant dies.',
     articles: [
       {
         id: 'photo-requirements',
@@ -179,13 +199,14 @@ export const HELP_SECTIONS: HelpSection[] = [
               caring for frees a slot immediately, and keeps all of its history.
             </p>
             <p>
-              The caps are 10 plants on the free Seedling plan, 500 on Garden and 5,000 on
+              The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on
               Greenhouse. Nothing is ever deleted for being over a cap; you just can&rsquo;t add
-              more until you are back under it.
+              more until you are back under it. A household that was already above a cap when it
+              changed keeps every plant it has.
             </p>
           </>
         ),
-        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 10 plants on the free Seedling plan, 500 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it.',
+        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it. A household that was already above a cap when it changed keeps every plant it has.',
       },
       {
         id: 'plant-died',
@@ -240,7 +261,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
             <p>
               It is metered per household, per calendar month, and resets on the 1st:{' '}
-              <strong>3 identifications on Seedling, 30 on Garden, 100 on Greenhouse</strong>. The
+              <strong>1 identification on Seedling, 30 on Garden, 100 on Greenhouse</strong>. The
               app does not show a running count, so the first you&rsquo;ll hear of the limit is a
               message when you reach it. An attempt is counted even if the service then fails, so a
               timeout can still use one.
@@ -252,7 +273,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. It is metered per household per calendar month and resets on the 1st: 3 identifications on Seedling, 30 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
+        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. It is metered per household per calendar month and resets on the 1st: 1 identification on Seedling, 30 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
       },
       {
         id: 'leaf-health',
@@ -275,13 +296,15 @@ export const HELP_SECTIONS: HelpSection[] = [
               you ran one and what the verdict was.
             </p>
             <p>
-              If the server can&rsquo;t reach the model you get a clearly-labelled demo result
-              instead of a real one — it says &ldquo;Demo result&rdquo; on the card. Don&rsquo;t act
-              on that.
+              If the server can&rsquo;t reach the model you are told so — the check fails with
+              &ldquo;temporarily unavailable&rdquo; and nothing is analysed. On a demo or preview
+              server you instead get a clearly-labelled demo result that says &ldquo;Demo
+              result&rdquo; on the card. Don&rsquo;t act on that. Either way, you never get an
+              assessment the model did not actually make.
             </p>
           </>
         ),
-        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped at 200 checks per household per calendar month, resetting on the 1st. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model you get a clearly labelled demo result instead of a real one; do not act on that.',
+        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped at 200 checks per household per calendar month, resetting on the 1st. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model the check fails with "temporarily unavailable" and nothing is analysed; on a demo or preview server you instead get a clearly labelled demo result, which you should not act on. Either way you never get an assessment the model did not actually make.',
       },
     ],
   },
@@ -290,6 +313,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'tasks',
     title: 'Tasks and streaks',
     description: 'Completing, snoozing, and what the streak number really means.',
+    metaTitle: 'Care Tasks, Snoozing & Streaks — Family Greenhouse',
+    metaDescription:
+      'How marking a task done differs from snoozing it, what the streak number actually counts, and how to pause tasks while you are away.',
     articles: [
       {
         id: 'done-vs-snooze',
@@ -355,6 +381,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'reminders',
     title: 'Reminders and notifications',
     description: 'Why a reminder did or didn’t arrive, and how to turn things off.',
+    metaTitle: 'Why Didn’t My Plant Reminder Arrive? — Family Greenhouse',
+    metaDescription:
+      'Fix missing watering reminders: browser notification permissions, quiet hours and time zones, the weekly digest, and how to turn emails off.',
     articles: [
       {
         id: 'no-reminder',
@@ -456,26 +485,31 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         id: 'stop-emails',
-        q: 'How do I stop the emails? There’s no unsubscribe link.',
+        q: 'How do I stop the emails?',
         a: (
           <>
             <p>
-              Correct — our emails have no unsubscribe link today, which is a gap we&rsquo;d rather
-              name than hide. Turn them off in <em>Settings → Notifications</em> by unticking{' '}
-              <strong>Email</strong>. That also stops the weekly digest and the annual recap.
+              The weekly digest and the annual recap carry an{' '}
+              <strong>Unsubscribe from these</strong> link in the footer, and they are sent with the
+              headers that put a one-click <strong>Unsubscribe</strong> button at the top of the
+              message in Gmail, Apple Mail and other clients that support them. Either one works in
+              a single click, and neither needs you to be signed in.
             </p>
             <p>
-              If you want reminders but not the Monday summary, untick just{' '}
+              For finer control, open <em>Settings → Notifications</em>. Unticking{' '}
+              <strong>Email</strong> stops everything, including task reminders — those carry no
+              unsubscribe link of their own, because they are answering a task you created. If you
+              want reminders but not the Monday summary, untick just{' '}
               <strong>Weekly plant digest</strong> and leave email on. One email always goes out
               regardless of preferences: the welcome message when you first create a household.
             </p>
             <p>
-              If you can&rsquo;t sign in to change this, email{' '}
+              If you can&rsquo;t sign in and have no recent digest to unsubscribe from, email{' '}
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and we&rsquo;ll do it for you.
             </p>
           </>
         ),
-        text: 'Correct, our emails have no unsubscribe link today, which is a gap we would rather name than hide. Turn them off in Settings then Notifications by unticking Email. That also stops the weekly digest and the annual recap. If you want reminders but not the Monday summary, untick just Weekly plant digest and leave email on. One email always goes out regardless of preferences: the welcome message when you first create a household. If you cannot sign in to change this, email support and we will do it for you.',
+        text: 'The weekly digest and the annual recap carry an Unsubscribe from these link in the footer, and they are sent with the headers that put a one-click Unsubscribe button at the top of the message in Gmail, Apple Mail and other clients that support them. Either one works in a single click, and neither needs you to be signed in. For finer control, open Settings then Notifications. Unticking Email stops everything, including task reminders, which carry no unsubscribe link of their own because they are answering a task you created. If you want reminders but not the Monday summary, untick just Weekly plant digest and leave email on. One email always goes out regardless of preferences: the welcome message when you first create a household. If you cannot sign in and have no recent digest to unsubscribe from, email support and we will do it for you.',
       },
       {
         id: 'weekly-digest',
@@ -537,6 +571,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'households',
     title: 'Households and members',
     description: 'Sharing with the people you live with, and taking access back.',
+    metaTitle: 'Invite Household Members & Share Plants — Family Greenhouse',
+    metaDescription:
+      'Invite the people you live with, the difference between admins and members, what each person can see, and how to remove someone’s access.',
     articles: [
       {
         id: 'invite-someone',
@@ -623,13 +660,14 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Someone can’t join — it says the household is full.',
         a: (
           <p>
-            Member caps are 6 on Seedling, 6 on Garden and 50 on Greenhouse, and they are checked at
-            the moment someone joins. Note that Garden raises your plant limit but not your member
-            limit — Greenhouse is the tier that adds people. Either remove a member you no longer
-            need, or move to Greenhouse.
+            The free <strong>Seedling</strong> plan holds three people. <strong>Garden</strong> and{' '}
+            <strong>Greenhouse</strong> have no member limit at all, so Garden — the cheaper of the
+            two — is the tier that lifts this. The cap is checked at the moment someone joins, and
+            it only ever blocks a new join: if you are already over it, everyone you have stays, and
+            stays editable. Either remove a member you no longer need, or move to Garden.
           </p>
         ),
-        text: 'Member caps are 6 on Seedling, 6 on Garden and 50 on Greenhouse, and they are checked at the moment someone joins. Garden raises your plant limit but not your member limit; Greenhouse is the tier that adds people. Either remove a member you no longer need, or move to Greenhouse.',
+        text: 'The free Seedling plan holds three people. Garden and Greenhouse have no member limit at all, so Garden, the cheaper of the two, is the tier that lifts this. The cap is checked at the moment someone joins, and it only ever blocks a new join: if you are already over it, everyone you have stays, and stays editable. Either remove a member you no longer need, or move to Garden.',
       },
       {
         id: 'multiple-households',
@@ -664,6 +702,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'sitters',
     title: 'Plant sitters',
     description: 'Handing your plants to a neighbour without handing over your account.',
+    metaTitle: 'Plant Sitter Links: Share Care Without Your Password',
+    metaDescription:
+      'Give a neighbour a plant-sitter link instead of your account: what they can see, what they can log, and how to revoke access when you are back.',
     articles: [
       {
         id: 'create-sitter-link',
@@ -671,20 +712,29 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <p>
             An admin creates a sitter link on the <strong>Household</strong> page, choosing how long
-            it should last (up to 60 days; the form suggests 14). You send that link to your sitter
-            — they need no account, no password and no app. The link is shown{' '}
+            it should last — up to 7 days on the free <strong>Seedling</strong> plan, and up to 90
+            on <strong>Garden</strong> and <strong>Greenhouse</strong>. The form suggests 14, or
+            your plan&rsquo;s maximum where that is lower. You send that link to your sitter — they
+            need no account, no password and no app. The link is shown{' '}
             <strong>once, at the moment you create it</strong>, so copy it then; we cannot show it
             to you again afterwards.
           </p>
         ),
-        text: 'An admin creates a sitter link on the Household page, choosing how long it should last, up to 60 days, with the form suggesting 14. You send that link to your sitter: they need no account, no password and no app. The link is shown once, at the moment you create it, so copy it then; we cannot show it to you again afterwards.',
+        text: 'An admin creates a sitter link on the Household page, choosing how long it should last: up to 7 days on the free Seedling plan, and up to 90 on Garden and Greenhouse. The form suggests 14, or your plan maximum where that is lower. You send that link to your sitter: they need no account, no password and no app. The link is shown once, at the moment you create it, so copy it then; we cannot show it to you again afterwards.',
       },
       {
         id: 'sitter-sees',
         q: 'What exactly can a plant sitter see?',
         a: (
           <>
-            <p>Only a to-do list. The page shows, for tasks due in the next 7 days or overdue:</p>
+            <p>
+              It depends on your plan, because <strong>Garden</strong> and{' '}
+              <strong>Greenhouse</strong> give the sitter a second page.
+            </p>
+            <p>
+              <strong>On every plan</strong> they get a to-do list. For each task due before the
+              link expires, or already overdue, it shows:
+            </p>
             <ul>
               <li>the plant&rsquo;s name</li>
               <li>what needs doing (water, fertilise, prune, repot, or your custom task name)</li>
@@ -692,32 +742,58 @@ export const HELP_SECTIONS: HelpSection[] = [
               <li>which space the plant is in, and its placement note</li>
             </ul>
             <p>
-              They cannot see your household members&rsquo; names or contact details, your saved
-              location, plant or task notes, photos, the activity feed, analytics, your plan or
-              billing, or any other household. They cannot even see plants that have nothing due.
+              How far ahead it reaches is the link&rsquo;s own window, not a fixed week: a 7-day
+              link on <strong>Seedling</strong> lists the next 7 days, a 90-day one on Garden or
+              Greenhouse lists all 90. Plants with nothing due are not on this list at all.
             </p>
             <p>
-              One caveat you control: plant names, space names and placement notes are your own free
-              text, and the sitter sees them verbatim. If a plant is called something you
-              wouldn&rsquo;t hand to a neighbour, rename it first.
+              <strong>On Garden and Greenhouse</strong> the Away Kit adds a printable{' '}
+              <strong>plant-care brief</strong>, linked from that list. It covers every plant in
+              your active care &mdash; not only the ones with something due &mdash; and for each one
+              it adds three things the list does not show:
+            </p>
+            <ul>
+              <li>the plant&rsquo;s latest photo</li>
+              <li>
+                your care rule for it &mdash; or, if you never wrote one,{' '}
+                <strong>the plant&rsquo;s own notes</strong>, word for word, under the heading
+                &ldquo;The household&rsquo;s note&rdquo;
+              </li>
+              <li>its entry in our verified pet-toxicity list, where it has one</li>
+            </ul>
+            <p>
+              On neither page can they see your household members&rsquo; names or contact details,
+              your saved location, task notes, the activity feed, analytics, your billing, or any
+              other household.
+            </p>
+            <p>
+              The caveat you control: plant names, space names, placement notes and custom task
+              names are your own free text, and the sitter sees them verbatim &mdash; as are plant
+              notes and plant photos once you are on Garden or Greenhouse. A door code, where the
+              spare key lives, or anything else you would not hand to a neighbour does not belong in
+              any of those fields while a sitter link is live. Move it, or rename the plant, first.
             </p>
           </>
         ),
-        text: 'Only a to-do list. The page shows, for tasks due in the next 7 days or overdue: the plant name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. They cannot see your household members names or contact details, your saved location, plant or task notes, photos, the activity feed, analytics, your plan or billing, or any other household. They cannot even see plants that have nothing due. One caveat you control: plant names, space names and placement notes are your own free text and the sitter sees them verbatim, so if a plant is called something you would not hand to a neighbour, rename it first.',
+        text: "It depends on your plan, because Garden and Greenhouse give the sitter a second page. On every plan they get a to-do list. For each task due before the link expires, or already overdue, it shows the plant's name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. How far ahead it reaches is the link's own window, not a fixed week: a 7-day link on Seedling lists the next 7 days, a 90-day one on Garden or Greenhouse lists all 90. Plants with nothing due are not on this list at all. On Garden and Greenhouse the Away Kit adds a printable plant-care brief, linked from that list. It covers every plant in your active care, not only the ones with something due, and for each one it adds three things the list does not show: the plant's latest photo; your care rule for it, or, if you never wrote one, the plant's own notes word for word under the heading “The household's note”; and its entry in our verified pet-toxicity list, where it has one. On neither page can they see your household members' names or contact details, your saved location, task notes, the activity feed, analytics, your billing, or any other household. The caveat you control: plant names, space names, placement notes and custom task names are your own free text and the sitter sees them verbatim, as are plant notes and plant photos once you are on Garden or Greenhouse. A door code, where the spare key lives, or anything else you would not hand to a neighbour does not belong in any of those fields while a sitter link is live. Move it, or rename the plant, first.",
       },
       {
         id: 'sitter-can-do',
         q: 'What can a sitter change?',
         a: (
           <p>
-            One thing: they can mark a listed task done. They cannot add, edit or delete plants or
-            tasks, snooze anything, upload photos, invite anyone, or reach settings. Their
-            completions are recorded as <strong>&ldquo;a plant sitter&rdquo;</strong> rather than
-            attributed to you or to any named person, and they advance the task&rsquo;s schedule
-            exactly as your own completions do.
+            On the free <strong>Seedling</strong> plan, one thing: they can mark a listed task done.
+            On <strong>Garden</strong> and <strong>Greenhouse</strong> the Away Kit adds a second:
+            they can send you a photo of a plant on their list, with an optional note, which joins
+            that plant&rsquo;s timeline without becoming its main picture. On any plan they cannot
+            add, edit or delete plants or tasks, snooze anything, invite anyone, or reach settings.
+            Both a completion and a photo are recorded as{' '}
+            <strong>&ldquo;a plant sitter&rdquo;</strong> rather than attributed to you or to any
+            named person, and a completion advances the task&rsquo;s schedule exactly as your own
+            do.
           </p>
         ),
-        text: 'One thing: they can mark a listed task done. They cannot add, edit or delete plants or tasks, snooze anything, upload photos, invite anyone, or reach settings. Their completions are recorded as a plant sitter rather than attributed to you or any named person, and they advance the task schedule exactly as your own completions do.',
+        text: "On the free Seedling plan, one thing: they can mark a listed task done. On Garden and Greenhouse the Away Kit adds a second: they can send you a photo of a plant on their list, with an optional note, which joins that plant's timeline without becoming its main picture. On any plan they cannot add, edit or delete plants or tasks, snooze anything, invite anyone, or reach settings. Both a completion and a photo are recorded as a plant sitter rather than attributed to you or any named person, and a completion advances the task schedule exactly as your own do.",
       },
       {
         id: 'revoke-sitter',
@@ -725,12 +801,13 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <p>
             An admin revokes the link on the <strong>Household</strong> page and it stops working
-            immediately. Otherwise it expires by itself on the date you chose, at most 60 days out.
-            Anyone holding the link can use it — it is the credential, so only send it to someone
-            you trust, and revoke it if you forward it to the wrong person.
+            immediately. Otherwise it expires by itself on the date you chose — at most 7 days out
+            on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the
+            link can use it — it is the credential, so only send it to someone you trust, and revoke
+            it if you forward it to the wrong person.
           </p>
         ),
-        text: 'An admin revokes the link on the Household page and it stops working immediately. Otherwise it expires by itself on the date you chose, at most 60 days out. Anyone holding the link can use it, because it is the credential, so only send it to someone you trust and revoke it if you forward it to the wrong person.',
+        text: 'An admin revokes the link on the Household page and it stops working immediately. Otherwise it expires by itself on the date you chose: at most 7 days out on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the link can use it, because it is the credential, so only send it to someone you trust and revoke it if you forward it to the wrong person.',
       },
     ],
   },
@@ -739,6 +816,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'billing',
     title: 'Plans, payment and cancelling',
     description: 'What the free plan keeps, what you get for paying, and how to stop paying.',
+    metaTitle: 'Plans, Billing & Cancelling — Family Greenhouse',
+    metaDescription:
+      'What the free plan keeps forever, what paying adds, who in a household can buy, how the 14-day trial works, and how to cancel without losing data.',
     webOnly: true,
     articles: [
       {
@@ -747,20 +827,25 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              The free <strong>Seedling</strong> plan is a real plan, not a trial: up to 10 plants
-              and 6 members, with no card required and no expiry. It includes plants and photos,
-              unlimited tasks and reminders, households and sharing, plant sitters, climate tips,
-              analytics, data export, and up to 200 leaf-health checks a month.
+              The free <strong>Seedling</strong> plan is a real plan, not a trial: a couple and
+              their plants &mdash; one home, up to 3 members and 20 plants, with no card required
+              and no expiry. It includes plants and photos, unlimited tasks and reminders, invites
+              and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the
+              last 30 days of analytics, the calendar feed, data export, and leaf-health checks each
+              month.
             </p>
             <p>
-              Paid plans raise the caps and add two things: <strong>Garden</strong> (500 plants, 6
-              members) adds the AI care assistant, and <strong>Greenhouse</strong> (5,000 plants, 50
-              members) adds API keys on top. Plant identification is available on every plan, with a
-              monthly allowance that grows with the tier.
+              The paid plans are drawn on homes and hands, not on how many plants you own.{' '}
+              <strong>Garden</strong> is for a household that has to coordinate: one home, unlimited
+              members, 200 plants, your full analytics history, and the AI care assistant.{' '}
+              <strong>Greenhouse</strong> is for many homes and many hands: belong to every
+              household you help with, unlimited members, 5,000 plants, and API keys on top. Plant
+              identification is available on every plan, with a monthly allowance that grows with
+              the tier. Export and your care history are never behind a plan.
             </p>
           </>
         ),
-        text: 'The free Seedling plan is a real plan, not a trial: up to 10 plants and 6 members, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, households and sharing, plant sitters, climate tips, analytics, data export, and up to 200 leaf-health checks a month. Paid plans raise the caps and add two things: Garden with 500 plants and 6 members adds the AI care assistant, and Greenhouse with 5,000 plants and 50 members adds API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier.',
+        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 3 members and 20 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
       },
       {
         id: 'who-can-buy',
@@ -793,13 +878,22 @@ export const HELP_SECTIONS: HelpSection[] = [
         id: 'free-trial',
         q: 'Is there a free trial?',
         a: (
-          <p>
-            Yes — every new subscription starts with a <strong>14-day free trial</strong>. Checkout
-            collects a card up front, and billing begins when the trial ends unless you cancel
-            before then. Cancelling during the trial leaves you on the free Seedling plan.
-          </p>
+          <>
+            <p>
+              Yes — a household&rsquo;s <strong>first</strong> paid subscription starts with a{' '}
+              <strong>14-day free trial</strong>. Checkout collects a card up front, and billing
+              begins when the trial ends unless you cancel before then. Cancelling during the trial
+              leaves you on the free Seedling plan.
+            </p>
+            <p>
+              The trial is <strong>once per household</strong>, not once per subscription. If your
+              household has had one before &mdash; you cancelled and came back, or a subscription
+              ended when a payment stopped going through &mdash; a new subscription is charged from
+              the start instead of after 14 free days.
+            </p>
+          </>
         ),
-        text: 'Yes. Every new subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan.',
+        text: "Yes. A household's first paid subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
       },
       {
         id: 'cancel',
@@ -909,6 +1003,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'data',
     title: 'Your data',
     description: 'Getting it out, and deleting it for good.',
+    metaTitle: 'Export or Delete Your Plant Data — Family Greenhouse',
+    metaDescription:
+      'Download a copy of your plants, photos and care history, and permanently delete your Family Greenhouse account and everything in it.',
     articles: [
       {
         id: 'export',
@@ -1049,6 +1146,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'limits',
     title: 'Devices and known limits',
     description: 'What works where, and what we haven’t built yet.',
+    metaTitle: 'Device Support & Known Limits — Family Greenhouse',
+    metaDescription:
+      'Which features work on iOS, Android and the web, what needs a browser, and the things we have not built yet — stated plainly rather than hidden.',
     articles: [
       {
         id: 'mobile-apps',

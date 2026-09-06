@@ -1081,13 +1081,13 @@ describe('invite + join flow', () => {
   });
 
   it('402s a join that would exceed the plan member cap', async () => {
-    // Seed household stays on seedling (maxMembers: 6). It starts with the
-    // seed admin; fill it to the cap so the next join trips the limit.
+    // Seed household stays on seedling (3 members, ADR 0014). It starts with
+    // the seed admin; fill it to the cap so the next join trips the limit.
     const adminToken = await loginAsSeed();
     const invite = await request(app)
       .post(`/households/${seedHouseholdId}/invites`)
       .set('Authorization', `Bearer ${adminToken}`);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 2; i++) {
       seedMember(`cap-fill-${i}`, `cap-fill-${i}@example.com`, 'member');
     }
     db.households.get(seedHouseholdId)!.planId = 'seedling';
@@ -1096,7 +1096,7 @@ describe('invite + join flow', () => {
       .post(`/households/join/${invite.body.code}`)
       .set('Authorization', `Bearer ${joinerToken}`);
     expect(join.status).toBe(402);
-    expect(join.body.message).toMatch(/limited to 6 members/);
+    expect(join.body.message).toMatch(/limited to 3 members/);
   });
 
   it('400s a double-join into the same household', async () => {
@@ -1896,6 +1896,7 @@ describe('multi-household via X-Household-Id', () => {
 
   it('honors the override for a household the caller IS a member of, with the membership role', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse'; // many homes (ADR 0014)
     const create = await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
@@ -2040,10 +2041,10 @@ describe('billing', () => {
 });
 
 describe('plan limits', () => {
-  it('Seedling plan caps plant creation at 10', async () => {
+  it('Seedling plan caps plant creation at 20', async () => {
     const token = await loginAsSeed();
-    // The seed already has 1 plant. Add 9 more to hit the cap.
-    for (let i = 0; i < 9; i++) {
+    // The seed already has 1 plant. Add 19 more to hit the cap (ADR 0014).
+    for (let i = 0; i < 19; i++) {
       const r = await request(app)
         .post('/plants')
         .set('Authorization', `Bearer ${token}`)
@@ -2059,8 +2060,8 @@ describe('plan limits', () => {
 
   it('a retained Garden entitlement lifts the cap', async () => {
     const token = await loginAsSeed();
-    // Cap out on Seedling.
-    for (let i = 0; i < 9; i++) {
+    // Cap out on Seedling (20 plants, ADR 0014).
+    for (let i = 0; i < 19; i++) {
       await request(app)
         .post('/plants')
         .set('Authorization', `Bearer ${token}`)
@@ -2132,6 +2133,7 @@ describe('climate', () => {
 describe('multi-household per user', () => {
   it('a user can create a second household without losing the first', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse'; // many homes (ADR 0014)
     const create = await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
@@ -2148,6 +2150,7 @@ describe('multi-household per user', () => {
 
   it('an X-Household-Id header pins requests to the addressed household', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse'; // many homes (ADR 0014)
     const create = await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
@@ -2169,6 +2172,7 @@ describe('multi-household per user', () => {
 
   it('the user is admin of any household they created — even when X-Household-Id is set', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse'; // many homes (ADR 0014)
     const create = await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
@@ -2235,6 +2239,7 @@ describe('GET /me/export', () => {
 
   it('spans every household the user belongs to', async () => {
     const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse'; // many homes (ADR 0014)
     const create = await request(app)
       .post('/households')
       .set('Authorization', `Bearer ${token}`)
@@ -2282,5 +2287,193 @@ describe('production contract details', () => {
       .send('{"email": ');
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: 'Invalid JSON body' });
+  });
+});
+
+describe('homes gate (ADR 0014: one home on Seedling and Garden, unlimited on Greenhouse)', () => {
+  it('402s a second household for a free user, and creates nothing', async () => {
+    const token = await loginAsSeed();
+    const before = db.households.size;
+    const res = await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Second Home' });
+    expect(res.status).toBe(402);
+    expect(res.body.message).toBe(
+      'Your Seedling plan includes 1 home and you already belong to 1 household. Upgrade to Greenhouse for unlimited homes.'
+    );
+    expect(db.households.size).toBe(before);
+  });
+
+  it('402s a second household on Garden too — Garden is one home, unlimited hands', async () => {
+    const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const res = await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Second Home' });
+    expect(res.status).toBe(402);
+    expect(res.body.message).toMatch(/Your Garden plan includes 1 home/);
+  });
+
+  it('always admits a hand into a Greenhouse household, even one that already has a home', async () => {
+    const adminToken = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const joinerToken = await createConfirmedUser('helper@example.com');
+    const own = await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${joinerToken}`)
+      .send({ name: 'My own place' });
+    expect(own.status).toBe(201);
+    const join = await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+    expect(join.status).toBe(200);
+  });
+
+  it('refuses a joiner who already has a home when the target household is free', async () => {
+    const adminToken = await loginAsSeed();
+    const invite = await request(app)
+      .post(`/households/${seedHouseholdId}/invites`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    const joinerToken = await createConfirmedUser('two-homes@example.com');
+    await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${joinerToken}`)
+      .send({ name: 'My own place' });
+    const join = await request(app)
+      .post(`/households/join/${invite.body.code}`)
+      .set('Authorization', `Bearer ${joinerToken}`);
+    expect(join.status).toBe(402);
+    expect(join.body.message).toMatch(/includes 1 home and you already belong to 1 household/);
+  });
+
+  it('grandfathers a user already in three free homes: all three still read, the fourth is refused', async () => {
+    const token = await createConfirmedUser('grandfathered@example.com');
+    const me = [...db.users.values()].find((u) => u.email === 'grandfathered@example.com')!;
+    // Three homes from before the re-cut, seeded directly — the gate never
+    // ran when they were created and must not care now.
+    for (const name of ['Home A', 'Home B', 'Home C']) {
+      const id = `gf-${name.slice(-1)}`;
+      db.households.set(id, { id, name, createdAt: '', createdBy: me.id });
+      me.memberships.push({ householdId: id, role: 'admin', joinedAt: '' });
+    }
+    me.householdId = 'gf-A';
+    me.householdRole = 'admin';
+
+    const list = await request(app).get('/me/households').set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body).toHaveLength(3);
+    for (const id of ['gf-A', 'gf-B', 'gf-C']) {
+      const read = await request(app)
+        .get(`/households/${id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-Household-Id', id);
+      expect(read.status).toBe(200);
+    }
+
+    const fourth = await request(app)
+      .post('/households')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Home D' });
+    expect(fourth.status).toBe(402);
+    expect(fourth.body.message).toMatch(/already belong to 3 households/);
+    expect(me.memberships).toHaveLength(3);
+  });
+});
+
+// The browser suite cannot reach into `db`, and checkout is a 503 here, so the
+// Greenhouse side of the homes gate is only drivable end to end through this
+// fixture route. It is opt-in and otherwise indistinguishable from an unknown
+// route, exactly like /__test__/accounts.
+describe('POST /__test__/households/:id/plan (browser-test entitlement fixture)', () => {
+  const OPT_IN = 'ALLOW_TEST_ACCOUNT_PROVISIONING';
+  afterEach(() => {
+    delete process.env[OPT_IN];
+  });
+
+  it('404s without the opt-in, and changes nothing', async () => {
+    delete process.env[OPT_IN];
+    const res = await request(app)
+      .post(`/__test__/households/${seedHouseholdId}/plan`)
+      .send({ planId: 'greenhouse' });
+    expect(res.status).toBe(404);
+    expect(db.households.get(seedHouseholdId)!.planId).toBeUndefined();
+  });
+
+  it('sets the plan when opted in, and nothing else', async () => {
+    process.env[OPT_IN] = '1';
+    const res = await request(app)
+      .post(`/__test__/households/${seedHouseholdId}/plan`)
+      .send({ planId: 'greenhouse' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: seedHouseholdId, planId: 'greenhouse' });
+    const household = db.households.get(seedHouseholdId)!;
+    expect(household.planId).toBe('greenhouse');
+    // Entitlement only — never a stand-in for the webhook path.
+    expect(household.stripeCustomerId).toBeUndefined();
+    expect(household.stripeSubscriptionId).toBeUndefined();
+    expect(household.subscriptionStatus).toBeUndefined();
+  });
+
+  it('rejects an unknown plan id and 404s an unknown household', async () => {
+    process.env[OPT_IN] = '1';
+    const bad = await request(app)
+      .post(`/__test__/households/${seedHouseholdId}/plan`)
+      .send({ planId: 'platinum' });
+    expect(bad.status).toBe(400);
+    expect(db.households.get(seedHouseholdId)!.planId).toBeUndefined();
+
+    const missing = await request(app)
+      .post('/__test__/households/no-such-household/plan')
+      .send({ planId: 'garden' });
+    expect(missing.status).toBe(404);
+  });
+});
+
+describe('analytics window (ADR 0014: free renders the trailing 30 days; nothing is deleted)', () => {
+  it('clamps the daily series to 30 days on Seedling and reports the window', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .get(`/households/${seedHouseholdId}/analytics/daily?days=180`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.days).toBe(30);
+    expect(res.body.series).toHaveLength(30);
+    expect(res.body.historyLimitDays).toBe(30);
+  });
+
+  it('serves the full range on Garden with historyLimitDays null', async () => {
+    const token = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const res = await request(app)
+      .get(`/households/${seedHouseholdId}/analytics/daily?days=180`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.days).toBe(180);
+    expect(res.body.series).toHaveLength(180);
+    expect(res.body.historyLimitDays).toBeNull();
+  });
+
+  it('windows the year-in-review on Seedling and leaves the completion rows alone', async () => {
+    const token = await loginAsSeed();
+    const before = db.completions.size;
+    const year = new Date().getFullYear();
+    const res = await request(app)
+      .get(`/households/${seedHouseholdId}/year-in-review?year=${year}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.historyLimitDays).toBe(30);
+    expect(typeof res.body.windowStart).toBe('string');
+    expect(db.completions.size).toBe(before);
+
+    db.households.get(seedHouseholdId)!.planId = 'garden';
+    const full = await request(app)
+      .get(`/households/${seedHouseholdId}/year-in-review?year=${year}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(full.body.historyLimitDays).toBeNull();
+    expect(full.body.windowStart).toBeUndefined();
   });
 });

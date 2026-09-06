@@ -5,6 +5,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { findPost, POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
+import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
@@ -19,26 +20,56 @@ export function BlogPost() {
   useMetaTags(
     post
       ? {
-          title: `${post.title} — Family Greenhouse`,
-          description: post.description,
+          // No ` — Family Greenhouse` suffix. The raw titles are 41-53
+          // chars and the 20-char suffix pushed every one of the 14 past
+          // the ~60 truncation point, spending the cut on the brand rather
+          // than the headline. Google renders the site name separately
+          // anyway, and the H1 and breadcrumb already establish it.
+          title: post.title,
+          description: post.metaDescription ?? post.description,
           canonical: `${SITE_URL}/blog/${post.slug}`,
           ogType: 'article',
+          // Only publishedTime: the manifest has no `modified` field, so
+          // there is no honest value for article:modified_time.
+          article: { publishedTime: post.date, section: 'Blog' },
           // Article schema makes the post eligible for Google's article
-          // rich-results treatment. We don't have author photos or a
-          // publisher logo URL set up yet — those are nice-to-haves that
-          // strengthen eligibility but aren't required.
+          // rich-results treatment. Publisher logo and `image` are both set
+          // below; a per-post hero image and a named Person author are the
+          // remaining strengtheners.
           jsonLd: {
             '@context': 'https://schema.org',
             '@graph': [
               {
                 '@type': 'Article',
                 headline: post.title,
-                description: post.description,
+                // The SERP-length copy, matching what the meta description
+                // says, rather than the longer index-card preview.
+                description: post.metaDescription ?? post.description,
+                // Google lists `image` as required for the Article rich
+                // result, and every post was omitting it — so all 14 were
+                // ineligible for the mobile SERP / Discover thumbnail despite
+                // otherwise-correct schema. No post ships a hero image yet, so
+                // this falls back to the shared 1200x630 social card, which is
+                // a valid ImageObject and unblocks eligibility today. Swap for
+                // a per-post image when one exists.
+                image: {
+                  '@type': 'ImageObject',
+                  url: DEFAULT_OG_IMAGE,
+                  width: 1200,
+                  height: 630,
+                },
                 datePublished: post.date,
                 dateModified: post.date,
                 author: { '@type': 'Organization', name: 'Family Greenhouse' },
                 publisher: {
                   '@type': 'Organization',
+                  // Same @id the homepage graph defines for this entity, so
+                  // the publisher on 14 posts, 24 guides and the homepage is
+                  // one Organization rather than three unlinked duplicates.
+                  // The name and logo stay: Google's Article spec wants them
+                  // present, and a bare @id reference into another document
+                  // is not guaranteed to resolve.
+                  '@id': `${SITE_URL}/#organization`,
                   name: 'Family Greenhouse',
                   logo: {
                     '@type': 'ImageObject',
@@ -69,7 +100,16 @@ export function BlogPost() {
   }
 
   const Body = post.Component;
-  const otherPosts = POSTS.filter((p) => p.slug !== post.slug).slice(0, 2);
+  // Same rotation as CareGuidePage, same reason: `.slice(0, 2)` linked every
+  // post to the first two in the manifest, so how-to-remember-to-water-plants
+  // and sharing-plant-care-without-becoming-the-nag took 13 inbound links each
+  // while five posts had none at all and were reachable only from /blog.
+  const relatedCount = Math.min(2, POSTS.length - 1);
+  const postIndex = POSTS.findIndex((p) => p.slug === post.slug);
+  const otherPosts = Array.from(
+    { length: relatedCount },
+    (_, i) => POSTS[(postIndex + 1 + i) % POSTS.length]
+  ).filter((p) => p !== undefined);
 
   return (
     <PublicShell width="article">
@@ -101,7 +141,7 @@ export function BlogPost() {
         <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
           <p className="font-serif text-xl text-ink">Try Family Greenhouse</p>
           <p className="mt-2 text-sm text-gray-600">
-            Free for up to 10 plants and 6 household members. No credit card.
+            Free for one home, up to 3 household members and 20 plants. No credit card.
           </p>
           <div className="mt-4">
             <Link to="/register" className={buttonStyles()}>

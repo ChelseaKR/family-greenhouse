@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  APNs environment for the App target.
+
+	  This file exists so that enabling the Push Notifications capability is not
+	  a manual Xcode step redone on every fresh clone (#469 §3). Without an
+	  `aps-environment` entitlement, `PushNotifications.register()` fails at
+	  runtime with no build-time signal — the plugin links, the AppDelegate
+	  forwards the APNs callbacks, and registration simply never succeeds.
+
+	  The value is a build setting rather than a literal so the sandbox/
+	  production split is stated in the project instead of being silently
+	  rewritten at export time: `APS_ENVIRONMENT` is `development` in the Debug
+	  configuration and `production` in Release, which is the one that archives
+	  for TestFlight and the App Store. A Release build signed with a
+	  development APNs environment registers against the sandbox gateway, and
+	  the tokens it produces are rejected by the production one.
+
+	  scripts/validate-store-release.mjs requires this file, and the
+	  CODE_SIGN_ENTITLEMENTS build setting that applies it, as soon as anything
+	  in frontend/src calls registerNativePush().
+	-->
+	<key>aps-environment</key>
+	<string>$(APS_ENVIRONMENT)</string>
+</dict>
+</plist>

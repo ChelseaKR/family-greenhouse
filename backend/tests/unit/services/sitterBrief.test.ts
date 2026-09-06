@@ -7,6 +7,19 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// The presigner is the one piece that needs real AWS credentials to run, so it
+// is the only thing stubbed: `plantImageKeyForHousehold` (the household-scoping
+// check that decides whether a photo is signable at all) runs for real.
+vi.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: vi.fn(
+    async (
+      _client: unknown,
+      command: { input: { Bucket: string; Key: string } },
+      options: { expiresIn: number }
+    ) => `https://signed.example/${command.input.Key}?ttl=${options.expiresIn}`
+  ),
+}));
+
 vi.mock('../../../src/services/plantService.js', () => ({ getPlants: vi.fn() }));
 vi.mock('../../../src/services/spaceService.js', () => ({ getSpaces: vi.fn() }));
 vi.mock('../../../src/services/taskService.js', () => ({
@@ -35,7 +48,7 @@ function plant(over: Record<string, unknown> = {}) {
     location: null,
     spaceId: 's1',
     placementNote: 'east window, top shelf',
-    imageUrl: 'https://cdn.example/p1.jpg',
+    imageUrl: 'https://cdn.example/plants/hh-1/p1/abc123.jpg',
     notes: 'Bottom-water this one',
     status: 'active',
     ...over,
@@ -87,7 +100,7 @@ describe('buildSitterBrief', () => {
       placementNote: 'east window, top shelf',
       careNote: 'Bottom-water this one',
       careNoteSource: 'notes',
-      photoUrl: 'https://cdn.example/p1.jpg',
+      photoUrl: 'https://signed.example/plants/hh-1/p1/abc123.jpg?ttl=3600',
     });
     expect(entry.tasks).toEqual([
       { taskId: 't1', taskType: 'water', dueDate: inDays(2), overdue: false },
@@ -186,5 +199,82 @@ describe('buildSitterBrief', () => {
     );
     const [entry] = (await buildSitterBrief(LINK, NOW)).plants;
     expect(entry.spaceName).toBeNull();
+  });
+});
+
+/**
+ * #453: the brief's photo URLs were permanent, unauthenticated CloudFront URLs
+ * on a behavior with no viewer authorization, cached at the edge for a year.
+ * Every other sitter capability is re-checked on each call and dies on revoke;
+ * the photographs of the inside of someone's home did not. A sitter who saved
+ * the page kept them, and so did anyone they forwarded them to.
+ */
+describe('buildSitterBrief — a photo expires with the brief (#453)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('hands out a signed URL, never the permanent public one', async () => {
+    const { buildSitterBrief } = await load([plant()], []);
+    const [entry] = (await buildSitterBrief(LINK, NOW)).plants;
+    expect(entry.photoUrl).toBe('https://signed.example/plants/hh-1/p1/abc123.jpg?ttl=3600');
+    expect(entry.photoUrl).not.toContain('cdn.example');
+    expect(JSON.stringify(entry)).not.toContain('https://cdn.example/');
+  });
+
+  it('caps the signature at an hour even though the link runs for weeks', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load([plant()], []);
+    await buildSitterBrief(LINK, NOW); // LINK expires in 20 days
+    const [, , options] = vi.mocked(presigner.getSignedUrl).mock.calls[0];
+    expect((options as { expiresIn: number }).expiresIn).toBe(3600);
+  });
+
+  it('never signs for longer than the link has left', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load([plant()], []);
+    const shortLink = { ...LINK, expiresAt: new Date(NOW.getTime() + 10 * 60_000).toISOString() };
+    await buildSitterBrief(shortLink, NOW);
+    const [, , options] = vi.mocked(presigner.getSignedUrl).mock.calls[0];
+    expect((options as { expiresIn: number }).expiresIn).toBe(600);
+  });
+
+  it('signs the key from the URL path, so an older asset origin still resolves', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load(
+      [plant({ imageUrl: 'https://old-bucket.s3.amazonaws.com/plants/hh-1/p1/abc123.jpg' })],
+      []
+    );
+    const [entry] = (await buildSitterBrief(LINK, NOW)).plants;
+    expect(entry.photoUrl).toContain('signed.example');
+    const [, command] = vi.mocked(presigner.getSignedUrl).mock.calls[0];
+    expect((command as { input: { Key: string } }).input.Key).toBe('plants/hh-1/p1/abc123.jpg');
+  });
+
+  it('refuses to sign a key outside the household, and omits the photo', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load(
+      [plant({ imageUrl: 'https://cdn.example/plants/some-other-household/p1/abc123.jpg' })],
+      []
+    );
+    const [entry] = (await buildSitterBrief(LINK, NOW)).plants;
+    // Fail closed: no signature, and NOT a fallback to the permanent URL.
+    expect(entry.photoUrl).toBeNull();
+    expect(presigner.getSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it('omits — rather than passes through — a URL of an unrecognised shape', async () => {
+    const { buildSitterBrief } = await load(
+      [plant({ imageUrl: 'https://cdn.example/p1.jpg' })],
+      []
+    );
+    const [entry] = (await buildSitterBrief(LINK, NOW)).plants;
+    expect(entry.photoUrl).toBeNull();
+  });
+
+  it('leaves a plant with no photo at null, without signing anything', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load([plant({ imageUrl: null })], []);
+    const [entry] = (await buildSitterBrief(LINK, NOW)).plants;
+    expect(entry.photoUrl).toBeNull();
+    expect(presigner.getSignedUrl).not.toHaveBeenCalled();
   });
 });

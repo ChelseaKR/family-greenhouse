@@ -25,6 +25,9 @@ vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(),
   getStripe: vi.fn(),
 }));
+vi.mock('../../../src/services/plantTagService.js', () => ({ revokeTagsCreatedBy: vi.fn() }));
+vi.mock('../../../src/services/sitterService.js', () => ({ revokeSitterLinksCreatedBy: vi.fn() }));
+vi.mock('../../../src/services/kioskService.js', () => ({ revokeKioskLinksCreatedBy: vi.fn() }));
 
 describe('account cleanup', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -204,7 +207,7 @@ describe('account cleanup', () => {
     ]);
   });
 
-  it('deletes sitter + kiosk credentials and every abandoned-household partition row', async () => {
+  it('deletes sitter + kiosk + caretaker credentials, plant tags, and every abandoned-household partition row', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
       const command = raw as unknown as {
@@ -214,18 +217,28 @@ describe('account cleanup', () => {
       if (command.kind !== 'Query') return {} as never;
       const pk = command.input.ExpressionAttributeValues?.[':pk'];
       if (command.input.IndexName === 'GSI1') {
-        // Both secret-token partitions are swept: sitter links AND the
-        // never-expiring kiosk (wall display) link.
+        // Every secret-token partition is swept: sitter links, the
+        // never-expiring kiosk (wall display) link, plant tags, and caretaker
+        // seats.
         return {
           Items:
             pk === 'HOUSEHOLD#hh#KIOSK'
               ? [{ PK: 'KIOSK#secret', SK: 'METADATA' }]
-              : [{ PK: 'SITTER#secret', SK: 'METADATA' }],
+              : pk === 'HOUSEHOLD#hh#PLANTTAG'
+                ? [{ PK: 'PLANTTAG#secret', SK: 'METADATA' }]
+                : pk === 'HOUSEHOLD#hh#CARETAKER'
+                  ? [{ PK: 'CARETAKER#secret', SK: 'METADATA' }]
+                  : [{ PK: 'SITTER#secret', SK: 'METADATA' }],
         } as never;
       }
       if (pk === 'HOUSEHOLD#hh#ACTIVITY') {
         return {
           Items: [{ PK: 'HOUSEHOLD#hh#ACTIVITY', SK: 'EVENT#1' }],
+        } as never;
+      }
+      if (pk === 'HOUSEHOLD#hh#CARETAKER_VISIT') {
+        return {
+          Items: [{ PK: 'HOUSEHOLD#hh#CARETAKER_VISIT', SK: 'VISIT#1' }],
         } as never;
       }
       return {
@@ -253,13 +266,20 @@ describe('account cleanup', () => {
           };
         }
     );
-    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(4);
+    // Seven partitions: sitter links, the kiosk link, caretaker seats,
+    // caretaker visits, plant tags, activity, and the base household
+    // partition. Credentials that live outside the household's own partition
+    // are exactly the rows a partition-only sweep would leave usable.
+    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(7);
     expect(
       commands.filter((command) => command.kind === 'Delete').map((command) => command.input.Key)
     ).toEqual(
       expect.arrayContaining([
         { PK: 'SITTER#secret', SK: 'METADATA' },
         { PK: 'KIOSK#secret', SK: 'METADATA' },
+        { PK: 'PLANTTAG#secret', SK: 'METADATA' },
+        { PK: 'CARETAKER#secret', SK: 'METADATA' },
+        { PK: 'HOUSEHOLD#hh#CARETAKER_VISIT', SK: 'VISIT#1' },
         { PK: 'HOUSEHOLD#hh#ACTIVITY', SK: 'EVENT#1' },
         { PK: 'HOUSEHOLD#hh', SK: 'METADATA' },
         { PK: 'HOUSEHOLD#hh', SK: 'SPACE#s1' },
@@ -411,5 +431,41 @@ describe('cancelAbandonedHouseholdSubscription', () => {
     stripe.subscriptions.retrieve.mockRejectedValue(stripeError('socket hang up'));
 
     await expect(cancel('hh')).rejects.toBe(failure);
+  });
+  // #449: removing a member used to revoke the session and nothing else. Every
+  // capability token they had minted lived on in the household's partitions —
+  // plant tags and kiosk links with no expiry at all.
+});
+
+describe('revokeCredentialsCreatedBy', () => {
+  it("revokes only the departing member's active credentials, and counts them", async () => {
+    const plantTagService = await import('../../../src/services/plantTagService.js');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const kioskService = await import('../../../src/services/kioskService.js');
+    vi.mocked(plantTagService.revokeTagsCreatedBy).mockResolvedValue(3);
+    vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(1);
+    vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(1);
+
+    const { revokeCredentialsCreatedBy } = await import('../../../src/services/accountCleanup.js');
+    await expect(revokeCredentialsCreatedBy('hh', 'u1')).resolves.toEqual({
+      plantTags: 3,
+      sitterLinks: 1,
+      kioskLinks: 1,
+    });
+    expect(plantTagService.revokeTagsCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+    expect(sitterService.revokeSitterLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+    expect(kioskService.revokeKioskLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+  });
+
+  it('propagates a failure rather than reporting a partial revocation as done', async () => {
+    const plantTagService = await import('../../../src/services/plantTagService.js');
+    const sitterService = await import('../../../src/services/sitterService.js');
+    const kioskService = await import('../../../src/services/kioskService.js');
+    vi.mocked(plantTagService.revokeTagsCreatedBy).mockRejectedValue(new Error('ddb throttled'));
+    vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(0);
+    vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(0);
+
+    const { revokeCredentialsCreatedBy } = await import('../../../src/services/accountCleanup.js');
+    await expect(revokeCredentialsCreatedBy('hh', 'u1')).rejects.toThrow('ddb throttled');
   });
 });

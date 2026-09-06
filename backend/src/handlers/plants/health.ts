@@ -12,7 +12,7 @@ import * as leafHealthBudget from '../../services/leafHealthBudget.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as billing from '../../services/billing.js';
-import { getPlan } from '../../models/plans.js';
+import { getEntitledPlan } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -59,10 +59,17 @@ export const checkPlantHealth = createHandler(
     // actually configured: with the flat default every tier shares one number
     // and this is the pre-tiering path, read for read. A cap we could not
     // resolve is not one we spend against — same 503 as a failed reservation.
+    //
+    // ENTITLEMENT, not the plan row (#476). Every scan is a real Bedrock
+    // invocation, and Stripe does not cancel on a failed charge — it retries
+    // for weeks. Resolving the cap from `planId` alone let a past_due
+    // household keep spending against a paid allowance for the whole dunning
+    // window; `getEntitledPlan` drops it to the free tier's allowance, which
+    // is the same treatment a downgrade already gets (identify.ts does this).
     let cap: number;
     try {
       cap = await leafHealthBudget.resolveMonthlyCap(
-        async () => getPlan((await billing.getHouseholdSubscription(user.householdId!)).planId).id
+        async () => getEntitledPlan(await billing.getHouseholdSubscription(user.householdId!)).id
       );
     } catch (err) {
       logger.error(
@@ -102,6 +109,19 @@ export const checkPlantHealth = createHandler(
     try {
       assessment = await leafHealth.assessLeafHealth(validatedBody.imageBase64);
     } catch (err) {
+      // Bedrock refused this deployment and this environment has NOT declared
+      // itself a demo. No paid work happened, so give the reservation back —
+      // same reasoning as the demo branch below — and answer honestly. A 503
+      // is what makes a credential regression visible to the existing api-5xx
+      // and Lambda-error alarms instead of shipping a fixture at 200 (#463).
+      if (err instanceof Error && err.name === 'LeafHealthUnavailableError') {
+        if (metered) await leafHealthBudget.releaseUsage(user.householdId!);
+        throw createHttpError(
+          503,
+          'Leaf-health checks are temporarily unavailable on this server. Nothing was analyzed — please try again later.',
+          { expose: true }
+        );
+      }
       // Both branches are intentionally exposed (5xx messages are hidden by
       // default) so the frontend can show why the check failed — mirrors the
       // identify handler's 502 contract.

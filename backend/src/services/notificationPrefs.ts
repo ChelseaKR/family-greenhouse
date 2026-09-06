@@ -3,6 +3,7 @@ import { DeleteCommand, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/l
 import createHttpError from 'http-errors';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
+import { isValidTimeZone } from '../utils/timeZone.js';
 import * as smsNotifier from './smsNotifier.js';
 
 /**
@@ -56,6 +57,28 @@ export interface NotificationPreferences {
   /** "X covered for you" — credit when someone does a task of yours. */
   careCredit: boolean;
   /**
+   * End-of-year recap email. Defaults ON whenever email notifications are
+   * enabled, matching `weeklyDigest`. It used to have no control at all: the
+   * recap was gated on `prefs.email` alone, so a user who explicitly unticked
+   * the weekly digest — the only summary opt-out the UI offered — still
+   * received the annual summary.
+   */
+  yearRecap: boolean;
+  /**
+   * Language outbound email is written in: `'en'`, `'es'`, or `''` for
+   * "never chosen".
+   *
+   * The empty sentinel is load-bearing. `timezone` has no such state — it
+   * reads `'UTC'` both for a row nobody ever wrote and for a user who
+   * genuinely chose UTC, which is the documented sharp edge behind quiet
+   * hours silently being evaluated in the wrong zone. Keeping "unset"
+   * distinguishable lets the settings page back-fill the detected language
+   * without waiting for a Save the user may never press, and lets
+   * `services/email/locale.ts` fall back to the household's language
+   * explicitly rather than defaulting to English in silence.
+   */
+  emailLocale: '' | 'en' | 'es';
+  /**
    * True once the current `phone` was confirmed via SMS code. Never settable
    * directly through `setPreferences` — only `confirmPhoneVerification`
    * stamps it, and changing the phone number clears it.
@@ -101,8 +124,16 @@ const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   taskUpForGrabs: true,
   coverageUpdates: true,
   careCredit: true,
+  yearRecap: true, // same rule as weeklyDigest
+  emailLocale: '', // never guessed; '' means "nobody has told us"
   phoneVerified: false,
 };
+
+/** Coerce a stored language to a locale we actually ship, or `''`. An
+ *  unrecognised value is "not chosen", never a silent 'en'. */
+function normalizeEmailLocale(raw: unknown): NotificationPreferences['emailLocale'] {
+  return raw === 'en' || raw === 'es' ? raw : '';
+}
 
 /**
  * Read the user's prefs row, returning a default record if none exists yet.
@@ -146,30 +177,25 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
     coverageUpdates:
       item.coverageUpdates === undefined ? Boolean(item.email) : Boolean(item.coverageUpdates),
     careCredit: item.careCredit === undefined ? Boolean(item.email) : Boolean(item.careCredit),
+    // Those users were receiving the recap on `email` alone, so default-on
+    // preserves what they already had.
+    yearRecap: item.yearRecap === undefined ? Boolean(item.email) : Boolean(item.yearRecap),
+    emailLocale: normalizeEmailLocale(item.emailLocale),
     phoneVerified: Boolean(item.phoneVerified),
     updatedAt: (item.updatedAt as string) ?? '',
   };
 }
 
 /**
- * Validate an IANA timezone. Primary check is the runtime's canonical list
- * (`Intl.supportedValuesOf`); we fall back to letting Intl resolve the name
- * because `supportedValuesOf` omits some accepted aliases (e.g. links like
- * "Etc/GMT" variants).
+ * Validate an IANA timezone.
+ *
+ * The implementation moved to `utils/timeZone.ts` so a module with no AWS
+ * imports can use it (`services/householdTimeZone.ts`). Re-exported here
+ * because `notificationPrefs.isValidTimeZone` is the name the notifications
+ * handler and `billingEmails.ts` already call it by, and renaming a validator
+ * at two call sites buys nothing.
  */
-let supportedTimeZones: Set<string> | null = null;
-export function isValidTimeZone(tz: string): boolean {
-  try {
-    if (!supportedTimeZones) {
-      supportedTimeZones = new Set(Intl.supportedValuesOf('timeZone'));
-    }
-    if (supportedTimeZones.has(tz)) return true;
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { isValidTimeZone };
 
 /**
  * True iff "now" falls inside the user's DND window. Caller passes the user's
@@ -217,8 +243,19 @@ export function isInDndWindow(prefs: NotificationPreferences, now = new Date()):
  *  keep the stored/derived value instead of resetting it to a default. */
 export type PreferencesInput = Omit<
   NotificationPreferences,
-  'updatedAt' | 'phoneVerified' | 'weeklyDigest' | HouseholdEmailPrefKey
-> & { weeklyDigest?: boolean } & Partial<Record<HouseholdEmailPrefKey, boolean>>;
+  | 'updatedAt'
+  | 'phoneVerified'
+  | 'weeklyDigest'
+  | 'yearRecap'
+  | 'emailLocale'
+  | HouseholdEmailPrefKey
+> & {
+  weeklyDigest?: boolean;
+  yearRecap?: boolean;
+  /** Optional so a client that predates the field cannot wipe a stored
+   *  language by round-tripping a payload that never carried it. */
+  emailLocale?: '' | 'en' | 'es';
+} & Partial<Record<HouseholdEmailPrefKey, boolean>>;
 
 /**
  * Replace the user's prefs row. We always write all fields so partial update
@@ -256,6 +293,8 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
     ...prefs,
     weeklyDigest: prefs.weeklyDigest ?? existing.weeklyDigest,
     ...householdEmailPrefs,
+    yearRecap: prefs.yearRecap ?? existing.yearRecap,
+    emailLocale: normalizeEmailLocale(prefs.emailLocale ?? existing.emailLocale),
     phoneVerified,
     timezone,
     updatedAt: new Date().toISOString(),
@@ -421,5 +460,61 @@ export async function confirmPhoneVerification(
     })
   );
   logger.info({ userId, msg: 'phone_verification_confirmed' }, 'phone_verification_confirmed');
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
+// One-click unsubscribe (RFC 8058)
+// ---------------------------------------------------------------------------
+
+/** Preference field each unsubscribable email category switches off. */
+const CATEGORY_FIELD = {
+  weekly_digest: 'weeklyDigest',
+  year_recap: 'yearRecap',
+  pest_alerts: 'pestAlerts',
+} as const;
+
+export type UnsubscribableCategory = keyof typeof CATEGORY_FIELD;
+
+/**
+ * Turn ONE email category off for a user, from an unauthenticated capability
+ * URL (see `services/email/capability.ts`).
+ *
+ * Deliberately not routed through `setPreferences`: that validates the stored
+ * timezone and the SMS/phone pairing and throws a 400 when either is
+ * historically bad. An unsubscribe must never fail because of an unrelated
+ * field — the one thing a mail provider's one-click POST is entitled to
+ * expect is that it worked. It reads the full record first (which supplies
+ * defaults for a row that was never written) so writing it back cannot drop a
+ * field to its zero value.
+ *
+ * Idempotent: unsubscribing twice is a no-op, which matters because Gmail may
+ * retry the POST.
+ */
+export async function disableEmailCategory(
+  userId: string,
+  category: UnsubscribableCategory
+): Promise<NotificationPreferences> {
+  const current = await getPreferences(userId);
+  const updated: NotificationPreferences = {
+    ...current,
+    [CATEGORY_FIELD[category]]: false,
+    updatedAt: new Date().toISOString(),
+  };
+  await dynamodb.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: `USER#${userId}`,
+        SK: 'PREFS',
+        entityType: 'NotificationPreferences',
+        ...updated,
+      },
+    })
+  );
+  logger.info(
+    { userId, category, msg: 'notification_prefs.unsubscribed' },
+    'notification_prefs.unsubscribed'
+  );
   return updated;
 }

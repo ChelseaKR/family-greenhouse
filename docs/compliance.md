@@ -1,6 +1,6 @@
 # Compliance & trust
 
-> Last verified: 2026-07-05 · Recheck: quarterly, or on any new PII-processing feature
+> Last verified: 2026-09-04 · Recheck: quarterly, or on any new PII-processing feature
 
 Ready-to-publish legal/trust statements and the requirements that gate two
 deferred features (SMS, Sentry). Pair with [`security.md`](security.md),
@@ -54,6 +54,7 @@ For any EU user/customer:
 - **Sub-processors:** AWS (hosting), Stripe (billing), and the optional enrichment APIs (Perenual, Plant.id, OpenWeather) when enabled. Maintain a public sub-processor list; each has a standard DPA you reference rather than negotiate.
 - **DPA:** offer AWS's and Stripe's standard DPAs by reference; provide a short Family-Greenhouse DPA addendum for B2B customers who ask. Not needed for consumer users in most cases, but have a template ready.
 - **Account deletion caveat to disclose:** `DELETE /me` removes login + personal data but preserves household _activity history_ under a pseudonymized member name (so a shared household's record stays coherent). State this explicitly in the privacy policy. As of [ADR 0023](adr/0023-billing-lifecycle-emails.md) the deletion also sends a confirmation email that states this caveat — plus Stripe's own retention of past payments, the DynamoDB point-in-time-recovery window, and the audit-log entry — at the moment the person is actually reading. The privacy-policy text and that email must not drift apart.
+- **Erasure does not reach log data immediately, and that is a deliberate trade.** The audit trail (`backend/src/utils/auditLog.ts`) records `actorEmail` on security-relevant actions — invites, member changes, plant-tag and kiosk issue/revoke — because an audit line with only an opaque `actorId` cannot answer "who did this" without a Cognito join that account deletion has already broken. The consequence is that the Lambda CloudWatch log groups hold member email addresses, so `DELETE /me` (which deletes rows, not log lines) leaves those behind. **The mitigation is the 30-day retention set on every group** (`infrastructure/modules/api/main.tf`), so the honest answer to "have you deleted everything?" is "within 30 days". Every other PII-shaped field is censored at the logger (`backend/src/utils/logger.ts`; see [`observability.md`](observability.md)) — `actorEmail` is the single, named exception. Reflect the 30-day figure in the privacy policy alongside the Stripe and point-in-time-recovery retentions already disclosed there.
 - **Subscription notices:** every subscription carries a 14-day trial, so every subscriber is a free-trial-to-paid conversion. California's Automatic Renewal Law expects a reminder before that conversion and an acknowledgement of the purchase carrying the renewal terms and how to cancel; the EU Consumer Rights Directive (Art. 8) expects confirmation of the contract on a durable medium including the total price. The receipt, renewal notice and cancellation confirmation in [ADR 0023](adr/0023-billing-lifecycle-emails.md) exist for this and should not be removed without legal review. The reminder's lead time is a **Stripe dashboard setting** (how far ahead `invoice.upcoming` fires), not a repository value — confirm it against the window the applicable statute requires.
 
 ---
@@ -74,14 +75,59 @@ Until #1–#3 are built, SMS stays off. Web push is unaffected (transactional, l
 
 The task reminder is transactional: the user created the task. **The Monday "plants at risk" digest and the January year-in-review are not** — they are lifecycle mail the recipient did not individually request, which puts them inside Gmail's and Yahoo's bulk-sender rules (in force since February 2024). [ADR 0022](adr/0022-email-deliverability-and-bounce-handling.md) is the decision record; this is the checklist.
 
-| Requirement                                                                                        | State                                                                                                                                                                                                                                                                           |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SPF, DKIM and DMARC, all aligned**                                                               | Done, pending apply. A custom MAIL FROM subdomain aligns SPF; DKIM already aligned. Before this, DMARC rested on DKIM alone.                                                                                                                                                    |
-| **Spam complaints under 0.3%, ideally under 0.1%**                                                 | Now measurable (per-configuration-set complaint rate in CloudWatch) and now acted on — a complaint suppresses the address permanently.                                                                                                                                          |
-| **Honour unsubscribes promptly**                                                                   | A complaint is treated as a permanent withdrawal of consent and enforced at the send path within one event.                                                                                                                                                                     |
-| **One-click unsubscribe (`List-Unsubscribe` + `List-Unsubscribe-Post`) on non-transactional mail** | **NOT DONE.** `SendEmailCommand` (SES v1) cannot set custom headers; this needs the v2 API, which is the same migration multipart HTML needs. Until then the per-type toggles (`email`, `weeklyDigest`) are the opt-out, and the in-product help says so rather than hiding it. |
+| Requirement                                                                                        | State                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **SPF, DKIM and DMARC, all aligned**                                                               | Done, pending apply. A custom MAIL FROM subdomain aligns SPF; DKIM already aligned. Before this, DMARC rested on DKIM alone.                                                                           |
+| **Spam complaints under 0.3%, ideally under 0.1%**                                                 | Measured, **alarmed** (`ses-complaint-rate`, 0.05% over three hourly datapoints — #523), and acted on: a complaint suppresses the address permanently.                                                 |
+| **Honour unsubscribes promptly**                                                                   | A complaint is treated as a permanent withdrawal of consent and enforced at the send path within one event.                                                                                            |
+| **One-click unsubscribe (`List-Unsubscribe` + `List-Unsubscribe-Post`) on non-transactional mail** | **Done** (#432, [ADR 0021](adr/0021-email-rendering-and-usefulness.md)). Both headers ship on the digest and the recap, and the automated one-click POST has its own unauthenticated route. See below. |
 
 Bounce and complaint handling itself (the suppression list, its policy, and how a suppressed address is un-suppressed) is documented in [`notifications.md`](notifications.md#deliverability-and-the-suppression-list).
+
+### One-click unsubscribe, in detail
+
+Verified against `main` on 2026-09-04:
+
+- **The headers.** `List-Unsubscribe` and `List-Unsubscribe-Post` are set on the
+  weekly digest (`backend/src/services/digestReport.ts:739-740`) and the annual
+  recap (`backend/src/services/digest.ts:628-629`) — and only when that
+  recipient actually has an unsubscribe URL, because a `List-Unsubscribe`
+  pointing nowhere is worse for deliverability than no header at all
+  (`backend/src/services/email/links.ts`). Both also render an
+  "Unsubscribe from these" footer link, so the header and the visible link
+  resolve to the same route.
+- **Transactional mail deliberately has neither.** A task reminder answers a
+  task the recipient created; the welcome email says so at
+  `backend/src/services/welcomeEmail.ts:12`.
+- **The v2 migration this row called blocking was not needed.** Sending moved
+  off SES v1 `SendEmailCommand`, which has no header surface at all, to
+  `SendRawEmailCommand` with a MIME builder
+  (`backend/src/services/emailNotifier.ts:169`,
+  `backend/src/services/email/mime.ts`).
+- **The automated POST has a route.** A provider's
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` lands on
+  `POST /notifications/email/unsubscribe`
+  (`infrastructure/modules/api/main.tf:1039`, `auth = "none"`, IP rate-limited),
+  which performs the opt-out and answers **503, not 200, when the write fails**
+  (`backend/src/handlers/notifications/handler.ts:425-441`) — a provider that
+  receives a 200 will not retry, so claiming an unsubscribe that did not persist
+  would leave the recipient still being mailed. `GET` on the same route renders
+  a confirm form and mutates nothing, so mail-client and corporate link scanners
+  cannot unsubscribe anyone.
+- **The per-type toggles remain** (`email`, `weeklyDigest`) as a second door
+  onto the same state, not as the only one.
+
+> **Why that row was wrong for a month.** It read **NOT DONE** from #432
+> shipping until 2026-09-04, and a compliance document that _understates_ has a
+> cost of its own. This table is an input to a decision — "can we send this
+> campaign?", "are we ready for the bulk-sender rules?" — so a false NO either
+> defers a legitimate send or buys a re-implementation of something that already
+> exists. It is also contagious: a reader who finds one row stale has no way to
+> know which of the others are. And because Gmail's and Yahoo's bulk-sender
+> requirements make one-click unsubscribe a dated obligation rather than a
+> nicety, a row saying we did not meet it was asserting a non-compliance we did
+> not have. Three email PRs (#430, #432, #433) landed between the previous
+> verification date and this one without the recheck firing.
 
 ---
 

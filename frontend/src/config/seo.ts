@@ -31,6 +31,26 @@ import { SITE_URL, siteUrl } from './site';
  *  care guides use `article`. */
 export type OgType = 'website' | 'article';
 
+/**
+ * ISO-8601 dates for an `og:type=article` page. Both are optional and only
+ * the ones supplied are emitted, because the two article surfaces have
+ * genuinely different sources: a blog post knows when it was PUBLISHED
+ * (`post.date`), and a care guide knows when it was last REVIEWED
+ * (`guide.reviewed`). Neither knows the other.
+ *
+ * Restating one as the other is exactly the conflation the Article JSON-LD
+ * already makes — `dateModified` is hardwired to `datePublished` on both
+ * templates, which is why 14 guides currently claim to have been *published*
+ * on their review date. Emitting only what is actually known keeps this from
+ * being a second instance of it.
+ */
+export interface ArticleMeta {
+  publishedTime?: string;
+  modifiedTime?: string;
+  /** Blog vs. care guide, so a share preview can say which section it is. */
+  section?: string;
+}
+
 /** Search-engine indexing policy. Use `noindex, nofollow` for app-only,
  * tokenized, or error pages that can otherwise look like valid SPA URLs. */
 export type RobotsPolicy = 'index, follow' | 'noindex, follow' | 'noindex, nofollow';
@@ -46,6 +66,17 @@ export interface MetaTags {
    *  instead of guessing — important for the indexable marketing routes. */
   canonical?: string;
   robots?: RobotsPolicy;
+  /**
+   * Article metadata, emitted as the `article:*` Open Graph properties and
+   * only when `ogType` is `'article'`.
+   *
+   * Both content templates already declared `og:type=article` while shipping
+   * none of the properties that type exists to carry — so LinkedIn and
+   * Facebook had no publish date to show in an unfurl, and evergreen care
+   * guides carried no freshness signal at all in a share preview. The dates
+   * were already in hand: they feed the Article JSON-LD on the same pages.
+   */
+  article?: ArticleMeta;
   /** Optional JSON-LD payload (Article, FAQ, etc.). The shape isn't validated
    *  here — the caller is responsible for emitting valid schema.org. */
   jsonLd?: Record<string, unknown>;
@@ -65,12 +96,12 @@ export const TWITTER_IMAGE_ALT = 'Family Greenhouse — every plant, every perso
 export const DEFAULT_META = {
   title: 'Family Greenhouse — Grow together',
   description:
-    'A collaborative plant care app for households. Free accounts include up to 10 plants, shared tasks, reminders, and care history.',
+    'A collaborative plant care app for households. Free accounts include one home, up to 3 people and 20 plants, with shared tasks, reminders, and care history.',
   ogTitle: 'Family Greenhouse — collaborative plant care for households',
   ogDescription:
-    'Collaborative plant care for households — share tasks, get reminders, and keep a care log everyone can see. Free for up to 10 plants.',
+    'Collaborative plant care for households — share tasks, get reminders, and keep a care log everyone can see. Free for up to 20 plants.',
   twitterDescription:
-    'Share tasks, get reminders, and keep a care log everyone can see. Free for up to 10 plants.',
+    'Share tasks, get reminders, and keep a care log everyone can see. Free for up to 20 plants.',
 } as const;
 
 /** The fully-resolved head of one page — no optionals left to interpret. */
@@ -87,6 +118,7 @@ export interface ResolvedHead {
   twitterDescription: string;
   twitterImage: string;
   robots: RobotsPolicy;
+  article?: ArticleMeta | undefined;
   jsonLd?: Record<string, unknown> | undefined;
 }
 
@@ -120,7 +152,21 @@ export function resolveHead(meta: MetaTags | null, path: string | null): Resolve
     twitterTitle: ogTitle,
     twitterDescription,
     twitterImage: meta?.ogImage ?? DEFAULT_TWITTER_IMAGE,
-    robots: meta?.robots ?? 'index, follow',
+    // Same `path === null` condition as the canonical above, for the same
+    // reason. That output is `dist/app-shell.html`, which CloudFront returns
+    // for EVERY path the prerender did not produce a file for — so one
+    // indexable shell would offer Google `/dashboard`, `/typo`, and every
+    // token-scoped URL (`/sit/<token>`, `/tag/<token>`, `/kiosk/<token>`,
+    // `/shared/<code>`) as a real page. ADR 0013 decided the shell carries a
+    // `noindex` for exactly this reason; it was the one part of that decision
+    // the code never implemented. `follow` rather than `nofollow` because the
+    // shell's `#root` is empty — there is nothing to follow — and `noindex,
+    // follow` is the conservative catch-all.
+    //
+    // A route that renders its own page is unaffected: prerendered files pass
+    // a real `path` and keep `index, follow`.
+    robots: meta?.robots ?? (path === null ? 'noindex, follow' : 'index, follow'),
+    article: meta?.article,
     jsonLd: meta?.jsonLd,
   };
 }
@@ -167,6 +213,22 @@ export function headToTags(head: ResolvedHead): string {
     meta('name', 'twitter:description', head.twitterDescription),
     meta('name', 'twitter:image', head.twitterImage),
     meta('name', 'twitter:image:alt', TWITTER_IMAGE_ALT),
+    // Facebook guesses the locale without this; the site ships English only
+    // (i18n/index.ts collapses SUPPORTED_LANGS to ['en']).
+    meta('property', 'og:locale', 'en_US'),
+    ...(head.ogType === 'article' && head.article
+      ? [
+          ...(head.article.publishedTime
+            ? [meta('property', 'article:published_time', head.article.publishedTime)]
+            : []),
+          ...(head.article.modifiedTime
+            ? [meta('property', 'article:modified_time', head.article.modifiedTime)]
+            : []),
+          ...(head.article.section
+            ? [meta('property', 'article:section', head.article.section)]
+            : []),
+        ]
+      : []),
     meta('name', 'robots', head.robots),
     ...(head.jsonLd
       ? [`<script type="application/ld+json">${jsonLdScript(head.jsonLd)}</script>`]

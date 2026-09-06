@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -26,7 +27,9 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { MemberVacation } from './MemberVacation';
 import { useVacationWindows } from './useVacationWindows';
 import { SitterLinksCard } from './SitterLinksCard';
+import { CaretakerSeatsCard } from './CaretakerSeatsCard';
 import { CareLoadCard } from './CareLoadCard';
+import { AutoHandoffCard } from './AutoHandoffCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -281,7 +284,37 @@ export function HouseholdPage() {
           traveller is rarely the admin. A separate component so the
           create/copy/revoke state stays self-contained; it decides per link
           whether this member may revoke it. */}
-      {householdId && <SitterLinksCard householdId={householdId} members={household.members} />}
+      {/* `#sitter-links` is the jump target `TripSitterOffer` points a member
+          at from the vacation form below (#480) — the moment they declare a
+          trip is the moment to reach this form. Keep the id if this moves. */}
+      {householdId && (
+        <div id="sitter-links" className="scroll-mt-4">
+          <SitterLinksCard householdId={householdId} members={household.members} />
+        </div>
+      )}
+
+      {/* Return recap — deliberately NOT admin-gated: the sitter looked after
+          the whole household's plants, so every member can see what happened
+          while they were away. */}
+      <Card>
+        <CardHeader
+          title={t('awayRecap.title')}
+          description={t('awayRecap.householdCardDescription')}
+        />
+        <Link to="/away-recap" className="text-primary-700 underline hover:text-primary-800">
+          {t('awayRecap.householdCardLink')}
+        </Link>
+      </Card>
+      {/* Auto-handoff (ADR 0018) — admin-only because it turns on a new class
+          of email for everyone. Plan gating is read from the catalog inside. */}
+      {isAdmin && householdId && (
+        <AutoHandoffCard householdId={householdId} household={household} />
+      )}
+
+      {/* Caretaker seats — named, revocable helper identities with a
+          proof-of-visit report. Admin-only, like sitter links. Plan gating is
+          read from the catalog inside, exactly like AutoHandoffCard. */}
+      {isAdmin && householdId && <CaretakerSeatsCard householdId={householdId} />}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what
@@ -476,7 +509,7 @@ export function HouseholdPage() {
         onClose={() => setMemberToRemove(null)}
         onConfirm={() => memberToRemove && removeMemberMutation.mutate(memberToRemove)}
         title="Remove member"
-        message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks."
+        message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, and any API key they issued."
         confirmLabel="Remove"
         isLoading={removeMemberMutation.isPending}
       />

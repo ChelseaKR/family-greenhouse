@@ -127,3 +127,52 @@ and wait for CloudFront invalidation before restoring the previous Lambda code.
 5. **Clean up** the throwaway table when done: `aws dynamodb delete-table --table-name family-greenhouse-restore-<date>`.
 
 Re-run this drill ~quarterly (it's cheap — a few cents on a tiny table).
+
+## Post-deploy test fixtures in production data
+
+**Symptom:** a count of households, members, or plants that does not match what
+the product actually has. On 2026-09-04 the production table held 38 households
+against two registered users; 35 were named "Smoke Test Household" and belonged
+to Cognito accounts that no longer existed. They also kept accruing rows — each
+one collected a `PEST_CHECK#<date>` marker every day the background job ran.
+
+**Cause:** `frontend/tests/e2e/post-deploy-smoke.spec.ts` creates a household
+through the real API on every production deploy, and its teardown cannot run
+when the job is skipped, the run is cancelled, or the runner dies.
+
+**Now in place:** fixture rows carry `isTestFixture: true` at creation
+(`TEST_FIXTURE` in `post-deploy-smoke-support.ts`), and the
+`sweep-test-fixtures` job in `cd-production.yml` clears marked debris older than
+three hours on every deploy, whatever happened to the smoke job.
+
+**To check or clean up by hand** — the script is a dry run unless `--apply` is
+passed, so the first command is always safe:
+
+```bash
+# What is in there, marked. Reads only.
+node scripts/sweep-test-fixtures.mjs --table family-greenhouse-production
+
+# Delete marked fixtures older than 3h.
+node scripts/sweep-test-fixtures.mjs --table family-greenhouse-production --apply
+
+# Pre-marker debris. Proposed on evidence — every member's Cognito user gone
+# from the pool — never on the household's name. REVIEW THE DRY RUN FIRST.
+node scripts/sweep-test-fixtures.mjs --table family-greenhouse-production \
+  --include-legacy --user-pool-id <production-user-pool-id>
+node scripts/sweep-test-fixtures.mjs --table family-greenhouse-production \
+  --include-legacy --user-pool-id <production-user-pool-id> --apply
+```
+
+A household holding a member who is not a fixture user is always skipped and
+reported, never deleted. `--max-deletes` (default 500) refuses a plan larger
+than expected. If a plan proposes something that looks real, stop and read it —
+the restore path above is PITR, and it is much cheaper to not delete.
+
+**To count households honestly** while fixtures may still be present:
+
+```bash
+aws dynamodb scan --table-name family-greenhouse-production \
+  --filter-expression 'entityType = :t AND attribute_not_exists(isTestFixture)' \
+  --expression-attribute-values '{":t":{"S":"Household"}}' \
+  --select COUNT --query Count
+```

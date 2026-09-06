@@ -41,6 +41,117 @@ Caps are enforced in:
 - `POST /plants` → counts existing plants in the household, refuses creation with HTTP **402 Payment Required** if at the cap
 - `POST /households/join/:inviteCode` → counts existing members, same 402 if full
 
+### Entitlement vs. plan
+
+A household's `planId` says which plan it is **on**. It does not say whether it
+is **paying** for it. `getEntitledPlan` (`backend/src/models/plans.ts`) resolves
+the second question, and the gates listed below use it rather than
+`getPlan(sub.planId)`:
+
+| Stripe `subscription.status`                                                   | Caps resolve to  |
+| ------------------------------------------------------------------------------ | ---------------- |
+| `active`, `trialing`                                                           | the paid plan    |
+| none recorded (free tier, one-time lifetime grant)                             | the plan on file |
+| `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused`, `canceled` | Seedling         |
+
+**There is no grace period, and that is an assumption, not a published policy.**
+Nothing in this repository states one — not this file, not
+[`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not the ADRs — so any number
+of days would have been invented. Entitlement therefore ends when good standing
+does. If the owner decides a grace window is the right product behaviour, it
+belongs here first and in `ENTITLED_SUBSCRIPTION_STATUSES` second.
+
+This is deliberately the same shape as a downgrade, not a lockout: see
+"Plan caps and downgrades" below. Existing plants and members stay readable and
+editable; only new creations pause.
+`GET /billing/me` reports the same entitled caps in its meters, so the numbers
+the UI shows are the numbers the API enforces; `planId` in that response stays
+the plan the household is on.
+
+### Starting something new vs. continuing something already issued
+
+The rule above answers "may this household **start** something?". A second
+question turned out to be hiding underneath it: **what happens to a thing
+already issued and in somebody else's hands?**
+
+A `past_due` household should not be able to mint a new sitter link. But a
+sitter standing in that household's kitchen, holding a link that worked when it
+was shared, is not the buyer and cannot enter a payment method — and the plants
+are what pay for the mistake. A printed plant tag is a sticker on a pot. A
+kiosk is a screen on a wall.
+
+So `models/plans.ts` exposes **two entry points over one concept**:
+
+| Function                             | Question                                               |
+| ------------------------------------ | ------------------------------------------------------ |
+| `getEntitledPlan(sub)`               | may this household **start** something new?            |
+| `getEntitledPlanForIssuedGrant(sub)` | what does an already-issued, unexpired grant **keep**? |
+
+Both apply the lifetime floor. The lenient one is bounded three ways: every
+grant it serves carries an expiry that is checked before it is reached, the
+plan row itself falls to Seedling when `customer.subscription.deleted` finally
+fires, and each use of it is pinned in a reviewed baseline (below).
+
+**Decisions, per surface** (#476):
+
+| Surface                         | Starting                                     | Continuing                                                                 |
+| ------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
+| Sitter links                    | issuing follows entitlement (402)            | an issued, unexpired link keeps its brief and photo-back to `expiresAt`    |
+| Move Day                        | firing a new season follows entitlement      | a season claimed inside the 14-day card window stays visible               |
+| Plant tags                      | issuing a label follows entitlement (402)    | scanning is **never** entitlement-checked; revocation is the control       |
+| Kiosk                           | issuing a link follows entitlement (402)     | the mounted display is **never** entitlement-checked; revoke stays ungated |
+| Caretaker seats                 | creating a seat follows entitlement (402)    | list / revoke / report stay open on every tier                             |
+| Auto-handoff (escalation)       | turning the rule ON follows entitlement      | the stored rule survives; the hourly scan simply stops acting on it        |
+| Analytics, coverage, away recap | follow entitlement — the reader is the buyer | n/a                                                                        |
+
+Refusing to fire Move Day leaves the season **unclaimed** rather than burning
+it, so the next dashboard load after the card is fixed produces the list.
+
+The gates `getEntitledPlan` covers are plant create, plant reactivate,
+shared-plant accept, bulk import, household join, the public read API
+(`middleware/apiKey.ts`), API key **minting** (`handlers/apiKeys`), the Plant.id
+allowance, the care assistant, the leaf-health monthly allowance, the cap
+`GET /chat/budget` reports, cross-home Today, sitter-link **issue**, plant-tag
+**issue** and the print sheet's allowance, kiosk-link **issue**, caretaker-seat
+**create**, auto-handoff **enable** and its hourly scan, Move Day **fire**, the
+analytics history window, year in review, coverage, the away recap, and the
+double-care detector.
+
+### The ratchet
+
+`backend/scripts/check-entitlement-gates.mjs` (`npm run entitlements:check`,
+in `npm run verify` and CI's required Lint job) fails on any new call to
+`getPlan` / `planLimits` / `planHasFeature` — or to
+`getEntitledPlanForIssuedGrant`, or any index into the catalog, `PLANS[…]` —
+that is not in `backend/scripts/entitlement-gates-baseline.json` with a reason
+and the pinned argument it is called with. It fails equally on a stale entry
+and on an entry whose argument has drifted, so the baseline can only shrink.
+
+It exists because this section used to claim "every paid-feature gate uses it"
+and that was not true: the rule stopped applying to code written after #364,
+and a new violating gate landed _while_ #476 was open. A hand-maintained list
+of gates is a snapshot, not a control.
+
+`PLANS[…]` was added after the fact, and the reason is worth keeping. The gate
+originally watched function names only, so `PLANS[h?.planId ?? 'seedling']` —
+`getPlan` with the unknown-id fallback written out by hand, reaching the same
+wrong answer — was invisible to it. `src/local-server.ts` resolved twenty
+paid-feature decisions that way, so the dev server kept granting a `past_due`
+household everything and kept dropping a lifetime owner to Seedling, while the
+gate reported green. That mattered because the integration suite exercises the
+mock: a test could pass against behaviour production does not have.
+`tests/integration/local-server-entitlement.test.ts` now pins the mock's
+answers against the table above, the way `tests/integration/route-parity.test.ts`
+pins its route table.
+
+Still invisible, and stated here rather than left to be found: a bare
+comparison against the plan row (`sub.planId === 'greenhouse'`), because
+`.planId` is read legitimately almost everywhere; and `strongestPlan(ids)`, the
+per-USER homes cap, which resolves from plan rows in `services/homesGate.ts`
+and its mock mirror. #476 did not convert the homes cap — whether one
+household's failing card should shrink a _different_ household's homes
+allowance is an open product question, not an oversight.
+
 The 402 response body carries a friendly explanation referencing the plan name; the frontend shows it as an error toast and links to `/settings/billing`.
 
 ## Frontend flow
@@ -65,14 +176,22 @@ Stripe webhook → POST /billing/webhook
 DDB household row updated (planId, status, stripeCustomerId, ...)
 ```
 
-The "Upgrade to X" button on `BillingSettings` does:
+**The client half of this flow no longer exists.** `billingService`
+(`frontend/src/services/billingService.ts`) exports exactly `listPlans` and
+`getCurrentSubscription`; the purchase UI and its `startCheckout` / `openPortal`
+callers were removed with the paid-plan surfaces. The diagram above therefore
+describes the retained BACKEND path plus the frontend that would have to be
+rebuilt, not code you can call today. Restoring it is part of the UI-restoration
+step in [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not a loose end.
 
-1. `billingService.startCheckout(planId)` → backend creates a Stripe Checkout Session and returns its URL
+Historically, the "Upgrade to X" button on `BillingSettings` did:
+
+1. Call the backend `POST /billing/checkout`, which creates a Stripe Checkout Session and returns its URL
 2. Frontend `window.location.href = result.url` → user lands on Stripe-hosted checkout
 3. After success/cancel, Stripe redirects to `${FRONTEND_URL}/settings/billing?status={success|cancel}`
 4. The settings page reads the query string and shows a friendly notice
 
-The portal flow ("Manage subscription") is the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI.
+The portal flow ("Manage subscription") was the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI. Both endpoints answer 503 while the hold is active.
 
 ### Members ask, admins buy
 
@@ -87,6 +206,18 @@ Checkout and the portal are `requireAdmin`, so a plain member who hits a paid fe
 Nothing on this path touches Stripe. Delivery flags in the response are honest: `emailDelivered: false` means no email left the building (failed or unconfigured), and the card says so instead of claiming success.
 
 Adopting the lock on a new gated surface is three steps: add the feature id to `FEATURE_CATALOG` in `backend/src/models/upgradeFeatures.ts` (mirror it in `frontend/src/services/upgradeRequestService.ts`), add `locked.features.<id>` to both i18n catalogs, and wrap the gated UI in `<LockedFeature feature="<id>">`.
+
+**Where an ask fires matters as much as what it says.** The Away Kit's prompt
+used to appear only in `SitterLinksCard`, when someone typed a window longer
+than seven days — the moment of _failure_, and only for the minority who push
+against a wall the form already shows them. `away_kit` is now also asked from
+`TripSitterOffer`, mounted in the vacation form, which is where a person
+declares a dated trip and which mentioned sitter links nowhere (#480). The
+component says two true things there: that a sitter link exists at all (free,
+and the pointer half is not an upsell), and — only from a `sitterLinkMaxDays`
+it actually read — how long one link on this plan covers. It renders the
+locked card only on `features.awayKit === false`, so a Garden household over
+its own 90-day cap is told the cap and offered nothing.
 
 ### Split the bill
 
@@ -152,11 +283,38 @@ deltaForStripeEvent(event): SubscriptionDelta | null      // pure: webhook event
 applyStripeEvent(event): Promise                          // calls deltaForStripeEvent then writes
 ```
 
+### The free trial is once per household
+
+`subscription_data.trial_period_days` is set only when the household has no
+`trialConsumedAt` on its metadata row. That marker is written write-once by the
+webhook the first time Stripe confirms a trial (a `trialing` subscription, a
+subscription carrying trial dates, or a subscription-mode Session that required
+no payment) and is never cleared by cancellation. Re-subscribing after
+cancelling stays deliberately possible; collecting a second 14 free days does
+not. The marker itself is internal and is not exposed by `GET /billing/me`;
+what that endpoint publishes is the derived boolean `trialAvailable`, so the UI
+can say which of the two a household is about to buy without ever learning the
+date (#602). Every user-facing sentence about the trial has to be written for
+both cases — the acquisition surfaces say a household's FIRST subscription,
+and Settings → Billing branches on `trialAvailable`.
+
+### Price reconciliation
+
+`backend/src/services/stripePrices.ts` compares the amounts this repository
+PUBLISHES against the Price objects Stripe would CHARGE.
+`createCheckoutSession` retrieves the price it is about to charge and refuses
+unless `unit_amount`, `currency`, and the recurring interval match
+`models/plans.ts` — and refuses when the price cannot be retrieved at all.
+`reconcileConfiguredPrices` sweeps every configured cadence for an ops check.
+This is the only thing in the stack that would catch two transposed `price_…`
+ids in tfvars: price ids encode neither amount nor cadence, and
+`stripe_price_ids_are_live` only guards test-vs-live mode.
+
 `deltaForStripeEvent` is intentionally pure. The webhook handler verifies the Stripe signature, calls `deltaForStripeEvent`, and applies whatever (if anything) it returns. This keeps the test surface small — `billing.test.ts` exercises the delta logic for every Stripe event type without ever touching DDB.
 
 Webhook events we handle:
 
-- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs and planId from the session metadata. The async event completes delayed one-time payment methods. **Status is deliberately not written here** — the session references the subscription by id and does not carry its state, so the subscription events own the field (otherwise every trialing household was recorded as `active`). A lifetime (`mode: 'payment'`) session is the exception: it has no subscription, so it writes `active` and clears the subscription ids.
+- `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs and planId from the session metadata, **but only once Stripe says the money settled**. A completed Session is not proof of payment: when a first subscription invoice fails, Stripe still completes the Session with `payment_status: 'unpaid'` while the subscription itself is `incomplete`. `payment_status === 'paid'` implies `active`; `no_payment_required` (a trial) implies `trialing`; anything else grants nothing at all, logs `stripe_checkout_session_unsettled_no_grant`, and waits for the subscription events. **Status is still never guessed** — where Stripe expanded the subscription onto the Session, its status wins over the value implied by `payment_status`, and the subscription events remain the authoritative source afterwards (otherwise every trialing household was recorded as `active`). The async event completes delayed one-time payment methods. A lifetime (`mode: 'payment'`) session is the exception: it has no subscription, so it writes `active` and clears the subscription ids.
 - `customer.subscription.created` / `customer.subscription.updated` → record latest status + period-end + planId
 - `customer.subscription.deleted` → reset to seedling, status canceled
 
@@ -169,7 +327,7 @@ change entitlement: `invoice.paid`, `invoice.upcoming`,
 alongside `invoice.paid` for the same money, and handling both would send two
 receipts for one charge.
 
-Three of these also emit a server-side product event (`backend/src/utils/serverAnalytics.ts`). The distinction that matters: every subscription checkout carries `trial_period_days: 14`, so checkout completion is a **trial start**, and the money-moved signal is the later `trialing → active` transition. See [`docs/analytics.md`](analytics.md) for the full contract — including why paid conversion keys off `customer.subscription.updated` rather than `invoice.payment_succeeded`, and how the dedupe ledger keeps an at-least-once redelivery from double-counting revenue.
+Three of these also emit a server-side product event (`backend/src/utils/serverAnalytics.ts`). The distinction that matters: a subscription checkout carries `trial_period_days: 14` only when the household has not consumed its trial (see "The free trial is once per household" above), so for a household's FIRST subscription checkout completion is a **trial start**, and the money-moved signal is the later `trialing → active` transition. A household that already spent its trial gets no trial days and is charged at checkout, so `subscription_activated` is not a reliable "no money has moved yet" marker for it — the caveat `applyStripeEvent` already spells out at the emit site. See [`docs/analytics.md`](analytics.md) for the full contract — including why paid conversion keys off `customer.subscription.updated` rather than `invoice.payment_succeeded`, and how the dedupe ledger keeps an at-least-once redelivery from double-counting revenue.
 
 ## Billing emails
 
@@ -250,6 +408,7 @@ repository hold must be inactive and `PAYMENTS_ENABLED` must be exactly `1`.
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | `environments/<env>/terraform.tfvars` — NOT secret, committed                                   |
 | `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                                                     |
+| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP`                                | same tfvars — one-time price; blank = pack not for sale, checkout refuses                       |
 | `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml)                                  |
 | `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`                                          |
 | `commercial-status.json`                                         | committed shared status; `commercialHoldActive: false` since 2026-09-01                         |
@@ -325,6 +484,43 @@ counters are always available. The nullable and partial-counter paths are
 covered by the household-usage service, billing-handler, and frontend billing
 tests instead of a synthetic local-server failure switch.
 
+## Identification top-up packs
+
+Identification is the one bundled entitlement with a hard per-call vendor
+cost ($0.0585; ADR 0012), so beyond the plan's monthly allowance it is sold
+by the pack rather than raised in tiers (ADR 0019): **20 identifications for
+$1.99**, one-time, valid 12 months from purchase, never auto-renewed.
+
+- **Offer:** `GET /billing/plans` publishes `identifyTopUp`
+  (`{ available, credits, validityDays, priceUsd? }`). `available` is true
+  only when payments are on AND `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` is set;
+  `priceUsd` appears only when payments are on — the same fail-closed rule
+  as the plan prices.
+- **Purchase:** `POST /billing/top-up/checkout` (admin only) opens a
+  `mode: 'payment'` Checkout Session with `purchase: identify_top_up` and
+  `credits: 20` stamped on its metadata. With the env var blank it answers
+  **400 `details.code: TOP_UP_NOT_CONFIGURED`** before touching Stripe —
+  never a fallback price, never a free credit.
+- **Grant:** the webhook grants on a PAID `checkout.session.completed` (or
+  the later `async_payment_succeeded` for deferred methods) by creating one
+  pack row `HOUSEHOLD#{id}` / `IDCREDIT#{sessionId}` with a conditional put.
+  The Stripe **session id is the key**, so a redelivery, a retry after a
+  crash between grant and ledger write, or two concurrent deliveries all
+  grant nothing the second time — independently of the `STRIPE_EVENT#`
+  ledger, which is written after the grant like every other event.
+  The household METADATA row is never touched: a pack is credits, not
+  entitlement.
+- **Consumption:** `POST /plants/identify` draws on the plan allowance
+  first and a credit only once the month's allowance is spent
+  (`identifyBudget.reserveIdentification`), soonest-expiring pack first, via
+  a conditional decrement. The success `usage` object gains `source`
+  (`allowance` | `credit`) and, after a credit spend, `credits`
+  (`{ remaining, expiresAt }`). The 402 gains `details`:
+  `{ code: IDENTIFY_BUDGET_EXHAUSTED, topUpAvailable, credits, topUp }`.
+- **Balance:** `GET /billing/me` carries `identifyCredits`
+  (`{ remaining, expiresAt }`), or `null` when the read failed — unknown is
+  never published as zero.
+
 ## Plan caps and downgrades
 
 If a household downgrades from Greenhouse → Seedling and they have 200 plants,
@@ -379,7 +575,7 @@ change to any row below is a change to the Terms as well, in **both** locales.
 | Terms section       | The behaviour it describes                                                                                                                                                                                               | Where it lives                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | Plan status         | Monthly only for new subscriptions; annual and Garden lifetime withdrawn but still renewing for existing households; admin-only; not sold in the mobile apps                                                             | `models/plans.ts` (`withdrawnIntervals`, `isIntervalOffered`), `requireAdmin` on checkout, `BillingSettings.tsx` `native` gate |
-| Free trials         | 14 days, card collected at checkout, first charge at trial end, trial-end date shown on the billing page                                                                                                                 | `services/billing.ts` (`trial_period_days: 14`), `BillingSettings.tsx` `trialEnds`                                             |
+| Free trials         | 14 days on a household's FIRST paid subscription only, card collected at checkout, first charge at trial end, trial-end date shown on the billing page; a household that already consumed its trial gets none and is charged at checkout | `services/billing.ts` (`TRIAL_PERIOD_DAYS`, gated on `trialConsumedAt`; `trialAvailable` on `GET /billing/me`), `BillingSettings.tsx` `trialEnds` |
 | Automatic renewal   | Renews until cancelled, charged to the card on file, at the price the subscription runs at                                                                                                                               | Stripe subscription against the tier's price id; the plan catalog never migrates a live subscription                           |
 | Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                  |
 | Price changes       | The 14-day material-change notice these Terms already give; an existing subscription keeps its own price                                                                                                                 | `legal.terms.agreement.body` / `changes.body`; § _Setup checklist_ above ("do not archive those Stripe prices")                |

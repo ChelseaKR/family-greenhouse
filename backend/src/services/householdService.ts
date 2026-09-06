@@ -19,7 +19,9 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { atCap, type Limit } from '../models/plans.js';
 import { invalidateMembership } from '../utils/membershipCache.js';
+import { HOUSEHOLD_TIMEZONE_UNSET, normalizeHouseholdTimeZone } from './householdTimeZone.js';
 import {
   Household,
   HouseholdMember,
@@ -29,6 +31,7 @@ import {
 } from '../models/types.js';
 import { CreateHouseholdInput } from '../models/schemas.js';
 import * as emailSuppression from './emailSuppression.js';
+import { normalizeEscalateAfterDays } from './escalationRule.js';
 
 /**
  * Raised when a write would exceed the household's plan cap. Handlers map
@@ -230,6 +233,33 @@ export async function setMemberRole(
   };
 }
 
+/**
+ * One household row -> one `Household`, so every write path hands back the
+ * same shape the read path does.
+ *
+ * It used to be two hand-written literals. `setHouseholdLocation`'s copy was
+ * already missing `escalateAfterDays`, so `PUT /households/{id}/location`
+ * answered with a household whose auto-handoff rule looked absent — the
+ * "absence rendered as a value" shape this repo keeps unwinding, and exactly
+ * the trap a second household-level setting would fall into next.
+ */
+function toHousehold(item: Record<string, unknown>): Household {
+  return {
+    id: item.id as string,
+    name: item.name as string,
+    location: (item.location as Household['location']) ?? null,
+    // Read-side normalisation lives in escalation.ts so a legacy/corrupt
+    // value can never surface as an enabled rule.
+    escalateAfterDays: normalizeEscalateAfterDays(item.escalateAfterDays),
+    // Same posture, different reason: an unrecognised zone reads as unset
+    // rather than as UTC, so "we were never told" stays distinguishable from
+    // "they chose UTC" (services/householdTimeZone.ts, ADR 0010, ADR 0025).
+    timezone: normalizeHouseholdTimeZone(item.timezone),
+    createdAt: item.createdAt as string,
+    createdBy: item.createdBy as string,
+  };
+}
+
 export async function getHousehold(householdId: string): Promise<Household | null> {
   const result = await dynamodb.send(
     new GetCommand({
@@ -245,13 +275,7 @@ export async function getHousehold(householdId: string): Promise<Household | nul
     return null;
   }
 
-  return {
-    id: result.Item.id as string,
-    name: result.Item.name as string,
-    location: (result.Item.location as Household['location']) ?? null,
-    createdAt: result.Item.createdAt as string,
-    createdBy: result.Item.createdBy as string,
-  };
+  return toHousehold(result.Item);
 }
 
 export async function setHouseholdLocation(
@@ -270,13 +294,44 @@ export async function setHouseholdLocation(
     })
   );
   if (!result.Attributes) return null;
-  return {
-    id: result.Attributes.id as string,
-    name: result.Attributes.name as string,
-    location: (result.Attributes.location as Household['location']) ?? null,
-    createdAt: result.Attributes.createdAt as string,
-    createdBy: result.Attributes.createdBy as string,
-  };
+  return toHousehold(result.Attributes);
+}
+
+/**
+ * Store (or clear) the household's IANA timezone.
+ *
+ * Write-side validation is the caller's job — the handler runs the same
+ * `isValidTimeZone` the notification prefs do — but `toHousehold` normalises
+ * again on the way out, so a row written before this existed, or by a future
+ * runtime whose tz database has retired the name, still reads as unset rather
+ * than as a zone the due-date math could act on.
+ *
+ * Clearing REMOVEs the attribute rather than writing `''`. DynamoDB can then
+ * tell "never set" from "set to something" at the storage layer, which is the
+ * signal ADR 0025's cutover needs and the one thing a defaulted column cannot
+ * give back once it is gone.
+ *
+ * NOTHING reads this value for due-date, reminder, ICS or digest math. See
+ * ADR 0025 for why that is a separate, owner-approved step.
+ */
+export async function setHouseholdTimeZone(
+  householdId: string,
+  timezone: string
+): Promise<Household | null> {
+  const clearing = normalizeHouseholdTimeZone(timezone) === HOUSEHOLD_TIMEZONE_UNSET;
+  const result = await dynamodb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+      UpdateExpression: clearing ? 'REMOVE #timezone' : 'SET #timezone = :timezone',
+      ExpressionAttributeNames: { '#timezone': 'timezone' },
+      ...(clearing ? {} : { ExpressionAttributeValues: { ':timezone': timezone } }),
+      ReturnValues: 'ALL_NEW',
+      ConditionExpression: 'attribute_exists(PK)',
+    })
+  );
+  if (!result.Attributes) return null;
+  return toHousehold(result.Attributes);
 }
 
 /**
@@ -318,16 +373,18 @@ export async function listAllHouseholdIds(): Promise<string[]> {
  * follows `LastEvaluatedKey` to exhaustion.
  *
  * This used to be a single un-paginated page, safe only because of a constant
- * in another file — the largest plan's `maxMembers` is 50 (`models/plans.ts`),
+ * in another file — the largest plan's member cap was 50 (`models/plans.ts`),
  * under the 100 here. That coupling was the hazard the old docstring named:
- * raise `maxMembers` past the `Limit` and callers stop getting an error, they
+ * raise the cap past the `Limit` and callers stop getting an error, they
  * get a silently short roster. Reminder fan-out (`services/reminders.ts`)
  * iterates exactly this list, so a truncated one was a member who is simply
- * never reminded, with nothing anywhere saying so.
+ * never reminded, with nothing anywhere saying so. The re-cut (ADR 0014)
+ * makes Garden and Greenhouse membership unlimited, which would have made
+ * that hazard live rather than theoretical.
  *
  * Paging removes the failure mode instead of documenting it — the same shape
  * `plantService.queryAllPages` and `taskService.queryAllPages` already use, so
- * `maxMembers` and this number are no longer coupled at all.
+ * the member cap and this number are no longer coupled at all.
  */
 export const MEMBER_QUERY_LIMIT = 100;
 
@@ -483,7 +540,7 @@ export async function addMember(
   userId: string,
   userName: string,
   userEmail: string,
-  maxMembers: number,
+  maxMembers: Limit,
   role: 'admin' | 'member' = 'member'
 ): Promise<HouseholdMember> {
   const now = new Date().toISOString();
@@ -519,10 +576,14 @@ export async function addMember(
   if (typeof meta.Item.memberCount !== 'number') {
     const members = await getHouseholdMembers(householdId);
     base = members.length;
-    if (base >= maxMembers) {
+    if (atCap(base, maxMembers)) {
       throw new PlanLimitError(`Member limit of ${maxMembers} reached`);
     }
   }
+  // An unlimited plan (`null`, models/plans.ts) carries no cap condition and
+  // no `:max` value — DynamoDB rejects an ExpressionAttributeValue that the
+  // expression never references.
+  const capped = maxMembers !== null;
 
   try {
     await dynamodb.send(
@@ -540,9 +601,12 @@ export async function addMember(
               TableName: TABLE_NAME,
               Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
               UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :base) + :one',
-              ConditionExpression:
-                'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)',
-              ExpressionAttributeValues: { ':base': base, ':one': 1, ':max': maxMembers },
+              ConditionExpression: capped
+                ? 'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)'
+                : 'attribute_exists(PK)',
+              ExpressionAttributeValues: capped
+                ? { ':base': base, ':one': 1, ':max': maxMembers }
+                : { ':base': base, ':one': 1 },
             },
           },
         ],

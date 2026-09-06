@@ -41,11 +41,18 @@ Auto-gates that run but are **not** in the ruleset's required list (honest note)
 `npm run verify` at the repo root) = format:check + lint +
 typecheck + `test:coverage` + `i18n:check` + `reads:check` +
 `observability:check` + `npm audit --omit=dev --audit-level=high` + the
-bare-marker, silenced-gates and docs-testing guards — the local mirror of the CI gates that
+bare-marker, silenced-gates and docs-testing guards + the figures, API-spec,
+sitemap and brand checks — the local mirror of the CI gates that
 have no browser/cloud dependency. It runs `vitest run --coverage` in both
 workspaces, so the coverage floors in `frontend/vitest.config.ts` and
 `backend/vitest.config.ts` fail locally exactly where `Test Frontend` /
 `Test Backend` would fail in CI. Run it before pushing.
+
+The steps run concurrently (`scripts/run-gate.mjs` over the list in
+`scripts/gate-steps.mjs`); any one of them failing fails the whole run and
+names itself. Concurrency is a scheduling change only — the set of checks is
+unchanged, and the runner refuses to start on a plan that would cover less
+than the workspaces `package.json` declares.
 
 ## REVIEW-GATE — human sign-off on the PR
 

@@ -16,7 +16,13 @@ import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import * as billing from '../../services/billing.js';
 import { ALL_PLANS } from '../../services/billing.js';
 import { getHouseholdCounters } from '../../services/householdUsage.js';
-import { getPlan, isIntervalOffered } from '../../models/plans.js';
+import { getCreditBalance } from '../../services/identifyCredits.js';
+import {
+  createIdentifyTopUpCheckoutSession,
+  TOP_UP_NOT_CONFIGURED,
+} from '../../services/identifyTopUp.js';
+import { getEntitledPlan, getPlan, isIntervalOffered, limitOf } from '../../models/plans.js';
+import { identifyTopUpSummary, isIdentifyTopUpConfigured } from '../../models/identifyTopUp.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 import {
@@ -54,6 +60,18 @@ const checkoutSchema = z
 
 type CheckoutInput = z.infer<typeof checkoutSchema>;
 
+// Body of POST /billing/top-up/checkout. There is exactly one pack, so the
+// body carries nothing but the per-click idempotency key; `{}` and a missing
+// body are both fine.
+const topUpCheckoutSchema = z
+  .object({
+    checkoutAttemptId: z.string().uuid().optional(),
+  })
+  .nullable()
+  .transform((v) => v ?? {});
+
+type TopUpCheckoutInput = z.infer<typeof topUpCheckoutSchema>;
+
 // GET /billing/plans  (public, no auth)
 // Plans rarely change. Cacheable publicly for 5 minutes — long enough that
 // CloudFront absorbs landing-page traffic, short enough that a price-change
@@ -69,6 +87,11 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
           effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
         },
         plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable)),
+        // The identification top-up offer, on the same fail-closed terms as
+        // the plan prices: `available` is true only when payments are on AND
+        // a Stripe price is configured; the amount appears only when
+        // payments are on.
+        identifyTopUp: identifyTopUpSummary(paymentsAvailable),
       },
       {
         maxAgeSeconds: 300,
@@ -87,30 +110,39 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
 export const getCurrentSubscription = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
-    const [sub, counters] = await Promise.all([
+    const [sub, counters, identifyCredits] = await Promise.all([
       billing.getHouseholdSubscription(user.householdId!),
       getHouseholdCounters(user.householdId!),
+      // Top-up credit balance. `null` = the read failed and the balance is
+      // unknown; a real 0 is `{ remaining: 0, expiresAt: null }`.
+      getCreditBalance(user.householdId!),
     ]);
-    const plan = getPlan(sub.planId);
+    // The meters must show the caps that are actually ENFORCED. Resolving
+    // them off planId alone would advertise Garden's plant cap to a past_due
+    // household whose next POST /plants is refused at Seedling's. `planId`
+    // itself stays truthful: it is the plan they are on, which is not the
+    // same as the caps they may currently use.
+    const plan = getEntitledPlan(sub);
     const usageDetail = {
       plantCount: counters.plantCount,
-      maxPlants: plan.maxPlants,
+      maxPlants: limitOf(plan, 'plants'),
       memberCount: counters.memberCount,
-      maxMembers: plan.maxMembers,
+      maxMembers: limitOf(plan, 'members'),
     };
     const usage =
       counters.plantCount !== null && counters.memberCount !== null
         ? {
             plantCount: counters.plantCount,
-            maxPlants: plan.maxPlants,
+            maxPlants: limitOf(plan, 'plants'),
             memberCount: counters.memberCount,
-            maxMembers: plan.maxMembers,
+            maxMembers: limitOf(plan, 'members'),
           }
         : undefined;
     return successResponse({
       ...sub,
       ...(usage ? { usage } : {}),
       usageDetail,
+      identifyCredits,
     });
   }
 )
@@ -183,6 +215,55 @@ export const checkout = createHandler(
   .use(requireHousehold())
   .use(requireAdmin())
   .use(validateBody(checkoutSchema));
+
+// POST /billing/top-up/checkout
+//
+// One-time Stripe Checkout for an identification top-up pack
+// (models/identifyTopUp.ts). Admin-only like every other purchase. Fails
+// CLOSED on configuration: with no price id in the environment the answer
+// is a 400 carrying `code: TOP_UP_NOT_CONFIGURED`, before Stripe is touched
+// — never a fallback price, never a free credit.
+export const topUpCheckout = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<TopUpCheckoutInput>;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const notConfigured = () =>
+      createHttpError(400, 'Identification top-up packs are not available in this environment.', {
+        expose: true,
+        details: { code: TOP_UP_NOT_CONFIGURED },
+      });
+    // Refuse before the service so a misconfigured environment cannot reach
+    // DynamoDB or Stripe for a product it does not sell. The service checks
+    // again (after the payments gate) for any path around this handler.
+    if (!isIdentifyTopUpConfigured()) throw notConfigured();
+    try {
+      const session = await createIdentifyTopUpCheckoutSession({
+        householdId: user.householdId!,
+        customerEmail: user.email,
+        successUrl: `${baseUrl}/settings/billing?status=success&purchase=identify-top-up`,
+        cancelUrl: `${baseUrl}/settings/billing?status=cancel`,
+        idempotencyKey: validatedBody.checkoutAttemptId
+          ? `top-up:${user.householdId}:${validatedBody.checkoutAttemptId}`
+          : undefined,
+      });
+      return successResponse(session);
+    } catch (err) {
+      if (isPaymentActivityDisabledError(err)) {
+        throw createHttpError(503, 'Payments are currently paused.', { expose: true });
+      }
+      if ((err as Error).message?.startsWith(TOP_UP_NOT_CONFIGURED)) throw notConfigured();
+      logger.error({ err }, 'stripe_top_up_checkout_failed');
+      throw createHttpError(502, 'Stripe checkout failed. Please try again shortly.', {
+        expose: true,
+      });
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(topUpCheckoutSchema));
 
 // POST /billing/portal
 export const portal = createHandler(
@@ -268,6 +349,7 @@ export const handler = createRouter({
   'GET /billing/plans': listPlans,
   'GET /billing/me': getCurrentSubscription,
   'POST /billing/checkout': checkout,
+  'POST /billing/top-up/checkout': topUpCheckout,
   'POST /billing/portal': portal,
   'POST /billing/webhook': webhook,
 });

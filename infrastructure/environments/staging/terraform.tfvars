@@ -18,6 +18,24 @@ alert_email                 = ""
 enable_monitoring_alarms    = false
 enable_monitoring_dashboard = false
 
+# External availability probes are off here for the same reason: staging has no
+# alerts destination and nobody is on call for it, so a Route 53 health check
+# would bill ~$2.60/month to publish a metric no alarm reads. Production sets
+# both from the root defaults (site check on, API check off). Turning the site
+# check on here means paying for it — see modules/monitoring/variables.tf for
+# the cost breakdown.
+enable_site_health_check = false
+enable_api_health_check  = false
+
+# The frontend-rail heartbeat alarm (issue #576) is off here for a stronger
+# reason than cost. It sets treat_missing_data = "breaching" on a metric fed by
+# .github/workflows/uptime.yml, and that workflow probes PRODUCTION only
+# (vars.HEALTHCHECK_URL). Enabled here it would find no heartbeat, correctly
+# conclude that nothing can deliver a telemetry report to staging, and page
+# about it every two hours forever. Turning it on means also giving the uptime
+# workflow a staging endpoint to probe.
+enable_telemetry_delivery_alarm = false
+
 # --- AI inference cost caps (per household per UTC month) ---
 # Identify metering is tracking-only here (and in the code default): usage is
 # counted and returned, never blocked. Only production sets "1". Made explicit
@@ -53,6 +71,11 @@ stripe_price_id_garden_annual     = "price_1UB39YAhnUt8CMG0n38Jx1Ol"
 stripe_price_id_garden_lifetime   = "price_1UB39YAhnUt8CMG0z0D2bIqs"
 stripe_price_id_greenhouse        = "price_1UB3AhAhnUt8CMG0oeGJZKqH"
 stripe_price_id_greenhouse_annual = "price_1UB3A7AhnUt8CMG0kyrXPGtH"
+# Identification top-up pack (ADR 0019): a ONE-TIME test-mode price for
+# "20 identifications, $1.99". Blank = not for sale; checkout answers 400
+# TOP_UP_NOT_CONFIGURED and nothing is granted. Owner step: create the price in
+# Stripe TEST mode, paste its id here, apply.
+stripe_price_id_identify_top_up = ""
 # Stays false in staging: these ids are test-mode by design, and the check
 # block in main.tf only requires the attestation for an sk_live_ key.
 stripe_price_ids_are_live = false

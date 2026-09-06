@@ -115,17 +115,53 @@ describe('resolveTargetPlan', () => {
     expect(resolveTargetPlan('garden_plan', 'garden')).toBeNull();
   });
 
+  it('resolves the Away Kit against the one boundary planIncludesAwayKit draws', async () => {
+    const { resolveTargetPlan } = await import('../../../src/services/upgradeRequests.js');
+    const { PLANS, planIncludesAwayKit } = await import('../../../src/models/plans.js');
+    // The ask must target the same line the entitlement check uses, or a
+    // member is emailing an admin about a gate they are already past (#480).
+    expect(resolveTargetPlan('away_kit', 'seedling')).toBe('garden');
+    expect(resolveTargetPlan('away_kit', 'garden')).toBeNull();
+    expect(resolveTargetPlan('away_kit', 'greenhouse')).toBeNull();
+    for (const plan of Object.values(PLANS)) {
+      expect(resolveTargetPlan('away_kit', plan.id) === null).toBe(planIncludesAwayKit(plan));
+    }
+  });
+
+  it('names the Away Kit in the copy an admin actually receives', async () => {
+    const { composeUpgradeRequestEmail, composeUpgradeRequestPush } =
+      await import('../../../src/models/upgradeFeatures.js');
+    const input = {
+      adminName: 'Maria',
+      memberName: 'Sam',
+      householdName: 'The Kim House',
+      feature: 'away_kit' as const,
+      targetPlanId: 'garden' as const,
+      appUrl: 'https://app.example',
+      householdId: 'hh-1',
+    };
+    expect(composeUpgradeRequestEmail(input).text).toContain('The Away Kit');
+    expect(composeUpgradeRequestPush(input).body).toContain('The Away Kit');
+  });
+
   it('resolves cap features against the live catalog, skipping tiers that do not raise the cap', async () => {
     const { resolveTargetPlan } = await import('../../../src/services/upgradeRequests.js');
-    const { PLANS } = await import('../../../src/models/plans.js');
+    const { PLANS, isUnlimited } = await import('../../../src/models/plans.js');
     expect(resolveTargetPlan('plant_cap', 'seedling')).toBe('garden');
     expect(resolveTargetPlan('plant_cap', 'garden')).toBe('greenhouse');
     expect(resolveTargetPlan('plant_cap', 'greenhouse')).toBeNull();
-    // Garden's member cap equals Seedling's today, so the first tier that
-    // actually adds seats is the answer — whichever that is in the catalog.
-    const firstSeatRaise =
-      PLANS.garden.maxMembers > PLANS.seedling.maxMembers ? 'garden' : 'greenhouse';
-    expect(resolveTargetPlan('member_cap', 'seedling')).toBe(firstSeatRaise);
+    // The first tier that actually adds seats is the answer — whichever that
+    // is in the catalog. Since ADR 0014 a cap is a `Limit`, so `null`
+    // (unlimited) is the HIGHEST ceiling, not a missing one: Garden's
+    // unlimited membership genuinely raises Seedling's three.
+    const seedlingMembers = PLANS.seedling.limits.members;
+    const gardenMembers = PLANS.garden.limits.members;
+    const gardenAddsSeats = isUnlimited(gardenMembers)
+      ? !isUnlimited(seedlingMembers)
+      : !isUnlimited(seedlingMembers) && gardenMembers > seedlingMembers;
+    expect(resolveTargetPlan('member_cap', 'seedling')).toBe(
+      gardenAddsSeats ? 'garden' : 'greenhouse'
+    );
     expect(resolveTargetPlan('member_cap', 'greenhouse')).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import {
   formatRelativeDate,
   isOverdue,
   isToday,
+  overdueAt,
   addDays,
   toISODateString,
 } from '@/utils/date';
@@ -62,6 +63,50 @@ describe('date utils', () => {
 
     it('returns false for future dates', () => {
       expect(isOverdue('2024-04-16T12:00:00Z')).toBe(false);
+    });
+
+    it('classifies against an injected clock instead of the ambient one', () => {
+      const nextWeek = new Date('2024-04-22T12:00:00Z');
+      expect(isOverdue('2024-04-16T12:00:00Z', nextWeek)).toBe(true);
+      expect(isOverdue('2024-04-22T12:00:00Z', nextWeek)).toBe(false);
+    });
+  });
+
+  describe('overdueAt', () => {
+    it('is local midnight after the due date’s calendar day', () => {
+      const start = new Date('2024-04-15T12:00:00Z');
+      start.setHours(0, 0, 0, 0);
+      const nextMidnight = new Date(start);
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      expect(overdueAt('2024-04-15T12:00:00Z')).toBe(nextMidnight.getTime());
+    });
+
+    it('is the same instant for every time of day on the due date', () => {
+      // A recurring task lands at an arbitrary hour (completion advances
+      // `nextDue` from the completion instant), and none of them may change
+      // when the household starts calling it overdue.
+      const morning = overdueAt('2024-04-15T13:00:00Z');
+      expect(overdueAt('2024-04-15T04:00:00Z')).toBe(morning);
+      expect(overdueAt('2024-04-15T23:00:00Z')).toBe(morning);
+    });
+
+    it('is NaN for an unparseable date, so schedulers can drop it', () => {
+      expect(overdueAt('not-a-date')).toBeNaN();
+      expect(Number.isFinite(overdueAt('not-a-date'))).toBe(false);
+    });
+
+    // The coupling the alert path depends on (#591): the instant a scheduler
+    // wakes for is exactly the instant the predicate flips. If either helper
+    // is changed alone — the household-timezone migration will change both —
+    // this fails.
+    it('agrees with isOverdue at every hour across a week', () => {
+      const base = new Date('2024-04-15T00:00:00Z').getTime();
+      const due = '2024-04-15T09:30:00Z';
+      const flipsAt = overdueAt(due);
+      for (let hour = 0; hour < 24 * 7; hour += 1) {
+        const now = new Date(base + hour * 3_600_000);
+        expect(isOverdue(due, now)).toBe(flipsAt <= now.getTime());
+      }
     });
   });
 

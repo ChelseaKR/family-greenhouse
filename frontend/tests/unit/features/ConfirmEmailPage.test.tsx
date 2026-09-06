@@ -205,7 +205,9 @@ describe('ConfirmEmailPage', () => {
     expect(
       await screen.findByRole('heading', { name: /te damos la bienvenida/i })
     ).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(/correo confirmado/i);
+    // A success confirmation is announced politely (role="status"), not
+    // assertively — see components/Alert.tsx.
+    expect(screen.getByRole('status')).toHaveTextContent(/correo confirmado/i);
     expect(screen.getByDisplayValue('ada@example.com')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /olvidaste tu contraseña/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /iniciar sesión/i })).toBeInTheDocument();

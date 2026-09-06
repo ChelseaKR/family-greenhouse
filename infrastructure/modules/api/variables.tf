@@ -137,6 +137,12 @@ variable "stripe_price_id_greenhouse_annual" {
   default     = ""
 }
 
+variable "stripe_price_id_identify_top_up" {
+  description = "Stripe ONE-TIME price ID for the identification top-up pack (20 identifications, $1.99; ADR 0019). Optional: blank means the pack is not for sale and POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED. Never a fallback price."
+  type        = string
+  default     = ""
+}
+
 variable "stripe_automatic_tax_enabled" {
   description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured. Enables automatic tax in Checkout."
   type        = string
@@ -180,9 +186,23 @@ variable "ses_configuration_set" {
 }
 
 variable "ses_event_topic_arn" {
-  description = "SNS topic carrying SES bounce/complaint/delivery events (modules/email). Empty leaves the emailEvents Lambda deployed but unsubscribed."
+  description = "SNS topic carrying SES bounce/complaint/delivery events (modules/email). Empty leaves the emailEvents Lambda deployed but unsubscribed. NOT usable in a `count`/`for_each` — see ses_events_enabled."
   type        = string
   default     = ""
+}
+
+# The plan-time twin of ses_event_topic_arn. The ARN is a resource attribute of
+# a topic in another module: on a run where that topic does not exist yet it is
+# unknown until apply, and a `count` that reads an unknown value is a hard
+# `terraform plan` error ("The count value depends on resource attributes that
+# cannot be determined until apply"), not a deferred decision. So the two
+# conditional resources below count on THIS flag instead — the root module sets
+# it from `var.domain_name != ""`, the same plain-input predicate that gates
+# `module.email` itself, which is always known at plan time.
+variable "ses_events_enabled" {
+  description = "Whether the email module (and therefore the SES event topic) is provisioned. Mirrors the `var.domain_name != \"\"` predicate that gates module.email. Exists so the SNS subscription + Lambda permission can be counted on a plan-time-known value rather than on ses_event_topic_arn."
+  type        = bool
+  default     = false
 }
 
 variable "web_push_vapid_public_key" {
@@ -252,6 +272,16 @@ variable "leaf_health_monthly_cap_greenhouse" {
   default     = ""
 }
 
+# Declaring "this environment has no Bedrock" is what earns the canned demo
+# assessment on an AccessDeniedException. Off by default so an environment
+# that IS supposed to reach Bedrock fails loudly (503 + ERROR log) rather than
+# answering with a fixture at HTTP 200.
+variable "leaf_health_demo" {
+  description = "Return the canned demo leaf-health assessment when Bedrock refuses this deployment. Set true ONLY for an environment with no Bedrock access."
+  type        = bool
+  default     = false
+}
+
 variable "perenual_api_key_parameter_name" {
   description = "SSM SecureString parameter name (e.g. '/family-greenhouse/perenual-api-key') holding the Perenual API key. The Lambda fetches the value at cold start; the secret material never lands in Terraform state. Empty disables Perenual integration."
   type        = string
@@ -306,6 +336,12 @@ variable "sprout_api_url" {
 
 variable "sprout_integration_secret_id" {
   description = "Secrets Manager id containing the Sprout HMAC secret."
+  type        = string
+  default     = ""
+}
+
+variable "fcm_service_account_secret_id" {
+  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON used for native APNs/FCM push. Blank disables device push entirely."
   type        = string
   default     = ""
 }

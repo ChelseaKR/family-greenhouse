@@ -36,8 +36,9 @@ This is a working audit against the OWASP Top 10 (2021 edition). Each category l
 - All request bodies pass through Zod schemas before reaching service code. Untyped fields are rejected at the validation middleware.
 - We don't use SQL, shell out to subprocesses, or `eval`/`Function` anywhere.
 - The Plant.id integration forwards a base64-encoded image; the body-size guard caps it at 256 KB before any upstream call.
+- **Email header injection** on the inbound forwarder (`infrastructure/modules/email/lambda/forwarder.mjs`): the attacker-controlled original `From` is interpolated into two headers of a message re-sent from our DKIM-aligned domain. Every CR and LF is collapsed out of it first — not just the message's own line ending, which is what a bare LF in a CRLF-framed message slipped past until 2026-09-05. This file sits outside the `backend/` coverage root, so coverage reports it as neither tested nor untested; `backend/tests/unit/config/sesForwarder.test.ts` is the only signal that it is covered at all.
 
-**Verified by**: a per-handler unit test mocks the DDB client and asserts on the parameters passed to each command.
+**Verified by**: a per-handler unit test mocks the DDB client and asserts on the parameters passed to each command. For the forwarder, `sesForwarder.test.ts` asserts that a `From` carrying a bare CR or LF yields no extra header line.
 
 ## A04:2021 — Insecure Design
 

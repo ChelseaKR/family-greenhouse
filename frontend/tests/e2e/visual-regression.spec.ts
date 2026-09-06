@@ -27,6 +27,13 @@ import { provisionAccount, ProvisionedAccount } from './helpers';
  * once Linux baselines exist.
  */
 
+// allow-silenced-gate: every committed baseline is `*-darwin.png` and CI runs
+// Linux, so there is nothing on a runner to compare against — the suite would
+// fail on filename, not on pixels. This is a KNOWN, DATED deferral, not a
+// bypass: it is stated in docs/testing.md, and lifting it means generating the
+// five browser variants x five pages on a Linux runner and committing them.
+// Until then this suite contributes NO coverage to the required
+// `E2E + accessibility (Playwright)` check, whatever its name suggests.
 test.skip(
   Boolean(process.env.CI),
   'Visual regression baselines are macOS-only today; regenerate on a Linux runner before enabling in CI.'

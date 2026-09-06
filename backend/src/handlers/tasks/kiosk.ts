@@ -7,7 +7,15 @@
  * one.
  *
  * The design rule and the full threat model live at the top of
- * `services/kioskService.ts`. The short version, because it governs every
+ * `services/kioskService.ts`. Neither route is plan-gated, and that is
+ * deliberate (#476): the kiosk is a screen someone mounted on a wall, the
+ * people reading it are not the buyer, and a display that goes blank because
+ * a card failed cannot be fixed by anyone standing in front of it.
+ * Entitlement is asked once, when the link is ISSUED
+ * (`handlers/households/kioskLink.ts`); revoking it stays ungated, which is
+ * the control.
+ *
+ * The short version of the threat model, because it governs every
  * line below: the token is PERMANENTLY DISPLAYED and must be assumed leaked,
  * so the surface is deliberately two operations wide, PII-free, IP-rate-
  * limited, generically 404-ing, and revocable in one click.

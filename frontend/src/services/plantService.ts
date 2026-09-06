@@ -1,10 +1,19 @@
+import axios from 'axios';
 import { api } from './api';
 import { track } from './analytics';
+import type { IdentifyCreditBalance } from './billingService';
 
 export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 
 /** List filter mirroring the backend: active (default), past, or all. */
 export type PlantFilter = 'active' | 'past' | 'all';
+
+/** Care rotation for a space (ADR 0018); mirrors the backend SpaceRotation. */
+export interface SpaceRotation {
+  memberIds: string[];
+  cadence: 'weekly' | 'monthly';
+  anchor: string;
+}
 
 export interface PlantSpace {
   id: string;
@@ -19,6 +28,14 @@ export interface PlantSpace {
   petAccess?: boolean | null;
   /** Household member who usually handles new tasks for plants here. */
   defaultCaregiverId?: string | null;
+  /** Care rotation; takes precedence over defaultCaregiverId. */
+  rotation?: SpaceRotation | null;
+  /**
+   * Derived server-side, present ONLY on spaces that have a rotation.
+   * `turnUserId: null` means everyone in the rotation is away — a real
+   * answer, and rendered as one rather than as "no rotation".
+   */
+  rotationTurn?: { turnUserId: string | null; turnName: string | null };
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -26,6 +43,9 @@ export interface PlantSpace {
 
 /** House rule length cap; mirrors CARE_RULE_MAX_LENGTH in backend/src/models/schemas.ts. */
 export const CARE_RULE_MAX_LENGTH = 140;
+
+/** Mirrors SpeciesSource in backend/src/models/types.ts. */
+export type SpeciesSource = 'user' | 'identified' | 'catalog';
 
 export interface Plant {
   id: string;
@@ -47,6 +67,14 @@ export interface Plant {
   statusChangedAt?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
+  /**
+   * Where `species` came from. Server-derived (a client cannot set it):
+   * `identified` means a photo-identification guess the user accepted, so the
+   * care advice keyed off this species — watering, light, pet toxicity —
+   * inherits the model's uncertainty. Null/absent = unknown, which is what
+   * every plant added before this field carried.
+   */
+  speciesSource?: SpeciesSource | null;
   /** Propagation lineage: the same-household plant this was cut from. */
   parentPlantId?: string | null;
   createdAt: string;
@@ -66,6 +94,13 @@ export interface CreatePlantData {
   careRule?: string;
   tags?: string[];
   perenualSpeciesId?: number;
+  /**
+   * The scientific name this write says came from a photo identification the
+   * user accepted. The server derives `speciesSource` from it and only
+   * believes it when it names the species actually being written — the enum
+   * itself is not settable from here.
+   */
+  identifiedSpecies?: string;
   /** Set when adding a cutting via "Propagate" — links it to its parent. */
   parentPlantId?: string;
 }
@@ -83,6 +118,13 @@ export interface UpdatePlantData {
   careRule?: string | null;
   tags?: string[];
   perenualSpeciesId?: number | null;
+  /**
+   * The scientific name this write says came from a photo identification the
+   * user accepted. The server derives `speciesSource` from it and only
+   * believes it when it names the species actually being written — the enum
+   * itself is not settable from here.
+   */
+  identifiedSpecies?: string;
   status?: PlantStatus;
 }
 
@@ -151,9 +193,25 @@ export interface Task {
   nextDue: string;
   assignedTo: string | null;
   assignedToName: string | null;
-  /** Space-inherited assignments can be taken over by another member. */
-  assignmentSource?: 'space_default' | null;
+  /** Inherited assignments — space default, Move Day split, or rotation turn
+   *  — can be taken over by another member; null means explicit or
+   *  unassigned. */
+  assignmentSource?: 'space_default' | 'move_day' | 'rotation' | null;
   notes: string | null;
+  /** Auto-handoff marker: `escalatedForDue === nextDue` means this occurrence
+   *  was put up for grabs by the app and nobody has claimed it since. */
+  escalatedAt?: string | null;
+  escalatedForDue?: string | null;
+  escalatedFrom?: string | null;
+  /** "Ask family to do it" marker (ADR 0024): `helpAskedForDue === nextDue`
+   *  AND nobody assigned means a housemate asked for this occurrence and it
+   *  is still waiting. Claiming or completing it closes the ask by itself —
+   *  there is no separate cancel. */
+  helpAskedAt?: string | null;
+  helpAskedBy?: string | null;
+  helpAskedByName?: string | null;
+  helpAskedNote?: string | null;
+  helpAskedForDue?: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -389,9 +447,81 @@ export interface IdentificationSuggestion {
   probability: number;
 }
 
+/** Mirrors the `usage` block of POST /plants/identify. `used` is null when the
+ *  server could not read its counter — unknown, never zero. `source` and
+ *  `credits` appear only on the enforced path (ADR 0019). */
+export interface IdentifyUsage {
+  used: number | null;
+  allowance: number;
+  meteringEnabled: boolean;
+  source?: 'allowance' | 'credit';
+  credits?: IdentifyCreditBalance;
+}
+
 export interface IdentifyResponse {
   configured: boolean;
+  /** Best-first: the server sorts by probability before truncating to five. */
   suggestions?: IdentificationSuggestion[];
+  /** Probability the top candidate is judged against (server-set). */
+  confidenceFloor?: number;
+  /**
+   * The top candidate scored below `confidenceFloor`. The list is still
+   * returned in full and every candidate stays usable — the floor demotes, it
+   * never filters, so an empty list keeps meaning exactly one thing ("nothing
+   * came back") instead of also meaning "not confident enough to say".
+   */
+  lowConfidence?: boolean;
+  usage?: IdentifyUsage;
+}
+
+/**
+ * The 402 POST /plants/identify answers once the month's allowance AND any
+ * top-up credits are spent. `topUp` is the pack on offer (null when it
+ * cannot be bought here: no household, payments paused, or no price
+ * configured); `credits` is the balance the refusal saw — a real 0, or null
+ * when credits were not consulted.
+ */
+export interface IdentifyBudgetExhausted {
+  message: string;
+  topUpAvailable: boolean;
+  credits: IdentifyCreditBalance | null;
+  topUp: { credits: number; priceUsd: number | null } | null;
+}
+
+/**
+ * Recognise the budget-exhausted refusal from any thrown error, so the
+ * caller can offer the pack instead of a generic failure. Anything that is
+ * not exactly that contract — a different status, a missing code — is null,
+ * and the caller falls back to `getErrorMessage`.
+ */
+export function identifyBudgetExhaustedFromError(error: unknown): IdentifyBudgetExhausted | null {
+  if (!axios.isAxiosError(error) || error.response?.status !== 402) return null;
+  const data = error.response.data as
+    { message?: unknown; details?: Record<string, unknown> | null } | null | undefined;
+  const details = data?.details;
+  if (!details || details.code !== 'IDENTIFY_BUDGET_EXHAUSTED') return null;
+  const rawCredits = details.credits as { remaining?: unknown; expiresAt?: unknown } | null;
+  const credits =
+    rawCredits && typeof rawCredits.remaining === 'number'
+      ? {
+          remaining: rawCredits.remaining,
+          expiresAt: typeof rawCredits.expiresAt === 'string' ? rawCredits.expiresAt : null,
+        }
+      : null;
+  const rawTopUp = details.topUp as { credits?: unknown; priceUsd?: unknown } | null;
+  const topUp =
+    rawTopUp && typeof rawTopUp.credits === 'number'
+      ? {
+          credits: rawTopUp.credits,
+          priceUsd: typeof rawTopUp.priceUsd === 'number' ? rawTopUp.priceUsd : null,
+        }
+      : null;
+  return {
+    message: typeof data?.message === 'string' ? data.message : '',
+    topUpAvailable: details.topUpAvailable === true && topUp !== null,
+    credits,
+    topUp,
+  };
 }
 
 /** Mirrors backend services/leafHealth.ts LeafHealthAssessment. */

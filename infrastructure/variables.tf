@@ -80,6 +80,24 @@ variable "enable_monitoring_dashboard" {
   default     = true
 }
 
+variable "enable_site_health_check" {
+  description = "Create the Route 53 health check that fetches a real (non-`/`) site page every 30 seconds and alarms into the alerts SNS topic when it stops serving this app. ~$2.60/month. Defaults true: with it off, nothing in this stack can tell a total outage from a quiet hour, which is how a forty-minute frontend outage went unnoticed on 2026-09-04 (issue #464). Staging sets it false."
+  type        = bool
+  default     = true
+}
+
+variable "enable_api_health_check" {
+  description = "Create the Route 53 health check that fetches GET /health every 30 seconds. ~$2.60/month in Route 53 fees plus ~$2-4/month of API Gateway, Lambda, DynamoDB and log cost from the ~1.3M extra requests it generates. Off by default: .github/workflows/uptime.yml already checks /health every 15 minutes for free. Turn it on to move API-outage detection to ~3 minutes and into the alerts topic."
+  type        = bool
+  default     = false
+}
+
+variable "enable_telemetry_delivery_alarm" {
+  description = "Create the alarm that fires when the frontend error rail has not been able to deliver anything for two hours (issue #576). ~$0.10/month for the alarm; the two custom metrics behind it are created regardless and cost ~$0.60/month between them, so the signal as a whole is ~$0.80/month. Defaults true: without it, `FrontendErrors == 0` means either 'no browser errors' or 'no browser could tell us' and nothing distinguishes them. It reads a heartbeat sent every 15 minutes by .github/workflows/uptime.yml, which probes production — so staging sets it false, because an alarm watching for a heartbeat nobody sends is correct to page forever."
+  type        = bool
+  default     = true
+}
+
 variable "email_from_address" {
   description = "Friendly From header for Cognito mail (signup confirmations, password resets). E.g. 'Family Greenhouse <hello@familygreenhouse.net>'. Required when domain_name is set."
   type        = string
@@ -87,7 +105,7 @@ variable "email_from_address" {
 }
 
 variable "email_reply_to" {
-  description = "Reply-To header for Cognito mail. Defaults to email_from_address when blank."
+  description = "Reply-To header for Cognito mail and for the app's own SES sends (reminders, digest, recap). Defaults to email_from_address when blank."
   type        = string
   default     = ""
 }
@@ -199,6 +217,17 @@ variable "sprout_integration_secret_id" {
   default     = ""
 }
 
+# Native push (APNs/FCM). Blank everywhere today: the Firebase project and the
+# APNs key it would name do not exist yet (docs/mobile.md § Push
+# notifications). While it is blank the notification Lambdas get no Secrets
+# Manager grant beyond a deliberately nonexistent secret, and
+# services/fcmNotifier.ts never makes a call.
+variable "fcm_service_account_secret_id" {
+  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON for native push. Blank disables device push."
+  type        = string
+  default     = ""
+}
+
 # Plant.id identify monthly meter. "1" ENFORCES the per-household monthly cap;
 # blank only tracks usage (beta default). Production sets "1" so the real
 # per-call Plant.id credit can't be cost-amplified by concurrency.
@@ -263,6 +292,19 @@ variable "leaf_health_monthly_cap_greenhouse" {
     condition     = var.leaf_health_monthly_cap_greenhouse == "" || can(regex("^[0-9]+$", var.leaf_health_monthly_cap_greenhouse))
     error_message = "leaf_health_monthly_cap_greenhouse must be blank or a non-negative integer."
   }
+}
+
+# Whether this environment is allowed to answer a leaf-health check with the
+# canned demo assessment when Bedrock refuses it. FALSE by default, and that
+# default is the point: an environment that is supposed to reach Bedrock must
+# surface a credential or model-access regression as a 503 the api-5xx alarm
+# can see, not as a fixture at HTTP 200 that reads like a real assessment of
+# someone's plant. Set true only for a preview/dev environment whose Lambda
+# role genuinely has no Bedrock access.
+variable "leaf_health_demo" {
+  description = "Allow the canned demo leaf-health assessment when Bedrock refuses this deployment. True ONLY for an environment with no Bedrock access."
+  type        = bool
+  default     = false
 }
 
 # Chat (services/chat/budget.ts). The flat pair has been declared in
@@ -483,6 +525,12 @@ variable "stripe_price_id_greenhouse" {
 
 variable "stripe_price_id_greenhouse_annual" {
   description = "Stripe price ID for the Greenhouse tier ANNUAL ($79.99/yr). Required for /billing/checkout with interval=year."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_identify_top_up" {
+  description = "Stripe ONE-TIME price ID for the identification top-up pack (20 identifications, $1.99; ADR 0019). Optional: blank means the pack is not for sale and POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED. Never a fallback price."
   type        = string
   default     = ""
 }

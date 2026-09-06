@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# commit-msg: conventional-commit enforcement via commitlint.
+#
+# Tracked rather than generated — see the header of .githooks/pre-push and
+# #544 for why every hook in this repo lives in a committed directory.
+
+set -e
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if [ ! -d node_modules ] || [ ! -f node_modules/.package-lock.json ]; then
+  echo "commit-msg: BLOCKED — dependencies are not installed in $root." >&2
+  echo "commitlint cannot run, so this commit is refused rather than going" >&2
+  echo "through unchecked (#544). Run \`npm ci\` first." >&2
+  exit 1
+fi
+
+PATH="$root/node_modules/.bin:$PATH"
+export PATH
+
+npx --no -- commitlint --edit "$1"

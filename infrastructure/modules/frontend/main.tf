@@ -195,22 +195,31 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
-# Clean-URL router for the prerendered marketing pages.
+# The router for this distribution. Every URI that is not a file resolves here.
 #
 # The frontend origin is a PRIVATE S3 bucket reached over the REST API (Origin
 # Access Control), not an S3 website endpoint, so it has no directory-index
-# behaviour: a request for /pricing asks for an object keyed "pricing", gets a
-# 403, and falls through to the SPA error response below. `default_root_object`
-# only covers the bare "/". Without this function every prerendered file would
-# be built, uploaded, and never served — the empty JS shell would keep going out
-# to crawlers and link unfurlers.
+# behaviour: a request for /pricing asks for an object keyed "pricing".
+# `default_root_object` only covers the bare "/". Without this function every
+# prerendered file would be built, uploaded, and never served — the empty JS
+# shell would keep going out to crawlers and link unfurlers.
+#
+# Since #615 it also resolves the routes that have NO prerendered page — the
+# dashboard, /login, /register, an unknown URL — to /app-shell.html BY NAME,
+# rather than rewriting them to a key that does not exist and letting
+# `custom_error_response` rescue the resulting 403. That is what frees the error
+# path to mean "not found" for the one prefix where it must: /assets/, whose
+# filenames contain the hash of their own bytes. The function carries a
+# generated list of the prerendered routes for that reason, and
+# `spa-router:check` fails the gate if it drifts from
+# frontend/scripts/public-routes.mjs.
 #
 # The function body lives in functions/spa-router.js with its reasoning, and is
 # unit-tested by frontend/scripts/spa-router.test.mjs.
 resource "aws_cloudfront_function" "spa_router" {
   name    = "${var.project_name}-spa-router-${var.environment}"
   runtime = "cloudfront-js-2.0"
-  comment = "Map clean marketing URLs to prerendered index.html objects"
+  comment = "Resolve clean URLs to prerendered objects, everything else to the app shell"
   publish = true
   code    = file("${path.module}/functions/spa-router.js")
 }
@@ -274,10 +283,18 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3.id
   }
 
-  # SPA fallback for every path that has NO prerendered file: the dashboard and
-  # the rest of the authenticated app, plus any unknown URL. S3 returns 403 for
-  # a missing key on a private bucket and 404 where the key is listable, so both
-  # map to the same document.
+  # The LAST-RESORT SPA fallback, and deliberately no longer the primary one.
+  #
+  # It covers exactly one live case now: an app route under the /plants/*
+  # behavior above. `/plants/{plantId}` is a route in the React app, and
+  # `/plants/{householdId}/{plantId}/...` is a photo key in the images bucket,
+  # so the same prefix serves both. Ordered cache behaviors take precedence over
+  # the default one, which means `/plants/abc-123` is sent to the images origin,
+  # misses, and gets 403 — and a viewer-request function cannot redirect it,
+  # because rewriting a URI does not change the cache behavior or the origin the
+  # request goes to. Only this rescue can serve it. Everything else — the
+  # dashboard, /login, /register, an unknown URL — is now resolved to
+  # /app-shell.html by functions/spa-router.js BEFORE it reaches an origin.
   #
   # This MUST be app-shell.html, not index.html. Now that the marketing routes
   # are prerendered, index.html is the rendered HOMEPAGE — serving it here would
@@ -285,12 +302,27 @@ resource "aws_cloudfront_distribution" "frontend" {
   # and hand React markup that doesn't match the route it's about to render.
   # app-shell.html is the pristine empty shell that frontend/scripts/prerender.mjs
   # writes for exactly this purpose; the app boots from it the way it always has.
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/app-shell.html"
-  }
-
+  #
+  # THE 404 RULE IS GONE ON PURPOSE (issue #615). `custom_error_response` is a
+  # property of the DISTRIBUTION, not of a cache behavior — there is no way to
+  # spell "rescue routes but not /assets/". So the rescue has to stop covering
+  # the status code that a missing ASSET produces, and the frontend bucket's
+  # `s3:ListBucket` grant is what makes that status 404 rather than 403:
+  #
+  #   /assets/index-<hash>.js  missing  -> S3 404 -> no rule  -> 404 to viewer
+  #   /brand/missing.png       missing  -> S3 404 -> no rule  -> 404 to viewer
+  #   /plants/abc-123          missing  -> S3 403 -> rescued  -> app shell, 200
+  #
+  # Before this, the first two lines read "-> 200 with the app shell", which is
+  # the CDN rendering absence as a value: a total loss of the JS bundle would
+  # have answered 200 on every route, carrying the very `og:site_name` markup
+  # `aws_route53_health_check.site` searches for, and the monitor built to catch
+  # a frontend outage would have reported healthy while no browser could boot
+  # the app.
+  #
+  # Restoring a 404 rule re-breaks that. If a future change needs a friendly
+  # 404 PAGE, add it as `error_code = 404, response_code = 404` — a page is
+  # fine, a 200 is not.
   custom_error_response {
     error_code         = 403
     response_code      = 200
@@ -498,6 +530,23 @@ resource "aws_cloudfront_response_headers_policy" "security" {
 }
 
 # S3 Bucket Policy for CloudFront
+#
+# `s3:ListBucket` is granted alongside `s3:GetObject`, and it is load-bearing
+# rather than incidental (issue #615). GetObject on a key that does not exist
+# answers 403 AccessDenied when the caller lacks ListBucket, and 404 NoSuchKey
+# when it has it — see the Permissions section of the S3 GetObject API
+# reference. Without it EVERY miss in this bucket is a 403, the distribution's
+# `custom_error_response` rescues all of them into `200 /app-shell.html`, and
+# `/assets/index-<hash>.js` is served as the app shell when the chunk is gone.
+#
+# It grants no listing capability to anyone. The permission is checked against
+# the CloudFront service principal for THIS distribution only, and every
+# request CloudFront makes to this origin carries an object key: the
+# viewer-request function (functions/spa-router.js) resolves every URI to a
+# concrete object, so `GET /?list-type=2` reaches S3 as a GetObject for
+# `index.html`, not as a ListObjectsV2. The Resource is the bucket ARN with no
+# `/*` because that is the form ListBucket takes; GetObject keeps its own
+# statement scoped to the objects.
 resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -517,11 +566,37 @@ resource "aws_s3_bucket_policy" "frontend" {
             "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
           }
         }
+      },
+      {
+        Sid    = "AllowCloudFrontToDistinguishMissingFromForbidden"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.frontend.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
+          }
+        }
       }
     ]
   })
 }
 
+# NOT granted `s3:ListBucket`, unlike the frontend bucket above, and that
+# asymmetry is deliberate. `/plants/{plantId}` is a React route served from this
+# origin by path-pattern accident (see the /plants/* cache behavior), and it
+# reaches the app only because a miss here is a 403 that the distribution's one
+# remaining `custom_error_response` rescues into the shell. Granting ListBucket
+# would turn that miss into a 404, which nothing rescues, and every plant detail
+# page opened by URL would break.
+#
+# The cost of the asymmetry is that a missing plant PHOTO still answers 200 with
+# the HTML shell instead of 404 — the same defect #615 fixed for /assets/, still
+# live for this one prefix. Fixing it properly means separating the image prefix
+# from the route prefix, which is a URL change with stored data behind it.
 resource "aws_s3_bucket_policy" "images" {
   bucket = aws_s3_bucket.images.id
 

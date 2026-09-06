@@ -23,12 +23,14 @@ import {
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { logger } from '../utils/logger.js';
 import { Task, TaskCompletion, DynamoDBItem } from '../models/types.js';
 import { CreateTaskInput, UpdateTaskInput, TaskFilters } from '../models/schemas.js';
-import { getMemberByUserId } from './householdService.js';
+import { getMemberByUserId, getHouseholdMembers } from './householdService.js';
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
 import { recordActivity } from './activity.js';
+import { isExplicitAssignment, resolveInheritedAssignee } from './assignmentResolver.js';
 
 const MAX_QUERY_LIMIT = 200;
 const MAX_DUE_WITHIN_DAYS = 365;
@@ -87,24 +89,33 @@ export async function createTask(
   householdId: string,
   userId: string,
   plantName: string,
-  options: { defaultAssigneeId?: string } = {}
+  options: {
+    defaultAssigneeId?: string;
+    /** Which inherited source produced `defaultAssigneeId` (ADR 0018): the
+     *  space's usual caregiver, Seasonal Move Day's round-robin pick, or the
+     *  space's rotation turn. Every one of them stays claimable. */
+    defaultAssignmentSource?: Exclude<Task['assignmentSource'], null>;
+  } = {}
 ): Promise<Task> {
   const id = uuid();
   const now = new Date();
   const nextDue = input.nextDue || now.toISOString();
 
   // Explicit task assignment always wins. If it is omitted, a space's usual
-  // caregiver may be supplied by the caller; stale defaults are ignored so a
-  // departed member can never prevent care tasks from being created.
+  // caregiver (or a Move Day pick) may be supplied by the caller; stale
+  // defaults are ignored so a departed member can never prevent care tasks
+  // from being created.
   let assignedTo = input.assignedTo ?? options.defaultAssigneeId ?? null;
   let assignmentSource: Task['assignmentSource'] =
-    input.assignedTo === undefined && options.defaultAssigneeId ? 'space_default' : null;
+    input.assignedTo === undefined && options.defaultAssigneeId
+      ? (options.defaultAssignmentSource ?? 'space_default')
+      : null;
   let assignedToName: string | null = null;
   if (assignedTo) {
     const member = await getMemberByUserId(householdId, assignedTo);
     // Reject a dangling assignee rather than writing a task nobody can see (M4).
     if (!member) {
-      if (assignmentSource === 'space_default') {
+      if (assignmentSource !== null) {
         assignedTo = null;
         assignmentSource = null;
       } else {
@@ -279,7 +290,45 @@ export async function getSitterTasks(
   windowEndsAt: string,
   now: Date = new Date()
 ): Promise<SitterTask[]> {
-  const cutoffIso = sitterWindowCutoff(windowEndsAt, now);
+  // One implementation, two projections: the caretaker view needs the opaque
+  // plantId (to attach a photo to the right plant), the sitter view has no
+  // route that takes one, so it never receives it. The two differ only in how
+  // far ahead they look — a sitter sees their whole link window, a caretaker
+  // sees at most a fortnight of a possibly months-long engagement — so the
+  // cutoff is computed by each caller and the body below is shared.
+  const tasks = await dueTasksThrough(householdId, sitterWindowCutoff(windowEndsAt, now), now);
+  return tasks.map(({ plantId: _plantId, ...rest }) => rest);
+}
+
+/**
+ * The caretaker projection: everything a sitter sees, plus the opaque plantId
+ * their photo routes need. Still no member identity, private notes, or
+ * household climate location.
+ */
+export interface CaretakerTask extends SitterTask {
+  plantId: string;
+}
+
+export async function getCaretakerTasks(
+  householdId: string,
+  now: Date = new Date(),
+  dueWithinDays = 7
+): Promise<CaretakerTask[]> {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + dueWithinDays);
+  return dueTasksThrough(householdId, cutoff.toISOString(), now);
+}
+
+/**
+ * Shared body of both projections: every active-plant task due on or before
+ * `cutoffIso` (which therefore also covers everything already overdue), in
+ * the PII-free CaretakerTask shape.
+ */
+async function dueTasksThrough(
+  householdId: string,
+  cutoffIso: string,
+  now: Date
+): Promise<CaretakerTask[]> {
   const nowIso = now.toISOString();
 
   // getTasks already lifecycle-filters (active plants only) and returns the
@@ -304,6 +353,7 @@ export async function getSitterTasks(
         : (plant?.location ?? null);
       return {
         taskId: t.id,
+        plantId: t.plantId,
         plantName: t.plantName,
         taskType: t.customType || t.type,
         dueDate: t.nextDue,
@@ -616,7 +666,84 @@ export async function completeTask(
     return null;
   }
 
-  return itemToTask(result.Attributes);
+  return reassignInheritedOccurrence(itemToTask(result.Attributes));
+}
+
+/**
+ * Re-resolve an INHERITED assignment for the occurrence just generated
+ * (ADR 0018). This is where care rotation actually advances: completing a task
+ * moves `nextDue`, and the next occurrence is resolved for its own due date,
+ * so a weekly rotation hands over on the week the work is due rather than the
+ * week it happened to be finished.
+ *
+ * Explicit assignments — a manual assignment or a claim — return untouched on
+ * the first line. That is the whole protection the brief asks for: rotation
+ * can never stomp a name a person chose.
+ *
+ * Best-effort: the task has already advanced and its completion is recorded,
+ * so a failure here leaves the previous assignee in place for one more cycle
+ * rather than failing a completion the user just made.
+ */
+async function reassignInheritedOccurrence(task: Task): Promise<Task> {
+  if (isExplicitAssignment(task)) return task;
+  try {
+    const plant = await plantService.getPlant(task.householdId, task.plantId);
+    if (!plant?.spaceId) return task;
+    const space = await spaceService.getSpace(task.householdId, plant.spaceId);
+    if (!space || (!space.rotation && !space.defaultCaregiverId)) return task;
+
+    const [members, vacations] = await Promise.all([
+      getHouseholdMembers(task.householdId),
+      listVacationWindows(task.householdId),
+    ]);
+    const inherited = resolveInheritedAssignee(
+      space,
+      { members, vacations },
+      new Date(task.nextDue)
+    );
+    if (inherited.userId === task.assignedTo && inherited.source === task.assignmentSource) {
+      return task;
+    }
+
+    const assigned = inherited.userId !== null;
+    const updated = await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${task.householdId}`, SK: `TASK#${task.id}` },
+        UpdateExpression: assigned
+          ? 'SET #assignedTo = :assignedTo, #assignedToName = :assignedToName, #assignmentSource = :source, GSI2PK = :gsi2pk, GSI2SK = #nextDue'
+          : 'SET #assignedTo = :null, #assignedToName = :null, #assignmentSource = :null REMOVE GSI2PK, GSI2SK',
+        ExpressionAttributeNames: {
+          '#assignedTo': 'assignedTo',
+          '#assignedToName': 'assignedToName',
+          '#assignmentSource': 'assignmentSource',
+          ...(assigned ? { '#nextDue': 'nextDue' } : {}),
+        },
+        ExpressionAttributeValues: assigned
+          ? {
+              ':assignedTo': inherited.userId,
+              ':assignedToName': inherited.name,
+              ':source': inherited.source,
+              ':gsi2pk': `HOUSEHOLD#${task.householdId}#ASSIGNEE#${inherited.userId}`,
+              // Only re-resolve while the occurrence we resolved for is still
+              // current: a concurrent complete/snooze must not be overwritten.
+              ':expectedNextDue': task.nextDue,
+            }
+          : { ':null': null, ':expectedNextDue': task.nextDue },
+        ConditionExpression: 'attribute_exists(PK) AND nextDue = :expectedNextDue',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
+    return updated.Attributes ? itemToTask(updated.Attributes) : task;
+  } catch (err) {
+    if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') {
+      logger.warn(
+        { err: (err as Error).message, householdId: task.householdId, taskId: task.id },
+        'tasks.rotation_reassign_failed'
+      );
+    }
+    return task;
+  }
 }
 
 export interface SnoozeTaskOutcome {
@@ -779,7 +906,14 @@ export async function getHouseholdActivity(
 export interface YearInReview {
   year: number;
   totalCompletions: number;
-  byMember: Array<{ userId: string; name: string; count: number }>;
+  /**
+   * Per-member completion counts. `name` is null when the completion rows
+   * carried no display name: it used to fall back to the raw `userId`, which
+   * printed a Cognito sub under the recap email's "Who did the work" heading
+   * as though it were a person's name. Null is "we do not have a name",
+   * rendered as an explicit unknown by every consumer.
+   */
+  byMember: Array<{ userId: string; name: string | null; count: number }>;
   byTaskType: Array<{ type: string; count: number }>;
   /**
    * EVERY plant with at least one completion this year, most-completed
@@ -800,6 +934,20 @@ export interface YearInReview {
 export async function getYearInReview(householdId: string, year: number): Promise<YearInReview> {
   const start = `${year}-01-01T00:00:00.000Z`;
   const end = `${year + 1}-01-01T00:00:00.000Z`;
+  return { year, ...(await getCompletionReview(householdId, start, end)) };
+}
+
+/**
+ * The same aggregation over an arbitrary ISO window. The free tier's
+ * analytics window (ADR 0014) is a calendar year intersected with the
+ * trailing N days — not a year — so the year-shaped wrapper above delegates
+ * here rather than the other way round.
+ */
+export async function getCompletionReview(
+  householdId: string,
+  start: string,
+  end: string
+): Promise<Omit<YearInReview, 'year'>> {
   // Paginated: an active household easily logs >200 completions/year, and a
   // single-page query silently undercounted everything past the first page.
   const allItems = await queryAllPages({
@@ -815,23 +963,24 @@ export async function getYearInReview(householdId: string, year: number): Promis
   });
 
   const items = allItems.filter((i) => i.entityType === 'TaskCompletion');
-  const memberCounts = new Map<string, { name: string; count: number }>();
+  const memberCounts = new Map<string, { name: string | null; count: number }>();
   const typeCounts = new Map<string, number>();
   const plantCounts = new Map<string, number>();
 
   for (const it of items) {
     const userId = it.completedBy as string;
-    const name = (it.completedByName as string) ?? userId;
+    const name = (it.completedByName as string | undefined) ?? null;
     const type = it.taskType as string;
     const plantId = it.plantId as string;
     const m = memberCounts.get(userId);
-    memberCounts.set(userId, { name, count: (m?.count ?? 0) + 1 });
+    // Keep the first real name we see: one unnamed row must not erase a
+    // member whose other completions do carry a name.
+    memberCounts.set(userId, { name: m?.name ?? name, count: (m?.count ?? 0) + 1 });
     typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
     plantCounts.set(plantId, (plantCounts.get(plantId) ?? 0) + 1);
   }
 
   return {
-    year,
     totalCompletions: items.length,
     byMember: [...memberCounts.entries()]
       .map(([userId, v]) => ({ userId, name: v.name, count: v.count }))
@@ -899,11 +1048,12 @@ export async function getTasksForPlant(householdId: string, plantId: string): Pr
 // ---------------------------------------------------------------------------
 
 /**
- * Atomically claim an unassigned task, or take over a space-inherited task,
- * for `userId`. Explicit assignments remain protected.
+ * Atomically claim an unassigned task, or take over a space-inherited or
+ * Move-Day-assigned task, for `userId`. Explicit assignments remain protected.
  *
  * The ConditionExpression guards both halves of the race in one write: the
- * task must still exist AND be unassigned or carry `space_default`. Two
+ * task must still exist AND be unassigned or carry `space_default` /
+ * `move_day` (both are suggestions, not claims — see Task.assignmentSource). Two
  * members tapping Claim/Take over at once means exactly one wins; the loser's
  * conditional write fails and we re-read to distinguish "someone beat you to
  * it" ('already_claimed' → 409 in the handler) from "task was deleted under
@@ -944,9 +1094,15 @@ export async function claimTask(
           ':gsi2pk': `HOUSEHOLD#${householdId}#ASSIGNEE#${userId}`,
           ':null': null,
           ':spaceDefault': 'space_default',
+          ':moveDay': 'move_day',
+          ':rotation': 'rotation',
         },
+        // Inherited assignments — a space default, a Move Day split OR a
+        // rotation turn — can be taken over; explicit ones stay protected.
+        // Claiming converts the task to explicit, which is what stops rotation
+        // reclaiming it next cycle.
         ConditionExpression:
-          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault)',
+          'attribute_exists(PK) AND (attribute_not_exists(#assignedTo) OR #assignedTo = :null OR #assignmentSource = :spaceDefault OR #assignmentSource = :moveDay OR #assignmentSource = :rotation)',
         ReturnValues: 'ALL_NEW',
       })
     );
@@ -1220,7 +1376,13 @@ export function annotateTasksWithCoverage(
   });
 }
 
-function itemToTask(item: Record<string, unknown>): Task {
+/**
+ * The single row → Task mapper. Exported so a service that performs its own
+ * conditional write on a task row and needs the `ALL_NEW` result back as a
+ * Task (services/askFamily.ts) maps it through THIS function rather than a
+ * second copy that can silently stop carrying a field.
+ */
+export function itemToTask(item: Record<string, unknown>): Task {
   return {
     id: item.id as string,
     householdId: item.householdId as string,
@@ -1235,6 +1397,14 @@ function itemToTask(item: Record<string, unknown>): Task {
     assignedToName: item.assignedToName as string | null,
     assignmentSource: (item.assignmentSource as Task['assignmentSource'] | undefined) ?? null,
     notes: item.notes as string | null,
+    escalatedAt: (item.escalatedAt as string | null | undefined) ?? null,
+    escalatedForDue: (item.escalatedForDue as string | null | undefined) ?? null,
+    escalatedFrom: (item.escalatedFrom as string | null | undefined) ?? null,
+    helpAskedAt: (item.helpAskedAt as string | null | undefined) ?? null,
+    helpAskedBy: (item.helpAskedBy as string | null | undefined) ?? null,
+    helpAskedByName: (item.helpAskedByName as string | null | undefined) ?? null,
+    helpAskedNote: (item.helpAskedNote as string | null | undefined) ?? null,
+    helpAskedForDue: (item.helpAskedForDue as string | null | undefined) ?? null,
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
   };

@@ -1,6 +1,7 @@
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses';
 import { logger } from '../utils/logger.js';
 import * as emailSuppression from './emailSuppression.js';
+import { buildRawMessage } from './email/mime.js';
 
 let cachedClient: SESClient | null = null;
 
@@ -17,9 +18,24 @@ export interface EmailMessage {
   /** Recipient address, must be a verified identity in SES sandbox mode. */
   to: string;
   subject: string;
-  /** Plain-text body. We deliberately don't ship HTML email yet — keeps the
-   *  templating story simple and avoids a whole class of phishing spoof. */
+  /**
+   * Plain-text body. Required for every message — the text part is a first
+   * class alternative, not a stripped copy of the HTML, and a message with
+   * only an HTML part is both a deliverability and an accessibility problem.
+   */
   text: string;
+  /**
+   * HTML body. When present the message goes out as `multipart/alternative`
+   * with both parts. Composers build this with `services/email/template.ts`,
+   * which escapes every interpolated value; nothing else may pass HTML here.
+   */
+  html?: string;
+  /**
+   * Extra RFC 5322 headers, e.g. `List-Unsubscribe` /
+   * `List-Unsubscribe-Post` on non-transactional mail. Values are sanitized
+   * for CR/LF in the MIME builder.
+   */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -51,9 +67,20 @@ export interface EmailAcceptance {
 }
 
 /**
+ * The domain half of an address, for logging. Returns 'unknown' rather than
+ * the input when there is no `@` — an unparseable value is likelier to be a
+ * malformed address than a bare domain, and echoing it back would defeat the
+ * point of not logging the address.
+ */
+function recipientDomain(address: string): string {
+  const at = address.lastIndexOf('@');
+  return at > 0 && at < address.length - 1 ? address.slice(at + 1).toLowerCase() : 'unknown';
+}
+
+/**
  * Hand one email to SES.
  *
- * Three things happen before the send that did not before:
+ * Three things happen before the send:
  *
  *   1. The recipient is checked against the suppression list. A hard-bounced
  *      or complaining address is never mailed again — sustained bounces cost
@@ -61,18 +88,51 @@ export interface EmailAcceptance {
  *   2. `ConfigurationSetName` is attached (when configured) so SES publishes
  *      bounce/complaint/delivery events for the message. Without it the
  *      feedback loop has nothing to consume.
- *   3. `ReplyToAddresses` points at the forwarded `support@` mailbox, so a
- *      reply reaches a human instead of the send-only `hello@` sender.
+ *   3. `Reply-To` points at the forwarded `support@` mailbox, so a reply
+ *      reaches a human instead of the send-only `hello@` sender.
  *
  * No-ops with a structured log line when `SES_FROM_EMAIL` isn't configured,
  * which is the normal state for local dev and unit tests. The dev experience
  * is the same regardless of channel: you see what would have gone out in the
  * logs.
+ *
+ * ## Why SendRawEmail
+ *
+ * This used `SendEmailCommand`, whose API surface is `Source` / `Destination`
+ * / `Message` and nothing else: it cannot set a single custom header. That
+ * made `List-Unsubscribe` — required in practice by Gmail's and Yahoo's bulk
+ * sender rules for the weekly digest and the annual recap — impossible to
+ * add, and forced every email to be text-only. Raw MIME buys both the header
+ * surface and the multipart body without adding `@aws-sdk/client-sesv2` to
+ * the bundle, and `ses:SendRawEmail` is already in the Lambda's IAM policy.
+ * ADR 0021 records the reasoning, including the phishing rationale the old
+ * text-only policy rested on and how each part of it is now mitigated.
+ *
+ * `Reply-To` moves from `SendEmailCommand`'s `ReplyToAddresses` parameter
+ * into the MIME headers, because `SendRawEmailCommand` has no such parameter
+ * — the raw message IS the headers. `ConfigurationSetName` stays a command
+ * parameter; that one exists on both.
  */
 export async function sendEmailAccepted(msg: EmailMessage): Promise<EmailAcceptance> {
   const from = process.env.SES_FROM_EMAIL;
   if (!from) {
-    logger.info({ msg: 'email_dry_run', to: msg.to, subject: msg.subject }, 'email_dry_run');
+    // The recipient's DOMAIN, never the address. This branch fires on the
+    // entire notification path in any environment where SES_FROM_EMAIL is
+    // unset — staging by default, and production the moment a Terraform change
+    // drops the variable — so it is the single highest-volume way an address
+    // could reach CloudWatch. The domain is what a dry run is actually
+    // diagnosed on ("is it sending to the right place at all?"); the local
+    // part adds nothing. The `email_suppressed` branch below already showed
+    // the discipline, on the same function (#452).
+    logger.info(
+      {
+        msg: 'email_dry_run',
+        toDomain: recipientDomain(msg.to),
+        subject: msg.subject,
+        html: Boolean(msg.html),
+      },
+      'email_dry_run'
+    );
     return { accepted: false, reason: 'dry_run' };
   }
 
@@ -96,16 +156,21 @@ export async function sendEmailAccepted(msg: EmailMessage): Promise<EmailAccepta
 
   const configurationSet = process.env.SES_CONFIGURATION_SET?.trim();
   const replyTo = process.env.SES_REPLY_TO?.trim();
+  const raw = buildRawMessage({
+    from,
+    to: msg.to,
+    subject: msg.subject,
+    text: msg.text,
+    html: msg.html,
+    replyTo: replyTo || undefined,
+    headers: msg.headers,
+  });
   await ses().send(
-    new SendEmailCommand({
+    new SendRawEmailCommand({
       Source: from,
-      Destination: { ToAddresses: [msg.to] },
-      ReplyToAddresses: replyTo ? [replyTo] : undefined,
+      Destinations: [msg.to],
       ConfigurationSetName: configurationSet || undefined,
-      Message: {
-        Subject: { Data: msg.subject, Charset: 'UTF-8' },
-        Body: { Text: { Data: msg.text, Charset: 'UTF-8' } },
-      },
+      RawMessage: { Data: raw },
     })
   );
   return { accepted: true, reason: 'sent' };

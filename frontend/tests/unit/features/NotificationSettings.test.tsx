@@ -53,6 +53,10 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
     taskUpForGrabs: true,
     coverageUpdates: true,
     careCredit: true,
+    yearRecap: true,
+    // Already chosen, so the locale back-fill below does not fire. Cases that
+    // exercise the back-fill pass emailLocale: '' explicitly.
+    emailLocale: 'en',
     phoneVerified: false,
     updatedAt: '',
     ...over,
@@ -185,7 +189,12 @@ describe('NotificationSettings', () => {
 
   it('shows the verified badge straight away for an already-verified number', async () => {
     await renderSettings(prefs({ phone: '+15551234567', phoneVerified: true, sms: true }));
-    expect(screen.getByTestId('phone-verified-badge')).toBeInTheDocument();
+    // `findBy`, not `getBy`: the badge needs `phoneDraft === prefs.phone`, and
+    // `phoneDraft` is filled by an effect that runs AFTER the render which
+    // first shows the digest checkbox `renderSettings` waits for. On a quiet
+    // machine that effect has always flushed by now; under contention it has
+    // not, and this asserted the badge's absence a beat too early (#596).
+    expect(await screen.findByTestId('phone-verified-badge')).toBeInTheDocument();
     const smsToggle = screen.getByRole('checkbox', { name: 'SMS notifications' });
     expect(smsToggle).toBeChecked();
     expect(smsToggle).toBeEnabled(); // can always turn OFF
@@ -261,10 +270,40 @@ describe('NotificationSettings', () => {
         taskUpForGrabs: true,
         coverageUpdates: true,
         careCredit: true,
+        yearRecap: true,
+        emailLocale: 'en',
       });
       await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('America/Chicago'));
       // A write the user did not ask for shows no "saved" banner.
       expect(screen.queryByText('Preferences saved.')).not.toBeInTheDocument();
+    });
+
+    it('back-fills the email language on first load, without waiting for a Save', async () => {
+      // The timezone trap this deliberately does not repeat: 'UTC' cannot be
+      // told apart from a deliberate choice, so a stored value stays wrong
+      // until someone presses Save. `emailLocale: ''` IS distinguishable, so
+      // the back-fill is safe and happens on load.
+      stubBrowserTimeZone('UTC');
+      const { notificationService } = await import('@/services/notificationService');
+      vi.mocked(notificationService.updatePreferences).mockResolvedValue(
+        prefs({ emailLocale: 'en' })
+      );
+
+      await renderSettings(prefs({ emailLocale: '' }));
+
+      await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
+      expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
+        emailLocale: 'en',
+      });
+      expect(screen.queryByText('Preferences saved.')).not.toBeInTheDocument();
+    });
+
+    it('leaves an already-chosen email language alone', async () => {
+      stubBrowserTimeZone('UTC');
+      const { notificationService } = await import('@/services/notificationService');
+      await renderSettings(prefs({ emailLocale: 'es' }));
+      await waitFor(() => expect(screen.getByLabelText('Email language')).toHaveValue('es'));
+      expect(notificationService.updatePreferences).not.toHaveBeenCalled();
     });
 
     it('evaluates quiet hours saved without touching the Timezone field in the browser zone', async () => {
@@ -298,7 +337,22 @@ describe('NotificationSettings', () => {
       stubBrowserTimeZone('America/Chicago');
       const { notificationService } = await renderSettings(prefs({ timezone: 'Europe/Berlin' }));
 
-      expect(screen.getByLabelText('Timezone')).toHaveValue('Europe/Berlin');
+      // Wait for the field to settle before asserting anything, exactly as the
+      // sibling test above does. Without this the assertion races the initial
+      // render: it can read the browser zone the mount is about to replace, and
+      // it fails as `America/Chicago` — reporting the opposite of the defect it
+      // guards, on a machine that is merely busy.
+      //
+      // It only ever fired under `vitest --coverage`, which is slow enough to
+      // lose the race and is NOT what `npm run verify` runs — so it was
+      // invisible there and blocked people at the pre-push hook instead.
+      await waitFor(() => expect(screen.getByLabelText('Timezone')).toHaveValue('Europe/Berlin'));
+
+      // Deliberately NOT inside the waitFor. A negative assertion wrapped in
+      // one passes on its first tick — before the write it is meant to forbid
+      // could even have happened — so it would hold whatever the code did.
+      // Placed after the settle, it means what it says: the field reached the
+      // stored value and nothing was written on the way.
       expect(notificationService.updatePreferences).not.toHaveBeenCalled();
     });
 
@@ -537,7 +591,7 @@ describe('NotificationSettings', () => {
     vi.mocked(notificationService.updatePreferences).mockResolvedValue(prefs({ browser: false }));
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       await waitFor(() => expect(notificationService.updatePreferences).toHaveBeenCalledOnce());
       expect(vi.mocked(notificationService.updatePreferences).mock.calls[0][0]).toMatchObject({
@@ -581,7 +635,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
       expect(
         await screen.findByText('Browser notifications disabled on this device.')
       ).toBeInTheDocument();
@@ -624,7 +678,7 @@ describe('NotificationSettings', () => {
     vi.mocked(notificationService.unsubscribe).mockRejectedValue(new Error('offline'));
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
@@ -667,7 +721,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(/couldn.t confirm that background push was turned off/u);
@@ -696,7 +750,7 @@ describe('NotificationSettings', () => {
     });
 
     try {
-      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+      await user.click(await screen.findByRole('button', { name: 'Turn off' }));
 
       expect(
         await screen.findByText('Browser notifications disabled on this device.')

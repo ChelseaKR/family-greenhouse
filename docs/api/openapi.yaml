@@ -75,8 +75,22 @@ components:
         nextDue: { type: string, format: date-time }
         assignedTo: { type: string, nullable: true }
         assignedToName: { type: string, nullable: true }
-        assignmentSource: { type: string, enum: [space_default], nullable: true }
+        assignmentSource:
+          type: string
+          enum: [space_default, rotation]
+          nullable: true
+          description: Inherited assignment (space default or care-rotation turn); null means explicit or unassigned.
         notes: { type: string, nullable: true }
+        escalatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When auto-handoff put this task up for grabs; absent if never escalated.
+        escalatedForDue:
+          type: string
+          format: date-time
+          nullable: true
+          description: Equal to nextDue while the escalated occurrence is still open.
         createdBy: { type: string }
         createdAt: { type: string, format: date-time }
     Completion:

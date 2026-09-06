@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { formatCurrency } from '@/i18n/format';
-import type { BillingInterval, Plan, PlanId } from '@/services/billingService';
-import { intervalIsOffered, priceFor } from './planPricing';
+import type { BillingInterval, Plan, PlanFeatures, PlanId } from '@/services/billingService';
+import { capsLine, intervalIsOffered, priceFor } from './planPricing';
 
 /** Cadences offered in the toggle, in display order. Labels are catalog keys;
  *  the component resolves them so the grid stays translatable. */
@@ -14,33 +14,95 @@ const INTERVALS: { id: BillingInterval; labelKey: string; hintKey?: string }[] =
   { id: 'lifetime', labelKey: 'pricing.intervalLifetime', hintKey: 'pricing.hintOneTime' },
 ];
 
-/** Feature bullets per tier. Caps come from the API; these are the qualitative
- *  differences that have no numeric field to read.
+/** The tier's one-line story, translated; the API's `description` is the
+ *  fallback for a locale without one. */
+const TAGLINE_KEY: Record<PlanId, string> = {
+  seedling: 'pricing.taglineSeedling',
+  garden: 'pricing.taglineGarden',
+  greenhouse: 'pricing.taglineGreenhouse',
+};
+
+/** Feature bullets per tier. Caps come from the API (the caps line); these
+ *  are the qualitative differences that have no numeric field to read.
  *
  *  The lists are cumulative ("Everything in …"), so a bullet on a paid tier
  *  claims the tiers below lack it. Anything every tier can do belongs on
- *  Seedling: import (POST /plants/import) and export (GET /me/export) are open
- *  to every plan — import is bounded only by the plant cap the caps line
- *  already states — while API keys really are Greenhouse-only
- *  (backend/src/handlers/apiKeys/handler.ts). */
+ *  Seedling: import (POST /plants/import), export (GET /me/export) and the
+ *  .ics feed are open to every plan, and so is the care history — the free
+ *  tier's 30-day window is an ANALYTICS window, not a history one.
+ *
+ *  Every bullet here is checkable against code today. A capability that has
+ *  not shipped is not listed, whatever the catalog's `features` map says —
+ *  see FEATURE_BULLETS.
+ *
+ *  Greenhouse carried "Priority support" until #607. There is no support
+ *  tiering anywhere in the repo: features/legal/SupportPage.tsx hands the one
+ *  SUPPORT_EMAIL to every plan, nothing reads a household's tier when a
+ *  request arrives, and there is no queue, routing rule or response-time
+ *  target to read. It was a service commitment sold at $9.99/mo with nothing
+ *  behind it. It goes back when something implements it.
+ *
+ *  Garden's identification bullet says "more each month", not "priority",
+ *  because that is what the code does: IDENTIFY_ALLOWANCES in
+ *  backend/src/services/identifyBudget.ts gives Seedling 1, Garden 30 and
+ *  Greenhouse 100 per calendar month (enforced in production —
+ *  identify_metering_enabled = "1"). It is a larger allowance; there is no
+ *  queue, and a Garden identification is not faster than a free one. The
+ *  numbers stay out of the bullet: they live in one place and a copy here
+ *  would be a second one to keep in step. */
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   seedling: [
-    'pricing.featureReminders',
-    'pricing.featureIdentification',
     'pricing.featureSharedHousehold',
+    'pricing.featureReminders',
+    'pricing.featureSitterBasic',
+    'pricing.featureAnalytics30',
+    'pricing.featureIdentification',
     'pricing.featureImportExport',
   ],
   garden: [
     'pricing.featureEverythingSeedling',
-    'pricing.featureCareHistory',
-    'pricing.featurePriorityIdentification',
+    'pricing.featureUnlimitedMembers',
+    'pricing.featureFullHistory',
+    'pricing.featureMoreIdentification',
   ],
-  greenhouse: [
-    'pricing.featureEverythingGarden',
-    'pricing.featureApiAccess',
-    'pricing.featurePrioritySupport',
-  ],
+  greenhouse: ['pricing.featureEverythingGarden', 'pricing.featureManyHomes'],
 };
+
+/**
+ * Bullets driven by the catalog's `features` map (backend/src/models/plans.ts).
+ * One renders on a tier when that tier has the flag AND the tier below does
+ * not — "new here", so the cumulative lists never repeat a bullet.
+ *
+ * An entry is added by the change that SHIPS the capability, never before:
+ * the flag says the tier includes it, this list says it exists. The Away Kit,
+ * Plant Tags, the household toolkit, Move Day, kiosk and caretaker seats each
+ * add their own line when they land (`awayKit`, `plantTags`,
+ * `householdToolkit`, `moveDay`, `kiosk`, `caretakerSeats`).
+ */
+const FEATURE_BULLETS: ReadonlyArray<{ flag: keyof PlanFeatures; key: string }> = [
+  { flag: 'chat', key: 'pricing.featureChat' },
+  { flag: 'apiKeys', key: 'pricing.featureApiAccess' },
+];
+
+/** Ascending entitlement order, mirroring PLAN_ORDER in backend/src/models/plans.ts. */
+const TIER_ORDER: readonly PlanId[] = ['seedling', 'garden', 'greenhouse'];
+
+/**
+ * Flag bullets that are NEW on `plan` — it has the capability and no tier
+ * below it does. Resolved through TIER_ORDER rather than the array's own
+ * order, because the cumulative "Everything in …" lists only read correctly
+ * if "below" means a lower tier; a catalog that arrived in another order
+ * would otherwise hang the assistant bullet on Greenhouse and leave Garden
+ * claiming nothing.
+ */
+function newFeatureBullets(plan: Plan, catalog: Plan[]): string[] {
+  if (!plan.features) return [];
+  const rank = TIER_ORDER.indexOf(plan.id);
+  const lower = catalog.filter((p) => TIER_ORDER.indexOf(p.id) < rank);
+  return FEATURE_BULLETS.filter(
+    ({ flag }) => plan.features?.[flag] === true && !lower.some((p) => p.features?.[flag] === true)
+  ).map(({ key }) => key);
+}
 
 interface PaidPlanGridProps {
   plans: Plan[];
@@ -122,6 +184,7 @@ export function PaidPlanGrid({ plans, currentPlanId, renderCta }: PaidPlanGridPr
           // price at this cadence simply isn't sold right now.
           const unavailable = !isFree && price === null;
           const isCurrent = currentPlanId === plan.id;
+          const bullets = [...PLAN_FEATURES[plan.id], ...newFeatureBullets(plan, plans)];
 
           return (
             <li
@@ -139,7 +202,9 @@ export function PaidPlanGrid({ plans, currentPlanId, renderCta }: PaidPlanGridPr
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-sm text-gray-600">{plan.description}</p>
+              <p className="mt-1 text-sm text-gray-600">
+                {t(TAGLINE_KEY[plan.id], { defaultValue: plan.description })}
+              </p>
 
               <p className="mt-4">
                 {unavailable ? (
@@ -164,18 +229,15 @@ export function PaidPlanGrid({ plans, currentPlanId, renderCta }: PaidPlanGridPr
                 )}
               </p>
 
-              {/* The caps are what actually separates the tiers, so they are
-                  set apart from the tier description rather than sharing its
-                  styling. Values stay API-sourced. */}
+              {/* Homes, hands and plants are what separate the tiers (ADR
+                  0014), so they are set apart from the tagline rather than
+                  sharing its styling. Values stay API-sourced. */}
               <p className="mt-4 rounded-lg bg-primary-50 px-3 py-2 text-sm font-medium text-primary-900">
-                {t('pricing.planCaps', {
-                  plants: plan.maxPlants.toLocaleString(),
-                  members: plan.maxMembers.toLocaleString(),
-                })}
+                {capsLine(plan, t)}
               </p>
 
               <ul className="mt-4 space-y-2" role="list">
-                {PLAN_FEATURES[plan.id].map((featureKey) => (
+                {bullets.map((featureKey) => (
                   <li key={featureKey} className="flex items-start gap-2 text-sm text-gray-700">
                     <CheckIcon
                       className="mt-0.5 h-4 w-4 shrink-0 text-primary-700"

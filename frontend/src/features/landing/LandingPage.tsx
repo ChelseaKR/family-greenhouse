@@ -177,9 +177,9 @@ const featureCardVariants = [
 // exist, they belong in this list — sourced from analytics, not vibes.
 const productFacts = [
   PUBLIC_REGISTRATION_AVAILABLE
-    ? { value: 'Free', label: 'Up to 10 plants — no credit card' }
+    ? { value: 'Free', label: 'Up to 20 plants — no credit card' }
     : { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
-  { value: '6 people', label: 'Share care across the household' },
+  { value: '3 people', label: 'Share one home free — unlimited on Garden' },
   { value: '5 minutes', label: 'From signup to first task' },
   { value: 'Portable', label: 'Export your data any time' },
 ];
@@ -242,7 +242,11 @@ const differentiators = [
   {
     icon: BellAlertIcon,
     label: "Reminders where you'll see them",
-    body: 'Browser, email, or text. Pick the channel, set quiet hours, and both get respected.',
+    // Browser and email only: SMS is built but gated on SMS_NOTIFICATIONS_ENABLED,
+    // which production leaves empty (environments/production/terraform.tfvars), so
+    // the toggle is disabled for every real user and the help page says as much.
+    // "or text" goes back in when the flag is on, not before.
+    body: 'Browser or email. Pick the channel, set quiet hours, and both get respected.',
   },
   {
     icon: ChartBarIcon,
@@ -360,7 +364,7 @@ function AppMockup({ className }: { className?: string }) {
                 <p className="text-sm font-medium text-white">Apartment 3B</p>
               </div>
 
-              <nav className="flex-1 -mx-2 space-y-1" aria-label="Mock navigation">
+              <div className="flex-1 -mx-2 space-y-1">
                 {navItems.map((item) => (
                   <span
                     key={item.name}
@@ -375,19 +379,19 @@ function AppMockup({ className }: { className?: string }) {
                     {item.name}
                   </span>
                 ))}
-              </nav>
+              </div>
             </aside>
 
             {/* Main content — mirrors the redesigned `DashboardPage`. */}
-            <main className="flex-1 p-4 sm:p-6 min-w-0">
+            <div className="flex-1 p-4 sm:p-6 min-w-0">
               <header className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-primary-700 font-semibold">
                     Your household
                   </p>
-                  <h2 className="mt-1 font-serif text-2xl text-ink leading-tight">
+                  <p className="mt-1 font-serif text-2xl text-ink leading-tight">
                     Welcome back, Chelsea
-                  </h2>
+                  </p>
                   <TitleUnderline className="mt-1 ml-0.5 h-2 w-28 text-primary-600" />
                   <p className="mt-2 text-xs text-gray-600">
                     Here&rsquo;s what&rsquo;s happening with your plants today.
@@ -409,7 +413,7 @@ function AppMockup({ className }: { className?: string }) {
               <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <section className="rounded-xl bg-paper border border-primary-100/70 shadow-journal overflow-hidden">
                   <header className="px-4 py-3 border-b border-primary-100/70">
-                    <h3 className="text-sm font-semibold text-ink">Upcoming tasks</h3>
+                    <p className="text-sm font-semibold text-ink">Upcoming tasks</p>
                   </header>
                   <ul className="divide-y divide-primary-100/60">
                     {todayTasks.map((t) => {
@@ -448,7 +452,7 @@ function AppMockup({ className }: { className?: string }) {
 
                 <section className="rounded-xl bg-paper border border-primary-100/70 shadow-journal overflow-hidden">
                   <header className="px-4 py-3 border-b border-primary-100/70">
-                    <h3 className="text-sm font-semibold text-ink">Family activity</h3>
+                    <p className="text-sm font-semibold text-ink">Family activity</p>
                   </header>
                   <ul className="divide-y divide-primary-100/60">
                     {activity.map((a, i) => (
@@ -476,7 +480,7 @@ function AppMockup({ className }: { className?: string }) {
                   </ul>
                 </section>
               </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>
@@ -538,7 +542,7 @@ export function LandingPage() {
   useMetaTags({
     title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
     description: PUBLIC_REGISTRATION_AVAILABLE
-      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for up to 10 plants and 6 members.'
+      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 3 people and 20 plants.'
       : 'A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in.',
     canonical: siteUrl('/'),
     ogType: 'website',
@@ -575,7 +579,7 @@ export function LandingPage() {
                   '@type': 'Offer',
                   price: '0',
                   priceCurrency: 'USD',
-                  description: 'Free for up to 10 plants and 6 household members',
+                  description: 'Free for one home, up to 3 household members and 20 plants',
                 },
               }
             : {}),
@@ -638,312 +642,325 @@ export function LandingPage() {
         </nav>
       </header>
 
-      {/* Hero Section — plain paper keeps the product preview in focus. At
+      {/* Everything between the site header and the footer is the page's
+          main content. Without this the only <main> in the document was the
+          one inside AppMockup — decorative chrome behind role="img"
+          aria-hidden — so App.tsx's skip link, which resolves
+          querySelector('main'), sent keyboard users into a picture. */}
+      <main>
+        {/* Hero Section — plain paper keeps the product preview in focus. At
           lg the hero goes asymmetric: copy left-aligned in the left
           column, the app mockup bleeding off the right edge (the
           overflow-hidden wrapper crops it). Below lg it stays the
           stacked, centered layout. */}
-      <div className="overflow-hidden bg-paper pt-14">
-        <div className="py-24 sm:py-32 lg:py-36">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
-              <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
-                <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
-                  {heroCopy[variant].eyebrow}
-                </p>
-                {/* `sm:leading-none` pins the ≥sm line-height to 1. Under Tailwind v3
+        <div className="overflow-hidden bg-paper pt-14">
+          <div className="py-24 sm:py-32 lg:py-36">
+            <div className="mx-auto max-w-7xl px-6 lg:px-8">
+              <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
+                <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
+                  <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
+                    {heroCopy[variant].eyebrow}
+                  </p>
+                  {/* `sm:leading-none` pins the ≥sm line-height to 1. Under Tailwind v3
                     the responsive `text-*` utilities won over the unprefixed
                     `leading-[1.05]` purely on source order (their media queries came
                     later in the stylesheet), so this headline has always rendered at
                     a 1.0 ratio from `sm` up. v4 composes leading through
                     `--tw-leading`, which makes `leading-[1.05]` win at every
                     breakpoint — pinning keeps the shipped rendering unchanged. */}
-                <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
-                  {heroCopy[variant].headlinePre}
-                  <span className="italic text-primary-700">
-                    {heroCopy[variant].headlineEmphasis}
-                  </span>
-                  {heroCopy[variant].headlinePost}
-                </h1>
-                <div className="mt-4 flex justify-center lg:justify-start">
-                  <TitleUnderline className="h-4 w-56 text-primary-600" />
+                  <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
+                    {heroCopy[variant].headlinePre}
+                    <span className="italic text-primary-700">
+                      {heroCopy[variant].headlineEmphasis}
+                    </span>
+                    {heroCopy[variant].headlinePost}
+                  </h1>
+                  <div className="mt-4 flex justify-center lg:justify-start">
+                    <TitleUnderline className="h-4 w-56 text-primary-600" />
+                  </div>
+                  <p className="mt-6 text-lg leading-8 text-gray-700">
+                    {heroCopy[variant].subhead}
+                  </p>
+                  <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
+                    {PUBLIC_REGISTRATION_AVAILABLE && (
+                      <Link to="/register" className={buttonStyles({ size: 'lg' })}>
+                        {t('auth.signUpFree')}
+                      </Link>
+                    )}
+                    <a
+                      href="#features"
+                      className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
+                    >
+                      See how it works <span aria-hidden="true">→</span>
+                    </a>
+                  </div>
                 </div>
-                <p className="mt-6 text-lg leading-8 text-gray-700">{heroCopy[variant].subhead}</p>
-                <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
-                  {PUBLIC_REGISTRATION_AVAILABLE && (
-                    <Link to="/register" className={buttonStyles({ size: 'lg' })}>
-                      {t('auth.signUpFree')}
-                    </Link>
-                  )}
-                  <a
-                    href="#features"
-                    className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
-                  >
-                    See how it works <span aria-hidden="true">→</span>
-                  </a>
-                </div>
-              </div>
 
-              {/* App Preview — a faithful mock of the real product chrome
+                {/* App Preview — a faithful mock of the real product chrome
                   styled to match the redesigned dashboard (paper bg,
                   botanical task icons, inline metadata row, Bitter serif
                   welcome). The visual is the product. At lg it renders at
                   a readable fixed width and bleeds off the right edge of
                   the viewport rather than squeezing into the column. */}
-              <AppMockup className="mt-16 sm:mt-24 lg:mt-0 lg:w-[56rem] lg:max-w-none" />
+                <AppMockup className="mt-16 sm:mt-24 lg:mt-0 lg:w-[56rem] lg:max-w-none" />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Product facts band — kept on the dark-green brand surface so it
+        {/* Product facts band — kept on the dark-green brand surface so it
           punches between the paper hero and the paper features section. */}
-      <div className="bg-primary-900 py-16">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
-            {productFacts.map((fact) => (
-              <div key={fact.label} className="text-center">
-                <div className="font-serif text-3xl text-white sm:text-4xl tabular-nums">
-                  {fact.value}
-                </div>
-                <div className="mt-2 text-sm text-primary-100">{fact.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Who it's for — persona on-ramp. Each card is a link into the part
-          of the page (or the care guides) that speaks to that persona. */}
-      <div className="py-20 sm:py-28 bg-parchment">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <SectionHeading
-            eyebrow="Who it's for"
-            title="However you ended up with plants"
-            description="The whole house arguing over the watering can is one story. Here are a few of the others."
-          />
-          <div className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-6 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-4">
-            {personas.map((persona) => (
-              <a
-                key={persona.label}
-                href={persona.href}
-                className="group flex flex-col rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 transition hover:ring-accent-300/70 hover:shadow-journal-hover"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-700 ring-1 ring-primary-200/60 transition group-hover:bg-accent-50 group-hover:text-accent-700 group-hover:ring-accent-200/60">
-                  <persona.icon className="h-6 w-6" aria-hidden="true" />
-                </span>
-                <span className="mt-4 font-serif text-lg text-ink">{persona.label}</span>
-                <span className="mt-2 text-sm leading-6 text-gray-700">{persona.body}</span>
-                <span className="mt-4 text-sm font-semibold text-primary-700 group-hover:text-accent-700">
-                  See how <span aria-hidden="true">→</span>
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Features Section */}
-      <div id="features" className="py-20 sm:py-28 bg-paper">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <SectionHeading
-            eyebrow="What it does"
-            title="One schedule the whole house can see"
-            description="Add a plant once and its schedule, reminders, photos, and history come along. The rest of the household sees the same thing you do."
-          />
-          <div className="mx-auto mt-12 max-w-2xl sm:mt-16 lg:mt-20 lg:max-w-none">
-            <dl className="mx-auto grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 md:max-w-none md:grid-cols-2 lg:grid-cols-3">
-              {features.map((feature, index) => {
-                const variant = featureCardVariants[index % featureCardVariants.length];
-                return (
-                  <div
-                    key={feature.name}
-                    className={clsx(
-                      'relative rounded-2xl p-8 shadow-journal hover:shadow-journal-hover transition-shadow border',
-                      variant.surface
-                    )}
-                  >
-                    <dt
-                      className={clsx(
-                        'flex flex-col items-start gap-4',
-                        variant.horizontal && 'lg:flex-row lg:items-center'
-                      )}
-                    >
-                      <div
-                        className={clsx(
-                          'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1',
-                          variant.chip
-                        )}
-                      >
-                        <feature.icon className="h-6 w-6" aria-hidden="true" />
-                      </div>
-                      <span className="text-lg font-semibold leading-7 text-ink">
-                        {feature.name}
-                      </span>
-                    </dt>
-                    <dd
-                      className={clsx(
-                        'mt-2 text-base leading-7 text-gray-700',
-                        variant.horizontal && 'lg:ml-16'
-                      )}
-                    >
-                      {feature.description}
-                    </dd>
+        <div className="bg-primary-900 py-16">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
+              {productFacts.map((fact) => (
+                <div key={fact.label} className="text-center">
+                  <div className="font-serif text-3xl text-white sm:text-4xl tabular-nums">
+                    {fact.value}
                   </div>
-                );
-              })}
-            </dl>
-          </div>
-        </div>
-      </div>
-
-      {/* Beyond the basics — the differentiators that show up past a
-          couple of plants. Lighter weight than the feature grid: a small line icon + label
-          + one line, so it reads as "and also" rather than a second
-          headline act. */}
-      <div className="py-20 sm:py-28 bg-parchment">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <SectionHeading
-            eyebrow="Beyond the basics"
-            title="More than a reminder app"
-            description="The shared schedule is where it starts. These are the parts you grow into."
-          />
-          {/* A list of features, not term/definition pairs — so a plain
-              role="list" rather than a <dl> (which axe requires to contain
-              only <dt>/<dd> groups, not the icon span + wrapper here). */}
-          <ul
-            role="list"
-            className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-x-10 gap-y-8 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {differentiators.map((item) => (
-              <li key={item.label} className="flex gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 ring-1 ring-primary-200/60">
-                  <item.icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <p className="font-semibold text-ink">{item.label}</p>
-                  <p className="mt-1 text-sm leading-6 text-gray-700">{item.body}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* How It Works Section — on paper between two parchment bands. */}
-      <div className="py-20 sm:py-28 bg-paper">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <SectionHeading eyebrow="Setup" title="Three steps, about five minutes" />
-          <div className="mx-auto mt-12 sm:mt-16 max-w-5xl">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[
-                {
-                  step: '1',
-                  title: 'Add your plants',
-                  description:
-                    'A name and a photo will do. Pick a watering rhythm yourself or start from a species suggestion.',
-                },
-                {
-                  step: '2',
-                  title: 'Invite your household',
-                  description:
-                    'Send one link. Whoever lives with you joins and sees the same plants and the same task list.',
-                },
-                {
-                  step: '3',
-                  title: 'Split the work',
-                  description:
-                    "Assign tasks, or let whoever's home claim them. Reminders go out, the history fills in.",
-                },
-              ].map((item) => (
-                <div key={item.step} className="text-center">
-                  <div
-                    className="mx-auto w-16 h-16 rounded-full bg-primary-700 ring-4 ring-primary-100 text-paper flex items-center justify-center font-serif text-2xl mb-6"
-                    aria-hidden="true"
-                  >
-                    {item.step}
-                  </div>
-                  <h3 className="font-serif text-xl text-ink mb-3">{item.title}</h3>
-                  <p className="text-gray-700">{item.description}</p>
+                  <div className="mt-2 text-sm text-primary-100">{fact.label}</div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Before you bring a plant home — the care-guide library doubles as a reason to
-          trust the app and a stop for pet owners and nervous beginners.
-          Two columns: the honest pitch, then a few guides by name. */}
-      <div className="py-20 sm:py-28 bg-parchment">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
-                Before you bring one home
-              </p>
-              {/* `sm:leading-none` — see the hero h1: v3 let `sm:text-5xl` (line-height 1)
-                  override the unprefixed `leading-tight` on source order, so this
-                  heading has always rendered at 1.0 from `sm` up. */}
-              <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight sm:leading-none">
-                Know what you&rsquo;re getting into
-              </h2>
-              <TitleUnderline className="mt-2 h-3 w-40 text-primary-600" />
-              <p className="mt-6 text-lg leading-8 text-gray-700">
-                The care guides are honest about the parts the plant-shop label skips: how often it
-                actually needs water, what the brown tips are telling you, and whether it&rsquo;s
-                safe around a cat or a curious toddler. Worth a read before the plant comes home.
-              </p>
+        {/* Who it's for — persona on-ramp. Each card is a link into the part
+          of the page (or the care guides) that speaks to that persona. */}
+        <div className="py-20 sm:py-28 bg-parchment">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <SectionHeading
+              eyebrow="Who it's for"
+              title="However you ended up with plants"
+              description="The whole house arguing over the watering can is one story. Here are a few of the others."
+            />
+            <div className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-6 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-4">
+              {personas.map((persona) => (
+                <a
+                  key={persona.label}
+                  href={persona.href}
+                  className="group flex flex-col rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 transition hover:ring-accent-300/70 hover:shadow-journal-hover"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-700 ring-1 ring-primary-200/60 transition group-hover:bg-accent-50 group-hover:text-accent-700 group-hover:ring-accent-200/60">
+                    <persona.icon className="h-6 w-6" aria-hidden="true" />
+                  </span>
+                  <span className="mt-4 font-serif text-lg text-ink">{persona.label}</span>
+                  <span className="mt-2 text-sm leading-6 text-gray-700">{persona.body}</span>
+                  <span className="mt-4 text-sm font-semibold text-primary-700 group-hover:text-accent-700">
+                    See how <span aria-hidden="true">→</span>
+                  </span>
+                </a>
+              ))}
             </div>
-            <div className="rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 sm:p-8">
-              <h3 className="font-serif text-lg text-ink">Start with a guide</h3>
-              <ul className="mt-4 grid grid-cols-2 gap-3">
-                {featuredGuides.map((guide) => (
-                  <li key={guide.slug}>
-                    <Link
-                      to={`/care/${guide.slug}`}
-                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink ring-1 ring-primary-100/70 transition hover:bg-primary-50 hover:ring-primary-200"
+          </div>
+        </div>
+
+        {/* Features Section */}
+        <div id="features" className="py-20 sm:py-28 bg-paper">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <SectionHeading
+              eyebrow="What it does"
+              title="One schedule the whole house can see"
+              description="Add a plant once and its schedule, reminders, photos, and history come along. The rest of the household sees the same thing you do."
+            />
+            <div className="mx-auto mt-12 max-w-2xl sm:mt-16 lg:mt-20 lg:max-w-none">
+              <dl className="mx-auto grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 md:max-w-none md:grid-cols-2 lg:grid-cols-3">
+                {features.map((feature, index) => {
+                  const variant = featureCardVariants[index % featureCardVariants.length];
+                  return (
+                    <div
+                      key={feature.name}
+                      className={clsx(
+                        'relative rounded-2xl p-8 shadow-journal hover:shadow-journal-hover transition-shadow border',
+                        variant.surface
+                      )}
                     >
-                      <CheckIcon className="h-4 w-4 shrink-0 text-primary-600" aria-hidden="true" />
-                      {guide.name}
-                    </Link>
-                  </li>
+                      <dt
+                        className={clsx(
+                          'flex flex-col items-start gap-4',
+                          variant.horizontal && 'lg:flex-row lg:items-center'
+                        )}
+                      >
+                        <div
+                          className={clsx(
+                            'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1',
+                            variant.chip
+                          )}
+                        >
+                          <feature.icon className="h-6 w-6" aria-hidden="true" />
+                        </div>
+                        <span className="text-lg font-semibold leading-7 text-ink">
+                          {feature.name}
+                        </span>
+                      </dt>
+                      <dd
+                        className={clsx(
+                          'mt-2 text-base leading-7 text-gray-700',
+                          variant.horizontal && 'lg:ml-16'
+                        )}
+                      >
+                        {feature.description}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        {/* Beyond the basics — the differentiators that show up past a
+          couple of plants. Lighter weight than the feature grid: a small line icon + label
+          + one line, so it reads as "and also" rather than a second
+          headline act. */}
+        <div className="py-20 sm:py-28 bg-parchment">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <SectionHeading
+              eyebrow="Beyond the basics"
+              title="More than a reminder app"
+              description="The shared schedule is where it starts. These are the parts you grow into."
+            />
+            {/* A list of features, not term/definition pairs — so a plain
+              role="list" rather than a <dl> (which axe requires to contain
+              only <dt>/<dd> groups, not the icon span + wrapper here). */}
+            <ul
+              role="list"
+              className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-x-10 gap-y-8 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {differentiators.map((item) => (
+                <li key={item.label} className="flex gap-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 ring-1 ring-primary-200/60">
+                    <item.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-ink">{item.label}</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-700">{item.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* How It Works Section — on paper between two parchment bands. */}
+        <div className="py-20 sm:py-28 bg-paper">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <SectionHeading eyebrow="Setup" title="Three steps, about five minutes" />
+            <div className="mx-auto mt-12 sm:mt-16 max-w-5xl">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  {
+                    step: '1',
+                    title: 'Add your plants',
+                    description:
+                      'A name and a photo will do. Pick a watering rhythm yourself or start from a species suggestion.',
+                  },
+                  {
+                    step: '2',
+                    title: 'Invite your household',
+                    description:
+                      'Send one link. Whoever lives with you joins and sees the same plants and the same task list.',
+                  },
+                  {
+                    step: '3',
+                    title: 'Split the work',
+                    description:
+                      "Assign tasks, or let whoever's home claim them. Reminders go out, the history fills in.",
+                  },
+                ].map((item) => (
+                  <div key={item.step} className="text-center">
+                    <div
+                      className="mx-auto w-16 h-16 rounded-full bg-primary-700 ring-4 ring-primary-100 text-paper flex items-center justify-center font-serif text-2xl mb-6"
+                      aria-hidden="true"
+                    >
+                      {item.step}
+                    </div>
+                    <h3 className="font-serif text-xl text-ink mb-3">{item.title}</h3>
+                    <p className="text-gray-700">{item.description}</p>
+                  </div>
                 ))}
-              </ul>
-              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
-                <Link to="/care" className="text-primary-700 hover:underline">
-                  All care guides <span aria-hidden="true">→</span>
-                </Link>
-                <Link to="/blog" className="text-primary-700 hover:underline">
-                  Read the blog <span aria-hidden="true">→</span>
-                </Link>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Plans band. Copy is chosen by BOTH commercial gates — see
+        {/* Before you bring a plant home — the care-guide library doubles as a reason to
+          trust the app and a stop for pet owners and nervous beginners.
+          Two columns: the honest pitch, then a few guides by name. */}
+        <div className="py-20 sm:py-28 bg-parchment">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
+                  Before you bring one home
+                </p>
+                {/* `sm:leading-none` — see the hero h1: v3 let `sm:text-5xl` (line-height 1)
+                  override the unprefixed `leading-tight` on source order, so this
+                  heading has always rendered at 1.0 from `sm` up. */}
+                <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight sm:leading-none">
+                  Know what you&rsquo;re getting into
+                </h2>
+                <TitleUnderline className="mt-2 h-3 w-40 text-primary-600" />
+                <p className="mt-6 text-lg leading-8 text-gray-700">
+                  The care guides are honest about the parts the plant-shop label skips: how often
+                  it actually needs water, what the brown tips are telling you, and whether
+                  it&rsquo;s safe around a cat or a curious toddler. Worth a read before the plant
+                  comes home.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 sm:p-8">
+                <h3 className="font-serif text-lg text-ink">Start with a guide</h3>
+                <ul className="mt-4 grid grid-cols-2 gap-3">
+                  {featuredGuides.map((guide) => (
+                    <li key={guide.slug}>
+                      <Link
+                        to={`/care/${guide.slug}`}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink ring-1 ring-primary-100/70 transition hover:bg-primary-50 hover:ring-primary-200"
+                      >
+                        <CheckIcon
+                          className="h-4 w-4 shrink-0 text-primary-600"
+                          aria-hidden="true"
+                        />
+                        {guide.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+                  <Link to="/care" className="text-primary-700 hover:underline">
+                    All care guides <span aria-hidden="true">→</span>
+                  </Link>
+                  <Link to="/blog" className="text-primary-700 hover:underline">
+                    Read the blog <span aria-hidden="true">→</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Plans band. Copy is chosen by BOTH commercial gates — see
           planBandFor — so this heading can never announce a pause over a
           catalog that is actually selling. `PricingGrid` remains the
           authority on whether any amount is shown at all. */}
-      <div id="pricing" className="py-20 sm:py-28 bg-paper">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <SectionHeading
-            eyebrow="Plans"
-            title={planBand.title}
-            description={planBand.description}
-          />
-          <PricingGrid />
-          <p className="mt-12 text-center text-sm text-gray-700">
-            {planBand.footerNote}{' '}
-            <Link to="/pricing" className="font-medium text-primary-700 hover:underline">
-              {planBand.footerLink}
-            </Link>
-            .
-          </p>
+        <div id="pricing" className="py-20 sm:py-28 bg-paper">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <SectionHeading
+              eyebrow="Plans"
+              title={planBand.title}
+              description={planBand.description}
+            />
+            <PricingGrid />
+            <p className="mt-12 text-center text-sm text-gray-700">
+              {planBand.footerNote}{' '}
+              <Link to="/pricing" className="font-medium text-primary-700 hover:underline">
+                {planBand.footerLink}
+              </Link>
+              .
+            </p>
+          </div>
         </div>
-      </div>
+      </main>
 
       {/* Footer */}
       <footer className="bg-primary-900">
@@ -968,11 +985,6 @@ export function LandingPage() {
                 <li>
                   <a href="#pricing" className="text-sm text-primary-200 hover:text-white">
                     Plans
-                  </a>
-                </li>
-                <li>
-                  <a href="/coming-soon" className="text-sm text-primary-200 hover:text-white">
-                    Mobile App
                   </a>
                 </li>
               </ul>
@@ -1000,11 +1012,6 @@ export function LandingPage() {
             <div>
               <h3 className="text-sm font-semibold text-white">Company</h3>
               <ul className="mt-4 space-y-2">
-                <li>
-                  <a href="/coming-soon" className="text-sm text-primary-200 hover:text-white">
-                    About
-                  </a>
-                </li>
                 <li>
                   <a
                     href="mailto:hello@familygreenhouse.net"

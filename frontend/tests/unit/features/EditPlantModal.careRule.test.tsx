@@ -75,8 +75,24 @@ describe('EditPlantModal house rule', () => {
     expect(screen.getByText(/16 of 140 characters\./)).toBeInTheDocument();
 
     await user.clear(input);
-    await user.type(input, 'x'.repeat(CARE_RULE_MAX_LENGTH + 5));
+    // Paste the over-long rule instead of typing it. user-event applies the
+    // element's maxlength to a paste through exactly the same code path it
+    // applies to each simulated keystroke (editInputElement), so this asserts
+    // the same cap in ONE event rather than 145. Typing 145 keys re-rendered
+    // the whole dialog 145 times, which ran past vitest's 5s test timeout
+    // whenever the machine was busy — and an aborted test does not cancel the
+    // in-flight typing promise, so its remaining keystrokes kept landing on
+    // whatever was focused next and interleaved into the following test's
+    // input ("x x xBxoxtxtxoxmx-…"). Keep this interaction O(1).
+    await user.click(input);
+    await user.paste('x'.repeat(CARE_RULE_MAX_LENGTH + 5));
     expect(input.value).toHaveLength(CARE_RULE_MAX_LENGTH);
+    expect(screen.getByText(/140 of 140 characters\./)).toBeInTheDocument();
+
+    // A keystroke once the field is full is refused as well, so the cap holds
+    // for typing and not just for the truncated paste.
+    await user.type(input, 'y');
+    expect(input.value).toBe('x'.repeat(CARE_RULE_MAX_LENGTH));
     expect(screen.getByText(/140 of 140 characters\./)).toBeInTheDocument();
   });
 

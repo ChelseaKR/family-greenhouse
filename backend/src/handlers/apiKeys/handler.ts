@@ -20,6 +20,7 @@ import {
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import * as apiKeysService from '../../services/apiKeys.js';
 import * as billing from '../../services/billing.js';
+import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import { audit } from '../../utils/auditLog.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 
@@ -33,7 +34,16 @@ type CreateInput = z.infer<typeof createSchema>;
 
 async function requireGreenhousePlan(householdId: string) {
   const sub = await billing.getHouseholdSubscription(householdId);
-  if (sub.planId !== 'greenhouse') {
+  // ENTITLEMENT, not the plan row (#476). middleware/apiKey.ts already gates
+  // USING a key on getEntitledPlan, so minting one on `planId` alone was the
+  // inconsistent half: a past_due household could issue a key that its own
+  // next request would then be refused with. Issuing is a new grant, and a
+  // household mid-dunning is not entitled to new grants.
+  // And the FLAG, not the id (#592). #476 fixed WHICH plan this asks about;
+  // it still asked by naming a tier. `features.apiKeys` is authored per tier
+  // in plans.ts, so a tier added above Garden gets whatever its own row says
+  // rather than whatever this literal happens to exclude.
+  if (!featureOf(getEntitledPlan(sub), 'apiKeys')) {
     throw createHttpError(
       402,
       'API access is included with the Greenhouse plan. Upgrade to issue API keys.'

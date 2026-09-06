@@ -103,7 +103,7 @@ export default function RememberingToWater() {
         built for one person, and most plant care happens in households. It does the feedback-loop
         thing (completing a task pushes the next due date forward from now, not from the original
         schedule), and it lets multiple people see and act on the same plant list. It is free for
-        households with up to 10 plants; the spreadsheet still beats the sticky note.
+        households with up to 20 plants; the spreadsheet still beats the sticky note.
       </p>
     </article>
   );

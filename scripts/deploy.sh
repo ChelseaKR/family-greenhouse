@@ -65,20 +65,66 @@ VITE_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
 
 # Deploy frontend
 echo "Deploying frontend to S3..."
+# Hashed, immutable assets. The exclude here used to be the literal
+# "index.html", which matches ONLY the root key — so pricing/index.html,
+# blog/<slug>/index.html and app-shell.html all went up with a 1-year
+# immutable cache at URLs that never change. The CD workflows already do the
+# two-phase split below; this script had drifted from them.
 aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
     --delete \
     --cache-control "max-age=31536000,public" \
-    --exclude "index.html" \
+    --exclude "*.html" \
     --exclude "sw.js" \
     --exclude "push-handler.js" \
-    --exclude "*.json"
+    --exclude "*.json" \
+    --exclude "robots.txt" \
+    --exclude "sitemap.xml" \
+    --exclude ".well-known/*"
 
-aws s3 cp frontend/dist/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+# All HTML, rebuilt every deploy at stable URLs.
+aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
+    --delete \
+    --exclude "*" \
+    --include "*.html" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+aws s3 cp frontend/dist/robots.txt "s3://${FRONTEND_BUCKET}/robots.txt" \
+    --cache-control "max-age=3600,public"
+aws s3 cp frontend/dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
+    --cache-control "max-age=3600,public"
 aws s3 cp frontend/dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 aws s3 cp frontend/dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+# The deep-link association files, when a build carries them. Neither would be
+# uploaded correctly by the syncs above: `assetlinks.json` matches
+# `--exclude "*.json"` in the first and `*.html` in the second, so NEITHER sync
+# claims it and it would never reach the bucket; `apple-app-site-association`
+# is extensionless, so it matched no exclude and rode the immutable sync up
+# with a 1-year max-age and a guessed `binary/octet-stream` content type, where
+# Apple requires `application/json`. `--exclude ".well-known/*"` above keeps the
+# generic sync off both, so these two commands are the only thing that uploads
+# them and their headers are the headers the files get.
+#
+# Guarded, because the files are not in the tree yet (#469 §2): the app-side
+# half needs the release keystore's SHA-256 fingerprint and the Apple Team ID,
+# which this repo cannot supply. Until those land both tests are false and this
+# is a no-op. Kept in step with the two CD workflows — this script has drifted
+# from them before, and the last time it did every prerendered page went up
+# immutable.
+if [[ -f frontend/dist/.well-known/assetlinks.json ]]; then
+    aws s3 cp frontend/dist/.well-known/assetlinks.json \
+        "s3://${FRONTEND_BUCKET}/.well-known/assetlinks.json" \
+        --content-type "application/json" \
+        --cache-control "max-age=300,public"
+fi
+if [[ -f frontend/dist/.well-known/apple-app-site-association ]]; then
+    aws s3 cp frontend/dist/.well-known/apple-app-site-association \
+        "s3://${FRONTEND_BUCKET}/.well-known/apple-app-site-association" \
+        --content-type "application/json" \
+        --cache-control "max-age=300,public"
+fi
 
 # Invalidate CloudFront
 echo "Invalidating CloudFront cache..."
@@ -112,13 +158,22 @@ for handler in "${HANDLERS[@]}"; do
     ZIP="$(pwd)/.deploy-${handler}.zip"
     (cd "$WORK" && zip -q -r "$ZIP" .)
 
-    PUBLISHED_VER=$(aws lambda update-function-code \
+    # `if` rather than `A && B || C` (SC2015): in the `&&`/`||` form the failure
+    # branch also runs when the UPDATE succeeded and the `echo` failed, which
+    # would print "not found or update failed" for a Lambda that had just been
+    # published and `continue` past the artifact archive below — leaving CD's
+    # auto-rollback with no zip for a version that exists.
+    if PUBLISHED_VER=$(aws lambda update-function-code \
         --function-name "$FUNCTION_NAME" \
         --region us-east-1 \
         --zip-file "fileb://${ZIP}" \
-        --publish --query 'Version' --output text 2>/dev/null) \
-        && echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})" \
-        || { echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"; rm -rf "$WORK" "$ZIP"; continue; }
+        --publish --query 'Version' --output text 2>/dev/null); then
+        echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})"
+    else
+        echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"
+        rm -rf "$WORK" "$ZIP"
+        continue
+    fi
 
     # Archive this version's zip so CD auto-rollback can restore it later.
     aws s3 cp "$ZIP" \

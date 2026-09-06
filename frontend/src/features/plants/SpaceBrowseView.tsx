@@ -12,6 +12,7 @@ import clsx from 'clsx';
 import type { HouseholdMember } from '@/services/householdService';
 import type { Plant, PlantSpace } from '@/services/plantService';
 import type { TaskWithCoverage } from '@/services/taskService';
+import { Alert } from '@/components/Alert';
 import { Card } from '@/components/Card';
 import { PlantImage } from '@/components/PlantImage';
 import { formatRelativeDay } from '@/i18n/format';
@@ -26,6 +27,16 @@ interface SpaceBrowseViewProps {
   tasksLoading?: boolean;
   tasksError?: boolean;
   showCareOverview?: boolean;
+  /**
+   * The spaces read SETTLED without data — not "this household has no rooms".
+   * With an empty `spaces`, `buildSpaceOverviewGroups` puts every plant in the
+   * `'unplaced'` group, so without this flag the page tells a household that
+   * has spent months organising its plants into rooms that it has organised
+   * nothing (ADR 0010). The plants themselves loaded fine and are still worth
+   * showing, so the view says what it could not read and stops claiming the
+   * grouping is real.
+   */
+  spacesUnavailable?: boolean;
 }
 
 const ROUTE_STRIPE: Record<SpaceOverviewGroup['environment'], string> = {
@@ -43,6 +54,7 @@ export function SpaceBrowseView({
   tasksLoading = false,
   tasksError = false,
   showCareOverview = true,
+  spacesUnavailable = false,
 }: SpaceBrowseViewProps) {
   const { t } = useTranslation();
   const groups = useMemo(
@@ -52,7 +64,9 @@ export function SpaceBrowseView({
 
   return (
     <div className="space-y-8">
-      {showCareOverview && (
+      {spacesUnavailable && <Alert variant="error">{t('spaces.roomsUnavailable')}</Alert>}
+
+      {showCareOverview && !spacesUnavailable && (
         <Card
           variant="paper"
           padding="sm"
@@ -89,7 +103,9 @@ export function SpaceBrowseView({
           <section key={environment} aria-labelledby={`space-environment-${environment}`}>
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h2 id={`space-environment-${environment}`} className="font-serif text-2xl text-ink">
-                {t(`spaces.${environment}`)}
+                {environment === 'unplaced' && spacesUnavailable
+                  ? t('spaces.locationUnknown')
+                  : t(`spaces.${environment}`)}
               </h2>
               <span className="text-xs text-gray-500">
                 {t('spaces.spaceCount', { count: environmentGroups.length })}
@@ -98,13 +114,19 @@ export function SpaceBrowseView({
             <div className="grid gap-5 xl:grid-cols-2">
               {environmentGroups.map((group) => {
                 const routeIndex = groups.findIndex((item) => item.id === group.id) + 1;
-                const displayName = group.id === 'unplaced' ? t('spaces.unplaced') : group.name;
+                const displayName =
+                  group.id === 'unplaced'
+                    ? spacesUnavailable
+                      ? t('spaces.locationUnknown')
+                      : t('spaces.unplaced')
+                    : group.name;
                 const hasSpaceNotes = Boolean(
                   group.space &&
                   (group.space.lightLevel ||
                     group.space.environment === 'outside' ||
                     group.space.petAccess != null ||
-                    group.caregiverName)
+                    group.caregiverName ||
+                    group.rotation)
                 );
                 return (
                   <Card
@@ -236,6 +258,15 @@ export function SpaceBrowseView({
                           {group.caregiverName && (
                             <span className="rounded-full border border-primary-100 bg-paper px-2.5 py-1 text-xs text-gray-700">
                               {t('spaces.usualCaregiver', { name: group.caregiverName })}
+                            </span>
+                          )}
+                          {/* A rotating space always says whose turn it is —
+                              or, honestly, that everyone in it is away. */}
+                          {group.rotation && (
+                            <span className="rounded-full border border-primary-100 bg-paper px-2.5 py-1 text-xs text-gray-700">
+                              {group.rotation.turnName
+                                ? t('spaces.rotation.turnIs', { name: group.rotation.turnName })
+                                : t('spaces.rotation.everyoneAway')}
                             </span>
                           )}
                         </div>

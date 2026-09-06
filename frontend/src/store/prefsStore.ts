@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import i18n, { SUPPORTED_LANGS } from '@/i18n';
+import i18n, { ensureLanguageCatalog, SUPPORTED_LANGS } from '@/i18n';
 
 /**
  * UI preferences. Persisted to localStorage so a refresh doesn't reset the
@@ -55,8 +55,19 @@ export const usePrefsStore = create<PrefsState>()(
       sharedCarePulseDismissedUntil: {},
       setDensity: (density) => set({ density }),
       setLanguage: (language) => {
+        // Order matters. `changeLanguage` first so the stored preference,
+        // i18next's active language and <html lang> never disagree, even for a
+        // fraction of a second. Non-English catalogs are fetched rather than
+        // bundled (src/i18n/nonEnglishCatalog.ts), so the copy may land a beat
+        // later; `react.bindI18nStore: 'added'` re-renders when it does, and
+        // until then i18next serves the English fallback rather than raw keys.
+        // PreferencesSettings prefetches on mount, so in practice the catalog
+        // is already registered before the picker is ever used.
         i18n.changeLanguage(language);
         set({ language });
+        void ensureLanguageCatalog(language).catch((error: unknown) => {
+          console.warn(`i18n: could not load the ${language} catalog`, error);
+        });
       },
       setWelcomeSeen: (welcomeSeen) => set({ welcomeSeen }),
       setDnd: (dndStart, dndEnd) => set({ dndStart, dndEnd }),

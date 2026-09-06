@@ -35,8 +35,12 @@ describe('apiKeys service', () => {
     const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
       input: { Item: Record<string, unknown> };
     };
-    // The stored row carries the hash on GSI3PK, never the plaintext.
-    expect(cmd.input.Item.GSI3PK).toBe(`APIKEY_HASH#${_internal.hashKey(result.plaintext)}`);
+    // The stored row carries the hash on GSI1PK, never the plaintext. GSI1 is
+    // one of the two indexes the table Terraform actually defines — see #400,
+    // where this was written to (and read from) a GSI3 that has never existed.
+    expect(cmd.input.Item.GSI1PK).toBe(`APIKEY_HASH#${_internal.hashKey(result.plaintext)}`);
+    expect(cmd.input.Item.GSI1SK).toBe('HOUSEHOLD#hh-1');
+    expect(cmd.input.Item.GSI3PK).toBeUndefined();
     expect(JSON.stringify(cmd.input.Item)).not.toContain(result.plaintext.slice(3));
   });
 
@@ -105,7 +109,7 @@ describe('apiKeys service', () => {
     expect(await lookupApiKey('not-fg-prefix')).toBeNull();
   });
 
-  it('lookupApiKey returns null when GSI3 returns no match', async () => {
+  it('lookupApiKey returns null when the lookup index returns no match', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] });
     const { lookupApiKey } = await import('../../../src/services/apiKeys.js');
@@ -114,7 +118,7 @@ describe('apiKeys service', () => {
 
   it('lookupApiKey returns the record for a known hash', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
-    // 1st send: the GSI3 query. 2nd send: the best-effort lastUsedAt
+    // 1st send: the index query. 2nd send: the best-effort lastUsedAt
     // update — its promise is `.catch()`-chained, so it must resolve.
     vi.mocked(dynamodb.send)
       .mockResolvedValueOnce({
@@ -137,6 +141,16 @@ describe('apiKeys service', () => {
     const result = await lookupApiKey('fg_anything');
     expect(result?.id).toBe('k1');
     expect(result?.householdId).toBe('hh');
+    // #400: the lookup must name an index the table actually has, and must
+    // read it on the same attribute createApiKey writes. A Query naming a
+    // missing index raises ValidationException — it does not degrade — so
+    // this is the difference between a working public API and one that
+    // rejects every caller.
+    const query = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      input: { IndexName: string; KeyConditionExpression: string };
+    };
+    expect(query.input.IndexName).toBe('GSI1');
+    expect(query.input.KeyConditionExpression).toBe('GSI1PK = :pk');
   });
 
   it('lookupApiKey awaits a CONDITIONED lastUsedAt bump (no revoked-key resurrection)', async () => {
@@ -218,5 +232,76 @@ describe('apiKeys service', () => {
     };
     expect(cmd.input.ExpressionAttributeValues[':pk']).toBe('HOUSEHOLD#hh-1');
     expect(cmd.input.ExpressionAttributeValues[':sk']).toBe('APIKEY#');
+  });
+});
+
+/**
+ * A credential that authenticates but cannot be listed cannot be revoked:
+ * revocation is by key id, and this listing is the only place an id is ever
+ * shown. The old `Limit: 50` with no paging made the fifty-first key
+ * permanently live and permanently invisible, while Settings rendered the
+ * page size as a total. See #455.
+ */
+describe('apiKeys — every key a household owns is a key it can revoke (#455)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function row(id: string) {
+    return {
+      id,
+      householdId: 'hh-1',
+      label: `key ${id}`,
+      last4: id.slice(-4),
+      scopes: ['read:plants'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      createdBy: 'u1',
+      lastUsedAt: null,
+    };
+  }
+
+  it('follows LastEvaluatedKey so the 51st key is listed, not stranded', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listApiKeys } = await import('../../../src/services/apiKeys.js');
+    const firstPage = Array.from({ length: 50 }, (_, i) => row(`key-${i}`));
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: firstPage,
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: 'APIKEY#key-49' },
+      })
+      .mockResolvedValueOnce({ Items: [row('key-50')] });
+
+    const keys = await listApiKeys('hh-1');
+    expect(keys).toHaveLength(51);
+    expect(keys.map((k) => k.id)).toContain('key-50');
+  });
+
+  it('resumes the second page from where the first ended', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listApiKeys } = await import('../../../src/services/apiKeys.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [row('key-a')],
+        LastEvaluatedKey: { PK: 'HOUSEHOLD#hh-1', SK: 'APIKEY#key-a' },
+      })
+      .mockResolvedValueOnce({ Items: [row('key-b')] });
+
+    await listApiKeys('hh-1');
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(2);
+    const second = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { ExclusiveStartKey?: Record<string, unknown> };
+    };
+    expect(second.input.ExclusiveStartKey).toEqual({
+      PK: 'HOUSEHOLD#hh-1',
+      SK: 'APIKEY#key-a',
+    });
+  });
+
+  it('stops after one round trip when there is no next page', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listApiKeys } = await import('../../../src/services/apiKeys.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [row('only')] });
+    await expect(listApiKeys('hh-1')).resolves.toHaveLength(1);
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
   });
 });

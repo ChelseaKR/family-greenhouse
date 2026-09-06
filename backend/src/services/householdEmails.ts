@@ -74,17 +74,18 @@ import * as taskService from './taskService.js';
 import * as plantService from './plantService.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
+import * as scheduledFanOut from './scheduledFanOut.js';
 import {
   composeCareCreditEmail,
   composeCoverageEmail,
   composeMemberJoinedEmail,
   composeUpForGrabsEmail,
   daysUntilDue,
-  preferredEmailLocale,
   taskLabel,
   type ComposedEmail,
   type EmailLocale,
 } from './emailCopy.js';
+import { resolveEmailLocale } from './email/locale.js';
 
 export const QUEUE_SK_PREFIX = 'HHEMAIL#';
 
@@ -550,7 +551,21 @@ export async function flushUser(userId: string, now: Date = new Date()): Promise
 
   const summary: FlushSummary = { ...EMPTY_FLUSH };
   const prefs = await notificationPrefs.getPreferences(userId);
-  const locale = preferredEmailLocale(prefs);
+  // Language comes from the canonical resolver in `services/email/locale.ts`.
+  // This used to call a `preferredEmailLocale` helper that probed the record
+  // for a field named `locale`; the field is `emailLocale`, so the probe was
+  // never true and every household email went out in English — including to
+  // users who had explicitly chosen Spanish in Settings, for copy that has a
+  // complete Spanish translation sitting in emailCopy.ts.
+  //
+  // The pure overload, not `resolveEmailLocaleForUser`: `prefs` is already in
+  // hand, so the accessor's own read would be a second point read per user per
+  // hourly pass. The household step is passed `null` for the same reason — it
+  // is a member fan-out, and this runs for every member every hour. `digest.ts`
+  // resolves the household's language once per run, which is where that cost
+  // belongs. `source` is logged so an English send to somebody who has never
+  // chosen is a countable event rather than an invisible one.
+  const { locale, source: localeSource } = resolveEmailLocale(prefs.emailLocale, null);
   const inDnd = notificationPrefs.isInDndWindow(prefs, now);
 
   for (const row of pending) {
@@ -609,6 +624,17 @@ export async function flushUser(userId: string, now: Date = new Date()): Promise
       continue;
     }
     summary.sent += 1;
+    logger.info(
+      {
+        userId,
+        householdId: row.householdId,
+        kind: row.kind,
+        locale,
+        localeSource,
+        msg: 'household_email.sent',
+      },
+      'household_email.sent'
+    );
     try {
       await markSent(key, now);
     } catch (err) {
@@ -967,6 +993,12 @@ export interface HouseholdEmailRunSummary {
    *  `offered: 0` so a broken read cannot be summarised as a calm week. */
   unknown: number;
   failed: number;
+  /** Households this run actually reached. Below `households` only when the
+   *  run stopped on its deadline. */
+  attempted: number;
+  /** The run ran out of its share of the invocation before finishing. Alarmed
+   *  on — see `services/scheduledFanOut.ts`. */
+  truncated: boolean;
 }
 
 /**
@@ -979,50 +1011,63 @@ export interface HouseholdEmailRunSummary {
  * household's failure must never abort the rest of the run.
  */
 export async function runHouseholdEmails(
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: { deadlineAt?: number } = {}
 ): Promise<HouseholdEmailRunSummary> {
   const ids = await householdService.listAllHouseholdIds();
   const summary: HouseholdEmailRunSummary = {
     households: ids.length,
+    attempted: 0,
     offered: 0,
     sent: 0,
     deferred: 0,
     expired: 0,
     unknown: 0,
     failed: 0,
+    truncated: false,
   };
+  // `flushed` is read and written only between awaits, so the check-and-add
+  // below is still atomic under the bounded concurrency: JavaScript cannot
+  // interleave another household between the `has` and the `add`.
   const flushed = new Set<string>();
 
-  for (const householdId of ids) {
-    try {
-      const outcome = await upForGrabsHousehold(householdId, now);
-      if (outcome === 'queued') summary.offered += 1;
-      if (outcome === 'unknown') summary.unknown += 1;
-    } catch (err) {
-      summary.failed += 1;
-      logger.warn(
-        { err: (err as Error).message, householdId },
-        'household_email.up_for_grabs_failed'
-      );
-    }
-    try {
-      const members = await householdService.getHouseholdMembers(householdId);
-      for (const member of members) {
-        // A user in several households has one queue partition; flushing it
-        // once per pass is enough and avoids re-querying it per household.
-        if (flushed.has(member.userId)) continue;
-        flushed.add(member.userId);
-        const result = await flushUser(member.userId, now);
-        summary.sent += result.sent;
-        summary.deferred += result.deferred;
-        summary.expired += result.expired;
-        summary.failed += result.failed;
+  const fanOut = await scheduledFanOut.fanOutHouseholds(
+    'householdEmails',
+    ids,
+    async (householdId) => {
+      try {
+        const outcome = await upForGrabsHousehold(householdId, now);
+        if (outcome === 'queued') summary.offered += 1;
+        if (outcome === 'unknown') summary.unknown += 1;
+      } catch (err) {
+        summary.failed += 1;
+        logger.warn(
+          { err: (err as Error).message, householdId },
+          'household_email.up_for_grabs_failed'
+        );
       }
-    } catch (err) {
-      summary.failed += 1;
-      logger.warn({ err: (err as Error).message, householdId }, 'household_email.flush_failed');
-    }
-  }
+      try {
+        const members = await householdService.getHouseholdMembers(householdId);
+        for (const member of members) {
+          // A user in several households has one queue partition; flushing it
+          // once per pass is enough and avoids re-querying it per household.
+          if (flushed.has(member.userId)) continue;
+          flushed.add(member.userId);
+          const result = await flushUser(member.userId, now);
+          summary.sent += result.sent;
+          summary.deferred += result.deferred;
+          summary.expired += result.expired;
+          summary.failed += result.failed;
+        }
+      } catch (err) {
+        summary.failed += 1;
+        logger.warn({ err: (err as Error).message, householdId }, 'household_email.flush_failed');
+      }
+    },
+    { deadlineAt: options.deadlineAt }
+  );
+  summary.attempted = fanOut.attempted;
+  summary.truncated = fanOut.truncated;
 
   logger.info({ ...summary, msg: 'household_email.run_complete' }, 'household_email.run_complete');
   return summary;

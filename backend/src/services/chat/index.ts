@@ -12,8 +12,13 @@ import createHttpError from 'http-errors';
 import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
 import * as billing from '../billing.js';
-import { askSprout, isSproutIntegrationEnabled, type SproutCitation } from '../sprout.js';
-import { getPlan } from '../../models/plans.js';
+import {
+  askSprout,
+  isSproutIntegrationEnabled,
+  type SproutCitation,
+  type SproutCoverage,
+} from '../sprout.js';
+import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -32,6 +37,7 @@ import {
 } from './tools.js';
 import {
   checkGrounding,
+  checkHouseholdClaims,
   checkSafetyClaims,
   isBlockingVerdict,
   mentionsPetSafety,
@@ -56,6 +62,7 @@ import {
   reserveBudget,
   type TurnBudgetReconciliation,
 } from './persistence.js';
+import { isDisplayOnlyBlock } from './types.js';
 import type {
   BudgetState,
   ChatMessageRecord,
@@ -64,22 +71,58 @@ import type {
   ToolUseBlock,
 } from './types.js';
 import { BUDGET_CONFIG, budgetConfigForPlan } from './budget.js';
+import {
+  GROUNDING_BLOCK_COPY,
+  HOUSEHOLD_COVERAGE_BLOCK_COPY,
+  PET_SAFETY_BLOCK_COPY,
+  detectChatLocale,
+  groundingBlockMessage,
+  householdCoverageBlockMessage,
+  petSafetyBlockMessage,
+} from './blockCopy.js';
+
+/**
+ * Wall-clock ceiling for all of one turn's Bedrock calls together.
+ *
+ * `bedrock.ts` bounds each CALL (BEDROCK_CHAT_TIMEOUT_MS, 25s) and says in as
+ * many words that six of those can still exceed the chat Lambda's 90 seconds
+ * (the `timeout` on the `chat` branch in `infrastructure/modules/api/main.tf`;
+ * unpinned from a line number because editing that comment moves it). This is
+ * the other half.
+ *
+ * What a Lambda kill costs, and why it is worth ending a turn early to avoid:
+ * the budget reservation below (RESERVE_INPUT_TOKENS = 8000) is reconciled to
+ * real usage in a `finally`, and the turn claim is resolved there too. A killed
+ * function runs neither. The household is then billed 8,000 input tokens
+ * against a 250k monthly allowance for a turn that produced no answer, and the
+ * claim sits until its lease expires — a reservation nobody reconciled, read
+ * downstream as consumption. Ending at 80s instead lets that `finally` run.
+ *
+ * The cost of the bound is honest and small: a turn whose last call would have
+ * finished between 80s and 90s now fails where it might have succeeded. Turns
+ * past 90s were already failing, just expensively and silently.
+ *
+ * NOT the graceful version — the turn errors, it does not wind up early with a
+ * best-effort answer. Telling the model to stop calling tools and answer with
+ * what it has changes what a user is shown, which is a product decision; this
+ * only changes whether the cleanup runs.
+ */
+const TURN_DEADLINE_MS = Number(process.env.CHAT_TURN_DEADLINE_MS || '80000');
 
 const MAX_TOOL_CALLS_PER_TURN = 5;
 const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
 const MAX_HISTORY_MESSAGES = 24;
 
-export const GROUNDING_BLOCK_MESSAGE =
-  "I couldn't verify every quantitative detail in that answer against the care knowledge I retrieved. Please rephrase the question or check a trusted horticultural source before acting.";
-
 /**
- * Replaces an answer that asserted a plant is safe for pets without a
- * non-toxic verdict from the curated table behind it (ADR 0011). A
- * refusal-with-pointer rather than a bare refusal: the verified checker is
- * one click away, and the acute case needs a phone number, not a chat.
+ * The English forms of the three block messages, kept as named exports because
+ * that is how the eval suite and the tests refer to them. All three now live
+ * in `blockCopy.ts` in every language the product ships, and the turn picks
+ * the one that matches the language the user asked in — see that file for why
+ * the question's language, and not a stored preference, decides it.
  */
-export const PET_SAFETY_BLOCK_MESSAGE =
-  "I can't confirm that plant is safe for pets: this answer didn't come from our verified pet-toxicity table, so I've held it back. Please use the pet-safety checker at /pet-safe (grounded in the ASPCA toxic and non-toxic plant list) or ask your vet. If an animal has already eaten or chewed a plant, or is showing symptoms, contact your vet or the ASPCA Animal Poison Control Center (888-426-4435) right away.";
+export const GROUNDING_BLOCK_MESSAGE = GROUNDING_BLOCK_COPY.en;
+export const PET_SAFETY_BLOCK_MESSAGE = PET_SAFETY_BLOCK_COPY.en;
+export const HOUSEHOLD_COVERAGE_BLOCK_MESSAGE = HOUSEHOLD_COVERAGE_BLOCK_COPY.en;
 
 // Tokens reserved up front by the atomic budget gate (reserveBudget), then
 // reconciled to actual usage when the turn finishes. A modest representative
@@ -174,6 +217,21 @@ export interface RunChatTurnResult {
   };
   /** Present when the feature-flagged first-party Sprout path answered. */
   citations?: SproutCitation[];
+  /**
+   * Sprout's own required per-answer disclosure, verbatim. Omitted when Sprout
+   * sent an empty one — the schema permits it, and an empty string rendered as
+   * a disclosure is worse than none — and when the answer was replaced by the
+   * household-coverage block, since the sentence delivered is then ours.
+   */
+  disclosure?: string;
+  /**
+   * How much of the household this answer was actually computed over (#549).
+   * Aggregate integers only. Returned so a caller can qualify the answer
+   * rather than inherit `buildSproutContext`'s reductions silently — and it
+   * describes `assistantText` whichever text that is, including the
+   * household-coverage block, whose whole subject is these numbers.
+   */
+  coverage?: SproutCoverage;
   provider?: 'sprout' | 'bedrock';
 }
 
@@ -204,11 +262,13 @@ function sanitizeToolResultBlock(block: ContentBlock): ContentBlock {
 function toBedrockMessages(history: ChatMessageRecord[]): BedrockMessage[] {
   return history.map((m) => ({
     role: m.role,
-    // Citation blocks are Family Greenhouse display metadata, not Anthropic
-    // content blocks. Strip them before replaying a Sprout-authored turn into
-    // a later Bedrock fallback. Persisted tool results may contain fields used
-    // by the authenticated UI; redact them again at this model boundary.
-    content: m.content.filter((block) => block.type !== 'citation').map(sanitizeToolResultBlock),
+    // Citation, disclosure and coverage blocks are Family Greenhouse display
+    // metadata, not Anthropic content blocks. Strip them before replaying a
+    // Sprout-authored turn into a later Bedrock fallback — the list lives on
+    // the ContentBlock union in types.ts so a new display block cannot be
+    // added without this boundary seeing it. Persisted tool results may
+    // contain fields used by the authenticated UI; redact them again here.
+    content: m.content.filter((block) => !isDisplayOnlyBlock(block)).map(sanitizeToolResultBlock),
   }));
 }
 
@@ -500,8 +560,21 @@ async function* turnEvents(
   // both the sync (runChatTurn) and streaming (streamChatTurn) entry points
   // share, before any idempotency/budget/Bedrock work — no future caller of
   // either entry point can accidentally skip it.
-  const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
-  if (plan.id === 'seedling') {
+  // Entitlement, not the plan row: each turn spends Bedrock tokens, so a
+  // past_due/unpaid household resolves to Seedling and hits the 402 above the
+  // same as a household that never paid. See getEntitledPlan.
+  // The FLAG, not the id (#592). This asked `plan.id === 'seedling'` — naming
+  // the one tier that must not have chat rather than asking whether this tier
+  // includes it. With three tiers the two agree for every input that exists.
+  // They stop agreeing the day a fourth tier is added between Seedling and
+  // Garden: its `features.chat` would be authored deliberately in plans.ts
+  // beside the other nine flags, and a deny-list naming one id would hand it
+  // the assistant regardless. Nothing would report that — a tier receiving a
+  // feature it was not granted produces no error and no log line, just a
+  // working chat, one Bedrock turn at a time. The choke-point property above
+  // is what would have made the leak uniform rather than partial.
+  const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
+  if (!featureOf(plan, 'chat')) {
     throw createHttpError(
       402,
       'The care assistant is included with the Garden plan and up. Upgrade to start chatting.'
@@ -564,11 +637,74 @@ async function* turnEvents(
   if (isSproutIntegrationEnabled()) {
     let sprout: Awaited<ReturnType<typeof askSprout>> | undefined;
     try {
-      sprout = await askSprout({ householdId, question: message });
+      sprout = await askSprout({
+        householdId,
+        question: message,
+        // The language of THIS question, on the rule blockCopy.ts already
+        // settled for the block messages and for the same reason: what Sprout
+        // is told decides the language of the answer AND of the disclosure
+        // shown underneath it, so leaving the 'en' default in place handed a
+        // Spanish speaker an English disclosure. `language` is already part of
+        // the request contract Sprout accepts, so nothing new crosses.
+        language: detectChatLocale(message),
+      });
     } catch (err) {
       logger.warn({ err: (err as Error).message }, 'sprout_integration_fallback');
     }
     if (sprout) {
+      // askSprout returns five fields and this turn used to read two of them,
+      // dropping `disclosure`, `observations` and `coverage` on the floor
+      // (#579). `disclosure` and `coverage` are persisted below as display
+      // blocks alongside the citations, so both survive with the answer and a
+      // reload shows what the live turn showed. `observations` are counted in
+      // the audit line but deliberately NOT persisted: what a household-scoped
+      // number may assert when its coverage is partial is the open product
+      // decision in #549, and storing a numerator for some later consumer to
+      // render without its denominator is precisely that defect, pre-built.
+      const disclosure = sprout.disclosure.trim();
+      if (!disclosure) {
+        // Required by the response contract but permitted to be empty by its
+        // own schema (`z.string()`, no minimum). Nothing is shown in that
+        // case, which is the honest outcome — but a silently absent
+        // disclosure should not look like a delivered one from the outside.
+        logger.warn({ conversationId }, 'sprout_answer_without_disclosure');
+      }
+      // The last of #549, and the reason the coverage above is computed at
+      // all: what an answer may ASSERT when its payload was a subset. Sprout
+      // is given the coverage and can qualify a number itself; this is the
+      // check that it did, made on our side because the household total is
+      // ours and a claim about it must not be verifiable only by the service
+      // making it. An unsupported count or all-clear replaces the answer, on
+      // the ADR 0009 / 0011 precedent — a number the reader cannot tell is
+      // wrong is worse than a refusal that says why (ADR 0026).
+      const household = checkHouseholdClaims(sprout.text, sprout.coverage);
+      const blockedOnCoverage = household.unsupportedHouseholdClaims.length > 0;
+      if (blockedOnCoverage) {
+        // Never log the claim text: an answer quotes the household back.
+        logger.warn(
+          {
+            conversationId,
+            blockedOn: 'household-coverage',
+            householdClaimsChecked: household.householdClaimsChecked.length,
+            unsupportedHouseholdClaimCount: household.unsupportedHouseholdClaims.length,
+            plantsIncluded: sprout.coverage.plants.included,
+            plantsTotal: sprout.coverage.plants.total,
+            tasksIncluded: sprout.coverage.tasks.included,
+            tasksTotal: sprout.coverage.tasks.total,
+          },
+          'chat_grounding_blocked'
+        );
+      }
+      // The citations and the disclosure belong to the withheld answer, not to
+      // the refusal: Family Greenhouse wrote the sentence below, so attaching
+      // Sprout's "AI-generated, not veterinary advice" note to it would credit
+      // our own copy to Sprout. The coverage block stays on either path — it
+      // is the reason for the refusal, and the facts behind it.
+      const answerText = blockedOnCoverage
+        ? householdCoverageBlockMessage(detectChatLocale(message))
+        : sprout.text;
+      const citations = blockedOnCoverage ? [] : sprout.citations;
+      const shownDisclosure = blockedOnCoverage ? '' : disclosure;
       const userRecord: ChatMessageRecord = {
         conversationId,
         timestamp: new Date().toISOString(),
@@ -580,8 +716,13 @@ async function* turnEvents(
         timestamp: new Date().toISOString(),
         role: 'assistant',
         content: [
-          { type: 'text', text: sprout.text },
-          ...sprout.citations.map((citation) => ({ type: 'citation' as const, ...citation })),
+          { type: 'text', text: answerText },
+          ...citations.map((citation) => ({ type: 'citation' as const, ...citation })),
+          ...(shownDisclosure ? [{ type: 'disclosure' as const, text: shownDisclosure }] : []),
+          // Attached whether or not it is partial and whether or not Sprout
+          // returned an observation: the PROSE above came out of the same
+          // reduced set, so the qualification belongs to the whole answer.
+          { type: 'coverage' as const, ...sprout.coverage },
         ],
       };
       try {
@@ -620,9 +761,11 @@ async function* turnEvents(
       }
       const result: RunChatTurnResult = {
         conversationId,
-        assistantText: sprout.text,
+        assistantText: answerText,
         proposals: [],
-        citations: sprout.citations,
+        citations,
+        disclosure: shownDisclosure || undefined,
+        coverage: sprout.coverage,
         provider: 'sprout',
         budgetRemaining: {
           inputTokens: Math.max(0, budgetConfig.maxInputTokensPerMonth - budget.inputTokens),
@@ -646,7 +789,32 @@ async function* turnEvents(
       audit('chat.message_sent', {
         actorId: userId,
         householdId,
-        metadata: { conversationId, provider: 'sprout', citationCount: sprout.citations.length },
+        metadata: {
+          conversationId,
+          provider: 'sprout',
+          // What was DELIVERED, not what arrived: a blocked answer keeps
+          // neither its citations nor its disclosure, and an audit line that
+          // counted them anyway would describe a turn nobody had.
+          citationCount: citations.length,
+          // Aggregate integers and booleans only, no strings — the same
+          // reason `coverage` itself is safe to carry. This is what makes
+          // "did this answer come from a subset of the household?" answerable
+          // in production today, ahead of any decision about what to render.
+          observationCount: sprout.observations.length,
+          disclosed: shownDisclosure.length > 0,
+          coveragePartial: sprout.coverage.partial,
+          // The other half of that question: did the subset actually cost the
+          // user an answer this time (ADR 0026)?
+          householdCoverageBlocked: blockedOnCoverage,
+          plantsIncluded: sprout.coverage.plants.included,
+          plantsTotal: sprout.coverage.plants.total,
+          plantsUnmatched: sprout.coverage.plants.unmatched,
+          plantsTruncated: sprout.coverage.plants.truncated,
+          tasksIncluded: sprout.coverage.tasks.included,
+          tasksTotal: sprout.coverage.tasks.total,
+          tasksUnmatched: sprout.coverage.tasks.unmatched,
+          tasksTruncated: sprout.coverage.tasks.truncated,
+        },
       });
       yield { type: 'start', conversationId };
       yield { type: 'done', result };
@@ -750,12 +918,17 @@ async function* turnEvents(
     messagesForModel = toBedrockMessages(history);
     retrievedSpans.push(...collectHistoryRagSpans(history));
 
+    // One deadline for the whole loop, fixed before the first call. Each call
+    // clips its own timeout to what is left of it.
+    const deadlineAt = Date.now() + TURN_DEADLINE_MS;
+
     for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
       const modelArgs = {
         system: SYSTEM_PROMPT,
         messages: messagesForModel,
         tools: TOOL_REGISTRY,
         maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
+        deadlineAt,
       };
 
       let response: BedrockChatResponse;
@@ -813,12 +986,20 @@ async function* turnEvents(
           );
           // A pet-safety block takes precedence: its message carries the
           // pointer to the verified checker and the poison-control line.
+          //
+          // Written in the language the user asked in. The model answers a
+          // Spanish question in Spanish; replacing that answer with an English
+          // constant switched language at the one moment the system decided the
+          // answer was too risky to give (#466).
+          const blockLocale = detectChatLocale(input.message);
           response = {
             ...response,
             content: [
               {
                 type: 'text',
-                text: blockedOnSafety ? PET_SAFETY_BLOCK_MESSAGE : GROUNDING_BLOCK_MESSAGE,
+                text: blockedOnSafety
+                  ? petSafetyBlockMessage(blockLocale)
+                  : groundingBlockMessage(blockLocale),
               },
             ],
           };
@@ -871,7 +1052,9 @@ async function* turnEvents(
           );
           response = {
             ...response,
-            content: [{ type: 'text', text: PET_SAFETY_BLOCK_MESSAGE }],
+            content: [
+              { type: 'text', text: petSafetyBlockMessage(detectChatLocale(input.message)) },
+            ],
           };
         }
       }

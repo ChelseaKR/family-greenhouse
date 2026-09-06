@@ -102,7 +102,7 @@ Per-household, per-UTC-month ceilings on the paid AI calls. Each is a Terraform 
 
 | Variable                                                                                                                             | Guard                                                         | Blank means                           | Notes                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IDENTIFY_METERING_ENABLED`                                                                                                          | `services/identifyBudget.ts` — 3 / 30 / 100 per month by plan | track only, never block               | `1` enforces. **Production sets `1`; staging and the code default only track.**                                                                                                                                                                                                                                                                                           |
+| `IDENTIFY_METERING_ENABLED`                                                                                                          | `services/identifyBudget.ts` — 1 / 30 / 100 per month by plan | track only, never block               | `1` enforces. **Production sets `1`; staging and the code default only track.**                                                                                                                                                                                                                                                                                           |
 | `LEAF_HEALTH_MONTHLY_CAP`                                                                                                            | `services/leafHealthBudget.ts`                                | `200`, every tier                     | Applies to every tier without a per-tier value. `0` = unlimited.                                                                                                                                                                                                                                                                                                          |
 | `LEAF_HEALTH_MONTHLY_CAP_SEEDLING` / `_GARDEN` / `_GREENHOUSE`                                                                       | same                                                          | inherit the flat cap                  | Setting any one makes the guard tier-aware, which adds one household read per check (the read identify already makes). `0` = unlimited for that tier.                                                                                                                                                                                                                     |
 | `CHAT_BUDGET_INPUT_TOKENS` / `CHAT_BUDGET_OUTPUT_TOKENS`                                                                             | `services/chat/budget.ts`                                     | `250000` / `50000`, every tier        | Applies to every tier without a per-tier value. `0` is **not** unlimited — it blocks every turn — so leave blank rather than zero.                                                                                                                                                                                                                                        |
@@ -112,12 +112,13 @@ All three guards reserve through a conditional DynamoDB `ADD` before the paid ca
 
 ### Billing
 
-| Variable                     | Effect                                          |
-| ---------------------------- | ----------------------------------------------- |
-| `STRIPE_SECRET_KEY`          | Stripe API key (`sk_live_...` or `sk_test_...`) |
-| `STRIPE_WEBHOOK_SECRET`      | Set on the webhook handler Lambda only          |
-| `STRIPE_PRICE_ID_GARDEN`     | Price ID for the $4.99 plan                     |
-| `STRIPE_PRICE_ID_GREENHOUSE` | Price ID for the $9.99 plan                     |
+| Variable                          | Effect                                                                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`               | Stripe API key (`sk_live_...` or `sk_test_...`)                                                                                                                                             |
+| `STRIPE_WEBHOOK_SECRET`           | Set on the webhook handler Lambda only                                                                                                                                                      |
+| `STRIPE_PRICE_ID_GARDEN`          | Price ID for the $4.99 plan                                                                                                                                                                 |
+| `STRIPE_PRICE_ID_GREENHOUSE`      | Price ID for the $9.99 plan                                                                                                                                                                 |
+| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` | One-time price ID for the 20-identification top-up pack ($1.99, ADR 0019). Blank = not for sale; checkout answers 400 `TOP_UP_NOT_CONFIGURED`. Terraform `stripe_price_id_identify_top_up`. |
 
 Use AWS Secrets Manager or SSM Parameter Store for any of these that look like secrets — Terraform pulls them in via `data` blocks rather than hardcoding.
 
@@ -311,7 +312,7 @@ pay-as-you-go, one credit per identification call, priced in EUR only
 purchase does not expire. At our volume we are Tier A: **€0.05 ≈ $0.0585 per
 identification** at the 1.17 USD/EUR assumed in
 `backend/src/config/upstreamCosts.ts`. That is the number the plan allowances
-(3 / 30 / 100 identifications a month) are priced against, and it is why the
+(1 / 30 / 100 identifications a month) are priced against, and it is why the
 annual and lifetime plans were withdrawn from sale — see
 [ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md) and
 [`evals/UNIT-ECONOMICS.md`](../evals/UNIT-ECONOMICS.md).

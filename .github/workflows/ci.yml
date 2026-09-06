@@ -7,8 +7,37 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on a pull request — pushing again to a PR makes the
+  # previous run's verdict irrelevant, and that is what this setting is for.
+  #
+  # Never cancel on `main`. A push to `main` is the only CI run that ever tests
+  # that exact squashed commit, and cancelling it leaves the commit on `main`
+  # with no completed result — the branch has a gap in its record rather than a
+  # green one.
+  #
+  # `cancel-in-progress: false` alone does not achieve that, which is where the
+  # previous revision of this block stopped. A concurrency group holds at most
+  # one *running* run and at most one *pending* run. `cancel-in-progress: false`
+  # protects the running one; it does nothing for the pending one, and when a
+  # third run enters the group GitHub cancels the pending run to make room. With
+  # the group keyed on the ref alone, every `main` push landed in one group, so
+  # a merge arriving while an earlier run was still going queued as pending and
+  # was then cancelled by the merge after it — before dispatching a single job.
+  #
+  # Measured 2026-09-06 over the 100 `main` CI runs since that revision merged:
+  # 32 ended `cancelled`, every one with `jobs.total_count == 0`, each cancelled
+  # within ~2s of the next push creating its run. The rate moved from 48% to
+  # 32%; the gap did not close. Those commits carry no finished verdict from the
+  # workflow that holds twelve of the thirteen required status checks.
+  #
+  # Keying a push by `github.sha` gives every `main` commit a group of its own,
+  # so `main` runs never contend and consecutive merges genuinely do run
+  # concurrently rather than superseding each other. Pull requests keep a stable
+  # per-ref group and still cancel on a new push, so fast iteration is unchanged.
+  # Actions minutes are free on this public repository and total job-minutes are
+  # unchanged — only whether the work survives long enough to become a verdict.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -28,6 +57,7 @@ jobs:
           # the default shallow clone (fetch-depth 1) leaves the base SHA
           # missing and fails with "Invalid revision range".
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -38,19 +68,99 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: node_modules matches package-lock.json (#581)
+        # A preflight in `npm run verify` (scripts/run-gate.mjs), where it earns
+        # its keep: a stale local install makes lint, typecheck and both suites
+        # fail on module resolution, and the gate then reports whichever noticed
+        # first. On 2026-09-05 that was `test:backend`, for fifteen suites that
+        # could not import a devDependency added 139 commits earlier.
+        #
+        # Here it is expected ALWAYS to pass, since `npm ci` above has just
+        # written the tree — and that is exactly why it runs here. The failure
+        # branch of a gate script is the branch a green build never executes,
+        # so what CI can uniquely prove is that the checker still agrees with a
+        # canonical fresh install rather than having drifted into a false alarm
+        # nobody sees until it blocks a push.
+        run: npm run deps:check
+
       - name: Run ESLint
+        # frontend's `lint` covers `src`, `tests/e2e` and `playwright.config.ts`.
+        # The e2e tree was previously outside every lint glob despite being the
+        # only code that can revert a production release (#440).
         run: npm run lint
+
+      - name: ESLint the .mjs tooling and the infrastructure Lambdas (#443)
+        # `npm run lint` is the two workspaces' `eslint src`. Twenty-six .mjs
+        # files sat outside it, outside tsc (which never sees a .mjs) and
+        # outside .pre-commit-config.yaml's `^(backend|frontend)/src/` filter.
+        # Thirteen of them ARE the gates: the only code path in a gate script
+        # that throws is its FAILURE branch, which a green build never executes,
+        # so a ReferenceError there would leave the gate passing while being
+        # incapable of failing. Two more are Lambdas that run in production, one
+        # of which forwards security@ mail.
+        #
+        # Separate from `Run ESLint` because it needs its own globs: ESLint 10
+        # resolves the nearest eslint.config.mjs to each file, so the block is
+        # mirrored into all three configs.
+        run: npm run lint:scripts
+
+      - name: shellcheck every tracked shell script (#443)
+        # Nothing checked them. One of the five deletes S3 object versions on
+        # the production release path. Switching this on found a shellcheck
+        # directive written with ESLint's `-- reason` suffix, which shellcheck
+        # cannot parse and which stops it reporting anything else in that file.
+        #
+        # The file list is derived from `git ls-files "*.sh"`, so a new script is
+        # covered without anyone remembering, and an empty list fails rather than
+        # passing vacuously. shellcheck ships on ubuntu-latest runners.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check (CICD-27).
+        run: npm run shell:check
 
       - name: No bare TODO/FIXME/HACK markers
         # Shared with `npm run verify` (scripts/check-no-bare-markers.mjs) so
         # local pre-push and CI run the identical check — see CICD-27.
         run: node scripts/check-no-bare-markers.mjs
 
+      - name: Git hooks are wired to a tracked directory (#544)
+        # `npm ci` above runs `prepare`, which points core.hooksPath at the
+        # TRACKED .githooks/. This step re-derives that wiring from git rather
+        # than trusting it: the hooks exist, are executable ON DISK and in the
+        # INDEX (mode 100755 — a hook that is executable on one laptop protects
+        # only that laptop), and pre-push still runs `npm run verify`.
+        #
+        # The index-mode assertion is the one that only CI can usefully make,
+        # and it is the property that failed: core.hooksPath was `.husky/_`, a
+        # directory husky generates and git-ignores, so a `git worktree add`
+        # inherited the path into a tree where nothing was there. Git ran no
+        # hook and pushed — exit 0, no warning.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
+        run: npm run hooks:check
+
       - name: No silenced test/security/lint gates in workflows (P0-3)
         # Regression gate for the exact bypasses this remediation pass closed
         # (cd-staging.yml's continue-on-error on e2e; the skip-lighthouse
         # label). See scripts/check-no-silenced-gates.mjs.
         run: node scripts/check-no-silenced-gates.mjs
+
+      - name: Every test suite is run by something (#472)
+        # `frontend`'s `test:edge` existed, passed, and ran in NO gate — a
+        # repo-wide grep found two hits: its package.json line and its own
+        # header comment claiming it was "part of the frontend test gate". What
+        # went uncovered was the CloudFront viewer-request function, and on
+        # 2026-09-04 that cost ~40 minutes of 403s on every route but `/`.
+        #
+        # This asserts the class, not the instance: a `test*` script must be a
+        # step in scripts/gate-steps.mjs, or be invoked by a workflow, or be
+        # registered with a reason. A suite nothing runs still reads as coverage.
+        #
+        # Also a step in `npm run verify` so local pre-push and CI run the
+        # identical check (CICD-27).
+        run: npm run tests:wired:check
 
       - name: Check formatting
         run: npm run format:check
@@ -66,6 +176,15 @@ jobs:
         # enforced" while three gates were enforcing it.
         run: node scripts/check-docs-testing.mjs
 
+      - name: Verify docs/adr/README.md matches the ADR files
+        # Shared with `npm run verify` (scripts/check-adr-index.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27). The index used to be
+        # hand-maintained and was a merge conflict on every parallel PR that
+        # carried a decision (#475); it is derived from the files now, and this
+        # step is what stops a hand-maintained one coming back.
+        run: npm run adr:check
+
       - name: Verify observability and SLO contract
         run: npm run observability:check
 
@@ -76,6 +195,18 @@ jobs:
         # `Lint` job rather than the unrequired `i18n Gates` job, so it can
         # actually block a merge.
         run: npm run reads:check
+
+      - name: Entitlement-gate ratchet (a paid feature must follow payment status)
+        # #476, direction 4. PR #364 introduced `getEntitledPlan` and converted
+        # every call site that existed then; the rule silently stopped applying
+        # to code written after it, and by the time #476 was filed a dozen new
+        # gates read `getPlan(sub.planId)` again — one of them added WHILE the
+        # issue was open, so its own table was stale before anyone worked it.
+        # Shared with `npm run verify` (root `entitlements:check`) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27). Lives in the required
+        # `Lint` job so it can actually block a merge.
+        run: npm run entitlements:check
 
       - name: Store release readiness (native version parity + listing metadata)
         # `npm run mobile:validate` existed but nothing ran it, so the only
@@ -88,39 +219,46 @@ jobs:
         # Runs the default (non-`--production`, non-`--synced`) mode, which
         # needs no signing material, no populated .env, and no `cap sync`
         # output, so it is safe on a plain CI checkout.
+        #
+        # That mode used to be the cheap half of the file: everything a store
+        # build depends on sat behind `--production`/`--synced` and ran only
+        # when someone remembered `npm run mobile:release` locally (CICD-470).
+        # The checks that are assertions about COMMITTED files have since been
+        # moved out of those blocks so they run here too — the release env
+        # template's VITE_CHAT_STREAM_URL/VITE_BETA_MODE values, and the
+        # native-push reachability gate. Reading them from process.env in CI
+        # would have passed vacuously, so they read the committed template
+        # instead.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
         run: npm run mobile:validate
-
-      - name: Validate commits
-        if: github.event_name == 'pull_request'
-        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
-
-  i18n:
-    name: i18n Gates
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Catalog gates (key parity, placeholder parity, plural categories, TODO markers, BCP-47, UTF-8)
         # STANDARDS/INTERNATIONALIZATION-STANDARD.md §4 G1/G3/G5/G6 —
         # shared with `npm run verify` (frontend `i18n:check`) so local == CI.
+        #
+        # Lives in `Lint` rather than a job of its own for the same reason the
+        # settled-read ratchet above does: `Lint` is a required status check
+        # and the old `i18n Gates` job was not, so key parity, placeholder
+        # parity, plural categories and the hardcoded-string ratchet could all
+        # go red without blocking a merge (CICD-467). scripts/
+        # check-no-silenced-gates.mjs now asserts that these two stay in a
+        # required job.
         working-directory: frontend
         run: node scripts/check-i18n-catalogs.mjs
 
       - name: Hardcoded-string ratchet (no new untranslatable JSX text)
         # §4 G2 as a ratchet against scripts/i18n-hardcoded-baseline.json —
-        # existing debt is pinned per file and may only shrink.
+        # existing debt is pinned per file and may only shrink. Also covers
+        # aria-label/alt/title/placeholder literals (CICD-468).
         working-directory: frontend
         run: node scripts/check-hardcoded-strings.mjs
+
+      - name: Validate commits
+        if: github.event_name == 'pull_request'
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
   typecheck:
     name: Type Check
@@ -128,6 +266,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -139,6 +279,10 @@ jobs:
         run: npm ci
 
       - name: TypeScript check - Frontend
+        # `npm run typecheck` in frontend is now two programs: tsconfig.json
+        # (src) and tsconfig.e2e.json (tests/e2e + playwright.config.ts). The
+        # e2e tree used to be outside every static check — see #440 and the
+        # header of frontend/tsconfig.e2e.json.
         working-directory: frontend
         run: npm run typecheck
 
@@ -146,12 +290,33 @@ jobs:
         working-directory: backend
         run: npm run typecheck
 
+      - name: Post-deploy smoke spec still loads (#440)
+        # `post-deploy-smoke.spec.ts` cannot RUN on a pull request — it needs a
+        # deployed Cognito pool, and playwright.smoke.config.ts throws at module
+        # load without E2E_BASE_URL. But it is the only code in the repo that can
+        # revert a production release (cd-production.yml fires `rollback` on any
+        # non-success from the smoke job), and PR CI executes it nowhere, so a
+        # load error in it would be discovered by production.
+        #
+        # `--list` under placeholder env vars proves the file and its imports
+        # parse, the Playwright API it calls still exists, and its two tests are
+        # still registered. It cannot prove an assertion inside a test is still
+        # true — that limit is stated in the script rather than left implicit.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places pattern
+        # as check-no-bare-markers.mjs (CICD-27).
+        working-directory: frontend
+        run: npm run smoke:parse
+
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -166,6 +331,35 @@ jobs:
         working-directory: frontend
         run: npm run test:coverage
 
+      - name: Run the CloudFront SPA router test (#472)
+        # `test:edge` covers infrastructure/modules/frontend/functions/
+        # spa-router.js — the viewer-request function that maps /pricing and
+        # the other prerendered routes onto their index.html objects. It has
+        # existed, passed, and run in NO CI job: `frontend`'s `test` script is
+        # `vitest run`, and vitest.config.ts includes only
+        # tests|src/**/*.{test,spec}.{ts,tsx}, which a .mjs file under
+        # frontend/scripts/ matches neither. The root `verify` chain does not
+        # call it either, so pre-push missed it too.
+        #
+        # On 2026-09-04 that gap cost a production outage: every route but `/`
+        # returned 403 for ~40 minutes. One of these six cases is literally
+        # "a trailing slash resolves to the same object, not a 403".
+        #
+        # Six cases, ~0.1s. It is a separate step rather than folded into
+        # `test:coverage` because it is `node --test`, not vitest, and a
+        # distinct step names the thing that failed.
+        working-directory: frontend
+        run: npm run test:edge
+
+      - name: Run the availability-check predicates (#615)
+        # `scripts/synthetic-page-check.mjs` only ever runs against a live
+        # origin — the fifteen-minute uptime cron and the post-deploy smoke —
+        # so until now no pre-merge gate executed a line of it. `test:checks`
+        # runs its pure predicates, including the one that decides whether a
+        # `/assets/` response is a served JavaScript bundle or the SPA shell
+        # standing in for a chunk that is not there.
+        run: npm run test:checks
+
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
@@ -179,6 +373,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -210,6 +406,7 @@ jobs:
           # Full history so gitleaks scans every commit, not just the tip —
           # a secret committed then removed still needs to be caught.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -227,10 +424,25 @@ jobs:
         # the vite-6 migration). Critical CVEs in runtime deps still block.
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Run Gitleaks (license-free CLI, blocking)
+      - name: Run Gitleaks — commit history AND working tree (#442)
         # Run the MIT-licensed binary directly so the gate stays independent
         # of repository visibility and action-wrapper licensing. A non-zero
         # exit blocks the build; `--redact` keeps any match out of the log.
+        #
+        # This step used to be ONE gitleaks command with no `--no-git`, which
+        # means git mode: gitleaks walks commits and scans PATCHES, not the
+        # files on disk. That is the right thing to do — a secret committed and
+        # then removed still needs catching — but it is an argument for running
+        # history mode AS WELL AS file mode. Measured with this pinned version,
+        # one fresh repo per case: a secret introduced only while resolving a
+        # merge conflict, and a secret in a file `.gitattributes` marks binary,
+        # both exit 0 in history mode and exit 1 under `--no-git`.
+        #
+        # scripts/check-secrets.mjs runs both as separate spawns with separately
+        # checked exit codes — never a pipeline, which reports only the last
+        # stage's status. It lives in a script rather than in this YAML so the
+        # flags cannot drift between here and `npm run verify`, which runs the
+        # identical check (CICD-27).
         env:
           GITLEAKS_VERSION: 8.30.1
         run: |
@@ -238,7 +450,7 @@ jobs:
           curl -sSfL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             | tar -xz -C /tmp gitleaks
-          /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+          GITLEAKS_BIN=/tmp/gitleaks node scripts/check-secrets.mjs
 
   sast:
     name: SAST (Semgrep)
@@ -250,10 +462,18 @@ jobs:
     # ERROR-severity findings only — high-confidence issues, low
     # false-positive noise. Tune the rulesets / severity as the codebase grows.
     container:
-      image: semgrep/semgrep
+      # Pinned by digest (zizmor `unpinned-images`): a bare `semgrep/semgrep`
+      # resolves `:latest` at job start, so the SAST gate could silently swap
+      # rule engines between two runs of the same commit. This digest is the
+      # one `:latest` resolved to when the pin was taken (semgrep 1.175.0), so
+      # the gate keeps running exactly the image it ran before.
+      # Bump deliberately: `docker buildx imagetools inspect semgrep/semgrep:<ver>`.
+      image: semgrep/semgrep:1.175.0@sha256:b94b53d02fd4a022f9eac4e2af1380f5c3c4c21400e79d3336bdff1d1db5e796
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Semgrep scan
         run: |
@@ -277,6 +497,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
@@ -295,10 +517,28 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-frontend, test-backend]
+    # No `needs:`. This job consumes nothing that lint/typecheck/test produce —
+    # it checks out, installs, and builds from source like every other job — so
+    # depending on them bought no correctness, only latency: `Build` used to sit
+    # idle until the slowest gate (`Test Frontend`, ~320s) finished, and the
+    # three jobs behind it then queued another ~320s later. Measured on run
+    # 33914673891: everything parallel finished by t+322s, `Build` ran
+    # t+322..389s, and E2E/Lighthouse/Bundle size only started at t+392s, for
+    # ~706s of wall clock.
+    #
+    # Nothing is skipped and nothing is weakened. `Build`, `Lint`, `Type Check`,
+    # `Test Frontend` and `Test Backend` are all in the `protect-main` ruleset's
+    # required-status-checks list, so the merge is blocked by the checks
+    # themselves, not by the job graph — a red test still blocks the merge
+    # exactly as before. The only behaviour change is that a broken build is now
+    # reported alongside a failing test instead of after it, and a run whose
+    # tests fail also spends the runner minutes to build. Actions minutes are
+    # free on this public repository, so that costs nothing.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -332,7 +572,10 @@ jobs:
   lighthouse:
     name: Lighthouse (mobile + desktop)
     runs-on: ubuntu-latest
-    needs: [build]
+    # No `needs: [build]`. This job never downloaded the `frontend-dist`
+    # artifact — it runs its own `npm run build` below — so the dependency was
+    # pure serialized waiting. It is its own required status check, so it still
+    # has to pass before the branch can merge.
     strategy:
       fail-fast: false
       matrix:
@@ -344,6 +587,7 @@ jobs:
           # Need the merge-base/previous commit to diff against — see the
           # "Determine whether frontend changed" step below.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Determine whether frontend changed
         # P0-3 fix: this job used to be skippable on any PR via a human-applied
@@ -399,10 +643,14 @@ jobs:
   bundle-size:
     name: Bundle size
     runs-on: ubuntu-latest
-    needs: [build]
+    # No `needs: [build]` — same reason as `lighthouse`: this job builds the
+    # frontend itself rather than downloading `frontend-dist`, so waiting for
+    # `Build` measured the same bundle a minute later. Still a required check.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -421,13 +669,40 @@ jobs:
         working-directory: frontend
         run: npm run size
 
-  e2e-a11y:
-    name: E2E + accessibility (Playwright)
+  e2e-shard:
+    name: E2E shard
     runs-on: ubuntu-latest
-    needs: [build]
+    # No `needs: [build]` — #499 removed it, and it stays removed. Playwright's
+    # `webServer` block builds and previews the frontend itself, so this job
+    # starts at t+0. Reusing the `Build` job's `frontend-dist` artifact instead
+    # was measured and rejected: `Build` finishes ~67s in, and downloading it
+    # saves only the ~18s rebuild, so `needs: [build]` would cost ~47s net.
+    #
+    # #499 took this job off the critical path's *tail position*; it did not
+    # make it fast. It was still ~314s of wall clock, 260s of which was 109
+    # tests on a single Playwright worker. Splitting `--shard=N/4` across four
+    # runners is the part that makes it fast.
+    #
+    # Why sharding and not `workers: > 1` inside one job: the local backend
+    # boots ONE in-memory DB per server, and specs that touch the well-known
+    # seed account (test@example.com) race each other when they run
+    # concurrently against it — the collision that `tests/e2e/helpers.ts` was
+    # written to document. Each shard is a separate runner with its own backend
+    # and its own fresh seed, so partitioning across shards cannot reintroduce
+    # that race, while raising in-job workers would. Each shard stays at one
+    # worker.
+    strategy:
+      # Every shard reports; a failure in shard 2 must not hide a different
+      # failure in shard 4. The gate job below is what turns these into one
+      # required check.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -439,16 +714,115 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
+        # Deliberately NOT cached on ~/.cache/ms-playwright. That was tried and
+        # measured on this branch (run 33918873452, cold then warm) and it is a
+        # wash: the cache saves only the browser *download*, while the apt work
+        # behind `--with-deps` has to happen either way. Cold `install
+        # --with-deps` came in at 22-23s across four shards; warm, the restore
+        # cost 3-5s and `install-deps` alone still cost 11, 12, 15 and 41s. The
+        # median gain was ~5s on a ~140s job, the worst case was a ~23s loss,
+        # and it bought a cache key to keep correct. Not worth either.
         run: npx playwright install --with-deps chromium
 
-      - name: Run e2e + a11y suite
+      - name: Run e2e + a11y suite (shard ${{ matrix.shard }} of 4)
         working-directory: frontend
-        run: npm run test:e2e -- --project=chromium
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: npm run test:e2e -- --project=chromium --shard="$SHARD/4" --reporter=blob
+
+      - name: Upload shard blob report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-blob-${{ matrix.shard }}
+          path: frontend/blob-report
+          if-no-files-found: ignore
+
+  e2e-a11y:
+    # Name is load-bearing: `E2E + accessibility (Playwright)` is a required
+    # status check on `main`. Sharding renames the job that does the work to
+    # `E2E shard (N)`, so this aggregate keeps the required context reporting
+    # and the ruleset needs no edit. It is deliberately a real gate, not a
+    # formality — it fails whenever the shard matrix is anything but wholly
+    # successful, including cancelled and skipped, so there is no result value
+    # that lets a broken suite through.
+    name: E2E + accessibility (Playwright)
+    runs-on: ubuntu-latest
+    needs: [e2e-shard]
+    if: always()
+    steps:
+      - name: Require every E2E shard to have passed
+        env:
+          SHARDS_RESULT: ${{ needs.e2e-shard.result }}
+        run: |
+          set -euo pipefail
+          echo "E2E shard matrix result: $SHARDS_RESULT"
+          if [ "$SHARDS_RESULT" != "success" ]; then
+            echo "::error::E2E shards did not all pass (aggregate result: $SHARDS_RESULT)."
+            exit 1
+          fi
+
+  e2e-report:
+    # Merges the four shard blobs back into the single HTML report this job used
+    # to publish, and prints the executed/skipped totals so a shard silently
+    # dropping tests is visible in the log. That printout is also the standing
+    # evidence that `visual-regression.spec.ts`'s ten specs are skipped in CI
+    # (#472) — today that fact is invisible unless you open the report.
+    #
+    # Not a required check: it produces an artifact, so keeping it off the
+    # required list means report generation never sits on merge latency. The
+    # pass/fail decision lives entirely in `e2e-a11y` above.
+    name: E2E report (merged)
+    runs-on: ubuntu-latest
+    needs: [e2e-shard]
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download shard blob reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: e2e-blob-*
+          merge-multiple: true
+          path: all-blob-reports
+
+      - name: Merge into one HTML report
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Report the executed test totals
+        # The suite is sharded, so "did every test still run?" is no longer
+        # answerable from one job's summary. Merge to JSON and print the counts.
+        # Deliberately printed rather than asserted against a hand-written
+        # expected number: a checked-in test-count constant is the kind of gate
+        # that makes every test-adding PR rewrite the same line and jams the
+        # merge queue (see the note in docs/testing.md about this file's own
+        # retired Files column).
+        run: |
+          set -euo pipefail
+          npx playwright merge-reports --reporter json ./all-blob-reports > merged.json
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync("merged.json", "utf8")).stats;
+            console.log(`expected(passed)=${s.expected} unexpected(failed)=${s.unexpected} flaky=${s.flaky} skipped=${s.skipped} total=${s.expected + s.unexpected + s.flaky + s.skipped}`);
+          '
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
-          path: frontend/playwright-report
+          path: playwright-report
           if-no-files-found: ignore

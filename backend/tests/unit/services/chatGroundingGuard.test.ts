@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   checkGrounding,
+  checkHouseholdClaims,
   checkSafetyClaims,
   isBlockingVerdict,
   mentionsPetSafety,
   normalizeEvidenceName,
   type RetrievedSpan,
 } from '../../../src/services/chat/groundingGuard.js';
+import type { SproutCoverage } from '../../../src/services/sprout.js';
 import { PET_TOXICITY, normalizeName } from '../../../src/models/petToxicity.js';
 
 const HUMIDITY_SPAN: RetrievedSpan = {
@@ -579,6 +581,154 @@ describe('categorical pet-safety claims (ADR 0011)', () => {
       'Set up a reminder to water the pothos every 10 days.',
     ])('does not hold: %s', (message) => {
       expect(mentionsPetSafety(message)).toBe(false);
+    });
+  });
+});
+
+/**
+ * #549 / ADR 0026. `buildSproutContext` reduces the household twice — the
+ * canonical-species privacy filter, then `SPROUT_CONTEXT_CAP` — so a count
+ * computed over what crossed is a household total only when that set is
+ * `complete`. These fixtures are the shape the live payload reports: 112
+ * plants, of which 62 were never species-matched and 10 more fell to the cap,
+ * leaving 40 that Sprout could actually see.
+ */
+describe('checkHouseholdClaims (a count of a household that was only partly sent)', () => {
+  function set(total: number, included: number, unmatched: number, truncated: number) {
+    return { total, included, unmatched, truncated, cap: 100, complete: included === total };
+  }
+
+  const PARTIAL_PLANTS: SproutCoverage = {
+    plants: set(112, 40, 62, 10),
+    tasks: set(9, 9, 0, 0),
+    partial: true,
+  };
+  const PARTIAL_TASKS: SproutCoverage = {
+    plants: set(112, 112, 0, 0),
+    tasks: set(40, 9, 31, 0),
+    partial: true,
+  };
+  const COMPLETE: SproutCoverage = {
+    plants: set(112, 112, 0, 0),
+    tasks: set(9, 9, 0, 0),
+    partial: false,
+  };
+
+  const UNSUPPORTED = [
+    'You have 12 plants that are toxic to cats.',
+    'Your collection has 40 plants.',
+    'I can see 40 of your plants.',
+    'You have three plants that need water today.',
+    'Tienes 12 plantas en tu colección.',
+    // The sentence #549 was filed about: an all-clear over a set that was
+    // never all sent, and the unsent part is where an unidentified plant is.
+    'None of your plants are toxic to cats.',
+    "I don't see any toxic plants in your collection.",
+    'Nothing in your collection is toxic to dogs.',
+    'Ninguna de tus plantas es tóxica para los gatos.',
+    // Bounded over-blocking, stated in ADR 0026: a care generality phrased as
+    // a claim about the whole household is one, by the only test available.
+    'All of your plants will want more light in winter.',
+  ];
+
+  it.each(UNSUPPORTED)('will not let Sprout say: %s', (answer) => {
+    const result = checkHouseholdClaims(answer, PARTIAL_PLANTS);
+
+    expect(result.householdClaimsChecked).toEqual([answer]);
+    expect(result.unsupportedHouseholdClaims).toEqual([answer]);
+  });
+
+  it.each(UNSUPPORTED)(
+    'and delivers the same sentence unchanged once the whole household crossed: %s',
+    (answer) => {
+      // The under-cap, fully-matched household. Every sentence above is then a
+      // true statement about it, and the guard has to be silent — a check that
+      // fires on coverage it was given in full is just a broken assistant.
+      expect(checkHouseholdClaims(answer, COMPLETE).unsupportedHouseholdClaims).toEqual([]);
+    }
+  );
+
+  it.each([
+    'Bright indirect light is best for most tropical houseplants.',
+    'Most plants prefer bright indirect light.',
+    'Water your monstera when the top inch of soil is dry.',
+    'Water every 2 weeks and check your plants for pests.',
+    'If any of your plants show yellow leaves, check the drainage.',
+    'Riega tus plantas cada dos semanas.',
+    'How many plants do you have?',
+  ])('recognizes no household claim in: %s', (answer) => {
+    const result = checkHouseholdClaims(answer, PARTIAL_PLANTS);
+
+    expect(result.householdClaimsChecked).toEqual([]);
+    expect(result.unsupportedHouseholdClaims).toEqual([]);
+  });
+
+  it('accepts a count that says what it is a count of', () => {
+    // The shape #549 asked for: not a bare number, a stated denominator. The
+    // denominator is the household total WE sent, so it can only be right by
+    // having been given — the answer cannot talk its way past this.
+    const answer = 'Of your 112 plants, 40 have a confirmed species and 2 of those are toxic.';
+
+    const result = checkHouseholdClaims(answer, PARTIAL_PLANTS);
+
+    expect(result.householdClaimsChecked).toEqual([answer]);
+    expect(result.unsupportedHouseholdClaims).toEqual([]);
+  });
+
+  it('does not let a denominator rescue a claim about all of them', () => {
+    // "None of your 112 plants" is a statement about 112 plants made from 40.
+    // Stating the total makes a count honest; it makes a universal worse.
+    const answer = 'None of your 112 plants are toxic to cats.';
+
+    expect(checkHouseholdClaims(answer, PARTIAL_PLANTS).unsupportedHouseholdClaims).toEqual([
+      answer,
+    ]);
+  });
+
+  it('checks a claim against the set it is actually about', () => {
+    const tasks = 'You have 9 tasks due this week.';
+    const plants = 'You have 12 plants.';
+
+    // Plants reduced, tasks whole: the task count stands, the plant count does not.
+    expect(checkHouseholdClaims(tasks, PARTIAL_PLANTS).unsupportedHouseholdClaims).toEqual([]);
+    expect(checkHouseholdClaims(plants, PARTIAL_PLANTS).unsupportedHouseholdClaims).toEqual([
+      plants,
+    ]);
+    // And the other way round, so neither set is riding on the other's coverage.
+    expect(checkHouseholdClaims(tasks, PARTIAL_TASKS).unsupportedHouseholdClaims).toEqual([tasks]);
+    expect(checkHouseholdClaims(plants, PARTIAL_TASKS).unsupportedHouseholdClaims).toEqual([]);
+  });
+
+  it('reads a hedge before the claim, never one after it', () => {
+    // A conditional asserts nothing about how many there are…
+    expect(
+      checkHouseholdClaims('When all your plants are dormant, water less.', PARTIAL_PLANTS)
+        .householdClaimsChecked
+    ).toEqual([]);
+    // …but a claim already made is not retracted by a later "if".
+    const stated = 'You have 12 plants, if that helps.';
+    expect(checkHouseholdClaims(stated, PARTIAL_PLANTS).unsupportedHouseholdClaims).toEqual([
+      stated,
+    ]);
+  });
+
+  it('blocks the count sentence without discarding the rest of the answer wholesale', () => {
+    // Sentence granularity, like the other two dimensions: the caller decides
+    // what to do with the answer, but it is told exactly which sentence failed.
+    const answer =
+      'Pothos likes bright indirect light. You have 12 plants that need water today. Water when the top inch is dry.';
+
+    const result = checkHouseholdClaims(answer, PARTIAL_PLANTS);
+
+    expect(result.unsupportedHouseholdClaims).toEqual([
+      'You have 12 plants that need water today.',
+    ]);
+  });
+
+  it('finds nothing to check in an empty answer', () => {
+    expect(checkHouseholdClaims('', PARTIAL_PLANTS)).toEqual({
+      householdClaimsChecked: [],
+      unsupportedHouseholdClaims: [],
     });
   });
 });

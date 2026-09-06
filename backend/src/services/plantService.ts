@@ -15,11 +15,12 @@ import {
   DeleteCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
+import type { BatchWriteCommandOutput, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
-import { Plant, PlantStatus, DynamoDBItem } from '../models/types.js';
+import { atCap, type Limit } from '../models/plans.js';
+import { Plant, PlantStatus, SpeciesSource, DynamoDBItem } from '../models/types.js';
 import { CreatePlantInput, MovePlantsInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -50,10 +51,13 @@ function transactCancellationReasons(err: unknown): Array<{ Code?: string }> {
 }
 
 export async function createPlant(
-  input: CreatePlantInput & { canonicalSpecies?: string | null },
+  input: CreatePlantInput & {
+    canonicalSpecies?: string | null;
+    speciesSource?: SpeciesSource | null;
+  },
   householdId: string,
   userId: string,
-  maxPlants: number
+  maxPlants: Limit
 ): Promise<Plant> {
   const id = uuid();
   const now = new Date().toISOString();
@@ -82,6 +86,9 @@ export async function createPlant(
     tags,
     perenualSpeciesId: input.perenualSpeciesId ?? null,
     canonicalSpecies: input.canonicalSpecies ?? null,
+    // Provenance of `species`. Derived by the handler, never read off the
+    // request body — see handlers/plants/handler.ts#deriveSpeciesSource.
+    speciesSource: input.speciesSource ?? null,
     // Propagation lineage — caller (handler) has already validated that the
     // parent exists in the same household.
     parentPlantId: input.parentPlantId ?? null,
@@ -127,10 +134,13 @@ export async function createPlant(
   if (typeof meta.Item.plantCount !== 'number') {
     const active = await getPlants(householdId, 'active');
     base = active.length;
-    if (base >= maxPlants) {
+    if (atCap(base, maxPlants)) {
       throw new PlanLimitError(`Plant limit of ${maxPlants} reached`);
     }
   }
+  // An unlimited cap (`null`, models/plans.ts) carries no condition and no
+  // `:max` value — DynamoDB rejects an unreferenced ExpressionAttributeValue.
+  const capped = maxPlants !== null;
 
   try {
     await dynamodb.send(
@@ -141,9 +151,12 @@ export async function createPlant(
               TableName: TABLE_NAME,
               Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
               UpdateExpression: 'SET plantCount = if_not_exists(plantCount, :base) + :one',
-              ConditionExpression:
-                'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)',
-              ExpressionAttributeValues: { ':base': base, ':one': 1, ':max': maxPlants },
+              ConditionExpression: capped
+                ? 'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
+                : 'attribute_exists(PK)',
+              ExpressionAttributeValues: capped
+                ? { ':base': base, ':one': 1, ':max': maxPlants }
+                : { ':base': base, ':one': 1 },
             },
           },
           { Put: { TableName: TABLE_NAME, Item: item } },
@@ -195,6 +208,7 @@ export async function getPlant(householdId: string, plantId: string): Promise<Pl
     tags: (result.Item.tags as string[] | undefined) ?? [],
     perenualSpeciesId: (result.Item.perenualSpeciesId as number | undefined) ?? null,
     canonicalSpecies: (result.Item.canonicalSpecies as string | null | undefined) ?? null,
+    speciesSource: (result.Item.speciesSource as SpeciesSource | null | undefined) ?? null,
     parentPlantId: (result.Item.parentPlantId as string | null | undefined) ?? null,
     createdAt: result.Item.createdAt as string,
     createdBy: result.Item.createdBy as string,
@@ -270,6 +284,7 @@ export async function getPlants(
       tags: (item.tags as string[] | undefined) ?? [],
       perenualSpeciesId: (item.perenualSpeciesId as number | undefined) ?? null,
       canonicalSpecies: (item.canonicalSpecies as string | null | undefined) ?? null,
+      speciesSource: (item.speciesSource as SpeciesSource | null | undefined) ?? null,
       parentPlantId: (item.parentPlantId as string | null | undefined) ?? null,
       createdAt: item.createdAt as string,
       createdBy: item.createdBy as string,
@@ -285,8 +300,11 @@ export async function getPlants(
 export async function updatePlant(
   householdId: string,
   plantId: string,
-  input: UpdatePlantInput & { canonicalSpecies?: string | null },
-  maxPlants: number
+  input: UpdatePlantInput & {
+    canonicalSpecies?: string | null;
+    speciesSource?: SpeciesSource | null;
+  },
+  maxPlants: Limit
 ): Promise<Plant | null> {
   const updateExpressions: string[] = [];
   const expressionAttributeNames: Record<string, string> = {};
@@ -370,6 +388,14 @@ export async function updatePlant(
     expressionAttributeValues[':canonicalSpecies'] = input.canonicalSpecies;
   }
 
+  // `undefined` means "leave provenance alone" (the name did not change), and
+  // is NOT the same as null. See handler#speciesSourceForUpdate.
+  if (input.speciesSource !== undefined) {
+    updateExpressions.push('#speciesSource = :speciesSource');
+    expressionAttributeNames['#speciesSource'] = 'speciesSource';
+    expressionAttributeValues[':speciesSource'] = input.speciesSource;
+  }
+
   if (input.parentPlantId !== undefined) {
     // Lineage link: a uuid sets/replaces the parent, an explicit null
     // detaches. Validation (same household, not self) lives in the handler.
@@ -445,6 +471,7 @@ export async function updatePlant(
       tags: (result.Attributes.tags as string[] | undefined) ?? [],
       perenualSpeciesId: (result.Attributes.perenualSpeciesId as number | undefined) ?? null,
       canonicalSpecies: (result.Attributes.canonicalSpecies as string | null | undefined) ?? null,
+      speciesSource: (result.Attributes.speciesSource as SpeciesSource | null | undefined) ?? null,
       parentPlantId: (result.Attributes.parentPlantId as string | null | undefined) ?? null,
       createdAt: result.Attributes.createdAt as string,
       createdBy: result.Attributes.createdBy as string,
@@ -528,12 +555,19 @@ export async function updatePlant(
                 // Reactivation (delta===1) is cap-checked, same as createPlant;
                 // the decrement (delta===-1) is never capped — leaving 'active'
                 // can only reduce the count.
+                // An unlimited cap (`null`) carries no condition and no `:max`.
                 ConditionExpression:
-                  delta === 1
+                  delta === 1 && maxPlants !== null
                     ? 'attribute_exists(PK) AND (attribute_not_exists(plantCount) OR plantCount < :max)'
                     : 'attribute_exists(PK)',
                 ExpressionAttributeValues:
-                  delta === 1 ? { ':zero': 0, ':one': 1, ':max': maxPlants } : { ':one': 1 },
+                  delta === 1
+                    ? {
+                        ':zero': 0,
+                        ':one': 1,
+                        ...(maxPlants !== null ? { ':max': maxPlants } : {}),
+                      }
+                    : { ':one': 1 },
               },
             },
           ],
@@ -593,13 +627,92 @@ export async function movePlants(householdId: string, input: MovePlantsInput): P
   return moved.filter((plant): plant is Plant => plant !== null);
 }
 
+/** `BatchWriteItem`'s per-request item limit. */
+const BATCH_WRITE_MAX_ITEMS = 25;
+/**
+ * How many times one chunk is submitted before the cascade is called failed.
+ *
+ * Enough for the throttle this is actually for — a burst against an on-demand
+ * table, which adaptive capacity absorbs in well under a second — without
+ * turning a genuinely unavailable table into a Lambda that runs out its
+ * timeout instead of reporting.
+ */
+const BATCH_WRITE_MAX_ATTEMPTS = 4;
+/** First backoff step. Doubles per attempt, with full jitter. */
+const BATCH_WRITE_RETRY_BASE_MS = 50;
+
+/** Type of a `RequestItems` list, and of what comes back unprocessed. */
+type PendingWrites = NonNullable<BatchWriteCommandOutput['UnprocessedItems']>[string];
+
+function batchWriteRetryDelayMs(step: number): number {
+  const ceiling = BATCH_WRITE_RETRY_BASE_MS * 2 ** (step - 1);
+  // Full jitter: two erasures throttling at the same moment back off onto
+  // different milliseconds instead of re-colliding in lockstep.
+  return 1 + Math.floor(Math.random() * ceiling);
+}
+
+/**
+ * Delete every key, resubmitting whatever DynamoDB declines.
+ *
+ * `BatchWriteItem` answers HTTP 200 with an `UnprocessedItems` map when it
+ * throttles part of a batch — those deletes did not happen, and the SDK does
+ * not resubmit them on the caller's behalf. This loop does, and then THROWS if
+ * anything is still unprocessed.
+ *
+ * Throwing is the point. The caller must let it reach the client before the
+ * plant row is deleted: a surviving `TaskCompletion` or `PlantPhoto` row under
+ * `HOUSEHOLD#{id}#PLANT#{plantId}` becomes unreachable once the plant row is
+ * gone — `accountCleanup.deleteAbandonedHouseholdData` never enumerates that
+ * partition, and neither row type carries a `ttl`, so nothing else will ever
+ * find it. On `DELETE /me` those rows are retained personal data (`uploadedBy`,
+ * `caption`, the image URL) belonging to an erased account, and a 500 the
+ * caller can retry is the only honest answer. Mirrors the S3 half of this same
+ * cascade, which already fails on `DeleteObjects`' `Errors`.
+ */
+async function batchDeleteKeys(
+  keys: Array<{ PK: string; SK: string }>,
+  context: { householdId: string; plantId: string }
+): Promise<void> {
+  for (let i = 0; i < keys.length; i += BATCH_WRITE_MAX_ITEMS) {
+    let pending: PendingWrites = keys
+      .slice(i, i + BATCH_WRITE_MAX_ITEMS)
+      .map((Key) => ({ DeleteRequest: { Key } }));
+    for (let attempt = 1; attempt <= BATCH_WRITE_MAX_ATTEMPTS && pending.length > 0; attempt += 1) {
+      if (attempt > 1) {
+        await new Promise((resolve) => setTimeout(resolve, batchWriteRetryDelayMs(attempt - 1)));
+      }
+      const result = await dynamodb.send(
+        new BatchWriteCommand({ RequestItems: { [TABLE_NAME]: pending } })
+      );
+      const unprocessed = result.UnprocessedItems?.[TABLE_NAME] ?? [];
+      if (unprocessed.length > 0) {
+        logger.warn(
+          { ...context, unprocessed: unprocessed.length, attempt },
+          'plant.cascade_batch_unprocessed'
+        );
+      }
+      pending = unprocessed;
+    }
+    if (pending.length > 0) {
+      logger.error({ ...context, unprocessed: pending.length }, 'plant.cascade_incomplete');
+      throw new Error(
+        `Plant cascade left ${pending.length} row(s) unprocessed after ` +
+          `${BATCH_WRITE_MAX_ATTEMPTS} attempts; the plant row was not deleted`
+      );
+    }
+  }
+}
+
 export async function deletePlant(householdId: string, plantId: string): Promise<Plant | null> {
   // Cascade: collect all task rows for this plant and all completion rows under
   // the plant's completion partition; batch-delete in chunks of 25 (the
-  // BatchWriteItem service limit). The plant row itself is deleted last with
-  // ConditionExpression + ALL_OLD so we get a single atomic "did it exist?"
-  // check + the deleted attributes back — saves the handler a GetItem
-  // roundtrip and lets us return the plant data for audit logging.
+  // BatchWriteItem service limit), resubmitting anything DynamoDB declines and
+  // failing loudly if it stays declined (see batchDeleteKeys). The plant row
+  // itself is deleted last with ConditionExpression + ALL_OLD so we get a
+  // single atomic "did it exist?" check + the deleted attributes back — saves
+  // the handler a GetItem roundtrip and lets us return the plant data for
+  // audit logging. Last is also what makes a failed cascade recoverable: the
+  // plant row is what a retry finds its orphans through.
   const taskRows = await queryAllPages({
     TableName: TABLE_NAME,
     KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
@@ -631,16 +744,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
   }));
 
   const cascadeKeys = [...taskKeysForPlant, ...plantPartitionKeys];
-  for (let i = 0; i < cascadeKeys.length; i += 25) {
-    const chunk = cascadeKeys.slice(i, i + 25);
-    await dynamodb.send(
-      new BatchWriteCommand({
-        RequestItems: {
-          [TABLE_NAME]: chunk.map((Key) => ({ DeleteRequest: { Key } })),
-        },
-      })
-    );
-  }
+  await batchDeleteKeys(cascadeKeys, { householdId, plantId });
 
   let deleted: Plant | null = null;
   try {
@@ -672,6 +776,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
         tags: (item.tags as string[] | undefined) ?? [],
         perenualSpeciesId: (item.perenualSpeciesId as number | null | undefined) ?? null,
         canonicalSpecies: (item.canonicalSpecies as string | null | undefined) ?? null,
+        speciesSource: (item.speciesSource as SpeciesSource | null | undefined) ?? null,
         parentPlantId: (item.parentPlantId as string | null | undefined) ?? null,
         createdAt: item.createdAt as string,
         createdBy: item.createdBy as string,
@@ -812,19 +917,36 @@ export interface PlantPhoto {
   uploadedBy: string;
   uploadedAt: string;
   caption: string | null;
+  /** Present (true) when a plant sitter sent the photo through an Away Kit
+   *  link; `sitterLinkId` names which link. Absent on member uploads. */
+  viaSitter?: boolean;
+  sitterLinkId?: string;
+}
+
+export interface AppendPlantPhotoOptions {
+  /** Attribute the photo to a sitter link instead of a member. */
+  viaSitter?: { linkId: string };
+  /**
+   * Default true: the plant row's primary `imageUrl` follows the newest
+   * photo. Sitter uploads pass false — an unauthenticated writer may add to
+   * the timeline but never replace the picture the household chose.
+   */
+  setPrimaryImage?: boolean;
 }
 
 /**
- * Append a photo to the plant's timeline AND atomically update the primary
- * `imageUrl` on the plant row. The plant row keeps tracking the most-recent
- * photo (so existing UI continues to work); the timeline keeps history.
+ * Append a photo to the plant's timeline AND (by default) atomically update
+ * the primary `imageUrl` on the plant row. The plant row keeps tracking the
+ * most-recent photo (so existing UI continues to work); the timeline keeps
+ * history.
  */
 export async function appendPlantPhoto(
   householdId: string,
   plantId: string,
   imageUrl: string,
   uploadedBy: string,
-  caption: string | null = null
+  caption: string | null = null,
+  options: AppendPlantPhotoOptions = {}
 ): Promise<PlantPhoto> {
   const id = uuid();
   const now = new Date();
@@ -835,6 +957,7 @@ export async function appendPlantPhoto(
     uploadedBy,
     uploadedAt: now.toISOString(),
     caption,
+    ...(options.viaSitter ? { viaSitter: true, sitterLinkId: options.viaSitter.linkId } : {}),
   };
   const photoItem: DynamoDBItem = {
     PK: `HOUSEHOLD#${householdId}#PLANT#${plantId}`,
@@ -842,6 +965,27 @@ export async function appendPlantPhoto(
     entityType: 'PlantPhoto',
     ...photo,
   };
+
+  if (options.setPrimaryImage === false) {
+    // Timeline-only write. The condition still ties the row to a live plant
+    // — the plant item must exist — via the same key the transaction below
+    // guards, so a photo can't be appended to a deleted plant.
+    await dynamodb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: TABLE_NAME, Item: photoItem } },
+          {
+            ConditionCheck: {
+              TableName: TABLE_NAME,
+              Key: { PK: `HOUSEHOLD#${householdId}`, SK: `PLANT#${plantId}` },
+              ConditionExpression: 'attribute_exists(PK)',
+            },
+          },
+        ],
+      })
+    );
+    return photo;
+  }
 
   await dynamodb.send(
     new TransactWriteCommand({
@@ -894,6 +1038,9 @@ export async function getPlantPhotos(
     uploadedBy: item.uploadedBy as string,
     uploadedAt: item.uploadedAt as string,
     caption: (item.caption as string | null) ?? null,
+    ...(item.viaSitter === true
+      ? { viaSitter: true, sitterLinkId: item.sitterLinkId as string | undefined }
+      : {}),
   }));
 }
 

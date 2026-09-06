@@ -272,6 +272,97 @@ describe('dashboard activity rows', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the housemate who asked and quotes their note', async () => {
+    renderDashboardActivity([
+      event('task.help_requested', {
+        taskId: 'task-1',
+        plantId: 'plant-monstera',
+        plantName: 'Monstera',
+        taskType: 'water',
+        note: 'I’m travelling until Sunday',
+        notified: 2,
+      }),
+    ]);
+
+    const text = await screen.findByText(/Chelsea asked the household to take water for Monstera/);
+    // Unlike an auto-handoff row this one HAS an actor, and the reason the
+    // ask beats a silent unclaim is the note — so it is rendered.
+    const row = text.closest('li') as HTMLElement;
+    expect(within(row).getByText(/travelling until Sunday/)).toBeInTheDocument();
+  });
+
+  it('renders an ask with no note without an empty quotation', async () => {
+    renderDashboardActivity([
+      event('task.help_requested', {
+        taskId: 'task-2',
+        plantId: 'plant-fern',
+        plantName: 'Fern',
+        taskType: 'fertilize',
+        note: null,
+        notified: 0,
+      }),
+    ]);
+
+    const text = await screen.findByText(/Chelsea asked the household to take fertilize for Fern/);
+    const row = text.closest('li') as HTMLElement;
+    expect(within(row).queryByText('“”')).not.toBeInTheDocument();
+  });
+
+  it('renders an ask row whose note field is missing entirely', async () => {
+    renderDashboardActivity([
+      runtimeEvent('task.help_requested', {
+        taskId: 'task-3',
+        plantId: 'plant-ivy',
+        plantName: 'Ivy',
+        taskType: 'water',
+      }),
+    ]);
+
+    expect(
+      await screen.findByText(/Chelsea asked the household to take water for Ivy/)
+    ).toBeInTheDocument();
+  });
+
+  it('renders an auto-handoff escalation without an actor and without blame', async () => {
+    renderDashboardActivity([
+      event('task.escalated', {
+        taskId: 'task-1',
+        plantId: 'plant-monstera',
+        plantName: 'Monstera',
+        taskType: 'water',
+        previousAssigneeId: 'user-2',
+        previousAssigneeName: 'Sam',
+        daysOverdue: 6,
+        notified: 2,
+      }),
+    ]);
+
+    const text = await screen.findByText(
+      'Nobody got to water for Monstera in 6 days — it’s up for grabs'
+    );
+    // System-authored: the row never renders the actor name, and the person
+    // the task was taken from is not named in the feed either.
+    const row = text.closest('li') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(within(row).queryByText(/Chelsea/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/Sam/)).not.toBeInTheDocument();
+  });
+
+  it('renders an escalation row whose days-overdue field is missing without inventing a number', async () => {
+    renderDashboardActivity([
+      runtimeEvent('task.escalated', {
+        taskId: 'task-1',
+        plantId: 'plant-fern',
+        plantName: 'Fern',
+        taskType: 'fertilize',
+      }),
+    ]);
+
+    expect(
+      await screen.findByText('Nobody got to fertilize for Fern — it’s up for grabs')
+    ).toBeInTheDocument();
+  });
+
   it('keeps rendering when a newer backend sends an activity type this build does not know', async () => {
     renderDashboardActivity([runtimeEvent('plant.future_event', {})]);
 

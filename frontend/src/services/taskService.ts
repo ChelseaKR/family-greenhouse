@@ -1,6 +1,7 @@
 import { api } from './api';
 import { Task } from './plantService';
 import { track } from './analytics';
+import { firstDueIso } from '@/utils/date';
 
 export interface CreateTaskData {
   plantId: string;
@@ -112,6 +113,29 @@ export interface VacationWindow {
   createdAt: string;
 }
 
+/**
+ * What `POST /tasks/{id}/ask` answers with. `recipients` is who the ask
+ * actually went out to and `skipped` says who was left out and why, so an
+ * empty list can be rendered as "nobody could be reached right now" instead
+ * of being mistaken for success. `delivered` counts the recipients for whom
+ * at least one channel really sent — 0 against a non-empty `recipients` means
+ * we tried and nothing left the building.
+ */
+export interface AskFamilyMember {
+  userId: string;
+  name: string;
+}
+
+export interface AskFamilyResult {
+  task: TaskWithCoverage;
+  note: string | null;
+  askedAt: string;
+  nextAllowedAt: string;
+  recipients: AskFamilyMember[];
+  skipped: Array<AskFamilyMember & { reason: 'away' | 'dnd' }>;
+  delivered: number;
+}
+
 export interface SetVacationData {
   /** Defaults to the caller; setting for someone else requires admin. */
   userId?: string;
@@ -144,8 +168,21 @@ export const taskService = {
     return response.data;
   },
 
+  /**
+   * Create a task. When the caller names no due date — which is every creation
+   * surface in the app; none of them offers a date field — the first
+   * occurrence is due at the END of the creator's local day, not at the
+   * creation instant.
+   *
+   * The default belongs here rather than at the four call sites (AddTaskModal,
+   * AddPlantPage, FirstPlantStep, ProposalCard) because it must not be
+   * possible to add a fifth and miss it, and because the server cannot supply
+   * it: its own fallback is `now`, which is what made every new task overdue a
+   * second after it was created (#346). See `firstDueIso`.
+   */
   async createTask(data: CreateTaskData): Promise<Task> {
-    const response = await api.post<Task>('/tasks', data);
+    const body: CreateTaskData = { ...data, nextDue: data.nextDue ?? firstDueIso() };
+    const response = await api.post<Task>('/tasks', body);
     track('task_created', { taskType: data.type });
     return response.data;
   },
@@ -202,6 +239,20 @@ export const taskService = {
   /** Release a task you're assigned to. */
   async unclaimTask(id: string): Promise<Task> {
     const response = await api.post<Task>(`/tasks/${id}/unclaim`, {});
+    return response.data;
+  },
+
+  /**
+   * Ask the household to pick up this occurrence (ADR 0024). `expectedNextDue`
+   * pins the occurrence so a retry after a lost response cannot ask about the
+   * next one. 403 = somebody else holds it, 409 = already asked or the row
+   * moved, 429 = already asked today (`details.nextAllowedAt`).
+   */
+  async askFamily(id: string, note?: string, expectedNextDue?: string): Promise<AskFamilyResult> {
+    const response = await api.post<AskFamilyResult>(`/tasks/${id}/ask`, {
+      ...(note ? { note } : {}),
+      ...(expectedNextDue ? { expectedNextDue } : {}),
+    });
     return response.data;
   },
 

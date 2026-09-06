@@ -7,5 +7,7 @@
     "allowSyntheticDefaultImports": true,
     "strict": true
   },
-  "include": ["vite.config.ts"]
+  // vite.manualChunks.ts is imported by vite.config.ts; a composite project
+  // must list every file it compiles (TS6307), so name it here too.
+  "include": ["vite.config.ts", "vite.manualChunks.ts"]
 }

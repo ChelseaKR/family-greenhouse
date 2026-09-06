@@ -6,6 +6,8 @@ export interface Household {
   name: string;
   /** Optional saved location for climate-aware care tips. */
   location?: { city: string; lat: number; lon: number } | null;
+  /** Auto-handoff rule: days overdue before a task goes up for grabs; null/absent = off. */
+  escalateAfterDays?: number | null;
   createdAt: string;
   createdBy: string;
 }
@@ -212,6 +214,27 @@ export const householdService = {
     );
     return response.data;
   },
+
+  /**
+   * Auto-handoff rule (admin-only, household-toolkit plans). `null` turns it
+   * off; the server enforces the 5-day floor.
+   */
+  async setEscalationRule(
+    householdId: string,
+    escalateAfterDays: number | null
+  ): Promise<{ escalateAfterDays: number | null }> {
+    const response = await api.put<{ escalateAfterDays: number | null }>(
+      `/households/${householdId}/escalation`,
+      { escalateAfterDays }
+    );
+    return response.data;
+  },
+
+  /** Coverage (bus-factor) report. 402 on plans without the household toolkit. */
+  async getCoverage(householdId: string): Promise<CoverageReport> {
+    const response = await api.get<CoverageReport>(`/households/${householdId}/analytics/coverage`);
+    return response.data;
+  },
 };
 
 /**
@@ -224,8 +247,16 @@ export type DoubleCareMonthly =
   | { status: 'not_in_plan' };
 
 export interface DailyAnalytics {
+  /** The window actually served — may be shorter than asked for (below). */
   days: number;
   series: Array<{ date: string; count: number }>;
+  /**
+   * The plan's analytics window in days (ADR 0014): a number means the
+   * series was clamped to that trailing window; `null` means the plan has no
+   * ceiling. `undefined` is an older backend that did not say — unknown, and
+   * rendered as neither.
+   */
+  historyLimitDays?: number | null;
   /** Absent on a backend that predates double-care — treat as unavailable. */
   doubleCare?: DoubleCareMonthly;
 }
@@ -249,6 +280,11 @@ export interface TaskCompletedActivityPayload {
   taskType: string;
   notes?: string | null;
   viaSitter?: boolean;
+  /** Completed from a printed plant tag (ADR 0016); `actorName` is the
+   *  display name the scanner typed, e.g. "Grandma". */
+  viaTag?: boolean;
+  /** Completed through a named caretaker seat; `actorName` is their name. */
+  viaCaretaker?: boolean;
 }
 
 export interface TaskSnoozedActivityPayload {
@@ -303,7 +339,16 @@ export interface ActivityPayloadByType {
     overall: 'healthy' | 'monitor' | 'concern';
     demo: boolean;
   };
-  'photo.uploaded': { plantId: string; photoId: string };
+  'photo.uploaded': {
+    plantId: string;
+    photoId: string;
+    /** Set on sitter photo-back uploads (Away Kit); absent on member uploads. */
+    plantName?: string;
+    imageUrl?: string;
+    caption?: string | null;
+    viaSitter?: boolean;
+    sitterLinkId?: string;
+  };
   'member.joined': { role: 'admin' | 'member' };
   'member.left': { role?: 'admin' | 'member' };
   'sitter_link.created': SitterLinkActivityPayload;
@@ -314,6 +359,22 @@ export interface ActivityPayloadByType {
    *  string here because historical rows may name features this build no
    *  longer knows. */
   'upgrade.requested': { feature: string; plan: 'garden' | 'greenhouse' };
+  /** Auto-handoff put an overdue task up for grabs. System-authored: no actor. */
+  /** "Ask family to do it" (ADR 0024): a member asked the household to pick
+   *  up this occurrence. Unlike `task.escalated` this one has a human actor. */
+  'task.help_requested': TaskAssignmentActivityPayload & {
+    note: string | null;
+    /** How many members were told; 0 is a real outcome (all away / in DND). */
+    notified: number;
+  };
+  'task.escalated': TaskAssignmentActivityPayload & {
+    previousAssigneeId: string | null;
+    previousAssigneeName: string | null;
+    daysOverdue: number;
+    notified: number;
+  };
+  /** A note left by a named caretaker during a visit (`actorName` is theirs). */
+  'caretaker.note': { text: string };
 }
 
 export type ActivityType = keyof ActivityPayloadByType;
@@ -341,6 +402,9 @@ export const ACTIVITY_TYPES = [
   'sitter_link.revoked',
   'task.schedule_matched',
   'upgrade.requested',
+  'task.help_requested',
+  'task.escalated',
+  'caretaker.note',
 ] as const satisfies readonly ActivityType[];
 
 type AssertNever<T extends never> = T;
@@ -385,9 +449,63 @@ export async function listMyHouseholds(): Promise<Membership[]> {
 export interface YearInReview {
   year: number;
   totalCompletions: number;
-  byMember: Array<{ userId: string; name: string; count: number }>;
+  /** `name` is null when the stored completion rows carried no display name.
+   *  It used to be the raw userId, which rendered a Cognito sub as a person's
+   *  name; consumers render an explicit unknown label instead. */
+  byMember: Array<{ userId: string; name: string | null; count: number }>;
   byTaskType: Array<{ type: string; count: number }>;
   /** Every plant with ≥1 completion this year, most-completed first — NOT a
    *  capped top-N, so absence from this list is a genuine zero. */
   topPlants: Array<{ plantId: string; count: number }>;
+  /** Same three-state meaning as `DailyAnalytics.historyLimitDays`. When a
+   *  number, the aggregates cover `windowStart`–`windowEnd` (the year
+   *  intersected with the trailing window), not the whole year. */
+  historyLimitDays?: number | null;
+  windowStart?: string;
+  windowEnd?: string;
+}
+
+// --- Coverage (the bus-factor view) -----------------------------------------
+//
+// Mirrors backend/src/services/coverageMath.ts. Deliberately shaped so a
+// per-member completion total cannot be expressed: caregivers are a SET of
+// names, and every count on this report is a count of plants at risk.
+
+export interface CoverageMember {
+  userId: string;
+  name: string;
+}
+
+export interface CoveragePlant {
+  plantId: string;
+  plantName: string;
+  /** Current members who have ever logged care on this plant, by name. */
+  caregivers: CoverageMember[];
+  caregiverCount: number;
+  /** The one person who knows this plant, when exactly one current member does. */
+  soleCaregiver: CoverageMember | null;
+}
+
+export interface AwayRisk {
+  userId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  coveredBy: string;
+  coveredByName: string | null;
+  active: boolean;
+  /** Plants nobody else who is still here has ever cared for, by name. */
+  uncoveredPlants: Array<{ plantId: string; plantName: string }>;
+  uncoveredPlantCount: number;
+}
+
+export interface CoverageReport {
+  members: CoverageMember[];
+  memberCount: number;
+  plantCount: number;
+  plants: CoveragePlant[];
+  soleCaregiverPlants: CoveragePlant[];
+  uncaredPlantCount: number;
+  awayRisks: AwayRisk[];
+  generatedAt: string;
 }

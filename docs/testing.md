@@ -22,7 +22,7 @@ The test suite is organised as a pyramid: many fast unit tests, a smaller integr
 <!-- END:TEST-COUNTS -->
 <!-- prettier-ignore-end -->
 
-**2,633 vitest cases** — 1,773 backend, 860 frontend — as of 2026-09-02. The backend suite runs in ~17s and the frontend in ~80s (jsdom, serial by config).
+**2,633 vitest cases** — 1,773 backend, 860 frontend — as of 2026-09-02. The backend suite runs in ~17s. The frontend suite runs its files in parallel across a worker-thread pool (`frontend/vitest.config.ts`); it took ~80s here when it ran them one at a time, and roughly a quarter of that once spread across cores. Each file still gets its own jsdom and module registry, and coverage is still collected over the whole suite in one process, so the floors below mean what they say.
 
 All Playwright specs but two run in the cross-browser matrix (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari — five projects). `post-deploy-smoke.spec.ts` and `store-screenshots.spec.ts` are excluded by `testIgnore` and run only from their own workflows.
 
@@ -156,27 +156,79 @@ beforeEach(async () => {
 
 ## End-to-end
 
-Playwright runs against the real Vite dev server + the real Express mock backend. The config at `frontend/playwright.config.ts` boots both webservers automatically:
+Playwright runs against the real production bundle (`vite preview`, not `vite dev` — the dev server's Firefox parser uses `eval`, which our production CSP correctly blocks) plus the real Express mock backend. The config at `frontend/playwright.config.ts` boots both webservers automatically:
 
 ```ts
 webServer: [
-  { command: 'npm --workspace backend run dev', url: 'http://localhost:4000/health', cwd: '..' },
-  { command: 'npm run dev', url: 'http://localhost:3000' },
+  {
+    command: 'ALLOW_TEST_ACCOUNT_PROVISIONING=1 npm --workspace backend run dev',
+    url: 'http://localhost:4000/health',
+    cwd: '..',
+  },
+  { command: 'npm run build && npm run preview', url: 'http://localhost:3000' },
 ],
 ```
+
+**Sharding.** CI splits the suite across four runners with Playwright's
+`--shard=N/4`, each at one worker. One worker per shard is deliberate: the local
+backend boots a single in-memory DB, so specs touching the shared seed account
+(`test@example.com`) race each other if they run concurrently against the _same_
+server — the collision documented at the top of `tests/e2e/helpers.ts`. Separate
+shards are separate runners with separate backends and separate seeds, so
+partitioning across them is safe where raising in-job workers would not be.
+
+Shards publish `--reporter=blob` output that the `E2E report (merged)` job merges
+back into one `playwright-report/`, printing the executed and skipped totals as
+it goes. The required `E2E + accessibility (Playwright)` check is an aggregate
+job that fails unless every shard succeeded.
 
 Twenty-two specs run across Chromium, Firefox, WebKit, Mobile Chrome and Mobile
 Safari. They fall into four groups:
 
 - **Golden paths** — `auth`, `happy-path`, `plant-crud`, `create-plant`, `task-completion`, `register-flow`, `join-second-household`, `space-overview`, `shared-care-pulse`, `pricing-interval`, `integration-functionality`, `no-care-data`
 - **Accessibility** — `a11y` and `a11y-authenticated` (axe over public and authenticated routes), plus `keyboard-path`, `reflow`, and `reduced-motion`
-- **Rendering** — `visual` and `visual-regression` (screenshot baselines, committed per browser under `*-snapshots/`), `responsive-ux`
+- **Rendering** — `visual` and `responsive-ux`. Also `visual-regression`
+  (screenshot baselines, committed per browser under `*-snapshots/`) — but
+  read the next paragraph before counting it as coverage.
 - **Notifications** — `notification-browser-surfaces`, `foreground-notification-timing`
+
+> **`visual-regression` does not execute in CI.** Every committed baseline is
+> `*-darwin.png` and the runners are Linux, so the spec skips itself on
+> `process.env.CI` (`visual-regression.spec.ts:30`) and
+> `.github/workflows/e2e-crossbrowser.yml` skips it for the same reason. It
+> therefore contributes nothing to the required
+> `E2E + accessibility (Playwright)` check that contains it — a required check
+> with a no-op inside. The deferral is deliberate and documented in the spec;
+> what was not documented is this line, which listed the suite as live
+> coverage. Lifting it means generating five browser variants across five pages
+> on a Linux runner and committing them. `scripts/check-no-silenced-gates.mjs`
+> now scans specs for this pattern, so the next one has to be argued for rather
+> than merely added.
 
 Two further specs are excluded from this matrix by `testIgnore` and run only
 from their own workflows: `post-deploy-smoke.spec.ts` (production CD, described
 below) and `store-screenshots.spec.ts` (mobile store assets, via
 `npm run mobile:release`).
+
+> **The e2e tree is statically checked, and that is not the same as being run.**
+> `frontend/tests/e2e/**` and `playwright.config.ts` used to sit outside every
+> static gate: `tsconfig.json` includes only `src`, the lint script was scoped to
+> `src`, and `testIgnore` keeps the two specs above out of PR CI. So the spec
+> that can revert a production release was compiled by nothing, linted by
+> nothing, and executed only by production (#440). They are now in
+> `frontend/tsconfig.e2e.json` and the frontend lint globs, and `npm run
+smoke:parse` loads the smoke spec through Playwright's runner (`--list`) in
+> both `npm run verify` and CI's `Type Check` job. Switching the checks on found
+> two live defects: a helper typed `APIResponse` that all six callers invoked
+> with a page `Response`, and a `use.reducedMotion` key that Playwright 1.62
+> silently ignores — measured, the browser reported
+> `prefers-reduced-motion: reduce` as **false** until it moved to
+> `contextOptions`.
+>
+> What none of this can catch is a **stale assertion**: `toHaveURL(/\/dashboard$/)`
+> parses and lints perfectly after the destination has moved, which is precisely
+> what happened in #394 / PR #439. Deciding whether a stale smoke assertion
+> should still auto-roll-back a good release is tracked separately in #440.
 
 Playwright still isn't where behaviour is specified — RTL and the vitest suites
 cover that. Playwright covers cross-browser rendering, accessibility, and "did
@@ -198,6 +250,46 @@ S3 calls. Failure diagnostics retain only response hostname/status or a safe AWS
 error class so presigned URL credentials cannot be written to CI output or
 reports. The deployed-smoke config therefore disables Playwright network traces
 (which archive full URLs); failure screenshots and video remain enabled.
+
+### Fixtures are marked, and swept when teardown never runs
+
+That teardown is careful and complete, and it still leaked. On 2026-09-04 the
+production table held 38 households, 35 of them left by smoke runs whose
+teardown never executed — a skipped job, a cancelled run, a dead runner. Against
+two real registered users, 92% of the household count was test debris, and
+nothing anywhere excluded it. Two additions close that:
+
+- **A structural marker, written at creation.** Every fixture row carries
+  `isTestFixture: true` plus `testFixtureRunId`, `testFixtureCreatedAt`, and
+  `testFixtureSource`. `TEST_FIXTURE` in `post-deploy-smoke-support.ts` is the
+  contract. It is an attribute, not a name: matching the string "Smoke Test
+  Household" would delete a real household the day somebody chose that name.
+  Anything that counts households can now exclude fixtures without this script.
+- **A claim row, written before the browser flow starts.**
+  `TESTFIXTURE#<runId> / METADATA` records the fixture's Cognito `sub`, so a run
+  that dies between "POST /households returned 201" and "the stamp landed" is
+  still traceable — the sweeper follows GSI1 from that `sub` to every household
+  the fixture joined. It carries no TTL on purpose: expiring the claim would
+  strand the very rows it is there to find. Teardown deletes it last, only once
+  the partitions it indexes verify empty.
+
+`scripts/sweep-test-fixtures.mjs` does the cleanup that does not depend on the
+run finishing. It is a **dry run by default** — it prints what it would delete
+and exits without touching anything — and needs `--apply` to act. It deletes
+only partitions reachable from a marked row, only fixtures older than
+`--min-age-hours` (default 3), refuses a plan above `--max-deletes`, re-checks
+every key against an allow-list of partition prefixes, and **skips any household
+holding a member who is not a fixture user**, reporting it rather than deleting
+it. The `sweep-test-fixtures` job in `cd-production.yml` runs it with `--apply`
+on every production deploy, under `if: always()` so that a failed, skipped, or
+cancelled smoke job still gets cleaned up by the next release.
+
+Rows created before the markers existed carry neither, so they cannot be swept
+by rule. `--include-legacy --user-pool-id <id>` proposes them on evidence — a
+household whose every member row's Cognito user is gone from the pool, older
+than the age gate — never on its name. Review the dry run, then re-run with
+`--apply`. The deploy job never passes `--include-legacy`; clearing the backlog
+is deliberately an operator action.
 
 ## Date / timezone tests
 
@@ -238,16 +330,58 @@ below any of them exits non-zero:
 
 | Workspace | Lines | Statements | Branches | Functions |
 | --------- | ----- | ---------- | -------- | --------- |
-| Backend   | 82    | 81         | 74       | 82        |
+| Backend   | 87    | 86         | 78       | 89        |
 | Frontend  | 76    | 75         | 65       | 66        |
 
 <!-- END:COVERAGE-THRESHOLDS -->
 <!-- prettier-ignore-end -->
 
+### The CloudFront edge function
+
+`frontend/scripts/spa-router.test.mjs` (`npm run test:edge`, `node --test`) covers
+`infrastructure/modules/frontend/functions/spa-router.js` — the viewer-request
+function that maps `/pricing` and the other prerendered routes onto their
+`index.html` objects. It is not a vitest suite, so it is a separate step rather
+than part of `test:coverage`: it runs in CI's `Test Frontend` job and as a step
+in `npm run verify`.
+
+It used to run in neither. The suite existed and passed, its own header comment
+said it was "part of the frontend test gate", and a repo-wide grep for
+`test:edge` returned only that comment and its `package.json` line. On
+2026-09-04 the untested function returned 403 for every route but `/` for about
+forty minutes. `scripts/check-test-scripts-run.mjs` now fails the build if any
+`test*` script is run by neither the gate nor a workflow without a registered
+reason (#472).
+
+The same file now also covers the routing decision itself. Since #615 the
+function resolves every non-prerendered route to `/app-shell.html` **by name**
+rather than rewriting it to a key that does not exist and letting CloudFront's
+`custom_error_response` rescue the 403 — which is what frees a missing
+`/assets/` object to answer 404 instead of the app shell. That makes a bug in
+this function an outage rather than a degradation, so the suite enumerates
+every kind of path the distribution serves, asserts the generated route map
+still matches `frontend/scripts/public-routes.mjs`, and asserts the source
+stays inside CloudFront's 10 KB function limit — the map grows by one line per
+blog post, and failing a gate is cheaper than failing a `terraform apply`.
+
+### The production availability predicates
+
+`scripts/synthetic-page-check.test.mjs` (`npm run test:checks`, `node --test`)
+covers the pure predicates in `scripts/synthetic-page-check.mjs`. That script
+only ever runs against a live origin — the fifteen-minute `uptime.yml` cron and
+the post-deploy smoke — so until #615 no pre-merge gate executed a line of it.
+Its `--expect-failure` negative control proves the check as a whole can still
+fail, which is real but coarse: any single assertion failing satisfies it, so
+an assertion that quietly stopped meaning anything would be invisible behind
+the others. These tests pin the two that decide whether a `/assets/` response
+is a served JavaScript bundle or the SPA shell standing in for a chunk that is
+not there, in both directions. Runs in CI's `Test Frontend` job and in
+`npm run verify`.
+
 Those floors are enforced in three places, all running the same command:
 
 - **CI** — the required `Test Backend` and `Test Frontend` jobs run `npm run test:coverage`, so a PR that drops below a floor cannot merge.
-- **Pre-push** — `.husky/pre-push` runs `npm run verify`, which chains `test:coverage`.
+- **Pre-push** — `.githooks/pre-push` runs `npm run verify`, which chains `test:coverage`.
 - **Locally** — `npm run verify`, or a single workspace:
 
 ```bash

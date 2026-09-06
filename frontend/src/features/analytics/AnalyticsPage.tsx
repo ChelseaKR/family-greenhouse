@@ -5,24 +5,28 @@ import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { householdService } from '@/services/householdService';
 import { taskService } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
+import { Alert } from '@/components/Alert';
 import { Card, CardHeader } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { calendarDaysBetween } from '@/utils/date';
+import { calendarDaysBetween, isOverdue } from '@/utils/date';
 import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
+import { CoverageCard } from './CoverageCard';
 
 /**
  * Care analytics — KPI tiles + four views over the same data feed:
  *   - 30-day completion trend (bars + 7-day moving average)
  *   - By task type (water vs fertilize vs prune vs …)
  *   - Plants at risk (overdue tasks, ranked)
+ *   - Coverage (which plants rest on one person — a fragility view, not a
+ *     leaderboard; see CoverageCard.tsx)
  *   - Per-member contribution this year
  *
- * No new endpoints beyond /analytics/daily, /year-in-review, /tasks, and
- * /plants — everything is computed client-side from data the dashboard
- * already needs anyway.
+ * No new endpoints beyond /analytics/daily, /analytics/coverage,
+ * /year-in-review, /tasks, and /plants — everything else is computed
+ * client-side from data the dashboard already needs anyway.
  */
 
 const TASK_TYPE_LABELS: Record<string, string> = {
@@ -41,14 +45,6 @@ const TASK_TYPE_COLORS: Record<string, string> = {
   repot: 'bg-amber-500',
   custom: 'bg-stone-400',
 };
-
-function isOverdue(nextDue: string, now = new Date()): boolean {
-  const due = new Date(nextDue);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return due.getTime() < today.getTime();
-}
 
 function daysOverdue(nextDue: string, now = new Date()): number {
   // Calendar days between the due date and today, DST-safe (raw local-midnight
@@ -91,6 +87,17 @@ export function AnalyticsPage() {
   );
 
   if (!householdId) return null;
+
+  // The plan's analytics window (ADR 0014). A number means the free tier's
+  // trailing window applied and the cards below describe THAT, not the year;
+  // `null` is a paid tier with no ceiling; `undefined` is an older backend
+  // that did not say — treated as no window rather than invented.
+  const windowDays =
+    typeof review?.historyLimitDays === 'number'
+      ? review.historyLimitDays
+      : typeof daily?.historyLimitDays === 'number'
+        ? daily.historyLimitDays
+        : null;
 
   // KPI tiles use already-fetched data — no extra round-trip.
   const overdueTasks = (tasks ?? []).filter((t) => isOverdue(t.nextDue));
@@ -154,6 +161,19 @@ export function AnalyticsPage() {
 
       {/* Double-care this month (household toolkit) */}
       <DoubleCareCard loading={dailyLoading} daily={daily} />
+      {/* Why the window is what it is. The data behind it is never deleted —
+          only the rendered range is the plan's — and the note says so, and
+          where to go. */}
+      {windowDays !== null && (
+        <Alert variant="info">
+          <p>
+            {t('analytics.historyWindow.note', { days: windowDays })}{' '}
+            <Link to="/settings/billing" className="font-medium underline">
+              {t('analytics.historyWindow.upgrade')}
+            </Link>
+          </p>
+        </Alert>
+      )}
 
       {/* 30-day trend */}
       <Card padding="none">
@@ -183,8 +203,12 @@ export function AnalyticsPage() {
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
-              title={`By task type in ${yearNow}`}
-              description="What kind of care your household has put in this year."
+              title={
+                windowDays !== null
+                  ? t('analytics.historyWindow.byTaskTypeWindow', { days: windowDays })
+                  : t('analytics.historyWindow.byTaskTypeYear', { year: yearNow })
+              }
+              description="What kind of care your household has put in."
             />
           </div>
           <ul className="divide-y divide-primary-100/60">
@@ -255,13 +279,22 @@ export function AnalyticsPage() {
         </Card>
       )}
 
+      {/* Coverage — the bus-factor view. Owns its own three settled states
+          (unavailable / locked / needs a second member) so a failed read can
+          never look like "every plant is covered". */}
+      <CoverageCard />
+
       {/* Per-member */}
       {review && review.byMember.length > 0 && (
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
-              title={`Top contributors in ${yearNow}`}
-              description="Tasks each member has completed this year."
+              title={
+                windowDays !== null
+                  ? t('analytics.historyWindow.topContributorsWindow', { days: windowDays })
+                  : t('analytics.historyWindow.topContributorsYear', { year: yearNow })
+              }
+              description="Tasks each member has completed."
             />
           </div>
           <ul className="divide-y divide-primary-100/60">
@@ -270,7 +303,9 @@ export function AnalyticsPage() {
               const pct = (m.count / max) * 100;
               return (
                 <li key={m.userId} className="flex items-center gap-3 px-6 py-3 text-sm">
-                  <span className="w-32 truncate text-gray-900">{m.name}</span>
+                  <span className="w-32 truncate text-gray-900">
+                    {m.name ?? t('analytics.unknownMember')}
+                  </span>
                   <span
                     className="h-3 rounded-full bg-primary-600"
                     style={{ width: `${pct}%`, minWidth: '4px' }}

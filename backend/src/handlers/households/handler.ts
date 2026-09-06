@@ -17,6 +17,10 @@ import {
   UpdateMemberRoleInput,
   createSitterLinkSchema,
   CreateSitterLinkInput,
+  setEscalationRuleSchema,
+  SetEscalationRuleInput,
+  setHouseholdTimeZoneSchema,
+  SetHouseholdTimeZoneInput,
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
 import * as welcomeEmail from '../../services/welcomeEmail.js';
@@ -24,22 +28,32 @@ import * as inviteEmail from '../../services/inviteEmail.js';
 import * as householdEmails from '../../services/householdEmails.js';
 import * as taskService from '../../services/taskService.js';
 import * as sitterService from '../../services/sitterService.js';
+import * as caretakers from '../caretakers/management.js';
 import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
-import { getPlan, hasHouseholdToolkit } from '../../models/plans.js';
+import * as escalation from '../../services/escalation.js';
+import * as coverage from '../../services/coverage.js';
+import { getEntitledPlan, hasHouseholdToolkit, limitOf, type Plan } from '../../models/plans.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
   sitterWindowDays,
 } from '../../services/sitterPlanGate.js';
 import * as doubleCare from '../../services/doubleCare.js';
+import {
+  assertCanAddHome,
+  homesLimitMessage,
+  type HomesLimitError,
+} from '../../services/homesGate.js';
+import { analyticsWindow } from '../../services/analyticsWindow.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { logger } from '../../utils/logger.js';
 import { createUpgradeRequest } from './upgradeRequests.js';
+import { getAwayRecap } from './awayRecap.js';
 
 async function sendFirstHouseholdWelcome(
   userId: string,
@@ -108,6 +122,21 @@ export const createHousehold = createHandler(
       );
       await sendFirstHouseholdWelcome(user.userId, user.email, userName);
       return createdResponse(existingHousehold);
+    }
+
+    // Homes gate (ADR 0014): a second home needs a plan that includes one.
+    // The first household is always allowed — `memberships` is empty — and a
+    // user already above the cap keeps every home they have and can act in
+    // all of them; only this next one is refused.
+    if (memberships.length > 0) {
+      try {
+        await assertCanAddHome(user.userId, { memberships });
+      } catch (err) {
+        if (err instanceof Error && err.name === 'HomesLimitError') {
+          throw createHttpError(402, homesLimitMessage(err as HomesLimitError));
+        }
+        throw err;
+      }
     }
 
     const household = await householdService.createHousehold(
@@ -402,7 +431,8 @@ export const joinHousehold = createHandler(
     }
 
     const sub = await billing.getHouseholdSubscription(invite.householdId);
-    const plan = getPlan(sub.planId);
+    // Member cap follows ENTITLEMENT, not the plan row — see getEntitledPlan.
+    const plan = getEntitledPlan(sub);
 
     const userName = await cognitoUsers.getUserName(user.userId, user.email);
 
@@ -421,6 +451,22 @@ export const joinHousehold = createHandler(
       throw createHttpError(400, 'You are already a member of this household');
     }
 
+    // Homes gate (ADR 0014): joining counts the joined household's plan, so
+    // a Greenhouse home always takes another hand, and a Seedling / Garden
+    // home takes one only from someone who has no other home yet. A joiner
+    // already above the cap keeps every home they have.
+    try {
+      await assertCanAddHome(user.userId, {
+        joiningHouseholdId: invite.householdId,
+        joiningPlanId: sub.planId,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'HomesLimitError') {
+        throw createHttpError(402, homesLimitMessage(err as HomesLimitError));
+      }
+      throw err;
+    }
+
     // Member-cap enforcement is atomic in the service (formerly a known
     // check-then-write race here): the member Put rides a transaction with a
     // conditional increment of the household's memberCount against the
@@ -431,7 +477,7 @@ export const joinHousehold = createHandler(
         user.userId,
         userName,
         user.email,
-        plan.maxMembers
+        limitOf(plan, 'members')
       );
     } catch (err) {
       // A concurrent double-join (two tabs, double-tap) loses the race on
@@ -445,7 +491,7 @@ export const joinHousehold = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `This household is on the ${plan.name} plan, limited to ${plan.maxMembers} members.`
+          `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`
         );
       }
       throw err;
@@ -526,17 +572,38 @@ export const getActivity = createHandler(
  * or `unavailable` when either the plan or the log could not be read — so
  * the analytics page never renders a failed read as "0 duplicates".
  */
-async function confirmedDoubleCareThisMonth(
-  householdId: string
-): Promise<doubleCare.DoubleCareMonthly> {
-  let plan;
+/**
+ * The household's plan as a SETTLED read (ADR 0010): either the plan, or an
+ * explicit `unavailable`. Deliberately not `Plan | null` — a bare null would
+ * be indistinguishable from "no plan / free tier" at the call site, which is
+ * exactly the collapse that turns a failed read into a confident answer.
+ */
+type PlanRead = { status: 'ok'; plan: Plan } | { status: 'unavailable' };
+
+async function readHouseholdPlan(householdId: string): Promise<PlanRead> {
   try {
-    plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    // ENTITLEMENT, not the plan row (#476). The analytics history window is a
+    // plan LIMIT, and a downgrade already narrows it (ADR 0014); a household
+    // mid-dunning is treated the same way rather than keeping the paid
+    // window for the weeks Stripe spends retrying. The rows are never
+    // trimmed, so nothing is lost — only the window a request may ask for.
+    return {
+      status: 'ok',
+      plan: getEntitledPlan(await billing.getHouseholdSubscription(householdId)),
+    };
   } catch (err) {
     logger.warn({ err: (err as Error).message, householdId }, 'household_plan_lookup_failed');
     return { status: 'unavailable' };
   }
-  if (!hasHouseholdToolkit(plan)) return { status: 'not_in_plan' };
+}
+
+async function confirmedDoubleCareThisMonth(
+  planRead: PlanRead,
+  householdId: string
+): Promise<doubleCare.DoubleCareMonthly> {
+  // A plan we could not read is an explicit absence, never a silent 0.
+  if (planRead.status !== 'ok') return { status: 'unavailable' };
+  if (!hasHouseholdToolkit(planRead.plan)) return { status: 'not_in_plan' };
   return doubleCare.countConfirmedDuplicatesThisMonth(householdId);
 }
 
@@ -550,12 +617,63 @@ export const getDailyAnalytics = createHandler(
       throw createHttpError(403, 'Access denied');
     }
     const daysRaw = event.queryStringParameters?.days;
-    const days = daysRaw ? Math.max(1, Math.min(180, parseInt(daysRaw, 10) || 30)) : 30;
+    const requestedDays = daysRaw ? Math.max(1, Math.min(180, parseInt(daysRaw, 10) || 30)) : 30;
+    // ONE settled plan read serves both answers below — the analytics window
+    // and the double-care roll-up — so a failed read is decided once, here,
+    // and explicitly in both directions.
+    const planRead = await readHouseholdPlan(householdId);
+    // Analytics window (ADR 0014): the free tier renders the trailing
+    // `analyticsHistoryDays`; paid tiers have no ceiling. Only the window a
+    // request may ask for is narrowed — the completion rows are never
+    // trimmed — and the response says which window applied so the client can
+    // say why. `null` means "no limit". An unreadable plan is FAIL-OPEN on
+    // this field: `undefined`, omitted from the body and read by the client
+    // as "unknown", because publishing a guessed ceiling would silently
+    // narrow a paid household's history. The roll-up below fails the other
+    // way — `unavailable`, never a 0 — because there a guess reads as a real
+    // count.
+    const historyLimitDays =
+      planRead.status === 'ok' ? limitOf(planRead.plan, 'analyticsHistoryDays') : undefined;
+    const days =
+      historyLimitDays == null ? requestedDays : Math.min(requestedDays, historyLimitDays);
     const [series, doubleCareMonthly] = await Promise.all([
       taskService.getDailyCompletionCounts(householdId, days),
-      confirmedDoubleCareThisMonth(householdId),
+      confirmedDoubleCareThisMonth(planRead, householdId),
     ]);
-    return successResponse({ days, series, doubleCare: doubleCareMonthly });
+    return successResponse({ days, series, historyLimitDays, doubleCare: doubleCareMonthly });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
+// GET /households/:id/analytics/coverage
+//
+// The bus-factor view: which plants rest on one person, and what an upcoming
+// vacation window leaves uncovered. Garden-and-up (the household toolkit).
+// Deliberately NOT a leaderboard — the report carries no per-member totals
+// and no ranking; see services/coverageMath.ts for the rule and the reasoning.
+export const getCoverage = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) throw createHttpError(400, 'Household ID is required');
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    // ENTITLEMENT, not the plan row (#476). A per-request report for a
+    // signed-in member of the buying household — nothing issued, nothing in a
+    // third party's hands — so it follows the downgrade contract.
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
+    if (!hasHouseholdToolkit(plan)) {
+      throw createHttpError(
+        402,
+        'Coverage is part of the household toolkit, included with the Garden plan and up.'
+      );
+    }
+    // A failed read throws here and surfaces as a 5xx — never as a report
+    // claiming zero plants at risk.
+    const report = await coverage.getCoverageReport(householdId);
+    return successResponse(report);
   }
 )
   .use(authMiddleware())
@@ -575,8 +693,27 @@ export const getYearInReview = createHandler(
     if (!Number.isFinite(year) || year < 2020 || year > 2100) {
       throw createHttpError(400, 'year must be between 2020 and 2100');
     }
-    const review = await taskService.getYearInReview(householdId, year);
-    return successResponse(review);
+    // ENTITLEMENT, not the plan row (#476) — the same window limit as the
+    // daily analytics above, resolved the same way. Completion rows are never
+    // trimmed; only the window this request may ask for narrows.
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
+    const historyLimitDays = limitOf(plan, 'analyticsHistoryDays');
+    if (historyLimitDays === null) {
+      const review = await taskService.getYearInReview(householdId, year);
+      return successResponse({ ...review, historyLimitDays });
+    }
+    // Windowed (ADR 0014): the calendar year intersected with the trailing
+    // window, so a past year on the free tier is honestly empty rather than
+    // silently relabelled as "the last 30 days". The rows are never trimmed.
+    const window = analyticsWindow(year, historyLimitDays);
+    const review = await taskService.getCompletionReview(householdId, window.start, window.end);
+    return successResponse({
+      year,
+      ...review,
+      historyLimitDays,
+      windowStart: window.start,
+      windowEnd: window.end,
+    });
   }
 )
   .use(authMiddleware())
@@ -689,6 +826,14 @@ export const removeMember = createHandler(
       }
       throw err;
     }
+    // Revoke the capability tokens this member minted. STRICTLY BEFORE
+    // anonymizeUserInHousehold: that sweep overwrites `createdBy` with the
+    // deleted-user id on exactly these rows, after which nothing can tell
+    // which credentials were theirs. Removal used to end the session and
+    // nothing else, so a plant tag (no expiry), a kiosk link (no expiry) or a
+    // sitter link they had issued kept working (#449).
+    const revoked = await accountCleanup.revokeCredentialsCreatedBy(householdId, userId);
+
     // Member rows are only one half of departure. Clear every active task
     // assignment, vacation/cover relationship, and space default that still
     // points at the departed user, while anonymizing retained history.
@@ -715,7 +860,13 @@ export const removeMember = createHandler(
       actorEmail: user.email,
       targetId: userId,
       householdId,
-      metadata: { removedEmail: member.email, removedRole: member.role },
+      metadata: {
+        removedEmail: member.email,
+        removedRole: member.role,
+        // What departure actually cost the household, so the revocation is
+        // reconstructable after the fact rather than only inferable.
+        revokedCredentials: revoked,
+      },
     });
 
     return noContentResponse();
@@ -770,8 +921,15 @@ export const createSitterLink = createHandler(
     // free/paid line. Seedling keeps one live link of up to seven days;
     // Garden/Greenhouse get 90-day windows and several links. Enforced here,
     // where the plan is known — the schema's 90-day cap is only the ceiling.
+    //
+    // ENTITLEMENT, not the plan row (#476). This is the ISSUING half of the
+    // sitter-link decision and the piece that makes the other half safe: a
+    // household mid-dunning cannot mint a new link or a longer window, while
+    // a link it already handed out keeps working to its expiry (see
+    // handlers/tasks/handler.ts and handlers/tasks/sitterPhotos.ts). Starting
+    // is gated on the card; continuing is not.
     const startsAt = validatedBody.startsAt ?? new Date().toISOString();
-    const plan = getPlan((await billing.getHouseholdSubscription(householdId)).planId);
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
     const gate = checkSitterLinkPlanGate(plan, {
       windowDays: sitterWindowDays(startsAt, validatedBody.expiresAt),
       liveLinks: countLiveSitterLinks(await sitterService.listSitterLinks(householdId)),
@@ -910,6 +1068,116 @@ export const revokeSitterLink = createHandler(
 // Kiosk (wall display) link management. Separate file, same group: it mints a
 // household-scoped credential exactly like the sitter links above.
 import { issueKioskLink, getKioskLink, revokeKioskLink } from './kioskLink.js';
+// PUT /households/{id}/escalation
+//
+// Auto-handoff rule (brief §4.4, ADR 0018): `{ escalateAfterDays: 5..60 | null }`.
+// Admin-only (it turns on a new class of email for the whole household) and
+// gated to plans with the household toolkit — 402, the same upgrade signal
+// the plant cap uses. The 5-day floor is enforced by the schema here AND by
+// the service, so no path can persist a lower value.
+export const setEscalationRule = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<SetEscalationRuleInput>;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    // ENTITLEMENT, not the plan row (#476). Turning auto-handoff ON is a new
+    // grant — it starts a new class of email for the whole household — so a
+    // household mid-dunning may not. A rule already stored keeps its row and
+    // is separately gated at scan time in services/escalation.ts, so nothing
+    // has to be cleaned up and nothing is lost when the card is fixed.
+    const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
+    if (!hasHouseholdToolkit(plan)) {
+      throw createHttpError(
+        402,
+        `Auto-handoff is part of the household toolkit, which the ${plan.name} plan does not include. Upgrade to turn it on.`
+      );
+    }
+    let escalateAfterDays: number | null;
+    try {
+      escalateAfterDays = await escalation.setEscalationRule(
+        householdId,
+        validatedBody.escalateAfterDays
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === 'EscalationRuleRangeError') {
+        throw createHttpError(400, err.message);
+      }
+      if (err instanceof Error && err.name === 'HouseholdNotFoundError') {
+        throw createHttpError(404, 'Household not found');
+      }
+      throw err;
+    }
+    audit('household.settings_changed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { setting: 'escalateAfterDays', value: escalateAfterDays },
+    });
+    return successResponse({ escalateAfterDays });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(setEscalationRuleSchema));
+
+// PUT /households/{id}/timezone
+//
+// The household's IANA timezone (#342, ADR 0025). `{ timezone: "" }` clears it
+// back to "never set", which is NOT the same as choosing `"UTC"`.
+//
+// Stored and readable, and read by nothing. Due dates are still ISO instants
+// compared in the Lambda's zone on every surface — `taskService.completeTask`,
+// the 7-day upcoming window, the reminder scan's rolling 24h cutoff, the ICS
+// all-day date, the digest's days-overdue. Making any of those consult this
+// field reinterprets `nextDue` for every task already in production, and ADR
+// 0025 is the plan for that decision rather than this route.
+//
+// Admin-only, like the location card next to which it will live: a zone is
+// shared by the whole household, not a per-member preference (members already
+// have their own for quiet hours). Deliberately NOT plan-gated — this is
+// correctness, not a feature, and `PUT /households/{id}/escalation`'s 402 is
+// there because auto-handoff starts a new class of email.
+export const setHouseholdTimeZone = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<SetHouseholdTimeZoneInput>;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    // `requireAdmin()` only proves the caller is an admin of their OWN
+    // household; without this equality check they could set any other
+    // household's zone (the same guard `setLocation` documents).
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const household = await householdService.setHouseholdTimeZone(
+      householdId,
+      validatedBody.timezone
+    );
+    if (!household) {
+      throw createHttpError(404, 'Household not found');
+    }
+    audit('household.settings_changed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { setting: 'timezone', value: household.timezone },
+    });
+    return successResponse({ timezone: household.timezone });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(validateBody(setHouseholdTimeZoneSchema));
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
@@ -921,6 +1189,7 @@ export const handler = createRouter({
   'POST /households/join/{inviteCode}': joinHousehold,
   'GET /households/{id}/activity': getActivity,
   'GET /households/{id}/analytics/daily': getDailyAnalytics,
+  'GET /households/{id}/analytics/coverage': getCoverage,
   'GET /households/{id}/year-in-review': getYearInReview,
   'PUT /households/{householdId}/members/{userId}/role': updateMemberRole,
   'DELETE /households/{householdId}/members/{userId}': removeMember,
@@ -932,4 +1201,13 @@ export const handler = createRouter({
   'DELETE /households/{id}/kiosk-link': revokeKioskLink,
   // Member → admin upgrade ask; documented in ./upgradeRequests.ts.
   'POST /households/{id}/upgrade-requests': createUpgradeRequest,
+  'GET /households/{id}/away-recap': getAwayRecap,
+  'PUT /households/{id}/escalation': setEscalationRule,
+  'PUT /households/{id}/timezone': setHouseholdTimeZone,
+  // Caretaker seats (handlers/caretakers/management.ts) — same posture as
+  // sitter links: create/list/revoke are admin-gated, the report is not.
+  'POST /households/{id}/caretakers': caretakers.createCaretaker,
+  'GET /households/{id}/caretakers': caretakers.listCaretakers,
+  'DELETE /households/{id}/caretakers/{caretakerId}': caretakers.revokeCaretaker,
+  'GET /households/{id}/caretaker-report': caretakers.getCaretakerReport,
 });

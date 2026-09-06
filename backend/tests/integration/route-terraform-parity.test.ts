@@ -36,6 +36,7 @@ import * as householdsH from '../../src/handlers/households/handler.js';
 import * as meH from '../../src/handlers/me/handler.js';
 import * as notificationsH from '../../src/handlers/notifications/handler.js';
 import * as plantsH from '../../src/handlers/plants/handler.js';
+import * as plantTagsH from '../../src/handlers/plantTags/handler.js';
 import * as speciesH from '../../src/handlers/species/handler.js';
 import * as tasksH from '../../src/handlers/tasks/handler.js';
 
@@ -52,6 +53,7 @@ const GROUPS: Array<{ handler: { routes: string[] } }> = [
   meH,
   notificationsH,
   plantsH,
+  plantTagsH,
   speciesH,
   tasksH,
 ];

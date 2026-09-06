@@ -1,5 +1,8 @@
 import { api } from './api';
-import type { PlantSpace } from './plantService';
+import type { PlantSpace, SpaceRotation } from './plantService';
+
+/** What a client may submit; `anchor` is server-stamped when omitted. */
+export type RotationInput = Omit<SpaceRotation, 'anchor'> & { anchor?: string };
 
 export const spaceService = {
   async getSpaces(): Promise<PlantSpace[]> {
@@ -14,6 +17,7 @@ export const spaceService = {
     lightLevel?: NonNullable<PlantSpace['lightLevel']>;
     petAccess?: boolean;
     defaultCaregiverId?: string;
+    rotation?: RotationInput;
   }): Promise<PlantSpace> {
     const response = await api.post<PlantSpace>('/spaces', input);
     return response.data;
@@ -26,7 +30,7 @@ export const spaceService = {
         PlantSpace,
         'name' | 'environment' | 'rainExposure' | 'lightLevel' | 'petAccess' | 'defaultCaregiverId'
       >
-    >
+    > & { rotation?: RotationInput | null }
   ): Promise<PlantSpace> {
     const response = await api.put<PlantSpace>(`/spaces/${id}`, input);
     return response.data;

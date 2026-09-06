@@ -101,6 +101,8 @@ function buildPreferencesUpdate(
     taskUpForGrabs: current.taskUpForGrabs ?? true,
     coverageUpdates: current.coverageUpdates ?? true,
     careCredit: current.careCredit ?? true,
+    yearRecap: current.yearRecap ?? true,
+    emailLocale: current.emailLocale ?? '',
     ...overrides,
   };
 }
@@ -121,9 +123,14 @@ const HOUSEHOLD_EMAIL_TOGGLES = [
   },
   { key: 'careCredit', titleKey: 'careCreditTitle', descriptionKey: 'careCreditDescription' },
 ] as const;
+/** The language the app is currently being read in, narrowed to the two
+ *  locales the email catalog ships. */
+function uiEmailLocale(language: string): 'en' | 'es' {
+  return language.toLowerCase().startsWith('es') ? 'es' : 'en';
+}
 
 export function NotificationSettings() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
   const native = isNativeApp();
@@ -141,6 +148,7 @@ export function NotificationSettings() {
   const [tzDraft, setTzDraft] = useState(browserTimeZone ?? 'UTC');
   // The background timezone write below runs at most once per mount.
   const timezoneDefaulted = useRef(false);
+  const localeDefaulted = useRef(false);
   // Last server record mirrored into the drafts, so a write that leaves a
   // field unchanged does not wipe an edit the user has in progress.
   const lastSynced = useRef<NotificationPreferences | null>(null);
@@ -271,6 +279,7 @@ export function NotificationSettings() {
     if (!prev || prev.dndStart !== data.dndStart) setDndStartDraft(data.dndStart);
     if (!prev || prev.dndEnd !== data.dndEnd) setDndEndDraft(data.dndEnd);
 
+    const backfill: Partial<PreferencesUpdate> = {};
     if (
       !timezoneDefaulted.current &&
       isServerDefaultTimeZone(data.timezone) &&
@@ -279,14 +288,27 @@ export function NotificationSettings() {
     ) {
       timezoneDefaulted.current = true;
       setTzDraft(browserTimeZone);
-      persistPreferences({ overrides: { timezone: browserTimeZone }, quiet: true });
+      backfill.timezone = browserTimeZone;
+    }
+    // Email language, back-filled from the language the app is actually being
+    // read in. Unlike `timezone` this field HAS a "never chosen" state (''),
+    // so filling it in cannot overwrite a deliberate choice — which is
+    // precisely why it does not repeat the timezone trap of leaving the value
+    // wrong until someone presses Save. A Spanish-speaking household should
+    // not be mailed in English because nobody opened this page.
+    if (!localeDefaulted.current && !data.emailLocale) {
+      localeDefaulted.current = true;
+      backfill.emailLocale = uiEmailLocale(i18n.language);
+    }
+    if (Object.keys(backfill).length > 0) {
+      persistPreferences({ overrides: backfill, quiet: true });
       return;
     }
     // Otherwise show what is actually stored. When the browser cannot resolve
     // a zone this leaves the server default visible as "UTC" — the truth —
     // rather than a guess.
     if (!prev || prev.timezone !== data.timezone) setTzDraft(data.timezone || 'UTC');
-  }, [prefsQuery.data, browserTimeZone, persistPreferences]);
+  }, [prefsQuery.data, browserTimeZone, persistPreferences, i18n.language]);
 
   const sendCodeMutation = useMutation({
     mutationFn: () => notificationService.startPhoneVerification(phoneDraft),
@@ -678,6 +700,52 @@ export function NotificationSettings() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Year in review. Used to have no control at all: the annual recap
+            was gated on the email master switch alone, so unticking the weekly
+            digest still left it arriving every January. */}
+        <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">{t('notifications.yearRecapTitle')}</p>
+            <p className="text-sm text-gray-600">
+              {prefs.email
+                ? t('notifications.yearRecapDescription')
+                : t('notifications.yearRecapRequiresEmail')}
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer">
+            <span className="sr-only">{t('notifications.yearRecapTitle')}</span>
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-primary-700"
+              checked={(prefs.yearRecap ?? true) && prefs.email}
+              disabled={!prefs.email || saveMutation.isPending}
+              onChange={(e) => save({ yearRecap: e.target.checked })}
+            />
+          </label>
+        </div>
+
+        {/* Email language */}
+        <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {t('notifications.emailLanguageTitle')}
+            </p>
+            <p className="text-sm text-gray-600">{t('notifications.emailLanguageDescription')}</p>
+          </div>
+          <label className="inline-flex items-center">
+            <span className="sr-only">{t('notifications.emailLanguageTitle')}</span>
+            <select
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
+              value={prefs.emailLocale || uiEmailLocale(i18n.language)}
+              disabled={saveMutation.isPending}
+              onChange={(e) => save({ emailLocale: e.target.value as 'en' | 'es' })}
+            >
+              <option value="en">{t('notifications.emailLanguageEnglish')}</option>
+              <option value="es">{t('notifications.emailLanguageSpanish')}</option>
+            </select>
+          </label>
         </div>
 
         {/* SMS */}

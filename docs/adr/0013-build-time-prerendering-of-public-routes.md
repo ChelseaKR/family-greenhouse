@@ -100,3 +100,31 @@ absolute and always apex-hosted, which is the in-repo half; a www→apex 301
 belongs in `infrastructure/modules/frontend/main.tf` and is not attempted here.
 Neither is a real 404 **status** for unknown paths, which is the same
 `custom_error_response` block.
+
+## Update — 2026-09-05 (issue #615)
+
+The last paragraph above is now half true, and the half that changed is worth
+recording here rather than only in the module.
+
+A real 404 **status** for a missing FILE now exists. `/assets/<name>` and any
+other path with an extension answer 404 when the object is not there, because
+the `404 → 200` rule was removed from the `custom_error_response` block and the
+frontend bucket was granted `s3:ListBucket` (which is what makes S3 answer
+`NoSuchKey` rather than `AccessDenied` for a missing key). That mattered
+because `custom_error_response` is a property of the distribution, not of a
+cache behavior, so it could not be told to skip `/assets/` — a missing JS chunk
+came back as `200 text/html`, the SPA shell, carrying the very `og:site_name`
+tag `aws_route53_health_check.site` matches.
+
+Paying for that meant the viewer-request function taking over the job the
+error rule was doing for routes: it now resolves every non-prerendered route to
+`/app-shell.html` **by name**, which is why it carries a generated copy of the
+public-route list (`npm run spa-router --workspace frontend`, gated by
+`spa-router:check`). The split this ADR describes — `app-shell.html` as the
+`noindex`, canonical-free shell, distinct from the prerendered `index.html` —
+is unchanged and is now load-bearing in one more place.
+
+Unknown **routes** still answer 200 with that shell, and deliberately: an SPA
+route that the client resolves is not a 404 at the CDN. `/plants/{plantId}`
+also still relies on the surviving `403 → 200` rule, because the images cache
+behavior shares its path prefix.

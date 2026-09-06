@@ -175,8 +175,13 @@ module "api" {
   ses_reply_to_email = var.email_reply_to
   # Attaching the configuration set is what makes SES publish bounce/complaint
   # events at all; the topic ARN is what the emailEvents Lambda subscribes to.
-  ses_configuration_set      = var.domain_name == "" ? "" : module.email[0].configuration_set_name
-  ses_event_topic_arn        = var.domain_name == "" ? "" : module.email[0].event_topic_arn
+  ses_configuration_set = var.domain_name == "" ? "" : module.email[0].configuration_set_name
+  ses_event_topic_arn   = var.domain_name == "" ? "" : module.email[0].event_topic_arn
+  # The SAME predicate that gates `module.email` above, passed down separately
+  # because the api module needs it at PLAN time. `ses_event_topic_arn` is a
+  # resource attribute and is unknown until the topic exists, which makes it
+  # illegal in a `count` — see modules/api/main.tf "SES delivery feedback".
+  ses_events_enabled         = var.domain_name != ""
   web_push_vapid_public_key  = var.web_push_vapid_public_key
   web_push_vapid_private_key = var.web_push_vapid_private_key
   web_push_vapid_subject     = var.web_push_vapid_subject
@@ -195,6 +200,7 @@ module "api" {
   sprout_integration_enabled      = var.sprout_integration_enabled
   sprout_api_url                  = var.sprout_api_url
   sprout_integration_secret_id    = var.sprout_integration_secret_id
+  fcm_service_account_secret_id   = var.fcm_service_account_secret_id
   identify_metering_enabled       = var.identify_metering_enabled
   sms_notifications_enabled       = var.sms_notifications_enabled
   git_sha                         = var.git_sha
@@ -210,6 +216,7 @@ module "api" {
   leaf_health_monthly_cap_seedling   = var.leaf_health_monthly_cap_seedling
   leaf_health_monthly_cap_garden     = var.leaf_health_monthly_cap_garden
   leaf_health_monthly_cap_greenhouse = var.leaf_health_monthly_cap_greenhouse
+  leaf_health_demo                   = var.leaf_health_demo
   chat_budget_input_tokens           = var.chat_budget_input_tokens
   chat_budget_output_tokens          = var.chat_budget_output_tokens
   # Per-tier chat budgets; a blank one inherits the flat pair above.
@@ -230,6 +237,7 @@ module "api" {
   stripe_price_id_garden_lifetime   = var.stripe_price_id_garden_lifetime
   stripe_price_id_greenhouse        = var.stripe_price_id_greenhouse
   stripe_price_id_greenhouse_annual = var.stripe_price_id_greenhouse_annual
+  stripe_price_id_identify_top_up   = var.stripe_price_id_identify_top_up
   stripe_automatic_tax_enabled      = var.stripe_automatic_tax_enabled
   payments_enabled                  = var.payments_enabled
 }
@@ -331,16 +339,52 @@ module "monitoring" {
   api_access_log_group_name   = module.api.api_access_log_group_name
   api_lambda_log_group_name   = module.api.api_lambda_log_group_name
   auth_lambda_log_group_name  = module.api.auth_lambda_log_group_name
-  lambda_function_names       = module.api.lambda_function_names
-  alert_email                 = var.alert_email
-  alert_sms_number            = var.alert_sms_number
-  dynamodb_table_name         = module.database.table_name
-  monthly_budget_usd          = var.monthly_budget_usd
-  lambda_dlq_name             = module.api.lambda_dlq_name
+  # Scheduled-job log groups: the run-summary metric filters read these. Without
+  # them a run where every household failed is indistinguishable from a quiet
+  # week (see the filters in modules/monitoring/main.tf). The billing log group
+  # is the source of the Stripe no-grant filters added alongside them.
+  reminders_lambda_log_group_name = module.api.reminders_lambda_log_group_name
+  digests_lambda_log_group_name   = module.api.digests_lambda_log_group_name
+  billing_lambda_log_group_name   = module.api.billing_lambda_log_group_name
+  lambda_function_names           = module.api.lambda_function_names
+  alert_email                     = var.alert_email
+  alert_sms_number                = var.alert_sms_number
+  dynamodb_table_name             = module.database.table_name
+  monthly_budget_usd              = var.monthly_budget_usd
+  lambda_dlq_name                 = module.api.lambda_dlq_name
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.
-  email_forwarder_dlq_name = var.domain_name == "" ? "" : module.email[0].forwarder_dlq_name
+  email_forwarder_dlq_name       = var.domain_name == "" ? "" : module.email[0].forwarder_dlq_name
+  email_forwarder_log_group_name = var.domain_name == "" ? "" : module.email[0].forwarder_log_group_name
+  # Same conditional wiring as the forwarder DLQ: the SES reputation alarms
+  # exist only when the email module does.
+  ses_configuration_set_name = var.domain_name == "" ? "" : module.email[0].configuration_set_name
+
+  # External availability (issue #464). Every alarm in modules/monitoring reads
+  # a metric this stack publishes and treats missing data as not-breaching, so
+  # none of them can see "the stack served nobody". These two health checks are
+  # the only monitoring here that observes production from OUTSIDE it.
+  #
+  # The hostnames come from the modules that own them rather than from tfvars,
+  # so changing the domain cannot leave a health check probing the old name
+  # while still reporting healthy. `site_url` is the custom domain when one is
+  # set and the CloudFront hostname otherwise; `api_url` carries the stage, so
+  # the host is its first path segment and the stage goes into the path.
+  enable_site_health_check = var.enable_site_health_check
+  enable_api_health_check  = var.enable_api_health_check
+
+  # Whether the frontend error rail can report at all (issue #576). The two
+  # health checks above watch the site and the API from outside; this watches
+  # the reporting path itself, which runs THROUGH the API it reports failures
+  # of and was therefore silent in exactly the cases worth alarming on. Its
+  # heartbeat comes from .github/workflows/uptime.yml, so it belongs only to an
+  # environment that workflow actually probes.
+  enable_telemetry_delivery_alarm = var.enable_telemetry_delivery_alarm
+
+  site_health_check_host = replace(module.frontend.site_url, "https://", "")
+  api_health_check_host  = split("/", replace(module.api.api_url, "https://", ""))[0]
+  api_health_check_path  = "/${var.environment}/health"
 }
 
 # NOTE: the WAF (`modules/security`) was removed for cost (~$8-16/mo) — its

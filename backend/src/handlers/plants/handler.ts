@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v4 as uuid } from 'uuid';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
 import { createHandler, firstAllowedOrigin } from '../../middleware/handler.js';
@@ -23,14 +22,24 @@ import {
   CreateSpaceInput,
   UpdateSpaceInput,
 } from '../../models/schemas.js';
+import type { SpeciesSource } from '../../models/types.js';
+import {
+  IMAGE_CONTENT_TYPES,
+  MAX_IMAGE_BYTES,
+  mintImageKey,
+  publicImageUrl,
+  resolveIssuedImageKey,
+} from '../../services/plantImageRules.js';
 import * as plantService from '../../services/plantService.js';
+import * as caretakerPhotos from '../caretakers/photos.js';
 import * as spaceService from '../../services/spaceService.js';
 import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
-import { getPlan } from '../../models/plans.js';
+import * as plantTagService from '../../services/plantTagService.js';
+import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
 import { audit } from '../../utils/auditLog.js';
@@ -122,14 +131,108 @@ async function canonicalSpeciesForUpdate(
   return null;
 }
 
+/**
+ * Decide `speciesSource` from the shape of the request. Clients send names and
+ * ids; the enum is only ever written here.
+ *
+ * Precedence is deliberate: an accepted photo identification beats a catalog
+ * id, because accepting a suggestion in the UI ALSO resolves that name against
+ * the catalog. Preferring `catalog` would relabel exactly the case this field
+ * exists to expose — a model's guess — as a catalog fact.
+ *
+ * No species name means no provenance to record: `null`, not `'user'`.
+ */
+function deriveSpeciesSource(body: {
+  species?: string | null;
+  identifiedSpecies?: string;
+  perenualSpeciesId?: number | null;
+}): SpeciesSource | null {
+  const name = body.species?.trim();
+  if (!name) return null;
+  const claimed = body.identifiedSpecies?.trim();
+  if (claimed && claimed.toLowerCase() === name.toLowerCase()) return 'identified';
+  if (body.perenualSpeciesId) return 'catalog';
+  return 'user';
+}
+
+/**
+ * Provenance for a new plant.
+ *
+ * A cutting arrives with its parent's species prefilled, which nobody stated
+ * and nothing identified — it was inherited. Calling that `'user'` would
+ * invent a provenance, so a cutting that keeps its parent's species keeps the
+ * parent's provenance too (including `null`, which is honest for a parent
+ * whose own origin was never recorded). Anything the person actually chose on
+ * the form — a photo identification, a catalog pick, a different name typed in
+ * — is theirs and wins.
+ */
+function speciesSourceForCreate(
+  body: { species?: string | null; identifiedSpecies?: string; perenualSpeciesId?: number | null },
+  parentPlant: { species?: string | null; speciesSource?: SpeciesSource | null } | null
+): SpeciesSource | null {
+  const derived = deriveSpeciesSource(body);
+  if (derived !== 'user' || !parentPlant) return derived;
+  const inherited = (parentPlant.species ?? '').trim().toLowerCase();
+  const chosen = (body.species ?? '').trim().toLowerCase();
+  if (!inherited || inherited !== chosen) return derived;
+  return parentPlant.speciesSource ?? null;
+}
+
+/**
+ * What `speciesSource` an update should write, or `undefined` to leave it
+ * untouched.
+ *
+ * Provenance belongs to the NAME, so it is rewritten only when the name
+ * actually changes — or when this write carries an identification claim for
+ * it. The edit form re-sends `species` unchanged whenever any other field is
+ * edited; recomputing on every such write would quietly relabel a photo
+ * identification as something a person stated, which is the audit trail this
+ * field exists to keep.
+ */
+async function speciesSourceForUpdate(
+  householdId: string,
+  plantId: string,
+  body: { species?: string | null; identifiedSpecies?: string; perenualSpeciesId?: number | null }
+): Promise<SpeciesSource | null | undefined> {
+  if (body.species === undefined) return undefined;
+  const next = deriveSpeciesSource(body);
+  // An explicit identification claim is always about this write, so it always
+  // lands (re-identifying to the same name still re-dates the provenance).
+  if (body.identifiedSpecies !== undefined) return next;
+  const current = await plantService.getPlant(householdId, plantId);
+  if (!current) return next; // missing plant 404s downstream; nothing is written
+  const before = (current.species ?? '').trim().toLowerCase();
+  const after = (body.species ?? '').trim().toLowerCase();
+  if (before === after) return undefined;
+  return next;
+}
+
 // Hop cap on the ancestor-chain walk in updatePlant's cycle guard — see there.
 const MAX_LINEAGE_DEPTH = 50;
 
 // GET /spaces
+//
+// Spaces carry a derived `rotationTurn` when they have a care rotation, so the
+// UI never re-implements the period maths (ADR 0018). `turnUserId: null` on a
+// rotating space is a real answer — everyone in the rotation is away — and the
+// client renders it as such.
 export const listSpaces = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
-    return successResponse(await spaceService.getSpaces(user.householdId!));
+    const householdId = user.householdId!;
+    const spaces = await spaceService.getSpaces(householdId);
+    if (!spaces.some((space) => space.rotation)) return successResponse(spaces);
+    const [members, vacations] = await Promise.all([
+      householdService.getHouseholdMembers(householdId),
+      taskService.listVacationWindows(householdId),
+    ]);
+    const turns = spaceService.rotationTurns(spaces, { members, vacations });
+    return successResponse(
+      spaces.map((space) => {
+        const turn = turns.get(space.id);
+        return turn ? { ...space, rotationTurn: turn } : space;
+      })
+    );
   }
 )
   .use(authMiddleware())
@@ -147,7 +250,11 @@ export const createSpace = createHandler(
       if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
         throw createHttpError(409, error.message);
       }
-      if (error instanceof Error && error.name === 'DefaultCaregiverNotMemberError') {
+      if (
+        error instanceof Error &&
+        (error.name === 'DefaultCaregiverNotMemberError' ||
+          error.name === 'RotationMemberNotMemberError')
+      ) {
         throw createHttpError(400, error.message);
       }
       throw error;
@@ -174,7 +281,11 @@ export const updateSpace = createHandler(
       if (error instanceof Error && error.name === 'DuplicateSpaceNameError') {
         throw createHttpError(409, error.message);
       }
-      if (error instanceof Error && error.name === 'DefaultCaregiverNotMemberError') {
+      if (
+        error instanceof Error &&
+        (error.name === 'DefaultCaregiverNotMemberError' ||
+          error.name === 'RotationMemberNotMemberError')
+      ) {
         throw createHttpError(400, error.message);
       }
       throw error;
@@ -258,7 +369,10 @@ export const createPlant = createHandler(
     // are backfilled lazily inside the service from the real (paginated)
     // active-plant count.
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    const plan = getPlan(sub.planId);
+    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
+    // household resolves to Seedling's free caps until Stripe reports the
+    // subscription in good standing again. See getEntitledPlan.
+    const plan = getEntitledPlan(sub);
 
     // Propagation: a cutting must point at a real plant in the SAME
     // household. (Self-reference is impossible on create — the new id
@@ -290,10 +404,12 @@ export const createPlant = createHandler(
         {
           ...validatedBody,
           ...(canonicalSpecies !== undefined ? { canonicalSpecies } : {}),
+          // Server-derived, never taken from the body (see deriveSpeciesSource).
+          speciesSource: speciesSourceForCreate(validatedBody, parentPlant),
         },
         user.householdId!,
         user.userId,
-        plan.maxPlants
+        limitOf(plan, 'plants')
       );
     } catch (err) {
       // Name check (not instanceof) so test automocks of the service module
@@ -301,7 +417,7 @@ export const createPlant = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
+          `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -506,7 +622,10 @@ export const updatePlant = createHandler(
     // like createPlant — see plantService.updatePlant for why this can't be
     // left uncapped now that the active-plant count is an atomic counter.
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    const plan = getPlan(sub.planId);
+    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
+    // household resolves to Seedling's free caps until Stripe reports the
+    // subscription in good standing again. See getEntitledPlan.
+    const plan = getEntitledPlan(sub);
 
     let plant: Awaited<ReturnType<typeof plantService.updatePlant>>;
     try {
@@ -515,17 +634,18 @@ export const updatePlant = createHandler(
         plantId,
         validatedBody
       );
+      const speciesSource = await speciesSourceForUpdate(user.householdId!, plantId, validatedBody);
       plant = await plantService.updatePlant(
         user.householdId!,
         plantId,
-        { ...validatedBody, canonicalSpecies },
-        plan.maxPlants
+        { ...validatedBody, canonicalSpecies, speciesSource },
+        limitOf(plan, 'plants')
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
+          `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -586,6 +706,15 @@ export const deletePlant = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
+    // A printed tag for a deleted plant must stop resolving (ADR 0016).
+    // Best-effort: the plant is already gone, so a scan would 404 anyway;
+    // this just keeps the row from counting against the household's cap.
+    try {
+      await plantTagService.revokeTagsForPlant(user.householdId!, plantId);
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, plantId }, 'planttag.revoke_on_delete_failed');
+    }
+
     audit('plant.deleted', {
       actorId: user.userId,
       actorEmail: user.email,
@@ -600,17 +729,6 @@ export const deletePlant = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
-// Allowlisted upload content types → file extension used in the S3 key.
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
-
-// Hard cap enforced at confirm time (the presigned PUT itself can't bound
-// size). Keep in sync with the frontend's client-side downscale target.
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
 // Body is optional: legacy clients POST with no body and get the jpeg default.
 const imageUploadRequestSchema = z
   .object({
@@ -618,18 +736,6 @@ const imageUploadRequestSchema = z
   })
   .nullable();
 type ImageUploadRequest = z.infer<typeof imageUploadRequestSchema>;
-
-/**
- * Public base URL for a stored image key. When ASSETS_BASE_URL is set
- * (production: the site origin, served via the CloudFront /plants/* behavior)
- * we mint `${ASSETS_BASE_URL}/plants/...`; otherwise (local dev) we fall back
- * to the raw S3 URL form.
- */
-function publicImageUrl(key: string): string {
-  const base = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
-  if (base) return `${base}/${key}`;
-  return `https://${IMAGES_BUCKET}.s3.amazonaws.com/${key}`;
-}
 
 // POST /plants/:id/image
 // Returns a presigned PUT URL but does NOT yet attach the image to the plant.
@@ -655,8 +761,7 @@ export const getImageUploadUrl = createHandler(
     }
 
     const contentType = validatedBody?.contentType ?? 'image/jpeg';
-    const ext = IMAGE_CONTENT_TYPES[contentType];
-    const key = `plants/${user.householdId}/${plantId}/${uuid()}.${ext}`;
+    const key = mintImageKey(user.householdId!, plantId, contentType);
 
     const command = new PutObjectCommand({
       Bucket: IMAGES_BUCKET,
@@ -690,22 +795,10 @@ export const confirmImageUpload = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
     const imageUrl = validatedBody.imageUrl;
-    const keyPrefix = `plants/${user.householdId}/${plantId}/`;
-    // Accept whichever URL forms we can mint; both map to the same S3 key.
-    const assetsBase = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');
-    const expectedPrefixes = [`https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`];
-    if (assetsBase) expectedPrefixes.unshift(`${assetsBase}/${keyPrefix}`);
-    const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
-    if (!matchedPrefix) {
+    const key = resolveIssuedImageKey(user.householdId!, plantId, imageUrl);
+    if (!key) {
       throw createHttpError(400, 'imageUrl does not match a key issued for this plant');
     }
-    // The remainder must look exactly like a key we minted (uuid.ext) — no
-    // slashes, dots, or query strings smuggling a different object.
-    const filename = imageUrl.slice(matchedPrefix.length);
-    if (!/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(filename)) {
-      throw createHttpError(400, 'imageUrl does not match a key issued for this plant');
-    }
-    const key = `${keyPrefix}${filename}`;
     const plant = await plantService.getPlant(user.householdId!, plantId);
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
@@ -924,7 +1017,10 @@ export const acceptSharedPlant = createHandler(
     ).slice(0, 1000);
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    const plan = getPlan(sub.planId);
+    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
+    // household resolves to Seedling's free caps until Stripe reports the
+    // subscription in good standing again. See getEntitledPlan.
+    const plan = getEntitledPlan(sub);
 
     let plant: Awaited<ReturnType<typeof plantService.createPlant>>;
     try {
@@ -937,13 +1033,13 @@ export const acceptSharedPlant = createHandler(
         },
         user.householdId!,
         user.userId,
-        plan.maxPlants
+        limitOf(plan, 'plants')
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `Your ${plan.name} plan is limited to ${plan.maxPlants} plants. Remove or archive a plant before adding more.`
+          `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`
         );
       }
       throw err;
@@ -999,4 +1095,8 @@ export const handler = createRouter({
   'POST /plants/{id}/image/confirm': confirmImageUpload,
   'GET /plants/{id}/photos': listPhotos,
   'GET /plants/{plantId}/history': getPlantHistory,
+  // Caretaker photo upload (handlers/caretakers/photos.ts). Token-scoped, no
+  // auth; lives in this group because this group owns the S3 image pipeline.
+  'POST /caretaker/{token}/plants/{plantId}/photo': caretakerPhotos.getCaretakerPhotoUploadUrl,
+  'POST /caretaker/{token}/plants/{plantId}/photo/confirm': caretakerPhotos.confirmCaretakerPhoto,
 });

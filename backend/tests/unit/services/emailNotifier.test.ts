@@ -5,9 +5,19 @@ vi.mock('@aws-sdk/client-ses', () => ({
   SESClient: vi.fn(function () {
     return { send: sesSendMock };
   }),
-  SendEmailCommand: vi.fn(function (input) {
-    return { input, kind: 'SendEmail' };
+  SendRawEmailCommand: vi.fn(function (input) {
+    return { input, kind: 'SendRawEmail' };
   }),
+}));
+
+const loggerInfoMock = vi.fn();
+vi.mock('../../../src/utils/logger.js', () => ({
+  logger: {
+    info: (...args: unknown[]) => (loggerInfoMock as (...a: unknown[]) => void)(...args),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
 }));
 
 const checkAddressMock = vi.fn(async () => ({ status: 'sendable' }));
@@ -17,6 +27,11 @@ vi.mock('../../../src/services/emailSuppression.js', () => ({
 }));
 
 const ORIGINAL = process.env;
+
+function rawOf(): string {
+  const cmd = sesSendMock.mock.calls[0][0] as { input: { RawMessage: { Data: Buffer } } };
+  return cmd.input.RawMessage.Data.toString('utf8');
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,24 +48,90 @@ describe('emailNotifier', () => {
     process.env = { ...ORIGINAL };
     delete process.env.SES_FROM_EMAIL;
     const { sendEmail } = await import('../../../src/services/emailNotifier.js');
-    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
+    await expect(sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' })).resolves.toBe(false);
     expect(sesSendMock).not.toHaveBeenCalled();
     // A dry run must not even look at the suppression list — nothing is going
     // out, so there is nothing to check.
     expect(checkAddressMock).not.toHaveBeenCalled();
   });
 
+  // #452: this branch fires on the WHOLE notification path wherever
+  // SES_FROM_EMAIL is unset, so it was the highest-volume way a recipient
+  // address could reach a 30-day CloudWatch retention.
+  it('logs the recipient DOMAIN on a dry run, never the address', async () => {
+    process.env = { ...ORIGINAL };
+    delete process.env.SES_FROM_EMAIL;
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'Nadia.Okafor@Example.COM', subject: 'hi', text: 'hello' });
+
+    expect(loggerInfoMock).toHaveBeenCalledTimes(1);
+    const [fields] = loggerInfoMock.mock.calls[0] as [Record<string, unknown>];
+    expect(fields).toMatchObject({ msg: 'email_dry_run', subject: 'hi', toDomain: 'example.com' });
+    expect(JSON.stringify(fields)).not.toContain('Nadia');
+    expect(JSON.stringify(fields)).not.toContain('nadia');
+    expect(fields).not.toHaveProperty('to');
+  });
+
+  it('renders an address with no @ as unknown rather than echoing it', async () => {
+    process.env = { ...ORIGINAL };
+    delete process.env.SES_FROM_EMAIL;
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'not-an-address', subject: 'hi', text: 'hello' });
+    const [fields] = loggerInfoMock.mock.calls[0] as [Record<string, unknown>];
+    expect(fields.toDomain).toBe('unknown');
+    expect(JSON.stringify(fields)).not.toContain('not-an-address');
+  });
+
   it('sends through SES when configured', async () => {
     process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'noreply@x.com' };
     sesSendMock.mockResolvedValueOnce({});
     const { sendEmail } = await import('../../../src/services/emailNotifier.js');
-    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
+    await expect(sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' })).resolves.toBe(true);
     expect(sesSendMock).toHaveBeenCalledTimes(1);
     const cmd = sesSendMock.mock.calls[0][0] as {
-      input: { Source: string; Destination: { ToAddresses: string[] } };
+      input: { Source: string; Destinations: string[] };
     };
     expect(cmd.input.Source).toBe('noreply@x.com');
-    expect(cmd.input.Destination.ToAddresses).toEqual(['a@b.com']);
+    expect(cmd.input.Destinations).toEqual(['a@b.com']);
+    expect(rawOf()).toContain('To: a@b.com');
+  });
+
+  it('sends both parts when an html body is supplied', async () => {
+    process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'noreply@x.com' };
+    sesSendMock.mockResolvedValueOnce({});
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello', html: '<p>hello</p>' });
+    const raw = rawOf();
+    expect(raw).toContain('multipart/alternative');
+    expect(raw).toContain('text/plain; charset=UTF-8');
+    expect(raw).toContain('text/html; charset=UTF-8');
+  });
+
+  it('stays a single text/plain message when no html is supplied', async () => {
+    // Callers that have not adopted the template kit still send valid mail.
+    process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'noreply@x.com' };
+    sesSendMock.mockResolvedValueOnce({});
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
+    expect(rawOf()).not.toContain('multipart/alternative');
+  });
+
+  it('carries custom headers such as List-Unsubscribe', async () => {
+    process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'noreply@x.com' };
+    sesSendMock.mockResolvedValueOnce({});
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({
+      to: 'a@b.com',
+      subject: 'hi',
+      text: 'hello',
+      headers: {
+        'List-Unsubscribe': '<https://api.example/u?t=x>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+    const raw = rawOf();
+    expect(raw).toContain('List-Unsubscribe: <https://api.example/u?t=x>');
+    expect(raw).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
   });
 
   it('attaches the configuration set so SES publishes bounce/complaint events', async () => {
@@ -75,8 +156,9 @@ describe('emailNotifier', () => {
     sesSendMock.mockResolvedValueOnce({});
     const { sendEmail } = await import('../../../src/services/emailNotifier.js');
     await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
-    const cmd = sesSendMock.mock.calls[0][0] as { input: { ReplyToAddresses?: string[] } };
-    expect(cmd.input.ReplyToAddresses).toEqual(['support@x.com']);
+    // Under SendRawEmailCommand there is no ReplyToAddresses parameter; the
+    // raw message IS the headers, so Reply-To moves into the MIME block.
+    expect(rawOf()).toContain('Reply-To: support@x.com');
   });
 
   it('omits Reply-To and the configuration set when neither is configured', async () => {
@@ -87,9 +169,9 @@ describe('emailNotifier', () => {
     const { sendEmail } = await import('../../../src/services/emailNotifier.js');
     await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello' });
     const cmd = sesSendMock.mock.calls[0][0] as {
-      input: { ReplyToAddresses?: string[]; ConfigurationSetName?: string };
+      input: { ConfigurationSetName?: string };
     };
-    expect(cmd.input.ReplyToAddresses).toBeUndefined();
+    expect(rawOf()).not.toContain('Reply-To:');
     expect(cmd.input.ConfigurationSetName).toBeUndefined();
   });
 

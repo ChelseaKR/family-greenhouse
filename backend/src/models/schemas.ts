@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidTimeZone } from '../utils/timeZone.js';
 
 // Auth schemas
 export const cognitoPasswordSchema = z
@@ -64,6 +65,20 @@ export const spaceEnvironmentEnum = z.enum(['inside', 'outside']);
 export const rainExposureEnum = z.enum(['exposed', 'sheltered']);
 export const lightLevelEnum = z.enum(['low', 'medium', 'bright']);
 
+// Care rotation (ADR 0018). At least two members: a rotation of one is just
+// `defaultCaregiverId` with extra steps, and allowing it would make "whose
+// turn" a fixed answer the UI would still label a rotation.
+export const spaceRotationSchema = z
+  .object({
+    memberIds: z.array(z.string().uuid()).min(2).max(20),
+    cadence: z.enum(['weekly', 'monthly']),
+    anchor: z.string().datetime().optional(),
+  })
+  .refine((input) => new Set(input.memberIds).size === input.memberIds.length, {
+    message: 'Rotation members must be unique',
+    path: ['memberIds'],
+  });
+
 export const createSpaceSchema = z.object({
   name: z.string().trim().min(1).max(80),
   environment: spaceEnvironmentEnum,
@@ -71,6 +86,7 @@ export const createSpaceSchema = z.object({
   lightLevel: lightLevelEnum.optional(),
   petAccess: z.boolean().optional(),
   defaultCaregiverId: z.string().uuid().optional(),
+  rotation: spaceRotationSchema.optional(),
 });
 
 export const updateSpaceSchema = createSpaceSchema
@@ -79,6 +95,7 @@ export const updateSpaceSchema = createSpaceSchema
     lightLevel: lightLevelEnum.nullable().optional(),
     petAccess: z.boolean().nullable().optional(),
     defaultCaregiverId: z.string().uuid().nullable().optional(),
+    rotation: spaceRotationSchema.nullable().optional(),
   })
   .refine(
     (input) =>
@@ -87,7 +104,8 @@ export const updateSpaceSchema = createSpaceSchema
       input.rainExposure !== undefined ||
       input.lightLevel !== undefined ||
       input.petAccess !== undefined ||
-      input.defaultCaregiverId !== undefined,
+      input.defaultCaregiverId !== undefined ||
+      input.rotation !== undefined,
     {
       message: 'At least one space field is required',
     }
@@ -113,6 +131,22 @@ export const createPlantSchema = z.object({
   // whitespace-only value becomes "no rule" (null) in the service.
   careRule: z.string().trim().max(CARE_RULE_MAX_LENGTH).optional(),
   perenualSpeciesId: z.number().int().positive().optional(),
+  /**
+   * Provenance CLAIM for `species`: the scientific name this write says came
+   * from a photo identification the user accepted. It is not the stored
+   * provenance — `speciesSource` is absent from this schema on purpose, so a
+   * client can never write that enum directly (same rule as
+   * `canonicalSpecies`). The server accepts the claim only when it names the
+   * very species being written, and derives the enum itself.
+   *
+   * Limit of the guarantee, stated plainly: a client could send this for a
+   * name it typed. That is a self-report about the sender's own plant with
+   * nothing to gain from lying, and the field that leaves the app —
+   * `canonicalSpecies` — stays server-resolved either way. Making it
+   * unforgeable would need a signed identification receipt, which needs a
+   * signing secret this service does not have yet (issue #344).
+   */
+  identifiedSpecies: z.string().max(100).optional(),
   // Propagation: the same-household plant this cutting was taken from.
   // Existence (same household, not self) is validated in the handler.
   parentPlantId: z.string().uuid().optional(),
@@ -132,6 +166,8 @@ export const updatePlantSchema = z.object({
   careRule: z.string().trim().max(CARE_RULE_MAX_LENGTH).optional().nullable(),
   tags: tagsSchema,
   perenualSpeciesId: z.number().int().positive().nullable().optional(),
+  /** Same provenance claim as on create; see createPlantSchema. */
+  identifiedSpecies: z.string().max(100).optional(),
   // Lifecycle transition. Setting 'died'/'gave_away' records an outcome;
   // 'archived' neutrally removes a plant from active care without data loss
   // (drops the plant out of active views/cap/reminders, keeps history);
@@ -216,6 +252,17 @@ export const snoozeTaskSchema = z.object({
   expectedNextDue: z.string().datetime().optional(),
 });
 
+// "Ask family to do it" (ADR 0024). A member asks the household to pick up
+// this occurrence, optionally with a short note. The note is the only field:
+// who is asking comes from the token, and which occurrence comes from the
+// row (echoed back via expectedNextDue, exactly as snoozeTaskSchema does, so
+// a retry after a lost response cannot ask about the next occurrence).
+export const ASK_HELP_NOTE_MAX_LENGTH = 200;
+export const askForHelpSchema = z.object({
+  note: z.string().trim().max(ASK_HELP_NOTE_MAX_LENGTH).optional(),
+  expectedNextDue: z.string().datetime().optional(),
+});
+
 // Vacation window (care handoff). userId defaults to the caller; setting it
 // for someone else requires the admin role (enforced in the handler, which
 // knows the caller). coveredBy membership + coveredBy !== userId are also
@@ -278,6 +325,38 @@ export const createSitterLinkSchema = z
       });
     }
   });
+
+// Auto-handoff rule (ADR 0018). The 5-day floor is the brief's own guardrail
+// against notification volume; it is enforced HERE (server-side) and again in
+// escalation.setEscalationRule so no client path can lower it. null = off.
+export const MIN_ESCALATE_AFTER_DAYS = 5;
+export const MAX_ESCALATE_AFTER_DAYS = 60;
+export const setEscalationRuleSchema = z.object({
+  escalateAfterDays: z
+    .number()
+    .int()
+    .min(MIN_ESCALATE_AFTER_DAYS)
+    .max(MAX_ESCALATE_AFTER_DAYS)
+    .nullable(),
+});
+
+/**
+ * Household IANA timezone (#342, ADR 0025). `''` clears it back to "never
+ * set", which is a distinct state from choosing `'UTC'`.
+ *
+ * The name is checked against the runtime's tz database rather than a regex:
+ * `Area/Location` matches plenty of strings Intl will not resolve, and a
+ * stored name Intl rejects is what made a bad prefs row abort a whole
+ * household's reminder run before `notificationPrefs.setPreferences` started
+ * validating. The length cap is a bound on the input, not the rule —
+ * `isValidTimeZone` is.
+ */
+export const setHouseholdTimeZoneSchema = z.object({
+  timezone: z
+    .string()
+    .max(100)
+    .refine((tz) => tz === '' || isValidTimeZone(tz), 'Unknown timezone'),
+});
 
 export const applyTemplateSchema = z.object({
   templateId: z.string().min(1).max(80),
@@ -343,6 +422,7 @@ export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type CreatePlantInput = z.infer<typeof createPlantSchema>;
 export type UpdatePlantInput = z.infer<typeof updatePlantSchema>;
 export type MovePlantsInput = z.infer<typeof movePlantsSchema>;
+export type SpaceRotationInput = z.infer<typeof spaceRotationSchema>;
 export type CreateSpaceInput = z.infer<typeof createSpaceSchema>;
 export type UpdateSpaceInput = z.infer<typeof updateSpaceSchema>;
 
@@ -357,7 +437,10 @@ export type ApplyTemplateBulkInput = z.infer<typeof applyTemplateBulkSchema>;
 export type ConfirmImageUploadInput = z.infer<typeof confirmImageUploadSchema>;
 export type CompleteTaskInput = z.infer<typeof completeTaskSchema>;
 export type SnoozeTaskInput = z.infer<typeof snoozeTaskSchema>;
+export type AskForHelpInput = z.infer<typeof askForHelpSchema>;
 export type SnoozeReason = z.infer<typeof snoozeReasonEnum>;
 export type SetVacationInput = z.infer<typeof setVacationSchema>;
+export type SetEscalationRuleInput = z.infer<typeof setEscalationRuleSchema>;
+export type SetHouseholdTimeZoneInput = z.infer<typeof setHouseholdTimeZoneSchema>;
 export type CreateSitterLinkInput = z.infer<typeof createSitterLinkSchema>;
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;

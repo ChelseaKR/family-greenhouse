@@ -4,7 +4,7 @@
  *
  *   - Reads `Authorization: Bearer fg_...` (or the alternate `X-Api-Key`
  *     header) instead of Cognito JWT claims.
- *   - Looks up the key in DDB (one point read via GSI3).
+ *   - Looks up the key in DDB (one point read via GSI1).
  *   - Attaches an `event.user` shape compatible with downstream `requireHousehold`
  *     so existing handler code can be reused.
  *
@@ -18,7 +18,9 @@ import createHttpError from 'http-errors';
 import * as apiKeys from '../services/apiKeys.js';
 import type { ApiScope } from '../services/apiKeys.js';
 import * as billing from '../services/billing.js';
-import { getPlan } from '../models/plans.js';
+import * as householdService from '../services/householdService.js';
+import { featureOf, getEntitledPlan } from '../models/plans.js';
+import { getCachedMembership, setCachedMembership } from '../utils/membershipCache.js';
 import type { AuthenticatedEvent } from './auth.js';
 
 /** Event shape after `apiKeyMiddleware` runs — carries the key's scopes. */
@@ -63,11 +65,44 @@ export const apiKeyMiddleware = (): middy.MiddlewareObj<
     // mint. Re-check on every use so a downgrade revokes access immediately
     // instead of leaving already-issued keys live forever.
     const sub = await billing.getHouseholdSubscription(record.householdId);
-    if (getPlan(sub.planId).id !== 'greenhouse') {
+    // Entitlement, not the plan row: a Greenhouse household that stopped
+    // paying resolves to Seedling here, so an unpaid subscription revokes API
+    // access on the same terms a downgrade does. See getEntitledPlan.
+    // And the flag, not the id (#592) — the same conversion as the minting
+    // gate in handlers/apiKeys, so the two halves of this feature keep asking
+    // the identical question.
+    if (!featureOf(getEntitledPlan(sub), 'apiKeys')) {
       throw createHttpError(
         403,
         'API access requires the Greenhouse plan. This household has downgraded — upgrade to keep using this key.'
       );
+    }
+
+    // ...and the same is true of the person who minted it. The key row records
+    // that `createdBy` was a member when it was issued, not that they still
+    // are. `middleware/auth.ts` states the rule for JWTs — the membership row
+    // is authoritative, the claim is only a hint, so a removed user gets a 403
+    // within the 60s cache TTL instead of keeping access until token expiry —
+    // and `services/calendarTokens.ts` repeats it for calendar feeds. The API
+    // key was the one long-lived credential exempt from it, which meant an
+    // admin who moved out kept full household read access, and write access on
+    // the task routes, through the unauthenticated-at-the-gateway /api/v1/*
+    // surface, indefinitely (#449).
+    //
+    // Reads through the same membership cache the JWT path uses, so a warm
+    // container adds no DynamoDB read and the revocation window is the one
+    // already documented. Only positive results are cached, so a removal is
+    // never masked by a stale entry beyond that TTL — and `removeMember`
+    // invalidates it outright.
+    if (!getCachedMembership(record.createdBy, record.householdId)) {
+      const member = await householdService.getMemberByUserId(record.householdId, record.createdBy);
+      if (!member) {
+        throw createHttpError(
+          403,
+          'This API key was issued by someone who is no longer a member of the household. Ask an admin to issue a new one.'
+        );
+      }
+      setCachedMembership(record.createdBy, record.householdId, member.role);
     }
 
     // Attach a minimal user shape. We deliberately don't synthesize an email

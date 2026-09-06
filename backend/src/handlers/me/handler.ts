@@ -14,6 +14,7 @@ import * as accountCleanup from '../../services/accountCleanup.js';
 import * as calendarTokens from '../../services/calendarTokens.js';
 import * as billingEmails from '../../services/billingEmails.js';
 import { buildIcs } from '../../services/icsExport.js';
+import { myToday } from './today.js';
 import { createdResponse, noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { logger } from '../../utils/logger.js';
@@ -442,6 +443,7 @@ export const handler = createRouter({
   'DELETE /me': deleteMe,
   'GET /me/export': exportMe,
   'GET /me/households': listMyHouseholds,
+  'GET /me/today': myToday,
   'GET /me/calendar.ics': calendarIcs,
   'GET /me/calendar-token': getCalendarToken,
   'POST /me/calendar-token': createCalendarToken,

@@ -10,7 +10,12 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
+import {
+  taskService,
+  type AskFamilyResult,
+  type SnoozeReason,
+  type TaskWithCoverage,
+} from '@/services/taskService';
 import { PlantWithTasks, Task } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
@@ -51,17 +56,31 @@ export function replaceCompletedTaskInCache(value: unknown, updatedTask: Task): 
   return value;
 }
 
-/** Dashboard's upcoming list represents the current care queue: a completed
- * row leaves it immediately. Full task lists keep the recurring task and show
- * its newly scheduled due date. */
+/**
+ * A completed row does NOT leave the dashboard's upcoming list — it moves to
+ * its next due date, exactly as every other task list shows it.
+ *
+ * This used to filter the row out, on the reasoning that the upcoming list is
+ * "the current care queue". The server disagrees: `getUpcomingTasks` returns
+ * everything due within SEVEN DAYS (`services/taskService.ts`), and completing
+ * a task advances `nextDue` by its frequency. So any task recurring every
+ * seven days or fewer — which is most watering — lands straight back inside
+ * the window and the refetch returns it.
+ *
+ * The row therefore vanished on tap and reappeared a moment later, which reads
+ * as "it didn't save". Observed in production: a household tapped done seven
+ * times in fifty seconds against a 3-day and a 7-day watering task. Every tap
+ * had persisted — there were seven completion rows to prove it.
+ *
+ * Removing a row the server is about to send back is the optimistic-update
+ * equivalent of rendering a guess as the answer. Showing the new due date is
+ * both true and self-explanatory: the task moves rather than flickering.
+ */
 export function replaceCompletedTaskInTaskQuery(
-  queryKey: readonly unknown[],
+  _queryKey: readonly unknown[],
   value: unknown,
   updatedTask: Task
 ): unknown {
-  if (Array.isArray(value) && queryKey[2] === 'upcoming') {
-    return (value as TaskWithCoverage[]).filter((task) => task.id !== updatedTask.id);
-  }
   return replaceCompletedTaskInCache(value, updatedTask);
 }
 
@@ -70,8 +89,9 @@ export function replaceCompletedTaskInTaskQuery(
  *
  * `backend/src/services/taskService.ts` (`completeTask`) computes
  * `nextDue.setDate(nextDue.getDate() + frequency)` in the process zone, and
- * the deployed Lambdas run in UTC (no `TZ` is set anywhere in
- * `infrastructure/`; `backend/vitest.config.ts` pins the same). `setDate` /
+ * the deployed Lambdas run in UTC (`infrastructure/modules/api/main.tf` sets
+ * `TZ = "UTC"` on the Lambda environment — #590; `backend/vitest.config.ts`
+ * pins the same zone for the suite). `setDate` /
  * `getDate` here run in the BROWSER's zone, so across a DST transition the
  * two disagree by an hour — enough to move the rendered calendar date a
  * whole day. The optimistic row then showed one date and visibly jumped to
@@ -263,6 +283,47 @@ export function useUnclaimTaskMutation(householdId: string | null) {
       ),
     t('tasks.unclaimedToast')
   );
+}
+
+export interface AskFamilyVariables {
+  task: Task;
+  /** The asker's optional short note; blank is sent as no note at all. */
+  note?: string;
+}
+
+/**
+ * "Ask family to do it" (ADR 0024).
+ *
+ * Deliberately NOT optimistic: the point of the feature is who got told, and
+ * that answer only exists once the server has run the away/Do-Not-Disturb
+ * guardrails. The toast reports it honestly — reaching nobody (a one-person
+ * household, or everyone away or asleep) is a real outcome and says so
+ * instead of showing a success the household never received.
+ */
+export function useAskFamilyMutation(householdId: string | null) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ task, note }: AskFamilyVariables) =>
+      taskService.askFamily(task.id, note?.trim() || undefined, task.nextDue),
+    onSuccess: (result: AskFamilyResult) => {
+      if (result.recipients.length === 0) {
+        toast.info(t('tasks.askNobodyReachable'));
+      } else if (result.delivered === 0) {
+        toast.info(t('tasks.askNotDelivered', { count: result.recipients.length }));
+      } else {
+        toast.success(t('tasks.askedToast', { count: result.delivered }));
+      }
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      queryClient.invalidateQueries({
+        queryKey: ['household', householdId, 'activity'],
+        refetchType: 'none',
+      });
+    },
+  });
 }
 
 /** Skip-cycle snooze (one full frequency) tagged with a climate reason. */

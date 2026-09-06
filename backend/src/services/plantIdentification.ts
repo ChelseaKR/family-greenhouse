@@ -17,9 +17,47 @@ export interface IdentificationSuggestion {
   probability: number;
 }
 
+/**
+ * Confidence floor for a photo identification, as a probability on the TOP
+ * candidate.
+ *
+ * **This number is a proposal, not a measurement.** It is not derived from a
+ * distribution of real Plant.id responses — nobody has looked at one. It is a
+ * judgement that below roughly a third, the leading guess among five is more
+ * likely wrong than right, so presenting it at the same visual weight as a
+ * 0.97 match overstates it. What would change it: a sample of real responses
+ * with the accepted species checked against the plant, showing where accepted
+ * suggestions actually start going wrong. Until then, treat 0.30 as a placed
+ * stake rather than a finding. See issue #344.
+ *
+ * The floor DEMOTES, it never filters. Dropping low-probability candidates
+ * would make an empty list mean both "the model was not confident" and
+ * "identification failed", which is the absence-rendered-as-a-value defect
+ * this repo keeps finding. Every candidate is still returned and still
+ * usable; the caller is told the leading one is weak so it can say so.
+ */
+export const IDENTIFICATION_CONFIDENCE_FLOOR = 0.3;
+
+/** How many candidates we return, best-first. */
+const MAX_SUGGESTIONS = 5;
+
 export interface IdentificationResult {
   configured: true;
+  /** Up to five candidates, sorted by probability descending. */
   suggestions: IdentificationSuggestion[];
+  /** The floor this response was judged against, so the client renders the
+   *  same threshold the server applied instead of hardcoding its own. */
+  confidenceFloor: number;
+  /**
+   * The top candidate scored below `confidenceFloor` — the list is worth
+   * showing but not worth trusting.
+   *
+   * `false` when there are no suggestions at all. That case is "nothing came
+   * back", which the caller already reports separately; it is deliberately
+   * NOT folded in here, because "no confident match" and "no match" are
+   * different things to tell a person.
+   */
+  lowConfidence: boolean;
 }
 
 export interface NotConfiguredResult {
@@ -108,12 +146,25 @@ export async function identifyPlant(base64Image: string): Promise<IdentifyRespon
       (s): s is Required<Pick<PlantIdSuggestion, 'name' | 'probability'>> & PlantIdSuggestion =>
         typeof s.name === 'string' && typeof s.probability === 'number'
     )
-    .slice(0, 5)
+    // Sort BEFORE slicing. Plant.id documents no ordering guarantee, and the
+    // bare `.slice(0, 5)` this replaces silently assumed one: an unordered
+    // (or differently ordered) response dropped the best match on the floor
+    // and handed the user the sixth-best guess as the headline. `.filter()`
+    // has already copied the array, so this does not mutate the response.
+    // Array#sort is stable, so equal probabilities keep provider order.
+    .sort((a, b) => b.probability - a.probability)
+    .slice(0, MAX_SUGGESTIONS)
     .map((s) => ({
       scientificName: s.name,
       commonName: s.details?.common_names?.[0] ?? null,
       probability: s.probability,
     }));
 
-  return { configured: true, suggestions };
+  return {
+    configured: true,
+    suggestions,
+    confidenceFloor: IDENTIFICATION_CONFIDENCE_FLOOR,
+    lowConfidence:
+      suggestions.length > 0 && suggestions[0].probability < IDENTIFICATION_CONFIDENCE_FLOOR,
+  };
 }

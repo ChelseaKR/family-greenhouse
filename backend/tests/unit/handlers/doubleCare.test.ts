@@ -110,9 +110,9 @@ const duplicate = {
   windowHours: 24,
 };
 
-async function setPlan(planId: string) {
+async function setPlan(planId: string, extra: Record<string, unknown> = {}) {
   const billing = await import('../../../src/services/billing.js');
-  vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId } as never);
+  vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId, ...extra } as never);
 }
 
 describe('double-care detection on POST /tasks/{id}/complete', () => {
@@ -250,6 +250,47 @@ describe('double-care detection on POST /tasks/{id}/complete', () => {
     expect(vi.mocked(taskService.completeTask).mock.calls[0]).toHaveLength(6);
   });
 
+  it.each(['past_due', 'unpaid', 'paused'])(
+    'skips the detector while the card has failed (%s), like a downgrade (#476)',
+    async (status) => {
+      // `resolvePlanBestEffort` resolves ENTITLEMENT now. Every caller of it
+      // is a signed-in member acting on their own account — nothing issued to
+      // a third party — so the STARTING question applies, and a household
+      // mid-dunning gets the free tier's behaviour.
+      await setPlan('garden', { status });
+      const doubleCare = await import('../../../src/services/doubleCare.js');
+      const { completeTask } = await import('../../../src/handlers/tasks/handler.js');
+
+      const res = (await completeTask(
+        jsonPost({ id: 't1' }, { confirmDuplicate: true }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      // Care logging is NEVER blocked by its own gate — only the paid
+      // detector is skipped.
+      expect(res.statusCode).toBe(200);
+      expect(doubleCare.findRecentDuplicate).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still runs the detector for a lifetime Garden owner after a cancellation (#476)', async () => {
+    // Paired positive control + the entitlement floor.
+    await setPlan('seedling', { status: 'canceled', lifetimePlanId: 'garden' });
+    const doubleCare = await import('../../../src/services/doubleCare.js');
+    vi.mocked(doubleCare.findRecentDuplicate).mockResolvedValueOnce({ status: 'none' } as never);
+    const { completeTask } = await import('../../../src/handlers/tasks/handler.js');
+
+    const res = (await completeTask(
+      jsonPost({ id: 't1' }, { confirmDuplicate: true }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(doubleCare.findRecentDuplicate).toHaveBeenCalled();
+  });
+
   it('skips the detector for a stale occurrence token (the service no-ops it)', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     const doubleCare = await import('../../../src/services/doubleCare.js');
@@ -334,6 +375,24 @@ describe('GET /plants/{plantId}/schedule-drift', () => {
       () => {}
     )) as APIGatewayProxyResult;
 
+    expect(JSON.parse(res.body)).toEqual({ available: false, reason: 'not_in_plan', tasks: [] });
+    expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
+  });
+
+  it('is explicitly not_in_plan while the card has failed (#476)', async () => {
+    await setPlan('garden', { status: 'past_due' });
+    const doubleCare = await import('../../../src/services/doubleCare.js');
+    const { getPlantScheduleDrift } = await import('../../../src/handlers/tasks/handler.js');
+
+    const res = (await getPlantScheduleDrift(
+      buildEvent({ pathParameters: { plantId: 'p1' } }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    // not_in_plan, NOT plan_unavailable: we read the plan successfully and
+    // the answer is "not entitled right now". The distinction is the point of
+    // ADR 0010 and this endpoint's three states.
     expect(JSON.parse(res.body)).toEqual({ available: false, reason: 'not_in_plan', tasks: [] });
     expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
   });
@@ -519,6 +578,9 @@ describe('GET /households/{id}/analytics/daily doubleCare field', () => {
     expect(JSON.parse(res.body)).toEqual({
       days: 30,
       series: [],
+      // A toolkit tier has no analytics ceiling (ADR 0014): null is "no
+      // limit", never "unknown".
+      historyLimitDays: null,
       doubleCare: { status: 'ok', month: '2026-09', confirmedDuplicates: 3 },
     });
   });

@@ -7,8 +7,18 @@ import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskServ
 import { plantService } from '@/services/plantService';
 import { climateService } from '@/services/climateService';
 import { deriveClimateSignals, climateSkipSuggestion } from './climateSignals';
-import { ClaimControls, ClimateSkipChip, CoveringBadge, UpForGrabsBadge } from './taskRowExtras';
 import {
+  AskedForHelpBadge,
+  AskFamilyButton,
+  ClaimControls,
+  ClimateSkipChip,
+  CoveringBadge,
+  UpForGrabsBadge,
+} from './taskRowExtras';
+import { isHelpRequestOpen } from './helpRequest';
+import { AskFamilyDialog } from './AskFamilyDialog';
+import {
+  useAskFamilyMutation,
   useClaimTaskMutation,
   useCompleteTaskMutation,
   useSkipCycleMutation,
@@ -27,12 +37,12 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
-import { calendarDaysBetween } from '@/utils/date';
+import { calendarDaysBetween, isOverdue, isToday } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
-import { spaceService } from '@/services/spaceService';
+import { useSpaces } from '@/hooks/useSpaces';
 import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
 import { TaskLocation } from '@/components/TaskLocation';
-import { plantLocationLabel, spaceMap } from '@/utils/spaces';
+import { plantLocationLabel } from '@/utils/spaces';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
 
@@ -63,22 +73,6 @@ function formatDueDate(dateString: string): string {
     return 'Tomorrow';
   }
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function isOverdue(dateString: string): boolean {
-  const date = new Date(dateString);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime() < today.getTime();
-}
-
-function isToday(dateString: string): boolean {
-  const date = new Date(dateString);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime() === today.getTime();
 }
 
 export function TasksPage() {
@@ -143,16 +137,19 @@ export function TasksPage() {
     enabled: Boolean(householdId),
   });
   const {
-    data: spaces = [],
-    isLoading: spacesLoading,
+    spaces,
+    byId: spacesById,
+    status: spacesStatus,
+    unavailable: spacesUnavailable,
     error: spacesError,
-  } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-    enabled: Boolean(householdId),
-  });
+  } = useSpaces();
+  const spacesLoading = spacesStatus === 'loading';
   const plantsById = useMemo(() => new Map((plants ?? []).map((p) => [p.id, p])), [plants]);
-  const spacesById = useMemo(() => spaceMap(spaces), [spaces]);
+  // A failed rooms read only becomes a blocking error when a room FILTER is
+  // active (below); the rest of the page still works. What it must not do is
+  // let every task quietly read "Unplaced" — the placement is unknown, not
+  // absent.
+  const unplacedLabel = spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
   const activeSpaceFilter =
     requestedSpaceFilter === 'unplaced' ||
     (requestedSpaceFilter != null && spacesById.has(requestedSpaceFilter))
@@ -190,6 +187,9 @@ export function TasksPage() {
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
   const skipMutation = useSkipCycleMutation(householdId);
+  const askMutation = useAskFamilyMutation(householdId);
+  // The task an ask is being composed for; null closes the dialog.
+  const [askTarget, setAskTarget] = useState<TaskWithCoverage | null>(null);
 
   const skipReasonFor = (task: TaskWithCoverage) => {
     const spaceId = plantsById.get(task.plantId)?.spaceId;
@@ -200,12 +200,14 @@ export function TasksPage() {
     skipReasonFor,
     locationFor: (task) =>
       plantsById.has(task.plantId)
-        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, t('spaces.unplaced'))
-        : t('spaces.unplaced'),
+        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
+        : unplacedLabel,
     onClaim: (id) => claimMutation.mutate(id),
     onUnclaim: (id) => unclaimMutation.mutate(id),
+    onAsk: (task) => setAskTarget(task),
     onSkip: (task, reason) => skipMutation.mutate({ task, reason }),
     claimPending: claimMutation.isPending || unclaimMutation.isPending,
+    askPending: askMutation.isPending,
     skipPending: skipMutation.isPending,
   };
 
@@ -239,6 +241,16 @@ export function TasksPage() {
   const overdueTasks = sortedTasks.filter((t) => isOverdue(t.nextDue));
   const todayTasks = sortedTasks.filter((t) => isToday(t.nextDue));
   const upcomingTasks = sortedTasks.filter((t) => !isOverdue(t.nextDue) && !isToday(t.nextDue));
+  // Announce the consequence of a filter press, not only the chip's own
+  // pressed state: the sections below re-render with a different set and
+  // nothing else says so (#447). Empty while the read is unsettled — "0 tasks
+  // shown" next to an error alert is the same failed-read-as-all-clear defect
+  // the overdue chip above was fixed for.
+  const taskCountSummary =
+    isLoading || error || tasks === undefined
+      ? ''
+      : `${sortedTasks.length} ${sortedTasks.length === 1 ? 'task' : 'tasks'} shown.`;
+
   const careRoundGroups = useMemo(
     () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, t('spaces.unplaced')),
     [plants, sortedTasks, spaces, t]
@@ -353,6 +365,10 @@ export function TasksPage() {
         ))}
       </div>
 
+      <p aria-live="polite" className="text-sm text-gray-600">
+        {taskCountSummary}
+      </p>
+
       {/* Task list */}
       {isLoading ? (
         <div className="flex justify-center py-12">
@@ -464,6 +480,17 @@ export function TasksPage() {
         </div>
       )}
       {careRuleGate.dialog}
+      <AskFamilyDialog
+        isOpen={askTarget !== null}
+        plantName={askTarget?.plantName ?? ''}
+        isPending={askMutation.isPending}
+        onClose={() => setAskTarget(null)}
+        onConfirm={(note) => {
+          if (!askTarget) return;
+          askMutation.mutate({ task: askTarget, note });
+          setAskTarget(null);
+        }}
+      />
     </div>
   );
 }
@@ -474,8 +501,10 @@ interface TaskRowExtras {
   locationFor: (task: TaskWithCoverage) => string;
   onClaim: (taskId: string) => void;
   onUnclaim: (taskId: string) => void;
+  onAsk: (task: TaskWithCoverage) => void;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
   claimPending: boolean;
+  askPending: boolean;
   skipPending: boolean;
 }
 
@@ -558,7 +587,16 @@ function TaskSection({
                   <TaskLocation label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {!task.assignedTo && <UpForGrabsBadge />}
+                      {!task.assignedTo &&
+                        (isHelpRequestOpen(task) ? (
+                          // A housemate asked: say who, not "auto-handoff".
+                          <AskedForHelpBadge
+                            name={task.helpAskedByName ?? null}
+                            note={task.helpAskedNote}
+                          />
+                        ) : (
+                          <UpForGrabsBadge escalated={task.escalatedForDue === task.nextDue} />
+                        ))}
                       {task.coveringFor && <CoveringBadge name={task.coveringFor} />}
                       {skipReason && (
                         <ClimateSkipChip
@@ -578,6 +616,7 @@ function TaskSection({
                   onUnclaim={extras.onUnclaim}
                   isPending={extras.claimPending}
                 />
+                <AskFamilyButton task={task} onAsk={extras.onAsk} isPending={extras.askPending} />
                 <Button
                   variant="secondary"
                   size="sm"

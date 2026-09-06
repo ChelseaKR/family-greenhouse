@@ -12,6 +12,12 @@ export interface DisplayMessage {
    *  messages, and only when the bot called `propose_reminder_task`). */
   proposals?: ProposedReminderTask[];
   citations?: Array<{ title: string; url: string; source: string; fetch_date: string }>;
+  /**
+   * Sprout's per-answer disclosure, restored from the persisted `disclosure`
+   * block so a reloaded transcript shows the same statement the live turn did
+   * (#579). Written entirely by Sprout; this app authors none of its words.
+   */
+  disclosure?: string;
 }
 
 /**
@@ -34,6 +40,13 @@ export function historyToDisplayMessages(history: ChatMessage[]): DisplayMessage
     const text = m.content
       .filter((b) => b.type === 'text')
       .map((b) => b.text ?? '')
+      .join('\n')
+      .trim();
+    // Sprout's disclosure block. Never folded into `text` above (that filters
+    // on `type === 'text'`), so it cannot silently become part of the answer.
+    const disclosure = m.content
+      .filter((block) => block.type === 'disclosure' && (block.text ?? '').trim().length > 0)
+      .map((block) => (block.text ?? '').trim())
       .join('\n')
       .trim();
     const citations = m.content.flatMap((block) =>
@@ -71,6 +84,7 @@ export function historyToDisplayMessages(history: ChatMessage[]): DisplayMessage
         text,
         proposals: pendingProposals.length > 0 ? pendingProposals : undefined,
         citations: citations.length > 0 ? citations : undefined,
+        disclosure: disclosure.length > 0 ? disclosure : undefined,
       });
       pendingProposals = [];
     }

@@ -9,11 +9,13 @@ import { IMAGE_BODY_MAX_BYTES } from '../../middleware/bodySize.js';
 import * as plantIdentification from '../../services/plantIdentification.js';
 import * as identifyBudget from '../../services/identifyBudget.js';
 import * as billing from '../../services/billing.js';
-import { getPlan } from '../../models/plans.js';
+import { getEntitledPlan, getPlan } from '../../models/plans.js';
 import {
   PLANT_ID_CREDITS_PER_IDENTIFICATION,
   PLANT_ID_USD_PER_CREDIT,
 } from '../../config/upstreamCosts.js';
+import { identifyTopUpSummary } from '../../models/identifyTopUp.js';
+import { paymentsAreAvailable } from '../../config/commercialStatus.js';
 import { logger } from '../../utils/logger.js';
 import { successResponse } from '../../utils/response.js';
 
@@ -45,7 +47,10 @@ export const identify = createHandler(
     // (default off — beta is unaffected).
     const bucketId = user.householdId ?? `user:${user.userId}`;
     const plan = user.householdId
-      ? getPlan((await billing.getHouseholdSubscription(user.householdId)).planId)
+      ? // Entitlement, not the plan row — Plant.id calls cost real money, and
+        // an unpaid subscription should not buy a larger allowance. See
+        // getEntitledPlan.
+        getEntitledPlan(await billing.getHouseholdSubscription(user.householdId))
       : getPlan('seedling');
     const allowance = identifyBudget.allowanceForPlan(plan.id);
     const meteringEnabled = identifyBudget.meteringEnabled();
@@ -54,17 +59,47 @@ export const identify = createHandler(
     // as `usage.used` and must never be a stand-in zero or an unverified
     // estimate; see the `finalUsed` note below.
     let used: number | null;
+    // Only set on the enforced path: which pool paid, and the top-up balance
+    // after a credit spend. Absent otherwise, so nothing is claimed about
+    // credits that were never read.
+    let reservation: identifyBudget.IdentifyReservation | undefined;
 
     if (meteringEnabled && upstreamConfigured) {
       // Reserve BEFORE the paid call. A read-then-check gate lets concurrent
       // requests all reach Plant.id before any one increments the counter.
+      // Consumption order is the plan allowance first, then a top-up credit
+      // (services/identifyBudget.ts#reserveIdentification).
       try {
-        used = await identifyBudget.reserveUsage(bucketId, allowance);
+        reservation = await identifyBudget.reserveIdentification(
+          bucketId,
+          allowance,
+          user.householdId ?? null
+        );
+        used = reservation.used;
       } catch (err) {
         if (err instanceof identifyBudget.IdentifyBudgetExceededError) {
+          // The pack is offered only where it can actually be bought: the
+          // caller has a household to hold it, payments are on, and a Stripe
+          // price is configured. `credits` is the balance the refusal saw —
+          // a real 0, or null when no household could hold a pack. A failed
+          // credit read never reaches here (it is the 503 below).
+          const topUp = user.householdId ? identifyTopUpSummary(paymentsAreAvailable()) : null;
+          const topUpAvailable = topUp?.available === true;
           throw createHttpError(
             402,
-            `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`
+            topUpAvailable
+              ? `Your ${plan.name} plan's ${allowance} plant identifications for this month are used up. Buy a top-up pack of ${topUp.credits} identifications, or upgrade for a higher monthly allowance.`
+              : `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+            {
+              details: {
+                code: 'IDENTIFY_BUDGET_EXHAUSTED',
+                topUpAvailable,
+                credits: err.credits,
+                topUp: topUpAvailable
+                  ? { credits: topUp.credits, priceUsd: topUp.priceUsd ?? null }
+                  : null,
+              },
+            }
           );
         }
         throw createHttpError(
@@ -116,6 +151,10 @@ export const identify = createHandler(
           planId: plan.id,
           credits: PLANT_ID_CREDITS_PER_IDENTIFICATION,
           costUsd: PLANT_ID_USD_PER_CREDIT * PLANT_ID_CREDITS_PER_IDENTIFICATION,
+          // Which pool paid for it, on the enforced path (ADR 0019).
+          // Summing `source: 'credit'` against pack revenue is how the pack's
+          // margin is checked against the same ledger that prices the call.
+          ...(reservation ? { source: reservation.source } : {}),
         },
         'plant_id_identify'
       );
@@ -123,7 +162,16 @@ export const identify = createHandler(
 
     return successResponse({
       ...result,
-      usage: { used: finalUsed, allowance, meteringEnabled },
+      usage: {
+        used: finalUsed,
+        allowance,
+        meteringEnabled,
+        // Additive, enforced-path only: which pool paid and (after a credit
+        // spend) the balance left. Omitted entirely when credits were not
+        // consulted, so a client never reads an absent balance as 0.
+        ...(reservation ? { source: reservation.source } : {}),
+        ...(reservation?.credits ? { credits: reservation.credits } : {}),
+      },
     });
   },
   { maxBodyBytes: IMAGE_BODY_MAX_BYTES }

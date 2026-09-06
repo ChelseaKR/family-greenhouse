@@ -111,8 +111,12 @@ resource "aws_ce_anomaly_subscription" "alerts" {
 
 # User-facing service-level signals come from the structured API access log.
 # Native API Gateway metrics remain as a platform backstop, but application
-# request/error panels deliberately exclude GET /health so the 30-second
-# synthetic probe cannot swamp the two real users' traffic or error rate.
+# request/error panels deliberately exclude GET /health so external probe
+# traffic cannot swamp the two real users' traffic or error rate. That
+# exclusion is load-bearing: `.github/workflows/uptime.yml` polls /health
+# every 15 minutes, and the optional Route 53 API health check at the bottom
+# of this file polls it every 30 seconds from ~15 locations, which is roughly
+# 1.3M requests a month against a handful of real ones.
 resource "aws_cloudwatch_dashboard" "main" {
   count = var.enable_dashboard ? 1 : 0
 
@@ -342,6 +346,263 @@ resource "aws_cloudwatch_log_metric_filter" "frontend_errors" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Whether the frontend rail can report at all (issue #576)
+#
+# FrontendErrors above is derived from reports that SURVIVED a cross-origin
+# POST to this API — DNS, TLS, CORS, the gateway, the rate limiter, the strict
+# schema and the Lambda. Every one of those is a place a report dies leaving
+# no trace, because `send()` used to discard both the rejection and the
+# resolved response. So `FrontendErrors == 0` had two meanings and the stack
+# could not tell them apart: nobody hit an error, or nobody could tell us.
+#
+# These two filters separate them. Both read `kind = "delivery"` lines, which
+# are statements about the rail rather than about the app:
+#
+#   source = "browser"   — a browser is reporting, now that delivery works
+#                          again, that N earlier reports never landed. A late
+#                          signal by construction: a browser cannot deliver
+#                          news of an outage during the outage. It is still
+#                          the difference between an outage that leaves a
+#                          trace and one that leaves nothing.
+#
+#   source = "synthetic" — scripts/telemetry-delivery-check.mjs, run every 15
+#                          minutes from .github/workflows/uptime.yml. It sends
+#                          the report a browser would send, with the preflight
+#                          a browser would send first, and asserts the CORS
+#                          headers a browser would require. Its cadence does
+#                          not depend on anyone visiting the site, which is
+#                          the property that makes its ABSENCE meaningful.
+#
+# That last point is the whole design. `treat_missing_data = "breaching"`
+# is only honest for a metric with a floor. FrontendErrors has no floor and
+# never will — this product can genuinely go an hour with no visitors — which
+# is why #576 could not be fixed by editing one attribute on the alarm below.
+# Compare the `sent` metric further down: published on purpose, alarmed on
+# purpose never, for exactly the same reason.
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudwatch_log_metric_filter" "frontend_reports_undelivered" {
+  name           = "${var.project_name}-frontend-reports-undelivered-${var.environment}"
+  log_group_name = var.api_lambda_log_group_name
+  pattern        = "{ $.msg = \"frontend_telemetry\" && $.kind = \"delivery\" && $.source = \"browser\" }"
+
+  metric_transformation {
+    # One point per SESSION that lost reports, not per report lost. A single
+    # visitor on a bad train connection produces one point no matter how many
+    # reports they lost, so the alarm threshold counts distinct browsers.
+    name          = "FrontendReportsUndelivered"
+    namespace     = "FamilyGreenhouse/Frontend/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "frontend_telemetry_probe" {
+  name           = "${var.project_name}-frontend-telemetry-probe-${var.environment}"
+  log_group_name = var.api_lambda_log_group_name
+  pattern        = "{ $.msg = \"frontend_telemetry\" && $.kind = \"delivery\" && $.source = \"synthetic\" }"
+
+  metric_transformation {
+    name      = "FrontendTelemetryProbe"
+    namespace = "FamilyGreenhouse/Frontend/${var.environment}"
+    value     = "1"
+    # Publishes an explicit 0 for any period the log group had events but no
+    # probe among them, so the alarm can distinguish "the probe stopped" from
+    # "the whole log group went quiet" — the latter arriving as missing data,
+    # which the alarm treats as breaching anyway.
+    default_value = "0"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Scheduled-run outcome metrics
+#
+# The problem these exist for: `reminders.ts:834`, `digest.ts:396` and
+# `digest.ts:788` each catch a per-household error, increment a `failed`
+# counter and log at WARN — which was the right fix, because a swallowed
+# error used to abort the run for every member after a bad one. But WARN is
+# below every metric filter, and the handlers then RETURN NORMALLY. So a run
+# in which every household failed produced no Lambda `Errors` data point,
+# nothing in the DLQ, and no signal anywhere. It was byte-identical, from the
+# outside, to a quiet week.
+#
+# The counters are already in the run-summary log lines (`digest.run_complete`,
+# `recap.run_complete`, and `reminders.run_complete`, added alongside these
+# filters because the reminder scan had no summary line at all). These filters
+# turn them into metrics; the alarms below page on a non-zero `failed`.
+#
+# `sent` is published as its own metric but deliberately NOT alarmed on. A
+# "sent should not be zero" alarm needs a floor the product does not have yet:
+# at current volume a genuinely quiet week is possible, and an alarm that
+# fires on it would be trained away within a month. Publishing the series now
+# means the floor can be chosen from real data later rather than guessed.
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudwatch_log_metric_filter" "reminders_run_failed" {
+  count = var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-reminders-run-failed-${var.environment}"
+  log_group_name = var.reminders_lambda_log_group_name
+  pattern        = "{ $.msg = \"reminders.run_complete\" && $.failed > 0 }"
+
+  metric_transformation {
+    name          = "RemindersHouseholdsFailed"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.failed"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "reminders_run_sent" {
+  count = var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-reminders-run-sent-${var.environment}"
+  log_group_name = var.reminders_lambda_log_group_name
+  pattern        = "{ $.msg = \"reminders.run_complete\" }"
+
+  metric_transformation {
+    name          = "RemindersEmailsSent"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.sent"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "digests_run_failed" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-digests-run-failed-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  # One filter for both routines the function runs: the weekly digest and the
+  # yearly recap share a log group and a failure shape.
+  pattern = "{ ($.msg = \"digest.run_complete\" && $.failed > 0) || ($.msg = \"recap.run_complete\" && $.failed > 0) }"
+
+  metric_transformation {
+    name          = "DigestsHouseholdsFailed"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.failed"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "digests_run_sent" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-digests-run-sent-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ ($.msg = \"digest.run_complete\") || ($.msg = \"recap.run_complete\") }"
+
+  metric_transformation {
+    name          = "DigestsEmailsSent"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "$.sent"
+    default_value = "0"
+  }
+}
+
+# Scheduled-run TRUNCATION (#458).
+#
+# Read this next to the note above, because it closes the hole that note's fix
+# would otherwise have opened.
+#
+# These jobs used to walk every household in a serial loop with no clock in it.
+# Past a few hundred households the loop ran past the 30-second Lambda timeout
+# and was killed wherever it happened to be — and EventBridge's retry restarted
+# it at household #1 and died in the same place, so the tail of the list was
+# not delayed, it was unreachable. That failure DID at least produce a Lambda
+# `Errors` data point, which the scheduled-function alarm below fires on at
+# `> 0`.
+#
+# `services/scheduledFanOut.ts` now stops cleanly on a deadline and resumes
+# next run from where it stopped. That is the fix — but it also means an
+# over-long run RETURNS SUCCESSFULLY, which would have deleted the only signal
+# the old shape had. That is precisely the defect #461 fixed, re-created from
+# the other side. So the run summaries carry `truncated`, and these filters and
+# alarms watch it.
+#
+# A truncated run is not a per-household failure and must not be counted as
+# one: nobody was mailed wrongly and nothing was lost. It is a CAPACITY signal
+# — the fleet no longer fits its budget — and the remedy is a bigger budget or
+# the GSI household directory, not a page at 3am. Hence its own metric rather
+# than folding it into `failed`.
+resource "aws_cloudwatch_log_metric_filter" "reminders_run_truncated" {
+  count = var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-reminders-run-truncated-${var.environment}"
+  log_group_name = var.reminders_lambda_log_group_name
+  # Both passes on the hourly schedule: the reminder fan-out and the
+  # household-email pass that rides the same invocation.
+  pattern = "{ ($.msg = \"reminders.run_complete\" && $.truncated IS TRUE) || ($.msg = \"household_email.run_complete\" && $.truncated IS TRUE) }"
+
+  metric_transformation {
+    name          = "RemindersRunTruncated"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "digests_run_truncated" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-digests-run-truncated-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ ($.msg = \"digest.run_complete\" && $.truncated IS TRUE) || ($.msg = \"recap.run_complete\" && $.truncated IS TRUE) }"
+
+  metric_transformation {
+    name          = "DigestsRunTruncated"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+# Household engagement (#478).
+#
+# `services/householdLapse.ts` classifies each household the weekly digest run
+# touches and logs `retention.household_engagement`. These two filters are what
+# make that answer COUNTABLE rather than a line somebody greps for once.
+#
+# They are deliberately a pair. A lapsing count on its own is unreadable: a
+# week where DynamoDB throttled produces fewer lapsing households and more
+# unreadable ones, and without the second series that looks like retention
+# improving. The classifier already refuses to fold a failed read into a
+# lapse — this is the same refusal at the metric layer.
+#
+# No alarm is attached to either. Households drifting away is not a page at
+# 3am, and nobody yet knows what a normal value looks like; that is exactly the
+# question these series exist to answer before any outreach is designed.
+resource "aws_cloudwatch_log_metric_filter" "retention_households_lapsing" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-retention-households-lapsing-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ $.msg = \"retention.household_engagement\" && $.engagement = \"lapsing\" }"
+
+  metric_transformation {
+    name          = "RetentionHouseholdsLapsing"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "retention_engagement_unavailable" {
+  count = var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-retention-engagement-unavailable-${var.environment}"
+  log_group_name = var.digests_lambda_log_group_name
+  pattern        = "{ $.msg = \"retention.household_engagement\" && $.engagement = \"unavailable\" }"
+
+  metric_transformation {
+    name          = "RetentionEngagementUnavailable"
+    namespace     = "FamilyGreenhouse/Scheduled/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
 # CloudWatch Alarms
 #
 # Alarm strategy (cost-driven consolidation): standard alarms are ~$0.10/mo
@@ -356,10 +617,27 @@ resource "aws_cloudwatch_log_metric_filter" "frontend_errors" {
 #     the user, an async one surfaces nowhere else) and `chat` (Bedrock
 #     tool-loop, the latency/cost outlier).
 locals {
-  critical_lambda_names = [
+  # Async, no-user-watching functions. `reminders` was already here; `digests`
+  # and `emailEvents` were not, for no stated reason — they are cron/SNS
+  # invoked and have no user to notice, which is verbatim the argument the
+  # strategy note above makes for keeping `reminders`.
+  scheduled_lambda_names = [
+    for name in var.lambda_function_names : name
+    if length(regexall("-(reminders|digests|emailEvents)-", name)) > 0
+  ]
+
+  # Functions whose LATENCY is worth its own alarm: the two the strategy note
+  # names. A weekly digest legitimately runs long, so a duration alarm on it
+  # would page for the job doing its work.
+  latency_lambda_names = [
     for name in var.lambda_function_names : name
     if length(regexall("-(reminders|chat)-", name)) > 0
   ]
+
+  error_alarm_lambda_names = distinct(concat(
+    local.scheduled_lambda_names,
+    [for name in var.lambda_function_names : name if length(regexall("-chat-", name)) > 0],
+  ))
 }
 
 # Any Lambda error anywhere in the account/region. Coarse by design — the
@@ -413,18 +691,32 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles_aggregate" {
   }
 }
 
-# Per-function alarms for the critical pair only (see strategy note above).
+# Per-function alarms for the functions the strategy note names (see above).
+#
+# The threshold is class-dependent, and that is the point of this block. At the
+# old flat `> 5 Sum over 2 consecutive 5-minute periods` a scheduled function
+# could never trip it: EventBridge retries a failed target at most 4 times
+# (infrastructure/modules/api/main.tf), so a completely broken hourly or weekly
+# run produces AT MOST 5 Errors data points, spread over a couple of minutes.
+# 5 is not > 5, and it certainly is not > 5 in each of two consecutive periods.
+# The alarm on `reminders` — kept per-function precisely because "an async
+# failure surfaces nowhere else" — was therefore unreachable for the failure it
+# was created for. A DLQ message still alarms separately, but only once every
+# retry is exhausted, and only for a target that actually threw.
+#
+# So: any error at all pages for a scheduled function, while `chat` keeps the
+# volume-based threshold that suits a user-facing, high-frequency path.
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  for_each = toset(var.enable_alarms ? local.critical_lambda_names : [])
+  for_each = toset(var.enable_alarms ? local.error_alarm_lambda_names : [])
 
   alarm_name          = "${each.value}-errors"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = contains(local.scheduled_lambda_names, each.value) ? 1 : 2
   metric_name         = "Errors"
   namespace           = "AWS/Lambda"
   period              = 300
   statistic           = "Sum"
-  threshold           = 5
+  threshold           = contains(local.scheduled_lambda_names, each.value) ? 0 : 5
   alarm_description   = "Lambda function ${each.value} errors exceeded threshold"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
@@ -443,7 +735,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  for_each = toset(var.enable_alarms ? local.critical_lambda_names : [])
+  for_each = toset(var.enable_alarms ? local.latency_lambda_names : [])
 
   alarm_name          = "${each.value}-duration"
   comparison_operator = "GreaterThanThreshold"
@@ -688,7 +980,93 @@ resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
   alarm_description   = "Three or more sanitized browser errors arrived within five minutes"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
+  # Stays "notBreaching", deliberately, and do not "fix" this to breaching.
+  # This alarm asks "are browsers erroring?", and at this traffic level a
+  # five-minute window with no reports is overwhelmingly the healthy answer:
+  # an alarm that paged on it would be trained away inside a month, which is
+  # worse than the gap it closed. The question "could a browser have told us?"
+  # is a DIFFERENT question and belongs to the two alarms below, which is what
+  # issue #576 was actually about. scripts/check-observability.mjs asserts
+  # both postures, in both directions, so neither can drift into the other.
+  treat_missing_data = "notBreaching"
+}
+
+# One point here is one browser SESSION that lost reports, so this reads
+# "three different browsers could not reach us in five minutes" — not "one
+# visitor has bad wifi", which is the noise this threshold sits above.
+#
+# notBreaching, and for once that is not the defect: no such report simply
+# means no browser has told us it lost anything. The absence that MATTERS —
+# nobody being able to tell us anything at all — is what the probe alarm below
+# watches, and that one is breaching.
+resource "aws_cloudwatch_metric_alarm" "frontend_reports_undelivered" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-frontend-reports-undelivered-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "FrontendReportsUndelivered"
+  namespace           = "FamilyGreenhouse/Frontend/${var.environment}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 2
+  alarm_description   = "Three or more browser sessions reported that earlier error reports never reached this API. Those reports are gone; only their count survived. Check CORS on POST /telemetry/frontend, the API's reachability from the public internet, and the rate limiter before assuming the browsers were at fault."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-frontend-reports-undelivered-alarm-${var.environment}"
+  }
+}
+
+# The dead-man's switch for the error rail, and the third alarm in this module
+# to set treat_missing_data = "breaching" (see the two Route 53 alarms at the
+# bottom of this file for the identical reasoning applied to the site).
+#
+# The metric is a synthetic report delivered every 15 minutes by
+# .github/workflows/uptime.yml. Silence therefore means one of: the API is
+# unreachable, CORS on POST /telemetry/frontend is broken, the route moved,
+# the schema drifted, the log group or metric filter changed shape, or the
+# workflow stopped running. Every one of those means the same operational
+# thing — the frontend error rail is not trustworthy right now — and until
+# issue #576 every one of them was invisible.
+#
+# The honest cost of this alarm: it can page because GitHub Actions was slow
+# rather than because production broke. A 3600s period with two evaluation
+# periods tolerates roughly seven consecutive missed 15-minute runs before it
+# fires, which makes that unlikely without being impossible. Detection is
+# therefore ~2 hours, which is right for a diagnostic layer — the Route 53
+# site check is what detects an outage in ~3 minutes. Moving this to an
+# EventBridge canary inside AWS would remove the GitHub dependency; it would
+# also add a Lambda, and that trade was not worth making before the signal
+# exists at all.
+resource "aws_cloudwatch_metric_alarm" "frontend_telemetry_unreportable" {
+  count = var.enable_alarms && var.enable_telemetry_delivery_alarm ? 1 : 0
+
+  alarm_name          = "${var.project_name}-frontend-telemetry-unreportable-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  metric_name         = "FrontendTelemetryProbe"
+  namespace           = "FamilyGreenhouse/Frontend/${var.environment}"
+  period              = 3600
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "No synthetic telemetry delivery probe has reached this API for two hours, so a browser probably cannot deliver an error report either — and the frontend-errors alarm reads that silence as health. Causes, in rough order: CORS on POST /telemetry/frontend, the API's public reachability, a renamed route or drifted schema, the metric filter, or .github/workflows/uptime.yml not running. Until this clears, treat a green frontend-errors alarm as unknown rather than as good news."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+
+  # NOT "notBreaching". This alarm exists to detect absence; if the signal
+  # itself goes absent, "we could not check" must not render as "checked and
+  # fine". Honest here and nowhere else in this file except the Route 53
+  # alarms, because this is the only frontend metric with a floor that does
+  # not depend on somebody visiting the site.
+  treat_missing_data = "breaching"
+
+  tags = {
+    Name = "${var.project_name}-frontend-telemetry-unreportable-alarm-${var.environment}"
+  }
 }
 
 # Dead-letter queue depth. Any message here = an async invocation (the hourly
@@ -749,6 +1127,227 @@ resource "aws_cloudwatch_metric_alarm" "email_forwarder_dlq_depth" {
   }
 }
 
+# Inbound mail refused because its scan verdict was not an explicit PASS —
+# GRAY, PROCESSING_FAILED, or no verdict at all. The forwarder is fail-closed
+# (modules/email/lambda/forwarder.mjs), so this message did NOT reach the
+# maintainer's inbox: it is sitting in the inbound-mail bucket at the `key` the
+# log line names, waiting for someone to decide. That is exactly the sort of
+# thing that must not be discoverable only by reading logs, because the
+# addresses this forwarder carries are security@ and abuse@.
+#
+# Deliberately NOT filtering the everyday `mail_dropped_scan_fail`: a FAIL is
+# a scan that ran and worked, on mail nobody wants, and paging on it would
+# turn ordinary spam into an alert.
+resource "aws_cloudwatch_log_metric_filter" "mail_not_relayed_unverified" {
+  count = var.email_forwarder_log_group_name != "" ? 1 : 0
+
+  name           = "${var.project_name}-mail-not-relayed-unverified-${var.environment}"
+  log_group_name = var.email_forwarder_log_group_name
+  pattern        = "{ $.msg = \"mail_not_relayed_scan_unverified\" }"
+
+  metric_transformation {
+    name          = "MailNotRelayedUnverifiedScan"
+    namespace     = "FamilyGreenhouse/Audit/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "mail_not_relayed_unverified" {
+  count = var.enable_alarms && var.email_forwarder_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-mail-not-relayed-unverified-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.mail_not_relayed_unverified[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Audit/${var.environment}"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "Inbound mail to security@/abuse@/support@ was NOT relayed because its spam/virus scan verdict was not an explicit PASS. The raw message is in the inbound-mail bucket at the key named in the log line — retrieve and triage it by hand."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-mail-not-relayed-unverified-alarm-${var.environment}"
+  }
+}
+
+# Scheduled-run failure alarms. Any household that failed is worth knowing
+# about: these jobs run hourly and weekly, so a single alarm cannot be noisy in
+# the way a per-request one could, and "some households were not reminded" is
+# exactly the state the product promises will not happen.
+resource "aws_cloudwatch_metric_alarm" "reminders_run_failed" {
+  count = var.enable_alarms && var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-reminders-run-failed-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.reminders_run_failed[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  period              = 3600
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "The hourly reminder scan finished with households it could not remind. The run returns normally and logs at WARN, so without this alarm an hour in which EVERY household failed looks exactly like an hour with nothing due."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-reminders-run-failed-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "digests_run_failed" {
+  count = var.enable_alarms && var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-digests-run-failed-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.digests_run_failed[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  # A day, not an hour: the digest runs weekly and the recap yearly, so the
+  # evaluation window has to be wide enough to contain the run it is watching.
+  period             = 86400
+  statistic          = "Sum"
+  threshold          = 0
+  alarm_description  = "The weekly digest or the yearly recap finished with households it could not mail. Digests can go to zero households for weeks and the first signal is a user saying they stopped arriving — from the population least likely to say anything."
+  alarm_actions      = [aws_sns_topic.alerts.arn]
+  ok_actions         = [aws_sns_topic.alerts.arn]
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-digests-run-failed-alarm-${var.environment}"
+  }
+}
+
+# Scheduled runs that could not finish inside their budget. See the metric
+# filters above for why this is a separate signal from `failed`.
+#
+# `> 0` over a window wide enough to contain the run, matching the failure
+# alarms: one truncated run means some households were skipped this cycle, and
+# the resume only guarantees they are reached EVENTUALLY. Two cycles in a row
+# means the fleet is falling behind faster than it catches up.
+resource "aws_cloudwatch_metric_alarm" "reminders_run_truncated" {
+  count = var.enable_alarms && var.reminders_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-reminders-run-truncated-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  metric_name         = aws_cloudwatch_log_metric_filter.reminders_run_truncated[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  period              = 3600
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "The hourly reminder scan ran out of its time budget two hours running, so some households were not reached in either. The resume makes them eventually-reminded rather than never-reminded, but two consecutive truncations mean the fleet is outgrowing a 30-second invocation: raise the timeout, or land the GSI household directory that removes the full-table scan."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-reminders-run-truncated-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "digests_run_truncated" {
+  count = var.enable_alarms && var.digests_lambda_log_group_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-digests-run-truncated-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.digests_run_truncated[0].metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Scheduled/${var.environment}"
+  # A day, for the same reason as the digest failure alarm: the window has to
+  # contain the run it is watching.
+  period             = 86400
+  statistic          = "Sum"
+  threshold          = 0
+  alarm_description  = "A weekly digest or yearly recap run stopped on its deadline with households left. Unlike the hourly scan there is no next hour to catch up in — the digest's four Monday runs are the whole budget for the week, so a truncation here can mean a household simply gets no digest that week."
+  alarm_actions      = [aws_sns_topic.alerts.arn]
+  ok_actions         = [aws_sns_topic.alerts.arn]
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-digests-run-truncated-alarm-${var.environment}"
+  }
+}
+
+# Bounce rate on the SES configuration set.
+#
+# `modules/email/events.tf` sets `reputation_metrics_enabled = true` precisely
+# so these reach CloudWatch, and until now nothing watched them. The module's
+# own header states the stake: sustained bounces cost a domain its sending
+# reputation, and that reputation is shared by every message the domain sends,
+# password resets included. AWS puts an identity under review at a 5% bounce
+# rate and can pause sending, at which point the first symptom anyone sees is
+# that nobody can complete a password reset.
+#
+# On the low-volume false-alarm risk, which is real: these are ROLLING RATE
+# metrics, so one bounce in a quiet week can spike the rate. The choice made
+# here is `datapoints_to_alarm = 3` over three consecutive hours rather than a
+# composite alarm gated on send volume — a single bad address resolves within
+# the rolling window, a suppression-list bug or a bad import does not. If this
+# proves noisy at current volume, raise `datapoints_to_alarm` before raising
+# the threshold: the threshold is set where it is because AWS acts at 5%, and
+# an alarm that only fires after AWS has already acted is not an alarm.
+resource "aws_cloudwatch_metric_alarm" "ses_bounce_rate" {
+  count = var.enable_alarms && var.ses_configuration_set_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-ses-bounce-rate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  metric_name         = "Reputation.BounceRate"
+  namespace           = "AWS/SES"
+  period              = 3600
+  statistic           = "Average"
+  # 3%, well under AWS's 5% review threshold, so there is room to act.
+  threshold         = 0.03
+  alarm_description = "SES bounce rate above 3% for 3 hours on ${var.ses_configuration_set_name}. AWS reviews at 5% and can pause the identity — at which point password resets stop. Check emailSuppression + recent imports."
+  alarm_actions     = [aws_sns_topic.alerts.arn]
+  ok_actions        = [aws_sns_topic.alerts.arn]
+  # A week with no sends legitimately has no data. Deliberate, not copied: a
+  # stopped sender is its own problem and the scheduled-run metrics above are
+  # what watch for that.
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    ConfigurationSetName = var.ses_configuration_set_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-ses-bounce-rate-alarm-${var.environment}"
+  }
+}
+
+# Complaint rate. AWS's review threshold is 0.1%; 0.05% leaves room to react.
+resource "aws_cloudwatch_metric_alarm" "ses_complaint_rate" {
+  count = var.enable_alarms && var.ses_configuration_set_name != "" ? 1 : 0
+
+  alarm_name          = "${var.project_name}-ses-complaint-rate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  metric_name         = "Reputation.ComplaintRate"
+  namespace           = "AWS/SES"
+  period              = 3600
+  statistic           = "Average"
+  threshold           = 0.0005
+  alarm_description   = "SES complaint rate above 0.05% for 3 hours on ${var.ses_configuration_set_name}. AWS reviews at 0.1%. Someone is marking our mail as spam — check what changed in the last send."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    ConfigurationSetName = var.ses_configuration_set_name
+  }
+
+  tags = {
+    Name = "${var.project_name}-ses-complaint-rate-alarm-${var.environment}"
+  }
+}
+
 # Audit alarm: failed-login spike (possible credential stuffing / brute force).
 # A metric filter turns the structured audit log line (pino JSON,
 # `event: "auth.login.failure"`) on the auth Lambda's log group into a metric;
@@ -784,6 +1383,93 @@ resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
 
   tags = {
     Name = "${var.project_name}-auth-login-failure-alarm-${var.environment}"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Stripe webhook: the paths that acknowledge an event and grant NOTHING
+#
+# `applyStripeEvent` (backend/src/services/billing.ts) has branches that log a
+# reason, return, and let the handler answer 200. Each one is correct in
+# isolation — acknowledging is right when the event is stale, mismatched, or
+# not ours — but until now none of them was visible anywhere except a log line
+# nobody reads. A metadata contract break, or a run of mismatched
+# subscriptions, could drop entitlement grants indefinitely while the delivery
+# log in Stripe showed a clean wall of 200s.
+#
+# TWO metrics rather than one, on purpose. The first three messages should be
+# flat zero in normal operation, so any occurrence is worth waking up for. The
+# fourth (a first payment that did not settle) is an ordinary business event —
+# declined cards happen — and folding it into the same metric would bury the
+# contract breaks under routine noise.
+#
+# Drill down with CloudWatch Logs Insights on the billing log group:
+#   fields @timestamp, msg, stripeEventId, householdId, type
+#   | filter msg like /stripe_/ | sort @timestamp desc
+# ---------------------------------------------------------------------------
+resource "aws_cloudwatch_log_metric_filter" "stripe_webhook_no_grant" {
+  name           = "${var.project_name}-stripe-webhook-no-grant-${var.environment}"
+  log_group_name = var.billing_lambda_log_group_name
+  pattern        = "{ $.msg = \"stripe_event_missing_or_unknown_plan_id\" || $.msg = \"stripe_event_subscription_mismatch_skipped\" || $.msg = \"stripe_event_out_of_order_skipped\" }"
+
+  metric_transformation {
+    name          = "StripeWebhookNoGrant"
+    namespace     = "FamilyGreenhouse/Billing/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "stripe_webhook_no_grant" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-stripe-webhook-no-grant-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.stripe_webhook_no_grant.metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Billing/${var.environment}"
+  period              = 900
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "A Stripe webhook was acknowledged without granting entitlement (unknown plan metadata, subscription mismatch, or an out-of-order event). Expected to be zero: a paying household may be missing its plan. Query the billing Lambda log group for msg=stripe_event_*."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-stripe-webhook-no-grant-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "stripe_checkout_unsettled" {
+  name           = "${var.project_name}-stripe-checkout-unsettled-${var.environment}"
+  log_group_name = var.billing_lambda_log_group_name
+  pattern        = "{ $.msg = \"stripe_checkout_session_unsettled_no_grant\" }"
+
+  metric_transformation {
+    name          = "StripeCheckoutUnsettled"
+    namespace     = "FamilyGreenhouse/Billing/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "stripe_checkout_unsettled_spike" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-stripe-checkout-unsettled-spike-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = aws_cloudwatch_log_metric_filter.stripe_checkout_unsettled.metric_transformation[0].name
+  namespace           = "FamilyGreenhouse/Billing/${var.environment}"
+  period              = 900
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "More than 10 subscription checkouts in 15 min completed without settling payment. A few declined cards are normal; a spike means a broken price, a payment-method outage, or fraud screening rejecting everyone."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-stripe-checkout-unsettled-alarm-${var.environment}"
   }
 }
 
@@ -858,5 +1544,219 @@ check "alarms_have_a_notification_destination" {
       length(aws_sns_topic_subscription.email) + length(aws_sns_topic_subscription.sms) > 0
     )
     error_message = "enable_alarms is true but the ${var.environment} alerts topic has no subscribers: alert_email and alert_sms_number are both empty, so every alarm here notifies nobody while still billing ~$0.10/month. Set alert_email (and/or alert_sms_number) in this environment's tfvars, or set enable_alarms = false."
+  }
+}
+
+# ===========================================================================
+# External availability — the only monitoring here that can see a total outage
+# ===========================================================================
+#
+# Everything above this line reads a metric THIS STACK publishes, and every
+# alarm above sets treat_missing_data = "notBreaching". Each of those choices
+# is right on its own: no throttle events means not throttling, no 5xx means
+# no errors. Together they mean "the stack served nobody for forty minutes"
+# produces zero data points and zero alarms.
+#
+# That is not hypothetical. On 2026-09-04 the production frontend answered 403
+# on every route except `/` for roughly forty minutes. None of the 28 alarms
+# fired. The API was healthy throughout, so the 15-minute GitHub Actions
+# `/health` curl passed fourteen minutes into it. The outage was found by a
+# human loading the site (issue #464).
+#
+# ## What this section adds, and what it does not replace
+#
+# `.github/workflows/uptime.yml` stays. It is the DEEPER of the two checks:
+# scripts/synthetic-page-check.mjs parses the HTML and asserts the app root
+# element, the module script, og:site_name and a non-empty title, on four
+# routes, and proves it can still fail via a negative control. What it cannot
+# do is run often or report reliably — a 15-minute cron on GitHub's
+# best-effort scheduler, which GitHub disables outright on repositories with
+# no recent activity, reporting by workflow-failure email rather than to the
+# alerts topic every other alarm here uses.
+#
+# These health checks are the opposite trade. Shallower assertion — HTTP 200
+# plus one literal string in the first 5120 bytes — but fetched every 30
+# seconds from Route 53's global checker fleet, with the result published as
+# a CloudWatch metric that alarms into the same SNS topic as everything else.
+# Detection goes from "up to 15 minutes, if the cron ran" to about three
+# minutes (90s for the health check to fail three times, then two 60s alarm
+# periods).
+#
+# Neither check subsumes the other, which is why both exist.
+#
+# ## treat_missing_data
+#
+# The two alarms below set `treat_missing_data = "breaching"`, and it is the
+# whole point of them. (The frontend-rail heartbeat alarm added for issue #576
+# is the only other one in this module that does; it has the same reasoning
+# written out at its own definition.) The ordinary alarms here are watching for
+# a bad value among good ones, where absent data honestly means "nothing bad
+# happened". These are watching for absence itself. If Route 53 stops publishing HealthCheckStatus — the health
+# check was deleted, the metric is unavailable, the account lost the
+# permission — then "we could not check" must not render as "checked and
+# fine". It renders as ALARM.
+#
+# ## Region
+#
+# Route 53 publishes AWS/Route53 HealthCheckStatus into us-east-1 ONLY. The
+# alarms must therefore live in us-east-1, and so must the SNS topic they
+# notify, because CloudWatch cannot target a topic in another region. Both
+# environments of this stack are us-east-1 (see environments/*/terraform.tfvars
+# and backend.tf). The preconditions below say that out loud, so a region
+# change fails the plan with an explanation instead of creating an alarm that
+# silently cannot deliver.
+
+locals {
+  site_health_check_enabled = var.enable_site_health_check && var.site_health_check_host != ""
+  api_health_check_enabled = (
+    var.enable_api_health_check &&
+    var.api_health_check_host != "" &&
+    var.api_health_check_path != ""
+  )
+
+  # Shared by both preconditions below. Kept as a local so the two error
+  # messages cannot drift apart from the condition they explain.
+  alarms_can_read_route53 = data.aws_region.current.name == "us-east-1"
+
+  route53_alarm_region_error = join(" ", [
+    "Route 53 publishes AWS/Route53 HealthCheckStatus in us-east-1 only, and a CloudWatch alarm can only notify an SNS topic in its own region.",
+    "This stack is deployed to ${data.aws_region.current.name}, so this alarm would either find no metric or be unable to reach ${aws_sns_topic.alerts.arn}.",
+    "To run this stack outside us-east-1, give modules/monitoring an aws.us_east_1 provider alias, create the alerts topic (or a second one) there, and put these alarms on it.",
+    "Until then set enable_site_health_check and enable_api_health_check to false — and note that with them off, nothing in this module can distinguish a total outage from a quiet hour (issue #464).",
+  ])
+}
+
+# The site probe. Fetches a REAL PAGE, not `/`, and requires the response to
+# contain a string only this app emits — because the outage that motivated
+# this served a 403 from a CloudFront distribution that was itself perfectly
+# healthy. "The CDN answered" is not the question; "the CDN answered with our
+# app" is.
+resource "aws_route53_health_check" "site" {
+  count = local.site_health_check_enabled ? 1 : 0
+
+  type          = "HTTPS_STR_MATCH"
+  fqdn          = var.site_health_check_host
+  port          = 443
+  resource_path = var.site_health_check_path
+  search_string = var.site_health_check_search_string
+
+  # CloudFront serves this domain off a SNI certificate; without this the TLS
+  # handshake fails and the check is unhealthy for the wrong reason.
+  enable_sni = true
+
+  # 30s is Route 53's normal interval (10s is available at +$1.00/month and
+  # buys ~60 seconds of detection time, which is not worth it here).
+  request_interval = 30
+
+  # Three consecutive failures before the aggregate flips, so a single
+  # checker's transient network blip cannot page. 3 x 30s = 90 seconds.
+  failure_threshold = 3
+
+  # +$1.00/month and this stack has no latency SLO that Route 53 would inform;
+  # ApplicationLatency above is the latency signal.
+  measure_latency = false
+
+  tags = {
+    Name = "${var.project_name}-site-${var.environment}"
+  }
+}
+
+resource "aws_route53_health_check" "api" {
+  count = local.api_health_check_enabled ? 1 : 0
+
+  type              = "HTTPS_STR_MATCH"
+  fqdn              = var.api_health_check_host
+  port              = 443
+  resource_path     = var.api_health_check_path
+  search_string     = var.api_health_check_search_string
+  enable_sni        = true
+  request_interval  = 30
+  failure_threshold = 3
+  measure_latency   = false
+
+  tags = {
+    Name = "${var.project_name}-api-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "site_unreachable" {
+  count = var.enable_alarms && local.site_health_check_enabled ? 1 : 0
+
+  alarm_name          = "${var.project_name}-site-unreachable-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "${var.site_health_check_host}${var.site_health_check_path} is not serving this application to Route 53's checkers, OR Route 53 stopped reporting on it. Either way nobody can use the site. This is the alarm for a total outage: check CloudFront, the frontend S3 bucket policy/OAC, and the most recent frontend deploy before anything else."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+
+  # NOT "notBreaching", unlike every other alarm in this module. This alarm
+  # exists to detect absence; if the signal itself goes absent, "we could not
+  # check" must not be reported as "checked and fine". See the section header.
+  treat_missing_data = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.site[0].id
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.alarms_can_read_route53
+      error_message = local.route53_alarm_region_error
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-site-unreachable-alarm-${var.environment}"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_unreachable" {
+  count = var.enable_alarms && local.api_health_check_enabled ? 1 : 0
+
+  alarm_name          = "${var.project_name}-api-unreachable-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "GET ${var.api_health_check_path} is not answering ${var.api_health_check_search_string} to Route 53's checkers, OR Route 53 stopped reporting on it. The health route reports \"degraded\" when its DynamoDB probe fails, so this fires for a reachable-but-broken API too, not only for an unreachable one."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.api[0].id
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.alarms_can_read_route53
+      error_message = local.route53_alarm_region_error
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-api-unreachable-alarm-${var.environment}"
+  }
+}
+
+# The companion to alarms_have_a_notification_destination above. That one
+# catches "alarms exist but reach nobody"; this one catches "alarms exist,
+# reach someone, and still cannot see the failure that matters most".
+#
+# A `check` rather than a precondition for the same reason as its sibling: it
+# warns on every plan instead of blocking, so an environment can deliberately
+# run without external probes — it just cannot do so quietly.
+check "something_can_see_a_total_outage" {
+  assert {
+    condition     = !var.enable_alarms || local.site_health_check_enabled
+    error_message = "The ${var.environment} stack creates CloudWatch alarms but no external site health check, so nothing in this module can tell 'serving nobody' from 'quiet': every alarm here uses treat_missing_data = \"notBreaching\". That is the exact state in which a forty-minute total frontend outage went unnoticed on 2026-09-04 (issue #464). Set enable_site_health_check = true with a site_health_check_host (~$2.60/month), or accept that the only thing standing between a total outage and a customer telling you about it is .github/workflows/uptime.yml — a 15-minute cron on GitHub's best-effort scheduler that reports by workflow-failure email."
   }
 }

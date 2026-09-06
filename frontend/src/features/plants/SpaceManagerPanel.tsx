@@ -6,10 +6,13 @@ import { spaceService } from '@/services/spaceService';
 import { householdService } from '@/services/householdService';
 import { getErrorMessage } from '@/services/api';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useSpaces } from '@/hooks/useSpaces';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import type { PlantSpace } from '@/services/plantService';
+import type { RotationInput } from '@/services/spaceService';
+import { SpaceRotationControl } from './SpaceRotationControl';
 
 type LightLevel = NonNullable<PlantSpace['lightLevel']>;
 type PetAccessChoice = '' | 'yes' | 'no';
@@ -24,10 +27,7 @@ export function SpaceManagerPanel() {
   const [lightLevel, setLightLevel] = useState<'' | LightLevel>('');
   const [petAccess, setPetAccess] = useState<PetAccessChoice>('');
   const [defaultCaregiverId, setDefaultCaregiverId] = useState('');
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['spaces', householdId],
-    queryFn: spaceService.getSpaces,
-  });
+  const { spaces, unavailable: spacesUnavailable } = useSpaces();
   const { data: household } = useQuery({
     queryKey: ['household', householdId],
     queryFn: () => householdService.getHousehold(householdId!),
@@ -66,7 +66,7 @@ export function SpaceManagerPanel() {
       id: string;
       input: Partial<
         Pick<PlantSpace, 'rainExposure' | 'lightLevel' | 'petAccess' | 'defaultCaregiverId'>
-      >;
+      > & { rotation?: RotationInput | null };
     }) => spaceService.updateSpace(id, input),
     onSuccess: refresh,
   });
@@ -167,6 +167,14 @@ export function SpaceManagerPanel() {
         </label>
       </div>
 
+      {/* An empty list here is a claim — "you have not made any rooms yet" —
+          and a failed read must not be allowed to make it. */}
+      {spacesUnavailable && (
+        <Alert variant="error" className="mt-5">
+          {t('spaces.roomsUnavailableShort')}
+        </Alert>
+      )}
+
       {spaces.length > 0 && (
         <ul className="mt-5 divide-y divide-primary-100/60 border-t border-primary-100/60">
           {spaces.map((space) => (
@@ -256,6 +264,14 @@ export function SpaceManagerPanel() {
                     </option>
                   ))}
                 </select>
+                <SpaceRotationControl
+                  space={space}
+                  members={members}
+                  isPending={updateMutation.isPending}
+                  onSave={(rotation) =>
+                    updateMutation.mutate({ id: space.id, input: { rotation } })
+                  }
+                />
                 <Button
                   type="button"
                   variant="danger"

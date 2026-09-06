@@ -12,11 +12,13 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog</loc>
+    <lastmod>2026-08-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -32,6 +34,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/changelog</loc>
+    <lastmod>2026-09-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
@@ -51,232 +54,242 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://familygreenhouse.net/support</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/account-deletion</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
     <loc>https://familygreenhouse.net/blog/how-to-remember-to-water-plants</loc>
+    <lastmod>2026-05-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-05-05</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/sharing-plant-care-without-becoming-the-nag</loc>
+    <lastmod>2026-05-13</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-05-13</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/low-maintenance-houseplants-for-forgetful-people</loc>
+    <lastmod>2026-05-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-05-21</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/how-to-move-plants-without-killing-them</loc>
+    <lastmod>2026-05-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-05-28</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/pet-safe-houseplants-that-are-hard-to-kill</loc>
+    <lastmod>2026-06-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-15</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/most-common-toxic-houseplants-and-safer-swaps</loc>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-16</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/how-to-split-plant-care-with-your-partner</loc>
+    <lastmod>2026-06-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-24</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/how-to-water-plants-while-on-vacation</loc>
+    <lastmod>2026-07-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-07-01</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/what-to-leave-for-a-plant-sitter</loc>
+    <lastmod>2026-07-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-07-08</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/plant-care-instructions-for-non-plant-people</loc>
+    <lastmod>2026-07-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-07-15</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/merging-plant-collections-when-you-move-in-together</loc>
+    <lastmod>2026-07-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-07-22</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/signs-of-overwatering-and-how-to-fix-it</loc>
+    <lastmod>2026-07-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-07-29</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/why-are-my-plant-leaves-turning-yellow</loc>
+    <lastmod>2026-08-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-08-05</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog/how-much-light-does-my-room-get</loc>
+    <lastmod>2026-08-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-08-12</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/pothos</loc>
+    <lastmod>2026-06-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-08</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/snake-plant</loc>
+    <lastmod>2026-06-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-08</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/monstera</loc>
+    <lastmod>2026-06-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-08</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/spider-plant</loc>
+    <lastmod>2026-06-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-12</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/peace-lily</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-17</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/heartleaf-philodendron</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-17</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/zz-plant</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-17</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/aloe-vera</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-17</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/dieffenbachia</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-17</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/calathea</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-06-17</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/fiddle-leaf-fig</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/rubber-plant</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/bird-of-paradise</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/anthurium</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/chinese-evergreen</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/jade-plant</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/english-ivy</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/boston-fern</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/money-tree</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/christmas-cactus</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/parlor-palm</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/orchid</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/hoya</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/nerve-plant</loc>
+    <lastmod>2026-09-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
-    <lastmod>2026-09-02</lastmod>
   </url>
   <url>
     <loc>https://familygreenhouse.net/help/getting-started</loc>

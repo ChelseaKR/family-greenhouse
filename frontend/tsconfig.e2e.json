@@ -1,0 +1,34 @@
+{
+  // Type-checks the end-to-end tree, which `tsconfig.json` does not: its
+  // `"include": ["src"]` leaves all of `frontend/tests/` outside the program.
+  //
+  // That mattered most for `tests/e2e/post-deploy-smoke.spec.ts`. It is the
+  // only code in the repo that can revert a production release — a non-success
+  // from the smoke job fires `rollback` in cd-production.yml — and it was
+  // compiled by nothing, linted by nothing, and executed by nothing except
+  // production itself, after the deploy. #394 moved the post-signup
+  // destination to `/welcome` while the spec still asserted the old URL; the
+  // next tag would have deployed a working release and rolled it back. See
+  // #440 and PR #439.
+  //
+  // Honest about the limit: a type check cannot catch a stale ASSERTION. It
+  // catches renamed helpers, wrong Playwright API usage, dead imports and
+  // signature drift — which is most of what actually rots in these files, and
+  // it found two live defects the day it was switched on (a helper typed
+  // `APIResponse` while every caller passes a page `Response`, and a
+  // `use.reducedMotion` config key that Playwright 1.62 silently ignores).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Playwright specs are Node programs: they read process.env, import
+    // node:crypto, and talk to the AWS SDK. The app's `types` list
+    // (vite/client, vite-plugin-pwa/client) is for the browser bundle.
+    "types": ["node"],
+    "noEmit": true,
+    "composite": false
+  },
+  // `playwright.config.ts` is in scope deliberately: it is the file whose
+  // `testIgnore` decides which specs PR CI runs at all, and it was outside
+  // every static check for the same reason the specs were.
+  "include": ["tests/e2e/**/*.ts", "playwright.config.ts"],
+  "references": []
+}

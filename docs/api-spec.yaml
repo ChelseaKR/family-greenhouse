@@ -573,9 +573,236 @@ paths:
                   overdue: { type: boolean }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /sitter/{token}/photos:
+    get:
+      summary: Away Kit photo-back status for a sitter link — whether the household's plan includes it and how much of the 60-photo cap is left. No auth; token is the only credential. `used`/`remaining` are null when the count could not be read.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Photo-back availability for this link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  max: { type: integer, example: 60 }
+                  used: { type: integer, nullable: true }
+                  remaining: { type: integer, nullable: true }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Sitter photo-back. Stores one JPEG/PNG/WebP photo (≤ 300 KB decoded, type verified by magic bytes) of the plant behind a task, under the household's photo timeline, attributed to the sitter link. Hard limits, all server-side — 60 photos per link (atomic), 300 KB per file, IP + per-token rate limits, refused once the link has expired or been revoked, refused (402) when the plan lacks the Away Kit. Never replaces the plant's primary image.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taskId, image]
+              properties:
+                taskId:
+                  {
+                    type: string,
+                    description: A task from the sitter view; resolved to its plant inside the token's household,
+                  }
+                image:
+                  {
+                    type: string,
+                    description: Data URL or bare base64 of the image bytes (≤ 409,
+                    600 chars),
+                  }
+                caption: { type: string, maxLength: 200 }
+      responses:
+        '201':
+          description: Photo stored (PII-free acknowledgement)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photoId: { type: string }
+                  plantName: { type: string }
+                  caption: { type: string, nullable: true }
+                  uploadedAt: { type: string, format: date-time }
+                  used: { type: integer }
+                  remaining: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402': { description: The household's plan does not include the Away Kit }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The link has reached its 60-photo limit }
+        '413': { description: Photo exceeds 300 KB }
+        '429': { description: Per-IP or per-token upload rate exceeded }
+
+  /caretaker/{token}:
+    get:
+      summary: Public caretaker view — the worklist for a named, time-boxed caretaker seat. No auth; the 256-bit token is the only credential. Same PII-free projection as the sitter view, plus the caretaker's own name and their complete permission list.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The caretaker's due tasks (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  caretakerName: { type: string }
+                  startsAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  permissions:
+                    type: array
+                    items: { type: string, enum: [task.complete, photo.add, note.add] }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        plantName: { type: string }
+                        taskType: { type: string }
+                        dueDate: { type: string, format: date-time }
+                        spaceName: { type: string, nullable: true }
+                        placementNote: { type: string, nullable: true }
+                        overdue: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/tasks/{taskId}/complete:
+    post:
+      summary: Public caretaker task completion, attributed to the caretaker by name and folded into their visit record. `visitRecorded` is false when the task completed but the visit line could not be written.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: taskId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedNextDue: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Task completed (PII-free projection)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  plantName: { type: string }
+                  taskType: { type: string }
+                  dueDate: { type: string, format: date-time }
+                  overdue: { type: boolean }
+                  visitRecorded: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/notes:
+    post:
+      summary: Leave a note on the caretaker's current visit. The note IS the record, so a failed write is an error rather than a partial success.
+      tags: [Tasks]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Note recorded on the visit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+                  at: { type: string, format: date-time }
+                  visitRecorded: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/plants/{plantId}/photo:
+    post:
+      summary: Presign a photo upload for a plant in the caretaker's household. Nothing is attached until /confirm. No auth; the key is minted for this household and plant only.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+      responses:
+        '200':
+          description: Presigned PUT URL and the public image URL it will have
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl: { type: string }
+                  imageUrl: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /caretaker/{token}/plants/{plantId}/photo/confirm:
+    post:
+      summary: Attach an uploaded photo to the plant's timeline, attributed to the caretaker and recorded on their visit. Verifies the object landed within the 5 MiB cap with an allowed content type.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl: { type: string }
+      responses:
+        '200':
+          description: Photo attached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imageUrl: { type: string }
+                  photo: { type: object }
+                  visitRecorded: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /households:
     post:
       summary: Create a new household
+      description: >-
+        The caller's plan decides how many households they may belong to (`limits.homes`; Seedling
+        and Garden include one, Greenhouse is unlimited). The first household is always allowed. A
+        caller already at or above the cap keeps every household they have and every right in them
+        — only this new one is refused.
       tags: [Households]
       requestBody:
         required: true
@@ -590,6 +817,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Household'
+        '402':
+          description: The caller's plan does not include another home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /households/{id}:
     get:
@@ -740,6 +973,56 @@ paths:
               schema:
                 type: array
                 items: { type: object }
+  /me/today:
+    get:
+      summary: Cross-home Today — due-today and overdue tasks across every household the caller belongs to, grouped by household
+      description: |
+        A work queue, not a global inventory (ADR 0017). Each household the
+        caller is a member of is resolved with that household's membership
+        role and returned as its own group with the household name on every
+        row; nothing is merged across homes. A household whose read fails is
+        returned as an explicit `status: unavailable` entry, never dropped.
+        Not pinned to the active household — `X-Household-Id` is ignored for
+        the read. Acting on a row goes through the ordinary task routes with
+        an explicit `X-Household-Id` for that row's household. Greenhouse
+        plan: 402 when no household of the caller's includes it.
+      tags: [Me]
+      parameters:
+        - in: query
+          name: until
+          required: false
+          description: The caller's local end-of-day as an ISO-8601 date-time. Defaults to the end of the UTC day; must be within 48 hours of now.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Due and overdue work, grouped by household
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generatedAt, cutoff, households]
+                properties:
+                  generatedAt: { type: string, format: date-time }
+                  cutoff: { type: string, format: date-time }
+                  households:
+                    type: array
+                    items:
+                      type: object
+                      required: [householdId, name, role, status]
+                      properties:
+                        householdId: { type: string, format: uuid }
+                        name: { type: string, nullable: true }
+                        role: { type: string, enum: [admin, member] }
+                        status: { type: string, enum: [ok, unavailable] }
+                        tasks:
+                          description: Present only when status is `ok`. Each row is a task plus `householdName`.
+                          type: array
+                          items: { type: object }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402':
+          description: No household of the caller's is on a plan that includes cross-home Today
+        '503':
+          description: Plan entitlement could not be verified; retry later
   /me/calendar.ics:
     get:
       summary: Authenticated one-shot iCalendar download of the active household's tasks. JWT-guarded, so it is NOT a subscription URL — calendar apps carry no session. Subscribe via /calendar/{token}/family-greenhouse.ics instead.
@@ -978,11 +1261,22 @@ paths:
   /households/join/{inviteCode}:
     post:
       summary: Join a household with a valid invite code
+      description: >-
+        Two plan gates apply. The joined household's member cap (`limits.members`; unlimited on
+        Garden and Greenhouse) and the caller's own home cap (`limits.homes`), which is resolved
+        against the strongest plan the caller would then hold — so joining a Greenhouse household
+        always succeeds however many homes the caller already has.
       tags: [Households]
       parameters: [{ $ref: '#/components/parameters/InviteCode' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '402':
+          description: The household is at its member cap, or the caller's plan includes no further home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /households/{id}/invites:
     post:
       summary: Generate a fresh household invite (admin only)
@@ -1038,6 +1332,11 @@ paths:
         confirmed double-care completions this UTC calendar month on
         household-toolkit tiers (`status: ok` with a count), `not_in_plan`
         otherwise, or `unavailable` when the plan or the log could not be read.
+      description: >-
+        `days` is clamped to the plan's analytics window (`limits.analyticsHistoryDays`; 30 on the
+        free tier, unlimited on paid). The response echoes the window actually served in `days` and
+        the plan's ceiling in `historyLimitDays` — a number, or `null` for no ceiling. Only the
+        RENDERED range is narrowed; no completion record is ever trimmed or deleted.
       tags: [Households]
       parameters:
         - { $ref: '#/components/parameters/HouseholdId' }
@@ -1045,10 +1344,83 @@ paths:
           in: query
           schema: { type: integer, minimum: 1, maximum: 90 }
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: Daily completion counts over the window actually served
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyAnalytics'
+  /households/{id}/analytics/coverage:
+    get:
+      summary: Coverage (bus-factor) report — which plants rest on one caregiver and what a vacation window leaves uncovered. Garden plan and up. Not a leaderboard; carries no per-member totals or ranking.
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '200':
+          description: Coverage report
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - members
+                  - memberCount
+                  - plantCount
+                  - plants
+                  - soleCaregiverPlants
+                  - uncaredPlantCount
+                  - awayRisks
+                  - generatedAt
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: '#/components/schemas/CoverageMember' }
+                  memberCount: { type: integer }
+                  plantCount: { type: integer }
+                  plants:
+                    description: Every active plant with the set of current members who have ever logged care on it, by plant name.
+                    type: array
+                    items: { $ref: '#/components/schemas/CoveragePlant' }
+                  soleCaregiverPlants:
+                    description: The subset of `plants` whose only-ever caregiver is a single current member, by plant name.
+                    type: array
+                    items: { $ref: '#/components/schemas/CoveragePlant' }
+                  uncaredPlantCount:
+                    description: Active plants no current member has ever logged care on.
+                    type: integer
+                  awayRisks:
+                    description: One entry per pending vacation window, soonest first.
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId: { type: string }
+                        name: { type: string }
+                        startDate: { type: string, format: date-time }
+                        endDate: { type: string, format: date-time }
+                        coveredBy: { type: string }
+                        coveredByName: { type: string, nullable: true }
+                        active: { type: boolean }
+                        uncoveredPlants:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              plantId: { type: string }
+                              plantName: { type: string }
+                        uncoveredPlantCount: { type: integer }
+                  generatedAt: { type: string, format: date-time }
+        '402':
+          { description: Household plan does not include the household toolkit (Garden and up) }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /households/{id}/year-in-review:
     get:
       summary: Year-in-review aggregation for a given calendar year
+      description: >-
+        On a plan with an analytics window the aggregation covers that calendar year INTERSECTED
+        with the trailing window, reported as `windowStart`/`windowEnd`; a past year therefore
+        comes back genuinely empty rather than silently relabelled. `historyLimitDays` is the
+        plan's ceiling, or `null` for no ceiling. Completion records are never trimmed.
       tags: [Households]
       parameters:
         - { $ref: '#/components/parameters/HouseholdId' }
@@ -1056,7 +1428,12 @@ paths:
           in: query
           schema: { type: integer, minimum: 2024 }
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: Completion aggregates over the year, or over the plan's window within it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YearInReview'
   /households/{householdId}/members/{userId}/role:
     put:
       summary: Promote/demote a household member (admin only)
@@ -1102,6 +1479,116 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { description: Geocoding provider or daily usage gate is temporarily unavailable }
+  /households/{id}/move-day:
+    post:
+      summary: Evaluate Seasonal Move Day (idempotent per season; may create claimable move tasks)
+      description: >-
+        Reads the household's already-cached climate snapshot — it never calls the weather
+        provider. When tonight's low crosses the frost line or today's high crosses the heat
+        line, every active plant whose current space differs from its winter/summer space is
+        listed, the moves are split round-robin across members who are not on vacation, and one
+        claimable `custom` task per plant is created (or re-armed if last year's still exists).
+        Fires at most once per season per household; later calls return the same list for 14
+        days and are `quiet` after that. `unavailable` means no saved location or no live cached
+        snapshot — the feature then does nothing and asserts nothing. Garden and Greenhouse
+        plans only; other plans receive `locked` without evaluation.
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      responses:
+        '200':
+          description: Evaluation result. Every status other than `ready` renders as silence.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MoveDayResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /households/{id}/escalation:
+    put:
+      summary: Set (or clear with `null`) the household's auto-handoff rule
+      description: |
+        Auto-handoff (ADR 0018). When `escalateAfterDays` is set, a task that many
+        days overdue is put up for grabs by the hourly scan and the other members
+        are told once; the previous holder is never nagged, and nobody away or
+        inside their DND window is notified. The floor is 5 days and is enforced
+        server-side. Admin-only; requires a plan with the household toolkit (402
+        otherwise, the same upgrade signal the plant cap uses).
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [escalateAfterDays]
+              properties:
+                escalateAfterDays:
+                  type: integer
+                  minimum: 5
+                  maximum: 60
+                  nullable: true
+                  description: Days overdue before a task goes up for grabs; null turns the rule off.
+      responses:
+        '200':
+          description: The stored rule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  escalateAfterDays: { type: integer, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402': { description: The household's plan does not include the household toolkit }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /households/{id}/timezone:
+    put:
+      summary: Set (or clear with `""`) the household's IANA timezone
+      description: |
+        The household's IANA timezone (issue #342, ADR 0025). Admin-only; not
+        plan-gated.
+
+        **Stored and readable; nothing consults it yet.** Due dates are still
+        ISO instants compared in the server's zone on every surface — the
+        upcoming window, the reminder scan, the ICS feed, the digest's
+        days-overdue count. Interpreting a due date as a calendar day in this
+        zone reclassifies tasks that already exist, which is the migration ADR
+        0025 plans rather than performs.
+
+        An empty string clears the zone back to "never set", which is a
+        distinct state from a household that chose `UTC`: the attribute is
+        removed from the row rather than defaulted, so the two remain
+        distinguishable (ADR 0010).
+      tags: [Households]
+      parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone:
+                  type: string
+                  maxLength: 100
+                  description: >-
+                    An IANA name the server's tz database resolves (e.g.
+                    `America/New_York`), or `""` to clear. Validated against
+                    `Intl`, not a pattern.
+                  example: America/New_York
+      responses:
+        '200':
+          description: The stored zone (`""` when unset)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timezone: { type: string, example: America/New_York }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /households/{householdId}/members/{userId}:
     delete:
       summary: Remove a member from a household (admin only)
@@ -1178,6 +1665,265 @@ paths:
         '204': { description: Sitter link revoked }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  # --- Plant Tags (ADR 0016) ---
+  /plants/{plantId}/tag:
+    post:
+      summary: Issue (or re-issue) a printable QR tag for one plant. Any member; gated on the plan (Seedling none, Garden 50, Greenhouse unlimited). An existing active tag for the plant is revoked first, so this is also the one-click rotation. Returns the token + scan URL.
+      tags: [Plants]
+      parameters:
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      responses:
+        '201':
+          description: Tag issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantTag'
+        '402': { description: Plan does not include plant tags, or the active-tag cap is reached }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Plant is not active (died / given away / archived) }
+    delete:
+      summary: Revoke the plant's active tag. The printed label stops working on the next scan.
+      tags: [Plants]
+      parameters:
+        - { name: plantId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Tag revoked }
+        '404': { description: The plant has no active tag }
+
+  /households/{id}/plant-tags:
+    get:
+      summary: The household's active plant tags (with tokens, for the print sheet), whether the scan PIN is on, and the plan allowance.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: Tags + settings + allowance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tags:
+                    type: array
+                    items: { $ref: '#/components/schemas/PlantTag' }
+                  pinEnabled: { type: boolean }
+                  allowance:
+                    type: object
+                    properties:
+                      enabled: { type: boolean }
+                      max: { type: integer, nullable: true, description: null = unlimited }
+                      used: { type: integer }
+                  planId: { type: string, enum: [seedling, garden, greenhouse] }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{id}/plant-tags/pin:
+    put:
+      summary: Set (four digits) or clear (null) the household PIN that scan pages must present. Admin only. Only a salted hash is stored.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin: { type: string, pattern: '^\d{4}$', nullable: true }
+      responses:
+        '200':
+          description: Current PIN state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pinEnabled: { type: boolean }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tag/{token}:
+    get:
+      summary: Public plant-tag scan view. No auth; the 256-bit token is the only credential and is scoped to ONE plant. Returns the plant's name, species, photo, care notes, this plant's due tasks, and a settled-read `history` (last care / last watering by first name, or `unavailable` when the read failed — never "never watered"). When the household set a PIN it must be sent in `X-Tag-Pin`.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - {
+            name: X-Tag-Pin,
+            in: header,
+            required: false,
+            schema: { type: string, pattern: '^\d{4}$' },
+          }
+      responses:
+        '200':
+          description: Scan view (one plant, no member ids / emails / location)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plantName: { type: string }
+                  species: { type: string, nullable: true }
+                  imageUrl: { type: string, nullable: true }
+                  careNotes: { type: string, nullable: true }
+                  history:
+                    type: object
+                    properties:
+                      status: { type: string, enum: [ok, unavailable] }
+                      lastCare: { $ref: '#/components/schemas/PlantTagCare' }
+                      lastWatered: { $ref: '#/components/schemas/PlantTagCare' }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        taskType: { type: string }
+                        dueDate: { type: string, format: date-time }
+                        overdue: { type: boolean }
+        '401': { description: PIN required or wrong (`details.reason` = required | wrong) }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { description: Locked after too many wrong PINs (`details.lockedUntil`) }
+
+  /tag/{token}/tasks/{taskId}/complete:
+    post:
+      summary: Public "I just did this". Completes one of the TAGGED PLANT's tasks (a task on any other plant is not found), attributed to the display name the scanner typed with a `tag:{id}` actor and `viaTag` on the activity event. PIN enforced like the scan view.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: taskId, in: path, required: true, schema: { type: string } }
+        - { name: X-Tag-Pin, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [displayName]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 40 }
+                expectedNextDue: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Completed (or already completed for this occurrence — `alreadyDone`)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  taskType: { type: string }
+                  dueDate: { type: string, format: date-time }
+                  completedByName: { type: string }
+                  alreadyDone: { type: boolean }
+        '401': { description: PIN required or wrong }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '423': { description: Locked after too many wrong PINs }
+
+  /households/{id}/caretakers:
+    post:
+      summary: Create a named, revocable, time-boxed caretaker seat (admin only, Greenhouse plan). Returns the token/URL exactly once, with the seat's complete permission list.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, expiresAt]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 60 }
+                startsAt: { type: string, format: date-time }
+                expiresAt: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Caretaker seat created (token returned once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  token: { type: string }
+                  url: { type: string }
+                  name: { type: string }
+                  startsAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  status: { type: string, enum: [active, revoked] }
+                  permissions:
+                    type: array
+                    items: { type: string, enum: [task.complete, photo.add, note.add] }
+        '402': { description: Caretaker seats require the Greenhouse plan }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    get:
+      summary: List the household's caretaker seats (admin only). Never returns tokens.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /households/{id}/caretakers/{caretakerId}:
+    delete:
+      summary: Revoke a caretaker seat by its non-secret id (admin only). Idempotent. Visits already recorded are kept — they are the record of work that happened.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: caretakerId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Caretaker revoked }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /households/{id}/caretaker-report:
+    get:
+      summary: Proof-of-visit report for a date range — who came, when they arrived, what they did. Available to any member, not only admins. A failed read is an error, never an empty report.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - {
+            name: from,
+            in: query,
+            required: false,
+            schema: { type: string },
+            description: 'Calendar date (YYYY-MM-DD) or ISO instant. Defaults to 30 days ago.',
+          }
+        - {
+            name: to,
+            in: query,
+            required: false,
+            schema: { type: string },
+            description: 'Calendar date (YYYY-MM-DD) or ISO instant. Defaults to now.',
+          }
+      responses:
+        '200':
+          description: The report for the range
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  householdId: { type: string }
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  generatedAt: { type: string, format: date-time }
+                  visits: { type: array, items: { type: object } }
+                  totals:
+                    type: object
+                    properties:
+                      visits: { type: integer }
+                      tasksCompleted: { type: integer }
+                      photos: { type: integer }
+                      notes: { type: integer }
+                      caretakers: { type: integer }
+                  byCaretaker: { type: array, items: { type: object } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /households/{id}/kiosk-link:
     post:
@@ -1276,6 +2022,7 @@ paths:
                       plant_cap,
                       member_cap,
                       api_keys,
+                      away_kit,
                       garden_plan,
                       greenhouse_plan,
                     ]
@@ -1319,6 +2066,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /households/{id}/away-recap:
+    get:
+      summary: Away Kit return recap — replays the activity a sitter link produced inside its window (tasks checked off, photos sent back, notes). Any household member. Defaults to the most recently ended link; `linkId` selects one explicitly. 402 when the plan lacks the Away Kit; 404 when no window has ended yet; a failed read is a 5xx, never an empty recap.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: linkId, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: The recap for one sitter window
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      label: { type: string, nullable: true }
+                      startsAt: { type: string, format: date-time }
+                      expiresAt: { type: string, format: date-time }
+                      status: { type: string, enum: [active, revoked] }
+                      ended: { type: boolean }
+                  window:
+                    type: object
+                    properties:
+                      from: { type: string, format: date-time }
+                      to: { type: string, format: date-time }
+                  tasksCompleted:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId: { type: string }
+                        plantId: { type: string }
+                        plantName: { type: string, nullable: true }
+                        taskType: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                        actorName: { type: string }
+                        notes: { type: string, nullable: true }
+                  photos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        photoId: { type: string }
+                        plantId: { type: string }
+                        plantName: { type: string, nullable: true }
+                        imageUrl: { type: string, nullable: true }
+                        caption: { type: string, nullable: true }
+                        occurredAt: { type: string, format: date-time }
+                  notes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source: { type: string, enum: [photo, task] }
+                        plantId: { type: string }
+                        plantName: { type: string, nullable: true }
+                        text: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                  counts:
+                    type: object
+                    properties:
+                      tasks: { type: integer }
+                      photos: { type: integer }
+                      notes: { type: integer }
+                  truncated:
+                    {
+                      type: boolean,
+                      description: True when the activity scan hit its cap — the lists are a prefix,
+                    }
+                  generatedAt: { type: string, format: date-time }
+        '402': { description: The household's plan does not include the Away Kit }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   # --- Notifications ---
   /notifications/prefs:
@@ -1373,6 +2198,36 @@ paths:
       tags: [Notifications]
       responses:
         '204': { description: Device token removed }
+  /notifications/email/unsubscribe:
+    get:
+      summary:
+        RFC 8058 one-click unsubscribe landing page. Public; the capability token in `t` is the
+        only credential. Renders a confirm form and changes nothing, so mail-client link scanners
+        cannot unsubscribe anyone.
+      tags: [Notifications]
+      security: []
+      parameters:
+        - { name: t, in: query, required: true, schema: { type: string } }
+        - { name: lang, in: query, required: false, schema: { type: string, enum: [en, es] } }
+      responses:
+        '200': { description: Confirmation page (text/html) }
+        '400': { description: Missing token }
+        '410': { description: Token invalid or expired }
+        '503': { description: Capability store unreachable; nothing was changed }
+    post:
+      summary:
+        Turn off one email category for the token's user. Also the target of a mail provider's
+        automated `List-Unsubscribe-Post`. Public and idempotent.
+      tags: [Notifications]
+      security: []
+      parameters:
+        - { name: t, in: query, required: true, schema: { type: string } }
+        - { name: lang, in: query, required: false, schema: { type: string, enum: [en, es] } }
+      responses:
+        '200': { description: Unsubscribed (text/html) }
+        '400': { description: Missing token }
+        '410': { description: Token invalid or expired }
+        '503': { description: Preference write failed; nothing was changed }
 
   # --- Billing ---
   /billing/plans:
@@ -1402,6 +2257,35 @@ paths:
       tags: [Billing]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /billing/top-up/checkout:
+    post:
+      summary: Start a one-time Stripe checkout for an identification top-up pack (admin only)
+      description: >-
+        Sells the pack described by `identifyTopUp` on GET /billing/plans (20 identifications, valid 12
+        months, never auto-renewed; ADR 0019). Credits are granted by the Stripe webhook, idempotently on
+        the Checkout Session id, and drawn on only after the plan's monthly allowance is spent. Fails
+        CLOSED: when no Stripe price is configured for this environment the answer is a 400 whose
+        `details.code` is `TOP_UP_NOT_CONFIGURED` — never a fallback price, never a free credit.
+      tags: [Billing]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checkoutAttemptId:
+                  type: string
+                  format: uuid
+                  description: Generated once per click; forwarded as Stripe's idempotency key.
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400':
+          {
+            description: Top-up pack not for sale in this environment (`details.code` = TOP_UP_NOT_CONFIGURED),
+          }
+        '403': { description: Admin-only }
+        '503': { description: Payments paused }
   /billing/portal:
     post:
       summary: Open the Stripe customer portal for plan management
@@ -1557,8 +2441,23 @@ paths:
                   type: string
                   description: Base64-encoded JPEG/PNG or a data URL. Cap at 256 KB after encoding.
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
+        '200':
+          description: >-
+            Up to five `suggestions`, sorted by `probability` descending, plus `confidenceFloor` (the
+            probability the top candidate is judged against) and `lowConfidence` (true when the top
+            candidate scores below it — the floor demotes, it never filters, so the candidates are
+            still returned and still usable; `false` when there are no suggestions at all, which is
+            a different answer). Also `usage` ({ used, allowance, meteringEnabled }). On the enforced
+            path the object also carries `source` (`allowance` | `credit`) and, after a credit spend,
+            `credits` (IdentifyCreditBalance). Both are omitted when credits were not consulted.
+        '402':
+          description: >-
+            Monthly allowance exhausted and no top-up credit left. `details` carries
+            `code: IDENTIFY_BUDGET_EXHAUSTED`, `topUpAvailable` (true only when the caller has a household,
+            payments are on, and a top-up price is configured), `credits` (IdentifyCreditBalance with a
+            real 0, or null when credits were not consulted), and `topUp` ({ credits, priceUsd } or null).
         '502': { description: Plant.id upstream failed }
+        '503': { description: Metering unavailable; nothing was charged and nothing was reserved }
 
   # --- Notifications: manual reminder kick (also runs hourly via EventBridge) ---
   /notifications/run-reminders:
@@ -1621,6 +2520,27 @@ paths:
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /tasks/{id}/ask:
+    post:
+      summary: Ask the household to pick up this task occurrence, with an optional note (free on every tier)
+      description: >
+        Puts THIS occurrence up for grabs — the same state auto-handoff
+        escalation reaches (ADR 0018), through a human door (ADR 0024) — and
+        notifies every household member except the asker, anyone away, and
+        anyone inside their Do-Not-Disturb window. The response reports who
+        was reached and who was deliberately skipped: an empty `recipients`
+        means nobody could be reached right now, which is a real outcome and
+        not a failure. One ask per task per member per 24 hours.
+      tags: [Tasks]
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403':
+          description: Another member explicitly holds this task; only they can release it
+        '409':
+          description: This occurrence has already been asked about, or it changed under you
+        '429':
+          description: Already asked about this task inside the 24-hour window (`nextAllowedAt` when known)
   /tasks/vacation:
     get:
       summary: List active and upcoming vacation coverage windows
@@ -1843,6 +2763,26 @@ components:
         active: { type: boolean }
         createdAt: { type: string, format: date-time, nullable: true }
         lastUsedAt: { type: string, format: date-time, nullable: true }
+    CoverageMember:
+      type: object
+      required: [userId, name]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+    CoveragePlant:
+      type: object
+      required: [plantId, plantName, caregivers, caregiverCount, soleCaregiver]
+      properties:
+        plantId: { type: string }
+        plantName: { type: string }
+        caregivers:
+          description: Current members who have ever logged care on this plant — a set, never a tally.
+          type: array
+          items: { $ref: '#/components/schemas/CoverageMember' }
+        caregiverCount: { type: integer }
+        soleCaregiver:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/CoverageMember' }]
     BillingUsage:
       type: object
       additionalProperties: false
@@ -1852,22 +2792,23 @@ components:
       required: [plantCount, maxPlants, memberCount, maxMembers]
       properties:
         plantCount: { type: integer, minimum: 0 }
-        maxPlants: { type: integer, minimum: 0 }
+        maxPlants: { type: integer, minimum: 0, nullable: true }
         memberCount: { type: integer, minimum: 0 }
-        maxMembers: { type: integer, minimum: 0 }
+        maxMembers: { type: integer, minimum: 0, nullable: true }
 
     BillingUsageDetail:
       type: object
       additionalProperties: false
       description: >-
-        Best-known usage. A null counter means its value is unavailable; it never means zero. Plan
-        caps remain known and non-null.
+        Best-known usage. A null COUNTER means its value is unavailable; it never means zero. A
+        null CAP means the plan has no ceiling on that dimension (unlimited members on Garden and
+        Greenhouse). The two nulls are different answers and must not be conflated.
       required: [plantCount, maxPlants, memberCount, maxMembers]
       properties:
         plantCount: { type: integer, minimum: 0, nullable: true }
-        maxPlants: { type: integer, minimum: 0 }
+        maxPlants: { type: integer, minimum: 0, nullable: true }
         memberCount: { type: integer, minimum: 0, nullable: true }
-        maxMembers: { type: integer, minimum: 0 }
+        maxMembers: { type: integer, minimum: 0, nullable: true }
 
     BillingSubscriptionState:
       type: object
@@ -1888,6 +2829,170 @@ components:
             Compatibility field for numeric-only clients; omitted whenever either counter is unknown.
         usageDetail:
           $ref: '#/components/schemas/BillingUsageDetail'
+        lifetimePlanId: { type: string, enum: [garden, greenhouse] }
+        cancelAtPeriodEnd: { type: boolean }
+        trialAvailable:
+          type: boolean
+          description: >-
+            Whether a new subscription checkout for this household would include the 14-day free
+            trial. The trial is once per household, not once per checkout, so this is false for a
+            household that has had one before and resubscribes. Derived from an internal timestamp
+            that is never published. Absent from older backends, where it means UNKNOWN — a client
+            must not read a missing field as false.
+        identifyCredits:
+          description: >-
+            Identification top-up credits (ADR 0019). `null` means the balance could not be read and is
+            unknown — never zero. A genuine zero is `{ remaining: 0, expiresAt: null }`.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/IdentifyCreditBalance'
+
+    IdentifyCreditBalance:
+      type: object
+      additionalProperties: false
+      required: [remaining, expiresAt]
+      properties:
+        remaining:
+          type: integer
+          minimum: 0
+          description: Credits left across every unexpired pack.
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the soonest-expiring pack with credits runs out; null when none remain.
+
+    PlanLimits:
+      type: object
+      additionalProperties: false
+      description: >-
+        Per-tier structural caps. A number is the ceiling; `null` is UNLIMITED — a deliberate,
+        typed value, never a missing one, and never `Infinity` (which JSON cannot carry). Caps
+        limit new growth only: a household already above one keeps everything it has and is
+        refused only the next add.
+      required:
+        [homes, members, plants, tags, analyticsHistoryDays, sitterLinkMaxDays, sitterLinksActive]
+      properties:
+        homes: { type: integer, minimum: 0, nullable: true }
+        members: { type: integer, minimum: 0, nullable: true }
+        plants: { type: integer, minimum: 0, nullable: true }
+        tags: { type: integer, minimum: 0, nullable: true }
+        analyticsHistoryDays: { type: integer, minimum: 1, nullable: true }
+        sitterLinkMaxDays: { type: integer, minimum: 1, nullable: true }
+        sitterLinksActive: { type: integer, minimum: 0, nullable: true }
+
+    PlanFeatures:
+      type: object
+      additionalProperties: false
+      description: Per-tier capability flags. True means the tier includes the capability.
+      required:
+        [
+          awayKit,
+          householdToolkit,
+          plantTags,
+          crossHomeToday,
+          kiosk,
+          caretakerSeats,
+          moveDay,
+          chat,
+          apiKeys,
+        ]
+      properties:
+        awayKit: { type: boolean }
+        householdToolkit: { type: boolean }
+        plantTags: { type: boolean }
+        crossHomeToday: { type: boolean }
+        kiosk: { type: boolean }
+        caretakerSeats: { type: boolean }
+        moveDay: { type: boolean }
+        chat: { type: boolean }
+        apiKeys: { type: boolean }
+
+    DailyAnalytics:
+      type: object
+      additionalProperties: false
+      required: [days, series, doubleCare]
+      properties:
+        days:
+          type: integer
+          minimum: 1
+          description: The window actually served, after clamping to the plan's ceiling.
+        series:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, count]
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer, minimum: 0 }
+        historyLimitDays:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: >-
+            The plan's analytics window; `null` means no ceiling, never "unknown". ABSENT when the
+            plan itself could not be read — the one genuinely unknown state, and the reason this
+            field is not required.
+        doubleCare:
+          type: object
+          description: >-
+            Confirmed double-care completions this UTC calendar month. Three explicit states, so a
+            failed read is never rendered as "0 duplicates".
+          required: [status]
+          properties:
+            status: { type: string, enum: [ok, unavailable, not_in_plan] }
+            month: { type: string }
+            confirmedDuplicates: { type: integer, minimum: 0 }
+
+    YearInReview:
+      type: object
+      additionalProperties: false
+      required: [year, totalCompletions, byMember, byTaskType, topPlants, historyLimitDays]
+      properties:
+        year: { type: integer }
+        totalCompletions: { type: integer, minimum: 0 }
+        byMember:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [userId, name, count]
+            properties:
+              userId: { type: string }
+              name: { type: string }
+              count: { type: integer, minimum: 0 }
+        byTaskType:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [type, count]
+            properties:
+              type: { type: string }
+              count: { type: integer, minimum: 0 }
+        topPlants:
+          type: array
+          description: Every plant with at least one completion in the window — not a capped top-N.
+          items:
+            type: object
+            additionalProperties: false
+            required: [plantId, count]
+            properties:
+              plantId: { type: string, format: uuid }
+              count: { type: integer, minimum: 0 }
+        historyLimitDays:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: The plan's analytics window; `null` means the whole year was aggregated.
+        windowStart:
+          type: string
+          format: date-time
+          description: Present only when a window applied — the start of the range aggregated.
+        windowEnd:
+          type: string
+          format: date-time
+          description: Present only when a window applied — the end of the range aggregated.
 
     FrontendTelemetryEvent:
       oneOf:
@@ -2250,6 +3355,28 @@ components:
           maxLength: 120
           nullable: true
 
+    SpaceRotation:
+      type: object
+      required: [memberIds, cadence]
+      description: |
+        Care rotation for a space (ADR 0018). Time-indexed from `anchor`, so
+        "whose turn" is derived from the clock rather than a stored counter and
+        a skipped cycle cannot desynchronise it. At least two members.
+      properties:
+        memberIds:
+          type: array
+          minItems: 2
+          maxItems: 20
+          items: { type: string, format: uuid }
+          description: Members in turn order; must all be current household members.
+        cadence:
+          type: string
+          enum: [weekly, monthly]
+        anchor:
+          type: string
+          format: date-time
+          description: Instant period 0 starts at. Server-stamped when omitted; preserved when only the member list changes.
+
     PlantSpace:
       type: object
       required: [id, householdId, name, environment, rainExposure, createdAt, createdBy, updatedAt]
@@ -2283,6 +3410,19 @@ components:
           format: uuid
           nullable: true
           description: Current household member inherited by new tasks for plants in this space.
+        rotation:
+          allOf: [{ $ref: '#/components/schemas/SpaceRotation' }]
+          nullable: true
+          description: Care rotation; takes precedence over defaultCaregiverId. Null means none.
+        rotationTurn:
+          type: object
+          description: |
+            Derived, read-only. Present only on spaces that HAVE a rotation.
+            `turnUserId: null` means every member of the rotation is currently
+            away — a real answer, not a missing one.
+          properties:
+            turnUserId: { type: string, format: uuid, nullable: true }
+            turnName: { type: string, nullable: true }
         createdAt:
           type: string
           format: date-time
@@ -2314,6 +3454,8 @@ components:
         defaultCaregiverId:
           type: string
           format: uuid
+        rotation:
+          $ref: '#/components/schemas/SpaceRotation'
 
     UpdateSpaceRequest:
       type: object
@@ -2338,6 +3480,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        rotation:
+          allOf: [{ $ref: '#/components/schemas/SpaceRotation' }]
+          nullable: true
+          description: Null clears the rotation.
 
     Task:
       type: object
@@ -2375,12 +3521,27 @@ components:
           nullable: true
         assignmentSource:
           type: string
-          enum: [space_default]
+          enum: [space_default, rotation]
           nullable: true
-          description: Space-inherited assignments remain claimable by another household member; null means explicit or unassigned.
+          description: Inherited assignments — a space default or a care-rotation turn — remain claimable by another household member and are re-resolved each occurrence; null means explicit (chosen or claimed) or unassigned.
         notes:
           type: string
           nullable: true
+        escalatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When auto-handoff last put this task up for grabs (ADR 0018); absent on never-escalated tasks.
+        escalatedForDue:
+          type: string
+          format: date-time
+          nullable: true
+          description: The `nextDue` the escalation fired for. Equal to `nextDue` while the escalated occurrence is still open; a completion advances `nextDue` and re-arms the rule.
+        escalatedFrom:
+          type: string
+          format: uuid
+          nullable: true
+          description: The member the task was taken from, or null if it was unassigned.
 
     TaskCompletion:
       type: object
@@ -2438,6 +3599,10 @@ components:
           format: uuid
         name:
           type: string
+        escalateAfterDays:
+          type: integer
+          nullable: true
+          description: Auto-handoff rule (days overdue before a task goes up for grabs); null or absent means off.
         createdAt:
           type: string
           format: date-time
@@ -2496,3 +3661,83 @@ components:
           type: string
         details:
           type: object
+
+    # Plant Tags (ADR 0016)
+    PlantTagCare:
+      type: object
+      nullable: true
+      description: One completion as the scan page shows it — first name only for members; the typed display name for tag completions.
+      properties:
+        taskType: { type: string }
+        completedAt: { type: string, format: date-time }
+        completedByName: { type: string }
+        viaTag: { type: boolean }
+    PlantTag:
+      type: object
+      description: A household-side view of one active tag. Includes the token because the household needs it to print the QR label (see ADR 0016).
+      properties:
+        id: { type: string }
+        householdId: { type: string }
+        plantId: { type: string }
+        plantName: { type: string }
+        plantSpecies: { type: string, nullable: true }
+        plantStatus: { type: string, enum: [active, died, gave_away, archived] }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        status: { type: string, enum: [active, revoked] }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        token: { type: string, description: 64 lowercase hex chars (256 bits) }
+        url: { type: string, description: The scan URL the QR code encodes }
+    MoveDayResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [locked, not_applicable, unavailable, quiet, ready]
+          description: >-
+            `locked` — plan does not include Move Day. `not_applicable` — no outdoor space or
+            no plant with a seasonal home. `unavailable` — no saved location or no live cached
+            snapshot (nothing is inferred). `quiet` — snapshot read, no line crossed / season
+            already handled / nothing out of place. `ready` — a list exists (see `list`).
+        list:
+          type: object
+          description: Present only when `status` is `ready`.
+          required: [season, firedAt, signal, items, tenderWithoutWinterHome]
+          properties:
+            season: { type: string, enum: [winter, summer] }
+            firedAt: { type: string, format: date-time }
+            signal:
+              type: object
+              description: The measured numbers that fired the list and the lines they crossed.
+              properties:
+                tempC: { type: number }
+                lowC: { type: number }
+                frostLineC: { type: number }
+                heatLineC: { type: number }
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  plantId: { type: string, format: uuid }
+                  plantName: { type: string }
+                  fromSpaceId: { type: string, format: uuid, nullable: true }
+                  fromSpaceName: { type: string, nullable: true }
+                  toSpaceId: { type: string, format: uuid }
+                  toSpaceName: { type: string }
+                  assigneeId: { type: string, format: uuid, nullable: true }
+                  assigneeName: { type: string, nullable: true }
+                  taskId: { type: string, format: uuid, nullable: true }
+            tenderWithoutWinterHome:
+              type: array
+              description: >-
+                Winter only. Outdoor plants with no winter space whose already-cached species
+                record is frost-tender (USDA zone 10+). Presence-only — plants without a cached
+                species record are absent, not cleared.
+              items:
+                type: object
+                properties:
+                  plantId: { type: string, format: uuid }
+                  plantName: { type: string }
+                  hardinessZone: { type: string }

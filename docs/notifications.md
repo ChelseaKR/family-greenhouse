@@ -26,6 +26,7 @@ For each member of the household:
   5. notifier.sendToUser(recipient, payload, {channels})
         │
         ├─▶ if prefs.browser → web-push to all stored PushSubscriptions
+        │                    → FCM to all stored DeviceTokens (unconfigured)
         ├─▶ if prefs.email   → SES SendEmailCommand
         └─▶ if prefs.sms && prefs.phone → SNS Publish
 ```
@@ -95,6 +96,37 @@ catch-up care, 0 coming up soon`; empty buckets are simply omitted.
   `'en'` from a single constant (`REMINDER_LOCALE_ADOPTION`) that becomes a
   read of that field when it lands.
 
+### The far edge of the due window
+
+`DUE_WINDOW_MS` gives the reminder a near edge — ask before it's late, nag
+after. It had no far edge: `taskService.getTasksDueBy` queries `GSI1SK <=
+cutoff` with no lower bound, so every overdue task stayed in the window at any
+age. The result inverted the product's own anti-nag reasoning. A household
+keeping up hears from us only when something is genuinely due; a household that
+has fallen behind was reminded **every morning, indefinitely**, about a list
+that only grew, each row carrying a `daysOverdue` with no ceiling.
+
+`REMINDER_OVERDUE_DECAY_DAYS` (14) is the far edge. A task that many whole days
+overdue drops out of the daily reminder and is carried by the weekly digest
+instead — `digestReport.gatherAtRisk` has no age ceiling and is deliberately not
+given one. Three consequences:
+
+- Nothing is hidden. The reminder states the count it is not listing
+  (`restingCount` on `ReminderEmailInput`), the digest still ranks every one of
+  them, and the app shows them all. What ends is the daily re-reading.
+- A household whose entire backlog has aged past the edge gets **no reminder at
+  all**, and the member/vacation reads are not paid for either. That silence is
+  the fix, not a regression.
+- The count stays out of the subject and out of `shortBody`. A subject line
+  that grows without bound as a household falls behind is the loop the constant
+  exists to cut, and a 140-byte SMS has no room to caveat a number.
+
+Two things it deliberately does not touch: a task whose `nextDue` did not parse
+(we don't know how overdue it is, so we can't decide it is old — and that row
+is the one most in need of a human), and the auto-handoff pass, which is still
+handed the unfiltered due list so a display rule cannot change who a task hands
+off to.
+
 ### Weather
 
 The reminder reads the household's cached forecast and adds a rain or frost
@@ -158,17 +190,37 @@ PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
 userId, browser, email, sms, phone, phoneVerified,
-dndStart, dndEnd, timezone, pestAlerts, weeklyDigest,
-memberJoined, taskUpForGrabs, coverageUpdates, careCredit, updatedAt
+dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, yearRecap,
+emailLocale, memberJoined, taskUpForGrabs, coverageUpdates, careCredit,
+updatedAt
 ```
 
-The last four are the household-email switches. Like `weeklyDigest`, they are
-optional in the PUT body and default-on at read time _only when `email` is on_,
-so a row written before they existed is not silently opted into new mail it
-never accepted, and an older client that omits them keeps the stored value
-instead of resetting it.
+`memberJoined`, `taskUpForGrabs`, `coverageUpdates` and `careCredit` are the
+household-email switches; `yearRecap` gates the annual recap, which used to
+have no control at all — it was gated on `email` alone, so a user who unticked
+the weekly digest, the only summary opt-out the UI offered, still received the
+January summary. Like `weeklyDigest`, all of them are optional in the PUT body
+and default-on at read time _only when `email` is on_, so a row written before
+they existed is not silently opted into new mail it never accepted, and an
+older client that omits them keeps the stored value instead of resetting it.
+
+`emailLocale` is the exception to that pattern: it defaults to `''`, not to a
+language, because "never chosen" has to stay distinguishable from a choice.
 
 One row per user. Read on every reminder fan-out; written when the user saves the settings page.
+
+### Email capability secret
+
+```
+PK: USER#{userId}
+SK: EMAILCAP
+entityType: EmailCapabilitySecret
+secret
+```
+
+A random 256-bit value used to sign unsubscribe capability URLs. On its own row
+so a capability write can never touch delivery preferences. Rotating it revokes
+every outstanding link for that user.
 
 ### Push subscriptions
 
@@ -184,6 +236,31 @@ userId, householdId, endpoint, keys: { p256dh, auth }, createdAt
 Endpoint hash is the first 64 bits of SHA-256. The point is to dedupe per
 device without putting a long provider URL in the sort key. When the browser
 drops a subscription (404/410 from web-push), the notifier deletes the row.
+
+### Device tokens (native shells)
+
+The same shape for APNs/FCM registration tokens, written by the iOS/Android
+shells through `POST /notifications/devices`:
+
+```
+PK: USER#{userId}
+SK: DEVICE#{tokenHash}
+entityType: DeviceToken
+userId, householdId, platform: ios|android, token, createdAt
+```
+
+`notifier.sendDevicePush` reads these, sends through `services/fcmNotifier.ts`,
+and deletes any row FCM answers `UNREGISTERED` for — the native half of the
+404/410 rule above, and the mechanism that clears rows left behind when a
+device rotates its token. It is capped at the 20 newest devices per user for
+the fan-out, after following every DynamoDB page; a user over that cap logs
+`device_tokens_capped`.
+
+Nothing about this channel is live: `FCM_SERVICE_ACCOUNT_SECRET_ID` is blank
+everywhere, so the sender logs `device_push_unconfigured` once per Lambda
+container and returns without a network call. The app's push toggle is
+unreachable too. See docs/mobile.md § Push notifications for what is still
+outstanding.
 
 ### Reminder channel markers
 
@@ -240,6 +317,37 @@ headers so browsers see handler fixes promptly.
 
 Without these env vars, `notifier.sendBrowserPush` logs a `push_dry_run` line and returns — the rest of the fan-out is unaffected.
 
+### Native push (APNs/FCM)
+
+The `browser` preference covers both push transports. Web push reaches
+browsers; the native shells have no Push API, so they register an APNs/FCM
+device token instead and `notifier.sendDevicePush` delivers to it through the
+FCM HTTP v1 API. Both legs run concurrently under the one `browser` channel
+and one reminder marker, and either arriving counts as the delivery.
+
+Set `FCM_SERVICE_ACCOUNT_SECRET_ID` (Terraform:
+`fcm_service_account_secret_id`) to the Secrets Manager name or ARN of a
+Firebase service-account JSON. `services/fcmNotifier.ts` reads it once per
+Lambda container, signs an RS256 JWT with the key, exchanges it for a
+`firebase.messaging` access token, and reuses that token for the whole
+fan-out. There is no `firebase-admin` dependency: everything needed is one
+`node:crypto` signature and two `fetch` calls, and the Lambda bundles ship to
+every notification handler.
+
+Failure states are deliberately distinct:
+
+| State                                       | Log                                        | Effect                                      |
+| ------------------------------------------- | ------------------------------------------ | ------------------------------------------- |
+| Secret id blank (every environment today)   | `device_push_unconfigured`, once/container | No network call. Channel behaves as before. |
+| Secret set but unreadable or not valid JSON | `device_push_credentials_unavailable`      | Warn, back off 15 min, prune nothing.       |
+| FCM answers 404 / `UNREGISTERED`            | —                                          | The token row is deleted.                   |
+| Anything else (5xx, 429, timeout, 400)      | `device_push_failed`                       | Token kept, retried next run.               |
+
+The last two rows are the important pair. `INVALID_ARGUMENT` is a 400 and is
+NOT treated as a dead token: FCM returns it for a message body it cannot parse
+as well as for a token it cannot parse, so pruning on it would delete every
+registration in the installed base the first time a payload bug shipped.
+
 ### Email (SES)
 
 Set `SES_FROM_EMAIL` to a verified SES identity. The Lambda role needs `ses:SendEmail` on that identity (or the wildcard for all).
@@ -250,11 +358,11 @@ The reminder body is a multi-line list; see "What the reminder actually says"
 above for the layout and the rules it holds. The digest, recap and welcome
 emails compose their own bodies.
 
-We send plain-text only. No HTML. Reasons:
-
-- Templating overhead is not worth it for a household app
-- Plain-text avoids a class of phishing-look-alike risk
-- Email clients render it fine
+Replies to an app email reach `support@` via `SES_REPLY_TO` (Terraform:
+`ses_reply_to_email`), which the inbound SES rule set forwards to a human —
+see [ADR 0022](adr/0022-email-deliverability-and-bounce-handling.md). Under
+`SendRawEmailCommand` that value becomes a `Reply-To:` MIME header rather than
+a command parameter, because raw sends have no `ReplyToAddresses`.
 
 Without `SES_FROM_EMAIL`, the notifier logs an `email_dry_run` line and returns.
 
@@ -318,6 +426,191 @@ They read `notificationPrefs` for the `timezone` field only, and they carry no
 unsubscribe link — instead a footer states that they are billing messages and
 why there is no unsubscribe. The welcome email is the third member of this
 group: it also ignores preferences, by design.
+
+#### Multipart HTML + text (ADR 0021)
+
+Every email may carry both an HTML and a plain-text part. The send path is
+`SendRawEmailCommand`, not `SendEmailCommand`: the simple API has no header
+surface at all, so `List-Unsubscribe` was unreachable and every body was
+text-only. ADR 0021 records why raw MIME over SESv2, and answers the
+phishing rationale the old text-only policy rested on point by point.
+
+The rendering kit lives in `backend/src/services/email/`:
+
+| File                 | What it owns                                                                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `template.ts`        | `renderEmail(doc)` → `{ html, text }`. Blocks: heading, text, notice, row, button, divider. Tables + inline styles, 600px cap, dark-mode palette, preheader. Escapes every interpolated value. |
+| `links.ts`           | The only place an email builds a URL. `plantUrl`, `taskUrl`, `tasksUrl`, `settingsUrl`, `unsubscribeUrl`, plus `safeLinkUrl` and `isOwnAssetUrl`.                                              |
+| `catalog.ts`         | English + Spanish strings, `t()` / `tn()`, `formatCount`, `formatDaysAgo`.                                                                                                                     |
+| `locale.ts`          | `resolveEmailLocaleForUser(userId, householdId?)` — **the accessor every composer should call.**                                                                                               |
+| `capability.ts`      | Revocable per-user tokens for one-click unsubscribe.                                                                                                                                           |
+| `mime.ts`            | `multipart/alternative` assembly and RFC 2047 subject encoding.                                                                                                                                |
+| `unsubscribePage.ts` | The (deliberately unstyled) landing page.                                                                                                                                                      |
+
+The plain-text part is generated from the same block list by its own layout
+rules, so it reads as a real document rather than stripped HTML.
+
+Adopted so far: the welcome email, the weekly digest, the annual recap. The
+reminder and pest-alert payloads still go out text-only through
+`notifier.sendToUser`'s generic `{title, body, url}` shape; converting them
+means giving the notifier a structured payload.
+
+#### Email language
+
+`emailLocale` on the preferences row: `'en'`, `'es'`, or `''` for **never
+chosen**. The empty sentinel is the fix for the timezone trap documented below
+— `timezone` cannot distinguish "never set" from "chose UTC", so quiet hours
+can silently apply in the wrong zone. `emailLocale` can, and the settings page
+back-fills the detected language on load rather than waiting for a Save.
+
+Resolution order, via `resolveEmailLocaleForUser`:
+
+1. the recipient's own `emailLocale`
+2. the household's — the most common language its members chose, ties broken by
+   earliest joiner
+3. `en`
+
+Every resolution returns a `source` (`user` / `household` / `default` /
+`unavailable`) and callers log it, so a fallback to English is countable rather
+than silent.
+
+The catalog is backend-local because a Lambda cannot reach the frontend
+workspace. **Every i18n CI gate scans `frontend/` only, so none of them sees
+it.** Its guard is `backend/tests/unit/services/email/catalog.test.ts`, which
+enforces key parity, placeholder parity and the CLDR plural categories each
+locale requires, and runs inside `npm run verify`.
+
+#### What the weekly digest says
+
+`services/digestReport.ts` gathers it; `services/digest.ts` delivers it. Every
+data source returns a discriminated result, so a failed read renders as a
+sentence saying we could not look — never as an empty list or a zero.
+
+| Section                                             | Source                                                            | Failure renders as                                     |
+| --------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| At-risk plants (unclaimed first, then most overdue) | `getTasksDueBy` + `getPlants('all')`                              | "We could not check which plants need care this week…" |
+| Who last did it, and when                           | `getTaskCompletions(plantId, 1)` per listed row                   | "Care history could not be loaded for this plant."     |
+| Weather tip                                         | `climate.peekCachedWeather` — cache only                          | "We could not read your local forecast this week."     |
+| 7-vs-7-day trend                                    | `getDailyCompletionCounts(30)`                                    | "We could not load your household's 30-day trend."     |
+| Pet safety                                          | curated `models/petToxicity.ts` × `PlantSpace.petAccess === true` | "We could not check which spaces your pets can reach." |
+| One schedule-drift reading (Garden and up)          | `doubleCare.getScheduleDriftForPlant` per listed row              | nothing — see below                                    |
+
+Reading plants with the `'all'` filter costs the same single query and lets the
+gather step tell a task on a plant that legitimately died from a task whose
+plant row is missing entirely; the latter is counted and logged as
+`digest.orphan_overdue_tasks`.
+
+**The drift line is the one section that says nothing when it fails**, and
+that is a deliberate exception to the rule above rather than an oversight.
+Every other section makes a positive claim when it is quiet ("nothing is
+overdue", "no pet risk"), so its silence has to be explained; this one either
+names a schedule worth changing or says nothing at all, which is the rule
+`ScheduleDriftHint` already states on the plant page. And its `unavailable`
+state fires on a failed BILLING read, when the tier is unknown — a "we could
+not check your schedules" line would then advertise a paid feature to free-tier
+households on the strength of a read that did not land. All four states
+(`ok` with a finding, `ok` with none, `not_in_plan`, `unavailable`) stay
+discriminated in the payload and in the logs.
+
+It scans only the plants the digest is already listing, which sees the
+UNDER-care direction only: a task done less often than scheduled runs
+chronically overdue and is therefore in that list, while a task done MORE often
+than scheduled pushes its own `nextDue` forward and never appears. Covering the
+over-care direction needs a household-wide completion scan and is not built.
+
+**The weather is cache-only on purpose.** `climate.getWeatherCached` calls
+OpenWeatherMap on a miss, spends from the shared daily budget, and throws
+without `OPENWEATHER_API_KEY` — which the digests Lambda deliberately does not
+have. `peekCachedWeather` reads the cached row and nothing else, so the digest
+uses a fresh snapshot when the household's own app use put one there and says
+nothing about the weather otherwise.
+
+**When no digest is sent.** A quiet week — nothing overdue, nothing failed —
+is skipped and logged as `digest.skipped_nothing_to_say` rather than mailing a
+cheerful nothing. A week whose at-risk read FAILED still sends, carrying the
+line above, because silence would otherwise read as an all-clear. Members with
+an active vacation window receive nothing; their plants are named on the
+covering member's copy.
+
+#### Is this household drifting away?
+
+`services/householdLapse.ts` answers that and **nothing else**: no email, no
+row, no change to who receives a digest. It is called once per household per
+weekly digest run, immediately after gate 1, and its answer is one structured
+log line, `retention.household_engagement`.
+
+The reason it is a module rather than a boolean is the repo's named defect class
+(ADR 0010) at its sharpest: a failed completions query is indistinguishable
+from a household that has completed nothing, so the careless version marks
+every household lapsing the day DynamoDB throttles. Five states, not two:
+
+| State          | Means                                                 | Never confused with          |
+| -------------- | ----------------------------------------------------- | ---------------------------- |
+| `active`       | somebody completed a task inside `LAPSE_SILENCE_DAYS` | —                            |
+| `lapsing`      | 21+ days of silence **and** work waiting              | any of the three below       |
+| `idle`         | silence, but the household owes its plants nothing    | `lapsing`                    |
+| `never_active` | nobody has ever completed a task here                 | `lapsing` — new ≠ drifted    |
+| `unavailable`  | a read failed, with the reason attached               | `never_active` and `lapsing` |
+
+Four separately-named unavailable reasons, because each is a different
+question we could not answer: `completions_read_failed` (the query threw),
+`completion_scan_incomplete` (the page budget ran out before the partition
+did — "we didn't look everywhere" is not "there is nothing there"),
+`completion_timestamp_unreadable` (a completion we can see and cannot date —
+not "0 days ago", which reads as engaged), and `overdue_unreadable` (the
+at-risk half of the definition was not available).
+
+Cost: one page-capped GSI1 query on `HOUSEHOLD#{id}#ACTIVITY`, plus one
+GetItem for the household's creation date **only** on the `never_active`
+branch. The at-risk count is handed in from the digest's existing read rather
+than re-queried, and the call sits after gate 1 so a household with nothing
+overdue is still rejected for two reads. The trade-off is that `idle` is a
+state the classifier can express and this call site will almost never produce.
+
+Deciding what — if anything — to send a lapsing household is a product
+decision and is not made here.
+
+#### One-click unsubscribe (RFC 8058)
+
+Non-transactional email carries:
+
+```
+List-Unsubscribe: <https://api.../notifications/email/unsubscribe?t=TOKEN>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+```
+
+- `GET /notifications/email/unsubscribe?t=…` renders a confirm form and
+  **changes nothing** — link scanners fetch every URL in a message.
+- `POST` performs it, and is what a provider's automated one-click hits.
+
+Both are unauthenticated and both make an authorization decision, so both are
+throttled per source IP, keyed per method so one cannot starve the other:
+
+| Route  | Limit  | Why                                                                                                                                                                                                                                                          |
+| ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`  | 30/min | Mutates nothing, and the traffic that hits it is machines — Safe Links, scanning proxies, prefetchers — arriving from a shared corporate egress IP. A tight limit would spend one organisation's budget on its scanner and 429 the employee who then clicks. |
+| `POST` | 10/min | The one that writes. Nothing legitimate calls it more than once or twice.                                                                                                                                                                                    |
+
+Neither is load-bearing against forgery (the token is an HMAC-SHA256 over a
+per-user 256-bit secret), and both sit behind API Gateway's stage throttle of
+50 rps / 100 burst. The dev mirror in `local-server.ts` carries the same two
+limits, via `express-rate-limit` with a separate store per route, so local
+behaviour matches production. That is a **devDependency** alongside `express`
+itself: the dev server is not in the Lambda bundle
+(`backend/esbuild.config.js` takes only `handlers/**/handler.ts`), so it adds
+no production bytes.
+
+The token is an HMAC over `userId`, category and expiry, signed with a random
+per-user secret on `USER#{id} / EMAILCAP` (its own row: an upsert onto `PREFS`
+would create a record reading `email: false` and silently unsubscribe the user
+from everything). It can turn one category off for one user and nothing else.
+Revoke by rotating the secret.
+
+Categories: `weekly_digest`, `year_recap`, `pest_alerts`. Transactional mail is
+not unsubscribable and carries no header.
+
+Requires `PUBLIC_API_URL` in the Lambda environment. Unset in production, the
+header and footer link are omitted rather than pointing somewhere that 404s.
 
 ### SMS (SNS)
 

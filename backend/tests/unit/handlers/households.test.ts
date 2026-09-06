@@ -18,6 +18,7 @@ vi.mock('../../../src/services/sitterService.js');
 vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
 }));
+vi.mock('../../../src/services/escalation.js');
 
 function buildEvent(
   claims: Record<string, unknown> | null,
@@ -83,11 +84,17 @@ describe('households handler', () => {
     setCachedMembership('user-1', 'hh-1', 'admin');
   });
 
-  it('createHousehold allows a user with an existing household to create another (multi-household)', async () => {
+  it('createHousehold allows a user with an existing household to create another when a plan they hold includes more homes', async () => {
     const householdService = await import('../../../src/services/householdService.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const billing = await import('../../../src/services/billing.js');
     const { createHousehold } = await import('../../../src/handlers/households/handler.js');
     vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+    // One existing home, on Greenhouse → unlimited homes (ADR 0014).
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+      { householdId: 'hh-1', role: 'admin', name: 'Home', joinedAt: '2026-01-01T00:00:00.000Z' },
+    ]);
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'greenhouse' });
     vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
       id: 'hh-second',
       name: 'Vacation',
@@ -104,6 +111,372 @@ describe('households handler', () => {
     // First-household-wins for the JWT default: a user who already has a
     // household keeps their original Cognito claim untouched.
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+  });
+
+  describe('homes gate (ADR 0014: the one per-user cap)', () => {
+    const membership = (householdId: string) => ({
+      householdId,
+      role: 'member' as const,
+      name: 'Home',
+      joinedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    it('createHousehold refuses a second home with 402 when the strongest plan held is Garden', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+      // Default billing mock = garden → 1 home.
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([membership('hh-1')]);
+      const event = buildEvent(adminClaims, {
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Vacation' }),
+        headers: { 'content-type': 'application/json' },
+      });
+      const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(JSON.parse(res.body).message).toBe(
+        'Your Garden plan includes 1 home and you already belong to 1 household. Upgrade to Greenhouse for unlimited homes.'
+      );
+      expect(householdService.createHousehold).not.toHaveBeenCalled();
+    });
+
+    it('grandfathers a user already in three homes: every home still reads, only the fourth is refused', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { createHousehold, getHousehold } =
+        await import('../../../src/handlers/households/handler.js');
+      const three = [membership('hh-1'), membership('hh-2'), membership('hh-3')];
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValue(three);
+      // All three on the free tier: over the cap of 1 from before the re-cut.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' });
+
+      // Reading an existing home is untouched by the gate.
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-1',
+        name: 'Home',
+        createdAt: '',
+        createdBy: 'user-1',
+      });
+      vi.mocked(householdService.getHouseholdMembersPublic).mockResolvedValueOnce([]);
+      const read = (await getHousehold(
+        buildEvent(adminClaims, { httpMethod: 'GET', pathParameters: { id: 'hh-1' } }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(read.statusCode).toBe(200);
+
+      // The fourth is refused; nothing is removed to make room.
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Alice');
+      const res = (await createHousehold(
+        buildEvent(adminClaims, {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'Fourth' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(JSON.parse(res.body).message).toMatch(/already belong to 3 households/);
+      expect(householdService.createHousehold).not.toHaveBeenCalled();
+      expect(householdService.removeMember).not.toHaveBeenCalled();
+
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([]);
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+    });
+
+    it('joinHousehold refuses a joiner who already has a home when the target is on Garden', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+        code: 'CODE',
+        householdId: 'hh-target',
+        createdBy: 'user-9',
+        createdAt: '',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-target',
+        name: 'Target',
+        createdAt: '',
+        createdBy: 'user-9',
+      });
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        membership('hh-mine'),
+      ]);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(JSON.parse(res.body).message).toMatch(/includes 1 home/);
+      expect(householdService.addMember).not.toHaveBeenCalled();
+    });
+
+    it('joinHousehold always admits a hand into a Greenhouse household, whatever the joiner already holds', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+        code: 'CODE',
+        householdId: 'hh-gh',
+        createdBy: 'user-9',
+        createdAt: '',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-gh',
+        name: 'Clients',
+        createdAt: '',
+        createdBy: 'user-9',
+      });
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        membership('hh-a'),
+        membership('hh-b'),
+      ]);
+      // The joined household is Greenhouse; the joiner's own two are free.
+      vi.mocked(billing.getHouseholdSubscription).mockImplementation(async (id: string) => ({
+        planId: id === 'hh-gh' ? 'greenhouse' : 'seedling',
+      }));
+      vi.mocked(householdService.addMember).mockResolvedValueOnce({
+        householdId: 'hh-gh',
+        userId: 'user-2',
+        name: 'Bob',
+        email: 'b@b.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      // Unlimited members on Greenhouse: the cap handed to the service is null.
+      expect(householdService.addMember).toHaveBeenCalledWith(
+        'hh-gh',
+        'user-2',
+        'Bob',
+        'b@b.com',
+        null
+      );
+      vi.mocked(billing.getHouseholdSubscription).mockImplementation(async () => ({
+        planId: 'garden',
+      }));
+    });
+  });
+
+  describe('analytics window (ADR 0014: free renders the trailing 30 days, nothing is deleted)', () => {
+    it('clamps the daily series to 30 days on Seedling and says which window applied', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      // `doubleCare` is the neighbouring feature's field on this same
+      // response: not_in_plan on Seedling, which has no household toolkit.
+      expect(JSON.parse(res.body)).toEqual({
+        days: 30,
+        series: [],
+        historyLimitDays: 30,
+        doubleCare: { status: 'not_in_plan' },
+      });
+      expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 30);
+    });
+
+    it('serves the full requested range on Garden with historyLimitDays null (no limit, not unknown)', async () => {
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      // Garden HAS the toolkit, so the roll-up is attempted; the service is
+      // unmocked here and reports its own explicit absence rather than a 0.
+      expect(JSON.parse(res.body)).toEqual({
+        days: 180,
+        series: [],
+        historyLimitDays: null,
+        doubleCare: { status: 'unavailable' },
+      });
+      expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 180);
+    });
+
+    it('clamps the daily series to the FREE window while the card has failed (#476)', async () => {
+      // A plan LIMIT, and a downgrade already narrows it (ADR 0014). The
+      // completion rows are never trimmed — only the window this request may
+      // ask for — so nothing is lost when the card is fixed.
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status: 'past_due',
+      } as never);
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toEqual({
+        days: 30,
+        series: [],
+        historyLimitDays: 30,
+        doubleCare: { status: 'not_in_plan' },
+      });
+      expect(taskService.getDailyCompletionCounts).toHaveBeenCalledWith('hh-1', 30);
+    });
+
+    it('keeps the unlimited window for a lifetime Garden owner after a cancellation (#476)', async () => {
+      // The paired positive control AND the lifetime floor: reading the plan
+      // row here resolved an outright owner to Seedling and silently cut
+      // their history to 30 days.
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'seedling',
+        status: 'canceled',
+        lifetimePlanId: 'garden',
+      } as never);
+      vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
+      const res = (await getDailyAnalytics(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { days: '180' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toMatchObject({ days: 180, historyLimitDays: null });
+    });
+
+    it('windows the year-in-review to the FREE window while the card has failed (#476)', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        status: 'past_due',
+      } as never);
+      vi.mocked(taskService.getCompletionReview).mockResolvedValueOnce({
+        totalCompletions: 2,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+      });
+      const res = (await getYearInReview(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { year: String(new Date().getFullYear()) },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).historyLimitDays).toBe(30);
+      // The windowed path was taken: getYearInReview (the unwindowed read)
+      // was never called.
+      expect(taskService.getYearInReview).not.toHaveBeenCalled();
+    });
+
+    it('windows the year-in-review on Seedling to the trailing 30 days of that year, never trimming rows', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+      vi.mocked(taskService.getCompletionReview).mockResolvedValueOnce({
+        totalCompletions: 2,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+      });
+      const year = new Date().getFullYear();
+      const res = (await getYearInReview(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { year: String(year) },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toMatchObject({ year, totalCompletions: 2, historyLimitDays: 30 });
+      expect(typeof body.windowStart).toBe('string');
+      expect(typeof body.windowEnd).toBe('string');
+      // The window is a read range, not a mutation: the year-shaped query is
+      // simply not used, and nothing else is called.
+      const [, start, end] = vi.mocked(taskService.getCompletionReview).mock.calls[0];
+      expect(new Date(end).getTime() - new Date(start).getTime()).toBeLessThanOrEqual(
+        30 * 24 * 60 * 60 * 1000
+      );
+      expect(taskService.getYearInReview).not.toHaveBeenCalled();
+    });
+
+    it('serves the whole year on Garden', async () => {
+      const taskService = await import('../../../src/services/taskService.js');
+      const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(taskService.getYearInReview).mockResolvedValueOnce({
+        year: 2026,
+        totalCompletions: 9,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+      });
+      const res = (await getYearInReview(
+        buildEvent(adminClaims, {
+          httpMethod: 'GET',
+          pathParameters: { id: 'hh-1' },
+          queryStringParameters: { year: '2026' },
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body)).toEqual({
+        year: 2026,
+        totalCompletions: 9,
+        byMember: [],
+        byTaskType: [],
+        topPlants: [],
+        historyLimitDays: null,
+      });
+      expect(taskService.getCompletionReview).not.toHaveBeenCalled();
+    });
   });
 
   it('createHousehold creates one and promotes user to admin via Cognito', async () => {
@@ -711,6 +1084,14 @@ describe('households handler', () => {
     const res = (await removeMember(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(204);
     expect(accountCleanup.anonymizeUserInHousehold).toHaveBeenCalledWith('hh-1', 'user-2');
+    // #449: the credentials they minted are revoked, and STRICTLY BEFORE the
+    // anonymisation sweep — that sweep rewrites `createdBy` to the deleted-user
+    // id on the very rows revocation has to identify, so the reverse order
+    // would leave them live and unattributable forever.
+    expect(accountCleanup.revokeCredentialsCreatedBy).toHaveBeenCalledWith('hh-1', 'user-2');
+    expect(
+      vi.mocked(accountCleanup.revokeCredentialsCreatedBy).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(accountCleanup.anonymizeUserInHousehold).mock.invocationCallOrder[0]);
     expect(cognitoUsers.clearHouseholdClaims).toHaveBeenCalledWith('user-2');
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
@@ -919,16 +1300,20 @@ describe('households handler', () => {
     // The memberCount increment lost against the plan cap inside the
     // service's TransactWriteCommand (e.g. a concurrent join took the last
     // Garden slot) — distinguishable from duplicate-join by error name.
+    // Seedling: Garden and Greenhouse have no member cap to lose (ADR 0014).
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'seedling' });
     vi.mocked(householdService.addMember).mockRejectedValueOnce(
-      Object.assign(new Error('Member limit of 6 reached'), { name: 'PlanLimitError' })
+      Object.assign(new Error('Member limit of 3 reached'), { name: 'PlanLimitError' })
     );
     const event = buildEvent(
       { sub: 'user-2', email: 'b@b.com' },
       { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
     );
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
     expect(res.statusCode).toBe(402);
-    expect(res.body).toMatch(/Garden plan, limited to 6 members/);
+    expect(res.body).toMatch(/Seedling plan, limited to 3 members/);
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
 
@@ -994,18 +1379,126 @@ describe('households handler', () => {
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     // Cap enforcement moved into the service transaction — the handler hands
-    // the plan's maxMembers down (default billing mock = garden → 6) and no
-    // longer pre-counts member rows.
-    expect(householdService.addMember).toHaveBeenCalledWith('hh-9', 'user-2', 'Bob', 'b@b.com', 6);
+    // the plan's member limit down (default billing mock = garden, whose
+    // member cap is `null`/unlimited per ADR 0014) and no longer pre-counts
+    // member rows.
+    expect(householdService.addMember).toHaveBeenCalledWith(
+      'hh-9',
+      'user-2',
+      'Bob',
+      'b@b.com',
+      null
+    );
     // The roster IS read after the join now, to address the "someone joined
-    // your household" email. What must not come back is the pre-count that the
-    // cap used to depend on, so this asserts ordering rather than absence: any
-    // roster read happens strictly after addMember.
+    // your household" email (#431). What must not come back is the pre-count
+    // the cap used to depend on, so this asserts ordering rather than
+    // absence: any roster read happens strictly after addMember.
     const addMemberOrder = vi.mocked(householdService.addMember).mock.invocationCallOrder[0];
     for (const order of vi.mocked(householdService.getHouseholdMembers).mock.invocationCallOrder) {
       expect(order).toBeGreaterThan(addMemberOrder);
     }
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-9', 'member');
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete'])(
+    'joinHousehold hands down the SEEDLING member cap when the Greenhouse subscription is %s',
+    async (status) => {
+      // Greenhouse members is UNLIMITED (`null`), Seedling's is 3 (ADR
+      // 0014). Before the fix the cap followed planId alone, so an unpaid
+      // Greenhouse household kept an uncapped roster for the whole of
+      // Stripe's dunning cycle.
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        status,
+      });
+      vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+        code: 'CODE',
+        householdId: 'hh-9',
+        createdBy: 'admin',
+        createdAt: '',
+        expiresAt: '2099-01-01',
+      });
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-9',
+        name: 'Home',
+        createdAt: '',
+        createdBy: 'admin',
+      });
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+      vi.mocked(householdService.addMember).mockResolvedValueOnce({
+        householdId: 'hh-9',
+        userId: 'user-2',
+        name: 'Bob',
+        email: 'b@b.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      await joinHousehold(event, fakeContext, () => {});
+      expect(householdService.addMember).toHaveBeenCalledWith(
+        'hh-9',
+        'user-2',
+        'Bob',
+        'b@b.com',
+        3
+      );
+    }
+  );
+
+  it('joinHousehold keeps the full Greenhouse member cap while the subscription is active', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const billing = await import('../../../src/services/billing.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'greenhouse',
+      status: 'active',
+    });
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce({
+      code: 'CODE',
+      householdId: 'hh-9',
+      createdBy: 'admin',
+      createdAt: '',
+      expiresAt: '2099-01-01',
+    });
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      id: 'hh-9',
+      name: 'Home',
+      createdAt: '',
+      createdBy: 'admin',
+    });
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    vi.mocked(householdService.addMember).mockResolvedValueOnce({
+      householdId: 'hh-9',
+      userId: 'user-2',
+      name: 'Bob',
+      email: 'b@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    vi.mocked(cognitoUsers.setHouseholdClaims).mockResolvedValueOnce(undefined);
+    const event = buildEvent(
+      { sub: 'user-2', email: 'b@b.com' },
+      { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+    );
+    await joinHousehold(event, fakeContext, () => {});
+    expect(householdService.addMember).toHaveBeenCalledWith(
+      'hh-9',
+      'user-2',
+      'Bob',
+      'b@b.com',
+      null
+    );
   });
 
   it('joinHousehold repairs Cognito claims on retry after the member write committed', async () => {
@@ -1057,6 +1550,166 @@ describe('households handler', () => {
     expect(JSON.parse(retry.body)).toMatchObject({ id: 'hh-9', name: 'Home' });
     expect(householdService.addMember).toHaveBeenCalledOnce();
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('households handler — PUT /households/{id}/escalation (ADR 0018)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Same membership/rate-limit reset as the main block: this describe is a
+    // sibling, so it must warm the admin caller itself.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
+  });
+
+  function escalationEvent(claims: Record<string, unknown>, body: unknown, id = 'hh-1') {
+    return buildEvent(claims, {
+      httpMethod: 'PUT',
+      pathParameters: { id },
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  it('stores a valid rule for an admin on a toolkit plan', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockResolvedValueOnce(7);
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ escalateAfterDays: 7 });
+    expect(escalation.setEscalationRule).toHaveBeenCalledWith('hh-1', 7);
+  });
+
+  it('clears the rule with null', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockResolvedValueOnce(null);
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: null }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(escalation.setEscalationRule).toHaveBeenCalledWith('hh-1', null);
+  });
+
+  it('enforces the 5-day floor at the edge (400) before touching the service', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 4 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it('is admin-only (403 for a member)', async () => {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const escalation = await import('../../../src/services/escalation.js');
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(memberClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it('is plan-gated: 402 without the household toolkit, and nothing is stored', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+    } as never);
+    const escalation = await import('../../../src/services/escalation.js');
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(402);
+    expect(JSON.parse(res.body).message).toMatch(/household toolkit/);
+    expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it.each(['past_due', 'unpaid', 'paused'])(
+    'is entitlement-gated: 402 while the card has failed (%s), and nothing is stored (#476)',
+    async (status) => {
+      // Turning auto-handoff ON starts a new class of email for the whole
+      // household — a new grant. The stored rule of a household that was
+      // already on is left alone and separately gated at scan time in
+      // services/escalation.ts, so nothing needs cleaning up.
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const escalation = await import('../../../src/services/escalation.js');
+      const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+      const res = (await setEscalationRule(
+        escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      expect(escalation.setEscalationRule).not.toHaveBeenCalled();
+    }
+  );
+
+  it('still stores the rule for a lifetime Garden owner after a later cancellation (#476)', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockResolvedValueOnce(7);
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(escalation.setEscalationRule).toHaveBeenCalledWith('hh-1', 7);
+  });
+
+  it('refuses another household’s id (403)', async () => {
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }, 'hh-other'),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('maps the service range error to 400 (defence in depth)', async () => {
+    const escalation = await import('../../../src/services/escalation.js');
+    vi.mocked(escalation.setEscalationRule).mockRejectedValueOnce(
+      Object.assign(new Error('too low'), { name: 'EscalationRuleRangeError' })
+    );
+    const { setEscalationRule } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setEscalationRule(
+      escalationEvent(adminClaims, { escalateAfterDays: 7 }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -1161,6 +1814,91 @@ describe('sitter links — member access and revocation model', () => {
     expect(res.statusCode).toBe(402);
     expect(JSON.parse(res.body).message).toMatch(/up to 7 days.*Garden allows up to 90 days/);
     expect(sitterService.createSitterLink).not.toHaveBeenCalled();
+  });
+
+  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+    'refuses (402) a Garden-length window while the card has failed (%s) — issuing is a NEW grant (#476)',
+    async (status) => {
+      // The half of the sitter-link decision that follows the card. A
+      // household mid-dunning may not mint a new link or a longer window;
+      // the link it already handed out keeps working to its expiry (see
+      // tests/unit/handlers/sitter.test.ts).
+      await warm('member');
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status,
+      } as never);
+      const sitterService = await import('../../../src/services/sitterService.js');
+      const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+      const res = (await createSitterLink(
+        buildEvent(memberClaims, {
+          httpMethod: 'POST',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(402);
+      // Falls back to Seedling's cap, which is the documented downgrade
+      // behaviour — not a lockout. A 7-day link is still available.
+      expect(JSON.parse(res.body).message).toMatch(/up to 7 days/);
+      expect(sitterService.createSitterLink).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['active', 'trialing', undefined])(
+    'still issues a 30-day link while the subscription is in good standing (%s) (#476)',
+    async (status) => {
+      // The paired positive control: the conversion cannot pass by denying
+      // everyone. `active`, `trialing` and no recorded status all still get
+      // the Garden window.
+      await warm('member');
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        ...(status ? { status } : {}),
+      } as never);
+      const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+      const res = (await createSitterLink(
+        buildEvent(memberClaims, {
+          httpMethod: 'POST',
+          pathParameters: { id: 'hh-1' },
+          body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+        }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+    }
+  );
+
+  it('still issues a 30-day link for a lifetime Garden owner after a later cancellation (#476)', async () => {
+    // The entitlement FLOOR at an issuing gate: `getPlan(sub.planId)` alone
+    // resolved this household to Seedling and would have capped it at 7 days
+    // — destroying part of a one-time purchase with no refund path.
+    await warm('member');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      status: 'canceled',
+      lifetimePlanId: 'garden',
+    } as never);
+    const { createSitterLink } = await import('../../../src/handlers/households/handler.js');
+    const res = (await createSitterLink(
+      buildEvent(memberClaims, {
+        httpMethod: 'POST',
+        pathParameters: { id: 'hh-1' },
+        body: JSON.stringify({ expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString() }),
+      }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(201);
   });
 
   it('refuses (402) a second live link on Seedling; ended and revoked rows do not count', async () => {
@@ -1319,5 +2057,139 @@ describe('sitter links — member access and revocation model', () => {
       () => {}
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('households handler — PUT /households/{id}/timezone (#342, ADR 0025)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
+  });
+
+  function tzEvent(claims: Record<string, unknown>, body: unknown, id = 'hh-1') {
+    return buildEvent(claims, {
+      httpMethod: 'PUT',
+      pathParameters: { id },
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  const storedHousehold = (timezone: string) =>
+    ({
+      id: 'hh-1',
+      name: 'Home',
+      location: null,
+      escalateAfterDays: null,
+      timezone,
+      createdAt: '2026',
+      createdBy: 'user-1',
+    }) as never;
+
+  it('stores a valid zone for an admin', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(
+      storedHousehold('America/New_York')
+    );
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/New_York' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ timezone: 'America/New_York' });
+    expect(householdService.setHouseholdTimeZone).toHaveBeenCalledWith('hh-1', 'America/New_York');
+  });
+
+  it('clears the zone with an empty string', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(storedHousehold(''));
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: '' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ timezone: '' });
+    expect(householdService.setHouseholdTimeZone).toHaveBeenCalledWith('hh-1', '');
+  });
+
+  it('rejects an unresolvable zone at the edge (400) before touching the service', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/Nowhere' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(householdService.setHouseholdTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('is admin-only (403 for a member), and stores nothing', async () => {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(memberClaims, { timezone: 'America/New_York' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(householdService.setHouseholdTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('404s when the household row is gone', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(null);
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'UTC' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("an admin cannot set ANOTHER household's zone (403), and nothing is stored", async () => {
+    // `requireAdmin()` only proves the caller administers their OWN household.
+    // Without the path/claim equality check in the handler, an admin of hh-1
+    // could rewrite hh-2's zone — which, once ADR 0025's migration lands,
+    // would silently reclassify a stranger's whole task list.
+    const householdService = await import('../../../src/services/householdService.js');
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/New_York' }, 'hh-2'),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(householdService.setHouseholdTimeZone).not.toHaveBeenCalled();
+  });
+
+  it('is NOT plan-gated — a zone is correctness, not a paid feature', async () => {
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+    } as never);
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.setHouseholdTimeZone).mockResolvedValueOnce(
+      storedHousehold('America/New_York')
+    );
+    const { setHouseholdTimeZone } = await import('../../../src/handlers/households/handler.js');
+    const res = (await setHouseholdTimeZone(
+      tzEvent(adminClaims, { timezone: 'America/New_York' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
   });
 });

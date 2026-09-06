@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/taskService.js');
+vi.mock('../../../src/services/askFamily.js');
 vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/spaceService.js');
 // Activity records are best-effort side writes; mocked so handlers don't
@@ -253,7 +254,10 @@ describe('tasks handler', () => {
       'hh-1',
       'user-1',
       'Pothos',
-      { defaultAssigneeId: '22222222-2222-4222-8222-222222222222' }
+      {
+        defaultAssigneeId: '22222222-2222-4222-8222-222222222222',
+        defaultAssignmentSource: 'space_default',
+      }
     );
   });
 
@@ -647,6 +651,157 @@ describe('tasks handler', () => {
       )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(200);
       expect(taskService.unclaimTask).toHaveBeenCalledWith('hh-1', 't1', 'user-1');
+    });
+  });
+
+  describe('ask family to do it (ADR 0024)', () => {
+    const askEvent = (body: Record<string, unknown> = {}) =>
+      buildEvent({
+        httpMethod: 'POST',
+        pathParameters: { id: 't1' },
+        body: JSON.stringify(body),
+      });
+
+    const askedTask = {
+      id: 't1',
+      householdId: 'hh-1',
+      plantId: 'p1',
+      plantName: 'Pothos',
+      type: 'water' as const,
+      customType: null,
+      frequency: 7,
+      lastCompleted: null,
+      nextDue: '2026-09-06T08:00:00.000Z',
+      assignedTo: null,
+      assignedToName: null,
+      assignmentSource: null,
+      notes: null,
+      helpAskedBy: 'user-1',
+      helpAskedByName: 'Tester',
+      helpAskedForDue: '2026-09-06T08:00:00.000Z',
+      createdBy: '',
+      createdAt: '',
+    };
+
+    const askResult = {
+      task: askedTask,
+      note: 'travelling until Sunday',
+      askedAt: '2026-09-04T12:00:00.000Z',
+      nextAllowedAt: '2026-09-05T12:00:00.000Z',
+      recipients: [{ userId: 'user-2', name: 'Priya' }],
+      skipped: [],
+      delivered: 1,
+    };
+
+    const refuses = async (error: Record<string, unknown>, status: number) => {
+      const askFamily = await import('../../../src/services/askFamily.js');
+      const { askFamilyForTask } = await import('../../../src/handlers/tasks/handler.js');
+      vi.mocked(askFamily.askFamilyForHelp).mockRejectedValueOnce(
+        Object.assign(new Error('nope'), error)
+      );
+      const res = (await askFamilyForTask(
+        askEvent(),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(status);
+      return res;
+    };
+
+    it('passes the note and the pinned occurrence through and returns the reach', async () => {
+      const askFamily = await import('../../../src/services/askFamily.js');
+      const { askFamilyForTask } = await import('../../../src/handlers/tasks/handler.js');
+      vi.mocked(askFamily.askFamilyForHelp).mockResolvedValueOnce(askResult as never);
+
+      const res = (await askFamilyForTask(
+        askEvent({ note: 'travelling until Sunday', expectedNextDue: '2026-09-06T08:00:00.000Z' }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(askFamily.askFamilyForHelp).toHaveBeenCalledWith({
+        householdId: 'hh-1',
+        taskId: 't1',
+        asker: { userId: 'user-1', email: 'a@b.com' },
+        note: 'travelling until Sunday',
+        expectedNextDue: '2026-09-06T08:00:00.000Z',
+      });
+      const body = JSON.parse(res.body);
+      expect(body.recipients).toEqual([{ userId: 'user-2', name: 'Priya' }]);
+      expect(body.delivered).toBe(1);
+    });
+
+    it('surfaces "nobody could be reached" as a 200 with an empty reach, never a silent success', async () => {
+      const askFamily = await import('../../../src/services/askFamily.js');
+      const { askFamilyForTask } = await import('../../../src/handlers/tasks/handler.js');
+      vi.mocked(askFamily.askFamilyForHelp).mockResolvedValueOnce({
+        ...askResult,
+        recipients: [],
+        skipped: [{ userId: 'user-2', name: 'Priya', reason: 'away' }],
+        delivered: 0,
+      } as never);
+
+      const res = (await askFamilyForTask(
+        askEvent(),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.recipients).toEqual([]);
+      expect(body.skipped).toEqual([{ userId: 'user-2', name: 'Priya', reason: 'away' }]);
+      expect(body.delivered).toBe(0);
+    });
+
+    it('400s without a task id', async () => {
+      const { askFamilyForTask } = await import('../../../src/handlers/tasks/handler.js');
+      const res = (await askFamilyForTask(
+        buildEvent({ httpMethod: 'POST', pathParameters: null, body: '{}' }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('400s a note past the length cap', async () => {
+      const { askFamilyForTask } = await import('../../../src/handlers/tasks/handler.js');
+      const res = (await askFamilyForTask(
+        askEvent({ note: 'x'.repeat(201) }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('maps each named service refusal to its status code', async () => {
+      await refuses({ name: 'TaskNotFoundError' }, 404);
+      await refuses({ name: 'TaskHeldByAnotherMemberError' }, 403);
+      await refuses({ name: 'HelpAlreadyRequestedError' }, 409);
+      await refuses({ name: 'TaskChangedError' }, 409);
+    });
+
+    it('429s a repeat ask and passes nextAllowedAt through to the client', async () => {
+      const res = await refuses(
+        { name: 'AskHelpRateLimitedError', nextAllowedAt: '2026-09-05T12:00:00.000Z' },
+        429
+      );
+      expect(JSON.parse(res.body).details).toEqual({
+        nextAllowedAt: '2026-09-05T12:00:00.000Z',
+      });
+    });
+
+    it('re-throws anything it does not recognise instead of inventing a status', async () => {
+      const askFamily = await import('../../../src/services/askFamily.js');
+      const { askFamilyForTask } = await import('../../../src/handlers/tasks/handler.js');
+      vi.mocked(askFamily.askFamilyForHelp).mockRejectedValueOnce(new Error('DynamoDB exploded'));
+      const res = (await askFamilyForTask(
+        askEvent(),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(500);
     });
   });
 

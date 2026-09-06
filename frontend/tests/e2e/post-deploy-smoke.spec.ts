@@ -44,13 +44,17 @@ import {
 import {
   DynamoDBClient,
   QueryCommand,
+  PutItemCommand,
+  UpdateItemCommand,
   BatchWriteItemCommand,
   type AttributeValue,
   type WriteRequest,
 } from '@aws-sdk/client-dynamodb';
 import { S3Client, DeleteObjectsCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import {
+  buildHouseholdFixtureStamp,
   buildSmokeEmail,
+  buildTestFixtureClaim,
   householdIdFromCreateResponse,
   householdIdFromMembershipItem,
   isAmazonS3Hostname,
@@ -59,6 +63,7 @@ import {
   runAllCleanupSteps,
   s3ObjectTargetFromPresignedUrl,
   safeResponseDiagnostic,
+  testFixtureClaimPartition,
   type SafeResponseDiagnostic,
   type SmokeDynamoKey,
   type SmokeS3ObjectTarget,
@@ -95,7 +100,16 @@ function smokeEmail(kind: 'public' | 'authenticated'): string {
 
 const PASSWORD = 'E2E-Smoke!Pass1234';
 
-function assertResponseStatus(response: APIResponse, expected: number, label: string): void {
+/**
+ * Both Playwright response shapes reach this helper: `APIResponse` from
+ * `request.*`, and the navigation `Response` from `page.waitForResponse`. It
+ * reads two members, so it asks for two members. It was declared `APIResponse`
+ * while all six call sites pass a page `Response` — a type error that stood
+ * because `frontend/tests/` was outside tsconfig's `include` (#440).
+ */
+type StatusAndUrl = Pick<APIResponse, 'status' | 'url'>;
+
+function assertResponseStatus(response: StatusAndUrl, expected: number, label: string): void {
   if (response.status() === expected) return;
   const diagnostic = safeResponseDiagnostic(response.url(), response.status());
   throw new Error(
@@ -144,6 +158,8 @@ interface ConfirmedFixture {
   sub: string;
   /** Authoritative id returned by POST /households; avoids relying on GSI propagation. */
   householdId?: string;
+  /** Set once the run's claim row is written; see claimTestFixture below. */
+  runId?: string;
 }
 
 async function deleteCognitoUser(username: string): Promise<void> {
@@ -292,6 +308,89 @@ async function deleteDynamoKeys(keys: SmokeDynamoKey[]): Promise<void> {
   }
 }
 
+/**
+ * Claim this run's fixtures BEFORE the browser flow creates any.
+ *
+ * Everything below this line can fail, be cancelled, or have its runner
+ * killed. The teardown at the bottom of this file is careful and complete, but
+ * it only runs when the process lives long enough to run it — and a run that
+ * dies is precisely how production came to hold 35 orphan "Smoke Test
+ * Household" rows. The claim row is the record that outlives the process: it
+ * says "a fixture run started here, and its Cognito sub is this", which is
+ * enough for `scripts/sweep-test-fixtures.mjs` to find and remove whatever the
+ * run created, including through GSI1 memberships the run never reported.
+ *
+ * Written before the household exists, so there is no window in which a
+ * fixture household is unreachable from a claim. A failure here throws, which
+ * fails the test before it has created anything to leak.
+ */
+async function claimTestFixture(fixture: ConfirmedFixture, runId: string): Promise<void> {
+  const claim = buildTestFixtureClaim({
+    runId,
+    createdAt: new Date().toISOString(),
+    cognitoSub: fixture.sub,
+    cognitoUsername: fixture.username,
+  });
+
+  await ddb.send(
+    new PutItemCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: { S: claim.PK },
+        SK: { S: claim.SK },
+        entityType: { S: claim.entityType },
+        isTestFixture: { BOOL: claim.isTestFixture },
+        testFixtureRunId: { S: claim.testFixtureRunId },
+        testFixtureCreatedAt: { S: claim.testFixtureCreatedAt },
+        testFixtureSource: { S: claim.testFixtureSource },
+        cognitoSub: { S: claim.cognitoSub },
+        cognitoUsername: { S: claim.cognitoUsername },
+      },
+      // A run id is a fresh UUID, so a collision means something is wrong with
+      // the id, not with the table. Fail rather than overwrite another run's
+      // claim and orphan whatever it was pointing at.
+      ConditionExpression: 'attribute_not_exists(PK)',
+    })
+  );
+  fixture.runId = runId;
+}
+
+/**
+ * Mark the household the UI just created as a fixture, structurally.
+ *
+ * This is what lets anything that counts households — a metric, a query, an
+ * operator with the CLI — tell a real home from test debris without matching
+ * on the name "Smoke Test Household", which any real household could
+ * legitimately be called.
+ *
+ * A failure here throws. The stamp shares its credentials and its table with
+ * the teardown that follows, so a failure to write it predicts a failure to
+ * clean up; and this runs seconds after household creation, long before the
+ * expensive part of the flow. The claim row above still makes the household
+ * findable either way, so failing here loses no cleanup guarantee.
+ */
+async function stampHouseholdAsTestFixture(fixture: ConfirmedFixture): Promise<void> {
+  if (!fixture.householdId) throw new Error('Cannot stamp a fixture household without its id');
+  if (!fixture.runId) throw new Error('Cannot stamp a fixture household without a claimed run');
+
+  const stamp = buildHouseholdFixtureStamp({
+    householdId: fixture.householdId,
+    runId: fixture.runId,
+    createdAt: new Date().toISOString(),
+  });
+
+  await ddb.send(
+    new UpdateItemCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: { S: stamp.Key.PK }, SK: { S: stamp.Key.SK } },
+      UpdateExpression: stamp.UpdateExpression,
+      ConditionExpression: stamp.ConditionExpression,
+      ExpressionAttributeNames: stamp.ExpressionAttributeNames,
+      ExpressionAttributeValues: stamp.ExpressionAttributeValues,
+    })
+  );
+}
+
 async function deleteUserAndHouseholds(fixture: ConfirmedFixture): Promise<void> {
   // First find every household the user is a member of via GSI1
   // (GSI1PK: USER#<sub>, GSI1SK: HOUSEHOLD#<id>) so we can tear down the rows
@@ -345,13 +444,20 @@ async function deleteUserAndHouseholds(fixture: ConfirmedFixture): Promise<void>
     {
       label: `DynamoDB owned rows for Cognito sub ${fixture.sub}`,
       run: async () => {
+        const store = { listKeys: listPartitionKeys, deleteKeys: deleteDynamoKeys };
         await purgeSmokeOwnedPartitions(
           [`USER#${fixture.sub}`, ...[...householdIds].map((id) => `HOUSEHOLD#${id}`)],
-          {
-            listKeys: listPartitionKeys,
-            deleteKeys: deleteDynamoKeys,
-          }
+          store
         );
+
+        // Only after every partition above verified empty. The claim row is
+        // the one thing that can still find this run's rows once the process
+        // is gone, so it must outlive a partial failure — the call above
+        // throws on one, which leaves the claim in place for
+        // scripts/sweep-test-fixtures.mjs to finish the job.
+        if (fixture.runId) {
+          await purgeSmokeOwnedPartitions([testFixtureClaimPartition(fixture.runId)], store);
+        }
       },
     },
     {
@@ -429,13 +535,22 @@ async function purgeUploadedS3Object(target: SmokeS3ObjectTarget | undefined): P
           nextVersionIdMarker: page.NextVersionIdMarker,
         };
       } catch (error) {
+        // Deliberately NOT attaching `cause`. safeAwsErrorName() is a
+        // sanitisation boundary: it passes through only a whitelisted error
+        // NAME and falls back to 'AwsError'. This suite runs against
+        // production with real credentials and a presigned S3 URL, and an
+        // attached cause would print the raw AWS error — message, request id,
+        // and whatever else the SDK put in it — into the CI log and the HTML
+        // report. The smoke config disables traces (`trace: 'off'`) for
+        // exactly this reason; re-attaching the cause here would undo it.
+        // eslint-disable-next-line preserve-caught-error -- sanitisation boundary, see above
         throw new Error(`S3 version listing failed (${safeAwsErrorName(error)})`);
       }
     },
     deleteVersions: async ({ bucket, objects }) => {
-      let errorCount = 0;
+      let result;
       try {
-        const result = await s3.send(
+        result = await s3.send(
           new DeleteObjectsCommand({
             Bucket: bucket,
             Delete: {
@@ -447,10 +562,16 @@ async function purgeUploadedS3Object(target: SmokeS3ObjectTarget | undefined): P
             },
           })
         );
-        errorCount = result.Errors?.length ?? 0;
       } catch (error) {
+        // Same sanitisation boundary as the sibling rethrow above: an attached
+        // cause would print the raw AWS error into the CI log and report.
+        // eslint-disable-next-line preserve-caught-error -- sanitisation boundary, see above
         throw new Error(`S3 version deletion failed (${safeAwsErrorName(error)})`);
       }
+      // Read the count outside the try. Assigning it inside and reading it
+      // after tripped `no-useless-assignment`, whose analysis cannot see that
+      // the catch always throws.
+      const errorCount = result.Errors?.length ?? 0;
       if (errorCount > 0) {
         throw new Error(`S3 version deletion returned ${errorCount} error(s)`);
       }
@@ -508,6 +629,8 @@ test.describe('post-deploy smoke', () => {
   test.beforeEach(async ({ page }) => {
     email = smokeEmail('authenticated');
     fixture = await createConfirmedUser(email);
+    // Before anything else this run creates. See claimTestFixture.
+    await claimTestFixture(fixture, randomUUID());
     authenticatedSessionEstablished = false;
     uploadedS3Target = undefined;
     apiErrors.length = 0;
@@ -578,8 +701,36 @@ test.describe('post-deploy smoke', () => {
     const householdResponse = await householdResponsePromise;
     assertResponseStatus(householdResponse, 201, 'Household creation');
     activeFixture.householdId = householdIdFromCreateResponse(await householdResponse.json());
+    // Structural, not "the name is Smoke Test Household". See
+    // stampHouseholdAsTestFixture and TEST_FIXTURE in the support module.
+    await stampHouseholdAsTestFixture(activeFixture);
 
-    // Successful household creation routes to /dashboard or '/'.
+    // Household creation does NOT land on the dashboard. #394 put the first-run
+    // activation flow in between: a household with no plants yet always routes
+    // to /welcome (see decideFirstRun). This spec only ever runs post-deploy,
+    // so it is the last gate that sees this path before real users do — and a
+    // failure here auto-rolls back the release. Walk the flow rather than
+    // asserting the destination it had before #394.
+    await expect(page).toHaveURL(/\/welcome$/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /add your first plant/i })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Skip the guided one-field plant step deliberately: the whole point of
+    // this test is the FULL plant form below, which is the only path that
+    // exercises presign → S3 PUT → confirm → CDN render.
+    await page.getByRole('button', { name: /skip for now/i }).click();
+
+    // Whoever creates the household is its admin, so the invite step follows.
+    // Asserting it (rather than tolerating either shape) keeps this honest: if
+    // the creator ever stops being an admin, that is a real regression in who
+    // can invite, and this should fail rather than quietly skip ahead.
+    await expect(page.getByRole('heading', { name: /share the care/i })).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByRole('button', { name: /go to my dashboard/i }).click();
+
+    // Now the dashboard, at /dashboard or '/'.
     await expect(page).toHaveURL(/\/(dashboard)?$/, { timeout: 15_000 });
 
     // Dashboard heading is visible (uses the user's first name).

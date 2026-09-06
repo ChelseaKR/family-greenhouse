@@ -87,6 +87,26 @@ the subscription is created in the api module, next to the function it delivers
 to. That split is what keeps `email → api` a straight line rather than a
 Terraform dependency cycle.
 
+Two consequences of that split were found only by the v0.24.0 production
+release, because neither is reachable by `terraform validate`:
+
+- **The topic ARN cannot gate the subscription.** It is a resource attribute of
+  another module, so on any run where the topic does not exist yet it is unknown
+  at plan time, and a `count` reading an unknown value fails the whole plan
+  ("The count value depends on resource attributes that cannot be determined
+  until apply"). The two conditional resources therefore count on
+  `var.ses_events_enabled`, wired from `var.domain_name != ""` — the same plain
+  input predicate that gates `module.email` itself, known before any refresh.
+- **The topic needs a customer-managed KMS key.** Bounce payloads carry
+  recipient addresses, so the topic is encrypted at rest; but SES publishes as a
+  service principal, and SES is refused unless the KMS **key** policy grants it
+  `kms:GenerateDataKey` and `kms:Decrypt` — a topic policy is not enough. AWS
+  owns the policy of `alias/aws/sns` and it cannot be edited, so a dedicated CMK
+  (`alias/<project>-email-events-<env>`) is the only available shape, not a
+  preference. The grant is confined by `aws:SourceAccount`; the key is dedicated
+  to this one topic, so no `aws:SourceArn` / `kms:EncryptionContext` narrowing is
+  needed today. Cost is the flat ~$1/month per CMK.
+
 ### 3. The suppression policy
 
 One row per address (`EMAIL#<normalized address>` / `DELIVERY_STATE`), holding a

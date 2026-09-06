@@ -324,7 +324,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: the name does this plant a disservice. People hear “lily,” assume it’s the cat-killer their vet warned them about, and either avoid it or panic. It isn’t a true lily at all — it won’t cause the kidney failure that real lilies (Lilium) do. It’s toxic in the ordinary mouth-irritation way, which is worth knowing but isn’t the emergency the name implies.',
-        'If you want to be sure about any plant before it comes home to a pet, run it through the free pet-safe checker at /pet-safe first — two seconds, no signup, and it spells out cats versus dogs rather than a vague “toxic.”',
+        'If you want to be sure about any plant before it comes home to a pet, run it through the [free pet-safe checker](/pet-safe) first — two seconds, no signup, and it spells out cats versus dogs rather than a vague “toxic.”',
       ],
     },
     faqs: [
@@ -338,7 +338,7 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Are peace lilies toxic to cats and dogs?',
-        a: 'Yes. Peace lilies contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth and throat irritation, drooling, and trouble swallowing. Despite the name it is NOT a true lily, so it won’t cause the kidney failure real lilies do — but keep it away from pets. You can confirm any plant at the free checker at /pet-safe.',
+        a: 'Yes. Peace lilies contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth and throat irritation, drooling, and trouble swallowing. Despite the name it is NOT a true lily, so it won’t cause the kidney failure real lilies do — but keep it away from pets. You can confirm any plant at the [free pet-safe checker](/pet-safe).',
       },
       {
         q: 'Why won’t my peace lily flower?',
@@ -384,7 +384,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: if you already have a pothos and want a second easy vine that looks a bit more refined, this is the one to get — the heart-shaped leaves are softer and tidier, and it’s every bit as forgiving. Don’t agonise over telling them apart; care for them identically and both will thrive.',
-        'It is, however, toxic to cats and dogs if chewed — the whole philodendron genus carries calcium oxalate crystals. A trailing vine is exactly the kind of dangling temptation a cat bats at, so hang it high. If you’re weighing it against a pet-safe pick, the free checker at /pet-safe gives you the cats-versus-dogs answer in a couple of seconds.',
+        'It is, however, toxic to cats and dogs if chewed — the whole philodendron genus carries calcium oxalate crystals. A trailing vine is exactly the kind of dangling temptation a cat bats at, so hang it high. If you’re weighing it against a pet-safe pick, the [free pet-safe checker](/pet-safe) gives you the cats-versus-dogs answer in a couple of seconds.',
       ],
     },
     faqs: [
@@ -398,7 +398,7 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Is a heartleaf philodendron toxic to cats and dogs?',
-        a: 'Yes. Philodendrons contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth irritation, drooling, and vomiting. It’s a trailing vine that pets bat at, so hang it out of reach. Check any plant at the free pet-safe tool at /pet-safe.',
+        a: 'Yes. Philodendrons contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth irritation, drooling, and vomiting. It’s a trailing vine that pets bat at, so hang it out of reach. Check any plant at the [free pet-safe tool](/pet-safe).',
       },
       {
         q: 'Why is my philodendron getting leggy?',
@@ -444,7 +444,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: the ZZ’s “toxic” reputation is overblown in one direction and underplayed in another. It won’t poison your pet from across the room — the danger is only if a pet actually chews it, and then it’s the ordinary mouth-irritation kind, not an emergency. But the sap can also irritate human skin, so wash your hands after pruning or repotting it.',
-        'If you’re choosing a near-indestructible plant for a home with curious pets, weigh it against something genuinely pet-safe rather than just hardy. The free checker at /pet-safe lays out the cats-versus-dogs verdict for the ZZ and its safer alternatives in a couple of seconds.',
+        'If you’re choosing a near-indestructible plant for a home with curious pets, weigh it against something genuinely pet-safe rather than just hardy. The [free pet-safe checker](/pet-safe) lays out the cats-versus-dogs verdict for the ZZ and its safer alternatives in a couple of seconds.',
       ],
     },
     faqs: [
@@ -458,7 +458,7 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Is a ZZ plant toxic to cats and dogs?',
-        a: 'Yes. ZZ plants contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth irritation, drooling, and vomiting. Its reputation overstates the danger — a nibble means an unhappy pet, not an emergency — but the sap can irritate skin too, so wash your hands after handling. Confirm any plant at the free tool at /pet-safe.',
+        a: 'Yes. ZZ plants contain calcium oxalate crystals that are toxic to cats and dogs if chewed, causing mouth irritation, drooling, and vomiting. Its reputation overstates the danger — a nibble means an unhappy pet, not an emergency — but the sap can irritate skin too, so wash your hands after handling. Confirm any plant at the [free pet-safe tool](/pet-safe).',
       },
       {
         q: 'Can a ZZ plant survive in low light?',
@@ -504,7 +504,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: keep one in the kitchen — snapping off a leaf for the cool gel inside really does take the sting out of a minor burn, and that’s a genuinely useful plant to have within reach. Just don’t over-love it; the number-one cause of a dead aloe is a watering schedule meant for a fern.',
-        'Worth being clear on the pet question, because the “medicine plant” reputation misleads people: the soothing gel is fine, but the leaf’s outer layer contains compounds that are toxic to cats and dogs if eaten, causing vomiting and lethargy. Keep the plant itself out of reach. The free pet-safe checker at /pet-safe spells out the cats-versus-dogs verdict if you want to double-check.',
+        'Worth being clear on the pet question, because the “medicine plant” reputation misleads people: the soothing gel is fine, but the leaf’s outer layer contains compounds that are toxic to cats and dogs if eaten, causing vomiting and lethargy. Keep the plant itself out of reach. The [free pet-safe checker](/pet-safe) spells out the cats-versus-dogs verdict if you want to double-check.',
       ],
     },
     faqs: [
@@ -518,7 +518,7 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Is aloe vera toxic to cats and dogs?',
-        a: 'Yes — the plant is toxic to cats and dogs if eaten. The clear inner gel is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy, and diarrhoea. Keep the plant out of reach even though aloe gel is a human first-aid staple. Check any plant at the free tool at /pet-safe.',
+        a: 'Yes — the plant is toxic to cats and dogs if eaten. The clear inner gel is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy, and diarrhoea. Keep the plant out of reach even though aloe gel is a human first-aid staple. Check any plant at the [free pet-safe tool](/pet-safe).',
       },
       {
         q: 'Why is my aloe vera flopping over?',
@@ -564,7 +564,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: this is a beautiful plant I’d happily recommend to a household with no pets and no toddlers, and one I’d steer clear of for anyone with either. The “dumb cane” name is a blunt warning — chewing the cane can numb and swell the mouth and throat badly enough to affect speech and, in bad cases, breathing. That’s a step beyond the mild mouth-irritation most houseplants cause.',
-        'If you’re not sure a plant is right for your home, that’s exactly what the free pet-safe checker at /pet-safe is for — it gives you a plain cats-versus-dogs verdict in a couple of seconds, and points you to genuinely safe alternatives if dieffenbachia is the wrong fit.',
+        'If you’re not sure a plant is right for your home, that’s exactly what the [free pet-safe checker](/pet-safe) is for — it gives you a plain cats-versus-dogs verdict in a couple of seconds, and points you to genuinely safe alternatives if dieffenbachia is the wrong fit.',
       ],
     },
     faqs: [
@@ -578,7 +578,7 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Is dieffenbachia toxic to cats, dogs, and people?',
-        a: 'Yes — it’s toxic to cats, dogs, and humans if chewed. The calcium oxalate crystals are among the harsher of the common houseplants, causing intense mouth and throat pain, drooling, and sometimes enough swelling to affect breathing (hence the old name “dumb cane”). Keep it firmly out of reach of pets and children. Check any plant at the free tool at /pet-safe.',
+        a: 'Yes — it’s toxic to cats, dogs, and humans if chewed. The calcium oxalate crystals are among the harsher of the common houseplants, causing intense mouth and throat pain, drooling, and sometimes enough swelling to affect breathing (hence the old name “dumb cane”). Keep it firmly out of reach of pets and children. Check any plant at the [free pet-safe tool](/pet-safe).',
       },
       {
         q: 'Why is my dieffenbachia leggy and leaning?',
@@ -624,7 +624,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: the good news that makes calathea worth the trouble — it’s genuinely pet-safe. The ASPCA lists calatheas as non-toxic to both cats and dogs, which is rare for a plant this showy. If you’ve got a leaf-chewing cat and you’re tired of hanging everything out of reach, a calathea is one of the few statement plants you can put at floor level without worry.',
-        'So the honest pitch is this: calathea asks more of you than almost anything else here, but it pays you back with both the best foliage and a clean bill of health for your pets. If pet safety is the deciding factor, the free checker at /pet-safe confirms it — and lists other safe choices if you’d rather start with something more forgiving.',
+        'So the honest pitch is this: calathea asks more of you than almost anything else here, but it pays you back with both the best foliage and a clean bill of health for your pets. If pet safety is the deciding factor, the [free pet-safe checker](/pet-safe) confirms it — and lists other safe choices if you’d rather start with something more forgiving.',
       ],
     },
     faqs: [
@@ -638,7 +638,7 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Are calatheas toxic to cats and dogs?',
-        a: 'No — calatheas are non-toxic to both cats and dogs per the ASPCA, making them one of the few genuinely pet-safe statement plants. A big mouthful might cause a mild upset like any plant, but there’s nothing poisonous in it. You can confirm this and find other safe plants at the free tool at /pet-safe.',
+        a: 'No — calatheas are non-toxic to both cats and dogs per the ASPCA, making them one of the few genuinely pet-safe statement plants. A big mouthful might cause a mild upset like any plant, but there’s nothing poisonous in it. You can confirm this and find other safe plants at the [free pet-safe tool](/pet-safe).',
       },
       {
         q: 'Why are my calathea leaves curling?',
@@ -651,7 +651,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Fiddle Leaf Fig',
     scientificName: 'Ficus lyrata',
     alsoKnownAs: ['Fiddle-Leaf Fig', 'Banjo Fig', 'Ficus lyrata'],
-    metaTitle: 'Fiddle Leaf Fig Care: How Often to Water (and Why It Drops Leaves)',
+    metaTitle: 'Fiddle Leaf Fig Care: Watering + Why It Drops Leaves',
     metaDescription:
       'How often to water a fiddle leaf fig, the light it actually needs, why the leaves get brown spots or drop, and how to keep one alive in a shared home.',
     reviewed: '2026-09-02',
@@ -831,7 +831,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Anthurium',
     scientificName: 'Anthurium andraeanum',
     alsoKnownAs: ['Flamingo Flower', 'Flamingo Lily', 'Painter’s Palette', 'Tail Flower'],
-    metaTitle: 'Anthurium Care: How Often to Water + Why It Stopped Flowering',
+    metaTitle: 'Anthurium Care: Watering + Why It Stopped Flowering',
     metaDescription:
       'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
     reviewed: '2026-09-02',
@@ -891,7 +891,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Chinese Evergreen',
     scientificName: 'Aglaonema',
     alsoKnownAs: ['Aglaonema', 'Silver Bay', 'Chinese Evergreen Plant'],
-    metaTitle: 'Chinese Evergreen (Aglaonema) Care: Watering, Light, Pet Safety',
+    metaTitle: 'Chinese Evergreen Care: Watering, Light, Pet Safety',
     metaDescription:
       'How often to water a Chinese evergreen, why it thrives in low light, what yellow or curling leaves mean, and whether aglaonema is safe for pets.',
     reviewed: '2026-09-02',
@@ -1191,7 +1191,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Christmas Cactus',
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
-    metaTitle: 'Christmas Cactus Care: Watering, Light, and How to Make It Flower',
+    metaTitle: 'Christmas Cactus Care: Watering + How to Make It Bloom',
     metaDescription:
       'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
     reviewed: '2026-09-02',
@@ -1311,7 +1311,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Moth Orchid',
     scientificName: 'Phalaenopsis',
     alsoKnownAs: ['Phalaenopsis', 'Phal', 'Moon Orchid', 'Supermarket Orchid'],
-    metaTitle: 'Orchid Care: How Often to Water a Moth Orchid (and Rebloom It)',
+    metaTitle: 'Orchid Care: Watering a Moth Orchid + Reblooming It',
     metaDescription:
       'How often to water a phalaenopsis orchid, what the roots are telling you, how to get it to flower again, and why orchids are pet-safe.',
     reviewed: '2026-09-02',
@@ -1431,7 +1431,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Nerve Plant',
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
-    metaTitle: 'Nerve Plant (Fittonia) Care: Why It Keeps Fainting + Pet Safety',
+    metaTitle: 'Nerve Plant Care: Why It Keeps Fainting + Pet Safety',
     metaDescription:
       'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
     reviewed: '2026-09-02',

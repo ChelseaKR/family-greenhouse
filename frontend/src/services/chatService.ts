@@ -17,6 +17,32 @@ export interface ChatContentBlock {
   url?: string;
   source?: string;
   fetch_date?: string;
+  /**
+   * `coverage` blocks persisted by the Sprout integration: how much of the
+   * household the answer was computed over (#549). Aggregate integers only,
+   * never a plant name or a typed species. Round-tripped here so a reload
+   * carries it; what a user is SHOWN when `partial` is true is still an open
+   * product decision, so nothing renders it yet.
+   */
+  plants?: ChatCoverageSet;
+  tasks?: ChatCoverageSet;
+  partial?: boolean;
+}
+
+/**
+ * Mirrors the backend's `SproutSetCoverage` exactly — every field, so a
+ * declaration that quietly narrows it cannot make a real payload look
+ * malformed. `unmatched` (dropped by the canonical-species privacy filter) and
+ * `truncated` (dropped by the cap, after it) stay separate because one is a
+ * privacy control and the other is a size limit.
+ */
+export interface ChatCoverageSet {
+  total: number;
+  included: number;
+  unmatched: number;
+  truncated: number;
+  cap: number;
+  complete: boolean;
 }
 
 export interface ChatMessage {
@@ -59,6 +85,11 @@ export interface SendMessageResponse {
     source: string;
     fetch_date: string;
   }>;
+  /**
+   * Sprout's own required per-answer disclosure, verbatim and already in the
+   * language the question was asked in. Absent when Sprout sent an empty one.
+   */
+  disclosure?: string;
 }
 
 export interface BudgetSnapshot {
