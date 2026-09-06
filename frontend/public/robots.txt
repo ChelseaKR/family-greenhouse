@@ -59,6 +59,5 @@ Disallow: /sit/
 Disallow: /tag/
 Disallow: /shared/
 Disallow: /caretaker/
-Disallow: /coming-soon
 
 Sitemap: https://familygreenhouse.net/sitemap.xml

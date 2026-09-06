@@ -983,11 +983,6 @@ export function LandingPage() {
                     Plans
                   </a>
                 </li>
-                <li>
-                  <a href="/coming-soon" className="text-sm text-primary-200 hover:text-white">
-                    Mobile App
-                  </a>
-                </li>
               </ul>
             </div>
             <div>
@@ -1013,11 +1008,6 @@ export function LandingPage() {
             <div>
               <h3 className="text-sm font-semibold text-white">Company</h3>
               <ul className="mt-4 space-y-2">
-                <li>
-                  <a href="/coming-soon" className="text-sm text-primary-200 hover:text-white">
-                    About
-                  </a>
-                </li>
                 <li>
                   <a
                     href="mailto:hello@familygreenhouse.net"
