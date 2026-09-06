@@ -207,11 +207,33 @@ Remaining work for delivery:
    outstanding here is the Apple-side key and the AppDelegate forwarding is
    already wired. Easiest delivery path is uploading the APNs key to the same
    Firebase project and sending everything through FCM.
-3. **Backend sender:** a `sendDevicePush` sibling to
-   `notifier.sendBrowserPush` that calls the FCM HTTP v1 API with the stored
-   tokens, pruning tokens FCM reports as dead (mirror the 404/410 cleanup the
-   web push path does). Needs the Firebase service-account JSON in Secrets
-   Manager + reminder Lambda wiring.
+3. **Backend sender: written and wired; unconfigured.** `notifier.sendDevicePush`
+   is the sibling of `sendBrowserPush`, and `services/fcmNotifier.ts` is the
+   FCM HTTP v1 transport behind it (RS256 service-account JWT → OAuth2 access
+   token → `messages:send`, no `firebase-admin` in the Lambda bundle). It runs
+   on the same `browser` preference and the same reminder marker as web push,
+   because to a user they are one channel reached over two transports, and it
+   prunes tokens FCM reports as `UNREGISTERED` — the native form of the
+   404/410 cleanup the web-push path does. `INVALID_ARGUMENT` deliberately
+   does NOT prune: FCM returns it for a malformed message as well as a
+   malformed token, so pruning on it would delete the whole installed base's
+   registrations over one bad payload.
+
+   What is left is credentials, not code. The Lambdas read the Firebase
+   service-account JSON from the Secrets Manager id in
+   `FCM_SERVICE_ACCOUNT_SECRET_ID` (Terraform:
+   `fcm_service_account_secret_id`), which is **blank in every environment**.
+   While it is blank the sender makes no network call and no Secrets Manager
+   call: it logs one `device_push_unconfigured` line per Lambda container and
+   the reminder path behaves exactly as it did before it existed. Filling it
+   in needs items 1 and 2 above to have happened first — the Firebase project
+   issues the service account, and the APNs key uploaded to that project is
+   what makes iOS work.
+
+   Delivery is still not verified end to end, and the toggle stays off until
+   it is. Restoring it is a separate frontend change (a `registerNativePush()`
+   call site), and `scripts/validate-store-release.mjs` will then require
+   `google-services.json` and the iOS entitlements.
 
 ## Store submission checklist
 

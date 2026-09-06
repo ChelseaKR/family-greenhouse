@@ -340,6 +340,12 @@ variable "sprout_integration_secret_id" {
   default     = ""
 }
 
+variable "fcm_service_account_secret_id" {
+  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON used for native APNs/FCM push. Blank disables device push entirely."
+  type        = string
+  default     = ""
+}
+
 # --- Sentry / release tagging ---
 variable "sentry_dsn" {
   description = "Sentry DSN. Empty = Sentry disabled (instrument() falls through to a no-op wrapper)."

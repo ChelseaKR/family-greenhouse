@@ -217,6 +217,17 @@ variable "sprout_integration_secret_id" {
   default     = ""
 }
 
+# Native push (APNs/FCM). Blank everywhere today: the Firebase project and the
+# APNs key it would name do not exist yet (docs/mobile.md § Push
+# notifications). While it is blank the notification Lambdas get no Secrets
+# Manager grant beyond a deliberately nonexistent secret, and
+# services/fcmNotifier.ts never makes a call.
+variable "fcm_service_account_secret_id" {
+  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON for native push. Blank disables device push."
+  type        = string
+  default     = ""
+}
+
 # Plant.id identify monthly meter. "1" ENFORCES the per-household monthly cap;
 # blank only tracks usage (beta default). Production sets "1" so the real
 # per-call Plant.id credit can't be cost-amplified by concurrency.

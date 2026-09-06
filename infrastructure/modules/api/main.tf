@@ -32,6 +32,15 @@ locals {
   sprout_secret_arn = var.sprout_integration_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/sprout-disabled" : (
     startswith(var.sprout_integration_secret_id, "arn:") ? var.sprout_integration_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.sprout_integration_secret_id}*"
   )
+  # The Firebase service-account JSON that services/fcmNotifier.ts signs its
+  # FCM HTTP v1 access tokens with. Same name-or-ARN handling and the same
+  # nonexistent-secret sentinel as Sprout above: this is unset in every
+  # environment today, and pointing the grant at a secret that does not exist
+  # is how "device push is not configured" avoids becoming "the notification
+  # Lambdas may read every secret in the account".
+  fcm_secret_arn = var.fcm_service_account_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/fcm-disabled" : (
+    startswith(var.fcm_service_account_secret_id, "arn:") ? var.fcm_service_account_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.fcm_service_account_secret_id}*"
+  )
 }
 
 # API Gateway
@@ -285,6 +294,16 @@ resource "aws_iam_role_policy" "lambda" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = local.sprout_secret_arn
+      },
+      {
+        # Firebase service-account JSON for native (APNs/FCM) push delivery.
+        # Read by services/fcmNotifier.ts on the reminders / notifications /
+        # households Lambdas. While fcm_service_account_secret_id is blank the
+        # resource is the disabled sentinel above and the code never calls
+        # Secrets Manager at all.
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = local.fcm_secret_arn
       }
     ]
   })
@@ -437,6 +456,13 @@ locals {
     WEB_PUSH_VAPID_PRIVATE_KEY = var.web_push_vapid_private_key
     WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
     SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
+    # Native (APNs/FCM) push. Blank in every environment today, which is what
+    # makes services/fcmNotifier.ts a no-op: it logs one line per Lambda
+    # container and never opens a socket. Filling this in is the last step of
+    # docs/mobile.md § Push notifications, AFTER the Firebase project and the
+    # APNs key exist — and it still does not make the app's push toggle
+    # reachable, which is a separate frontend change.
+    FCM_SERVICE_ACCOUNT_SECRET_ID = var.fcm_service_account_secret_id
   })
 
   plant_integration_environment = {
