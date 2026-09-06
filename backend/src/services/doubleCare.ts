@@ -13,6 +13,8 @@ import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import type { Task } from '../models/types.js';
+import { getHousehold } from './householdService.js';
+import { hemisphereForLocation, resolveCadence, type Hemisphere } from './seasonalCadence.js';
 import {
   CompletionLike,
   RecentDuplicate,
@@ -20,6 +22,7 @@ import {
   computeScheduleDrift,
   doubleCareWindowStart,
   pickRecentDuplicate,
+  scheduleDriftScheduleUnavailable,
   scheduleDriftUnavailable,
 } from './doubleCareRules.js';
 
@@ -157,6 +160,83 @@ async function readPlantCompletions(
   return (result.Items ?? []).map(itemToCompletion);
 }
 
+/** The task fields the drift path needs. */
+type DriftTask = Pick<Task, 'id' | 'frequency' | 'seasonalCadences'>;
+
+/** Whether a task carries a seasonal profile at all. */
+const isSeasonal = (task: DriftTask) =>
+  Boolean(task.seasonalCadences && task.seasonalCadences.length > 0);
+
+/**
+ * The household's hemisphere for the drift path — as a settled result, never
+ * as a bare `Hemisphere | null`.
+ *
+ * `null` and "the read failed" are different answers and the drift math treats
+ * them differently: a household with no location has a knowable scheduled
+ * interval (the base frequency), and a household we could not read does not.
+ * Collapsing the two here would publish `scheduledIntervalDays` as if it were
+ * the interval in force when it might not be — ADR 0010's rule, on the value
+ * a measurement is divided by.
+ */
+type HemisphereRead = { status: 'ok'; hemisphere: Hemisphere | null } | { status: 'unavailable' };
+
+async function readHemisphere(householdId: string): Promise<HemisphereRead> {
+  try {
+    return {
+      status: 'ok',
+      hemisphere: hemisphereForLocation((await getHousehold(householdId))?.location),
+    };
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, householdId },
+      'schedule_drift_household_read_failed'
+    );
+    return { status: 'unavailable' };
+  }
+}
+
+/**
+ * The interval each task is actually scheduled at right now, or `null` for a
+ * task whose interval could not be established.
+ *
+ * Drift is `(median actual − scheduled) / scheduled`, so a task with a
+ * seasonal profile measured against its base `frequency` reports the
+ * household's *correct* winter interval as a mistake — the app telling a
+ * family that doing the right thing is drift. The household is read once for
+ * the whole plant, and only when some task on it actually has a profile.
+ *
+ * KNOWN LIMIT, deliberately not papered over: the comparison is one median
+ * against the cadence in force NOW. A history that spans a cadence change is
+ * still compared against a single interval, so a household that switched to
+ * its winter cadence last month can still show drift for a few weeks until the
+ * window of considered completions catches up. Per-interval seasoning would
+ * change what `medianIntervalDays` and `driftPct` mean on a published payload,
+ * which is a bigger, separate decision than this one.
+ */
+async function scheduledIntervals(
+  householdId: string,
+  tasks: readonly DriftTask[]
+): Promise<Map<string, number | null>> {
+  const intervals = new Map<string, number | null>(tasks.map((task) => [task.id, task.frequency]));
+  if (!tasks.some(isSeasonal)) return intervals;
+
+  const read = await readHemisphere(householdId);
+  for (const task of tasks) {
+    if (!isSeasonal(task)) continue;
+    intervals.set(
+      task.id,
+      read.status === 'ok'
+        ? resolveCadence(task.frequency, task.seasonalCadences, read.hemisphere, new Date())
+            .frequency
+        : // Interval unknown. A seasonal task's base frequency is NOT a stand-in
+          // for it, so the caller reports `schedule_unavailable` rather than a
+          // number it would then divide by.
+          null
+    );
+  }
+  return intervals;
+}
+
 /**
  * Drift for every task of a plant from ONE partition read. A failed read
  * marks every task `history_unavailable` rather than reporting 0% drift.
@@ -164,8 +244,11 @@ async function readPlantCompletions(
 export async function getScheduleDriftForPlant(
   householdId: string,
   plantId: string,
-  tasks: readonly Pick<Task, 'id' | 'frequency'>[]
+  tasks: readonly DriftTask[]
 ): Promise<ScheduleDrift[]> {
+  const scheduled = await scheduledIntervals(householdId, tasks);
+  const intervalFor = (task: DriftTask) => scheduled.get(task.id) ?? null;
+
   let completions: CompletionLike[];
   try {
     completions = await readPlantCompletions(householdId, plantId);
@@ -174,7 +257,12 @@ export async function getScheduleDriftForPlant(
       { err: (err as Error).message, householdId, plantId },
       'schedule_drift_history_read_failed'
     );
-    return tasks.map((task) => scheduleDriftUnavailable(task.id, task.frequency));
+    return tasks.map((task) => {
+      const interval = intervalFor(task);
+      return interval === null
+        ? scheduleDriftScheduleUnavailable(task.id, task.frequency)
+        : scheduleDriftUnavailable(task.id, interval);
+    });
   }
   const byTask = new Map<string, CompletionLike[]>();
   for (const completion of completions) {
@@ -182,15 +270,18 @@ export async function getScheduleDriftForPlant(
     list.push(completion);
     byTask.set(completion.taskId, list);
   }
-  return tasks.map((task) =>
-    computeScheduleDrift(task.id, task.frequency, byTask.get(task.id) ?? [])
-  );
+  return tasks.map((task) => {
+    const interval = intervalFor(task);
+    return interval === null
+      ? scheduleDriftScheduleUnavailable(task.id, task.frequency)
+      : computeScheduleDrift(task.id, interval, byTask.get(task.id) ?? []);
+  });
 }
 
 /** Drift for a single task (the one-tap "match schedule" path recomputes it). */
 export async function getScheduleDriftForTask(
   householdId: string,
-  task: Pick<Task, 'id' | 'plantId' | 'frequency'>
+  task: Pick<Task, 'id' | 'plantId' | 'frequency' | 'seasonalCadences'>
 ): Promise<ScheduleDrift> {
   const [drift] = await getScheduleDriftForPlant(householdId, task.plantId, [task]);
   return drift;

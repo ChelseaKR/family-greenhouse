@@ -122,7 +122,24 @@ export interface ScheduleDriftReading {
   exceedsThreshold: boolean;
 }
 
-export type ScheduleDriftReason = 'insufficient_completions' | 'history_unavailable';
+export type ScheduleDriftReason =
+  | 'insufficient_completions'
+  /** The completion history could not be read. */
+  | 'history_unavailable'
+  /**
+   * The history read fine, but the interval to measure it AGAINST could not be
+   * established: the task carries a seasonal profile
+   * (services/seasonalCadence.ts) and the household row — which supplies the
+   * hemisphere the season is derived from — could not be read.
+   *
+   * A distinct reason rather than reuse of `history_unavailable`, and rather
+   * than quietly measuring against the task's base `frequency`. Drift is
+   * `(median − scheduled) / scheduled`: measuring against the wrong
+   * `scheduled` does not produce a slightly-off number, it produces a
+   * confident wrong one, on a payload that publishes
+   * `scheduledIntervalDays` as if it were the interval in force.
+   */
+  | 'schedule_unavailable';
 
 /**
  * Per-task drift payload. `drift` is null in exactly two cases, and `reason`
@@ -206,6 +223,28 @@ export function scheduleDriftUnavailable(
     requiredCompletions: DRIFT_MIN_COMPLETIONS,
     drift: null,
     reason: 'history_unavailable',
+  };
+}
+
+/**
+ * The explicit "we could not establish this task's scheduled interval" payload
+ * — see `ScheduleDriftReason.schedule_unavailable`.
+ *
+ * `scheduledIntervalDays` carries the task's base frequency because the field
+ * is required and that is the only interval actually known; `drift` is null
+ * and `reason` says why, so no caller can read the pair as a measurement.
+ */
+export function scheduleDriftScheduleUnavailable(
+  taskId: string,
+  baseFrequency: number
+): ScheduleDrift {
+  return {
+    taskId,
+    scheduledIntervalDays: baseFrequency,
+    completionsConsidered: 0,
+    requiredCompletions: DRIFT_MIN_COMPLETIONS,
+    drift: null,
+    reason: 'schedule_unavailable',
   };
 }
 

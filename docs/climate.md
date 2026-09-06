@@ -127,6 +127,91 @@ Test coverage in `tests/unit/services/climate.test.ts`. The mapping is intention
 
 **Every number in a tip is an outdoor reading.** OpenWeatherMap reports conditions at the geocoded city centroid; this product has no indoor sensor and no way to infer one. A tip may reason about indoor conditions ("indoor air is usually drier still") but must never print a snapshot value as if it were measured inside the home. `deriveClimateTips` used to open with "Indoor humidity is around 28%" against the outdoor reading — a wrong label that changes what a user does, since 28% outdoors on a rainy 5°C day is a very different room than 28% outdoors in August. A regression test in `tests/unit/services/climate.test.ts` asserts no tip claims an indoor measurement.
 
+## Seasonal cadences (calendar, not weather)
+
+Everything above reacts to a _reading_: today's humidity, tonight's low, the
+rain that means skip this cycle. A **seasonal cadence** is the other half —
+the part of a plant's year that needs no API call at all. Most houseplants slow
+down in the dormant months, and a task carrying a single `frequency` is
+therefore wrong for half the year in a way no weather event can correct.
+
+`backend/src/services/seasonalCadence.ts` is the whole rule, and it is pure:
+
+- A task may carry up to four `seasonalCadences`, at most one per season.
+  Each overrides the task's base `frequency` while its season is in force.
+- Seasons are **meteorological** — whole calendar months, Mar–May spring
+  through Dec–Feb winter in the north — so a cadence changes on a date the
+  household can read off a calendar, and the boundary is the same every year.
+- The **hemisphere** comes from the household's stored location (the same
+  `lat` this document's `PUT /households/:id/location` writes) and is the only
+  thing it changes: the southern table is the northern one read six months out
+  of phase. Because a cadence names a _season_ and not a month range, a
+  household that moves across the equator keeps every profile it had, with no
+  row rewritten.
+- Latitude exactly `0` reads as northern, matching the already-shipped
+  `frontend/src/features/plants/seasonalHomes.ts`. Two helpers disagreeing
+  about the equator would be worse than either answer.
+
+### What it never does
+
+Nothing here changes a schedule on its own. Applying a profile is a person's
+edit, exactly as `frequency` is; the cadence then decides how far
+`completeTask` advances `nextDue`, and nothing else.
+
+And it never renders absence as a value. `resolveCadence` always returns a real
+number of days — a completion has to advance the schedule — but every fall back
+to the base `frequency` carries a `reason` saying which of these happened, and
+`season` stays `null` rather than being guessed:
+
+| `reason`                | What it means                                                       |
+| ----------------------- | ------------------------------------------------------------------- |
+| `no_profile`            | The task has no seasonal cadences. Every task today.                |
+| `no_location`           | The household has no location, so no hemisphere. A settled fact.    |
+| `household_unavailable` | The household row could not be READ. **Not** the same as the above. |
+| `season_unset`          | Hemisphere known; this season simply has no cadence set.            |
+
+The `no_location` / `household_unavailable` split is load-bearing rather than
+decorative. The UI offers "add a household location" for the first and must not
+for the second, and a transient DynamoDB failure must never be recorded as a
+settled fact about where the household is. Same rule as
+[ADR 0010](adr/0010-settled-read-states.md), applied to a write path.
+
+### Where the cadence in force is read
+
+| Surface                                             | Why it has to agree                                                                           |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `taskService.completeTask`                          | The schedule itself: `nextDue = now + cadence`.                                               |
+| `doubleCare.getScheduleDriftForPlant`               | Drift against the base interval reports a _correct_ winter rhythm as a mistake.               |
+| `POST /tasks/{id}/match-schedule`                   | Writes the new interval into the season in force, or the household taps it and nothing moves. |
+| `icsExport.buildIcs`                                | A calendar saying "every 7 days" all winter contradicts the app it mirrors.                   |
+| `digestReport` at-risk drift                        | Same reading as the app, or the weekly email argues with the product.                         |
+| `features/tasks/taskRowExtras.SeasonalCadenceBadge` | The row's headline interval is the base one; the chip names what is actually in force.        |
+
+The household row is read **only** when a task actually carries a profile.
+Without that guard every completion in the product — including the kiosk,
+sitter-link and plant-tag paths — would pay a `GetItem` to be told a hemisphere
+nothing would consult.
+
+### Known limit
+
+Drift compares one median interval against the cadence in force _now_. A
+completion history that spans a cadence change is still measured against a
+single interval, so a household that switched to its winter cadence last month
+can show drift for a few weeks until the considered window catches up.
+Seasoning each interval individually would change what `medianIntervalDays` and
+`driftPct` mean on an already-published payload, which is a separate decision.
+
+### Tests
+
+`backend/tests/unit/services/seasonalCadence.test.ts` sweeps every month in
+both hemispheres rather than sampling — the only interesting months are the
+boundaries, and a spot check in mid-season cannot see an off-by-one. It also
+reads `frontend/src/features/tasks/seasonalCadence.ts` and re-derives its table,
+so the client mirror and the server cannot drift apart: the server decides what
+the schedule does, the client decides what the household is told it does, and a
+row reading "summer cadence" against a winter advance is worse than either side
+being wrong alone.
+
 ## Frontend integration points
 
 | File                                   | Responsibility                                          |

@@ -494,14 +494,40 @@ export const matchTaskSchedule = createHandler(
         expose: true,
       });
     }
+    // The history read, but the interval to compare it against did not — the
+    // task is seasonally scheduled and the household row was unreadable. A
+    // suggestion computed against the wrong interval is worse than none.
+    if (reading.reason === 'schedule_unavailable') {
+      throw createHttpError(503, 'Could not read this task’s schedule just now.', {
+        expose: true,
+      });
+    }
     if (!reading.drift || !reading.drift.exceedsThreshold) {
       throw createHttpError(409, 'This task’s schedule already matches how often it gets done.');
     }
 
     const newFrequency = reading.drift.suggestedFrequency;
     const nextDue = nextDueAfterMatch(task.lastCompleted, newFrequency, new Date());
+
+    // Write the new interval where the schedule will actually read it. On a
+    // task with a seasonal profile the base `frequency` is overridden while a
+    // season's cadence is in force, so writing it there would leave the
+    // household tapping "match my rhythm" and watching nothing change. When
+    // the resolver could not name a season — no household location, or the
+    // household read failed — the base frequency IS what is in force, and that
+    // is the correct field to write.
+    const inForce = await taskService.resolveTaskCadence(householdId, task, new Date());
+    const seasonalUpdate =
+      inForce.source === 'seasonal' && inForce.season
+        ? {
+            seasonalCadences: (task.seasonalCadences ?? []).map((cadence) =>
+              cadence.season === inForce.season ? { ...cadence, frequency: newFrequency } : cadence
+            ),
+          }
+        : { frequency: newFrequency };
+
     const updated = await taskService.updateTask(householdId, taskId, {
-      frequency: newFrequency,
+      ...seasonalUpdate,
       ...(nextDue ? { nextDue } : {}),
     });
     if (!updated) {
@@ -519,7 +545,11 @@ export const matchTaskSchedule = createHandler(
         plantId: task.plantId,
         plantName: task.plantName,
         taskType: task.customType || task.type,
-        previousFrequency: task.frequency,
+        // The interval the drift was actually measured against, which on a
+        // seasonally-scheduled task is the season's cadence, not the base
+        // `frequency`. Reporting the base here would make the audit line
+        // disagree with the number the household was shown.
+        previousFrequency: reading.scheduledIntervalDays,
         newFrequency,
         medianIntervalDays: reading.drift.medianIntervalDays,
         completionsConsidered: reading.completionsConsidered,

@@ -84,6 +84,12 @@ export interface AtRiskRow {
   /** The task's scheduled interval in whole days. Carried so the drift
    *  section can read this row's rhythm without a second task read. */
   scheduledIntervalDays: number;
+  /** The task's seasonal profile, or null. Carried for the same reason as
+   *  `scheduledIntervalDays`: without it the digest's drift section measures a
+   *  seasonally-scheduled task against its base frequency and emails the
+   *  household that its schedule is drifting when the app, reading the same
+   *  task, says it is not (services/seasonalCadence.ts). */
+  seasonalCadences: Task['seasonalCadences'];
 }
 
 export type AtRiskResult =
@@ -291,6 +297,7 @@ export async function gatherAtRisk(householdId: string, now: Date): Promise<AtRi
       assignedToName: task.assignedToName,
       unclaimed: task.assignedTo === null,
       scheduledIntervalDays: task.frequency,
+      seasonalCadences: task.seasonalCadences ?? null,
     });
   }
 
@@ -573,7 +580,11 @@ export async function gatherScheduleDrift(
       row,
       reading: (
         await doubleCare.getScheduleDriftForPlant(householdId, row.plantId, [
-          { id: row.taskId, frequency: row.scheduledIntervalDays },
+          {
+            id: row.taskId,
+            frequency: row.scheduledIntervalDays,
+            seasonalCadences: row.seasonalCadences,
+          },
         ])
       )[0],
     }))
@@ -582,7 +593,11 @@ export async function gatherScheduleDrift(
   let unreadable = 0;
   let best: { row: AtRiskRow; suggested: number; driftPct: number } | null = null;
   for (const { row, reading } of readings) {
-    if (!reading || reading.reason === 'history_unavailable') {
+    if (
+      !reading ||
+      reading.reason === 'history_unavailable' ||
+      reading.reason === 'schedule_unavailable'
+    ) {
       unreadable += 1;
       continue;
     }

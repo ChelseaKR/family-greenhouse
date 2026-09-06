@@ -56,6 +56,8 @@ import { plantLocationLabel } from '@/utils/spaces';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { householdService } from '@/services/householdService';
 import { seasonalHomeSuggestion } from './seasonalHomes';
+import { SeasonalCadenceBadge } from '@/features/tasks/taskRowExtras';
+import { hemisphereForLatitude, resolveCadence } from '@/features/tasks/seasonalCadence';
 import { PlacementFitCard } from './PlacementFitCard';
 
 function formatDate(dateString: string | null): string {
@@ -530,6 +532,7 @@ export function PlantDetailPage() {
                   })
                 }
                 onEdit={() => setEditingTask(task)}
+                latitude={household?.location?.lat}
                 isCompleting={
                   completeTaskMutation.isPending &&
                   completeTaskMutation.variables?.taskId === task.id
@@ -658,6 +661,9 @@ interface TaskRowProps {
   isCompleting: boolean;
   isSnoozing: boolean;
   isReadOnly: boolean;
+  /** Household latitude, for the seasonal-cadence chip. Null/undefined when the
+   *  household has no location — the chip says so rather than assuming one. */
+  latitude: number | null | undefined;
   /** Schedule-drift reading for this task; undefined until loaded / not in plan. */
   drift?: ScheduleDrift;
   onMatchSchedule: () => void;
@@ -680,6 +686,7 @@ function TaskRow({
   isCompleting,
   isSnoozing,
   isReadOnly,
+  latitude,
   drift,
   onMatchSchedule,
   isMatchingSchedule,
@@ -693,6 +700,12 @@ function TaskRow({
   const streakText = streakLabel(task, streakReading);
   const style = taskTypeStyle(task.type);
   const { Icon } = style;
+  // What the schedule will actually advance by on the next completion.
+  const intervalInForce = resolveCadence(
+    task.frequency,
+    task.seasonalCadences,
+    hemisphereForLatitude(latitude)
+  ).frequency;
 
   return (
     <li className="px-4 py-4 hover:bg-parchment/60 sm:px-6">
@@ -708,7 +721,14 @@ function TaskRow({
             {task.customType || taskTypeLabels[task.type]}
           </span>
           <div className="min-w-0">
-            <p className="text-sm text-gray-900">Every {task.frequency} days</p>
+            {/* The interval IN FORCE, not the base `frequency`: on a task with
+                a seasonal profile those differ, and the row is where a
+                household would read the wrong one. Same JSX shape as before —
+                one expression between two text nodes — so the interval reads as
+                a single normalised string. The chip underneath names the season
+                and when it changes. */}
+            <p className="text-sm text-gray-900">Every {intervalInForce} days</p>
+            <SeasonalCadenceBadge task={task} latitude={latitude} />
             {isReadOnly ? (
               <p className="text-xs font-medium text-amber-800">
                 {t('plants.archive.tasksPaused')}

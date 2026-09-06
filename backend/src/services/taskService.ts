@@ -24,9 +24,15 @@ import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
-import { Task, TaskCompletion, DynamoDBItem } from '../models/types.js';
+import { Task, TaskCompletion, DynamoDBItem, SeasonalCadence } from '../models/types.js';
 import { CreateTaskInput, UpdateTaskInput, TaskFilters } from '../models/schemas.js';
-import { getMemberByUserId, getHouseholdMembers } from './householdService.js';
+import { getMemberByUserId, getHouseholdMembers, getHousehold } from './householdService.js';
+import {
+  hemisphereForLocation,
+  resolveCadence,
+  type CadenceResolution,
+  type Hemisphere,
+} from './seasonalCadence.js';
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
 import { recordActivity } from './activity.js';
@@ -134,6 +140,7 @@ export async function createTask(
     type: input.type,
     customType: input.type === 'custom' ? input.customType || null : null,
     frequency: input.frequency,
+    seasonalCadences: input.seasonalCadences ?? null,
     lastCompleted: null,
     nextDue,
     assignedTo,
@@ -431,6 +438,14 @@ export async function updateTask(
     expressionAttributeValues[':frequency'] = input.frequency;
   }
 
+  if (input.seasonalCadences !== undefined) {
+    // `null` writes null rather than removing the attribute, so a cleared
+    // profile reads back the same way an unset one does through `itemToTask`.
+    setExpressions.push('#seasonalCadences = :seasonalCadences');
+    expressionAttributeNames['#seasonalCadences'] = 'seasonalCadences';
+    expressionAttributeValues[':seasonalCadences'] = input.seasonalCadences ?? null;
+  }
+
   if (input.assignedTo !== undefined) {
     setExpressions.push(
       '#assignedTo = :assignedTo',
@@ -558,6 +573,78 @@ export async function deleteTask(householdId: string, taskId: string): Promise<b
   }
 }
 
+/**
+ * The cadence in force for one task right now — the I/O half of
+ * `services/seasonalCadence.ts`.
+ *
+ * The household read happens ONLY for a task that actually carries a seasonal
+ * profile. That is not a micro-optimisation: every task in production today has
+ * no profile, so without the early return this would add a DynamoDB GetItem to
+ * every completion in the product — including the kiosk, sitter-link and
+ * plant-tag paths, which complete tasks for people who are standing in front of
+ * a plant with a phone.
+ *
+ * A failed household read is reported as `household_unavailable`, never as
+ * `no_location`. Both keep today's schedule behaviour (the base frequency), but
+ * only one of them is a fact about the household, and the UI offers "set a
+ * location" for exactly one of them. Swallowing the difference here is the
+ * repo's named defect class — a failed read published as a settled value.
+ */
+export async function resolveTaskCadence(
+  householdId: string,
+  task: Pick<Task, 'frequency' | 'seasonalCadences'>,
+  at: Date
+): Promise<CadenceResolution> {
+  if (!task.seasonalCadences || task.seasonalCadences.length === 0) {
+    return resolveCadence(task.frequency, null, null, at);
+  }
+
+  let household: Awaited<ReturnType<typeof getHousehold>> = null;
+  let readFailed = false;
+  try {
+    household = await getHousehold(householdId);
+  } catch (err) {
+    readFailed = true;
+    logger.warn({ err, householdId }, 'seasonal_cadence_household_read_failed');
+  }
+  // A household row that is simply absent is not a read failure — it has no
+  // location, which is a settled answer.
+  const unavailableReason = readFailed ? 'household_unavailable' : 'no_location';
+
+  return resolveCadence(
+    task.frequency,
+    task.seasonalCadences,
+    hemisphereForLocation(household?.location),
+    at,
+    unavailableReason
+  );
+}
+
+/**
+ * The household's hemisphere, for a batch of tasks — or `null` when it has no
+ * location, its row could not be read, or no task in the batch carries a
+ * seasonal profile to need one.
+ *
+ * The last case is why this takes the task list: the calendar feed exports
+ * every task a household has, and a household that uses no seasonal profiles
+ * (all of them, today) must not pay a DynamoDB read per feed fetch to be told
+ * a hemisphere nothing will consult.
+ */
+export async function hemisphereForTasks(
+  householdId: string,
+  tasks: readonly Pick<Task, 'seasonalCadences'>[]
+): Promise<Hemisphere | null> {
+  if (!tasks.some((task) => task.seasonalCadences && task.seasonalCadences.length > 0)) {
+    return null;
+  }
+  try {
+    return hemisphereForLocation((await getHousehold(householdId))?.location);
+  } catch (err) {
+    logger.warn({ err, householdId }, 'seasonal_cadence_household_read_failed');
+    return null;
+  }
+}
+
 export async function completeTask(
   householdId: string,
   taskId: string,
@@ -584,8 +671,9 @@ export async function completeTask(
   }
 
   const now = new Date();
+  const cadence = await resolveTaskCadence(householdId, task, now);
   const nextDue = new Date(now);
-  nextDue.setDate(nextDue.getDate() + task.frequency);
+  nextDue.setDate(nextDue.getDate() + cadence.frequency);
 
   // Advance the task FIRST, guarded two ways:
   //  - attribute_exists(PK): completing a concurrently-deleted task must not
@@ -1391,6 +1479,7 @@ export function itemToTask(item: Record<string, unknown>): Task {
     type: item.type as Task['type'],
     customType: item.customType as string | null,
     frequency: item.frequency as number,
+    seasonalCadences: (item.seasonalCadences as SeasonalCadence[] | null | undefined) ?? null,
     lastCompleted: item.lastCompleted as string | null,
     nextDue: item.nextDue as string,
     assignedTo: item.assignedTo as string | null,

@@ -25,6 +25,7 @@
  *    which member is on the hook. Both are still visible in the app.
  */
 import type { Task } from '../models/types.js';
+import { resolveCadence, type Hemisphere } from './seasonalCadence.js';
 
 const PROD_ID = '-//Family Greenhouse//Plant care tasks//EN';
 
@@ -90,7 +91,7 @@ function escapeText(text: string): string {
     .replace(/\r?\n/g, '\\n');
 }
 
-function eventLines(task: Task, now: Date): string[] {
+function eventLines(task: Task, now: Date, hemisphere: Hemisphere | null): string[] {
   const due = new Date(task.nextDue);
   // Legacy rows can have an empty `type`; `type[0].toUpperCase()` threw on
   // those and 500'd the whole feed. Fall back to a generic label.
@@ -101,7 +102,17 @@ function eventLines(task: Task, now: Date): string[] {
   // Cadence only. `task.notes` and `task.assignedToName` are intentionally
   // left out — see the module doc: the feed URL is a bearer credential, so
   // the feed must not carry private notes or member names.
-  const description = `Recurring every ${task.frequency} day${task.frequency === 1 ? '' : 's'}.`;
+  //
+  // A seasonally-scheduled task states the cadence actually in force and
+  // names the season, because the alternative is a calendar that says "every
+  // 7 days" all winter while the app schedules every 14 — the feed telling
+  // the household a different story from the app it mirrors.
+  const cadence = resolveCadence(task.frequency, task.seasonalCadences, hemisphere, now);
+  const days = cadence.frequency;
+  const description =
+    cadence.source === 'seasonal' && cadence.season
+      ? `Recurring every ${days} day${days === 1 ? '' : 's'} (${cadence.season} cadence).`
+      : `Recurring every ${days} day${days === 1 ? '' : 's'}.`;
 
   // Deliberately NO RRULE here: completing/snoozing a task re-anchors its
   // nextDue server-side, so a client-extrapolated recurrence anchored at
@@ -124,7 +135,17 @@ function eventLines(task: Task, now: Date): string[] {
  * responsible for restricting to tasks the requesting user is allowed
  * to see.
  */
-export function buildIcs(tasks: Task[], now: Date = new Date()): string {
+export function buildIcs(
+  tasks: Task[],
+  now: Date = new Date(),
+  /**
+   * The household's hemisphere, for tasks carrying a seasonal profile. `null`
+   * (a household with no location, or one whose row could not be read) keeps
+   * every description on the task's base cadence — the same text the feed
+   * emitted before seasonal profiles existed.
+   */
+  hemisphere: Hemisphere | null = null
+): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -137,7 +158,7 @@ export function buildIcs(tasks: Task[], now: Date = new Date()): string {
     'X-WR-CALDESC:Recurring plant care tasks from Family Greenhouse',
   ];
   for (const task of tasks) {
-    lines.push(...eventLines(task, now));
+    lines.push(...eventLines(task, now, hemisphere));
   }
   lines.push('END:VCALENDAR');
   // RFC 5545 mandates CRLF line endings + line folding for over-75 lines.

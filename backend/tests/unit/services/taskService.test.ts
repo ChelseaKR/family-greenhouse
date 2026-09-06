@@ -45,6 +45,10 @@ vi.mock('../../../src/services/householdService.js', () => ({
   getMemberByUserId: vi.fn(),
   // Read by the occurrence re-resolution (ADR 0018) when a space rotates.
   getHouseholdMembers: vi.fn(async () => []),
+  // Read by the seasonal-cadence resolver, and ONLY for a task that carries a
+  // profile — the "no household read on the hot path" test below is what
+  // holds that.
+  getHousehold: vi.fn(async () => null),
 }));
 
 // Activity records are best-effort side writes; mock them out so dynamo
@@ -542,6 +546,131 @@ describe('taskService', () => {
     expect(update.input.ExpressionAttributeValues[':lastCompleted']).toBe(
       '2026-03-07T23:30:00.000Z'
     );
+  });
+
+  describe('completeTask with a seasonal cadence', () => {
+    /** 7 days in the growing seasons, 14 in the dormant ones. */
+    const SEVEN_FOURTEEN = [
+      { season: 'spring' as const, frequency: 7 },
+      { season: 'summer' as const, frequency: 7 },
+      { season: 'autumn' as const, frequency: 14 },
+      { season: 'winter' as const, frequency: 14 },
+    ];
+    const BERLIN = { city: 'Berlin', lat: 52.52, lon: 13.4 };
+    const MELBOURNE = { city: 'Melbourne', lat: -37.81, lon: 144.96 };
+
+    /** Complete a seasonal task at `whenIso` for a household at `location`. */
+    async function completeAt(
+      whenIso: string,
+      location: { city: string; lat: number; lon: number } | null,
+      cadences: typeof SEVEN_FOURTEEN | null = SEVEN_FOURTEEN
+    ) {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(whenIso));
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getHousehold).mockResolvedValue(
+        location === null
+          ? null
+          : ({ id: 'hh-1', name: 'Home', location, createdAt: '', createdBy: 'u' } as never)
+      );
+      const { completeTask } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({
+          Item: { ...baseTask, frequency: 9, seasonalCadences: cadences },
+        })
+        .mockResolvedValueOnce({ Attributes: { ...baseTask } })
+        .mockResolvedValueOnce({});
+      await completeTask('hh-1', 't1', 'user-1', 'Test');
+      const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as SentCommand;
+      return update.input.ExpressionAttributeValues[':nextDue'] as string;
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('advances by the dormant cadence in November and the growing one in May', async () => {
+      // The issue's own acceptance criterion. Base frequency is 9 and appears
+      // in neither answer, so a fallback to it cannot pass as a seasonal hit.
+      expect(await completeAt('2026-11-15T09:00:00.000Z', BERLIN)).toBe(
+        '2026-11-29T09:00:00.000Z' // +14
+      );
+      vi.clearAllMocks();
+      expect(await completeAt('2026-05-15T09:00:00.000Z', BERLIN)).toBe(
+        '2026-05-22T09:00:00.000Z' // +7
+      );
+    });
+
+    it('reverses both for a southern-hemisphere household', async () => {
+      expect(await completeAt('2026-11-15T09:00:00.000Z', MELBOURNE)).toBe(
+        '2026-11-22T09:00:00.000Z' // +7
+      );
+      vi.clearAllMocks();
+      expect(await completeAt('2026-05-15T09:00:00.000Z', MELBOURNE)).toBe(
+        '2026-05-29T09:00:00.000Z' // +14
+      );
+    });
+
+    it('uses the base frequency when the household has no location', async () => {
+      const household = { id: 'hh-1', name: 'Home', location: null };
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-11-15T09:00:00.000Z'));
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getHousehold).mockResolvedValue(household as never);
+      const { completeTask } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({
+          Item: { ...baseTask, frequency: 9, seasonalCadences: SEVEN_FOURTEEN },
+        })
+        .mockResolvedValueOnce({ Attributes: { ...baseTask } })
+        .mockResolvedValueOnce({});
+      await completeTask('hh-1', 't1', 'user-1', 'Test');
+      const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as SentCommand;
+      // +9, the base frequency — not the 14 the profile would have given.
+      expect(update.input.ExpressionAttributeValues[':nextDue']).toBe('2026-11-24T09:00:00.000Z');
+    });
+
+    it('still completes, on the base frequency, when the household read throws', async () => {
+      // A transient DynamoDB failure must never cost someone their completion.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-11-15T09:00:00.000Z'));
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getHousehold).mockRejectedValue(new Error('throttled'));
+      const { completeTask } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({
+          Item: { ...baseTask, frequency: 9, seasonalCadences: SEVEN_FOURTEEN },
+        })
+        .mockResolvedValueOnce({ Attributes: { ...baseTask } })
+        .mockResolvedValueOnce({});
+      const result = await completeTask('hh-1', 't1', 'user-1', 'Test');
+      expect(result).not.toBeNull();
+      const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as SentCommand;
+      expect(update.input.ExpressionAttributeValues[':nextDue']).toBe('2026-11-24T09:00:00.000Z');
+    });
+
+    it('does not read the household at all for a task with no profile', async () => {
+      // Every task in production is this one. A household GetItem per
+      // completion would be paid by the kiosk, sitter-link and plant-tag
+      // paths too, and none of them would ever consult the answer.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-11-15T09:00:00.000Z'));
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getHousehold).mockClear();
+      const { completeTask } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({ Item: { ...baseTask, frequency: 9, seasonalCadences: null } })
+        .mockResolvedValueOnce({ Attributes: { ...baseTask } })
+        .mockResolvedValueOnce({});
+      await completeTask('hh-1', 't1', 'user-1', 'Test');
+      expect(householdService.getHousehold).not.toHaveBeenCalled();
+      const update = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as SentCommand;
+      expect(update.input.ExpressionAttributeValues[':nextDue']).toBe('2026-11-24T09:00:00.000Z');
+    });
   });
 
   it('completeTask guards with attribute_exists + expected nextDue and syncs GSI keys', async () => {
