@@ -161,10 +161,14 @@ export function preflightFailures({ status, allowOrigin, allowMethods, allowHead
  * Evaluate the real POST. Pure, for the same reason as above: the assertions
  * are the point of this script and must be readable and testable on their own.
  */
-export function postFailures({ status, allowOrigin, origin }) {
+export function postFailures({ status, allowOrigin, origin, pendingDeploy = null }) {
   const failures = [];
 
-  if (status !== EXPECTED_POST_STATUS) {
+  // A production that predates the `delivery` kind is not a delivery failure,
+  // and saying it is trains everyone to ignore this check (#639). The status
+  // assertion is the only one that outcome explains, so it is the only one
+  // suppressed; the CORS assertion below still has to hold.
+  if (status !== EXPECTED_POST_STATUS && pendingDeploy === null) {
     failures.push(
       `POST returned HTTP ${status} (expected ${EXPECTED_POST_STATUS}) — the browser discards this outcome today, so a renamed route, a schema change, added auth or the rate limiter all look identical to a delivered report`
     );
@@ -178,6 +182,58 @@ export function postFailures({ status, allowOrigin, origin }) {
   }
 
   return failures;
+}
+
+/**
+ * Tell "this build predates the `delivery` kind" apart from "delivery is
+ * broken" (#639).
+ *
+ * `a8354c8e` added the `delivery` member of `frontendTelemetrySchema` and the
+ * probe that exercises it in one commit. `cd-production.yml` triggers on `v*`
+ * tags, so the probe went live on merge while the schema shipped only on the
+ * next release, and this check was red every fifteen minutes for reasons that
+ * had nothing to do with what it monitors. A monitor that cannot tell "not
+ * shipped yet" from "broken" has the same defect the rest of this rail exists
+ * to remove — and a check that is red all week is one nobody reads when it
+ * finally means something.
+ *
+ * The signature is narrow on purpose. A deployed zod discriminated union
+ * rejects an unknown discriminator by naming the ones it DOES accept:
+ *
+ *   {"message":"Validation failed",
+ *    "details":{"kind":["Invalid discriminator value. Expected 'error' | 'vital'"]}}
+ *
+ * So this returns a reason only when the rejection is about `kind`, and the
+ * kinds production lists do not include the one we sent. Any other 400 — a
+ * field we got wrong, a schema that dropped a member it still lists, a
+ * rejection naming a different field — is still a failure, because those are
+ * real drift between the browser's payload and the deployed schema.
+ */
+export function pendingDeployReason({ status, body, kind }) {
+  if (status !== 400 || typeof body !== 'string' || body === '') return null;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+
+  const messages = parsed?.details?.kind;
+  if (!Array.isArray(messages)) return null;
+
+  const discriminator = messages.find(
+    (message) => typeof message === 'string' && message.includes('Invalid discriminator value')
+  );
+  if (discriminator === undefined) return null;
+
+  // Only when the accepted list omits our kind. If production lists `delivery`
+  // and still rejected it, something is genuinely wrong and this must not
+  // swallow it.
+  const accepted = [...discriminator.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  if (accepted.length === 0 || accepted.includes(kind)) return null;
+
+  return `production accepts ${accepted.map((value) => `"${value}"`).join(', ')} but not "${kind}", so the deployed build predates the ${kind} kind — this is a pending deploy, not a delivery failure (#639)`;
 }
 
 /** The synthetic heartbeat body. Must satisfy `frontendTelemetrySchema`. */
@@ -266,13 +322,27 @@ export async function checkDelivery(telemetryUrl, origin, timeoutMs = DEFAULT_TI
   if (!post.ok) {
     steps.push({ step: 'post', status: 0, failures: [`request failed (${post.reason})`] });
   } else {
+    // Read the body only on the one status that can carry a pending-deploy
+    // rejection. A body that cannot be read is not evidence of anything, so it
+    // falls through as an ordinary failure rather than as "pending".
+    let body = '';
+    if (post.response.status === 400) {
+      body = await post.response.text().catch(() => '');
+    }
+    const pendingDeploy = pendingDeployReason({
+      status: post.response.status,
+      body,
+      kind: probePayload().kind,
+    });
     steps.push({
       step: 'post',
       status: post.response.status,
+      pendingDeploy,
       failures: postFailures({
         status: post.response.status,
         allowOrigin: post.response.headers.get('access-control-allow-origin'),
         origin,
+        pendingDeploy,
       }),
     });
   }
@@ -322,14 +392,18 @@ export async function main(argv) {
   console.log(`Endpoint: ${telemetryUrl}`);
   for (const result of steps) {
     if (result.failures.length === 0) {
-      console.log(`ok    ${result.step} (HTTP ${result.status})`);
+      const label = result.pendingDeploy ? 'PEND' : 'ok  ';
+      console.log(`${label}  ${result.step} (HTTP ${result.status})`);
+      if (result.pendingDeploy) console.log(`        … ${result.pendingDeploy}`);
     } else {
       console.log(`FAIL  ${result.step} (HTTP ${result.status})`);
       for (const failure of result.failures) console.log(`        ✗ ${failure}`);
+      if (result.pendingDeploy) console.log(`        … ${result.pendingDeploy}`);
     }
   }
 
   const failed = steps.filter((result) => result.failures.length > 0);
+  const pending = steps.filter((result) => result.pendingDeploy && result.failures.length === 0);
 
   if (options.expectFailure) {
     if (failed.length === 0) {
@@ -346,12 +420,32 @@ export async function main(argv) {
   }
 
   if (failed.length > 0) {
+    // State what the probe measured, not what it would like to conclude. It
+    // established that THIS request was refused; whether real browser reports
+    // are also failing depends on which assertion broke, and a 400 naming our
+    // own payload says nothing about the `error` and `vital` kinds (#639).
+    const steps_ = failed.map((result) => result.step).join(', ');
     console.error(
-      `\nTelemetry delivery check FAILED for ${failed.length} of ${steps.length} step(s).\n` +
-        `Browser error reports are not reaching CloudWatch right now, and nothing else would have said so: ` +
-        `the FrontendErrors alarm reads an absence of reports as health (issue #576).`
+      `\nTelemetry delivery check FAILED for ${failed.length} of ${steps.length} step(s): ${steps_}.\n` +
+        `A synthetic browser at ${options.origin} could not complete the reporting path above. ` +
+        `Report delivery runs through this same route, and the FrontendErrors alarm reads an ` +
+        `absence of reports as health (issue #576), so nothing else would raise this — but read ` +
+        `the assertions above before concluding that real error reports are being lost.`
     );
     return 1;
+  }
+
+  if (pending.length > 0) {
+    // Deliberately exit 0. Red for a reason unrelated to what a monitor
+    // monitors is how a monitor stops being read (#639). The next release
+    // clears this on its own.
+    console.log(
+      `\nTelemetry delivery check PENDING DEPLOY: the reporting path is reachable and CORS is ` +
+        `correct, but production does not yet know the probe's payload kind. ` +
+        `cd-production.yml deploys on a \`v*\` tag, so this clears with the next release. ` +
+        `Not treated as a delivery failure.`
+    );
+    return 0;
   }
 
   console.log(
