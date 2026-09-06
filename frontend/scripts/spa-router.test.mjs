@@ -132,6 +132,31 @@ test('a route that starts with "assets" is still a route', () => {
   assert.equal(rewrite('/assetsomething'), '/app-shell.html');
 });
 
+// The deep-link association files. `apple-app-site-association` is
+// extensionless by Apple's spec, so before the `/.well-known/` rule it fell
+// through to the shell rewrite: Apple's CDN would have been served 200
+// text/html regardless of what the deploy uploaded, and the file would have
+// sat in the bucket, correctly typed, and unreachable. Asserted here because
+// nothing else in the repo can catch it — the upload steps in
+// cd-production.yml and scripts/deploy.sh would all report success.
+test('nothing under /.well-known/ is rewritten, so an association file is reachable', () => {
+  for (const uri of [
+    '/.well-known/assetlinks.json',
+    '/.well-known/apple-app-site-association', // extensionless: the whole point
+    '/.well-known/',
+    '/.well-known',
+  ]) {
+    assert.equal(rewrite(uri), uri, `well-known path ${uri}`);
+  }
+});
+
+// Same shape as the `/assetsomething` case: a path whose first segment merely
+// begins with the same letters is not the well-known prefix, and is still a
+// route.
+test('a route whose first segment starts with ".well-known" is still a route', () => {
+  assert.equal(rewrite('/.well-knownish/page'), '/app-shell.html');
+});
+
 test('the generated route map matches the public route list', () => {
   assert.deepEqual(committedRoutes().sort(), mappedRoutes().sort());
 });
