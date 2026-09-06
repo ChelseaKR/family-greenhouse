@@ -7,23 +7,36 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
   # Cancel superseded runs on a pull request — pushing again to a PR makes the
   # previous run's verdict irrelevant, and that is what this setting is for.
   #
   # Never cancel on `main`. A push to `main` is the only CI run that ever tests
   # that exact squashed commit, and cancelling it leaves the commit on `main`
   # with no completed result — the branch has a gap in its record rather than a
-  # green one. Because `cancel-in-progress` was unconditional and the group key
-  # is just the ref, every merge cancelled the previous merge's run: measured
-  # 2026-09-04 over the 33 most recent `main` pushes, 16 of them (48%) ended
-  # `cancelled`, so nearly half of `main`'s commits carried no finished verdict
-  # from the workflow that holds nine of the repository's required checks.
+  # green one.
   #
-  # PR runs still cancel, so the fast-iteration benefit is unchanged. The cost
-  # is that consecutive merges now run concurrently instead of superseding each
-  # other; Actions minutes are free on this public repository, and total
-  # job-minutes are unchanged — only whether the work is thrown away.
+  # `cancel-in-progress: false` alone does not achieve that, which is where the
+  # previous revision of this block stopped. A concurrency group holds at most
+  # one *running* run and at most one *pending* run. `cancel-in-progress: false`
+  # protects the running one; it does nothing for the pending one, and when a
+  # third run enters the group GitHub cancels the pending run to make room. With
+  # the group keyed on the ref alone, every `main` push landed in one group, so
+  # a merge arriving while an earlier run was still going queued as pending and
+  # was then cancelled by the merge after it — before dispatching a single job.
+  #
+  # Measured 2026-09-06 over the 100 `main` CI runs since that revision merged:
+  # 32 ended `cancelled`, every one with `jobs.total_count == 0`, each cancelled
+  # within ~2s of the next push creating its run. The rate moved from 48% to
+  # 32%; the gap did not close. Those commits carry no finished verdict from the
+  # workflow that holds twelve of the thirteen required status checks.
+  #
+  # Keying a push by `github.sha` gives every `main` commit a group of its own,
+  # so `main` runs never contend and consecutive merges genuinely do run
+  # concurrently rather than superseding each other. Pull requests keep a stable
+  # per-ref group and still cancel on a new push, so fast iteration is unchanged.
+  # Actions minutes are free on this public repository and total job-minutes are
+  # unchanged — only whether the work survives long enough to become a verdict.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
