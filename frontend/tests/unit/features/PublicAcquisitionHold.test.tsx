@@ -65,6 +65,36 @@ describe('free registration with paid activity on hold', () => {
     }
   });
 
+  it('names only the reminder channels production can deliver', () => {
+    // #607. SMS is built and fail-closed: production leaves
+    // `sms_notifications_enabled` empty, so `smsAvailable()` in
+    // backend/src/handlers/notifications/handler.ts is false for every real
+    // user — the toggle renders disabled, phone verification is hidden, and a
+    // request that enables it anyway is rejected. The landing page sold
+    // "Browser, email, or text" regardless, which a visitor could only
+    // discover was untrue after signing up. A channel may be marketed once
+    // the flag that delivers it is on, and this reads that flag rather than
+    // trusting the copy.
+    const repositoryRoot = resolve(process.cwd(), '..');
+    const productionVars = readFileSync(
+      resolve(repositoryRoot, 'infrastructure/environments/production/terraform.tfvars'),
+      'utf8'
+    );
+    const smsDelivers = /^\s*sms_notifications_enabled\s*=\s*"1"/m.test(productionVars);
+
+    // Comment lines are stripped: the source explains why SMS is absent, and
+    // that explanation must not read as the claim it is there to prevent.
+    const landingCopy = readFileSync(
+      resolve(repositoryRoot, 'frontend/src/features/landing/LandingPage.tsx'),
+      'utf8'
+    ).replace(/^\s*\/\/.*$/gm, '');
+
+    expect(
+      smsDelivers || !/\bSMS\b|\bor text\b|\btext message/i.test(landingCopy),
+      'LandingPage.tsx offers a text/SMS reminder channel that production does not deliver'
+    ).toBe(true);
+  });
+
   it('advertises free registration in crawler and PWA metadata', () => {
     const repositoryRoot = resolve(process.cwd(), '..');
     for (const relativePath of ['frontend/index.html', 'frontend/vite.config.ts']) {

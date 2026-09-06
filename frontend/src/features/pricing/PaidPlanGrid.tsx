@@ -33,7 +33,23 @@ const TAGLINE_KEY: Record<PlanId, string> = {
  *
  *  Every bullet here is checkable against code today. A capability that has
  *  not shipped is not listed, whatever the catalog's `features` map says —
- *  see FEATURE_BULLETS. */
+ *  see FEATURE_BULLETS.
+ *
+ *  Greenhouse carried "Priority support" until #607. There is no support
+ *  tiering anywhere in the repo: features/legal/SupportPage.tsx hands the one
+ *  SUPPORT_EMAIL to every plan, nothing reads a household's tier when a
+ *  request arrives, and there is no queue, routing rule or response-time
+ *  target to read. It was a service commitment sold at $9.99/mo with nothing
+ *  behind it. It goes back when something implements it.
+ *
+ *  Garden's identification bullet says "more each month", not "priority",
+ *  because that is what the code does: IDENTIFY_ALLOWANCES in
+ *  backend/src/services/identifyBudget.ts gives Seedling 1, Garden 30 and
+ *  Greenhouse 100 per calendar month (enforced in production —
+ *  identify_metering_enabled = "1"). It is a larger allowance; there is no
+ *  queue, and a Garden identification is not faster than a free one. The
+ *  numbers stay out of the bullet: they live in one place and a copy here
+ *  would be a second one to keep in step. */
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   seedling: [
     'pricing.featureSharedHousehold',
@@ -47,13 +63,9 @@ const PLAN_FEATURES: Record<PlanId, string[]> = {
     'pricing.featureEverythingSeedling',
     'pricing.featureUnlimitedMembers',
     'pricing.featureFullHistory',
-    'pricing.featurePriorityIdentification',
+    'pricing.featureMoreIdentification',
   ],
-  greenhouse: [
-    'pricing.featureEverythingGarden',
-    'pricing.featureManyHomes',
-    'pricing.featurePrioritySupport',
-  ],
+  greenhouse: ['pricing.featureEverythingGarden', 'pricing.featureManyHomes'],
 };
 
 /**

@@ -166,6 +166,27 @@ describe('PaidPlanGrid', () => {
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
   });
 
+  it('sells no support tier, and calls Garden’s identification difference an allowance', () => {
+    // #607. "Priority support" sat on the $9.99 tier with nothing behind it:
+    // features/legal/SupportPage.tsx hands the one SUPPORT_EMAIL to every
+    // plan, and no queue, routing rule or response-time target exists to
+    // honour it. "Priority plant identification" was a mislabel of a real
+    // difference — IDENTIFY_ALLOWANCES (backend/src/services/identifyBudget.ts)
+    // gives Seedling 1, Garden 30 and Greenhouse 100 a month — so the bullet
+    // now claims the allowance, which is what ships, and not a queue, which
+    // does not exist.
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+    expect(screen.queryByText(/priority/i)).not.toBeInTheDocument();
+    expect(card('Garden').getByText('More plant identifications each month')).toBeInTheDocument();
+    // Greenhouse keeps the two differentiators that are enforced.
+    expect(card('Greenhouse').getByText('Everything in Garden')).toBeInTheDocument();
+    expect(
+      card('Greenhouse').getByText('Unlimited homes — belong to every home you help with')
+    ).toBeInTheDocument();
+  });
+
   it('renders no call to action when the caller supplies none', () => {
     // The public pricing page and Settings pass different CTAs; the grid
     // itself must never invent a purchase path.
