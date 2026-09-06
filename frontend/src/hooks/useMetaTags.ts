@@ -1,6 +1,6 @@
 import { useContext, useEffect } from 'react';
 import { MetaSinkContext } from './metaSink';
-import type { MetaTags } from '@/config/seo';
+import type { ArticleMeta, MetaTags } from '@/config/seo';
 
 /**
  * Mutate <head> meta tags imperatively for the lifetime of a route. Cleans
@@ -66,6 +66,9 @@ export function useMetaTags(meta: MetaTags): void {
   // rebuild every head tag on every render (title/JSON-LD flicker). Depend on
   // a stable serialization instead.
   const jsonLdKey = meta.jsonLd ? JSON.stringify(meta.jsonLd) : undefined;
+  // Same reason as jsonLdKey above: callers build this inline, so a new
+  // object identity every render would re-run the effect forever.
+  const articleKey = meta.article ? JSON.stringify(meta.article) : undefined;
   useEffect(() => {
     const cleanups: Array<() => void> = [];
     if (meta.title) {
@@ -90,6 +93,24 @@ export function useMetaTags(meta: MetaTags): void {
     }
     if (meta.ogType) {
       cleanups.push(setMeta('og:type', meta.ogType, 'property'));
+    }
+    // Parity with headToTags in config/seo.ts. Scrapers never run JS, so the
+    // prerendered head is what they actually read and this path is only for
+    // in-tab navigation — but a route that leaves these behind hands the next
+    // page the previous one's publish date, so they are emitted (and cleaned
+    // up) here for the same reason og:type is.
+    cleanups.push(setMeta('og:locale', 'en_US', 'property'));
+    if (meta.ogType === 'article' && articleKey) {
+      const { publishedTime, modifiedTime, section } = JSON.parse(articleKey) as ArticleMeta;
+      if (publishedTime) {
+        cleanups.push(setMeta('article:published_time', publishedTime, 'property'));
+      }
+      if (modifiedTime) {
+        cleanups.push(setMeta('article:modified_time', modifiedTime, 'property'));
+      }
+      if (section) {
+        cleanups.push(setMeta('article:section', section, 'property'));
+      }
     }
     if (meta.robots) {
       cleanups.push(setMeta('robots', meta.robots));
@@ -120,6 +141,7 @@ export function useMetaTags(meta: MetaTags): void {
     meta.ogType,
     meta.canonical,
     meta.robots,
+    articleKey,
     jsonLdKey,
   ]);
 }

@@ -109,3 +109,57 @@ describe('headToTags', () => {
     expect(tags.split('<script type="application/ld+json">')[1]).not.toContain('</script><script>');
   });
 });
+
+/**
+ * `article:*` and `og:locale`. Both content templates declared
+ * `og:type=article` while shipping none of the properties that type carries,
+ * so a LinkedIn or Facebook unfurl of a post or a care guide had no date to
+ * show — and evergreen guides had no freshness signal at all in a preview.
+ */
+describe('article Open Graph properties', () => {
+  it('emits og:locale on every page, article or not', () => {
+    const tags = headToTags(resolveHead({ title: 'x' }, '/x'));
+    expect(tags).toContain('<meta property="og:locale" content="en_US" />');
+  });
+
+  it('emits only the article dates a route actually supplies', () => {
+    const post = headToTags(
+      resolveHead(
+        {
+          title: 'p',
+          ogType: 'article',
+          article: { publishedTime: '2026-05-05', section: 'Blog' },
+        },
+        '/blog/p'
+      )
+    );
+    expect(post).toContain('<meta property="article:published_time" content="2026-05-05" />');
+    expect(post).toContain('<meta property="article:section" content="Blog" />');
+    // A blog post has no modified date to give: the manifest has no such
+    // field, and restating publishedTime as modifiedTime is the conflation
+    // the Article JSON-LD already makes.
+    expect(post).not.toContain('article:modified_time');
+  });
+
+  it('lets a care guide give a review date without claiming a publish date', () => {
+    const guide = headToTags(
+      resolveHead(
+        {
+          title: 'g',
+          ogType: 'article',
+          article: { modifiedTime: '2026-09-02', section: 'Plant care' },
+        },
+        '/care/g'
+      )
+    );
+    expect(guide).toContain('<meta property="article:modified_time" content="2026-09-02" />');
+    expect(guide).not.toContain('article:published_time');
+  });
+
+  it('never emits article:* on a non-article page', () => {
+    const page = headToTags(
+      resolveHead({ title: 'x', article: { publishedTime: '2026-05-05' } }, '/pricing')
+    );
+    expect(page).not.toContain('article:');
+  });
+});

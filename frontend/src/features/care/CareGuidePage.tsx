@@ -89,6 +89,9 @@ export function CareGuidePage() {
           description: guide.metaDescription,
           canonical: `${SITE}/care/${guide.slug}`,
           ogType: 'article',
+          // Only modifiedTime: `reviewed` is a REVIEW date, not a publish
+          // date, and the guides carry no record of when they first shipped.
+          article: { modifiedTime: guide.reviewed, section: 'Plant care' },
           jsonLd: {
             '@context': 'https://schema.org',
             '@graph': [

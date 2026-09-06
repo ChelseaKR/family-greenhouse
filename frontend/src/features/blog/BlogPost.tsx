@@ -29,6 +29,9 @@ export function BlogPost() {
           description: post.metaDescription ?? post.description,
           canonical: `${SITE_URL}/blog/${post.slug}`,
           ogType: 'article',
+          // Only publishedTime: the manifest has no `modified` field, so
+          // there is no honest value for article:modified_time.
+          article: { publishedTime: post.date, section: 'Blog' },
           // Article schema makes the post eligible for Google's article
           // rich-results treatment. Publisher logo and `image` are both set
           // below; a per-post hero image and a named Person author are the
