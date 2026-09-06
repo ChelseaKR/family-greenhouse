@@ -242,7 +242,11 @@ const differentiators = [
   {
     icon: BellAlertIcon,
     label: "Reminders where you'll see them",
-    body: 'Browser, email, or text. Pick the channel, set quiet hours, and both get respected.',
+    // Browser and email only: SMS is built but gated on SMS_NOTIFICATIONS_ENABLED,
+    // which production leaves empty (environments/production/terraform.tfvars), so
+    // the toggle is disabled for every real user and the help page says as much.
+    // "or text" goes back in when the flag is on, not before.
+    body: 'Browser or email. Pick the channel, set quiet hours, and both get respected.',
   },
   {
     icon: ChartBarIcon,
