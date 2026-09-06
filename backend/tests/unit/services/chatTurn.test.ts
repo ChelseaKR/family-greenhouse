@@ -69,11 +69,13 @@ import {
   trimHistory,
   BUDGET_CONFIG,
   GROUNDING_BLOCK_MESSAGE,
+  HOUSEHOLD_COVERAGE_BLOCK_MESSAGE,
   PET_SAFETY_BLOCK_MESSAGE,
   RESERVE_INPUT_TOKENS,
   RESERVE_OUTPUT_TOKENS,
   SYSTEM_PROMPT,
 } from '../../../src/services/chat/index.js';
+import { HOUSEHOLD_COVERAGE_BLOCK_COPY } from '../../../src/services/chat/blockCopy.js';
 import { lookupPetToxicityForModel } from '../../../src/services/chat/tools.js';
 import * as billing from '../../../src/services/billing.js';
 import { askSprout, isSproutIntegrationEnabled } from '../../../src/services/sprout.js';
@@ -450,6 +452,184 @@ describe('runChatTurn', () => {
       expect(JSON.stringify(vi.mocked(invokeChatModel).mock.calls[0][0].messages)).not.toContain(
         'veterinary advice'
       );
+    });
+  });
+
+  /**
+   * #549, the part #570 and #579 left open: what an answer may ASSERT once the
+   * payload admits it is a subset. Sprout is given the coverage and can state
+   * a denominator itself; this is the check that it did, and the household
+   * total it is checked against is ours, not the reply's.
+   */
+  describe('a count of a household that was only partly sent (#549)', () => {
+    function setCoverage(total: number, included: number, unmatched: number, truncated: number) {
+      return { total, included, unmatched, truncated, cap: 100, complete: included === total };
+    }
+
+    /** The over-cap household: 250 plants, 100 crossed, 50 never matched. */
+    const OVER_CAP = {
+      plants: setCoverage(250, 100, 50, 100),
+      tasks: setCoverage(12, 12, 0, 0),
+      partial: true,
+    };
+    /** The same household under the cap and fully matched. */
+    const WHOLE = {
+      plants: setCoverage(12, 12, 0, 0),
+      tasks: setCoverage(12, 12, 0, 0),
+      partial: false,
+    };
+
+    function sproutAnswer(text: string, coverage: typeof OVER_CAP) {
+      return {
+        text,
+        citations: [
+          {
+            title: 'Pothos care',
+            url: 'https://example.test/pothos',
+            source: 'pothos.md',
+            fetch_date: '2026-05-01',
+          },
+        ],
+        observations: [
+          {
+            kind: 'collection' as const,
+            value: { total_plants: 100 },
+            provenance: 'household' as const,
+            coverage: coverage.plants,
+          },
+        ],
+        disclosure: 'General information, not veterinary advice.',
+        coverage,
+      };
+    }
+
+    async function askOnce(
+      text: string,
+      coverage: typeof OVER_CAP,
+      message = 'How many plants do I have?'
+    ) {
+      vi.mocked(isSproutIntegrationEnabled).mockReturnValueOnce(true);
+      vi.mocked(askSprout).mockResolvedValueOnce(sproutAnswer(text, coverage));
+      return runChatTurn({ userId: 'u1', householdId: 'hh-1', message });
+    }
+
+    function persistedAssistantRecord() {
+      return vi.mocked(appendMessagePair).mock.calls.at(-1)?.[2];
+    }
+
+    it('does not state a total the payload cannot support, and says why instead', async () => {
+      // 250 plants in the household; 100 crossed. "You have 100 plants" is
+      // wrong by 150, and nothing in it tells the reader that.
+      const result = await askOnce('You have 100 plants.', OVER_CAP);
+
+      expect(result.assistantText).toBe(HOUSEHOLD_COVERAGE_BLOCK_MESSAGE);
+      expect(result.assistantText).not.toContain('100');
+      // The withheld answer takes its citations and Sprout's disclosure with
+      // it: the sentence delivered is Family Greenhouse's, not Sprout's.
+      expect(result.citations).toEqual([]);
+      expect(result.disclosure).toBeUndefined();
+      const content = persistedAssistantRecord()?.content;
+      expect(content?.[0]).toEqual({ type: 'text', text: HOUSEHOLD_COVERAGE_BLOCK_MESSAGE });
+      expect(content?.some((block) => block.type === 'citation')).toBe(false);
+      expect(content?.some((block) => block.type === 'disclosure')).toBe(false);
+      // The coverage block stays: it is the reason for the refusal, and it is
+      // what a reload has to show alongside the stored answer.
+      expect(content).toContainEqual({ type: 'coverage', ...OVER_CAP });
+      // Nothing about the withheld text is persisted anywhere on this turn.
+      expect(JSON.stringify(vi.mocked(appendMessagePair).mock.calls.at(-1))).not.toContain(
+        'You have 100 plants'
+      );
+    });
+
+    it('will not let an all-clear speak for the plants that never crossed', async () => {
+      // The question #549 was filed about. The unmatched plants are exactly
+      // the unidentified ones someone worries about, and they were not in the
+      // set this answer was written from.
+      const result = await askOnce(
+        'None of your plants are toxic to cats.',
+        OVER_CAP,
+        'Do I have anything toxic to my cat?'
+      );
+
+      expect(result.assistantText).toBe(HOUSEHOLD_COVERAGE_BLOCK_MESSAGE);
+    });
+
+    it('leaves the answer alone when the whole household crossed', async () => {
+      // The same sentence shape, the ONLY difference being that the household
+      // is under the cap and fully matched. A guard that fires here is a guard
+      // that has stopped answering the question it was built for.
+      const result = await askOnce('You have 12 plants.', WHOLE);
+
+      expect(result.assistantText).toBe('You have 12 plants.');
+      expect(result.citations).toHaveLength(1);
+      expect(result.disclosure).toBe('General information, not veterinary advice.');
+      expect(persistedAssistantRecord()?.content).toContainEqual({
+        type: 'text',
+        text: 'You have 12 plants.',
+      });
+    });
+
+    it('delivers a count that states what it is a count of', async () => {
+      // The shape the block message exists to make Sprout reach for: the
+      // denominator is the household total we sent it.
+      const answer = 'Of your 250 plants, 100 have a confirmed species.';
+
+      const result = await askOnce(answer, OVER_CAP);
+
+      expect(result.assistantText).toBe(answer);
+      expect(result.citations).toHaveLength(1);
+    });
+
+    it('leaves ordinary care advice alone over a partial household', async () => {
+      const result = await askOnce('Water pothos when the top inch of soil is dry.', OVER_CAP);
+
+      expect(result.assistantText).toBe('Water pothos when the top inch of soil is dry.');
+    });
+
+    it('writes the refusal in the language the question was asked in', async () => {
+      const result = await askOnce(
+        'Ninguna de tus plantas es tóxica para los gatos.',
+        OVER_CAP,
+        '¿Alguna de mis plantas es tóxica para mi gato?'
+      );
+
+      expect(result.assistantText).toBe(HOUSEHOLD_COVERAGE_BLOCK_COPY.es);
+      expect(result.assistantText).not.toBe(HOUSEHOLD_COVERAGE_BLOCK_MESSAGE);
+    });
+
+    it('records the block on the same events the other two blocks use', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const infoSpy = vi.spyOn(logger, 'info');
+
+      await askOnce('You have 100 plants.', OVER_CAP);
+
+      const blocked = warnSpy.mock.calls.find((call) => call[1] === 'chat_grounding_blocked');
+      expect(blocked?.[0]).toMatchObject({
+        blockedOn: 'household-coverage',
+        householdClaimsChecked: 1,
+        unsupportedHouseholdClaimCount: 1,
+        plantsIncluded: 100,
+        plantsTotal: 250,
+      });
+      // Never the claim text: an answer quotes the household back.
+      expect(JSON.stringify(blocked?.[0])).not.toContain('plants.');
+      const sent = infoSpy.mock.calls.find((call) => call[1] === 'chat.message_sent');
+      expect(sent?.[0]).toMatchObject({
+        metadata: { householdCoverageBlocked: true, citationCount: 0, disclosed: false },
+      });
+    });
+
+    it('says on the audit line when a partial household cost the user nothing', async () => {
+      const infoSpy = vi.spyOn(logger, 'info');
+
+      await askOnce('Water pothos when the top inch of soil is dry.', OVER_CAP);
+
+      const sent = infoSpy.mock.calls.find((call) => call[1] === 'chat.message_sent');
+      // Partial coverage and no block are different facts, and the pair is
+      // what makes "how often does this cost an answer?" a query.
+      expect(sent?.[0]).toMatchObject({
+        metadata: { coveragePartial: true, householdCoverageBlocked: false, citationCount: 1 },
+      });
     });
   });
 

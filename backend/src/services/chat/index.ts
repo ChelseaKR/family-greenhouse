@@ -37,6 +37,7 @@ import {
 } from './tools.js';
 import {
   checkGrounding,
+  checkHouseholdClaims,
   checkSafetyClaims,
   isBlockingVerdict,
   mentionsPetSafety,
@@ -72,9 +73,11 @@ import type {
 import { BUDGET_CONFIG, budgetConfigForPlan } from './budget.js';
 import {
   GROUNDING_BLOCK_COPY,
+  HOUSEHOLD_COVERAGE_BLOCK_COPY,
   PET_SAFETY_BLOCK_COPY,
   detectChatLocale,
   groundingBlockMessage,
+  householdCoverageBlockMessage,
   petSafetyBlockMessage,
 } from './blockCopy.js';
 
@@ -111,14 +114,15 @@ const MAX_OUTPUT_TOKENS_PER_CALL = 1024;
 const MAX_HISTORY_MESSAGES = 24;
 
 /**
- * The English forms of the two block messages, kept as named exports because
- * that is how the eval suite and the tests refer to them. Both messages now
- * live in `blockCopy.ts` in every language the product ships, and the turn
- * picks the one that matches the language the user asked in — see that file
- * for why the question's language, and not a stored preference, decides it.
+ * The English forms of the three block messages, kept as named exports because
+ * that is how the eval suite and the tests refer to them. All three now live
+ * in `blockCopy.ts` in every language the product ships, and the turn picks
+ * the one that matches the language the user asked in — see that file for why
+ * the question's language, and not a stored preference, decides it.
  */
 export const GROUNDING_BLOCK_MESSAGE = GROUNDING_BLOCK_COPY.en;
 export const PET_SAFETY_BLOCK_MESSAGE = PET_SAFETY_BLOCK_COPY.en;
+export const HOUSEHOLD_COVERAGE_BLOCK_MESSAGE = HOUSEHOLD_COVERAGE_BLOCK_COPY.en;
 
 // Tokens reserved up front by the atomic budget gate (reserveBudget), then
 // reconciled to actual usage when the turn finishes. A modest representative
@@ -216,13 +220,16 @@ export interface RunChatTurnResult {
   /**
    * Sprout's own required per-answer disclosure, verbatim. Omitted when Sprout
    * sent an empty one — the schema permits it, and an empty string rendered as
-   * a disclosure is worse than none.
+   * a disclosure is worse than none — and when the answer was replaced by the
+   * household-coverage block, since the sentence delivered is then ours.
    */
   disclosure?: string;
   /**
    * How much of the household this answer was actually computed over (#549).
    * Aggregate integers only. Returned so a caller can qualify the answer
-   * rather than inherit `buildSproutContext`'s reductions silently.
+   * rather than inherit `buildSproutContext`'s reductions silently — and it
+   * describes `assistantText` whichever text that is, including the
+   * household-coverage block, whose whole subject is these numbers.
    */
   coverage?: SproutCoverage;
   provider?: 'sprout' | 'bedrock';
@@ -662,6 +669,42 @@ async function* turnEvents(
         // disclosure should not look like a delivered one from the outside.
         logger.warn({ conversationId }, 'sprout_answer_without_disclosure');
       }
+      // The last of #549, and the reason the coverage above is computed at
+      // all: what an answer may ASSERT when its payload was a subset. Sprout
+      // is given the coverage and can qualify a number itself; this is the
+      // check that it did, made on our side because the household total is
+      // ours and a claim about it must not be verifiable only by the service
+      // making it. An unsupported count or all-clear replaces the answer, on
+      // the ADR 0009 / 0011 precedent — a number the reader cannot tell is
+      // wrong is worse than a refusal that says why (ADR 0026).
+      const household = checkHouseholdClaims(sprout.text, sprout.coverage);
+      const blockedOnCoverage = household.unsupportedHouseholdClaims.length > 0;
+      if (blockedOnCoverage) {
+        // Never log the claim text: an answer quotes the household back.
+        logger.warn(
+          {
+            conversationId,
+            blockedOn: 'household-coverage',
+            householdClaimsChecked: household.householdClaimsChecked.length,
+            unsupportedHouseholdClaimCount: household.unsupportedHouseholdClaims.length,
+            plantsIncluded: sprout.coverage.plants.included,
+            plantsTotal: sprout.coverage.plants.total,
+            tasksIncluded: sprout.coverage.tasks.included,
+            tasksTotal: sprout.coverage.tasks.total,
+          },
+          'chat_grounding_blocked'
+        );
+      }
+      // The citations and the disclosure belong to the withheld answer, not to
+      // the refusal: Family Greenhouse wrote the sentence below, so attaching
+      // Sprout's "AI-generated, not veterinary advice" note to it would credit
+      // our own copy to Sprout. The coverage block stays on either path — it
+      // is the reason for the refusal, and the facts behind it.
+      const answerText = blockedOnCoverage
+        ? householdCoverageBlockMessage(detectChatLocale(message))
+        : sprout.text;
+      const citations = blockedOnCoverage ? [] : sprout.citations;
+      const shownDisclosure = blockedOnCoverage ? '' : disclosure;
       const userRecord: ChatMessageRecord = {
         conversationId,
         timestamp: new Date().toISOString(),
@@ -673,9 +716,9 @@ async function* turnEvents(
         timestamp: new Date().toISOString(),
         role: 'assistant',
         content: [
-          { type: 'text', text: sprout.text },
-          ...sprout.citations.map((citation) => ({ type: 'citation' as const, ...citation })),
-          ...(disclosure ? [{ type: 'disclosure' as const, text: disclosure }] : []),
+          { type: 'text', text: answerText },
+          ...citations.map((citation) => ({ type: 'citation' as const, ...citation })),
+          ...(shownDisclosure ? [{ type: 'disclosure' as const, text: shownDisclosure }] : []),
           // Attached whether or not it is partial and whether or not Sprout
           // returned an observation: the PROSE above came out of the same
           // reduced set, so the qualification belongs to the whole answer.
@@ -718,10 +761,10 @@ async function* turnEvents(
       }
       const result: RunChatTurnResult = {
         conversationId,
-        assistantText: sprout.text,
+        assistantText: answerText,
         proposals: [],
-        citations: sprout.citations,
-        disclosure: disclosure || undefined,
+        citations,
+        disclosure: shownDisclosure || undefined,
         coverage: sprout.coverage,
         provider: 'sprout',
         budgetRemaining: {
@@ -749,14 +792,20 @@ async function* turnEvents(
         metadata: {
           conversationId,
           provider: 'sprout',
-          citationCount: sprout.citations.length,
+          // What was DELIVERED, not what arrived: a blocked answer keeps
+          // neither its citations nor its disclosure, and an audit line that
+          // counted them anyway would describe a turn nobody had.
+          citationCount: citations.length,
           // Aggregate integers and booleans only, no strings — the same
           // reason `coverage` itself is safe to carry. This is what makes
           // "did this answer come from a subset of the household?" answerable
           // in production today, ahead of any decision about what to render.
           observationCount: sprout.observations.length,
-          disclosed: disclosure.length > 0,
+          disclosed: shownDisclosure.length > 0,
           coveragePartial: sprout.coverage.partial,
+          // The other half of that question: did the subset actually cost the
+          // user an answer this time (ADR 0026)?
+          householdCoverageBlocked: blockedOnCoverage,
           plantsIncluded: sprout.coverage.plants.included,
           plantsTotal: sprout.coverage.plants.total,
           plantsUnmatched: sprout.coverage.plants.unmatched,

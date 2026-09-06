@@ -77,6 +77,25 @@ export const PET_SAFETY_BLOCK_COPY: Record<ChatLocale, string> = {
   es: 'No puedo confirmar que esa planta sea segura para las mascotas: esta respuesta no salió de nuestra tabla verificada de toxicidad, así que la he retenido. Usa el verificador de seguridad para mascotas en /pet-safe (basado en la lista de plantas tóxicas y no tóxicas de la ASPCA) o consulta a tu veterinario. Si un animal ya se comió o mordió una planta, o presenta síntomas, contacta a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA (888-426-4435) ahora mismo.',
 };
 
+/**
+ * Replaces an answer that counted the user's own collection, or spoke for all
+ * of it, when only part of it reached the answering service (#549, ADR 0026).
+ *
+ * A refusal-with-pointer, like the pet-safety message and for the same reason:
+ * the complete count exists and is one tap away, in the plant list the user
+ * already has. It also names the one thing that puts a plant back into these
+ * answers — matching it to a species — because the larger of the two
+ * reductions is the canonical-species privacy filter, not the cap.
+ *
+ * Neither reduction is quantified in the copy. The numbers differ per turn and
+ * live in the `coverage` block persisted beside this message; a static string
+ * that guessed at them would be the same defect one layer out.
+ */
+export const HOUSEHOLD_COVERAGE_BLOCK_COPY: Record<ChatLocale, string> = {
+  en: "I can't give you that number for your collection: only part of it reached this answer, so any total would have been counted from a subset without saying so. Your plant list has the complete count. I can only include a plant here once it's been matched to a species, so identifying the ones that haven't been is what brings them into answers like this.",
+  es: 'No puedo darte ese número sobre tu colección: solo una parte llegó a esta respuesta, así que cualquier total se habría contado sobre un subconjunto sin decirlo. Tu lista de plantas tiene el recuento completo. Aquí solo puedo incluir una planta cuando está asociada a una especie, así que identificar las que faltan es lo que las incorpora a respuestas como esta.',
+};
+
 /** Accent-fold and lowercase, so the word list below stays ASCII. */
 function fold(text: string): string {
   return text
@@ -124,4 +143,8 @@ export function groundingBlockMessage(locale: ChatLocale): string {
 
 export function petSafetyBlockMessage(locale: ChatLocale): string {
   return PET_SAFETY_BLOCK_COPY[locale];
+}
+
+export function householdCoverageBlockMessage(locale: ChatLocale): string {
+  return HOUSEHOLD_COVERAGE_BLOCK_COPY[locale];
 }

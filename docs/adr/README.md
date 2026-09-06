@@ -55,6 +55,7 @@ be invisible.
 | [0023](0023-billing-lifecycle-emails.md)                            | Billing lifecycle emails: transactional, idempotent, and never a number we did not read            | Accepted |
 | [0024](0024-ask-family-to-do-it.md)                                 | "Ask family to do it" is a second door onto one state                                              | Accepted |
 | [0025](0025-household-timezone-and-the-due-date-migration.md)       | A due date is a calendar day in the household's zone, and the migration to it is staged            | Proposed |
+| [0026](0026-household-counts-over-a-partial-payload-block.md)       | An answer may not count a household it was only partly given                                       | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 
