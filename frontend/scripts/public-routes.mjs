@@ -37,6 +37,7 @@ export const FRONTEND_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '.
 const POSTS = join(FRONTEND_ROOT, 'src', 'features', 'blog', 'posts', 'index.ts');
 const CARE = join(FRONTEND_ROOT, 'src', 'features', 'care', 'careGuides.ts');
 const HELP = join(FRONTEND_ROOT, 'src', 'features', 'help', 'helpContent.tsx');
+const CHANGELOG = join(FRONTEND_ROOT, '..', 'CHANGELOG.md');
 
 /**
  * Canonical production origin. MUST match `src/config/site.ts` (SITE_URL) —
@@ -97,6 +98,18 @@ export function readCareGuides() {
  * Every section is public on the web. `webOnly` hides a section inside the
  * iOS/Android shells only, and the store builds are not what a crawler reads.
  */
+/**
+ * The date of the newest released CHANGELOG entry, for /changelog's lastmod.
+ * Matches `## [x.y.z] - YYYY-MM-DD` and ignores `## [Unreleased]`, which
+ * carries no date and would otherwise read as the newest thing on the page.
+ * Returns undefined if the format ever changes, which omits the tag rather
+ * than emitting a wrong one.
+ */
+export function readChangelogDate() {
+  const src = readFileSync(CHANGELOG, 'utf8');
+  return /^## \[\d+\.\d+\.\d+\][^\n]*?(\d{4}-\d{2}-\d{2})/m.exec(src)?.[1];
+}
+
 export function readHelpTopics() {
   const src = readFileSync(HELP, 'utf8');
   const re = /id:\s*'([^']+)',\s*title:\s*'/g;
@@ -144,7 +157,32 @@ export function publicRoutes() {
     changefreq: 'monthly',
   }));
 
-  return [...STATIC_ROUTES, ...blogEntries, ...careEntries, ...helpEntries];
+  // Hub lastmods, derived rather than restated. `lastmod` is the only
+  // sitemap field Google still consumes (changefreq and priority are
+  // documented as ignored), and the hubs are where a crawler learns that new
+  // children exist — so /blog and /care handing over no freshness signal left
+  // recrawl of the two highest-value listing pages to chance.
+  //
+  // Each is max(children), which is exactly true: the hub changes when its
+  // newest child does. Reproducible for the same reason the child entries
+  // are, so `--check` still byte-compares.
+  //
+  // The remaining static routes keep no lastmod on purpose, for the reason
+  // the help entries above give: there is no honest source for one, and a
+  // date that moves at midnight is both a lie and unverifiable.
+  const newest = (dates) => [...dates].sort().at(-1);
+  const hubLastmod = new Map([
+    ['/blog', newest(readBlogDates().values())],
+    ['/care', newest(readCareGuides().values())],
+    ['/changelog', readChangelogDate()],
+  ]);
+
+  const staticEntries = STATIC_ROUTES.map((route) => {
+    const lastmod = hubLastmod.get(route.path);
+    return lastmod ? { ...route, lastmod } : route;
+  });
+
+  return [...staticEntries, ...blogEntries, ...careEntries, ...helpEntries];
 }
 
 /** Just the paths — what the prerenderer and the coverage gate compare. */

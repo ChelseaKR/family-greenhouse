@@ -36,15 +36,20 @@ import { FRONTEND_ROOT, SITE, publicRoutes } from './public-routes.mjs';
 
 const OUT = join(FRONTEND_ROOT, 'public', 'sitemap.xml');
 
+// The sitemaps.org 0.9 schema declares <url> as an xsd:sequence of
+// loc, lastmod, changefreq, priority — the order is part of the schema, not a
+// convention. This emitted lastmod last, which Google's lenient parser
+// accepts but strict validators (and Screaming Frog's XML validation) flag,
+// and it put the one field Google still consumes in the position a strict
+// parser stops reading at.
 function urlEntry({ path, priority, changefreq, lastmod }) {
-  const lines = [
-    `  <url>`,
-    `    <loc>${SITE}${path}</loc>`,
+  const lines = [`  <url>`, `    <loc>${SITE}${path}</loc>`];
+  if (lastmod) lines.push(`    <lastmod>${lastmod}</lastmod>`);
+  lines.push(
     `    <changefreq>${changefreq}</changefreq>`,
     `    <priority>${priority.toFixed(1)}</priority>`,
-  ];
-  if (lastmod) lines.push(`    <lastmod>${lastmod}</lastmod>`);
-  lines.push(`  </url>`);
+    `  </url>`
+  );
   return lines.join('\n');
 }
 
