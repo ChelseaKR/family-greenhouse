@@ -15,6 +15,18 @@ on:
   push:
     tags:
       - 'v*'
+  # Also on pull requests that touch the check itself. Without this the whole
+  # workflow — the releases fetch, the check, the negative control — would first
+  # execute on main, after review, with nothing having proved it runs. A gate
+  # whose first execution is in production is not a gate yet. Path-filtered, so
+  # it never appears on an unrelated pull request, and it is not a required
+  # check, so it cannot jam the queue.
+  pull_request:
+    paths:
+      - '.github/workflows/release-record.yml'
+      - '.github/release-record-baseline.txt'
+      - 'scripts/check-release-record.mjs'
+      - 'scripts/check-release-record.test.mjs'
   schedule:
     # Mondays, 15:20 UTC. Off the hour so it is not queued behind the crowd.
     - cron: '20 15 * * 1'
