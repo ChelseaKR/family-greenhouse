@@ -21,20 +21,33 @@ purchase.
 
 Source of truth: `backend/src/models/plans.ts`.
 
-| Plan       | Monthly | Plants cap | Members cap | Notes                           |
-| ---------- | ------- | ---------- | ----------- | ------------------------------- |
-| Seedling   | Free    | 10         | 6           | Default for every new household |
-| Garden     | $4.99   | 500        | 6           | 14-day free trial via Stripe    |
-| Greenhouse | $9.99   | 5000       | 50          | 14-day free trial               |
+| Plan       | Monthly | Plants cap | Members cap | Notes                                 |
+| ---------- | ------- | ---------- | ----------- | ------------------------------------- |
+| Seedling   | Free    | 20         | 3           | Default for every new household       |
+| Garden     | $4.99   | 200        | Unlimited   | 14-day free trial, once per household |
+| Greenhouse | $9.99   | 5000       | Unlimited   | 14-day free trial, once per household |
 
-Seedling's member cap is deliberately the same as Garden's, not 1 — household
-sharing is a free, unrestricted capability by design (competitors like
-Planta paywall it entirely; matching that would give up the product's main
-differentiator). Only plant count and paid-feature depth are monetization
-levers. This table previously listed 1 for Seedling, which was stale
-relative to `plans.ts` and the marketing pricing page (both already say 6) —
-if you're about to "fix" `plans.ts` to match a "1" you saw somewhere, don't;
-check here and the marketing copy first.
+`scripts/check-doc-figures.mjs` re-derives all six cap figures above from
+`plans.ts` on every `npm run verify`, and fails both when a number is wrong and
+when the row stating it is deleted. Do not hand-edit them; change `plans.ts`
+and let the gate tell you what this table should say.
+
+The tiers are drawn on **homes and hands**, not collection size
+([ADR 0014](adr/0014-plans-drawn-on-homes-and-hands.md)). `plans.ts` states the
+reasoning at each limit: Seedling's 20 plants are deliberate generosity, because
+plant rows cost nothing and "generosity here buys member #2 — the metric that
+matters"; its cap of 3 members is where the charge lands, "at the fourth hand …
+never at the second". Members are uncapped on both paid tiers, so the members
+column is a free-tier boundary rather than a paid-tier ceiling.
+
+> **Superseded note, kept because it was load-bearing advice.** This paragraph
+> used to say Seedling's member cap was "deliberately the same as Garden's, not
+> 1", that household sharing was "a free, unrestricted capability by design",
+> and — directly — that a reader who saw a smaller number in `plans.ts` should
+> not "fix" `plans.ts` but trust this file instead. ADR 0014 re-cut the tiers
+> and made all of that false, so the instruction pointed maintainers away from
+> the source of truth and at a stale table. `plans.ts` is the source of truth;
+> this file follows it, and now the gate enforces that direction.
 
 Caps are enforced in:
 

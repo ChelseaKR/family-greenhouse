@@ -183,6 +183,71 @@ if (distinct.length !== 1) {
   });
 }
 
+// --- docs/billing.md: the plan caps -----------------------------------------
+// Added after the table was found stale on FIVE of its six cap figures while
+// real cards were being charged: Seedling read 10 plants / 6 members against an
+// actual 20 / 3, Garden 500 / 6 against 200 / unlimited, Greenhouse 50 members
+// against unlimited. #618 fixed the same defect in the help pages and this file
+// was missed, which is the argument for deriving it rather than fixing it once
+// more by hand.
+//
+// The prose under the table made it worse than a stale number: it instructed a
+// reader who saw a smaller figure in `plans.ts` not to "fix" `plans.ts` but to
+// trust this table — pointing maintainers away from the source of truth. A
+// document that can send someone to correct the code from the doc is one that
+// has to be gated in the direction the repository actually reads.
+const BILLING = 'docs/billing.md';
+const plansSource = read('backend/src/models/plans.ts');
+
+/** Read one `limits` field off a tier in `plans.ts`. `UNLIMITED` is `null`. */
+function planLimit(tier, field) {
+  const block = plansSource.match(
+    new RegExp(`id: '${tier}'[\\s\\S]*?limits:\\s*\\{([\\s\\S]*?)\\}`)
+  );
+  if (block === null) {
+    problems.push(`backend/src/models/plans.ts: no limits block for tier "${tier}".`);
+    return null;
+  }
+  const value = block[1].match(new RegExp(`\\b${field}:\\s*([A-Za-z0-9_]+)`));
+  if (value === null) {
+    problems.push(`backend/src/models/plans.ts: tier "${tier}" has no \`${field}\` limit.`);
+    return null;
+  }
+  return value[1] === 'UNLIMITED' ? 'Unlimited' : value[1];
+}
+
+for (const tier of ['seedling', 'garden', 'greenhouse']) {
+  const plants = planLimit(tier, 'plants');
+  const members = planLimit(tier, 'members');
+  if (plants === null || members === null) continue;
+
+  // One row per tier, matched as a whole so a reordered or deleted row fails
+  // rather than silently matching nothing.
+  //
+  // Anchored to the start of a line, and every skipped cell is `[^|\n]*` rather
+  // than `[^|]*`: "Seedling" is also the value of the last cell in the
+  // entitlement table above, and a cell pattern that can cross a newline walks
+  // out of that row into the next one and matches twice. The gate caught that
+  // while it was being written, which is the behaviour these patterns want.
+  const name = tier[0].toUpperCase() + tier.slice(1);
+  const row = `^\\|\\s*${name}\\s*\\|`;
+  const cell = '[^|\\n]*\\|';
+  statesFigure({
+    file: BILLING,
+    label: `the ${name} plants cap`,
+    pattern: new RegExp(`${row}${cell}\\s*([A-Za-z0-9]+)\\s*\\|`, 'gm'),
+    expected: plants,
+    expectedMatches: 1,
+  });
+  statesFigure({
+    file: BILLING,
+    label: `the ${name} members cap`,
+    pattern: new RegExp(`${row}${cell}${cell}\\s*([A-Za-z0-9]+)\\s*\\|`, 'gm'),
+    expected: members,
+    expectedMatches: 1,
+  });
+}
+
 if (problems.length > 0) {
   console.error('\n❌ Stated figures no longer match the repository:\n');
   for (const p of problems) console.error(`   ${p}`);
@@ -192,6 +257,6 @@ if (problems.length > 0) {
 
 console.log(
   `Doc figures OK — quality-audit.md states no hand-maintained route count ` +
-    `(${routeCount} handler routes on disk, via --print) and README's aligned version ` +
-    `(${distinct[0]}) re-derived from the repository.`
+    `(${routeCount} handler routes on disk, via --print), README's aligned version ` +
+    `(${distinct[0]}) and billing.md's six plan caps re-derived from the repository.`
 );
