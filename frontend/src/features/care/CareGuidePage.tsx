@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
@@ -14,11 +15,55 @@ import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
 
 const SITE = SITE_URL;
 
+/**
+ * Minimal inline-link syntax for guide prose: `[text](/path)`, internal paths
+ * only. Deliberately not a markdown parser — `careGuides.ts` sections and FAQ
+ * answers are `string`, rendered as `{text}` into JSX, so anything richer
+ * would mean either a markdown runtime or `dangerouslySetInnerHTML`, and the
+ * copy needs exactly one construct.
+ *
+ * Why it exists: twelve places in careGuides.ts wrote "the free pet-safe
+ * checker at /pet-safe", and with no parser the reader saw the literal
+ * characters `/pet-safe` mid-sentence. The copy said "link" and the DOM had
+ * no anchor, so /pet-safe — the highest-intent page on the site — got zero
+ * inbound links from the 24 pages most likely to send it traffic.
+ *
+ * Paths only, never absolute URLs: an external href would need rel/target
+ * handling and a trust decision, and none of this copy wants one.
+ */
+const INLINE_LINK = /\[([^\]]+)\]\((\/[A-Za-z0-9\-._~/]*)\)/g;
+
+function withLinks(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(INLINE_LINK)) {
+    const at = match.index;
+    if (at > last) out.push(text.slice(last, at));
+    out.push(
+      <Link key={at} to={match[2]!} className="text-primary-700 underline hover:no-underline">
+        {match[1]}
+      </Link>
+    );
+    last = at + match[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/**
+ * The same prose with the link syntax removed, for places that need plain
+ * text rather than nodes — notably the FAQPage JSON-LD, which must publish
+ * the sentence a reader sees and not `[free pet-safe checker](/pet-safe)`.
+ */
+function plainText(text: string): string {
+  return text.replace(INLINE_LINK, '$1');
+}
+
 function Paragraphs({ items }: { items: string[] }) {
   return (
     <>
       {items.map((p, i) => (
-        <p key={i}>{p}</p>
+        <p key={i}>{withLinks(p)}</p>
       ))}
     </>
   );
@@ -76,7 +121,7 @@ export function CareGuidePage() {
                 mainEntity: guide.faqs.map((f) => ({
                   '@type': 'Question',
                   name: f.q,
-                  acceptedAnswer: { '@type': 'Answer', text: f.a },
+                  acceptedAnswer: { '@type': 'Answer', text: plainText(f.a) },
                 })),
               },
               {
@@ -202,7 +247,7 @@ export function CareGuidePage() {
           {guide.faqs.map((f) => (
             <div key={f.q} className="mt-4">
               <dt className="font-semibold text-gray-900">{f.q}</dt>
-              <dd className="mt-1 text-gray-700">{f.a}</dd>
+              <dd className="mt-1 text-gray-700">{withLinks(f.a)}</dd>
             </div>
           ))}
         </dl>
