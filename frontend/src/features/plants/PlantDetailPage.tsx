@@ -700,6 +700,12 @@ function TaskRow({
   const streakText = streakLabel(task, streakReading);
   const style = taskTypeStyle(task.type);
   const { Icon } = style;
+  // What the schedule will actually advance by on the next completion.
+  const intervalInForce = resolveCadence(
+    task.frequency,
+    task.seasonalCadences,
+    hemisphereForLatitude(latitude)
+  ).frequency;
 
   return (
     <li className="px-4 py-4 hover:bg-parchment/60 sm:px-6">
@@ -717,19 +723,11 @@ function TaskRow({
           <div className="min-w-0">
             {/* The interval IN FORCE, not the base `frequency`: on a task with
                 a seasonal profile those differ, and the row is where a
-                household would read the wrong one. The chip underneath names
-                the season and when it changes. */}
-            <p className="text-sm text-gray-900">
-              Every{' '}
-              {
-                resolveCadence(
-                  task.frequency,
-                  task.seasonalCadences,
-                  hemisphereForLatitude(latitude)
-                ).frequency
-              }{' '}
-              days
-            </p>
+                household would read the wrong one. Same JSX shape as before —
+                one expression between two text nodes — so the interval reads as
+                a single normalised string. The chip underneath names the season
+                and when it changes. */}
+            <p className="text-sm text-gray-900">Every {intervalInForce} days</p>
             <SeasonalCadenceBadge task={task} latitude={latitude} />
             {isReadOnly ? (
               <p className="text-xs font-medium text-amber-800">
