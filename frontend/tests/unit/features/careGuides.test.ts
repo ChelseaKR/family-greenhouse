@@ -65,3 +65,42 @@ describe('CARE_GUIDES registry', () => {
     }
   });
 });
+
+/**
+ * Guide prose supports one inline construct, `[text](/path)`, rendered by
+ * `withLinks` in CareGuidePage. Before it existed, twelve entries wrote "the
+ * free pet-safe checker at /pet-safe" and the reader saw those characters
+ * verbatim: the copy promised a link and the DOM had no anchor, so the
+ * highest-intent page on the site got nothing from the 24 pages likeliest to
+ * feed it.
+ */
+describe('inline links in guide prose', () => {
+  const proseOf = (g: (typeof CARE_GUIDES)[number]) => [
+    ...g.sections.watering,
+    ...g.sections.light,
+    ...g.sections.problems,
+    ...g.sections.sharedCare,
+    ...g.sections.honestBit,
+    ...g.faqs.map((f) => f.a),
+  ];
+
+  it('never leaves a bare internal path in prose, which renders as literal text', () => {
+    for (const guide of CARE_GUIDES) {
+      for (const text of proseOf(guide)) {
+        // A path not preceded by "](" is one no anchor will wrap.
+        const bare = text.match(/(?<!]\()\/(?:pet-safe|care|blog|help|pricing)\b/g);
+        expect(bare, `${guide.slug} has an unlinked path: ${bare?.join(', ')}`).toBeNull();
+      }
+    }
+  });
+
+  it('links /pet-safe from every guide that discusses pet toxicity', () => {
+    const linked = CARE_GUIDES.filter((g) => proseOf(g).some((t) => t.includes('](/pet-safe)')));
+    expect(linked.length).toBeGreaterThan(0);
+    for (const guide of linked) {
+      const withLink = proseOf(guide).find((t) => t.includes('](/pet-safe)'))!;
+      // Descriptive anchor text, not "here" or a bare path.
+      expect(withLink).toMatch(/\[free pet-safe (?:checker|tool)\]\(\/pet-safe\)/);
+    }
+  });
+});
