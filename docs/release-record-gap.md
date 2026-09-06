@@ -147,6 +147,43 @@ jam the PR queue.
 
 The check cannot close the gap. It only stops it growing.
 
+## A second gap in the same namespace: nothing protects the tags
+
+Found while measuring the above, and reported rather than fixed.
+
+There is no tag ruleset on this repository. `.github/rulesets/` holds only
+`main.json`, and the live ruleset list is one entry, `protect-main`, whose rules
+are `non_fast_forward`, `deletion` and `required_status_checks` — all scoped to
+the branch, none to tags.
+
+`RELEASE-AND-VERSIONING-STANDARD.md` §3.1 requires the opposite:
+
+> A committed repository-owned `.github/rulesets/tags.json` named
+> `protect-release-tags` targets exactly `refs/tags/v*`, restricts **all
+> updates** and deletions, and has no bypass actors. `non_fast_forward` alone is
+> insufficient because it can still permit a fast-forward tag move.
+
+So today a `v*` tag can be moved or deleted, and because `cd-production.yml`
+triggers on `push: tags: ['v*']`, moving one is a production deploy of whatever
+it now points at.
+
+**This is not a change to make without the owner, for a reason beyond the usual
+one.** The standard's text says the ruleset must have _no bypass actors_. The
+owner's standing instruction across this portfolio is that she must always be
+able to bypass, in any repository — an empty bypass list has locked her out
+before, and restoring access took a sweep across eighteen repositories. Those
+two requirements contradict, and the contradiction has to be settled by her, not
+worked around here. `gtfs-scorecard` shows what following the text produces: its
+`.github/rulesets/tags.json` carries `"bypass_actors": []` and the live ruleset
+confirms it, so nobody — including her — can move or delete a mistagged release
+there.
+
+Deciding this needs one answer to one question: does `protect-release-tags` get
+the repository-admin bypass
+(`{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}`),
+with §3.1's "no bypass actors" amended to say so, or does the standard's text
+win? Nothing should be applied to either repository until that is settled.
+
 ## What the owner has to decide
 
 1. **Backfill or declare.** Either publish releases for the 32 tags that
