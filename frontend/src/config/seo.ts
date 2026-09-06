@@ -31,6 +31,26 @@ import { SITE_URL, siteUrl } from './site';
  *  care guides use `article`. */
 export type OgType = 'website' | 'article';
 
+/**
+ * ISO-8601 dates for an `og:type=article` page. Both are optional and only
+ * the ones supplied are emitted, because the two article surfaces have
+ * genuinely different sources: a blog post knows when it was PUBLISHED
+ * (`post.date`), and a care guide knows when it was last REVIEWED
+ * (`guide.reviewed`). Neither knows the other.
+ *
+ * Restating one as the other is exactly the conflation the Article JSON-LD
+ * already makes — `dateModified` is hardwired to `datePublished` on both
+ * templates, which is why 14 guides currently claim to have been *published*
+ * on their review date. Emitting only what is actually known keeps this from
+ * being a second instance of it.
+ */
+export interface ArticleMeta {
+  publishedTime?: string;
+  modifiedTime?: string;
+  /** Blog vs. care guide, so a share preview can say which section it is. */
+  section?: string;
+}
+
 /** Search-engine indexing policy. Use `noindex, nofollow` for app-only,
  * tokenized, or error pages that can otherwise look like valid SPA URLs. */
 export type RobotsPolicy = 'index, follow' | 'noindex, follow' | 'noindex, nofollow';
@@ -46,6 +66,17 @@ export interface MetaTags {
    *  instead of guessing — important for the indexable marketing routes. */
   canonical?: string;
   robots?: RobotsPolicy;
+  /**
+   * Article metadata, emitted as the `article:*` Open Graph properties and
+   * only when `ogType` is `'article'`.
+   *
+   * Both content templates already declared `og:type=article` while shipping
+   * none of the properties that type exists to carry — so LinkedIn and
+   * Facebook had no publish date to show in an unfurl, and evergreen care
+   * guides carried no freshness signal at all in a share preview. The dates
+   * were already in hand: they feed the Article JSON-LD on the same pages.
+   */
+  article?: ArticleMeta;
   /** Optional JSON-LD payload (Article, FAQ, etc.). The shape isn't validated
    *  here — the caller is responsible for emitting valid schema.org. */
   jsonLd?: Record<string, unknown>;
@@ -87,6 +118,7 @@ export interface ResolvedHead {
   twitterDescription: string;
   twitterImage: string;
   robots: RobotsPolicy;
+  article?: ArticleMeta | undefined;
   jsonLd?: Record<string, unknown> | undefined;
 }
 
@@ -134,6 +166,7 @@ export function resolveHead(meta: MetaTags | null, path: string | null): Resolve
     // A route that renders its own page is unaffected: prerendered files pass
     // a real `path` and keep `index, follow`.
     robots: meta?.robots ?? (path === null ? 'noindex, follow' : 'index, follow'),
+    article: meta?.article,
     jsonLd: meta?.jsonLd,
   };
 }
@@ -180,6 +213,22 @@ export function headToTags(head: ResolvedHead): string {
     meta('name', 'twitter:description', head.twitterDescription),
     meta('name', 'twitter:image', head.twitterImage),
     meta('name', 'twitter:image:alt', TWITTER_IMAGE_ALT),
+    // Facebook guesses the locale without this; the site ships English only
+    // (i18n/index.ts collapses SUPPORTED_LANGS to ['en']).
+    meta('property', 'og:locale', 'en_US'),
+    ...(head.ogType === 'article' && head.article
+      ? [
+          ...(head.article.publishedTime
+            ? [meta('property', 'article:published_time', head.article.publishedTime)]
+            : []),
+          ...(head.article.modifiedTime
+            ? [meta('property', 'article:modified_time', head.article.modifiedTime)]
+            : []),
+          ...(head.article.section
+            ? [meta('property', 'article:section', head.article.section)]
+            : []),
+        ]
+      : []),
     meta('name', 'robots', head.robots),
     ...(head.jsonLd
       ? [`<script type="application/ld+json">${jsonLdScript(head.jsonLd)}</script>`]
