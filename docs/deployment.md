@@ -182,11 +182,16 @@ The webhook route needs to be configured for **raw body** so Stripe's signature 
 
 ## CI/CD
 
-Two workflows in `.github/workflows/`:
+The deployment-relevant workflows in `.github/workflows/` (the security and
+availability ones are covered elsewhere; the count is deliberately not stated
+here, because a hand-maintained count in prose goes stale — this list said "two"
+while naming three):
 
 - `ci.yml` — runs on every PR + push to `main`: lint, typecheck, test, build
 - `cd-staging.yml` — manual staging deploy (`workflow_dispatch`)
 - `cd-production.yml` — version tag (`v*`) or manual dispatch deploys to production
+- `release-record.yml` — weekly and on every `v*` tag: asserts each deployed tag
+  left a GitHub Release behind it (`docs/release-record-gap.md`)
 
 Use OIDC federated identity from GitHub to AWS instead of static keys:
 
@@ -236,11 +241,30 @@ npm --workspace frontend run build
 Staging → production uses an approval gate in `cd-production.yml`. Tag a release:
 
 ```bash
-git tag v1.2.3
+git tag -s v1.2.3 -m 'v1.2.3'
 git push origin v1.2.3
 ```
 
 The workflow opens a deploy request that an admin approves before applying.
+
+**A `v*` tag is a deployment, not a bookmark.** `cd-production.yml` triggers on
+`push: tags: ['v*']`, so pushing the tag is the act that ships to production and
+to real paying customers. There is no separate "deploy" command to decide on
+afterwards.
+
+**Publishing the GitHub Release is part of the procedure, not an optional
+flourish.** `RELEASE-AND-VERSIONING-STANDARD.md` §4 step 7 and §6 require it,
+carrying the SBOM, the provenance attestation, and the tag's `CHANGELOG.md`
+section as its notes. Nothing automates it, so it is done by hand after the
+deploy succeeds:
+
+```bash
+gh release create v1.2.3 --title 'v1.2.3' --notes-file <the CHANGELOG section>
+```
+
+This step was skipped for 38 of the 46 tags cut before 2026-09-06;
+[docs/release-record-gap.md](release-record-gap.md) is the measurement and
+`.github/workflows/release-record.yml` is what stops the gap growing further.
 
 ## Rolling back
 

@@ -1,0 +1,50 @@
+# Tags that deployed to production without a GitHub Release, as measured on
+# 2026-09-06. Read by scripts/check-release-record.mjs; the narrative, the
+# method and the per-tag deploy outcomes are in docs/release-record-gap.md.
+#
+# This file is a BASELINE, not a permission. Its job is to stop the gap growing
+# silently: a v* tag that is not listed here and has no GitHub Release after the
+# grace period fails the release-record check. Every line here is a release
+# record the owner still owes, and the correct edit to this file is a deletion
+# after the release is published — never an addition.
+#
+# Blank lines and lines starting with `#` are ignored.
+
+v0.8.0
+v0.9.0
+v0.10.0
+v0.11.0
+v0.11.1
+v0.12.0
+v0.12.1
+v0.12.2
+v0.12.3
+v0.13.0
+v0.13.1
+v0.14.0
+v0.14.1
+v0.14.2
+v0.15.0
+v0.15.1
+v0.15.2
+v0.15.3
+v0.15.4
+v0.16.0
+v0.16.1
+v0.17.0
+v0.18.0
+v0.19.0
+v0.21.0
+v0.22.0
+v0.23.0
+v0.23.1
+v0.23.2
+v0.23.3
+v0.23.4
+v0.23.5
+v0.24.0
+v0.25.0
+v0.26.0
+v0.27.0
+v0.28.0
+v0.29.0
