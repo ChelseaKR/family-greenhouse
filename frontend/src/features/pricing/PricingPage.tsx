@@ -4,6 +4,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { PricingGrid } from './PricingGrid';
+import { pricingJsonLd } from './pricingJsonLd';
 import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
@@ -51,6 +52,12 @@ export function PricingPage() {
         : 'Paid plans, purchases, plan changes, and new account registration are paused.'
       : 'Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.',
     canonical: siteUrl('/pricing'),
+    // SoftwareApplication + Offer, from the guarded price mirror rather than
+    // from the runtime catalog: the prerendered HTML is written at build time,
+    // long before any fetch, and it is the only version of this page a crawler
+    // that runs no JavaScript ever sees. Which offers may be published — and
+    // why there is no aggregateRating — is decided in `pricingJsonLd`.
+    jsonLd: pricingJsonLd(),
   });
 
   if (native) {
