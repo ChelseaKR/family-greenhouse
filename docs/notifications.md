@@ -26,6 +26,7 @@ For each member of the household:
   5. notifier.sendToUser(recipient, payload, {channels})
         │
         ├─▶ if prefs.browser → web-push to all stored PushSubscriptions
+        │                    → FCM to all stored DeviceTokens (unconfigured)
         ├─▶ if prefs.email   → SES SendEmailCommand
         └─▶ if prefs.sms && prefs.phone → SNS Publish
 ```
@@ -236,6 +237,31 @@ Endpoint hash is the first 64 bits of SHA-256. The point is to dedupe per
 device without putting a long provider URL in the sort key. When the browser
 drops a subscription (404/410 from web-push), the notifier deletes the row.
 
+### Device tokens (native shells)
+
+The same shape for APNs/FCM registration tokens, written by the iOS/Android
+shells through `POST /notifications/devices`:
+
+```
+PK: USER#{userId}
+SK: DEVICE#{tokenHash}
+entityType: DeviceToken
+userId, householdId, platform: ios|android, token, createdAt
+```
+
+`notifier.sendDevicePush` reads these, sends through `services/fcmNotifier.ts`,
+and deletes any row FCM answers `UNREGISTERED` for — the native half of the
+404/410 rule above, and the mechanism that clears rows left behind when a
+device rotates its token. It is capped at the 20 newest devices per user for
+the fan-out, after following every DynamoDB page; a user over that cap logs
+`device_tokens_capped`.
+
+Nothing about this channel is live: `FCM_SERVICE_ACCOUNT_SECRET_ID` is blank
+everywhere, so the sender logs `device_push_unconfigured` once per Lambda
+container and returns without a network call. The app's push toggle is
+unreachable too. See docs/mobile.md § Push notifications for what is still
+outstanding.
+
 ### Reminder channel markers
 
 Each accepted reminder channel is stored independently:
@@ -290,6 +316,37 @@ notification URLs. The worker and push handler are deployed with `no-cache`
 headers so browsers see handler fixes promptly.
 
 Without these env vars, `notifier.sendBrowserPush` logs a `push_dry_run` line and returns — the rest of the fan-out is unaffected.
+
+### Native push (APNs/FCM)
+
+The `browser` preference covers both push transports. Web push reaches
+browsers; the native shells have no Push API, so they register an APNs/FCM
+device token instead and `notifier.sendDevicePush` delivers to it through the
+FCM HTTP v1 API. Both legs run concurrently under the one `browser` channel
+and one reminder marker, and either arriving counts as the delivery.
+
+Set `FCM_SERVICE_ACCOUNT_SECRET_ID` (Terraform:
+`fcm_service_account_secret_id`) to the Secrets Manager name or ARN of a
+Firebase service-account JSON. `services/fcmNotifier.ts` reads it once per
+Lambda container, signs an RS256 JWT with the key, exchanges it for a
+`firebase.messaging` access token, and reuses that token for the whole
+fan-out. There is no `firebase-admin` dependency: everything needed is one
+`node:crypto` signature and two `fetch` calls, and the Lambda bundles ship to
+every notification handler.
+
+Failure states are deliberately distinct:
+
+| State                                       | Log                                        | Effect                                      |
+| ------------------------------------------- | ------------------------------------------ | ------------------------------------------- |
+| Secret id blank (every environment today)   | `device_push_unconfigured`, once/container | No network call. Channel behaves as before. |
+| Secret set but unreadable or not valid JSON | `device_push_credentials_unavailable`      | Warn, back off 15 min, prune nothing.       |
+| FCM answers 404 / `UNREGISTERED`            | —                                          | The token row is deleted.                   |
+| Anything else (5xx, 429, timeout, 400)      | `device_push_failed`                       | Token kept, retried next run.               |
+
+The last two rows are the important pair. `INVALID_ARGUMENT` is a 400 and is
+NOT treated as a dead token: FCM returns it for a message body it cannot parse
+as well as for a token it cannot parse, so pruning on it would delete every
+registration in the installed base the first time a payload bug shipped.
 
 ### Email (SES)
 

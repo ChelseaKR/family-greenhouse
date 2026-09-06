@@ -1,6 +1,8 @@
 import webpush from 'web-push';
 import { logger } from '../utils/logger.js';
 import * as pushSubscriptions from './pushSubscriptions.js';
+import * as deviceTokens from './deviceTokens.js';
+import * as fcmNotifier from './fcmNotifier.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
 import * as smsNotifier from './smsNotifier.js';
@@ -159,6 +161,72 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
   return anyDelivered;
 }
 
+/**
+ * The native sibling of `sendBrowserPush`: APNs/FCM device tokens registered
+ * by the Capacitor shells (`frontend/src/services/nativePush.ts`), delivered
+ * through the FCM HTTP v1 API.
+ *
+ * Same contract as its browser twin, for the same reason. Returns whether at
+ * least one device ACTUALLY received the notification, so an unconfigured
+ * channel, a user with no registered devices, or a user all of whose tokens
+ * are dead can never claim the day's reminder slot on a notification nobody
+ * saw.
+ *
+ * The two are disjoint in practice — the WebViews have no Push API and so
+ * never hold a web-push subscription, and a desktop browser never holds a
+ * device token — so a user is reached over whichever of the two their
+ * installs actually produced, and `prefs.browser` (the user's "send me push
+ * notifications" intent) governs both.
+ *
+ * UNCONFIGURED IS THE NORMAL CASE TODAY. No environment has the Firebase
+ * service account, so `sendDevicePushMessages` answers `unconfigured` without
+ * a network call and this returns false — the same answer, and the same
+ * `channels.browser` value, that the reminder path produced before this
+ * existed. See `services/fcmNotifier.ts` for the one-line-per-container
+ * signal that says so.
+ */
+async function sendDevicePush(userId: string, payload: NotificationPayload): Promise<boolean> {
+  const devices = await deviceTokens.getUserDeviceTokens(userId);
+  if (devices.length === 0) return false;
+
+  const outcomes = await fcmNotifier.sendDevicePushMessages(
+    devices.map((device) => ({
+      token: device.token,
+      title: payload.title,
+      body: payload.body,
+      url: payload.url,
+      tag: payload.tag,
+    }))
+  );
+
+  let anyDelivered = false;
+  await Promise.all(
+    outcomes.map(async (outcome, index) => {
+      if (outcome === 'delivered') {
+        anyDelivered = true;
+        return;
+      }
+      // `failed` and `unconfigured` KEEP the token. Only FCM saying the token
+      // is unregistered removes it — the native equivalent of the browser's
+      // 404/410, and for the same reason: a timeout or a 5xx says nothing
+      // about whether the app is still installed.
+      if (outcome !== 'token_dead') return;
+      await deviceTokens
+        .deleteDeviceToken(userId, devices[index].token)
+        .catch((cleanupErr: unknown) => {
+          // Best-effort, exactly as on the browser side: a DynamoDB blip
+          // while deleting one dead token must not reject the whole device
+          // leg and take the user's other devices down with it.
+          logger.warn(
+            { err: cleanupErr, userId, msg: 'device_push_stale_cleanup_failed' },
+            'device_push_stale_cleanup_failed'
+          );
+        });
+    })
+  );
+  return anyDelivered;
+}
+
 function safeEndpointHost(endpoint: string): string {
   try {
     return new URL(endpoint).hostname;
@@ -197,8 +265,14 @@ export interface SendResult {
  *
  * DND policy:
  *   - Inside DND, email + SMS are suppressed (they wake people up loudly).
- *   - Browser push is NOT suppressed — the OS already manages quiet hours
- *     better than we can, and browser push respects the OS setting.
+ *   - Push is NOT suppressed — the OS already manages quiet hours better than
+ *     we can, and both push transports respect the OS setting.
+ *
+ * The `browser` channel covers BOTH push transports: web push to browsers
+ * that hold a subscription, and FCM to the native shells' device tokens. One
+ * channel because it is one user-facing preference and one reminder marker;
+ * two transports because iOS WKWebView has no Push API, so the phone and the
+ * laptop are reached by different means.
  *
  * Returns a `SendResult` describing whether anything was delivered and, if
  * not, whether the only thing standing in the way was the DND window — see
@@ -224,15 +298,30 @@ export async function sendToUser(
   const work: Promise<void>[] = [];
   if (requested.has('browser') && prefs.browser) {
     channels.browser = 'failed';
+    const pushPayload = { ...payload, body: compactBody(payload) };
     work.push(
-      sendBrowserPush(recipient.userId, { ...payload, body: compactBody(payload) })
-        .then((sent) => {
-          channels.browser = sent ? 'delivered' : 'failed';
-        })
-        .catch((err) => {
-          logger.warn({ err, userId: recipient.userId, msg: 'push_failed' }, 'push_failed');
-          channels.browser = 'failed';
-        })
+      (async () => {
+        // Web push and native device push are ONE channel to the user (and
+        // to the reminder markers): "notify me on my devices". They are two
+        // transports because a WebView has no Push API, so a household with
+        // a laptop and a phone needs both. Each leg catches its own failure —
+        // a Firebase outage must not stop the desktop notification, and vice
+        // versa — and either one arriving is a delivery.
+        const [browserSent, deviceSent] = await Promise.all([
+          sendBrowserPush(recipient.userId, pushPayload).catch((err) => {
+            logger.warn({ err, userId: recipient.userId, msg: 'push_failed' }, 'push_failed');
+            return false;
+          }),
+          sendDevicePush(recipient.userId, pushPayload).catch((err) => {
+            logger.warn(
+              { err, userId: recipient.userId, msg: 'device_push_failed' },
+              'device_push_failed'
+            );
+            return false;
+          }),
+        ]);
+        channels.browser = browserSent || deviceSent ? 'delivered' : 'failed';
+      })()
     );
   }
 

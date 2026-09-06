@@ -85,10 +85,6 @@
     "services/doubleCare.ts::readPlantCompletions::unpaginated-limit": {
       "reason": "Schedule drift over one plant's 200 most recent completions, newest first — the function's own contract is 'one page' and its caller (getScheduleDriftForPlant) is computing a recent-behaviour statistic, not a lifetime total. Older completions would not change the answer, and a failed read is a separate named state (history_unavailable) rather than 0% drift.",
       "callers": ["services/doubleCare.ts::getScheduleDriftForPlant"]
-    },
-    "services/deviceTokens.ts::getUserDeviceTokens::unpaginated-limit": {
-      "reason": "A documented UI-oriented 20-device cap with, as the empty caller set records, no production caller at all today. The one path that MUST be exhaustive — deleteUserDeviceTokens, on account deletion — deliberately queries keys directly rather than through here and follows LastEvaluatedKey, and says so in its docstring. If this ever gains a caller that sends to the devices it returns, the caller set changes, this entry fails, and the cap has to be re-argued.",
-      "callers": []
     }
   }
 }
