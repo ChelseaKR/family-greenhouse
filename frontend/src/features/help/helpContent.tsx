@@ -727,7 +727,14 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'What exactly can a plant sitter see?',
         a: (
           <>
-            <p>Only a to-do list. The page shows, for tasks due in the next 7 days or overdue:</p>
+            <p>
+              It depends on your plan, because <strong>Garden</strong> and{' '}
+              <strong>Greenhouse</strong> give the sitter a second page.
+            </p>
+            <p>
+              <strong>On every plan</strong> they get a to-do list. For each task due before the
+              link expires, or already overdue, it shows:
+            </p>
             <ul>
               <li>the plant&rsquo;s name</li>
               <li>what needs doing (water, fertilise, prune, repot, or your custom task name)</li>
@@ -735,32 +742,58 @@ export const HELP_SECTIONS: HelpSection[] = [
               <li>which space the plant is in, and its placement note</li>
             </ul>
             <p>
-              They cannot see your household members&rsquo; names or contact details, your saved
-              location, plant or task notes, photos, the activity feed, analytics, your plan or
-              billing, or any other household. They cannot even see plants that have nothing due.
+              How far ahead it reaches is the link&rsquo;s own window, not a fixed week: a 7-day
+              link on <strong>Seedling</strong> lists the next 7 days, a 90-day one on Garden or
+              Greenhouse lists all 90. Plants with nothing due are not on this list at all.
             </p>
             <p>
-              One caveat you control: plant names, space names and placement notes are your own free
-              text, and the sitter sees them verbatim. If a plant is called something you
-              wouldn&rsquo;t hand to a neighbour, rename it first.
+              <strong>On Garden and Greenhouse</strong> the Away Kit adds a printable{' '}
+              <strong>plant-care brief</strong>, linked from that list. It covers every plant in
+              your active care &mdash; not only the ones with something due &mdash; and for each one
+              it adds three things the list does not show:
+            </p>
+            <ul>
+              <li>the plant&rsquo;s latest photo</li>
+              <li>
+                your care rule for it &mdash; or, if you never wrote one,{' '}
+                <strong>the plant&rsquo;s own notes</strong>, word for word, under the heading
+                &ldquo;The household&rsquo;s note&rdquo;
+              </li>
+              <li>its entry in our verified pet-toxicity list, where it has one</li>
+            </ul>
+            <p>
+              On neither page can they see your household members&rsquo; names or contact details,
+              your saved location, task notes, the activity feed, analytics, your billing, or any
+              other household.
+            </p>
+            <p>
+              The caveat you control: plant names, space names, placement notes and custom task
+              names are your own free text, and the sitter sees them verbatim &mdash; as are plant
+              notes and plant photos once you are on Garden or Greenhouse. A door code, where the
+              spare key lives, or anything else you would not hand to a neighbour does not belong in
+              any of those fields while a sitter link is live. Move it, or rename the plant, first.
             </p>
           </>
         ),
-        text: 'Only a to-do list. The page shows, for tasks due in the next 7 days or overdue: the plant name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. They cannot see your household members names or contact details, your saved location, plant or task notes, photos, the activity feed, analytics, your plan or billing, or any other household. They cannot even see plants that have nothing due. One caveat you control: plant names, space names and placement notes are your own free text and the sitter sees them verbatim, so if a plant is called something you would not hand to a neighbour, rename it first.',
+        text: "It depends on your plan, because Garden and Greenhouse give the sitter a second page. On every plan they get a to-do list. For each task due before the link expires, or already overdue, it shows the plant's name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. How far ahead it reaches is the link's own window, not a fixed week: a 7-day link on Seedling lists the next 7 days, a 90-day one on Garden or Greenhouse lists all 90. Plants with nothing due are not on this list at all. On Garden and Greenhouse the Away Kit adds a printable plant-care brief, linked from that list. It covers every plant in your active care, not only the ones with something due, and for each one it adds three things the list does not show: the plant's latest photo; your care rule for it, or, if you never wrote one, the plant's own notes word for word under the heading “The household's note”; and its entry in our verified pet-toxicity list, where it has one. On neither page can they see your household members' names or contact details, your saved location, task notes, the activity feed, analytics, your billing, or any other household. The caveat you control: plant names, space names, placement notes and custom task names are your own free text and the sitter sees them verbatim, as are plant notes and plant photos once you are on Garden or Greenhouse. A door code, where the spare key lives, or anything else you would not hand to a neighbour does not belong in any of those fields while a sitter link is live. Move it, or rename the plant, first.",
       },
       {
         id: 'sitter-can-do',
         q: 'What can a sitter change?',
         a: (
           <p>
-            One thing: they can mark a listed task done. They cannot add, edit or delete plants or
-            tasks, snooze anything, upload photos, invite anyone, or reach settings. Their
-            completions are recorded as <strong>&ldquo;a plant sitter&rdquo;</strong> rather than
-            attributed to you or to any named person, and they advance the task&rsquo;s schedule
-            exactly as your own completions do.
+            On the free <strong>Seedling</strong> plan, one thing: they can mark a listed task done.
+            On <strong>Garden</strong> and <strong>Greenhouse</strong> the Away Kit adds a second:
+            they can send you a photo of a plant on their list, with an optional note, which joins
+            that plant&rsquo;s timeline without becoming its main picture. On any plan they cannot
+            add, edit or delete plants or tasks, snooze anything, invite anyone, or reach settings.
+            Both a completion and a photo are recorded as{' '}
+            <strong>&ldquo;a plant sitter&rdquo;</strong> rather than attributed to you or to any
+            named person, and a completion advances the task&rsquo;s schedule exactly as your own
+            do.
           </p>
         ),
-        text: 'One thing: they can mark a listed task done. They cannot add, edit or delete plants or tasks, snooze anything, upload photos, invite anyone, or reach settings. Their completions are recorded as a plant sitter rather than attributed to you or any named person, and they advance the task schedule exactly as your own completions do.',
+        text: "On the free Seedling plan, one thing: they can mark a listed task done. On Garden and Greenhouse the Away Kit adds a second: they can send you a photo of a plant on their list, with an optional note, which joins that plant's timeline without becoming its main picture. On any plan they cannot add, edit or delete plants or tasks, snooze anything, invite anyone, or reach settings. Both a completion and a photo are recorded as a plant sitter rather than attributed to you or any named person, and a completion advances the task schedule exactly as your own do.",
       },
       {
         id: 'revoke-sitter',
