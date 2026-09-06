@@ -54,6 +54,16 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://familygreenhouse.net/support</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/account-deletion</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
     <loc>https://familygreenhouse.net/blog/how-to-remember-to-water-plants</loc>
     <lastmod>2026-05-05</lastmod>
     <changefreq>monthly</changefreq>

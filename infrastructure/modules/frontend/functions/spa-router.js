@@ -58,6 +58,8 @@ var PRERENDERED = {
   '/status': 1,
   '/legal/privacy': 1,
   '/legal/terms': 1,
+  '/support': 1,
+  '/account-deletion': 1,
   '/blog/how-to-remember-to-water-plants': 1,
   '/blog/sharing-plant-care-without-becoming-the-nag': 1,
   '/blog/low-maintenance-houseplants-for-forgetful-people': 1,
