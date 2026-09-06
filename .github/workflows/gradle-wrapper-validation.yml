@@ -35,7 +35,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Per commit on a push, per ref on a pull request. A group holds one running
+  # run and one pending run; keyed on the ref alone every commit on main shares a
+  # slot and a third push evicts the second before it dispatches a job -- an
+  # absent verdict, not a red one. Pull requests keep the per-ref key so a new
+  # push to a branch still supersedes the run it replaced.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: true
 
 jobs:
