@@ -1,0 +1,78 @@
+name: Release record
+
+# A `v*` tag in this repository is a production deployment: `cd-production.yml`
+# triggers on `push: tags: ['v*']`. Measured on 2026-09-06, 46 tags had produced
+# 8 GitHub Releases, so 32 successful production deploys left no public record
+# of what shipped beyond a workflow run that ages out of the Actions UI. See
+# docs/release-record-gap.md for the measurement and
+# .github/release-record-baseline.txt for the debt this cannot retroactively fix.
+#
+# This runs on its own schedule rather than in the merge gate on purpose. It
+# asks a question about tags and releases, which a pull request cannot answer,
+# and a red scheduled run should never be able to jam the PR queue.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  schedule:
+    # Mondays, 15:20 UTC. Off the hour so it is not queued behind the crowd.
+    - cron: '20 15 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-record
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Every deployed tag has a release record
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Reading tags and releases is all this needs. It never publishes one:
+      # writing the record is the owner's judgement about what shipped.
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # The check compares tags against releases, so a checkout without
+          # tags would compare an empty set and pass every time.
+          fetch-tags: true
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Fetch releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases" \
+            --paginate --jq '.[] | {tag_name: .tag_name, draft: .draft}' \
+            | jq -s '.' > releases.json
+
+      - name: Check the release record
+        run: |
+          # pipefail, or `tee`'s exit status is the step's and a failing check
+          # reports green. `npm run verify` has been caught doing exactly that.
+          set -o pipefail
+          node scripts/check-release-record.mjs --releases releases.json \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Same discipline as uptime.yml's synthetic checks. An assertion proved
+      # only in the passing case is not an assertion, and this one passes by
+      # default the moment its baseline covers everything. Emptying the baseline
+      # must make it fail: if it does not, the check has stopped checking.
+      - name: Negative control (the check must still be able to fail)
+        run: |
+          : > /tmp/empty-baseline.txt
+          node scripts/check-release-record.mjs --releases releases.json \
+            --baseline /tmp/empty-baseline.txt --expect-failure
