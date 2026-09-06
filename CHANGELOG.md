@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-05
+
 ### Added
 
 - **A household can now record its timezone.** Nothing uses it yet, and that
@@ -28,6 +30,105 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   (`docs/adr/0025-household-timezone-and-the-due-date-migration.md`) rather
   than making it. A household that has not set a zone keeps exactly the
   behaviour it has today.
+
+- **The weekly digest carries a schedule-drift reading.** Drift has been
+  measured and correct for a while, but it rendered in exactly one place — a
+  single plant's detail page, and only once that plant had already drifted.
+  Nobody browses detail pages looking for advice they do not know exists. It
+  now arrives in the mail the household already reads.
+
+- **The Away Kit is offered where a trip is declared, not where one fails.**
+  The upgrade prompt fired in one place: the sitter-links card, when someone
+  typed a window longer than seven days. That is the moment of failure, not
+  the moment of intent, and only the minority who push against a wall the form
+  already shows them ever reached it.
+
+### Changed
+
+- **The quality gate sizes itself for the machine it is sharing.** Both the
+  gate's job pool and vitest's worker pool asked `availableParallelism()`,
+  which reports the machine's cores and not its free ones — so three
+  concurrent `npm run verify` runs each sized themselves as though they owned
+  the laptop. Measured at load average 131 on ten cores, with jsdom tests
+  missing deadlines at random and blocking pushes on branches that touched no
+  frontend file. The gate now counts its peers and divides.
+
+- **Lint and format results are cached between gate runs**, keyed on the
+  tool's own configuration rather than on the source files alone — a cache
+  that survives a config change is a check that cannot fail, which is not a
+  trade this repo makes.
+
+- **The weekly digest reads the household's plants once per report** instead
+  of once per plant.
+
+### Fixed
+
+- **Two pages the app stores link to could never be indexed.** `/support` is
+  the App Store and Play support URL and `/account-deletion` is the page
+  Google Play requires for account deletion. Neither was in the prerendered
+  route list, so both were served by the app shell — which carries `noindex`
+  — and an automated fetch got an empty page. Both now prerender, are in the
+  sitemap, and carry their own canonical.
+
+- **Every social share advertised the wrong free-plan limit.** The card
+  attached to every link shared from this site read "free for up to 10
+  plants"; the free plan has allowed 20 since the tier was re-cut. The card is
+  regenerated, and the check that pins it now compares the number against the
+  plan itself rather than only against its own source file — which is why it
+  had nothing to say for seven weeks.
+
+- **A missing asset came back as the app shell, with a 200.** Every miss under
+  the distribution — including a dropped JavaScript bundle — was rescued into
+  a success carrying the shell, so a broken deploy was indistinguishable by
+  status code from a healthy one, and the uptime check (which matches a tag
+  living in that very shell) would have called it healthy.
+
+- **The dashboard called a task overdue the moment it fell due.** A task due
+  at 09:00 announced itself as overdue at 09:00, while the list it feeds
+  buckets by calendar day and still showed it as due today.
+
+- **The sitter brief invented watering advice it promised not to.** The brief
+  states in its own introduction that nothing in it is generated, and that a
+  plant with no note says so — then printed generated text under the heading
+  "The household's note" for every plant nobody had written one for.
+
+- **The help pages stated plan caps the app does not enforce.** Two answers
+  named member and sitter-link limits that no longer matched the catalog, and
+  both are published as FAQ structured data — so the wrong numbers were served
+  to search engines as well as to the person who went looking for them.
+
+- **A low-confidence plant identification was recorded as fact.** There was no
+  confidence floor and no re-sort, and an accepted guess was written into the
+  plant's species indistinguishably from a species a person stated — a value
+  that then drives watering cadence, light and pet-safety answers.
+
+- **A household could be promised a 14-day trial it had already spent.**
+
+- **The caretaker report gave an all-clear it had not earned**, treating an
+  empty list as a completed visit.
+
+- **Care guides told readers to visit a checker they could not click.** Twelve
+  guides said "the free pet-safe checker at /pet-safe" and the path rendered
+  as literal text, so the site's pet-toxicity tool received no links from the
+  24 pages most likely to send it there.
+
+- **Search engines were given a worse version of the site than readers get.**
+  Nine help pages were titled with their sidebar labels; twelve blog posts had
+  descriptions written for the index card and truncated in results; six care
+  guides had titles cut off mid-phrase; every article page was missing the
+  image required for an article result; the home page's only main-content
+  landmark belonged to a decorative mockup, whose fake headings a crawler read
+  before any real one; and "related" links on every guide and post pointed at
+  the same three pages, leaving twenty guides and five posts with a single
+  inbound link each.
+
+- **A token-scoped caretaker link was offered to crawlers.** The rules that
+  keep sitter, kiosk, tag and share links out of a crawl listed five such
+  surfaces and the caretaker page was not among them, so a well-behaved
+  crawler that found one would fetch the credential.
+
+- **The sitemap and robots file were deployed with a one-year cache**, so a
+  correction to either could not reach a crawler that had already read it.
 
 ### Security
 
