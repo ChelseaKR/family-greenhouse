@@ -8,6 +8,19 @@ Screenshots must come from the final synchronized build and must not include
 real user data. Reviewer credentials and signing material are intentionally
 not stored here.
 
+`npm run store:screenshots --workspace frontend` regenerates all twelve
+frames. It captures the **store-demo household** — three named members, eight
+plants across five rooms, one overdue job nobody has claimed, four due today
+across three people, and a month of care history — not the mock backend's
+default one-plant `test@example.com` fixture. That household lives in
+`backend/src/local-server-store-demo.ts` and is seeded only when the API
+starts with `SEED_STORE_DEMO=1`, which `tests/e2e/playwright.store.config.ts`
+does; the spec probes for the demo account before capturing, so a dev server
+already holding port 4000 without the flag fails the run instead of quietly
+reproducing the old frames. Every name, address and plant in it is invented,
+and the addresses are `@example.com` — permanently unregistrable, so no frame
+can ever show a real person's account.
+
 `npm run mobile:validate` runs in CI (the `Lint` job) and checks every size,
 every character limit, native/`package.json` version parity, and secrets
 hygiene. It is the gate; this file is the context it cannot encode.
@@ -52,15 +65,17 @@ health guarantees appear anywhere in the metadata, and none should be added.
 
 The artwork validates, but validating is not the same as selling:
 
-- **The screenshots undersell the product.** They are captured against the
-  mock backend's default fixture (`test@example.com`), so the dashboard reads
-  "Welcome back, Test", the household has one member, and there is one plant
-  and one task. The Tasks screen is more than half empty. Nothing in any of
-  the four frames shows a second person, which is the entire pitch. Before
-  submitting, seed a store-demo household — a few named members, ~8 plants
-  across rooms, a mix of claimed / up-for-grabs / completed tasks, and a photo
-  timeline — and re-run `npm run store:screenshots --workspace frontend`.
-  "Test" as a user name is also a 2.3.3 risk on its own.
+- **No plant photographs in any frame.** Every plant in the store-demo
+  household has no `imageUrl`, so all eight cards, the plant-detail hero and
+  the phone plant-detail frame — which is mostly hero image — render the brand
+  placeholder, and `PhotoTimeline` (which needs two photos) never appears. The
+  fixture supports photos: `db.photos` rows pointing at `/mock-images/…`
+  objects would populate the strip. What it cannot supply is a photograph.
+  Inventing one and presenting it as this household's own plant is the thing
+  the no-real-user-data rule exists to prevent, and a synthetic gradient
+  standing in for a photo would read as a placeholder anyway. Real photos of
+  real plants, consented and owned, are what this needs — after which the
+  seed's `imageUrl` and `db.photos` are the two places to put them.
 - **No caption overlays.** These are raw device frames. Both stores allow
   captioned marketing frames and nearly every competitor uses them.
 - **No Android tablet screenshots.** iPad frames exist, so the app runs on a
