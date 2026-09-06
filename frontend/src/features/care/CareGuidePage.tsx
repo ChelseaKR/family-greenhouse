@@ -9,6 +9,7 @@ import { MistLeafIcon } from '@/components/icons/MistLeafIcon';
 import { PawLeafIcon } from '@/components/icons/PawLeafIcon';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
+import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
 
@@ -48,13 +49,25 @@ export function CareGuidePage() {
             '@graph': [
               {
                 '@type': 'Article',
-                headline: `${guide.commonName} Care Guide`,
+                // Was "<Name> Care Guide" while the visible H1 reads
+                // "<Name> care" and the metaTitle a third thing. Google asks
+                // that headline match the visible headline.
+                headline: `${guide.commonName} care`,
                 description: guide.metaDescription,
+                // See the note in BlogPost.tsx — `image` is required for the
+                // Article rich result and all 24 guides omitted it.
+                image: {
+                  '@type': 'ImageObject',
+                  url: DEFAULT_OG_IMAGE,
+                  width: 1200,
+                  height: 630,
+                },
                 datePublished: guide.reviewed,
                 dateModified: guide.reviewed,
                 author: { '@type': 'Organization', name: 'Family Greenhouse' },
                 publisher: {
                   '@type': 'Organization',
+                  '@id': `${SITE}/#organization`,
                   name: 'Family Greenhouse',
                   logo: {
                     '@type': 'ImageObject',
