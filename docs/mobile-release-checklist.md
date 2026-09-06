@@ -6,11 +6,12 @@
 - [x] Native HTTP handles API and presigned image uploads without weakening web CORS.
 - [x] Account deletion, AI response reporting, native purchase guards, camera disclosures, and privacy copy are implemented.
 - [x] Store icons, Play feature graphic, metadata, and review-safe screenshots validate.
-- [ ] Screenshots are re-captured from a seeded store-demo household. The
-      current frames come from the mock backend's default `test@example.com`
-      fixture: the dashboard greets "Test", the household has one member, and
-      one plant and one task carry all four frames, so the shared-household
-      pitch never appears. See `store-assets/README.md`.
+- [x] Screenshots are re-captured from a seeded store-demo household
+      (`backend/src/local-server-store-demo.ts`, `SEED_STORE_DEMO=1`): the
+      dashboard greets Dana, three named members hold work across the frames,
+      eight plants sit in five rooms, and Tasks shows one overdue job up for
+      grabs plus four due today. No frame carries a plant photograph — see
+      the remaining gap in `store-assets/README.md`.
 - [ ] Listing still says reminders are email-only. Native push is not
       implemented and production SMS is off, so this stays true until
       `docs/mobile.md`'s push work ships.

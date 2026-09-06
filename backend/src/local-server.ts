@@ -125,6 +125,7 @@ import {
   type LocalPlantTag,
   type LocalPlantTagPin,
 } from './local-server-plant-tags.js';
+import { STORE_DEMO_LOGIN, seedStoreDemoHousehold } from './local-server-store-demo.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
 import { buildCaretakerReport, resolveReportRange } from './services/caretakerReport.js';
@@ -722,6 +723,12 @@ export function resetDb(): void {
     createdBy: seedUserId,
     createdAt: now,
   });
+
+  // Opt-in second household for the store screenshot run only. Off by
+  // default so every existing caller of resetDb() sees exactly the fixture it
+  // was written against — including the integration tests that count the
+  // global `db.photos` / `db.completions` Maps. See local-server-store-demo.ts.
+  if (process.env.SEED_STORE_DEMO === '1') seedStoreDemoHousehold(db);
 }
 
 resetDb();
@@ -7051,6 +7058,11 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('\nTest account:');
     console.log('  Email: test@example.com');
     console.log('  Password: password123');
+    if (process.env.SEED_STORE_DEMO === '1') {
+      console.log('\nStore-demo household (SEED_STORE_DEMO=1):');
+      console.log(`  Email: ${STORE_DEMO_LOGIN.email}`);
+      console.log(`  Password: ${STORE_DEMO_LOGIN.password}`);
+    }
     console.log('\nFor new signups, use confirmation code: 123456');
     console.log('========================================\n');
   });

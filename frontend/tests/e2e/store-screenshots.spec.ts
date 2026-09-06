@@ -8,10 +8,33 @@ const outputByProject: Record<string, string> = {
   'google-play-phone': 'google-play/phone',
 };
 
+const API_URL = 'http://localhost:4000';
+
+/**
+ * The store-demo household, not the default `test@example.com` seed: three
+ * named members, eight plants across five rooms, and a mix of claimed,
+ * up-for-grabs and completed work, so the shared-household pitch is actually
+ * visible in the frames (backend/src/local-server-store-demo.ts).
+ */
+const DEMO = { email: 'dana@example.com', password: 'password123' };
+
 async function login(page: Page) {
+  // Probe the API first. The config reuses an already-running backend, and one
+  // started without SEED_STORE_DEMO=1 has no demo household at all — capturing
+  // it would quietly reproduce the one-plant "Welcome back, Test" frames these
+  // assets exist to replace. Failing here names the cause; failing on the
+  // dashboard URL assertion below would not.
+  const probe = await page.request.post(`${API_URL}/auth/login`, { data: DEMO });
+  expect(
+    probe.ok(),
+    `No store-demo household on ${API_URL}. It is seeded only when the API is started with ` +
+      'SEED_STORE_DEMO=1 (playwright.store.config.ts does that). Stop any dev server already ' +
+      'holding port 4000 and re-run.'
+  ).toBeTruthy();
+
   await page.goto('/login');
-  await page.getByLabel(/email/i).fill('test@example.com');
-  await page.locator('input[name="password"]').fill('password123');
+  await page.getByLabel(/email/i).fill(DEMO.email);
+  await page.locator('input[name="password"]').fill(DEMO.password);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
