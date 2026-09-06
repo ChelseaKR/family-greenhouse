@@ -575,3 +575,41 @@ For end-to-end verification against Stripe directly, use the Stripe CLI to forwa
 stripe listen --forward-to localhost:4000/billing/webhook
 stripe trigger checkout.session.completed
 ```
+
+## What the Terms of Service say, and where it comes from
+
+The public Terms (`/legal/terms`, sourced from `legal.terms.*` in
+`frontend/src/i18n/locales/{en,es}/legal.json` — the deferred catalog fragment
+loaded by `frontend/src/i18n/legalCatalog.ts`, not the startup
+`translation.json`) state the commercial terms. Every sentence there is a
+description of behaviour in this repo, not a policy written ahead of it — so a
+change to any row below is a change to the Terms as well, in **both** locales.
+
+| Terms section       | The behaviour it describes                                                                                                                                                                                                               | Where it lives                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan status         | Monthly only for new subscriptions; annual and Garden lifetime withdrawn but still renewing for existing households; admin-only; not sold in the mobile apps                                                                             | `models/plans.ts` (`withdrawnIntervals`, `isIntervalOffered`), `requireAdmin` on checkout, `BillingSettings.tsx` `native` gate                    |
+| Free trials         | 14 days on a household's FIRST paid subscription only, card collected at checkout, first charge at trial end, trial-end date shown on the billing page; a household that already consumed its trial gets none and is charged at checkout | `services/billing.ts` (`TRIAL_PERIOD_DAYS`, gated on `trialConsumedAt`; `trialAvailable` on `GET /billing/me`), `BillingSettings.tsx` `trialEnds` |
+| Automatic renewal   | Renews until cancelled, charged to the card on file, at the price the subscription runs at                                                                                                                                               | Stripe subscription against the tier's price id; the plan catalog never migrates a live subscription                                              |
+| Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                 | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                     |
+| Price changes       | The 14-day material-change notice these Terms already give; an existing subscription keeps its own price                                                                                                                                 | `legal.terms.agreement.body` / `changes.body`; § _Setup checklist_ above ("do not archive those Stripe prices")                                   |
+| One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                              | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                |
+| Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                               | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                    |
+
+### Refunds are deliberately unstated
+
+There is no refund policy, and the Terms publish none — see the
+non-rendering `TODO(owner)` block in `frontend/src/features/legal/TermsPage.tsx`
+and **issue #426**, which holds the options and the facts they have to fit:
+
+- nothing in this repo ever calls Stripe's refund API;
+- `cancelAbandonedHouseholdSubscription` cancels with no proration and no
+  refund requested, matching the lifetime-grant path and Stripe's default;
+- the help centre already publishes "we do not publish a refund policy, so
+  anything in that territory is handled case by case; ask";
+- unused identification credits survive a cancellation but are deleted with
+  the rest of the `HOUSEHOLD#{id}` partition when the last member deletes
+  their account (`deleteAbandonedHouseholdData`), with no warning and nothing
+  returned.
+
+Choosing a policy is a commercial decision. Until it is made, do not add a
+refund sentence to the Terms, the help centre, or the checkout page.

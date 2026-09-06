@@ -77,11 +77,36 @@
       },
       "termination": {
         "heading": "Cancelación de la cuenta",
-        "body": "Puedes eliminar tu cuenta en cualquier momento desde <em>Ajustes → Cuenta → Eliminar mi cuenta</em>. Podemos suspender o cancelar las cuentas que incumplan estos términos; intentaremos darte la oportunidad de corregir el problema primero, salvo que la infracción sea grave (por ejemplo, abusos contra otras personas usuarias)."
+        "body": "Puedes eliminar tu cuenta en cualquier momento desde <em>Ajustes → Cuenta → Eliminar mi cuenta</em>. Si eres la única persona que queda en un hogar con una suscripción de pago, al eliminar tu cuenta esa suscripción se cancela de inmediato, para que nunca siga cobrando a un hogar al que ya no puede entrar nadie. Podemos suspender o cancelar las cuentas que incumplan estos términos; intentaremos darte la oportunidad de corregir el problema primero, salvo que la infracción sea grave (por ejemplo, abusos contra otras personas usuarias)."
       },
       "planStatus": {
         "heading": "Estado de los planes",
         "body": "El registro de cuentas gratuitas está abierto. Los planes de pago Garden y Greenhouse están disponibles en la web, con facturación mensual. La facturación anual y la compra única de por vida de Garden ya no están a la venta; los hogares que ya tienen una la conservan, al precio y con las condiciones con los que la compraron. Las compras, las mejoras y los cambios de plan los realiza una persona administradora del hogar en <em>Ajustes → Facturación</em>, y la primera suscripción de pago de un hogar empieza con una prueba gratuita de 14 días. Los planes de pago no se venden dentro de las aplicaciones móviles. Si crees que un cargo o evento de facturación te ha afectado, escríbenos para que podamos investigarlo y resolverlo directamente."
+      },
+      "trial": {
+        "heading": "Pruebas gratuitas",
+        "intro": "La primera suscripción de pago de un hogar empieza con una prueba gratuita de 14 días. Al pasar por el proceso de pago se pide una tarjeta antes de que empiece la prueba, pero no se cobra nada mientras dura; la página de facturación muestra la fecha en la que termina la prueba. La prueba es una sola por hogar: si tu hogar ya la ha usado, volver a contratar una suscripción cobra la tarjeta en el momento del pago, sin prueba.",
+        "ending": "Cuando pasan los 14 días, el primer cobro se realiza automáticamente y la suscripción comienza. Para evitarlo, cancela antes de que termine la prueba (consulta <em>Cancelar</em> más abajo). Cancelar durante la prueba no cuesta nada: el hogar conserva las funciones de pago hasta el último día de la prueba y después pasa al plan gratuito Plántula."
+      },
+      "renewal": {
+        "heading": "Renovación automática",
+        "cadence": "Las suscripciones se renuevan automáticamente hasta que se cancelan. Un plan mensual se renueva cada mes —a partir del final de la prueba gratuita o, si no hubo prueba, desde el día de la compra— y cada renovación se cobra a la tarjeta registrada sin volver a preguntarte.",
+        "price": "El importe cobrado es el precio del plan que tiene tu suscripción: el precio con el que se contrató, no el que se anuncie más adelante. Los hogares que siguen en un plan anual se renuevan una vez al año al precio con el que lo compraron. La compra de por vida de Garden, ya retirada de la venta, no se renueva nunca: fue un pago único y no hay nada que cancelar."
+      },
+      "cancellation": {
+        "heading": "Cancelar",
+        "how": "Una persona administradora del hogar puede cancelar en cualquier momento desde <em>Ajustes → Facturación → Gestionar suscripción</em>, que abre el portal de facturación de nuestro proveedor de pagos. Cambiar o cancelar una suscripción activa se hace ahí, y cancelar ahí es lo que detiene el siguiente cobro. La cancelación no está disponible dentro de las aplicaciones móviles.",
+        "when": "Cancelar no te corta el acceso en el acto. Surte efecto al final del periodo que ya has pagado: hasta esa fecha el hogar conserva el plan, sus límites y todas las funciones de pago, y la página de facturación indica la fecha. Después, el hogar pasa al plan gratuito Plántula.",
+        "whatRemains": "Pasar al plan gratuito no borra nada. Todas las plantas, las fotos, las personas del hogar y el historial de cuidados se conservan, y siguen pudiendo consultarse y editarse; las tareas se siguen creando y los recordatorios siguen llegando. Lo que cambia es que no podrás añadir plantas ni miembros mientras el hogar supere un límite del plan gratuito, que la asignación mensual de identificaciones de plantas vuelve a la del plan gratuito, que el asistente de cuidados con IA requiere Garden o superior, que las claves de API requieren Greenhouse y que los enlaces para quien cuida las plantas vuelven al límite del plan gratuito: un enlace activo de hasta siete días, con la lista de tareas pero sin la guía de cuidados imprimible."
+      },
+      "priceChanges": {
+        "heading": "Cambios de precio",
+        "body": "Podemos cambiar lo que cuesta un plan. Un cambio en el importe que se te cobra es un cambio sustancial según estos términos, así que recibe el mismo aviso: se anuncia dentro de la aplicación con al menos 14 días de antelación, con tiempo para cancelar. Hasta entonces tu suscripción se sigue renovando a su propio precio: un precio nuevo se aplica a las suscripciones nuevas, y no trasladamos una suscripción existente a ese precio sin ese aviso."
+      },
+      "oneTimePurchases": {
+        "heading": "Compras únicas",
+        "body": "No todo es una suscripción. Una compra única se cobra una sola vez y no se renueva, así que no hay nada recurrente que cancelar. La realiza una persona administradora del hogar y pertenece al hogar, no a quien la pagó.",
+        "packs": "Si vendemos un paquete de identificaciones de plantas, es una compra de este tipo. Sus identificaciones se suman a la asignación mensual de tu plan y solo se usan cuando esa asignación se ha agotado; se conservan de un mes al siguiente y caducan 12 meses después de la compra. Cancelar una suscripción o pasar al plan gratuito no te las quita: siguen en el hogar y pueden gastarse también ahí. Si el hogar desaparece, cuando su última persona miembro elimina su cuenta, lo que quede sin usar desaparece con él. La compra de por vida de Garden, ya retirada, es del otro tipo: un pago único que no caduca y que conserva su plan de forma permanente."
       },
       "limitations": {
         "heading": "Limitaciones",

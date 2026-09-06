@@ -8,7 +8,7 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 // (frontend/scripts/check-i18n-catalogs.mjs), which CI runs on every PR.
 //
 // `locales/<lng>/legal.json` is deliberately NOT imported here. It holds the
-// privacy/terms/support/account-deletion prose — 101 keys per locale that only
+// privacy/terms/support/account-deletion prose — 116 keys per locale that only
 // four rarely-visited routes read — and ./legalCatalog.ts merges it into this
 // same `translation` namespace on demand, from those routes. Importing it here
 // would put ~37 kB of page copy back on the startup path for every visit.

@@ -23,15 +23,44 @@ import { TermsPage } from '@/features/legal/TermsPage';
  *     governing-language line; English shows neither.
  */
 
+/**
+ * `effectiveEn` / `effectiveEs` are per page on purpose: each page carries its
+ * own effective date and only the page whose text changed moves. Terms is a
+ * day ahead of the rest because the commercial sections (renewal, cancelling,
+ * the trial, price changes, one-time purchases) landed after the others.
+ */
 const PAGES = [
-  { name: 'privacy', Page: PrivacyPage, en: 'Privacy', es: 'Privacidad' },
-  { name: 'terms', Page: TermsPage, en: 'Terms of Service', es: 'Términos del servicio' },
-  { name: 'support', Page: SupportPage, en: 'Support', es: 'Soporte' },
+  {
+    name: 'privacy',
+    Page: PrivacyPage,
+    en: 'Privacy',
+    es: 'Privacidad',
+    effectiveEn: 'Effective September 2, 2026.',
+    effectiveEs: 'Vigente desde el 2 de septiembre de 2026.',
+  },
+  {
+    name: 'terms',
+    Page: TermsPage,
+    en: 'Terms of Service',
+    es: 'Términos del servicio',
+    effectiveEn: 'Effective September 3, 2026.',
+    effectiveEs: 'Vigente desde el 3 de septiembre de 2026.',
+  },
+  {
+    name: 'support',
+    Page: SupportPage,
+    en: 'Support',
+    es: 'Soporte',
+    effectiveEn: 'Effective September 2, 2026.',
+    effectiveEs: 'Vigente desde el 2 de septiembre de 2026.',
+  },
   {
     name: 'account deletion',
     Page: AccountDeletionPage,
     en: 'Delete your account',
     es: 'Eliminar tu cuenta',
+    effectiveEn: 'Effective September 2, 2026.',
+    effectiveEs: 'Vigente desde el 2 de septiembre de 2026.',
   },
 ] as const;
 
@@ -73,11 +102,11 @@ function renderSpanish(Page: () => JSX.Element) {
   );
 }
 
-describe.each(PAGES)('legal page: $name', ({ Page, en, es: esTitle }) => {
+describe.each(PAGES)('legal page: $name', ({ Page, en, es: esTitle, effectiveEn, effectiveEs }) => {
   it('renders English from the catalog with a localized effective date and no draft notice', () => {
     const { container } = renderEnglish(Page);
     expect(screen.getByRole('heading', { level: 1, name: en })).toBeInTheDocument();
-    expect(screen.getByText('Effective September 2, 2026.')).toBeInTheDocument();
+    expect(screen.getByText(effectiveEn)).toBeInTheDocument();
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(RAW_KEY);
   });
@@ -85,7 +114,7 @@ describe.each(PAGES)('legal page: $name', ({ Page, en, es: esTitle }) => {
   it('renders Spanish from the catalog, flagged as a draft where English governs', () => {
     const { container } = renderSpanish(Page);
     expect(screen.getByRole('heading', { level: 1, name: esTitle })).toBeInTheDocument();
-    expect(screen.getByText('Vigente desde el 2 de septiembre de 2026.')).toBeInTheDocument();
+    expect(screen.getByText(effectiveEs)).toBeInTheDocument();
     const note = screen.getByRole('note');
     expect(note).toHaveTextContent(/borrador/);
     expect(note).toHaveTextContent(/prevalece la versión en inglés/);
