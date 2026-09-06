@@ -384,6 +384,105 @@ describe('reminders service', () => {
     expect(notifier.sendToUser).toHaveBeenCalledOnce();
   });
 
+  describe('when a reminder fires, relative to the due date (#343)', () => {
+    // Nothing pinned this before 2026-08-28. Every `nextDue` fixture in this
+    // file was one of two constants, `soon` (NOW + 1h) and `past` (NOW - 1h),
+    // both trivially inside the 24h window and on the same UTC day as the
+    // scan. The window boundary was never crossed by any test and the scan
+    // instant was never varied against a fixed due date, so a change to the
+    // window or to the dedupe key could not turn this suite red.
+    //
+    // `getTasksDueBy` is mocked without regard for its cutoff everywhere else
+    // in this file, which is why the window was invisible. Here the mock
+    // honours the cutoff, so these assertions describe real behaviour.
+    //
+    // CHARACTERIZATION, not endorsement. The pattern below is the defect
+    // #343 reports, measured rather than assumed — the issue's own
+    // walk-through gets the second fire wrong. Any fix must edit these
+    // expectations deliberately.
+
+    // Tue Jun 9, 22:00 America/New_York. The task list calls this "Today"
+    // for all of Tuesday (frontend/src/utils/date.ts isToday, browser-local).
+    const DUE = '2026-06-10T02:00:00.000Z';
+
+    async function arrange(timezone: string) {
+      const household = await import('../../../src/services/householdService.js');
+      const tasks = await import('../../../src/services/taskService.js');
+      const prefs = await import('../../../src/services/notificationPrefs.js');
+      await mockConditionalMarkerStore();
+      await mockActivePlants(['p1']);
+      vi.mocked(prefs.getPreferences).mockImplementation(async (userId: string) =>
+        notificationPreferences(userId, { timezone })
+      );
+      vi.mocked(household.getHouseholdMembers).mockResolvedValue([memberA] as never);
+      // The service asks for tasks due by `now + 24h`; honour that.
+      vi.mocked(tasks.getTasksDueBy).mockImplementation(
+        async (_householdId: string, cutoff: string) =>
+          (cutoff >= DUE ? [{ nextDue: DUE, plantId: 'p1', assignedTo: 'u1' }] : []) as never
+      );
+      return await import('../../../src/services/reminders.js');
+    }
+
+    it('stays quiet while the task is outside the rolling 24h window', async () => {
+      const { remindHousehold } = await arrange('America/New_York');
+      // Mon Jun 8, 18:00 EDT — cutoff Jun 9 22:00Z, still short of DUE.
+      expect(await remindHousehold('hh', new Date('2026-06-08T22:00:00.000Z'))).toBe(0);
+    });
+
+    it('fires on the EVENING BEFORE the day the app calls the task due', async () => {
+      const { remindHousehold } = await arrange('America/New_York');
+      // Mon Jun 8, 22:00 EDT. The window opens exactly 24h before DUE, so the
+      // first eligible hourly tick is always the night before, whatever
+      // minute EventBridge happens to fire on.
+      expect(await remindHousehold('hh', new Date('2026-06-09T02:00:00.000Z'))).toBe(1);
+    });
+
+    it('fires AGAIN at local midnight, because the dedupe key is a local date', async () => {
+      const { remindHousehold } = await arrange('America/New_York');
+      expect(await remindHousehold('hh', new Date('2026-06-09T02:00:00.000Z'))).toBe(1);
+      // Tue Jun 9, 00:00 EDT. New local date, fresh marker. This is the
+      // midnight push the issue flags as reaching browser-only users through
+      // their quiet hours: browser delivery is exempt from the DND check
+      // (reminders.ts), and the first eligible tick of a local day is ~00:0x.
+      expect(await remindHousehold('hh', new Date('2026-06-09T04:00:00.000Z'))).toBe(1);
+    });
+
+    it('is then silent for the WHOLE due day, including the moment it comes due', async () => {
+      const { remindHousehold } = await arrange('America/New_York');
+      await remindHousehold('hh', new Date('2026-06-09T02:00:00.000Z')); // Mon 22:00
+      await remindHousehold('hh', new Date('2026-06-09T04:00:00.000Z')); // Tue 00:00
+      // Every remaining tick of Tuesday local is deduped against the
+      // 2026-06-09 marker burned at midnight — including 22:00, when the task
+      // actually becomes due, and the whole working day in between.
+      for (const at of [
+        '2026-06-09T12:00:00.000Z', // Tue 08:00
+        '2026-06-09T16:00:00.000Z', // Tue 12:00
+        '2026-06-09T22:00:00.000Z', // Tue 18:00
+        '2026-06-10T00:00:00.000Z', // Tue 20:00
+        '2026-06-10T02:00:00.000Z', // Tue 22:00 — the due instant itself
+      ]) {
+        expect(await remindHousehold('hh', new Date(at))).toBe(0);
+      }
+      // The next reminder is Wed 00:00, after the task was already due.
+      expect(await remindHousehold('hh', new Date('2026-06-10T04:00:00.000Z'))).toBe(1);
+    });
+
+    it('a UTC-defaulted recipient is deduped on UTC days, not their own', async () => {
+      // Every user who has never saved quiet hours IS 'UTC', whatever zone
+      // they live in: `notificationPrefs.ts` defaults the field and, as its
+      // own comment at :71 says, `timezone` has no "never chosen" state the
+      // way `emailLocale` does. So this is not an edge case — it is the
+      // default recipient, and #342 is where that half lives.
+      const { remindHousehold } = await arrange('UTC');
+      expect(await remindHousehold('hh', new Date('2026-06-09T02:00:00.000Z'))).toBe(1);
+      // Still UTC Jun 9 → deduped, though it is Tuesday evening for a
+      // recipient in New York.
+      expect(await remindHousehold('hh', new Date('2026-06-09T23:00:00.000Z'))).toBe(0);
+      // UTC Jun 10 → fires again.
+      expect(await remindHousehold('hh', new Date('2026-06-10T00:00:00.000Z'))).toBe(1);
+    });
+  });
+
   it('includes unassigned due tasks in every member roll-up', async () => {
     const household = await import('../../../src/services/householdService.js');
     const tasks = await import('../../../src/services/taskService.js');
