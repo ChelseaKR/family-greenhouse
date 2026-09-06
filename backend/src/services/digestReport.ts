@@ -213,7 +213,17 @@ export interface DigestReport {
 // Gathering
 // ---------------------------------------------------------------------------
 
-function wholeDaysOverdue(nextDue: string, now: Date): number | null {
+/**
+ * Whole days overdue, by elapsed hours rather than calendar days — the
+ * under-report #342 names as the dangerous direction (a task due 23:00 local,
+ * digested at 08:00 the next morning, scores 0 here and 1 on `TasksPage`).
+ *
+ * Exported for the equivalence suite in `tests/unit/services/dueDay.test.ts`.
+ * ADR 0025 phase 4 replaces it with `services/dueDay.wholeDaysOverdue`; the
+ * suite asserts the two already agree for a household with no zone set, so
+ * that swap is provably a no-op until a household chooses a zone.
+ */
+export function wholeDaysOverdue(nextDue: string, now: Date): number | null {
   const due = new Date(nextDue).getTime();
   if (!Number.isFinite(due)) return null;
   return Math.floor((now.getTime() - due) / (24 * 60 * 60 * 1000));
