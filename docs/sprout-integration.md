@@ -79,8 +79,8 @@ each now:
   set. That is what lets a stored answer still be qualified later; before it,
   the facts lived only for the lifetime of the function call. Aggregate
   integers only, so it crosses to the browser under the same contract it
-  crossed to Sprout under. **Nothing renders it yet** — see the first open
-  decision below.
+  crossed to Sprout under. It is also what the answer is now CHECKED against —
+  see the next section.
 - **`observations`** are counted on the `chat.message_sent` audit line and are
   deliberately not persisted. Storing a household-scoped numerator for a later
   consumer to render without its denominator is the #549 defect pre-built, and
@@ -96,19 +96,42 @@ metadata, not Anthropic content blocks: `chat/types.ts` lists them and
 `toBedrockMessages` strips every one before a later Bedrock fallback replays
 the conversation.
 
-Two things this does **not** settle, both owner decisions:
+## What an answer may assert over a partial payload
 
-- **What is asserted when coverage is partial.** Whether an answer hedges,
-  states its denominator ("1 of the 3 plants I can identify") or declines a
-  count is a policy in the Sprout service, and the matching question on this
-  side is whether Family Greenhouse also shows a caveat of its own next to the
-  answer. Family Greenhouse supplies the facts; it does not choose the wording.
-  This is now implementable rather than blocked: the coverage reaches the turn
-  result, the persisted record and the browser, so a decision about the
-  sentence is a decision about copy, not about plumbing.
+Settled in [ADR 0026](adr/0026-household-counts-over-a-partial-payload-block.md).
+Sprout is given the coverage and can qualify a number itself; this is the check
+that it did, made on the boundary Family Greenhouse owns because the household
+total is ours.
+
+Before the answer is persisted or delivered, `checkHouseholdClaims`
+(`chat/groundingGuard.ts`) reads it for claims about the size or composition of
+the user's own collection — a number or a universal quantifier attached to a
+household noun, in English or Spanish, in a sentence that refers to the user's
+plants or tasks. A claim over a set whose `complete` is false is unsupported:
+
+- **"You have 100 plants."** — blocked. The household has 250; 100 crossed.
+- **"None of your plants are toxic to cats."** — blocked. The plants that did
+  not cross are the unmatched ones, which is where an unidentified plant is.
+- **"Of your 250 plants, 100 have a confirmed species."** — delivered. A count
+  is supported when the sentence states the household total, which is the
+  number we sent it. A universal claim gets no such exception.
+- **"Water pothos when the top inch of soil is dry."** — untouched. Corpus
+  advice about plants in general is not a claim about this household.
+
+A blocked answer is replaced by `HOUSEHOLD_COVERAGE_BLOCK_COPY` in the language
+of the question, on the ADR 0009 / 0011 precedent, and loses its citations and
+Sprout's disclosure with it — the sentence delivered is Family Greenhouse's, so
+Sprout's per-answer note does not belong under it. The `coverage` block stays:
+it is the reason for the refusal. `chat_grounding_blocked` records it with
+`blockedOn: 'household-coverage'`, and the audit line carries
+`householdCoverageBlocked`.
+
+One thing this does **not** settle, an owner decision:
+
 - **Whether the cap stays.** It is a real cap, not a page size — nothing
   fetches the remainder. It remains for now because the payload crosses a
-  service boundary; raising or removing it is a separate call.
+  service boundary; raising or removing it is a separate call, and raising it
+  would only move the point at which a household stops being fully represented.
 
 Sprout rejects unknown payload fields, so `coverage` must be accepted there
 before `sprout_integration_enabled` is set in any environment.

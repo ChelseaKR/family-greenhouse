@@ -164,8 +164,11 @@ then answers over (`sprout.ts`); `.slice` has no syntactic tell separating a
 deliberate top ten from a silent cap, so it stays a review concern. That
 `sprout.ts` case was fixed on its own merits in #549, and not by a ratchet: the
 payload now carries a `coverage` block (total / included / unmatched /
-truncated / complete) beside the reduced arrays, so the protection is the
-payload contract a reader can check, not a rule a gate can match. Like the frontend gate, it does not judge consequence: a display name
+truncated / complete) beside the reduced arrays, and an answer that counts the
+household over a set that did not all cross is blocked
+([ADR 0026](0026-household-counts-over-a-partial-payload-block.md)) — so the
+protection is a payload contract and a guard a reader can check, not a rule a
+gate can match. Like the frontend gate, it does not judge consequence: a display name
 and a spend cap are the same shape to it, and the baseline entry is where the
 difference gets written down. Its own tests
 (`backend/tests/unit/scripts/checkSettledReadStates.test.ts`) run the script

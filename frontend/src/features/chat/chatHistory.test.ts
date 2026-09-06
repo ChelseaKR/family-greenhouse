@@ -72,8 +72,11 @@ describe('chat history', () => {
     expect(messages).toHaveLength(1);
     expect(messages[0].text).toBe('Pothos is toxic to cats.');
     expect(messages[0].disclosure).toBe('General information, not veterinary advice.');
-    // The coverage block round-trips but renders nothing yet: what a user is
-    // TOLD when coverage is partial is still an owner decision (#549).
+    // The coverage block round-trips and still renders nothing. What an answer
+    // may ASSERT over a partial household is settled (ADR 0026: a count it
+    // cannot support is refused server-side, before the text is ever
+    // persisted); whether these numbers are also shown beside an answer that
+    // passed is a separate call, and not made here.
     expect(messages[0]).not.toHaveProperty('coverage');
   });
 

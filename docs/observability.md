@@ -394,7 +394,9 @@ Useful Logs Insights queries:
 The RAG grounding guard emits one of three events per checked answer, one per
 verdict (see [ADR 0009](adr/0009-three-state-grounding-verdict.md)). The event
 name carries the verdict so a query for "answers the guard verified" cannot
-sweep up answers it merely didn't recognize:
+sweep up answers it merely didn't recognize. `chat_grounding_blocked` is also
+emitted by the household-coverage check on the Sprout path — a block is a block
+wherever it happened, and `blockedOn` says which:
 
 | event                       | meaning                                                                                       |
 | --------------------------- | --------------------------------------------------------------------------------------------- |
@@ -405,7 +407,26 @@ sweep up answers it merely didn't recognize:
 Every event carries `claimsChecked` (quantitative) and `safetyClaimsChecked`
 (categorical pet-safety claims, [ADR 0011](adr/0011-categorical-pet-safety-claims-block.md)).
 `chat_grounding_blocked` additionally carries `blockedOn` (`safety` |
-`quantitative`) and `ungroundedSafetyClaimCount`. A safety block with
+`quantitative` | `household-coverage`) and `ungroundedSafetyClaimCount`.
+
+`household-coverage` is the Sprout path, not the RAG one
+([ADR 0026](adr/0026-household-counts-over-a-partial-payload-block.md)): an
+answer stated a count of the user's own collection, or spoke for all of it, over
+a payload that carried only part of it. It carries
+`householdClaimsChecked`, `unsupportedHouseholdClaimCount` and the
+included/total integers for both sets instead of `sourceCount`. Pair it with
+`coveragePartial` and `householdCoverageBlocked` on the `chat.message_sent`
+audit line to see how often a reduced household actually costs a user an
+answer — a high rate is the argument for the Sprout side stating denominators,
+or for revisiting `SPROUT_CONTEXT_CAP`:
+
+```text
+fields @timestamp, plantsIncluded, plantsTotal, householdClaimsChecked, conversationId
+| filter msg = "chat_grounding_blocked" and blockedOn = "household-coverage"
+| stats count(*) as blocked by bin(1d)
+```
+
+A safety block with
 `sourceCount: 0` is the model asserting a plant is safe for pets without
 having called `check_pet_toxicity` at all — the primary failure mode the
 tool exists to remove, and the row to watch after a model or prompt change:
