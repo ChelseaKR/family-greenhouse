@@ -160,7 +160,10 @@ describe('terms: the trial length is the one the backend actually asks Stripe fo
     const days = /^\d+$/.test(token)
       ? token
       : billingSource.match(new RegExp(`\\b${token}\\s*=\\s*(\\d+)`))?.[1];
-    expect(days, `trial_period_days is set to \`${token}\`, whose value was not found`).toBeDefined();
+    expect(
+      days,
+      `trial_period_days is set to \`${token}\`, whose value was not found`
+    ).toBeDefined();
 
     expect(enLegal.legal.terms.trial.intro).toContain(`${days}-day free trial`);
     expect(enLegal.legal.terms.trial.ending).toContain(`When the ${days} days are up`);
