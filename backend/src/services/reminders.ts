@@ -375,8 +375,14 @@ function frontendUrl(path: string): string {
  * equivalent arithmetic renders `waiting NaN days for some care`; a named
  * state means the reminder can say "we could not read this date" instead of
  * printing a number it does not have.
+ *
+ * Exported for the equivalence suite in `tests/unit/services/dueDay.test.ts`,
+ * which asserts that `services/dueDay.ts` — the shared helper ADR 0025 phase 4
+ * will replace this function with — returns the identical state for a
+ * household that has set no zone. That is the migration's load-bearing claim
+ * (ADR 0025 §2), and it can only be checked if both sides are callable.
  */
-function dueStateFor(nextDue: string | null | undefined, now: Date): DueState {
+export function dueStateFor(nextDue: string | null | undefined, now: Date): DueState {
   const parsed = nextDue ? Date.parse(nextDue) : NaN;
   if (!Number.isFinite(parsed)) return { kind: 'unknown' };
   const diffMs = now.getTime() - parsed;
